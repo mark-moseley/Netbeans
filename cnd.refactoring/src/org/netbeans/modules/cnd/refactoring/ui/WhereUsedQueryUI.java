@@ -40,12 +40,16 @@
  */
 package org.netbeans.modules.cnd.refactoring.ui;
 
+import java.util.Collection;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.cnd.api.model.CsmInclude;
 import org.netbeans.modules.cnd.api.model.CsmNamedElement;
 import org.netbeans.modules.cnd.api.model.CsmObject;
+import org.netbeans.modules.cnd.api.model.CsmProject;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
 import org.netbeans.modules.cnd.refactoring.api.WhereUsedQueryConstants;
+import org.netbeans.modules.cnd.refactoring.support.CsmRefactoringUtils;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.api.WhereUsedQuery;
@@ -91,16 +95,16 @@ public class WhereUsedQueryUI implements RefactoringUI {
         // handle parameters defined in panel
         assert panel != null;
         query.putValue(WhereUsedQuery.SEARCH_IN_COMMENTS,panel.isSearchInComments());
-        // TODO: handle selected scope
-        if (panel.getScope()==WhereUsedPanel.Scope.ALL) {
-            // query.getContext().add();
-        } else {
-            // query.getContext().add();
-        }
-        if (panel.getReferencedObject() == null) {
+        boolean allProjects = (panel.getScope()==WhereUsedPanel.Scope.ALL);
+        Collection<CsmProject> prjs = CsmRefactoringUtils.getRelatedCsmProjects(this.origObject, allProjects);
+        CsmProject[] ar = prjs.toArray(new CsmProject[prjs.size()]);
+        query.getContext().add(ar);
+
+        CsmObject refObj = panel.getReferencedObject();
+        if (refObj == null) {
             query.setRefactoringSource(Lookup.EMPTY);
         } else {
-            query.setRefactoringSource(Lookups.singleton(panel.getReferencedObject()));
+            query.setRefactoringSource(Lookups.singleton(CsmRefactoringUtils.getHandler(refObj)));
         }
         if (panel.isVirtualMethod()) {
             setForMethod();
@@ -115,19 +119,21 @@ public class WhereUsedQueryUI implements RefactoringUI {
     
     private void setForMethod() {
         assert panel != null;
-        if (panel.isMethodFromBaseClass()) {
-            if (panel.getBaseMethod() == null) {
+//        if (panel.isMethodFromBaseClass()) {
+//            CsmObject refObj = panel.getBaseMethod();
+//            if (refObj == null) {
+//                query.setRefactoringSource(Lookup.EMPTY);
+//            } else {
+//                query.setRefactoringSource(Lookups.singleton(CsmRefactoringUtils.getHandler(refObj)));
+//            }
+//        } else {
+            CsmObject refObj = panel.getReferencedObject();
+            if (refObj == null) {
                 query.setRefactoringSource(Lookup.EMPTY);
             } else {
-                query.setRefactoringSource(Lookups.singleton(panel.getBaseMethod()));
-            }            
-        } else {
-            if (panel.getReferencedObject() == null) {
-                query.setRefactoringSource(Lookup.EMPTY);
-            } else {
-                query.setRefactoringSource(Lookups.singleton(panel.getReferencedObject()));
+                query.setRefactoringSource(Lookups.singleton(CsmRefactoringUtils.getHandler(refObj)));
             }
-        }
+//        }
         query.putValue(WhereUsedQueryConstants.FIND_OVERRIDING_METHODS,panel.isMethodOverriders());
         query.putValue(WhereUsedQueryConstants.SEARCH_FROM_BASECLASS,panel.isMethodFromBaseClass());
         query.putValue(WhereUsedQuery.FIND_REFERENCES,panel.isMethodFindUsages());
@@ -183,33 +189,6 @@ public class WhereUsedQueryUI implements RefactoringUI {
             }
             description = description.replace("<html>", "").replace("</html>", ""); // NOI18N
             return getString(key, description);
-//            if (CsmKindUtilities.isClass(origCsmObject)/*kind == ElementKind.MODULE || kind == ElementKind.CLASS*/) {
-//                if (!panel.isClassFindUsages())
-//                    if (!panel.isClassSubTypesDirectOnly()) {
-//                        return getFormattedString("DSC_WhereUsedFindAllSubTypes", name);
-//                    } else {
-//                        return getFormattedString("DSC_WhereUsedFindDirectSubTypes", name);
-//                    }
-//            } else {
-//                if (CsmKindUtilities.isFunction(origCsmObject)/*kind == ElementKind.METHOD*/) {
-//                    String description = null;
-//                    if (panel.isMethodFindUsages()) {
-//                        description = getString("DSC_FindUsages");
-//                    }
-//                    
-//                    if (panel.isMethodOverriders()) {
-//                        if (description != null) {
-//                            description += " " + getString("DSC_And") + " ";
-//                        } else {
-//                            description = "";
-//                        }
-//                        description += getString("DSC_WhereUsedMethodOverriders");
-//                    }
-//                    
-//                    description += " " + getFormattedString("DSC_WhereUsedOf", panel.getMethodDeclaringClass() + '.' + name); //NOI18N
-//                    return description;
-//                }
-//            }
         }
         return getString("DSC_WhereUsed", name); // NOI18N
     }
@@ -237,6 +216,8 @@ public class WhereUsedQueryUI implements RefactoringUI {
             objName = ((CsmReference)csmObj).getText().toString();
         } else if (CsmKindUtilities.isNamedElement(csmObj)) {
             objName = ((CsmNamedElement)csmObj).getName().toString();
+        } else if (CsmKindUtilities.isInclude(csmObj)) {
+            objName = ((CsmInclude)csmObj).getIncludeName().toString();
         } else if (csmObj != null) {
             objName = "<UNNAMED ELEMENT>"; // NOI18N
         } else {
