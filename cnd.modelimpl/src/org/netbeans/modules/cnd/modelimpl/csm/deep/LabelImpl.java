@@ -41,35 +41,37 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm.deep;
 
-import java.util.*;
 
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.deep.*;
 
-import org.netbeans.modules.cnd.modelimpl.csm.*;
 
 import antlr.collections.AST;
-import org.netbeans.modules.cnd.modelimpl.parser.CsmAST;
-import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
+import org.netbeans.modules.cnd.modelimpl.textcache.QualifiedNameCache;
 
 /**
  * Implements ... statement
  * @author Vladimir Kvashin
  */
-public class LabelImpl extends StatementBase implements CsmStatement {
+public class LabelImpl extends StatementBase implements CsmStatement, CsmLabel {
 
-    String label;
+    CharSequence label;
 
     public LabelImpl(AST ast, CsmFile file, CsmScope scope) {
         super(ast, file, scope);
+        label = QualifiedNameCache.getManager().getString(ast.getFirstChild().getText());
     }
     
     public CsmStatement.Kind getKind() {
         return CsmStatement.Kind.LABEL;
     }
     
-    public String getLabel() {
+    public CharSequence getLabel() {
         return label;
+    }
+
+    public CharSequence getName() {
+        return getLabel();
     }
     
 }
