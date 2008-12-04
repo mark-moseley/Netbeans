@@ -44,30 +44,45 @@ package org.netbeans.modules.websvc.rest.wadl.model;
 import java.util.Collection;
 import org.netbeans.modules.xml.xam.Nameable;
 
-public interface ResourceType extends Nameable<WadlComponent>, ReferenceableWadlComponent, WadlComponent {
-
-    public static String PARAM_PROPERTY = "param";
-    public static String METHOD_PROPERTY = "method";
-    public static String ID_PROPERTY = "id";
+public interface Application extends Nameable<WadlComponent>, ReferenceableWadlComponent, WadlComponent {
     
-    public static ParamStyle[] VALID_PARAM_STYLES = {
-        ParamStyle.HEADER,
-        ParamStyle.QUERY
-    };
+    public static String TARGET_NAMESPACE_PROPERTY = "targetNamespace";
+    public static String SCHEMA_NAMESPACE_PROPERTY = "schemaNamespace";
+    public static String GRAMMARS_PROPERTY = "grammars";
+    public static String RESOURCES_PROPERTY = "resources";
+    public static String TYPES_PROPERTY = "types";
+    public static String RESOURCE_TYPE_PROPERTY = "resource_type";
+    public static String REPRESENTATION_PROPERTY = "representation";
+    public static String FAULT_PROPERTY = "fault";
+    public static String METHOD_PROPERTY = "method";
 
-    public Collection<Param> getParam();
+    public String getSchemaNamespacePrefix();
 
-    public void addParam(Param param);
+    public String getTargetNamespace();
+    public void setTargetNamespace(String tns);
+    
+    public Collection<Grammars> getGrammars();
+    public void addGrammars(Grammars grammars);
+    void removeGrammars(Grammars importDefinition);
 
-    public void removeParam(Param param);
-
+    public Collection<Resources> getResources();
+    public void addResources(Resources resources);
+    public void removeResources(Resources resources);
+    
+    public Collection<ResourceType> getResourceType();
+    public void addResourceType(ResourceType r);
+    public void removeResourceType(ResourceType r);
+    
     public Collection<Method> getMethod();
+    public void addMethod(Method m);
+    public void removeMethod(Method m);
 
-    public void addMethod(Method method);
-
-    public void removeMethod(Method method);
-
-    public String getId();
-
-    public void setId(String base);
+    public Collection<RepresentationType> getRepresentationType();
+    public Collection<Representation> getRepresentation();
+    public void addRepresentation(Representation rep);
+    void removeRepresentation(Representation rep);
+    
+    public Collection<Fault> getFault();
+    public void addFault(Fault rep);
+    void removeFault(Fault rep);
 }

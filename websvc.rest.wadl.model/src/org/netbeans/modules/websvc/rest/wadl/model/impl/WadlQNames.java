@@ -39,35 +39,68 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.websvc.rest.wadl.model;
+/*
+ * WSDLQNames.java
+ *
+ * Created on November 17, 2005, 6:01 PM
+ *
+ * To change this template, choose Tools | Template Manager
+ * and open the template in the editor.
+ */
 
-import java.util.Collection;
-import org.netbeans.modules.xml.xam.Nameable;
+package org.netbeans.modules.websvc.rest.wadl.model.impl;
 
-public interface ResourceType extends Nameable<WadlComponent>, ReferenceableWadlComponent, WadlComponent {
+import java.util.HashSet;
+import java.util.Set;
+import javax.xml.namespace.QName;
 
-    public static String PARAM_PROPERTY = "param";
-    public static String METHOD_PROPERTY = "method";
-    public static String ID_PROPERTY = "id";
+/**
+ *
+ * @author Ayub Khan
+ */
+public enum WadlQNames {
+    DOC(createWSDLQName("doc")),
+    APPLICATION(createWSDLQName("application")),
+    GRAMMARS(createWSDLQName("grammars")),
+    RESOURCES(createWSDLQName("resources")),
+    RESOURCE(createWSDLQName("resource")),
+    RESOURCE_TYPE(createWSDLQName("resource_type")),
+    METHOD(createWSDLQName("method")),
+    REQUEST(createWSDLQName("request")),
+    RESPONSE(createWSDLQName("response")),
+    PARAM(createWSDLQName("param")),
+    OPTION(createWSDLQName("option")),
+    LINK(createWSDLQName("link")),
+    INCLUDE(createWSDLQName("include")),
+    REPRESENTATION(createWSDLQName("representation")),
+    FAULT(createWSDLQName("fault"))
+    ;
     
-    public static ParamStyle[] VALID_PARAM_STYLES = {
-        ParamStyle.HEADER,
-        ParamStyle.QUERY
-    };
-
-    public Collection<Param> getParam();
-
-    public void addParam(Param param);
-
-    public void removeParam(Param param);
-
-    public Collection<Method> getMethod();
-
-    public void addMethod(Method method);
-
-    public void removeMethod(Method method);
-
-    public String getId();
-
-    public void setId(String base);
+    public static final String WADL_NS_URI = "http://research.sun.com/wadl/2006/10";
+    public static final String WADL_PREFIX = "wadl";
+    
+    public static QName createWSDLQName(String localName){
+        return new QName(WADL_NS_URI, localName, WADL_PREFIX);
+    }
+    
+    WadlQNames(QName name) {
+        qName = name;
+    }
+    
+    QName getQName(){
+        return qName;
+    }
+    
+    private static Set<QName> qnames = null;
+    public static Set<QName> getQNames() {
+        if (qnames == null) {
+            qnames = new HashSet<QName>();
+            for (WadlQNames wq : values()) {
+                qnames.add(wq.getQName());
+            }
+        }
+        return qnames;
+    }
+    
+    private final QName qName;
 }

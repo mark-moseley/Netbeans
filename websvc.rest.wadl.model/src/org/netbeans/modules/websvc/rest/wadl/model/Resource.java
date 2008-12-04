@@ -42,18 +42,13 @@
 package org.netbeans.modules.websvc.rest.wadl.model;
 
 import java.util.Collection;
-import org.netbeans.modules.xml.xam.Nameable;
 
-public interface ResourceType extends Nameable<WadlComponent>, ReferenceableWadlComponent, WadlComponent {
+public interface Resource extends ResourceType {
 
-    public static String PARAM_PROPERTY = "param";
-    public static String METHOD_PROPERTY = "method";
-    public static String ID_PROPERTY = "id";
-    
-    public static ParamStyle[] VALID_PARAM_STYLES = {
-        ParamStyle.HEADER,
-        ParamStyle.QUERY
-    };
+    public static String RESOURCE_PROPERTY = "resource";
+    public static String PATH_PROPERTY = "path";
+    public static String TYPE_PROPERTY = "type";
+    public static String QUERY_TYPE_PROPERTY = "queryType";
 
     public Collection<Param> getParam();
 
@@ -67,7 +62,25 @@ public interface ResourceType extends Nameable<WadlComponent>, ReferenceableWadl
 
     public void removeMethod(Method method);
 
+    public Collection<Resource> getResource();
+
+    public void addResource(Resource resource);
+
+    public void removeResource(Resource resource);
+
     public String getId();
 
     public void setId(String base);
+
+    public String getType();
+
+    public void setType(String base);
+
+    public String getQueryType();
+
+    public void setQueryType(String base);
+
+    public String getPath();
+
+    public void setPath(String base);
 }
