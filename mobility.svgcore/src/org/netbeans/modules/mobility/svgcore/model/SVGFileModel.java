@@ -58,7 +58,6 @@ import java.util.zip.GZIPInputStream;
 import javax.microedition.m2g.SVGImage;
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
-import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.AttributeSet;
@@ -69,7 +68,7 @@ import javax.swing.text.Element;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.BaseDocumentEvent;
 import org.netbeans.editor.CharSeq;
-import org.netbeans.editor.Formatter;
+import org.netbeans.modules.editor.indent.api.Reformat;
 import org.netbeans.modules.editor.structure.api.DocumentElement;
 import org.netbeans.modules.editor.structure.api.DocumentModel;
 import org.netbeans.modules.editor.structure.api.DocumentModelException;
@@ -125,21 +124,17 @@ public final class SVGFileModel {
 
             synchronized (getTransactionMonitor()) {
                 SceneManager.log(Level.FINE, "Transaction started."); //NOI18N
+                Reformat formatting = Reformat.get(getDoc());
                 try {
                     updateModel();
-                    //assert SwingUtilities.isEventDispatchThread() : "Transaction must be called in AWT thread.";
-                    getDoc().getFormatter().reformatLock();
-                    getDoc().atomicLock();
-                    //checkModel();
+                    formatting.lock();
                     m_model.readLock();
-                    transaction();
-                } catch (Exception e) {
-                    SceneManager.error("Transaction failed.", e); //NOI18N
-                    getDoc().atomicUndo();
+
+                    runTransaction();
+                    
                 } finally {
                     m_model.readUnlock();
-                    getDoc().atomicUnlock();
-                    getDoc().getFormatter().reformatUnlock();
+                    formatting.unlock();
                     SceneManager.log(Level.FINE, "Transaction completed."); //NOI18N
                     if (decrementTransactionCounter() == 0) {
                         getSceneManager().setBusyState(TRANSACTION_TOKEN, false);
@@ -154,9 +149,36 @@ public final class SVGFileModel {
             }
         }
 
+        private void runTransaction() {
+            Runnable run = new Runnable() {
+
+                public void run() {
+                    try {
+                        transaction();
+                    } catch (Exception ex) {
+                        // throw RuntimeException to inform runAtomic that
+                        // run() hasn't finished correctly
+                        throw new FileModelTransactionException(ex);
+                    }
+                }
+            };
+            try {
+                getDoc().runAtomic(run);
+            } catch (FileModelTransactionException ex) {
+                SceneManager.error("Transaction failed.", ex.getCause()); //NOI18N
+            }
+        }
+
         protected abstract void transaction() throws Exception;
     }
-        
+
+    private static class FileModelTransactionException extends RuntimeException {
+
+        public FileModelTransactionException(Throwable cause) {
+            super(cause);
+        }
+    }
+
     private final XmlMultiViewEditorSupport m_edSup;
     private final ElementMapping      m_mapping;
     private final List<ModelListener> m_modelListeners = new ArrayList<ModelListener>();
@@ -398,7 +420,9 @@ public final class SVGFileModel {
         return (SVGDataObject) m_edSup.getDataObject();
     }
 
-    public SVGImage parseSVGImage() throws IOException, BadLocationException {
+    public SVGImage parseSVGImage() 
+            throws IOException, BadLocationException, InterruptedException 
+    {
         SceneManager.log(Level.INFO, "Parsing image..."); //NOI18N
         checkModel();
         SVGImage svgImage = m_mapping.parseDocument(true);
@@ -469,6 +493,15 @@ public final class SVGFileModel {
         return id;
     }
 
+    public static boolean isHiddenElement(DocumentElement de) {
+        AttributeSet attrs = de.getAttributes();
+        String visible = (String) attrs.getAttribute(SVGConstants.SVG_VISIBILITY_ATTRIBUTE);
+        if (visible != null && visible.equals(SVGConstants.CSS_HIDDEN_VALUE)) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Convenience helper method.
      */
@@ -510,12 +543,21 @@ public final class SVGFileModel {
 
     public String getElementId(DocumentElement de) {
         String id = m_mapping.element2id(de);
-        assert id != null : "Element " + de + " could not be found!"; //NOI18N
+        //assert id != null : "Element " + de + " could not be found!"; //NOI18N
+        //Warning if id == null, it could happen when Navigator is not updated fast enough.
+        if (id == null) {
+            id = ""; //NOI18N
+            System.out.println("Element " + de + " could not be found!"); //NOI18N
+        }
         return id;
     }
 
     public String createUniqueId(String prefix, boolean isWrapper) {
-        return m_mapping.generateId(prefix, isWrapper, null);
+        return createUniqueId(prefix, isWrapper, null);
+    }
+
+    public String createUniqueId(String prefix, boolean isWrapper, Set<String> extIds) {
+        return m_mapping.generateId(prefix, isWrapper, extIds);
     }
 
     public static boolean isWrapperId(String id) {
@@ -773,12 +815,14 @@ public final class SVGFileModel {
 
                 if (svgRoot != null) {
                     BaseDocument doc = getDoc();
-                    DocumentElement lastChild = getLastTagChild(svgRoot.getChildren());
+                    List<DocumentElement> children = svgRoot.getChildren();
+                    DocumentElement lastChild = getLastTagChild(children);
                     int insertPosition;
                     if (lastChild != null) {
                         CharSequence chars = (CharSequence) doc.getProperty(CharSequence.class);
                         
-                        //insert new text after last child
+                        //insert new text before last visible
+                        lastChild = getLastVisibleTagChild(children);
                         insertPosition = lastChild.getEndOffset() + 1;
                         String str = insertString;
                         int i = insertPosition;
@@ -795,7 +839,7 @@ public final class SVGFileModel {
                             }
                         }
                         doc.insertString(insertPosition, str, null);
-                        doc.getFormatter().reformat(doc, insertPosition, insertPosition + str.length());
+                        Reformat.get(doc).reformat(insertPosition, insertPosition + str.length()+1);
                     } else {
                         String docText = doc.getText(0, doc.getLength());
                         int startOff = svgRoot.getStartOffset();
@@ -808,12 +852,14 @@ public final class SVGFileModel {
                         if (c == '/') {
                             if (docText.charAt(insertPosition) == '<') {
                                 doc.insertString(insertPosition, insertString, null);
+                                Reformat.get(doc).reformat(insertPosition, insertPosition + insertString.length()+1);
                             } else {
                                 StringBuilder sb = new StringBuilder(docText.substring(startOff, insertPosition + 1));
                                 sb.append(">\n"); //NOI18N
                                 sb.append(insertString);
                                 sb.append("\n</svg>"); //NOI18N
                                 doc.replace(startOff, svgRoot.getEndOffset() - startOff + 1, sb.toString(), null);
+                                Reformat.get(doc).reformat(insertPosition, doc.getLength());
                             }
                         } else {
                             //TODO report invalid svg doc
@@ -1150,6 +1196,7 @@ public final class SVGFileModel {
 
     public void runTransaction(final FileModelTransaction transaction) {
         new Thread("TransactionWrapper") {  //NOI18N
+            @Override
             public void run() {
                 transaction.run();
                 //SwingUtilities.invokeLater(transaction);
@@ -1232,7 +1279,19 @@ public final class SVGFileModel {
     }
 
     @SuppressWarnings("unchecked")
-    protected String getWithUniqueIds(DocumentModel docModel, String wrapperId, boolean isRootSvg, String[] rootId, boolean allowAnonymousRoot) throws BadLocationException {
+    protected String getWithUniqueIds(DocumentModel docModel, String wrapperId, 
+            boolean isRootSvg, String[] rootId, boolean allowAnonymousRoot) 
+            throws BadLocationException 
+    {
+        return getWithUniqueIds(docModel, wrapperId, isRootSvg, rootId, allowAnonymousRoot, true);
+    }
+    
+    @SuppressWarnings("unchecked")
+    protected String getWithUniqueIds(DocumentModel docModel, String wrapperId, 
+            boolean isRootSvg, String[] rootId, boolean allowAnonymousRoot, 
+            boolean silently) 
+            throws BadLocationException 
+    {
         try {
             docModel.readLock();
 
@@ -1272,15 +1331,7 @@ public final class SVGFileModel {
                                 newId = m_mapping.generateId(oldId, false, newIds);
                             }
                             
-                            if ( i < 10) {
-                                conflictMsg.append("\t'"); //NOI18N
-                                conflictMsg.append( oldId);
-                                conflictMsg.append("' -> '"); //NOI18N
-                                conflictMsg.append( newId);
-                                conflictMsg.append("'\n"); //NOI18N
-                            } else if (i == 10) {
-                                conflictMsg.append("\t...\n"); //NOI18N
-                            }
+                            appendToConflictMsg(conflictMsg, oldId, newId, i, silently);
                             
                             newIds.add(newId);
                             if (rootId != null && oldId.equals(rootId[0])) {
@@ -1297,9 +1348,7 @@ public final class SVGFileModel {
 
                         // fragment length have changed probably
                         docText = sb.substring(startOff, endOff + (sb.length() - length) + 1);
-                        DialogDisplayer.getDefault().notify(
-                                new NotifyDescriptor.Message( NbBundle.getMessage(ElementMapping.class, "WARNING_IDConflicts", conflictMsg.toString()), //NOI18N
-                                NotifyDescriptor.Message.WARNING_MESSAGE));
+                        notifyAboutConflictIds(conflictMsg, silently);
                     } else {
                         docText = doc.getText(startOff, endOff - startOff + 1);
                     }
@@ -1327,6 +1376,32 @@ public final class SVGFileModel {
         } finally {
             docModel.readUnlock();
         }
+    }
+    
+    private void appendToConflictMsg(StringBuilder msg, String oldId, String newId,
+            int conflictIdx, boolean silently)
+    {
+        if (silently) {
+            return;
+        }
+            
+            if (conflictIdx < 10) {
+                msg.append("\t'"); //NOI18N
+                msg.append(oldId).append("' -> '").append(newId);//NOI18N
+                msg.append("'\n"); //NOI18N
+            } else if (conflictIdx == 10) {
+                msg.append("\t...\n"); //NOI18N
+            }
+    }
+    
+    private void notifyAboutConflictIds(StringBuilder conflictMsg, boolean silently){
+        if(silently){
+            return;
+        }
+        String msg = NbBundle.getMessage(ElementMapping.class, 
+                "WARNING_IDConflicts", conflictMsg.toString()); //NOI18N
+        DialogDisplayer.getDefault().notify(
+                new NotifyDescriptor.Message(msg, NotifyDescriptor.Message.WARNING_MESSAGE));
     }
     
     protected static String wrapText(String wrapperId, String textToWrap) {
@@ -1365,6 +1440,7 @@ public final class SVGFileModel {
             return ((ChangeDescriptor) o).m_startOffset - m_startOffset;
         }
         
+        @Override
         public boolean equals(Object o) {
             return ((ChangeDescriptor) o).m_startOffset == m_startOffset;
         }
@@ -1514,6 +1590,16 @@ public final class SVGFileModel {
         return null;
     }
 
+    private static DocumentElement getLastVisibleTagChild(List<DocumentElement> children) {
+        for (int i = children.size() - 1; i >= 0; i--) {
+            DocumentElement child = children.get(i);
+            if (isTagElement(child) && !isHiddenElement(child)) {
+                return child;
+            }
+        }
+        return null;
+    }
+    
     private static int getTagChildCount(List<DocumentElement> children) {
         int count = 0;
         
