@@ -41,38 +41,41 @@ package org.netbeans.modules.parsing.impl.indexing.lucene;
 
 import java.io.IOException;
 import java.net.URL;
-import org.netbeans.modules.parsing.impl.indexing.IndexDocumentImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexFactoryImpl;
-import org.netbeans.modules.parsing.spi.indexing.Context;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  *
  * @author Tomas Zezula
  */
-public class LuceneIndexFactory implements IndexFactoryImpl {
+public class LuceneIndexManager {
 
-    public IndexDocumentImpl createDocument() {
-        return new LuceneDocument();
+    private static LuceneIndexManager instance;
+    private volatile boolean invalid;
+
+    private final Map<URL, LuceneIndex> indexes = new HashMap<URL, LuceneIndex> ();
+
+    private LuceneIndexManager() {}
+
+
+    public static synchronized LuceneIndexManager getDefault () {
+        if (instance == null) {
+            instance = new LuceneIndexManager();
+        }
+        return instance;
     }
 
-    public IndexImpl createIndex (Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, true);
-    }
-
-    public IndexImpl getIndex(final Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, false);
-    }
-
-    private URL getIndexFolder (final Context ctx) throws IOException {
-        final FileObject indexFolder = ctx.getIndexFolder();
-        final String indexVersion = Integer.toString(LuceneIndex.VERSION);
-        final FileObject luceneIndexFolder = FileUtil.createFolder(indexFolder,indexVersion);    //NOI18N
-        return luceneIndexFolder.getURL();
-    }
+    public synchronized LuceneIndex getIndex (final URL root, boolean create) throws IOException {
+        assert root != null;
+        if (invalid) {
+            return null;
+        }
+        LuceneIndex li = indexes.get(root);
+        if (create && li == null) {
+            li = new LuceneIndex(root);
+            indexes.put(root,li);
+        }
+        return li;
+    }   
 
 }

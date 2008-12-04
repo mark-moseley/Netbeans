@@ -39,40 +39,25 @@
 
 package org.netbeans.modules.parsing.impl.indexing.lucene;
 
-import java.io.IOException;
-import java.net.URL;
-import org.netbeans.modules.parsing.impl.indexing.IndexDocumentImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexFactoryImpl;
-import org.netbeans.modules.parsing.spi.indexing.Context;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
 
 /**
  *
  * @author Tomas Zezula
  */
-public class LuceneIndexFactory implements IndexFactoryImpl {
+public class DocumentUtil {
 
-    public IndexDocumentImpl createDocument() {
-        return new LuceneDocument();
+    private static final String FIELD_SOURCE_NAME = "_sn";  //NOI18N
+
+    static Query sourceNameQuery(String relativePath) {
+        return new TermQuery(sourceNameTerm(relativePath));
     }
 
-    public IndexImpl createIndex (Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, true);
-    }
-
-    public IndexImpl getIndex(final Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, false);
-    }
-
-    private URL getIndexFolder (final Context ctx) throws IOException {
-        final FileObject indexFolder = ctx.getIndexFolder();
-        final String indexVersion = Integer.toString(LuceneIndex.VERSION);
-        final FileObject luceneIndexFolder = FileUtil.createFolder(indexFolder,indexVersion);    //NOI18N
-        return luceneIndexFolder.getURL();
+    static Term sourceNameTerm (final String relativePath) {
+        assert relativePath != null;
+        return new Term (FIELD_SOURCE_NAME, relativePath);
     }
 
 }

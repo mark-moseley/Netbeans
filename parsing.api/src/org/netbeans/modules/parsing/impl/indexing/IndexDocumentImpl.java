@@ -37,42 +37,12 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl.indexing.lucene;
-
-import java.io.IOException;
-import java.net.URL;
-import org.netbeans.modules.parsing.impl.indexing.IndexDocumentImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexFactoryImpl;
-import org.netbeans.modules.parsing.spi.indexing.Context;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
+package org.netbeans.modules.parsing.impl.indexing;
 
 /**
  *
  * @author Tomas Zezula
  */
-public class LuceneIndexFactory implements IndexFactoryImpl {
-
-    public IndexDocumentImpl createDocument() {
-        return new LuceneDocument();
-    }
-
-    public IndexImpl createIndex (Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, true);
-    }
-
-    public IndexImpl getIndex(final Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, false);
-    }
-
-    private URL getIndexFolder (final Context ctx) throws IOException {
-        final FileObject indexFolder = ctx.getIndexFolder();
-        final String indexVersion = Integer.toString(LuceneIndex.VERSION);
-        final FileObject luceneIndexFolder = FileUtil.createFolder(indexFolder,indexVersion);    //NOI18N
-        return luceneIndexFolder.getURL();
-    }
-
+public interface IndexDocumentImpl {
+    public void addPair (String key, String value, boolean searchable, boolean stored);
 }

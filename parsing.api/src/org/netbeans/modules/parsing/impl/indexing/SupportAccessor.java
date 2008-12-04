@@ -37,42 +37,42 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl.indexing.lucene;
+package org.netbeans.modules.parsing.impl.indexing;
 
 import java.io.IOException;
-import java.net.URL;
-import org.netbeans.modules.parsing.impl.indexing.IndexDocumentImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexFactoryImpl;
-import org.netbeans.modules.parsing.spi.indexing.Context;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
+import java.util.Collection;
+import org.netbeans.modules.parsing.spi.indexing.support.IndexingSupport;
+import org.openide.util.Exceptions;
 
 /**
  *
  * @author Tomas Zezula
  */
-public class LuceneIndexFactory implements IndexFactoryImpl {
+public abstract class SupportAccessor {
 
-    public IndexDocumentImpl createDocument() {
-        return new LuceneDocument();
+    private static volatile SupportAccessor instance;
+
+    public static void setInstance (final SupportAccessor _instance) {
+        assert _instance != null;
+        instance = _instance;
     }
 
-    public IndexImpl createIndex (Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, true);
+    public static synchronized SupportAccessor getInstance () {
+        if (instance == null) {
+            try {
+                Class.forName(IndexingSupport.class.getName(),true, IndexingSupport.class.getClassLoader());
+                assert instance != null;
+            } catch (ClassNotFoundException e) {
+                Exceptions.printStackTrace(e);
+            }
+        }
+        return instance;
     }
 
-    public IndexImpl getIndex(final Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, false);
-    }
+    public abstract void beginTrans ();
 
-    private URL getIndexFolder (final Context ctx) throws IOException {
-        final FileObject indexFolder = ctx.getIndexFolder();
-        final String indexVersion = Integer.toString(LuceneIndex.VERSION);
-        final FileObject luceneIndexFolder = FileUtil.createFolder(indexFolder,indexVersion);    //NOI18N
-        return luceneIndexFolder.getURL();
-    }
+    public abstract void endTrans () throws IOException;
+
+    public abstract Collection<? extends IndexingSupport> getDirtySupports ();
 
 }

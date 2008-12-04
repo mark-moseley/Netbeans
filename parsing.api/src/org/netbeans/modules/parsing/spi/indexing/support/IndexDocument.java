@@ -37,42 +37,48 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl.indexing.lucene;
+package org.netbeans.modules.parsing.spi.indexing.support;
 
-import java.io.IOException;
-import java.net.URL;
 import org.netbeans.modules.parsing.impl.indexing.IndexDocumentImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexFactoryImpl;
-import org.netbeans.modules.parsing.spi.indexing.Context;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
+import org.openide.util.Parameters;
 
 /**
+ * An IndexDocument lets you store a series of [key,value] pairs in the
+ * persistent store.
  *
+ * @author Tor Norbye
  * @author Tomas Zezula
  */
-public class LuceneIndexFactory implements IndexFactoryImpl {
+//@ThreadSafe
+public final class IndexDocument {
 
-    public IndexDocumentImpl createDocument() {
-        return new LuceneDocument();
+    final IndexDocumentImpl spi;
+
+    IndexDocument (final IndexDocumentImpl spi) {
+        Parameters.notNull("spi", spi);
+        this.spi = spi;
     }
 
-    public IndexImpl createIndex (Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, true);
+    /**
+     * Add a [key,value] pair to this document. Note that the document really
+     * contains a multi-map, so it is okay and normal to call addPair multiple
+     * times with the same key. This just adds the value to the set of values
+     * associated with the key.
+     *
+     * @param key The key that you will later search by. Note that you are NOT
+     *   allowed to use the keys <code>filename</code> or <code>timestamp</code>
+     *   since these are reserved (and in fact used) by GSF.
+     * @param value The value that will be retrieved for this key
+     * @param searchable A boolean which if set to true will store the pair with
+     *   an indexed/searchable field key, otherwise with an unindexed field (that cannot be
+     *   searched).  You <b>must</b> be consistent in how keys are identified
+     *   as searchable; the same key must always be referenced with the same
+     *   value for searchable when pairs are added (per document).
+     */
+    public void addPair( /*@NonNull*/ String key, /*@NonNull*/ String value, boolean searchable, boolean stored) {
+        Parameters.notNull("key", key); //NOI18N
+        Parameters.notEmpty("key", key);    //NOI18N
+        Parameters.notNull("value", value); //NOI18N
+        this.spi.addPair(key, value, searchable, stored);
     }
-
-    public IndexImpl getIndex(final Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, false);
-    }
-
-    private URL getIndexFolder (final Context ctx) throws IOException {
-        final FileObject indexFolder = ctx.getIndexFolder();
-        final String indexVersion = Integer.toString(LuceneIndex.VERSION);
-        final FileObject luceneIndexFolder = FileUtil.createFolder(indexFolder,indexVersion);    //NOI18N
-        return luceneIndexFolder.getURL();
-    }
-
 }

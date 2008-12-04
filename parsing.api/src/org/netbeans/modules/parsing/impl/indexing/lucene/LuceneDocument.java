@@ -39,40 +39,27 @@
 
 package org.netbeans.modules.parsing.impl.indexing.lucene;
 
-import java.io.IOException;
-import java.net.URL;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
 import org.netbeans.modules.parsing.impl.indexing.IndexDocumentImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexImpl;
-import org.netbeans.modules.parsing.impl.indexing.IndexFactoryImpl;
-import org.netbeans.modules.parsing.spi.indexing.Context;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 
 /**
  *
  * @author Tomas Zezula
  */
-public class LuceneIndexFactory implements IndexFactoryImpl {
+public class LuceneDocument implements IndexDocumentImpl {
 
-    public IndexDocumentImpl createDocument() {
-        return new LuceneDocument();
+    public final Document doc;
+
+    LuceneDocument () {
+        this.doc = new Document();
     }
 
-    public IndexImpl createIndex (Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, true);
-    }
-
-    public IndexImpl getIndex(final Context ctx) throws IOException {
-        final URL luceneIndexFolder = getIndexFolder(ctx);
-        return LuceneIndexManager.getDefault().getIndex(luceneIndexFolder, false);
-    }
-
-    private URL getIndexFolder (final Context ctx) throws IOException {
-        final FileObject indexFolder = ctx.getIndexFolder();
-        final String indexVersion = Integer.toString(LuceneIndex.VERSION);
-        final FileObject luceneIndexFolder = FileUtil.createFolder(indexFolder,indexVersion);    //NOI18N
-        return luceneIndexFolder.getURL();
+    public void addPair(final String key, final String value, final boolean searchable, final boolean stored) {
+        final Field field = new Field (key, value,
+                stored ? Field.Store.YES : Field.Store.NO,
+                searchable ? Field.Index.NO_NORMS : Field.Index.NO);
+        doc.add (field);
     }
 
 }
