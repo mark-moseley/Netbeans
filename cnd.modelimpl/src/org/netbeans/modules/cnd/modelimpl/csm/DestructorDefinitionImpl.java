@@ -45,13 +45,15 @@ import org.netbeans.modules.cnd.api.model.*;
 import antlr.collections.AST;
 import java.io.DataInput;
 import java.io.IOException;
+import org.netbeans.modules.cnd.modelimpl.csm.core.AstUtil;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 
 /**
- * @author Vladimir Kvasihn
+ * @author Vladimir Kvashin
  */
 public final class DestructorDefinitionImpl extends FunctionDefinitionImpl {
-    public DestructorDefinitionImpl(AST ast, CsmFile file) {
+
+    public DestructorDefinitionImpl(AST ast, CsmFile file) throws AstRendererException {
         super(ast, file, null, true);
     }
 
@@ -59,30 +61,30 @@ public final class DestructorDefinitionImpl extends FunctionDefinitionImpl {
     public CsmType getReturnType() {
         return NoType.instance();
     }
-    
+
     @Override
     protected String initName(AST node) {
         AST token = node.getFirstChild();
-        while( token != null && 
-		(token.getType() == CPPTokenTypes.LITERAL_inline || 
-		token.getType() == CPPTokenTypes.LITERAL_template) ) {
-            token = token.getNextSibling();
+        if (token != null) {
+            token = AstUtil.findSiblingOfType(token, CPPTokenTypes.CSM_QUALIFIED_ID);
         }
-        if( token != null && token.getType() == CPPTokenTypes.CSM_QUALIFIED_ID ) {
-            token = token.getNextSibling();
-            if( token != null && token.getType() == CPPTokenTypes.TILDE ) {
+        if (token != null) {
+            token = AstUtil.findChildOfType(token, CPPTokenTypes.TILDE);
+            if (token != null) {
                 token = token.getNextSibling();
-                if( token != null && token.getType() == CPPTokenTypes.ID ) {
+                if (token != null && token.getType() == CPPTokenTypes.ID) {
                     return "~" + token.getText(); // NOI18N
                 }
             }
         }
         return "~"; // NOI18N
     }
+
     ////////////////////////////////////////////////////////////////////////////
-    // iml of SelfPersistent
-    
+    // impl of SelfPersistent
+
     public DestructorDefinitionImpl(DataInput input) throws IOException {
         super(input);
-    }     
+    }
+
 }
