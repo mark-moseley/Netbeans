@@ -47,6 +47,7 @@ import java.awt.EventQueue;
 import java.lang.ref.WeakReference;
 import javax.accessibility.AccessibleContext;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
@@ -107,6 +108,8 @@ public final class ResultWindow extends TopComponent {
     /** Creates a new instance of ResultWindow */
     public ResultWindow() {
         super();
+        setToolTipText(NbBundle.getMessage(ResultWindow.class,
+                                           "TOOLTIP_TEST_RESULTS"));
         setFocusable(true);
         setLayout(new BorderLayout());
         //add(tabbedPanel = new JTabbedPane(), BorderLayout.CENTER);
@@ -114,7 +117,7 @@ public final class ResultWindow extends TopComponent {
         setName(ID);
         setDisplayName(NbBundle.getMessage(ResultWindow.class,
                                            "TITLE_TEST_RESULTS"));      //NOI18N
-        setIcon(Utilities.loadImage(
+        setIcon(ImageUtilities.loadImage(
                 "org/netbeans/modules/junit/output/res/testResults.png",//NOI18N
 	        true));
         
