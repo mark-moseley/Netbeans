@@ -36,32 +36,17 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.php.editor.model;
 
-import org.netbeans.modules.gsf.api.annotations.CheckForNull;
-import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
+import java.util.List;
+import org.netbeans.modules.gsf.api.OffsetRange;
 
 /**
- *
  * @author Radek Matous
  */
-public final class OccurencesSupport {
-    private ModelVisitor modelVisitor;
-    private int offset;
-    OccurencesSupport(ModelVisitor modelVisitor, int offset) {
-        this.modelVisitor = modelVisitor;
-        this.offset = offset;
-    }
-
-    @CheckForNull
-    public Occurence getOccurence() {
-        return modelVisitor.getOccurence(offset);
-    }
-
-    @CheckForNull
-    public CodeMarker getCodeMarker() {
-        return modelVisitor.getCodeMarker(offset);
-    }
-
+public interface Occurence{
+    ModelElement getDeclaration();
+    List<? extends ModelElement> getAllDeclarations();
+    List<Occurence> getAllOccurences();
+    OffsetRange getOccurenceRange();
 }

@@ -36,32 +36,67 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.php.editor.model;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.netbeans.modules.gsf.api.annotations.CheckForNull;
-import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
+import org.netbeans.modules.gsf.api.annotations.NonNull;
+import org.openide.filesystems.FileObject;
 
 /**
  *
  * @author Radek Matous
  */
-public final class OccurencesSupport {
-    private ModelVisitor modelVisitor;
-    private int offset;
-    OccurencesSupport(ModelVisitor modelVisitor, int offset) {
-        this.modelVisitor = modelVisitor;
-        this.offset = offset;
+public class ModelUtils {
+
+    private ModelUtils() {
     }
 
     @CheckForNull
-    public Occurence getOccurence() {
-        return modelVisitor.getOccurence(offset);
+    public static <T extends ModelElement> T getFirst(List<? extends T> all) {
+        return all.size() > 0 ? all.get(0) : null;
     }
 
     @CheckForNull
-    public CodeMarker getCodeMarker() {
-        return modelVisitor.getCodeMarker(offset);
+    public static <T extends Occurence> T getFirst(List<? extends T> all) {
+        return all.size() > 0 ? all.get(0) : null;
     }
 
+    @CheckForNull
+    public static <T extends ModelElement> T getLast(List<? extends T> all) {
+        return all.size() > 0 ? all.get(all.size()-1) : null;
+    }
+
+    @NonNull
+    public static <T extends ModelElement> List<? extends T> forFileOnly(List<? extends T> all, FileObject fo) {
+        List<T> retval = new ArrayList<T>();
+        for (T element : all) {
+            if (element.getFileObject() == fo) {
+                retval.add(element);
+            }
+        }
+        return retval;
+    }
+
+    @SuppressWarnings("unchecked")
+    @NonNull
+    public static <T extends ModelElement> List<? extends T> merge(List<? extends T>... all) {
+        List<T> retval = new ArrayList<T>();
+        for (List<? extends T> list : all) {
+            retval.addAll(list);
+        }
+        return retval;
+    }
+
+    @NonNull
+    public static ModelScope getModelScope(ModelElement element) {
+        ModelScope tls = (element instanceof ModelScope) ? (ModelScope)element : null;
+        while (tls == null && element != null) {
+            element = element.getInScope();
+            tls = (ModelScope) ((element instanceof ModelScope) ? element : null);
+        }
+        assert tls != null;
+        return tls;
+    }
 }
