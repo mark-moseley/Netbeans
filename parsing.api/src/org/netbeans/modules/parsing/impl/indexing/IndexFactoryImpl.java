@@ -40,17 +40,18 @@
 package org.netbeans.modules.parsing.impl.indexing;
 
 import java.io.IOException;
-
+import org.netbeans.modules.parsing.spi.indexing.Context;
+import org.netbeans.modules.parsing.spi.indexing.Indexable;
 
 /**
  *
  * @author Tomas Zezula
  */
-public interface IndexImpl {
+public interface IndexFactoryImpl {
 
-    public void addDocument (IndexDocumentImpl document);
+    public IndexDocumentImpl createDocument (Indexable indexable);
 
-    public void removeDocument (String relativePath);
+    public IndexImpl createIndex (final Context ctx) throws IOException;
 
-    public void store () throws IOException;
+    public IndexImpl getIndex (final Context ctx) throws IOException;
 }
