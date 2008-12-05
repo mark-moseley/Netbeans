@@ -42,11 +42,9 @@
 package org.netbeans.modules.websvc.rest.wizard;
 
 import java.awt.Component;
-import java.util.List;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.websvc.rest.spi.RestSupport;
-import org.netbeans.modules.websvc.rest.support.JavaSourceHelper;
-import org.netbeans.modules.websvc.rest.support.PersistenceHelper;
+import org.netbeans.modules.websvc.rest.support.PersistenceHelper.PersistenceUnit;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.WizardDescriptor;
 import org.openide.util.HelpCtx;
@@ -63,26 +61,27 @@ public final class EntitySelectionPanel extends AbstractPanel {
     }
     
     public HelpCtx getHelp() {
-        return HelpCtx.DEFAULT_HELP;
+        return new HelpCtx(EntitySelectionPanel.class);
     }
     
     public boolean isFinishPanel() {
         return false;
     }
     
+    @Override
     public boolean isValid() {
         Project project = Templates.getProject(wizardDescriptor);
         RestSupport support = project.getLookup().lookup(RestSupport.class);
         if(support == null) {
-            setErrorMessage("MSG_EntitySelectionPanel_NotWebProject");
+            setInfoMessage("MSG_EntitySelectionPanel_NotWebProject");
             return false;
         } else {
             /*if(!support.hasSwdpLibrary()) {
                 setErrorMessage("MSG_EntitySelectionPanel_NoSWDP");
                 return false;
             }*/
-            if (getPersistenceUnitName(project) == null) {
-                setErrorMessage("MSG_EntitySelectionPanel_NoPersistenceUnit");
+            if (getPersistenceUnit(project) == null) {
+                setInfoMessage("MSG_EntitySelectionPanel_NoPersistenceUnit");
                 return false;
             }
         }
@@ -97,17 +96,7 @@ public final class EntitySelectionPanel extends AbstractPanel {
         return component;
     }
     
-    private String getPersistenceUnitName(Project project) {
-        return getPersistenceUnitName(wizardDescriptor, project);
+    private PersistenceUnit getPersistenceUnit(Project project) {
+        return Util.getPersistenceUnit(wizardDescriptor, project);
     }
-    
-    static String getPersistenceUnitName(WizardDescriptor wizard, Project project) {
-        String puName = (String) wizard.getProperty(WizardProperties.PERSISTENCE_UNIT_NAME);
-        if (puName == null || puName.trim().length() == 0) {
-            puName = PersistenceHelper.getPersistenceUnitName(project);
-            wizard.putProperty(WizardProperties.PERSISTENCE_UNIT_NAME, puName);
-        }
-        return puName;
-    }
-
 }
