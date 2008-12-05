@@ -48,8 +48,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -57,14 +59,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.ruby.platform.RubyPlatform.Info;
-import org.netbeans.modules.ruby.platform.RubyExecution;
+import org.netbeans.modules.ruby.platform.execution.ExecutionUtils;
 import org.netbeans.modules.ruby.platform.RubyPreferences;
 import org.netbeans.modules.ruby.platform.Util;
-import org.netbeans.modules.ruby.platform.execution.ExecutionService;
 import org.netbeans.modules.ruby.spi.project.support.rake.EditableProperties;
 import org.netbeans.modules.ruby.spi.project.support.rake.PropertyUtils;
 import org.openide.filesystems.FileObject;
@@ -94,6 +97,21 @@ public final class RubyPlatformManager {
     private static final String PLATFORM_ID_DEFAULT = "default"; // NOI18N
 
     private static final Logger LOGGER = Logger.getLogger(RubyPlatformManager.class.getName());
+
+    /** 
+     * Compares alphabetically by the long descriptions. Fallbacks to
+     * interpreter's paths comparison
+     */
+    private static final Comparator<RubyPlatform> ALPHABETICAL_COMPARATOR = new Comparator<RubyPlatform>() {
+        public int compare(RubyPlatform p1, RubyPlatform p2) {
+            int result = Collator.getInstance().compare(
+                    p1.getInfo().getLongDescription(), p2.getInfo().getLongDescription());
+            if (result == 0) {
+                result = p1.getInterpreter().compareTo(p2.getInterpreter());
+            }
+            return result;
+        }
+    };
     
     private static Set<RubyPlatform> platforms;
     
@@ -116,11 +134,22 @@ public final class RubyPlatformManager {
         platforms = null;
         firePlatformsChanged();
     }
+
     /**
      * Get a set of all registered platforms.
      */
     public static synchronized Set<RubyPlatform> getPlatforms() {
         return new HashSet<RubyPlatform>(getPlatformsInternal());
+    }
+
+    /**
+     * Get a set of all registered platforms, sorted alphabetically by long
+     * description. Fallbacks to the interpreter's paths comparison.
+     */
+    public static synchronized SortedSet<? extends RubyPlatform> getSortedPlatforms() {
+        SortedSet<RubyPlatform> _platforms = new TreeSet<RubyPlatform>(ALPHABETICAL_COMPARATOR);
+        _platforms.addAll(getPlatformsInternal());
+        return _platforms;
     }
 
     /**
@@ -520,8 +549,8 @@ public final class RubyPlatformManager {
             // autodetection, otherwise interpreter under JRUBY_HOME would be
             // effectively used
             pb.environment().remove("JRUBY_HOME"); // NOI18N
-            pb.environment().put("JAVA_HOME", RubyExecution.getJavaHome()); // NOI18N
-            ExecutionService.logProcess(pb);
+            pb.environment().put("JAVA_HOME", ExecutionUtils.getJavaHome()); // NOI18N
+            ExecutionUtils.logProcess(pb);
             final Process proc = pb.start();
             // FIXME: set timeout
             Thread gatherer = new Thread(new Runnable() {
