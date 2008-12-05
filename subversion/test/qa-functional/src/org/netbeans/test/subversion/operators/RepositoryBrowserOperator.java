@@ -23,7 +23,7 @@ public class RepositoryBrowserOperator extends NbDialogOperator {
         super("Browse Repository");
     }
 
-    private TreeTableOperator _tree;
+    private JTableOperator _table;
     private JLabelOperator _lblSpecifyFolderToCheckout;
     private JButtonOperator _btOK;
     private JButtonOperator _btCancel;
@@ -37,11 +37,11 @@ public class RepositoryBrowserOperator extends NbDialogOperator {
     /** Tries to find null TreeView$ExplorerTree in this dialog.
      * @return JTreeOperator
      */
-    public TreeTableOperator tree() {
-        if (_tree == null) {
-            _tree= new TreeTableOperator(this);
+    public JTableOperator table() {
+        if (_table == null) {
+            _table = new JTableOperator(this);
         }
-        return _tree;
+        return _table;
     }
 
     /** Tries to find "Specify Folder to checkout:" JLabel in this dialog.
@@ -58,16 +58,46 @@ public class RepositoryBrowserOperator extends NbDialogOperator {
     // Low-level functionality definition part
     //****************************************
 
-    /** Selects a folder denoted by path.
-     * @param path path to folder without root (e.g. "folder|subfolder")
+    /** Performs popup menu on specified row.
+     * @param row row number to be selected (starts from 0)
+     * @param popupPath popup menu path
      */
-    public void selectFolder(String path) {
-        new Node(tree().tree(), path).select();
+    public void performPopup(int row, String popupPath) {
+        table().selectCell(row, 0);
+        JPopupMenuOperator popup = new JPopupMenuOperator(table().callPopupOnCell(row, 0));
+        popup.pushMenu(popupPath);
+    }
+
+    /** Performs popup menu on specified file.
+     * @param filename name of file to be selected
+     * @param popupPath popup menu path
+     */
+    public void performPopup(String filename, String popupPath) {
+        performPopup(table().findCellRow(filename), popupPath);
+    }
+
+    /** Performs popup menu on specified row and no block further execution.
+     * @param row row number to be selected (starts from 0)
+     * @param popupPath popup menu path
+     */
+    public void performPopupNoBlock(int row, String popupPath) {
+        table().selectCell(row, 0);
+        JPopupMenuOperator popup = new JPopupMenuOperator(table().callPopupOnCell(row, 0));
+        popup.pushMenuNoBlock(popupPath);
+    }
+
+    /** Performs popup menu on specified file and no block further execution.
+     * @param filename name of file to be selected
+     * @param popupPath popup menu path
+     */
+    public void performPopupNoBlock(String filename, String popupPath) {
+        performPopupNoBlock(table().findCellRow(filename), popupPath);
     }
     
     /** Tries to find "OK" JButton in this dialog.
      * @return JButtonOperator
      */
+    @Override
     public JButtonOperator btOK() {
         if (_btOK==null) {
             _btOK = new JButtonOperator(this, "OK");
@@ -78,6 +108,7 @@ public class RepositoryBrowserOperator extends NbDialogOperator {
     /** Tries to find "Cancel" JButton in this dialog.
      * @return JButtonOperator
      */
+    @Override
     public JButtonOperator btCancel() {
         if (_btCancel==null) {
             _btCancel = new JButtonOperator(this, "Cancel");
@@ -88,6 +119,7 @@ public class RepositoryBrowserOperator extends NbDialogOperator {
     /** Tries to find "Help" JButton in this dialog.
      * @return JButtonOperator
      */
+    @Override
     public JButtonOperator btHelp() {
         if (_btHelp==null) {
             _btHelp = new JButtonOperator(this, "Help");
@@ -102,18 +134,21 @@ public class RepositoryBrowserOperator extends NbDialogOperator {
 
     /** clicks on "OK" JButton
      */
+    @Override
     public void ok() {
         btOK().push();
     }
 
     /** clicks on "Cancel" JButton
      */
+    @Override
     public void cancel() {
         btCancel().push();
     }
 
     /** clicks on "Help" JButton
      */
+    @Override
     public void help() {
         btHelp().push();
     }
@@ -126,7 +161,7 @@ public class RepositoryBrowserOperator extends NbDialogOperator {
     /** Performs verification of RepositoryBrowserOperator by accessing all its components.
      */
     public void verify() {
-        tree();
+        table();
         lblSpecifyFolderToCheckout();
         btOK();
         btCancel();
