@@ -41,7 +41,7 @@
 
 package org.netbeans.modules.uml.project.ui.nodes;
 
-import java.util.Iterator;
+import java.awt.Dialog;
 import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
@@ -56,9 +56,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ResourceBundle;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.JSeparator;
+import javax.swing.JButton;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -77,18 +79,12 @@ import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 
-import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
-import org.openide.loaders.DataFolder;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.loaders.FolderLookup;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -105,12 +101,12 @@ import org.netbeans.modules.uml.project.ui.nodes.actions.NewElementType;
 import org.netbeans.modules.uml.project.ui.nodes.actions.NewPackageType;
 import org.netbeans.modules.uml.resources.images.ImageUtil;
 import org.netbeans.modules.uml.ui.support.applicationmanager.IProduct;
-import org.netbeans.spi.project.support.ant.AntProjectHelper;
-import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.ui.support.CommonProjectActions;
 
+import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.awt.Mnemonics;
 import org.openide.util.Mutex;
 import org.openide.util.datatransfer.NewType;
 
@@ -306,7 +302,7 @@ public class UMLPhysicalViewProvider implements LogicalViewProvider
         return ((UMLLogicalViewRootNode)createLogicalView()).getModelRootNode();
     }
     
-    private static Image brokenProjectBadge = Utilities.loadImage(
+    private static Image brokenProjectBadge = ImageUtilities.loadImage(
         ImageUtil.IMAGE_FOLDER + "broken-project-badge.gif"); // NOI18N
     /////// end isBroken stuff
     
@@ -346,7 +342,7 @@ public class UMLPhysicalViewProvider implements LogicalViewProvider
             Image original = super.getIcon(type);
             
             return broken
-                    ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0)
+                    ? ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0)
                     : original;
         }
         
@@ -356,7 +352,7 @@ public class UMLPhysicalViewProvider implements LogicalViewProvider
             Image original = super.getOpenedIcon(type);
             
             return broken
-                    ? Utilities.mergeImages(original, brokenProjectBadge, 8, 0)
+                    ? ImageUtilities.mergeImages(original, brokenProjectBadge, 8, 0)
                     : original;
         }
         
@@ -414,29 +410,52 @@ public class UMLPhysicalViewProvider implements LogicalViewProvider
         @Override
         public void destroy() throws IOException
         {
-            NotifyDescriptor descriptor=new NotifyDescriptor.Confirmation(
-                    NbBundle.getMessage(UMLPhysicalViewProvider.class,
-                    "MSG_ConfirmDeleteProject", mProject.getName(),
-                    mProject.getProjectDirectory().getPath()),
-                    NotifyDescriptor.YES_NO_OPTION);
-            
-            if (DialogDisplayer.getDefault().notify(descriptor)==
-                    NotifyDescriptor.YES_OPTION)
+            //
+            final UMLProjectDeletePanel delPanel=new UMLProjectDeletePanel(mProject.getName(), mProject.getProjectDirectory().getPath());
+            String title = NbBundle.getMessage(UMLPhysicalViewProvider.class,"LBL_ConfirmDeleteTitle");
+            String adesc = NbBundle.getMessage(UMLPhysicalViewProvider.class,"ADS_ConfirmDeleteProject");
+            final JButton confirm = new JButton();
+            Mnemonics.setLocalizedText(confirm, NbBundle.getMessage(UMLPhysicalViewProvider.class, "LBL_Yes_Button"));
+            final JButton cancel  = new JButton(NbBundle.getMessage(UMLPhysicalViewProvider.class, "LBL_No_Button"));
+
+            confirm.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(UMLPhysicalViewProvider.class, "ACSD_Yes_Button"));
+            cancel.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(UMLPhysicalViewProvider.class, "ACSD_No_Button"));
+
+            DialogDescriptor dialogDescriptor = new DialogDescriptor(delPanel, title,
+                true,new Object[] {confirm, cancel}, cancel,
+                DialogDescriptor.DEFAULT_ALIGN, null,null);
+            dialogDescriptor.setMessageType(NotifyDescriptor.QUESTION_MESSAGE);
+
+            Dialog dialog = DialogDisplayer.getDefault().createDialog(dialogDescriptor);
+            dialog.getAccessibleContext().setAccessibleDescription(adesc);
+            dialog.getAccessibleContext().setAccessibleName(title);
+            try
             {
-                mProject.removeUMLProjectMetaListener();
-                
-                closeDiagramsWithoutSave();
-                Mutex.EVENT.readAccess(new Mutex.Action<Void>()
+                dialog.setVisible(true);
+                if (dialogDescriptor.getValue() == confirm)
                 {
-                    public Void run()
+                    mProject.removeUMLProjectMetaListener();
+
+                    closeDiagramsWithoutSave();
+                    Mutex.EVENT.readAccess(new Mutex.Action<Void>()
                     {
-                        OpenProjects.getDefault().close(new Project[] {mProject});
-                        return null;
-                        
-                    }
-                });
-                
-                mHelper.getProjectDirectory().delete();
+                        public Void run()
+                        {
+                            OpenProjects.getDefault().close(new Project[] {mProject});
+                            return null;
+
+                        }
+                    });
+
+                    mHelper.getProjectDirectory().delete();
+                }
+            } catch (Exception e)
+            {
+                Logger.getLogger(UMLPhysicalViewProvider.class.getName()).log(Level.SEVERE,
+                        e.getLocalizedMessage());
+            } finally
+            {
+                dialog.dispose();
             }
         }
         
@@ -459,7 +478,7 @@ public class UMLPhysicalViewProvider implements LogicalViewProvider
                             IDiagram diag = diagram.getDiagram();
                             if (diag != null)
                             {
-                                diag.setIsDirty(false);
+                                diag.setDirty(false);
                                 product.getDiagramManager().closeDiagram2(diag);
                             }
                         }
@@ -561,40 +580,7 @@ public class UMLPhysicalViewProvider implements LogicalViewProvider
             actions.add(null);
             actions.add(CommonProjectActions.deleteProjectAction());
             actions.add(null);
-            
-            try
-            {
-                Repository repository  = Repository.getDefault();
-                FileSystem sfs = repository.getDefaultFileSystem();
-                FileObject fo = sfs.findResource("UMLProjects/Actions"); // NOI18N
-                
-                if (fo != null)
-                {
-                    DataObject dobj = DataObject.find(fo);
-                    FolderLookup actionRegistry = new FolderLookup((DataFolder)dobj);
-                    Lookup.Template query = new Lookup.Template(Object.class);
-                    Lookup lkup = actionRegistry.getLookup();
-                    Iterator it = lkup.lookup(query).allInstances().iterator();
-
-                    while (it.hasNext())
-                    {
-                        Object next = it.next();
-                        
-                        if (next instanceof Action)
-                            actions.add(next);
-                        
-                        else if (next instanceof JSeparator)
-                            actions.add(null);
-                    }
-                }
-            }
-            
-            catch (DataObjectNotFoundException ex)
-            {
-                // data folder for exitinf fileobject expected
-                ErrorManager.getDefault().notify(ex);
-            }
-            
+            actions.addAll(Utilities.actionsForPath("UMLProjects/Actions")); // NOI18N
             addContextMenus(actions);
             actions.add(null);
             
