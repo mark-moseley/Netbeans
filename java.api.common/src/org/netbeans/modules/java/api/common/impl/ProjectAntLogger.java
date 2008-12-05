@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -39,87 +39,53 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.java.j2seproject;
+package org.netbeans.modules.java.api.common.impl;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.regex.Pattern;
 import org.apache.tools.ant.module.spi.AntEvent;
 import org.apache.tools.ant.module.spi.AntLogger;
 import org.apache.tools.ant.module.spi.AntSession;
-import org.netbeans.api.project.Project;
-import org.netbeans.api.project.ProjectManager;
-import org.openide.ErrorManager;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
+import org.openide.util.lookup.ServiceProvider;
 
 /**
- * Logger which should suppress or prettify typical Ant output from a
- * j2seproject's build-impl.xml.
- * @author Jesse Glick
+ * Logger which should suppress or prettify typical Ant output from build-impl.xml.
  */
-public final class J2SEAntLogger extends AntLogger {
-    
-    /** Default constructor for lookup. */
-    public J2SEAntLogger() {}
-    
+@ServiceProvider(service=AntLogger.class, position=50)
+public class ProjectAntLogger extends AntLogger {
+
+    @Override
     public boolean interestedInSession(AntSession session) {
-        // Even if the initiating project is not a J2SEProject, suppress these messages.
+        // Even if the initiating project is not an Ant-based project, suppress these messages.
         // However disable our tricks when running at VERBOSE or higher.
         return session.getVerbosity() <= AntEvent.LOG_INFO;
     }
     
-    private static boolean isJ2SEProject(File dir) {
-        FileObject projdir = FileUtil.toFileObject(FileUtil.normalizeFile(dir));
-        try {
-            Project proj = ProjectManager.getDefault().findProject(projdir);
-            if (proj != null) {
-                // Check if it is a J2SEProject.
-                return proj.getLookup().lookup(J2SEProject.class) != null;
-            }
-        } catch (IOException e) {
-            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
-        }
-        return false;
-    }
-    
+    @Override
     public boolean interestedInScript(File script, AntSession session) {
         if (script.getName().equals("build-impl.xml")) { // NOI18N
             File parent = script.getParentFile();
             if (parent != null && parent.getName().equals("nbproject")) { // NOI18N
                 File parent2 = parent.getParentFile();
-                if (parent2 != null && parent2.canRead()) {
-                    return isJ2SEProject(parent2);
+                if (parent2 != null && parent2.isFile()) {
+                    return true;
                 }
             }
         }
-        // #43968: messages from subprojects are sent in AntEvent that has script 
-        // name build.xml and we are interested in those messages too
-        else if (script.getName().equals("build.xml")) { // NOI18N
-            File parent = script.getParentFile();
-            if (parent != null && parent.canRead()) {
-                return isJ2SEProject(parent);
-            }
-        }
-        // Was not a J2SEProject's nbproject/build-impl.xml; ignore it.
+        // Was not a nbproject/build-impl.xml; ignore it.
         return false;
     }
     
+    @Override
     public String[] interestedInTargets(AntSession session) {
         return AntLogger.ALL_TARGETS;
     }
     
+    @Override
     public String[] interestedInTasks(AntSession session) {
-        // XXX will eventually need them all anyway; as is, could list just javac
-        return AntLogger.ALL_TASKS;
+        return new String[] {"javac"};
     }
     
-    public int[] interestedInLogLevels(AntSession session) {
-        return new int[] {
-            AntEvent.LOG_WARN,
-        };
-    }
-    
+    @Override
     public void taskFinished(AntEvent event) {
         if ("javac".equals(event.getTaskName())) { // NOI18N
             Throwable t = event.getException();
@@ -129,15 +95,6 @@ public final class J2SEAntLogger extends AntLogger {
                 // it will have been a compilation error which we do not wish to show.
                 session.consumeException(t);
             }
-        }
-    }
-
-    public void messageLogged(AntEvent event) {
-        // #43968 - filter out following message
-        if (!event.isConsumed() && event.getLogLevel() == AntEvent.LOG_WARN &&
-            event.getMessage().startsWith("Trying to override old definition of " + // NOI18N
-                "task http://www.netbeans.org/ns/j2se-project/")) { // NOI18N
-            event.consume();
         }
     }
 
