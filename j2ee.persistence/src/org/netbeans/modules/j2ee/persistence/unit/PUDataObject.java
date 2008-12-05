@@ -73,6 +73,7 @@ import org.openide.loaders.DataObjectExistsException;
 import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 
 /**
@@ -244,7 +245,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
     public void addPersistenceUnit(PersistenceUnit persistenceUnit){
         ProviderUtil.makePortableIfPossible(FileOwnerQuery.getOwner(getPrimaryFile()), persistenceUnit);
         getPersistence().addPersistenceUnit(persistenceUnit);
-        modelUpdatedFromUI();
+        modelUpdated();
         firePropertyChange(PERSISTENCE_UNIT_ADDED_OR_REMOVED, false, true);
     }
     
@@ -253,7 +254,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
      */
     public void removePersistenceUnit(PersistenceUnit persistenceUnit){
         getPersistence().removePersistenceUnit(persistenceUnit);
-        modelUpdatedFromUI();
+        modelUpdated();
         firePropertyChange(PERSISTENCE_UNIT_ADDED_OR_REMOVED, false, true);
     }
     
@@ -273,7 +274,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
             }
         }
         persistenceUnit.addClass2(clazz);
-        modelUpdatedFromUI();
+        modelUpdated();
         return true;
     }
     
@@ -285,8 +286,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
      */
     public void removeClass(PersistenceUnit persistenceUnit, String clazz){
         persistenceUnit.removeClass2(clazz);
-        
-        modelUpdatedFromUI();
+        modelUpdated();
     }
     
     
@@ -312,7 +312,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
         }
         
         public java.awt.Image getIcon() {
-            return org.openide.util.Utilities.loadImage("org/netbeans/modules/j2ee/persistence/unit/PersistenceIcon.gif"); //NOI18N
+            return ImageUtilities.loadImage("org/netbeans/modules/j2ee/persistence/unit/PersistenceIcon.gif"); //NOI18N
         }
         
         public String preferredID() {
@@ -351,8 +351,15 @@ public class PUDataObject extends XmlMultiViewDataObject {
         return (ToolBarMultiViewElement)super.getActiveMultiViewElement();
     }
     
-    public void modelUpdatedFromUI() {
+    public void modelUpdated() {
         setModified(true);
+        modelSynchronizer.requestUpdateData();
+    }
+    
+    /**
+     * Call this method if the model got updated via UI, such as,visual editor
+     */
+    public void modelUpdatedFromUI() {
         modelSynchronizer.requestUpdateData();
     }
     
@@ -373,7 +380,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
     }
     
     protected Image getXmlViewIcon() {
-        return org.openide.util.Utilities.loadImage("org/netbeans/modules/j2ee/persistence/unit/PersistenceIcon.gif"); //NOI18N
+        return ImageUtilities.loadImage("org/netbeans/modules/j2ee/persistence/unit/PersistenceIcon.gif"); //NOI18N
     }
     
     private class ModelSynchronizer extends XmlMultiViewDataSynchronizer {
