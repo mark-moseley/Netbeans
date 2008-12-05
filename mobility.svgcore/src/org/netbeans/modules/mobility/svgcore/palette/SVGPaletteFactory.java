@@ -40,7 +40,6 @@
  */   
 package org.netbeans.modules.mobility.svgcore.palette;
 
-import org.netbeans.modules.mobility.svgcore.view.source.*;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.util.logging.Level;
@@ -77,20 +76,6 @@ public final class SVGPaletteFactory {
             palette = PaletteFactory.createPalette( SVGXML_PALETTE_FOLDER,
                       new SVGPaletteActions(), null, null);
         }
-        /*
-        palette.addPropertyChangeListener( new PropertyChangeListener() {
-            public void propertyChange(PropertyChangeEvent evt) {
-                if ( PaletteController.PROP_SELECTED_ITEM.equals(evt.getPropertyName())) {
-                    Lookup selItem = palette.getSelectedItem();
-                    if ( selItem != null) {
-                        Node selNode = selItem.lookup(Node.class);
-                        if ( selNode != null) {
-                            System.out.println("Palette item selected: " + selNode.getDisplayName());
-                        }
-                    }
-                }
-            }
-        });*/ 
         return palette;
     }
     
@@ -120,7 +105,9 @@ public final class SVGPaletteFactory {
                                     } else if (comp instanceof SVGViewTopComponent) {
                                         DataObject sourceDObj = lookup.lookup(DataObject.class);
                                         assert sourceDObj != null;
-                                        ((SVGViewTopComponent) comp).dropDataObject(sourceDObj);
+                                        // TODO calculate real mouse release point.
+                                        float[] point = new float[]{0,0};
+                                        ((SVGViewTopComponent) comp).dropDataObject(sourceDObj, point);
                                     }
                                 } catch( Exception ex) {
                                     SceneManager.error("Palette drop failed.", ex); //NOI18N
