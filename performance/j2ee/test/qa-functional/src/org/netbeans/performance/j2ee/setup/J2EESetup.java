@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,66 +39,96 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages.setup;
+package org.netbeans.performance.j2ee.setup;
 
+import org.netbeans.modules.performance.utilities.CommonUtilities;
 import org.netbeans.jellytools.JellyTestCase;
 import java.io.IOException;
 import org.openide.util.Exceptions;
-import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.performance.languages.Projects;
 
-/**
- *
- * @author mkhramov@netbeans.org
- */
-public class ScriptingSetup extends JellyTestCase {
+public class J2EESetup extends JellyTestCase {
     
-    public ScriptingSetup(String testName) {
+
+    public J2EESetup(java.lang.String testName) {
         super(testName);
+    }
+    
+    public void testCloseAllDocuments() {
+        CommonUtilities.closeAllDocuments();
     }
 
     public void testCloseMemoryToolbar() {
         CommonUtilities.closeMemoryToolbar();
     }
 
-    public void testOpenRubyProject() {
+    public void testAddAppServer() {
+        CommonUtilities.addApplicationServer();
+    }
 
+    public void testInstallPlugin() {
+        CommonUtilities.installPlugin("JAX-RPC Web Services");
+    }
+               
+    public void testOpenTestApplications() {
         try {
-            this.openDataProjects(Projects.RUBY_PROJECT);
+            this.openDataProjects("TestApplication");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
     }
 
-    public void testOpenRailsProject() {
+    public void testOpenTestApplication_ejb() {
 
         try {
-            this.openDataProjects(Projects.RAILS_PROJECT);
+            this.openDataProjects("TestApplication/TestApplication-ejb");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
+
+    }
+
+    public void testOpenTestApplication_war() {
+      
+        try {
+            this.openDataProjects("TestApplication/TestApplication-war");
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+
     }
     
-    public void testOpenScriptingProject() {
+    public void testOpenDeployTest() {
 
         try {
-            this.openDataProjects(Projects.SCRIPTING_PROJECT);
+            this.openDataProjects("DeployTest");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
+
     }
 
-    public void testOpenPHPProject() {
+    public void testOpenDeployTest_ejb() {
 
         try {
-            this.openDataProjects(Projects.PHP_PROJECT);
+            this.openDataProjects("DeployTest/DeployTest-ejb");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
+
+    }
+
+    public void testOpenDeployTest_war() {
+
+        try {
+            this.openDataProjects("DeployTest/DeployTest-war");
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+
     }
 
     public void testCloseTaskWindow() {
         CommonUtilities.closeTaskWindow();
-    }
-
+    }      
+   
 }

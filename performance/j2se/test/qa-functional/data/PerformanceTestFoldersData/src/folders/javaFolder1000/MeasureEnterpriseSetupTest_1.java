@@ -38,67 +38,56 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package folders.javaFolder1000;
 
-package org.netbeans.performance.languages.setup;
-
-import org.netbeans.jellytools.JellyTestCase;
-import java.io.IOException;
-import org.openide.util.Exceptions;
-import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.performance.languages.Projects;
+import junit.framework.Test;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.modules.performance.utilities.PerformanceTestCase;
+import org.netbeans.performance.enterprise.setup.EnterpriseSetup;
 
 /**
+ * Test suite that actually does not perform any test but sets up user directory
+ * for UI responsiveness tests
  *
- * @author mkhramov@netbeans.org
+ * @author  rkubacki@netbeans.org, mmirilovic@netbeans.org
  */
-public class ScriptingSetup extends JellyTestCase {
-    
-    public ScriptingSetup(String testName) {
+public class MeasureEnterpriseSetupTest_1 extends NbTestCase {
+
+    public MeasureEnterpriseSetupTest_1(java.lang.String testName) {
         super(testName);
     }
-
-    public void testCloseMemoryToolbar() {
-        CommonUtilities.closeMemoryToolbar();
-    }
-
-    public void testOpenRubyProject() {
-
-        try {
-            this.openDataProjects(Projects.RUBY_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
-
-    public void testOpenRailsProject() {
-
-        try {
-            this.openDataProjects(Projects.RAILS_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
     
-    public void testOpenScriptingProject() {
+    public static Test suite(NbTestSuite suite) {
+        PerformanceTestCase.prepareForMeasurements();
 
-        try {
-            this.openDataProjects(Projects.SCRIPTING_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
+        suite.addTest(NbModuleSuite.create(
+            NbModuleSuite.createConfiguration(EnterpriseSetup.class)
+            .addTest("cleanTempDir")
+            .addTest("closeMemoryToolbar")
+
+            .addTest("addApplicationServer")
+            .addTest("addTomcatServer")
+
+            .addTest("openWebProject")
+            .addTest("openReservationPartnerServicesProject")
+            .addTest("openTravelReservationServiceProject")
+            .addTest("openTravelReservationServiceApplicationProject")
+            .addTest("openSoaTestProject")
+            .addTest("openBPELTestProject")
+            .addTest("closeAllDocuments")
+            .enableModules(".*")
+            .clusters(".*")
+        ));    
+        
+        return suite;        
     }
 
-    public void testOpenPHPProject() {
+    public static Test suite() {
+        NbTestSuite suite = new NbTestSuite("UI Responsiveness Enterprise Setup suite");
+        System.setProperty("suitename", MeasureEnterpriseSetupTest.class.getCanonicalName());
 
-        try {
-            this.openDataProjects(Projects.PHP_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
+        return suite(suite);
     }
-
-    public void testCloseTaskWindow() {
-        CommonUtilities.closeTaskWindow();
-    }
-
 }

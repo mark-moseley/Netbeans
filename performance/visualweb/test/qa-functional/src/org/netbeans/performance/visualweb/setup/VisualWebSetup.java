@@ -39,59 +39,43 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages.setup;
+package org.netbeans.performance.visualweb.setup;
 
-import org.netbeans.jellytools.JellyTestCase;
 import java.io.IOException;
 import org.openide.util.Exceptions;
+
+import org.netbeans.jellytools.JellyTestCase;
+
 import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.performance.languages.Projects;
 
 /**
+ * Test suite that actually does not perform any test but sets up servers
+ * for Visual Web Pack tests (and opens required test projects...)
  *
- * @author mkhramov@netbeans.org
+ * @author  mkhramov@netbeans.org, mmirilovic@netbeans.org
  */
-public class ScriptingSetup extends JellyTestCase {
-    
-    public ScriptingSetup(String testName) {
+public class VisualWebSetup extends JellyTestCase  {
+
+    public VisualWebSetup(String testName) {
         super(testName);
+    }
+
+    public void testCloseAllDocuments() {
+        CommonUtilities.closeAllDocuments();
     }
 
     public void testCloseMemoryToolbar() {
         CommonUtilities.closeMemoryToolbar();
     }
-
-    public void testOpenRubyProject() {
-
-        try {
-            this.openDataProjects(Projects.RUBY_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
-
-    public void testOpenRailsProject() {
-
-        try {
-            this.openDataProjects(Projects.RAILS_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
     
-    public void testOpenScriptingProject() {
+    public void testAddAppServer() {
+        CommonUtilities.addApplicationServer();
+    }    
+
+    public void testOpenLargeVisualWebProject() {
 
         try {
-            this.openDataProjects(Projects.SCRIPTING_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
-
-    public void testOpenPHPProject() {
-
-        try {
-            this.openDataProjects(Projects.PHP_PROJECT);
+            this.openDataProjects("UltraLargeWA");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
@@ -100,5 +84,5 @@ public class ScriptingSetup extends JellyTestCase {
     public void testCloseTaskWindow() {
         CommonUtilities.closeTaskWindow();
     }
-
+    
 }

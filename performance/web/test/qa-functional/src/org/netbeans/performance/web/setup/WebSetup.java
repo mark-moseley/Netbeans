@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,66 +39,57 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages.setup;
+package org.netbeans.performance.web.setup;
+
+import org.netbeans.modules.performance.utilities.CommonUtilities;
 
 import org.netbeans.jellytools.JellyTestCase;
+
 import java.io.IOException;
 import org.openide.util.Exceptions;
-import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.performance.languages.Projects;
 
-/**
- *
- * @author mkhramov@netbeans.org
- */
-public class ScriptingSetup extends JellyTestCase {
+public class WebSetup extends JellyTestCase {
     
-    public ScriptingSetup(String testName) {
+
+    public WebSetup(String testName) {
         super(testName);
+    }
+
+    public void testCloseAllDocuments() {
+        CommonUtilities.closeAllDocuments();
     }
 
     public void testCloseMemoryToolbar() {
         CommonUtilities.closeMemoryToolbar();
     }
 
-    public void testOpenRubyProject() {
+    public void testAddTomcatServer() {
+        
+        CommonUtilities.addTomcatServer();
+    }
+
+    public void testOpenWebProject() {
 
         try {
-            this.openDataProjects(Projects.RUBY_PROJECT);
+            this.openDataProjects("TestWebProject");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
+        CommonUtilities.buildProject("TestWebProject");
     }
-
-    public void testOpenRailsProject() {
+  
+    public void testOpenWebFoldersProject() {
 
         try {
-            this.openDataProjects(Projects.RAILS_PROJECT);
+            this.openDataProjects("PerformanceTestFolderWebApp");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
+        CommonUtilities.buildProject("PerformanceTestFolderWebApp");
     }
-    
-    public void testOpenScriptingProject() {
-
-        try {
-            this.openDataProjects(Projects.SCRIPTING_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
-
-    public void testOpenPHPProject() {
-
-        try {
-            this.openDataProjects(Projects.PHP_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
-
+        
     public void testCloseTaskWindow() {
         CommonUtilities.closeTaskWindow();
     }
-
+    
 }

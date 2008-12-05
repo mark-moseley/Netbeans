@@ -39,21 +39,24 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages.setup;
+package org.netbeans.performance.enterprise.setup;
 
-import org.netbeans.jellytools.JellyTestCase;
+import java.io.File;
 import java.io.IOException;
+
 import org.openide.util.Exceptions;
+import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.performance.languages.Projects;
 
 /**
+ * Test suite that actually does not perform any test but sets up user directory
+ * for UI responsiveness tests
  *
- * @author mkhramov@netbeans.org
+ * @author  mmirilovic@netbeans.org, mrkam@netbeans.org
  */
-public class ScriptingSetup extends JellyTestCase {
-    
-    public ScriptingSetup(String testName) {
+public class EnterpriseSetup extends JellyTestCase {
+
+    public EnterpriseSetup(java.lang.String testName) {
         super(testName);
     }
 
@@ -61,42 +64,59 @@ public class ScriptingSetup extends JellyTestCase {
         CommonUtilities.closeMemoryToolbar();
     }
 
-    public void testOpenRubyProject() {
-
-        try {
-            this.openDataProjects(Projects.RUBY_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
+    public void testAddApplicationServer() {
+        CommonUtilities.addApplicationServer();
     }
 
-    public void testOpenRailsProject() {
+    public void testAddTomcatServer() {
+        CommonUtilities.addTomcatServer();
+    }
+
+    public void testOpenReservationPartnerServicesProject() {
 
         try {
-            this.openDataProjects(Projects.RAILS_PROJECT);
+            this.openDataProjects("TravelReservationService" + File.separator + "ReservationPartnerServices");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
     }
     
-    public void testOpenScriptingProject() {
+    public void testOpenTravelReservationServiceProject() {
 
         try {
-            this.openDataProjects(Projects.SCRIPTING_PROJECT);
+            this.openDataProjects("TravelReservationService" + File.separator + "TravelReservationService");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
     }
-
-    public void testOpenPHPProject() {
+    
+    public void testOpenTravelReservationServiceApplicationProject() {
 
         try {
-            this.openDataProjects(Projects.PHP_PROJECT);
+            this.openDataProjects("TravelReservationService" + File.separator + "TravelReservationServiceApplication");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
     }
+    
+    public void testOpenSoaTestProject() {
 
+        try {
+            this.openDataProjects("SOATestProject");
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+    }
+    
+    public void testOpenBPELTestProject() {
+
+        try {
+            this.openDataProjects("BPELTestProject");
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+    }
+    
     public void testCloseTaskWindow() {
         CommonUtilities.closeTaskWindow();
     }

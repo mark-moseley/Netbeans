@@ -39,66 +39,44 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages.setup;
 
-import org.netbeans.jellytools.JellyTestCase;
-import java.io.IOException;
-import org.openide.util.Exceptions;
-import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.performance.languages.Projects;
+package folders.javaFolder1000;
+
+import junit.framework.Test;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.performance.uml.setup.UMLSetup;
+
+import org.netbeans.junit.NbTestSuite;
 
 /**
+ * Test suite that actually does not perform any test but sets up user directory
+ * for UI responsiveness tests
  *
- * @author mkhramov@netbeans.org
+ * @author mrkam@netbeans.org
  */
-public class ScriptingSetup extends JellyTestCase {
-    
-    public ScriptingSetup(String testName) {
+public class MeasureUMLSetupTest_1 extends NbTestSuite {
+
+    public MeasureUMLSetupTest_1 (java.lang.String testName) {
         super(testName);
     }
 
-    public void testCloseMemoryToolbar() {
-        CommonUtilities.closeMemoryToolbar();
-    }
+    public static Test suite() {
+        NbTestSuite suite = new NbTestSuite("UI Responsiveness Setup suite for UML Pack");
+        System.setProperty("suitename", MeasureUMLSetupTest.class.getCanonicalName());
 
-    public void testOpenRubyProject() {
+        suite.addTest(NbModuleSuite.create(
+            NbModuleSuite.createConfiguration(UMLSetup.class)
+            .addTest("closeMemoryToolbar")
 
-        try {
-            this.openDataProjects(Projects.RUBY_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
+            .addTest("openJEditModelProject")
+            .addTest("openJEditProject")
 
-    public void testOpenRailsProject() {
+            .addTest("closeAllDocuments")
+            .enableModules(".*")
+            .clusters(".*")
+        ));
 
-        try {
-            this.openDataProjects(Projects.RAILS_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
+        return suite;
     }
     
-    public void testOpenScriptingProject() {
-
-        try {
-            this.openDataProjects(Projects.SCRIPTING_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
-
-    public void testOpenPHPProject() {
-
-        try {
-            this.openDataProjects(Projects.PHP_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
-
-    public void testCloseTaskWindow() {
-        CommonUtilities.closeTaskWindow();
-    }
-
 }

@@ -38,22 +38,22 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.performance.j2se.setup;
 
-package org.netbeans.performance.languages.setup;
-
-import org.netbeans.jellytools.JellyTestCase;
-import java.io.IOException;
-import org.openide.util.Exceptions;
 import org.netbeans.modules.performance.utilities.CommonUtilities;
-import org.netbeans.performance.languages.Projects;
+import org.netbeans.jellytools.JellyTestCase;
+import java.io.*;
+import org.openide.util.Exceptions;
 
 /**
+ * Test suite that actually does not perform any test but sets up user directory
+ * for UI responsiveness tests
  *
- * @author mkhramov@netbeans.org
+ * @author  mmirilovic@netbeans.org
  */
-public class ScriptingSetup extends JellyTestCase {
-    
-    public ScriptingSetup(String testName) {
+public class J2SESetup extends JellyTestCase {
+
+    public J2SESetup(java.lang.String testName) {
         super(testName);
     }
 
@@ -61,37 +61,32 @@ public class ScriptingSetup extends JellyTestCase {
         CommonUtilities.closeMemoryToolbar();
     }
 
-    public void testOpenRubyProject() {
+    public void testAddTomcatServer() {
+        CommonUtilities.addTomcatServer();
+    }
+
+    public void testOpenDataProject() {
 
         try {
-            this.openDataProjects(Projects.RUBY_PROJECT);
+            this.openDataProjects("PerformanceTestData");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
     }
 
-    public void testOpenRailsProject() {
+    public void testOpenFoldersProject() {
 
         try {
-            this.openDataProjects(Projects.RAILS_PROJECT);
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
-    
-    public void testOpenScriptingProject() {
-
-        try {
-            this.openDataProjects(Projects.SCRIPTING_PROJECT);
+            this.openDataProjects("PerformanceTestFoldersData");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
     }
 
-    public void testOpenPHPProject() {
+    public void testOpenNBProject() {
 
         try {
-            this.openDataProjects(Projects.PHP_PROJECT);
+            this.openDataProjects("SystemProperties");
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
@@ -100,5 +95,4 @@ public class ScriptingSetup extends JellyTestCase {
     public void testCloseTaskWindow() {
         CommonUtilities.closeTaskWindow();
     }
-
 }
