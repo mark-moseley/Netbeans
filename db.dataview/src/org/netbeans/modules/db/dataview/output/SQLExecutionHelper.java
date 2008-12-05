@@ -61,6 +61,8 @@ import org.netbeans.modules.db.dataview.meta.DBMetaDataFactory;
 import org.netbeans.modules.db.dataview.meta.DBTable;
 import org.netbeans.modules.db.dataview.util.DBReadWriteHelper;
 import org.netbeans.modules.db.dataview.util.DataViewUtils;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 
@@ -76,12 +78,9 @@ class SQLExecutionHelper {
     private static Logger mLogger = Logger.getLogger(SQLExecutionHelper.class.getName());
     // the RequestProcessor used for executing statements.
     private final RequestProcessor rp = new RequestProcessor("SQLStatementExecution", 1, true); // NOI18N
-
     private static final String LIMIT_CLAUSE = " LIMIT "; // NOI18N
-
     public static final String OFFSET_CLAUSE = " OFFSET "; // NOI18N
     private static Logger LOGGER = Logger.getLogger(SQLExecutionHelper.class.getName());
-
 
     SQLExecutionHelper(DataView dataView, DatabaseConnection dbConn) {
         this.dataView = dataView;
@@ -93,12 +92,12 @@ class SQLExecutionHelper {
         try {
             Connection conn = DBConnectionFactory.getInstance().getConnection(dbConn);
             String msg = "";
-            if(conn == null) {
+            if (conn == null) {
                 Throwable ex = DBConnectionFactory.getInstance().getLastException();
-                if(ex != null) {
+                if (ex != null) {
                     msg = ex.getMessage();
                 } else {
-                    msg = NbBundle.getMessage(SQLExecutionHelper.class,"MSG_connection_failure", dv.getDatabaseConnection());
+                    msg = NbBundle.getMessage(SQLExecutionHelper.class, "MSG_connection_failure", dv.getDatabaseConnection());
                 }
                 dv.setErrorStatusText(new DBException(msg));
                 return;
@@ -197,12 +196,13 @@ class SQLExecutionHelper {
 
     void executeDeleteRow(final DataViewTableUI rsTable) {
         String title = NbBundle.getMessage(SQLExecutionHelper.class, "LBL_sql_delete");
+        final int[] rows = rsTable.getSelectedRows();
         SQLStatementExecutor executor = new SQLStatementExecutor(dataView, title, "") {
 
             @Override
             public void execute() throws SQLException, DBException {
                 dataView.setEditable(false);
-                int[] rows = rsTable.getSelectedRows();
+                
                 for (int j = 0; j < rows.length && !error; j++) {
                     if (Thread.currentThread().isInterrupted()) {
                         break;
@@ -229,7 +229,7 @@ class SQLExecutionHelper {
                     int rows = dataView.getUpdateCount();
                     if (rows == 0) {
                         error = true;
-                        errorMsg = errorMsg + NbBundle.getMessage(SQLExecutionHelper.class, "MSG_Warning_Deletion");//"MSG_no_match_to_delete");
+                        errorMsg = errorMsg + NbBundle.getMessage(SQLExecutionHelper.class, "MSG_Warning_Deletion");
                     } else if (rows > 1) {
                         error = true;
                         errorMsg = errorMsg + NbBundle.getMessage(SQLExecutionHelper.class, "MSG_no_unique_row_for_match");
@@ -247,7 +247,7 @@ class SQLExecutionHelper {
 
             @Override
             protected void executeOnSucess() {
-                dataView.decrementRowSize(rsTable.getSelectedRows().length);
+                dataView.decrementRowSize(rows.length);
                 SQLExecutionHelper.this.executeQuery();
             }
         };
@@ -416,6 +416,17 @@ class SQLExecutionHelper {
                     } else {
                         return;
                     }
+                } catch (SQLException sqlEx) {
+                    //List<Object[]> rows = new ArrayList<Object[]>();
+                    //dataView.getDataViewPageContext().setCurrentRows(rows);
+                    String title = NbBundle.getMessage(SQLExecutionHelper.class, "MSG_error");
+                    NotifyDescriptor nd = new NotifyDescriptor.Confirmation(sqlEx.getMessage() + "." + NbBundle.getMessage(SQLExecutionHelper.class, "Confirm_Close"), title, NotifyDescriptor.OK_CANCEL_OPTION, NotifyDescriptor.QUESTION_MESSAGE);
+                    DialogDisplayer.getDefault().notify(nd);
+                    if (nd.getValue().equals(NotifyDescriptor.YES_OPTION)) {
+                        dataView.removeComponents();
+                    }
+                    throw sqlEx;
+
                 } finally {
                     DataViewUtils.closeResources(rs);
                 }
@@ -524,7 +535,7 @@ class SQLExecutionHelper {
             stmt = conn.createStatement();
         }
         int pageSize = dataView.getDataViewPageContext().getPageSize();
-        
+
         try {
             stmt.setFetchSize(pageSize);
         } catch (SQLException e) {
@@ -547,8 +558,8 @@ class SQLExecutionHelper {
     private void executeSQLStatement(Statement stmt, String sql) throws SQLException {
         if (dataView.isLimitSupported() && isSelectStatement(sql)) {
             if (!isLimitUsedInSelect(sql)) {
-                sql += LIMIT_CLAUSE + dataView.getDataViewPageContext().getPageSize(); 
-                sql += OFFSET_CLAUSE + (dataView.getDataViewPageContext().getCurrentPos() - 1); 
+                sql += LIMIT_CLAUSE + dataView.getDataViewPageContext().getPageSize();
+                sql += OFFSET_CLAUSE + (dataView.getDataViewPageContext().getCurrentPos() - 1);
             }
         }
 
@@ -609,14 +620,14 @@ class SQLExecutionHelper {
     private boolean isLimitUsedInSelect(String sql) {
         return sql.toUpperCase().indexOf(LIMIT_CLAUSE) != -1;
     }
-    
+
     private boolean isGroupByUsedInSelect(String sql) {
         return sql.toUpperCase().indexOf(" GROUP BY ") != -1; // NOI18N
     }
 
     private boolean isDistinctUsedInSelect(String sql) {
         return sql.toUpperCase().indexOf(" DISTINCT ") != -1; // NOI18N
-    }    
+    }
 
     static String millisecondsToSeconds(long ms) {
         NumberFormat fmt = NumberFormat.getInstance();
