@@ -68,6 +68,8 @@ import org.netbeans.modules.mobility.svgcore.composer.actions.MoveToBottomAction
 import org.netbeans.modules.mobility.svgcore.composer.actions.MoveToTopActionFactory;
 import org.netbeans.modules.mobility.svgcore.composer.actions.RotateActionFactory;
 import org.netbeans.modules.mobility.svgcore.composer.actions.ScaleActionFactory;
+import org.netbeans.modules.mobility.svgcore.composer.actions.ScaleXActionFactory;
+import org.netbeans.modules.mobility.svgcore.composer.actions.ScaleYActionFactory;
 import org.netbeans.modules.mobility.svgcore.composer.actions.SelectAction;
 import org.netbeans.modules.mobility.svgcore.composer.actions.SelectActionFactory;
 import org.netbeans.modules.mobility.svgcore.composer.actions.SkewActionFactory;
@@ -107,7 +109,7 @@ public final class SceneManager {
         if ( LOGGER.getLevel() == null) {
             LOGGER.setLevel( Level.WARNING);
         }
-        Logger.getLogger("global").log( Level.INFO, "mobility.svg.level=" + LOGGER.getLevel()); //NOI18N
+        //Logger.getLogger("global").log( Level.INFO, "mobility.svg.level=" + LOGGER.getLevel()); //NOI18N
         String str;
 
         str = LOGGER_NAME + ".logTime"; //NOI18N
@@ -177,7 +179,7 @@ public final class SceneManager {
     private boolean                               m_busyCursorOn = false;
         
     /** persistent properties */
-    private boolean  m_isReadOnly   = true;
+    private boolean  m_isReadOnly   = false;
             float    m_zoomRatio    = (float)1.0;
     
     public static interface SelectionListener {
@@ -209,8 +211,10 @@ public final class SceneManager {
         m_actionFactories.add( new HighlightActionFactory(this));
         m_actionFactories.add( m_selectActionFactory);
         m_actionFactories.add( new TranslateActionFactory(this));
-        m_actionFactories.add( new SkewActionFactory(this));
+        m_actionFactories.add( new ScaleXActionFactory(this));
+        m_actionFactories.add( new ScaleYActionFactory(this));
         m_actionFactories.add( new ScaleActionFactory(this));
+        m_actionFactories.add( new SkewActionFactory(this));
         m_actionFactories.add( new RotateActionFactory(this));
         m_actionFactories.add( new DeleteActionFactory(this));
         m_actionFactories.add( new MoveToTopActionFactory(this));
@@ -292,10 +296,14 @@ public final class SceneManager {
     public void restoreSelection() {
         if ( m_selectedId != null) {
             SVGObject selectedObj = m_perseusController.getObjectById(m_selectedId);
-            
+
             if (selectedObj != null && (m_selectedTag == null ||
-                m_selectedTag.equals( selectedObj.getSVGElement().getLocalName()))) {
+                    m_selectedTag.equals(selectedObj.getSVGElement().getLocalName()))) {
                 setSelection(m_selectedId, false);
+            } else {
+                // fix for #150939. related to #145987. Clear selection manually 
+                // if there is no more object with id remembered as selected before update
+                setSelection(null, false);
             }
             m_selectedId = null;
         }
@@ -413,7 +421,7 @@ public final class SceneManager {
         return m_lookup;
     }
     
-    public PerseusController getPerseusController() {
+    public synchronized PerseusController getPerseusController() {
         return m_perseusController;
     }
 
@@ -455,12 +463,21 @@ public final class SceneManager {
         if ( m_isReadOnly != isReadOnly) {
             m_isReadOnly = isReadOnly;
             updateStatusBar();
-            if ( !m_isReadOnly) {
+            /*
+             * Fix for IZ#145739 - [65cat] NullPointerException at 
+             * org.netbeans.modules.mobility.svgcore.composer.SceneManager.setReadOnly
+             * 
+             * m_perseusController could be null when image was broken 
+             * from very beginning. In this case it was not initialized .
+             */
+            if ( !m_isReadOnly && m_perseusController!= null) {
                 m_perseusController.stopAnimator();
             }
             SVGObject [] selected = getSelected();
             notifySelectionChanged(selected, selected);
-            m_screenMgr.repaint();
+            if ( m_perseusController!= null ){
+                m_screenMgr.repaint();
+            }
         }
     }
 
@@ -475,6 +492,7 @@ public final class SceneManager {
                 action.actionCompleted();
             }
 
+            SVGObject [] newSelection = null;
             if ( id != null) {
                 SVGObject selectedObj = m_perseusController.getObjectById(id);
 
@@ -484,17 +502,21 @@ public final class SceneManager {
                     }
                     ActionMouseCursor cursor = m_selectActionFactory.getMouseCursor(null, false);
                     m_screenMgr.setCursor(cursor != null ? cursor.getCursor() : null);
+                    newSelection = getSelected();
                 } else {
                     // TODO Revisit: Hack! Do not send the notification about selection change
                     // if the selected object if not SVGLocatableElement, to allow
                     // SVG tree traversal in the navigator. Correct way is to allow
                     // selection of other SVG elements as well.
-                    return;
+                    //return;
+                    // fix for #145987 - send null in selection changed notification
+                    // Persejus has selected object (getSelected() returns not null),
+                    // but we do not want to display this selection.
+                    newSelection = null;
                 }
                 
             }
             //TODO implement better selection change handling
-            SVGObject [] newSelection = getSelected();
             if (!SVGObject.areSame(newSelection, oldSelection)) {
                 selectionChanged(newSelection, oldSelection);
             }        
@@ -610,7 +632,14 @@ public final class SceneManager {
     public void deleteObject(SVGObject svgObj) {
         SVGObject [] oldSelection = getSelected();
         svgObj.delete();
-        SVGObject [] newSelection = getSelected();
+        // fix for #150324. 
+        // clear selection manually by setting new value to null.
+        // removing transaction is started in separate thread and 
+        //  can be in process at this moment. 
+        // So have two options - wait for it to finish (to use getSelected()) 
+        //  or clear selection manually.
+        //SVGObject [] newSelection = getSelected();
+        SVGObject [] newSelection = null;
         if (!SVGObject.areSame(newSelection, oldSelection)) {
             selectionChanged(newSelection, oldSelection);
         }                    
