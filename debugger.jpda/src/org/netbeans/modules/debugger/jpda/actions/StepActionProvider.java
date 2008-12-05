@@ -184,7 +184,7 @@ implements Executor {
                         // Or suspend count > 1 !
                         //itsex.printStackTrace();
                         //System.err.println("Thread: "+tr.name()+", suspended = "+tr.isSuspended()+", suspend count = "+tr.suspendCount()+", status = "+tr.status());
-                        logger.warning(itsex.getLocalizedMessage()+"\nThread: "+tr.name()+", suspended = "+tr.isSuspended()+", suspend count = "+tr.suspendCount()+", status = "+tr.status());
+                        logger.warning(itsex.getLocalizedMessage()+"\nThread: "+tr.name()+", suspended = "+tr.isSuspended()+", status = "+tr.status());
                         getDebuggerImpl ().getOperator ().unregister(stepRequest);
                         return ;
                     }
@@ -205,10 +205,7 @@ implements Executor {
                 getDebuggerImpl ().resume ();
             }
         } catch (VMDisconnectedException e) {
-            ErrorManager.getDefault().notify(ErrorManager.USER,
-                ErrorManager.getDefault().annotate(e,
-                    NbBundle.getMessage(StepActionProvider.class,
-                        "VMDisconnected")));
+            // Debugger is disconnected => the action will be ignored.
         }
         //S ystem.out.println("/nStepAction.doAction end");
     }
