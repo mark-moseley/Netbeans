@@ -53,9 +53,9 @@ import java.util.List;
  */
 public class APTBracketRecoveryFilter implements TokenStream {
     private final TokenStream orig;
-    private int curlies = 0;
-    private int parens = 0;
-    private int squares = 0;
+//    private int curlies = 0;
+//    private int parens = 0;
+//    private int squares = 0;
     private int pos = -1;
     private final List<Token> stack = new ArrayList<Token>(1000);
     private Token last = null;
@@ -90,8 +90,8 @@ public class APTBracketRecoveryFilter implements TokenStream {
     }     
 
     private Token checkToken(Token last) {
-        int matchedBracket = APTUtils.getMatchBracket(last.getType());
-        int topToken = peek().getType();
+        //int matchedBracket = APTUtils.getMatchBracket(last.getType());
+        //int topToken = peek().getType();
         return null;
     }
     
