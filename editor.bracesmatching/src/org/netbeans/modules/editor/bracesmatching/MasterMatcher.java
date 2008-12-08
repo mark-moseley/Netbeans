@@ -48,11 +48,9 @@ import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.settings.AttributesUtilities;
 import org.netbeans.api.editor.settings.EditorStyleConstants;
 import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.spi.editor.bracesmatching.BracesMatcher;
-import org.netbeans.spi.editor.bracesmatching.BracesMatcherFactory;
 import org.netbeans.spi.editor.bracesmatching.BracesMatcherFactory;
 import org.netbeans.spi.editor.bracesmatching.MatcherContext;
 import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
@@ -104,12 +102,16 @@ public final class MasterMatcher {
         int caretOffset, 
         OffsetsBag highlights, 
         AttributeSet matchedColoring, 
-        AttributeSet mismatchedColoring
+        AttributeSet mismatchedColoring,
+        AttributeSet matchedMulticharColoring,
+        AttributeSet mismatchedMulticharColoring
     ) {
         assert document != null : "The document parameter must not be null"; //NOI18N
         assert highlights != null : "The highlights parameter must not be null"; //NOI18N
         assert matchedColoring != null : "The matchedColoring parameter must not be null"; //NOI18N
         assert mismatchedColoring != null : "The mismatchedColoring parameter must not be null"; //NOI18N
+        assert matchedMulticharColoring != null : "The matchedMulticharColoring parameter must not be null"; //NOI18N
+        assert mismatchedMulticharColoring != null : "The mismatchedMulticharColoring parameter must not be null"; //NOI18N
         assert caretOffset >= 0 : "The caretOffset parameter must be >= 0"; //NOI18N
         
         synchronized (LOCK) {
@@ -126,7 +128,11 @@ public final class MasterMatcher {
                     lastResult.getMaxBwdLookahead() == maxBwdLookahead &&
                     lastResult.getMaxFwdLookahead() == maxBwdLookahead
                 ) {
-                    lastResult.addHighlightingJob(highlights, matchedColoring, mismatchedColoring);
+                    lastResult.addHighlightingJob(
+                            highlights,
+                            matchedColoring, mismatchedColoring,
+                            matchedMulticharColoring, mismatchedMulticharColoring
+                    );
                 } else {
                     // Different request, cancel the current task
                     lastResult.cancel();
@@ -137,7 +143,11 @@ public final class MasterMatcher {
             if (task == null) {
                 // Remember the last request
                 lastResult = new Result(document, caretOffset, allowedSearchDirection, caretBias, maxBwdLookahead, maxFwdLookahead);
-                lastResult.addHighlightingJob(highlights, matchedColoring, mismatchedColoring);
+                lastResult.addHighlightingJob(
+                        highlights,
+                        matchedColoring, mismatchedColoring,
+                        matchedMulticharColoring, mismatchedMulticharColoring
+                );
 
                 // Fire up a new task
                 task = PR.post(lastResult);
@@ -291,13 +301,34 @@ public final class MasterMatcher {
             highlights.addHighlight(offsets[i * 2], offsets[i * 2 + 1], coloring);
         }
     }
-    
+
+    private static boolean isMultiChar(int [] offsets, boolean skipFirst) {
+        if (offsets != null) {
+            int startIdx;
+
+            if (skipFirst && offsets.length > 2) {
+                startIdx = 1;
+            } else {
+                startIdx = 0;
+            }
+
+            // Highlight all the matches
+            for(int i = startIdx; i < offsets.length / 2; i++) {
+                if (offsets[i * 2 + 1] - offsets[i * 2] > 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     // when navigating: set the dot after or before the matching area, depending on the caret bias
-    // when selecting: always select the inside between original and matching areas
-    //                 do not select the areas themselvs
+    // when selecting: see #123091 for details
     private static void navigateAreas(
         int [] origin, 
         int [] matches,
+        int caretOffset,
         Object caretBias,
         Caret caret,
         boolean select
@@ -322,8 +353,20 @@ public final class MasterMatcher {
             
             if (newDotBackwardIdx != -1) {
                 if (select) {
-                    caret.setDot(origin[0]);
-                    caret.moveDot(matches[2 * newDotBackwardIdx + 1]);
+                    int set, move;
+                    
+                    if (caretOffset < origin[1]) {
+                        set = origin[0];
+                        move = matches[2 * newDotBackwardIdx + 1];
+                    } else {
+                        set = origin[1];
+                        move = matches[2 * newDotBackwardIdx];
+                    }
+
+                    if (caret.getDot() == caret.getMark()) { // || (move <= caret.getMark() && caret.getMark() <= set)
+                        caret.setDot(set);
+                    }
+                    caret.moveDot(move);
                 } else {
                     if (B_BACKWARD.equalsIgnoreCase(caretBias.toString())) {
                         caret.setDot(matches[2 * newDotBackwardIdx + 1]);
@@ -333,8 +376,20 @@ public final class MasterMatcher {
                 }
             } else if (newDotForwardIdx != -1) {
                 if (select) {
-                    caret.setDot(origin[1]);
-                    caret.moveDot(matches[2 * newDotForwardIdx]);
+                    int set, move;
+
+                    if (caretOffset > origin[0]) {
+                        set = origin[1];
+                        move = matches[2 * newDotForwardIdx];
+                    } else {
+                        set = origin[0];
+                        move = matches[2 * newDotForwardIdx + 1];
+                    }
+                    
+                    if (caret.getDot() == caret.getMark()) { //  || (set <= caret.getMark() && caret.getMark() <= move)
+                        caret.setDot(set);
+                    }
+                    caret.moveDot(move);
                 } else {
                     if (B_BACKWARD.equalsIgnoreCase(caretBias.toString())) {
                         caret.setDot(matches[2 * newDotForwardIdx + 1]);
@@ -346,24 +401,28 @@ public final class MasterMatcher {
         }
     }
 
-    private static Collection<? extends BracesMatcherFactory> findFactories(Document document, int offset, boolean backward) {
-        MimePath mimePath = null;
-
-        TokenHierarchy<? extends Document> th = TokenHierarchy.get(document);
-        if (th != null) {
-            List<TokenSequence<?>> sequences = th.embeddedTokenSequences(offset, backward);
-            if (!sequences.isEmpty()) {
-                String path = sequences.get(sequences.size() - 1).languagePath().mimePath();
-                mimePath = MimePath.parse(path);
+    private static Collection<? extends BracesMatcherFactory> findFactories(final Document document,
+            final int offset, final boolean backward
+    ) {
+        final MimePath[] mimePath = { null };
+        document.render(new Runnable() {
+            public void run() {
+                TokenHierarchy<? extends Document> th = TokenHierarchy.get(document);
+                if (th.isActive()) {
+                    List<TokenSequence<?>> sequences = th.embeddedTokenSequences(offset, backward);
+                    if (!sequences.isEmpty()) {
+                        String path = sequences.get(sequences.size() - 1).languagePath().mimePath();
+                        mimePath[0] = MimePath.parse(path);
+                    }
+                } else {
+                    String mimeType = (String) document.getProperty("mimeType"); //NOI18N
+                    mimePath[0] = mimeType != null ? MimePath.parse(mimeType) : MimePath.EMPTY;
+                }
             }
-        } else {
-            String mimeType = (String) document.getProperty("mimeType"); //NOI18N
-            mimePath = mimeType != null ? MimePath.parse(mimeType) : MimePath.EMPTY;
-        }
-
-        Collection<? extends BracesMatcherFactory> factories = mimePath == null ?
+        });
+        Collection<? extends BracesMatcherFactory> factories = mimePath[0] == null ?
             Collections.<BracesMatcherFactory>emptyList() :
-            MimeLookup.getLookup(mimePath).lookupAll(BracesMatcherFactory.class);
+            MimeLookup.getLookup(mimePath[0]).lookupAll(BracesMatcherFactory.class);
         
 //        System.out.println("@@@ '" + (mimePath == null ? "null" : mimePath.getPath()) + "', offset = " + offset + ", backward = " + backward + " -> {");
 //        for(BracesMatcherFactory f : factories) {
@@ -383,7 +442,7 @@ public final class MasterMatcher {
         private final int maxBwdLookahead;
         private final int maxFwdLookahead;
 
-        private boolean inDocumentRender = false;
+//        private boolean inDocumentRender = false;
         private volatile boolean canceled = false;
         
         private final List<Object []> highlightingJobs = new ArrayList<Object []>();
@@ -409,12 +468,16 @@ public final class MasterMatcher {
         public void addHighlightingJob(
             OffsetsBag highlights,
             AttributeSet matchedColoring,
-            AttributeSet mismatchedColoring
+            AttributeSet mismatchedColoring,
+            AttributeSet matchedMulticharColoring,
+            AttributeSet mismatchedMulticharColoring
         ) {
             highlightingJobs.add(new Object[] {
                 highlights,
                 matchedColoring,
-                mismatchedColoring
+                mismatchedColoring,
+                matchedMulticharColoring,
+                mismatchedMulticharColoring
             });
         }
 
@@ -456,21 +519,30 @@ public final class MasterMatcher {
         // ------------------------------------------------
         
         public void run() {
-            // Read lock the document
-            if (!inDocumentRender) {
-                inDocumentRender = true;
-                THREAD_RESULTS.put(Thread.currentThread(), this);
-                try {
-                    document.render(this);
-                } catch (ThreadDeath t) {
-                    throw t;
-                } catch (Error t) {
-                    // ignore, can happen when the task is interrupted
-                } finally {
-                    THREAD_RESULTS.remove(Thread.currentThread());
-                }
-                return;
+            THREAD_RESULTS.put(Thread.currentThread(), this);
+            try {
+                _run();
+            } finally {
+                THREAD_RESULTS.remove(Thread.currentThread());
             }
+        }
+        
+        private void _run() {
+//            // Read lock the document
+//            if (!inDocumentRender) {
+//                inDocumentRender = true;
+//                THREAD_RESULTS.put(Thread.currentThread(), this);
+//                try {
+//                    document.render(this);
+//                } catch (ThreadDeath t) {
+//                    throw t;
+//                } catch (Error t) {
+//                    // ignore, can happen when the task is interrupted
+//                } finally {
+//                    THREAD_RESULTS.remove(Thread.currentThread());
+//                }
+//                return;
+//            }
 
             if (canceled) {
                 return;
@@ -495,12 +567,12 @@ public final class MasterMatcher {
 //                System.out.println("!!! ------------------- finding Origin ---------------------");
                 if (D_BACKWARD.equalsIgnoreCase(allowedDirection.toString())) {
                     origin = findOrigin(true, matcher);
-                    if (origin == null) {
+                    if (origin == null && !canceled) {
                         origin = findOrigin(false, matcher);
                     }
                 } else if (D_FORWARD.equalsIgnoreCase(allowedDirection.toString())) {
                     origin = findOrigin(false, matcher);
-                    if (origin == null) {
+                    if (origin == null && !canceled) {
                         origin = findOrigin(true, matcher);
                     }
                 }
@@ -511,7 +583,10 @@ public final class MasterMatcher {
                     matches = matcher[0].findMatches();
                 }
             } catch (BadLocationException ble) {
-                LOG.log(Level.WARNING, null, ble);
+                // since we are not running under document lock (see #131284) there can be exceptions
+                LOG.log(Level.FINE, null, ble);
+                return;
+                
             } catch (Exception e) {
                 for(Throwable t = e; t != null; t = t.getCause()) {
                     if (t instanceof InterruptedException) {
@@ -519,7 +594,10 @@ public final class MasterMatcher {
                         return;
                     }
                 }
-                LOG.log(Level.WARNING, null, e);
+
+                // since we are not running under document lock (see #131284) there can be exceptions
+                LOG.log(Level.FINE, null, e);
+                return;
             }
 
             // Show the results
@@ -533,16 +611,44 @@ public final class MasterMatcher {
                 MasterMatcher.this.task = null;
             }
 
-            for (Object[] job : highlightingJobs) {
-                highlightAreas(origin, matches, (OffsetsBag) job[0], (AttributeSet) job[1], (AttributeSet) job[2]);
-                if (Boolean.valueOf((String) component.getClientProperty(PROP_SHOW_SEARCH_PARAMETERS))) {
-                    showSearchParameters((OffsetsBag) job[0]);
-                }
-            }
+            final int [] _origin = origin;
+            final int [] _matches = matches;
+            document.render(new Runnable() {
+                public void run() {
+                    try {
+                        for (Object[] job : highlightingJobs) {
+                            AttributeSet matchedColoring;
+                            AttributeSet mismatchedColoring;
 
-            for(Object [] job : navigationJobs) {
-                navigateAreas(origin, matches, caretBias, (Caret) job[0], (Boolean) job[1]);
-            }
+                            if (isMultiChar(_origin, true) || isMultiChar(_matches, false)) {
+                                matchedColoring = (AttributeSet) job[3];
+                                mismatchedColoring = (AttributeSet) job[4];
+                            } else {
+                                matchedColoring = (AttributeSet) job[1];
+                                mismatchedColoring = (AttributeSet) job[2];
+                            }
+
+                            highlightAreas(_origin, _matches, (OffsetsBag) job[0], matchedColoring, mismatchedColoring);
+                            if (Boolean.valueOf((String) component.getClientProperty(PROP_SHOW_SEARCH_PARAMETERS))) {
+                                showSearchParameters((OffsetsBag) job[0]);
+                            }
+                        }
+
+                        for(Object [] job : navigationJobs) {
+                            navigateAreas(_origin, _matches, caretOffset, caretBias, (Caret) job[0], (Boolean) job[1]);
+                        }
+                    } catch (Exception e) {
+                        // the results were not computed under document lock and may be out of sync
+                        // with the document, just ignore the exception and remove any highlights
+                        LOG.log(Level.FINE, null, e);
+
+                        // clear everything, we probably screwed it up
+                        for (Object[] job : highlightingJobs) {
+                            ((OffsetsBag) job[0]).clear();
+                        }
+                    }
+                }
+            });
         }
         
         private int [] findOrigin(
@@ -610,13 +716,16 @@ public final class MasterMatcher {
                         break;
                     }
                 }
-
+            }
+            
+            if (matcher[0] != null) {
                 // Find the original area
                 int [] origin = null;
                 try {
                     origin = matcher[0].findOrigin();
                 } catch (BadLocationException ble) {
-                    LOG.log(Level.WARNING, null, ble);
+                    // since we are not running under document lock (see #131284) there can be exceptions
+                    LOG.log(Level.FINE, null, ble);
                 }
                 
                 // Check the original area for consistency
@@ -627,16 +736,23 @@ public final class MasterMatcher {
                         if (LOG.isLoggable(Level.WARNING)) {
                             LOG.warning("Invalid BracesMatcher implementation, " + //NOI18N
                                 "findOrigin() should return nothing or offset pairs. " + //NOI18N
-                                "Offending BracesMatcher: " + matcher); //NOI18N
-                        }
-                        origin = null;
-                    } else if (origin[0] < 0 || origin[1] > document.getLength() || origin[0] > origin[1]) {
-                        if (LOG.isLoggable(Level.WARNING)) {
-                            LOG.warning("Invalid origin offsets [" + origin[0] + ", " + origin[1] + "]. " + //NOI18N
-                                "Offending BracesMatcher: " + matcher); //NOI18N
+                                "Offending BracesMatcher: " + matcher[0]); //NOI18N
                         }
                         origin = null;
                     } else {
+                        for(int i = 0; i < origin.length / 2; i++) {
+                            if (origin[2 * i] < 0 || origin[2 * i + 1] > document.getLength() || origin[2 * i] > origin[2 * i + 1]) {
+                                if (LOG.isLoggable(Level.WARNING)) {
+                                    LOG.warning("Invalid origin offsets [" + origin[2 * i] + ", " + origin[2 * i + 1] + "]. " + //NOI18N
+                                        "Offending BracesMatcher: " + matcher[0]); //NOI18N
+                                }
+                                origin = null;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (origin != null) {
                         if (backward) {
                             if (origin[1] < caretOffset - lookahead || origin[0] > caretOffset) {
                                 if (LOG.isLoggable(Level.WARNING)) {
@@ -645,7 +761,7 @@ public final class MasterMatcher {
                                         "caretOffset = " + caretOffset + //NOI18N
                                         ", lookahead = " + lookahead + //NOI18N
                                         ", searching backwards. " + //NOI18N
-                                        "Offending BracesMatcher: " + matcher); //NOI18N
+                                        "Offending BracesMatcher: " + matcher[0]); //NOI18N
                                 }
                                 origin = null;
                             }
@@ -657,19 +773,20 @@ public final class MasterMatcher {
                                         "caretOffset = " + caretOffset + //NOI18N
                                         ", lookahead = " + lookahead + //NOI18N
                                         ", searching forward. " + //NOI18N
-                                        "Offending BracesMatcher: " + matcher); //NOI18N
+                                        "Offending BracesMatcher: " + matcher[0]); //NOI18N
                                 }
                                 origin = null;
                             }
                         }
-
                     }
                 }
 
-                if (origin != null) {
-                    LOG.fine("[" + origin[0] + ", " + origin[1] + "] for caret = " + caretOffset + ", lookahead = " + (backward ? "-" : "") + lookahead); //NOI18N
-                } else {
-                    LOG.fine("[null] for caret = " + caretOffset + ", lookahead = " + (backward ? "-" : "") + lookahead); //NOI18N
+                if (LOG.isLoggable(Level.FINE)) {
+                    if (origin != null) {
+                        LOG.fine("[" + origin[0] + ", " + origin[1] + "] for caret = " + caretOffset + ", lookahead = " + (backward ? "-" : "") + lookahead); //NOI18N
+                    } else {
+                        LOG.fine("[null] for caret = " + caretOffset + ", lookahead = " + (backward ? "-" : "") + lookahead); //NOI18N
+                    }
                 }
                 
                 return origin;
