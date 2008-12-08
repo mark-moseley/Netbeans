@@ -344,6 +344,46 @@ public class DetectorTest extends TestBase {
 	performTest("UsedInFor");
     }
     
+    public void testCastIsClassUse() throws Exception {
+	performTest("CastIsClassUse");
+    }
+    
+    public void testWildcardBoundIsClassUse() throws Exception {
+	performTest("WildcardBoundIsClassUse");
+    }
+    
+    public void testStaticImport128662() throws Exception {
+	performTest("StaticImport128662");
+    }
+    
+    public void testUsedImport129988() throws Exception {
+	performTest("UsedImport129988");
+    }
+    
+    public void testUsedImport132980() throws Exception {
+	performTest("UsedImport132980");
+    }
+    
+    public void testReadUse132342() throws Exception {
+	performTest("ReadUse132342");
+    }
+    
+    public void testRecursiveExecutionIsNotUse() throws Exception {
+	performTest("RecursiveExecutionIsNotUse");
+    }
+
+    public void testDeprecatedClassDeprecatesConstructor() throws Exception {
+        performTest("DeprecatedClassDeprecatesConstructor");
+    }
+
+    public void testAttributeDefaultValue() throws Exception {
+        performTest("AttributeDefaultValue");
+    }
+
+    public void testWriteThroughThis() throws Exception {
+        performTest("WriteThroughThis");
+    }
+
     private void performTest(String fileName) throws Exception {
         performTest(fileName, new Performer() {
             public void compute(CompilationController parameter, Document doc, ErrorDescriptionSetter setter) {
@@ -413,8 +453,9 @@ public class DetectorTest extends TestBase {
         
         testBuildTo.mkdirs();
 
-        SourceUtilsTestUtil.prepareTest(FileUtil.toFileObject(dataFolder), FileUtil.toFileObject(testBuildTo), cache);
-        SourceUtilsTestUtil.compileRecursively(FileUtil.toFileObject(dataFolder));
+        FileObject srcRoot = FileUtil.toFileObject(testSource.getParentFile());
+        SourceUtilsTestUtil.prepareTest(srcRoot, FileUtil.toFileObject(testBuildTo), cache);
+        SourceUtilsTestUtil.compileRecursively(srcRoot);
 
         final Document doc = getDocument(testSourceFO);
         
