@@ -43,6 +43,8 @@ package org.netbeans.modules.cnd.test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.mimelookup.test.MockMimeLookup;
 import org.netbeans.junit.Manager;
@@ -50,6 +52,8 @@ import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.cnd.editor.cplusplus.CCKit;
 import org.netbeans.modules.cnd.editor.cplusplus.CKit;
+import org.netbeans.modules.cnd.editor.fortran.FKit;
+import org.netbeans.modules.cnd.remote.support.RemoteUserInfo;
 
 /**
  * IMPORTANT NOTE:
@@ -95,11 +99,15 @@ public abstract class BaseTestCase extends NbTestCase {
     protected void setUp() throws Exception {
         super.setUp();
         
+        Logger.getLogger("org.netbeans.modules.editor.settings.storage.Utils").setLevel(Level.SEVERE);
+        System.setProperty("cnd.mode.unittest", "true");
         MockServices.setServices(MockMimeLookup.class);
-        MimePath mimePath = MimePath.parse("text/x-c++");
+        MimePath mimePath = MimePath.parse("text/x-c++"); // NOI18N
         MockMimeLookup.setInstances(mimePath, new CCKit());
-        mimePath = MimePath.parse("text/x-c");
+        mimePath = MimePath.parse("text/x-c"); // NOI18N
         MockMimeLookup.setInstances(mimePath, new CKit());
+        mimePath = MimePath.parse("text/x-fortran"); // NOI18N
+        MockMimeLookup.setInstances(mimePath, new FKit());
     }
 
     /**
@@ -121,7 +129,7 @@ public abstract class BaseTestCase extends NbTestCase {
     public File getGoldenFile(String filename) {
         String fullClassName = getTestCaseGoldenDataClass().getName();
         String goldenFileName = fullClassName.replace('.', File.separatorChar) + File.separator + filename;
-        File goldenFile = new File(getDataDir() + "/goldenfiles/" + goldenFileName);
+        File goldenFile = new File(getDataDir() + "/goldenfiles/" + goldenFileName); // NOI18N
         return goldenFile;
     }
 
@@ -171,12 +179,12 @@ public abstract class BaseTestCase extends NbTestCase {
             
             if (CndCoreTestUtils.diff(testFile, goldenFile, null)) {
                 // copy golden
-                File goldenDataFileCopy = new File(getWorkDir(), goldenFilename + ".golden");
-                CndCoreTestUtils.copyToWorkDir(goldenFile, goldenDataFileCopy); // NOI18N
-                fail("Files differ; check " + goldenDataFileCopy);
+                File goldenDataFileCopy = new File(getWorkDir(), goldenFilename + ".golden"); // NOI18N
+                CndCoreTestUtils.copyToWorkDir(goldenFile, goldenDataFileCopy); 
+                fail("Files differ; diff " +testFile.getAbsolutePath()+ " "+ goldenDataFileCopy); // NOI18N
             }             
         } catch (IOException ioe) {
-            fail("Could not obtain working direcory " + ioe);
+            fail("Error comparing files: " + ioe); // NOI18N
         }
     }    
     
@@ -187,6 +195,58 @@ public abstract class BaseTestCase extends NbTestCase {
      */
     @Override
     public void compareReferenceFiles() {
-        compareReferenceFiles(this.getName()+".ref",this.getName()+".ref");
-    }    
+        compareReferenceFiles(this.getName()+".ref",this.getName()+".ref"); // NOI18N
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // <editor-fold defaultstate="collapsed" desc="Remote tests support">
+
+    private static Boolean isRemoteSupported = null;
+    private static String remoteHKey = null;
+
+    protected boolean canTestRemote()  {
+        if (isRemoteSupported == null) {
+            isRemoteSupported = new Boolean(initRemoteUserInfo());
+        }
+        return isRemoteSupported.booleanValue();
+    }
+
+    protected String getHKey(){
+        assert isRemoteSupported != null : "Run canTestRemote() before any remote development tests logic."; //NOI18N
+        return remoteHKey;
+    }
+
+    /*
+     * Format: user:password@server
+     */
+    private boolean initRemoteUserInfo() {
+        String ui = System.getProperty("cnd.remote.testuserinfo");
+        if( ui == null ) {
+            ui = System.getenv("CND_REMOTE_TESTUSERINFO");
+        }
+        if (ui != null) {
+            System.err.print("initRemoteUserInfo:debug (ui: " + ui + "). ");
+            int m = ui.indexOf(':');
+            if (m>-1) {
+                int n = ui.indexOf('@');
+                String remotePassword = ui.substring(m+1, n);
+                remoteHKey = ui.substring(0,m) + ui.substring(n);
+                RemoteUserInfo rui = RemoteUserInfoAccessor.getDefault().get(remoteHKey);
+                if (rui == null) {
+                    System.err.println("There is no valid RemoteUserInfoAccessor.");
+                    return false;
+                }
+                rui.setPassword(remotePassword, false);
+                System.err.println("mode 0. hkey: " + remoteHKey + ", pkey: " + remotePassword);
+            } else {
+                remoteHKey = ui;
+                System.err.println("mode 1. hkey: " + remoteHKey );
+            }
+            return true;
+        }
+        System.err.println("initRemoteUserInfo:debug. No info found");
+        return false;
+    }
+
+    //</editor-fold>
 }
