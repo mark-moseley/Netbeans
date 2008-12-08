@@ -49,7 +49,7 @@ import org.netbeans.modules.vmd.midp.components.MidpVersionDescriptor;
 import org.netbeans.modules.vmd.midp.components.handlers.EventHandlerCD;
 import org.netbeans.modules.vmd.midp.flow.FlowEventHandlerPinBadgePresenter;
 import org.netbeans.modules.vmd.midpnb.codegen.MidpCustomCodePresenterSupport;
-import org.openide.util.Utilities;
+import org.openide.util.ImageUtilities;
 import java.util.Arrays;
 import java.util.List;
 import org.openide.util.NbBundle;
@@ -82,7 +82,7 @@ public class SVGMenuEventHandlerCD extends ComponentDescriptor {
                 // info
                 InfoPresenter.createStatic (NbBundle.getMessage(SVGMenuEventHandlerCD.class, "DISP_Process_SVG_Menu"), NbBundle.getMessage(SVGMenuEventHandlerCD.class, "TYPE_Action"), ICON_PATH), // NOI18N
                 // flow
-                new FlowEventHandlerPinBadgePresenter (Utilities.loadImage (ICON_PATH), 0) {
+                new FlowEventHandlerPinBadgePresenter (ImageUtilities.loadImage (ICON_PATH), 0) {
                     @Override
                     protected DesignEventFilter getEventFilter () {
                         return super.getEventFilter ().addParentFilter (getComponent (), 2, false);

@@ -63,8 +63,8 @@ import org.netbeans.modules.vmd.midp.general.AcceptTypePresenter;
 import org.netbeans.modules.vmd.midp.palette.MidpPaletteProvider;
 import org.netbeans.modules.vmd.midp.propertyeditors.MidpPropertiesCategories;
 import org.netbeans.modules.vmd.midp.propertyeditors.PropertyEditorJavaString;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 import javax.swing.text.StyledDocument;
 import java.util.ArrayList;
@@ -127,7 +127,7 @@ public class SwitchPointCD extends ComponentDescriptor {
     protected List<? extends Presenter> createPresenters () {
         return Arrays.asList (
             // general
-            InfoPresenter.create (PointSupport.createInfoResolver (Utilities.loadImage (ICON_PATH), MethodPointCD.PROP_METHOD_NAME, "Switch")),
+            InfoPresenter.create (PointSupport.createInfoResolver (ImageUtilities.loadImage (ICON_PATH), MethodPointCD.PROP_METHOD_NAME, "Switch")),
             new GoToSourcePresenter() {
                 protected boolean matches (GuardedSection section) {
                     return MultiGuardedSection.matches(section, getComponent ().getComponentID () + "-switch", 1); // NOI18N

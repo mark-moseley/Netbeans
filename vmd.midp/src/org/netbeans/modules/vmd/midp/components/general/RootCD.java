@@ -133,7 +133,8 @@ public final class RootCD extends ComponentDescriptor {
                                               new DefaultOrderingController(20, PointsCategoryCD.TYPEID),
                                               new DefaultOrderingController(30, CommandsCategoryCD.TYPEID),
                                               new DefaultOrderingController(40, ControllersCategoryCD.TYPEID),
-                                              new DefaultOrderingController(50, ResourcesCategoryCD.TYPEID)
+                                              new DefaultOrderingController(50, ResourcesCategoryCD.TYPEID),
+                                              new DefaultOrderingController(60, DatabindingCategoryCD.TYPEID)
                                              };
     }
 
@@ -232,7 +233,7 @@ public final class RootCD extends ComponentDescriptor {
         public boolean select (FlowDescriptor descriptor, int modifiers) {
             DesignDocument document = descriptor.getRepresentedComponent ().getDocument ();
             PaletteController controller = PaletteSupport.getPaletteController (document);
-            Lookup category = controller.getSelectedCategory ();
+            //Lookup category = controller.getSelectedCategory ();
             Lookup item = controller.getSelectedItem ();
             boolean ret = false;
 

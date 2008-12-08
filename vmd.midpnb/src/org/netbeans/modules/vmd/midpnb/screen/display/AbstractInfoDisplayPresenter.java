@@ -48,7 +48,7 @@ import org.netbeans.modules.vmd.midp.components.resources.ImageCD;
 import org.netbeans.modules.vmd.midp.screen.display.DisplayableDisplayPresenter;
 import org.netbeans.modules.vmd.midp.screen.display.ScreenSupport;
 import org.netbeans.modules.vmd.midpnb.components.displayables.AbstractInfoScreenCD;
-import org.openide.util.Utilities;
+import org.openide.util.ImageUtilities;
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
@@ -68,7 +68,7 @@ import org.openide.util.NbBundle;
 public class AbstractInfoDisplayPresenter extends DisplayableDisplayPresenter {
 
     private static final String ICON_BROKEN_PATH = "org/netbeans/modules/vmd/midpnb/resources/broken-image.png"; // NOI18N
-    private static final Icon ICON_BROKEN = new ImageIcon(Utilities.loadImage(ICON_BROKEN_PATH));
+    private static final Icon ICON_BROKEN = new ImageIcon(ImageUtilities.loadImage(ICON_BROKEN_PATH));
     private JLabel imageLabel;
     private JLabel stringLabel;
     private ScreenFileObjectListener imageFileListener;
