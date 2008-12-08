@@ -49,15 +49,18 @@ made subject to such option by the copyright holder.
     <fontcolor name="guarded" bgColor="ffdfdfdf"/>
     <fontcolor name="highlight-caret-row" bgColor="fff1f1da"/>
     <fontcolor name="nbeditor-bracesMatching-match" bgColor="ff4BFF0F"/>
-    <fontcolor name="nbeditor-bracesMatching-mismatch" bgColor="red"/>
+    <fontcolor name="nbeditor-bracesMatching-mismatch" bgColor="ffD83636"/>
+    <fontcolor name="nbeditor-bracesMatching-match-multichar" bgColor="ff4BFF0F"/>
+    <fontcolor name="nbeditor-bracesMatching-mismatch-multichar" bgColor="ffD83636"/>
     <fontcolor name="highlight-search" foreColor="black" bgColor="ffFFB442"/>
     <fontcolor name="inc-search" foreColor="black" bgColor="ffFFB442"/> <!-- ffff9900 -->
     <fontcolor name="line-number" foreColor="black" bgColor="ffe9e8e2"/>
     <fontcolor name="selection" bgColor="ffb5cce3"/>
     <fontcolor name="status-bar"/>
-    <fontcolor name="status-bar-bold" foreColor="white" bgColor="red"/>
+    <fontcolor name="status-bar-bold" foreColor="red"/>
     <fontcolor name="caret-color-insert-mode" foreColor="black"/>
     <fontcolor name="text-limit-line-color" foreColor="ffffa8a8"/>
     <fontcolor name="hyperlinks" foreColor="blue" underline="blue"/>
-    <fontcolor name="synchronized-text-blocks" bgColor="ff8AC0EC"/>
+    <fontcolor name="synchronized-text-blocks-ext" foreColor="ffCC0099"/>
+    <fontcolor name="synchronized-text-blocks-ext-slave" foreColor="ff996600"/>
 </fontscolors>
