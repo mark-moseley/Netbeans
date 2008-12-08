@@ -42,57 +42,84 @@
 package org.netbeans.modules.cnd.api.execution;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Writer;
 import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.ResourceBundle;
-import org.netbeans.modules.cnd.execution.NativeExecution;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
 import org.netbeans.modules.cnd.execution.OutputWindowWriter;
+import org.netbeans.modules.cnd.execution.Unbuffer;
 import org.openide.ErrorManager;
 import org.openide.awt.StatusDisplayer;
 import org.openide.execution.ExecutionEngine;
 import org.openide.execution.ExecutorTask;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.windows.IOProvider;
 import org.openide.windows.InputOutput;
+import org.openide.windows.OutputListener;
+import org.openide.windows.OutputWriter;
 
 public class NativeExecutor implements Runnable {
-    private ArrayList listeners = new ArrayList();
+    private final ArrayList<ExecutionListener> listeners = new ArrayList<ExecutionListener>();
     
-    private String runDir;
-    private String executable;
-    private String arguments;
-    private String[] envp;
-    private String tabName;
-    private String actionName;
+    private final String runDir;
+    private final String executable;
+    private final String arguments;
+    private final String[] envp;
+    private final String tabName;
+    private final String actionName;
+    private final boolean parseOutputForErrors;
+    private final boolean showInput;
+    private final String hkey;
+    private final boolean unbuffer;
+    
     private String rcfile;
-    private boolean parseOutputForErrors;
-    private boolean showInput;
+    private NativeExecution nativeExecution;
     
-    private boolean showHeader = true;
-    private boolean showFooter = true;
+    private static final boolean showHeader = Boolean.getBoolean("cnd.execution.showheader");
     
     /** I/O class for writing output to a build tab */
     private InputOutput io;
     private PrintWriter out;
+    private PrintWriter err;
+    private Writer outputListener;
     
-    /** targets may be null to indicate default target */
+    /**
+     * The real constructor. This class is used to manage native execution, but run and build.
+     */
     public NativeExecutor(
+	    String hkey,
             String runDir,
             String executable,
             String arguments,
             String[] envp,
             String tabName,
             String actionName,
-            boolean parseOutputForErrors) {
-        this(runDir, executable, arguments, envp, tabName, actionName, parseOutputForErrors, false);
+            boolean parseOutputForErrors,
+            boolean showInput,
+            boolean unbuffer) {
+        this.hkey = hkey;
+        this.runDir = runDir;
+        this.executable = executable;
+        this.arguments = arguments;
+        this.envp = envp;
+        this.tabName = tabName;
+        this.actionName = actionName;
+        this.parseOutputForErrors = parseOutputForErrors;
+        this.showInput = showInput;
+        this.unbuffer = unbuffer;
     }
     
     /** targets may be null to indicate default target */
+    /*@Deprecated*/
     public NativeExecutor(
             String runDir,
             String executable,
@@ -102,17 +129,11 @@ public class NativeExecutor implements Runnable {
             String actionName,
             boolean parseOutputForErrors,
             boolean showInput) {
-        //this.pae = pae;
-        this.runDir = runDir;
-        this.executable = executable;
-        this.arguments = arguments;
-        this.envp = envp;
-        this.tabName = tabName;
-        this.actionName = actionName;
-        this.parseOutputForErrors = parseOutputForErrors;
-        this.showInput = showInput;
+        this(CompilerSetManager.LOCALHOST, runDir, executable, arguments, envp, tabName, actionName, parseOutputForErrors, showInput, false);
     }
     
+    /** targets may be null to indicate default target */
+    /*@Deprecated
     public NativeExecutor(
             String runDir,
             String executable,
@@ -120,15 +141,9 @@ public class NativeExecutor implements Runnable {
             String[] envp,
             String tabName,
             String actionName,
-            boolean parseOutputForErrors,
-            boolean showInput,
-            boolean showHeader,
-            boolean showFooter ) {
-        this( runDir, executable, arguments, envp, tabName, actionName, parseOutputForErrors, showInput );
-        
-        this.showHeader = showHeader;
-        this.showFooter = showFooter;
-    }
+            boolean parseOutputForErrors) {
+        this(runDir, executable, arguments, envp, tabName, actionName, parseOutputForErrors, false);
+    }*/
     
     /** Start it going. */
     public ExecutorTask execute() throws IOException {
@@ -137,6 +152,11 @@ public class NativeExecutor implements Runnable {
     
     /** Start it going. */
     public ExecutorTask execute(InputOutput io) throws IOException {
+        return execute(io, null); 
+    }
+    
+    /** Start it going. */
+    public ExecutorTask execute(InputOutput io, String host) throws IOException {
         final ExecutorTask task;
         synchronized (this) {
             // OutputWindow
@@ -153,8 +173,45 @@ public class NativeExecutor implements Runnable {
         return IOProvider.getDefault().getIO(tabName, true);
     }
     
+    public InputOutput getTab() {
+        return io;
+    }
+    
+    public String getTabeName() {
+        return tabName;
+    }
+
+    public void setOutputListener(Writer outputListener) {
+        this.outputListener = outputListener;
+    }
+    
     public void setExitValueOverride(String rcfile) {
         this.rcfile = rcfile;
+    }
+
+    private final String[] prepareEnvironment() {
+        List<String> envpList = new ArrayList<String>();
+        if (envp != null) {
+            envpList.addAll(Arrays.asList(envp));
+        }
+        envpList.add("SPRO_EXPAND_ERRORS="); // NOI18N
+
+        if (unbuffer) {
+            try {
+                // TODO: resolve remote path correctly!
+                File exeFile = new File(runDir, executable);
+                if (!exeFile.exists()) {
+                    //try to resolve from the root
+                    exeFile = new File(executable);
+                }
+                for (String envEntry : Unbuffer.getUnbufferEnvironment(hkey, exeFile.getAbsolutePath())) {
+                    envpList.add(envEntry);
+                }
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+        return envpList.toArray(new String[envpList.size()]);
     }
     
     /**
@@ -169,93 +226,153 @@ public class NativeExecutor implements Runnable {
         }
         
         File runDirFile = new File(runDir);
-        if (parseOutputForErrors)
-            out = new PrintWriter(new OutputWindowWriter(io.getOut(), FileUtil.toFileObject(runDirFile), parseOutputForErrors));
-        else
-            out = io.getOut();
+        OutputWriter originalWriter = io.getOut();
+        if (outputListener != null) {
+            originalWriter = new OutputWriterProxy(originalWriter, outputListener);
+        }
+        if (parseOutputForErrors) {
+            out = new PrintWriter(new OutputWindowWriter(hkey, originalWriter, FileUtil.toFileObject(runDirFile), parseOutputForErrors));
+        } else {
+            out = originalWriter;
+        }
+        err = io.getErr();
+        
         executionStarted();
         int rc = 0;
+
+        long startTime = System.currentTimeMillis();
         
         try {
             // Execute the selected command
-            rc = new NativeExecution().executeCommand(
+            nativeExecution = NativeExecution.getDefault(hkey).getNativeExecution();
+            rc = nativeExecution.executeCommand(
                     runDirFile,
                     executable,
                     arguments,
-                    envp,
+                    prepareEnvironment(),
                     out,
-		    showInput ? io.getIn() : null);
+		    showInput ? io.getIn() : null,
+                    unbuffer);
         } catch (ThreadDeath td) {
             StatusDisplayer.getDefault().setStatusText(getString("MSG_FailedStatus"));
-            executionFinished(-1);
-            out.close();
+            executionFinished(-1, System.currentTimeMillis() - startTime);
             throw td;
+        } catch (IOException ex) {
+            // command not found, normal exit
+            StatusDisplayer.getDefault().setStatusText(getString("MSG_FailedStatus"));
+            rc = -1;
+        } catch (InterruptedException ex) {
+            // interrupted, normal exit
+            StatusDisplayer.getDefault().setStatusText(getString("MSG_FailedStatus"));
+            rc = -1;
         } catch (Throwable t) {
             StatusDisplayer.getDefault().setStatusText(getString("MSG_FailedStatus"));
             ErrorManager.getDefault().notify(t);
             rc = -1;
         } finally {
-	    if (showInput) {
-		io.setInputVisible(false);
-		try {
-		    io.getIn().close();
-		} catch (IOException ex) {
-		    ex.printStackTrace();
-		}
-	    }
+            if (showInput) {
+                io.setInputVisible(false);
+                try {
+                    io.getIn().close();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+            }
         }
+        long time = System.currentTimeMillis() - startTime;
         if (rcfile != null) {
             File file = null;
+            FileReader fr = null;
             
             try {
                 file = new File(rcfile);
                 
                 if (file.exists()) {
-                    FileReader fr = new FileReader(file);
+                    fr = new FileReader(file);
 
                     if (fr.ready()) {
                         char[] cbuf = new char[256];
                         int i = fr.read(cbuf);
                         if (i > 0) {
-                            rc = Integer.valueOf(String.valueOf(cbuf, 0, i - 1)).intValue();
+                            rc = Integer.parseInt(String.valueOf(cbuf, 0, i - 1));
                         }
-
                     }
-                    fr.close();
-                    file.delete();
                 }
-            } catch (FileNotFoundException ex) {
-            } catch (IOException ex) {
+            } catch (Exception ex) {
+                // do nothing
             } finally {
+                if (fr != null) {
+                    try {
+                        fr.close();
+                    } catch (IOException ex) {
+                        // do nothing
+                    }
+                }
                 if (file != null && file.exists()) {
                    file.delete(); 
                 }
             }     
         }
-        executionFinished(rc);
-        out.close();
+        executionFinished(rc, time);
+    }
+    
+    public void stop() {
+        nativeExecution.stop();
     }
     
     private void executionStarted() {
-        if( showHeader ) {
+        if(showHeader) {
+            String runDirToShow = CompilerSetManager.LOCALHOST.equals(hkey) ?
+                runDir : HostInfoProvider.getDefault().getMapper(hkey).getRemotePath(runDir);
+            
             String preText = MessageFormat.format(getString("PRETEXT"),
-		    new Object[] {exePlusArgsQuoted(executable, arguments), runDir});
-            out.println(preText);
-            out.println("");
+		    exePlusArgsQuoted(executable, arguments), runDirToShow);
+            err.println(preText);
+            err.println();
         }
         fireExecutionStarted();
     }
-    
-    private void executionFinished(int exitValue) {
-        if( showFooter ) {
-            String failedOrSucceded = MessageFormat.format(getString(exitValue == 0 ? "SUCCESSFUL" : "FAILED"), new Object[] {actionName});
-            String postText = MessageFormat.format(getString("POSTTEXT"), new Object[] {failedOrSucceded, "" + exitValue}); // NOI18N
-            out.println(""); // NOI18N
-            out.println(postText);
-            out.println(""); // NOI18N
-            StatusDisplayer.getDefault().setStatusText(failedOrSucceded);
+
+    private void executionFinished(int exitValue, long millis) {
+        StringBuilder res = new StringBuilder();
+        res.append(MessageFormat.format(getString(exitValue == 0 ? "SUCCESSFUL" : "FAILED"), actionName.toUpperCase())); // NOI18N
+        res.append(" ("); // NOI18N
+        if (exitValue != 0) {
+            res.append(MessageFormat.format(getString("EXIT_VALUE"), exitValue)); // NOI18N
+            res.append(' ');
         }
+        res.append(MessageFormat.format(getString("TOTAL_TIME"), formatTime(millis))); // NOI18N
+        res.append(')');
+
+        PrintWriter pw = (exitValue == 0) ? out : err;
+        pw.println(res.toString());
+        pw.println();
+        StatusDisplayer.getDefault().setStatusText(
+                MessageFormat.format(getString(exitValue == 0 ? "MSG_SUCCESSFUL" : "MSG_FAILED"), actionName));  // NOI18N
+
+        out.close();
+        err.close();
+
         fireExecutionFinished(exitValue);
+    }
+
+    private static String formatTime(long millis) {
+        StringBuilder res = new StringBuilder();
+        long seconds = millis/1000;
+        long minutes = seconds/60;
+        long hours = minutes/60;
+        if (hours > 0) {
+            res.append(" " + hours + getString("HOUR")); // NOI18N
+        }
+        if (minutes > 0) {
+            res.append(" " + (minutes-hours*60) + getString("MINUTE")); // NOI18N
+        }
+        if (seconds > 0) {
+            res.append(" " + (seconds-minutes*60) + getString("SECOND")); // NOI18N
+        } else {
+            res.append(" " + (millis-seconds*1000) + getString("MILLISECOND")); // NOI18N
+        }
+        return res.toString();
     }
     
     public void addExecutionListener(ExecutionListener l) {
@@ -263,15 +380,14 @@ public class NativeExecutor implements Runnable {
     }
     
     public void removeExecutionListener(ExecutionListener l) {
-        listeners.remove(listeners.indexOf(l));
+        listeners.remove(l);
     }
     
     /**
      * Send a ExecutionEvent to each executionStarted method
      */
     private void fireExecutionStarted() {
-        for (int i = 0; i < listeners.size(); i++) {
-            ExecutionListener listener = (ExecutionListener) listeners.get(i);
+        for (ExecutionListener listener : listeners) {
             listener.executionStarted();
         }
     }
@@ -280,8 +396,7 @@ public class NativeExecutor implements Runnable {
      * Send a ExecutionEvent to each executionFinished method
      */
     private void fireExecutionFinished(int rc) {
-        for (int i = 0; i < listeners.size(); i++) {
-            ExecutionListener listener = (ExecutionListener) listeners.get(i);
+        for (ExecutionListener listener : listeners) {
             listener.executionFinished(rc);
         }
     }
@@ -289,10 +404,11 @@ public class NativeExecutor implements Runnable {
     private String exePlusArgsQuoted(String exe, String args) {
         String ret = exe;
         // add quoted arguments
-        if (args == null || args.length() == 0)
-            ret =  "\"" + ret + "\""; // NOI18N
-        else
-            ret =  "\"" + ret + " " + args + "\""; // NOI18N
+        if (args == null || args.length() == 0) {
+            ret = "\"" + ret + "\""; // NOI18N
+        } else {
+            ret = "\"" + ret + " " + args + "\""; // NOI18N
+        }
         
         return ret;
     }
@@ -303,5 +419,84 @@ public class NativeExecutor implements Runnable {
             bundle = NbBundle.getBundle(NativeExecutor.class);
         }
         return bundle.getString(s);
+    }
+
+    private static class OutputWriterProxy extends OutputWriter {
+        private final OutputWriter original;
+        private final Writer duplicate;
+
+        private OutputWriterProxy(OutputWriter original, Writer duplicate) {
+            super(original);
+            this.original = original;
+            this.duplicate = duplicate;
+        }
+
+        @Override
+        public void write(char[] cbuf, int off, int len) {
+            original.write(cbuf, off, len);
+            doWrite(cbuf, off, len);
+        }
+
+        @Override
+        public void println(String s) {
+            original.println(s);
+            doWrite(s.toCharArray(), 0, s.length());
+            doWrite(new char[]{'\n'}, 0, 1);
+        }
+
+        @Override
+        public void write(String s, int off, int len) {
+            original.write(s, off, len);
+            doWrite(s.toCharArray(), off, len);
+        }
+
+        @Override
+        public void write(int c) {
+            original.write(c);
+            doWrite(new char[]{(char)c}, 0, 1);
+        }
+
+        @Override
+        public void write(char data[]) {
+            original.write(data);
+            doWrite(data, 0, data.length);
+        }
+
+        @Override
+        public void flush() {
+            original.flush();
+            try {
+                duplicate.flush();
+            } catch (IOException ex) {
+            }
+        }
+
+        @Override
+        public void close() {
+            original.close();
+            try {
+                duplicate.close();
+            } catch (IOException ex) {
+            }
+        }
+
+        @Override
+        public void reset() throws IOException {
+            original.reset();
+        }
+
+        @Override
+        public void println(String s, OutputListener l) throws IOException {
+            original.println(s,l);
+            doWrite(s.toCharArray(), 0, s.length());
+            doWrite(new char[]{'\n'}, 0, 1);
+        }
+
+        private void doWrite(char[] cbuf, int off, int len){
+            try {
+                duplicate.write(cbuf, off, len);
+            } catch (IOException ex) {
+            }
+        }
     }
 }
