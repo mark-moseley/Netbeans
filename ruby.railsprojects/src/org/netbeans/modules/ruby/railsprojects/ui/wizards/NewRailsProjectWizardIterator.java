@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -54,6 +54,9 @@ import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.ruby.railsprojects.RailsProjectCreateData;
 import org.netbeans.modules.ruby.railsprojects.RailsProjectGenerator;
+import org.netbeans.modules.ruby.railsprojects.database.RailsAdapterFactory;
+import org.netbeans.modules.ruby.railsprojects.database.RailsDatabaseConfiguration;
+import org.netbeans.modules.ruby.railsprojects.server.spi.RubyInstance;
 import org.netbeans.modules.ruby.spi.project.support.rake.RakeProjectHelper;
 import org.netbeans.spi.project.ui.support.ProjectChooser;
 import org.openide.ErrorManager;
@@ -75,8 +78,17 @@ public class NewRailsProjectWizardIterator implements WizardDescriptor.ProgressI
     static final String JDBC_WN = "useJdbc"; // NOI18N
     /** Wizard descriptor name for the target Rails database */
     static final String RAILS_DB_WN = "railsDatabase"; // NOI18N
-    /** Wizard descriptor name for including Goldspike for WAR deployment */
-    static final String GOLDSPIKE_WN = "goldspike"; // NOI18N
+    static final String RAILS_DEVELOPMENT_DB = "railsDatabase.development"; // NOI18N
+    static final String RAILS_PRODUCTION_DB = "railsDatabase.production"; // NOI18N
+    static final String RAILS_TEST_DB = "railsDatabase.test"; // NOI18N
+    /** Wizard descriptor name for including support for WAR deployment */
+    static final String WAR_SUPPORT = "warSupport"; //NOI18N
+    /** Wizard descriptor name for the target Rails server */
+    static final String SERVER_INSTANCE = "serverInstance"; //NOI18N
+    /** Wizard descriptor name for the Ruby platform */
+    static final String PLATFORM = "platform"; //NOI18N
+    /** Wizard descriptor name for the Rails version */
+    static final String RAILS_VERSION = "rails.version"; //NOI18N
     
     static final int TYPE_APP = 0;
     //static final int TYPE_LIB = 1;
@@ -104,6 +116,7 @@ public class NewRailsProjectWizardIterator implements WizardDescriptor.ProgressI
         if (type == TYPE_APP) {
             return new WizardDescriptor.Panel[] {
                     new PanelConfigureProject(this.type),
+                    new DatabaseConfigPanel(),
                     new RailsInstallationPanel.Panel()
                 };
         } else {
@@ -116,9 +129,10 @@ public class NewRailsProjectWizardIterator implements WizardDescriptor.ProgressI
     
     private String[] createSteps() {
         String config = NbBundle.getMessage(NewRailsProjectWizardIterator.class,"LAB_ConfigureProject");
+        String database = NbBundle.getMessage(NewRailsProjectWizardIterator.class,"LAB_ConfigureDatabase");
         String rails = NbBundle.getMessage(NewRailsProjectWizardIterator.class,"LAB_InstallRails");
         if (type == TYPE_APP) {
-            return new String[] { config, rails };
+            return new String[] { config, database, rails };
         } else {
             return new String[] { config };
         }
@@ -133,7 +147,7 @@ public class NewRailsProjectWizardIterator implements WizardDescriptor.ProgressI
     public Set/*<FileObject>*/ instantiate (ProgressHandle handle) throws IOException {
         handle.start (4);
         //handle.progress (NbBundle.getMessage (NewRailsProjectWizardIterator.class, "LBL_NewRailsProjectWizardIterator_WizardProgress_ReadingProperties"));
-        Set resultSet = new HashSet ();
+        Set<FileObject> resultSet = new HashSet<FileObject>();
         File dirF = (File)wiz.getProperty("projdir");        //NOI18N
         if (dirF != null) {
             dirF = FileUtil.normalizeFile(dirF);
@@ -144,40 +158,24 @@ public class NewRailsProjectWizardIterator implements WizardDescriptor.ProgressI
 
         RakeProjectHelper h = null;
         
-        String database = (String)wiz.getProperty(RAILS_DB_WN); // NOI18N
-        Boolean jdbc = (Boolean)wiz.getProperty(JDBC_WN); // NOI18N
-        Boolean deploy = (Boolean)wiz.getProperty(GOLDSPIKE_WN); // NOI18N
-        
-        RailsProjectCreateData data = new RailsProjectCreateData(dirF, name, type == TYPE_APP,
-                database, jdbc, deploy);
-        RubyPlatform platform = (RubyPlatform) wiz.getProperty("platform"); // NOI18N
-        h = RailsProjectGenerator.createProject(data, platform);
-        handle.progress (2);
+        Boolean deploy = (Boolean) wiz.getProperty(WAR_SUPPORT); // NOI18N
+        RubyInstance server = (RubyInstance) wiz.getProperty(SERVER_INSTANCE); // NOI18N
 
-//        if (mainClass != null && mainClass.length () > 0) {
-//            try {
-//                //String sourceRoot = "src"; //(String)j2seProperties.get (RailsProjectProperties.SRC_DIR);
-//                FileObject sourcesRoot = h.getProjectDirectory ().getFileObject ("src");        //NOI18N
-//                FileObject mainClassFo = getMainClassFO (sourcesRoot, mainClass);
-//                assert mainClassFo != null : "sourcesRoot: " + sourcesRoot + ", mainClass: " + mainClass;        //NOI18N
-//                // Returning FileObject of main class, will be called its preferred action
-//                resultSet.add (mainClassFo);
-//            } catch (Exception x) {
-//                ErrorManager.getDefault().notify(x);
-//            }
-//        }
+        RubyPlatform platform = (RubyPlatform) wiz.getProperty("platform"); // NOI18N
+        RailsDatabaseConfiguration databaseConf = (RailsDatabaseConfiguration) wiz.getProperty(RAILS_DEVELOPMENT_DB);
+        if (databaseConf == null) {
+            databaseConf = RailsAdapterFactory.getDefaultAdapter(platform);
+        }
+        
+        String railsVersion = (String) wiz.getProperty(RAILS_VERSION);
+        RailsProjectCreateData data = new RailsProjectCreateData(platform, dirF, name, type == TYPE_APP,
+                databaseConf, deploy, server.getServerUri(), railsVersion);
+        h = RailsProjectGenerator.createProject(data);
+        handle.progress(2);
+
         FileObject dir = FileUtil.toFileObject(dirF);
-//        if (type == TYPE_APP || type == TYPE_EXT) {
-//            createManifest(dir);
-//        }
         handle.progress (3);
 
-        // TODO - check for Java DB and if so configure it
-
-        // Returning FileObject of project diretory. 
-        // Project will be open and set as main
-//        Integer index = (Integer) wiz.getProperty(PROP_NAME_INDEX);
-//        FoldersListSettings.getDefault().setNewApplicationCount(index.intValue());
         resultSet.add (dir);
         handle.progress (NbBundle.getMessage (NewRailsProjectWizardIterator.class, "LBL_NewRailsProjectWizardIterator_WizardProgress_PreparingToOpen"), 4);
         dirF = (dirF != null) ? dirF.getParentFile() : null;
@@ -250,9 +248,9 @@ public class NewRailsProjectWizardIterator implements WizardDescriptor.ProgressI
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent)c;
                 // Step #.
-                jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }
         //set the default values of the sourceRoot and the testRoot properties
@@ -298,17 +296,6 @@ public class NewRailsProjectWizardIterator implements WizardDescriptor.ProgressI
     public final void addChangeListener(ChangeListener l) {}
     public final void removeChangeListener(ChangeListener l) {}
     
-    // helper methods, finds mainclass's FileObject
-    private FileObject getMainClassFO (FileObject sourcesRoot, String mainClass) {
-        // replace '.' with '/'
-//        mainClass = mainClass.replace ('.', '/'); // NOI18N
-//        
-//        // ignore unvalid mainClass ???
-//        
-//        return sourcesRoot.getFileObject (mainClass+ ".java"); // NOI18N
-        return sourcesRoot.getFileObject(mainClass);        
-    }
-
     static String getPackageName (String displayName) {
         StringBuffer builder = new StringBuffer ();
         boolean firstLetter = true;
@@ -325,28 +312,5 @@ public class NewRailsProjectWizardIterator implements WizardDescriptor.ProgressI
         return builder.length() == 0 ? NbBundle.getMessage(NewRailsProjectWizardIterator.class,"TXT_DefaultPackageName") : builder.toString();
     }
     
-//    /**
-//     * Create a new application manifest file with minimal initial contents.
-//     * @param dir the directory to create it in
-//     * @throws IOException in case of problems
-//     */
-//    private static void createManifest(final FileObject dir) throws IOException {
-//        FileObject manifest = dir.createData(MANIFEST_FILE);
-//        FileLock lock = manifest.lock();
-//        try {
-//            OutputStream os = manifest.getOutputStream(lock);
-//            try {
-//                PrintWriter pw = new PrintWriter(os);
-//                pw.println("Manifest-Version: 1.0"); // NOI18N
-//                pw.println("X-COMMENT: Main-Class will be added automatically by build"); // NOI18N
-//                pw.println(); // safest to end in \n\n due to JRE parsing bug
-//                pw.flush();
-//            } finally {
-//                os.close();
-//            }
-//        } finally {
-//            lock.releaseLock();
-//        }
-//    }
 
 }
