@@ -54,9 +54,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.WeakHashMap;
 
-//import org.dom4j.Attribute;
-import org.dom4j.Document;
-import org.dom4j.Element;
 import org.dom4j.Node;
 
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.Attribute;
@@ -69,8 +66,6 @@ import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.Operation;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.IParameter;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.Parameter;
-import org.netbeans.modules.uml.core.metamodel.core.constructs.IEnumeration;
-import org.netbeans.modules.uml.core.metamodel.core.constructs.Enumeration;
 import org.netbeans.modules.uml.core.metamodel.core.constructs.IEnumerationLiteral;
 import org.netbeans.modules.uml.core.metamodel.core.constructs.EnumerationLiteral;
 
@@ -80,8 +75,6 @@ import org.netbeans.modules.uml.core.metamodel.core.constructs.Enumeration;
 import org.netbeans.modules.uml.core.metamodel.core.constructs.IClass;
 import org.netbeans.modules.uml.core.metamodel.core.constructs.IEnumeration;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.Namespace;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.core.reverseengineering.parsingfacilities.IUMLParserEventDispatcher;
 import org.netbeans.modules.uml.core.reverseengineering.parsingfacilities.IUMLParserEventsSink;
@@ -93,12 +86,9 @@ import org.netbeans.modules.uml.core.reverseengineering.reframework.IPackageEven
 import org.netbeans.modules.uml.core.reverseengineering.reframework.parsingframework.IErrorEvent;
 import org.netbeans.modules.uml.core.reverseengineering.reframework.parsingframework.IFacility;
 import org.netbeans.modules.uml.core.reverseengineering.reframework.parsingframework.IFacilityManager;
-import org.netbeans.modules.uml.core.reverseengineering.reintegration.UMLParsingIntegrator;
 import org.netbeans.modules.uml.core.support.umlsupport.IResultCell;
 import org.netbeans.modules.uml.core.support.umlsupport.ProductRetriever;
 import org.netbeans.modules.uml.core.support.umlsupport.XMLManip;
-import org.netbeans.modules.uml.core.support.umlsupport.IStrings;
-import org.netbeans.modules.uml.core.support.umlsupport.Strings;
 
 public class Merger implements IUMLParserEventsSink {
 
@@ -372,7 +362,8 @@ public class Merger implements IUMLParserEventsSink {
 		{
 		    if (! matchedOld.contains(elem)) 
 		    {
-			if (ElementMatcher.isMarked(elem) || isOverwriteProp()) 
+			if ((ElementMatcher.isMarked(elem) || isOverwriteProp()) 
+                            && ! ElementMatcher.isMarkedByOthers(elem))
 			{
 			    fileBuilder.replace(new ElementDescriptor(newElem.getNode()), 
 						new ElementDescriptor(elem.getNode()),
@@ -424,7 +415,8 @@ public class Merger implements IUMLParserEventsSink {
 		// has been already matched using ID marker
 		continue;
 	    }
-	    if (ElementMatcher.isMarked(oldElem) || isOverwriteProp()) 
+	    if ((ElementMatcher.isMarked(oldElem) || isOverwriteProp())
+                && ! ElementMatcher.isMarkedByOthers(oldElem))
 	    {
 		// the element is regenerateable, 
 		// ie. not having been matched means to be deleted
@@ -513,11 +505,7 @@ public class Merger implements IUMLParserEventsSink {
 	for(i = 0; i < map.length; i++) 
 	{
 	    boolean processed = false;
-	    if (map[i] == null) 
-	    {
-		;
-	    } 
-	    else 
+	    if (map[i] != null) 
 	    {
 		Mapping m = map[i];
 		if (lastProcessed == null || isOrdered(lastProcessed, m.oe)) 
@@ -526,7 +514,8 @@ public class Merger implements IUMLParserEventsSink {
 		    {
 			if (map[j] != null) 
 			{
-			    if (ElementMatcher.isMarked(map[j].oe) || isOverwriteProp()) 
+			    if ((ElementMatcher.isMarked(map[j].oe) || isOverwriteProp())
+                                && ! ElementMatcher.isMarkedByOthers(map[j].oe))
 			    {
 				fileBuilder.remove(new ElementDescriptor(map[j].oe.getNode()));
 			    } 
@@ -540,8 +529,9 @@ public class Merger implements IUMLParserEventsSink {
 					   false,
 					   j - i);
 		    }
-		    if (ElementMatcher.isMarked(m.oe) || isOverwriteProp()) 
-		    {
+		    if ((ElementMatcher.isMarked(m.oe) || isOverwriteProp()) 
+                        && ! ElementMatcher.isMarkedByOthers(m.oe))
+                    {
 			fileBuilder.replace(new ElementDescriptor(m.ne.getNode()), 
 					    new ElementDescriptor(m.oe.getNode()),
 					    ElementMatcher.isRegenBody(m.oe) 
@@ -565,7 +555,8 @@ public class Merger implements IUMLParserEventsSink {
 		{
 		    if (map[j] != null) 
 		    {
-			if (ElementMatcher.isMarked(map[j].oe) || isOverwriteProp()) 
+			if ((ElementMatcher.isMarked(map[j].oe) || isOverwriteProp()) 
+                            && ! ElementMatcher.isMarkedByOthers(map[j].oe))
 			{
 			    fileBuilder.remove(new ElementDescriptor(map[j].oe.getNode()));
 			} 
@@ -598,7 +589,8 @@ public class Merger implements IUMLParserEventsSink {
 		// has been already matched using ID marker
 		continue;
 	    }
-	    if (ElementMatcher.isMarked(oldElem) || isOverwriteProp()) 
+	    if ((ElementMatcher.isMarked(oldElem) || isOverwriteProp()) 
+                && ! ElementMatcher.isMarkedByOthers(oldElem))
 	    {
 		// the element is regenerateable, 
 		// ie. not having been matched means to be deleted
@@ -974,7 +966,7 @@ public class Merger implements IUMLParserEventsSink {
 	List mrs2 = XMLManip.selectNodeList(pn2, query);
 	
 	if (! compareNodeLists(mrs1, mrs2,
-			       new BySpecificAttributeNodeComparator("collectionType"))) 
+			       new BySpecificAttributeNodeComparator("collectionType", pp))) 
 	{
 	    return false;
 	}
@@ -983,7 +975,7 @@ public class Merger implements IUMLParserEventsSink {
 	mrs1 = XMLManip.selectNodeList(pn1, query);
 	mrs2 = XMLManip.selectNodeList(pn2, query);
 	if (! compareNodeLists(mrs1, mrs2,
-			       new BySpecificAttributeNodeComparator("name"))) 
+			       new BySpecificAttributeNodeComparator("name", pp))) 
 	{
 	    return false;
 	}
@@ -992,7 +984,7 @@ public class Merger implements IUMLParserEventsSink {
 	mrs1 = XMLManip.selectNodeList(pn1, query);
 	mrs2 = XMLManip.selectNodeList(pn2, query);
 	if (! compareNodeLists(mrs1, mrs2,
-			       new BySpecificAttributeNodeComparator("value"))) 
+			       new BySpecificAttributeNodeComparator("value", pp))) 
 	{
 	    return false;
 	}	
@@ -1072,16 +1064,16 @@ public class Merger implements IUMLParserEventsSink {
                 if (pManager != null)
                 {
                     IFacility pFacility = pManager.retrieveFacility("Parsing.UMLParser");
-                    IUMLParser pParser = pFacility instanceof IUMLParser ? (IUMLParser) pFacility : null;
-                    if (pParser != null)
+                    IUMLParser pParserRet = pFacility instanceof IUMLParser ? (IUMLParser) pFacility : null;
+                    if (pParserRet != null)
                     {
-                        IUMLParserEventDispatcher m_Dispatcher = pParser.getUMLParserDispatcher();
+                        IUMLParserEventDispatcher m_Dispatcher = pParserRet.getUMLParserDispatcher();
                         if (m_Dispatcher != null)
                         {
                             m_Dispatcher.revokeUMLParserSink(this);
                             m_Dispatcher.registerForUMLParserEvents(this, " ");
                         }
-                        return pParser;
+                        return pParserRet;
                     }
                 }
             }
@@ -1135,15 +1127,6 @@ public class Merger implements IUMLParserEventsSink {
 		IClassifier cls = new Classifier();
 		cls.setNode(dataNode);
 		classNodes.add(cls);
-		/*		
-		System.out.println("\nMerger.onClassFound \n dataNode = "+dataNode);
-		String query = ".//TDescriptor";
-		List nodes = XMLManip.selectNodeList(dataNode, query);
-		for (Iterator iter = nodes.iterator(); iter.hasNext(); ) {
-		    Node curElement = (Node)iter.next();
-		    //System.out.println("\nMerger.onClassFound \n curElement = "+curElement);
-		}
-		*/
 	    }
             
         } catch (Exception e) {
@@ -1155,24 +1138,10 @@ public class Merger implements IUMLParserEventsSink {
     }
     
     public void onEndParseFile(String fileName, IResultCell cell) {
-	 			
-	try {	
-	    /*
-	    fileName = fileName.replace('\\', '_');
-	    fileName = fileName.replace('/', '_');
-	    fileName = fileName.replace(':', '_');
-	    if (classNodes.size() > 0) 
-		XMLManip.save(classNodes.get(0).getNode().getDocument(), "/tmp/out.txt."+fileName);
-            */
-	} catch (Exception ex) {
-	    ex.printStackTrace(System.out);
-	}
-		
     }
     
     public void onError(IErrorEvent data, IResultCell cell) {
 	errorHappened = true;
-	//System.out.println("\nPARSER ERROR\n");	
     }
 
     // end of interface IUMLParserEventsSink
