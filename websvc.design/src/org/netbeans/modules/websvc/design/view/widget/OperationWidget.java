@@ -60,13 +60,12 @@ import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
 import org.netbeans.modules.websvc.design.javamodel.MethodModel;
 import org.netbeans.modules.websvc.design.javamodel.ServiceModel;
-import org.netbeans.modules.websvc.design.schema2java.OperationGeneratorHelper;
 import org.netbeans.modules.websvc.design.view.DesignView;
 import org.netbeans.modules.websvc.design.view.DesignViewPopupProvider;
 import org.netbeans.modules.websvc.design.view.actions.GotoSourceAction;
 import org.netbeans.modules.websvc.design.view.actions.RemoveOperationAction;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 /**
  *
@@ -132,13 +131,13 @@ public class OperationWidget extends AbstractTitledWidget {
         Image image = null;
         if(operation.isOneWay()) {
             typeOfOperation = NbBundle.getMessage(OperationWidget.class, "LBL_OneWay");
-            image = Utilities.loadImage(IMAGE_ONE_WAY);
+            image = ImageUtilities.loadImage(IMAGE_ONE_WAY);
         } else if (!operation.getParams().isEmpty()) {
             typeOfOperation = NbBundle.getMessage(OperationWidget.class, "LBL_RequestResponse");
-            image = Utilities.loadImage(IMAGE_REQUEST_RESPONSE);
+            image = ImageUtilities.loadImage(IMAGE_REQUEST_RESPONSE);
         } else {
             typeOfOperation = NbBundle.getMessage(OperationWidget.class, "LBL_Notification");
-            image = Utilities.loadImage(IMAGE_NOTIFICATION);
+            image = ImageUtilities.loadImage(IMAGE_NOTIFICATION);
         }
         headerLabelWidget = new ImageLabelWidget(getScene(), image, operation.getOperationName()) {
             private Object key = new Object();
@@ -154,7 +153,7 @@ public class OperationWidget extends AbstractTitledWidget {
         headerLabelWidget.setLabelFont(getScene().getFont().deriveFont(Font.BOLD));
         headerLabelWidget.setLabelEditor(new TextFieldInplaceEditor(){
             public boolean isEnabled(Widget widget) {
-                return true;
+                return isNameEditable();
             }
             
             public String getText(Widget widget) {
@@ -162,9 +161,6 @@ public class OperationWidget extends AbstractTitledWidget {
             }
             
             public void setText(Widget widget, String text) {
-                if (service.getWsdlUrl()!=null) {
-                    OperationGeneratorHelper.changeWSDLOperationName(serviceModel, service, operation, text);
-                }
                 operation.setOperationName(text);
                 headerLabelWidget.setLabel(text);
             }
@@ -224,7 +220,7 @@ public class OperationWidget extends AbstractTitledWidget {
 
         listWidget = new Widget(getScene());
         listWidget.setLayout(LayoutFactory.createVerticalFlowLayout(LayoutFactory.SerialAlignment.JUSTIFY, RADIUS/2));
-        inputWidget = new ParametersWidget(getObjectScene(),operation);
+        inputWidget = new ParametersWidget(getObjectScene(), operation, isNameEditable());
         outputWidget = new OutputWidget(getObjectScene(),operation);
         faultWidget = new FaultsWidget(getObjectScene(),operation);
         descriptionWidget = new DescriptionWidget(getObjectScene(),operation);
@@ -250,6 +246,11 @@ public class OperationWidget extends AbstractTitledWidget {
             getHeaderWidget().addChild(getExpanderWidget());
         }
         super.collapseWidget();
+        // set this operation as selected and focused
+        if(hashKey()!=null) {
+            getObjectScene().setSelectedObjects(Collections.singleton(hashKey()));
+            getObjectScene().setFocusedObject(hashKey());
+        }
     }
 
     protected void expandWidget() {
@@ -260,6 +261,11 @@ public class OperationWidget extends AbstractTitledWidget {
             getHeaderWidget().addChild(buttons);
         }
         super.expandWidget();
+        // set this operation as selected and focused
+        if(hashKey()!=null) {
+            getObjectScene().setSelectedObjects(Collections.singleton(hashKey()));
+            getObjectScene().setFocusedObject(hashKey());
+        }
     }
 
     public Object hashKey() {
@@ -326,6 +332,10 @@ public class OperationWidget extends AbstractTitledWidget {
             path.lineTo(2*width/3, height/3);
             return path;
         }
+    }
+
+    private boolean isNameEditable() {
+        return service != null && service.getWsdlUrl() == null;
     }
 
 }
