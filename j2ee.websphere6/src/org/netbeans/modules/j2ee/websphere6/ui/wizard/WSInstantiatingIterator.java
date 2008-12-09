@@ -40,8 +40,6 @@
  */
 package org.netbeans.modules.j2ee.websphere6.ui.wizard;
 
-
-
 import java.io.IOException;
 
 import java.net.Socket;
@@ -52,6 +50,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.Vector;
 
+import javax.swing.JComponent;
 import javax.swing.JOptionPane;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -59,6 +58,7 @@ import javax.swing.event.ChangeListener;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.websphere6.WSDeploymentFactory;
 import org.netbeans.modules.j2ee.websphere6.WSURIManager;
+import org.netbeans.modules.j2ee.websphere6.WSVersion;
 import org.openide.WizardDescriptor;
 import org.openide.util.NbBundle;
 
@@ -83,12 +83,23 @@ public class WSInstantiatingIterator
      * at creation time and can be changed via the properties sheet
      */
     private static final String DEFAULT_DEBUGGER_PORT = "8787"; // NOI18N
+
+    private final WSVersion version;
     
     /**
      * The parent wizard descriptor
      */
     private WizardDescriptor wizardDescriptor;
-    
+
+    public WSInstantiatingIterator(WSVersion version) {
+        assert version != null : "Version must not be null"; // NOI18N
+        this.version = version;
+    }
+
+    public WSVersion getVersion() {
+        return version;
+    }
+        
     /**
      * A misterious method whose purpose is obviously in freeing the resources 
      * obtained by the wizard during instance registration. We do not need such 
@@ -106,6 +117,23 @@ public class WSInstantiatingIterator
      */
     public void initialize(WizardDescriptor wizardDescriptor) {
         this.wizardDescriptor = wizardDescriptor;
+
+        for (int i = 0; i < panels.size(); i++)
+        {
+            Object c = panels.get(i).getComponent();
+
+            if (c instanceof JComponent)
+            {
+                // assume Swing components
+                JComponent jc = (JComponent) c;
+                // Step #.
+                jc.putClientProperty(
+                    WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
+
+                // Step name (actually the whole list for reference).
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
+            }
+        }
     }
     
     /**
@@ -131,18 +159,15 @@ public class WSInstantiatingIterator
         Set result = new HashSet();
         
         // build the URL
-        String url = WSURIManager.constructUrl(this.host, this.port, serverRoot, domainRoot);
-        
-        // build the display name
-        String displayName = getDisplayName() + " [" + this.host +     // NOI18N
-                ":" + this.port +"]";                                  // NOI18N
+        String url = WSURIManager.constructUrl(this.version,
+                this.host, this.port, serverRoot, domainRoot);
         
         // if all the data is normally validated - create the instance and 
         // attach the additional properties
         if (validate()) {
             InstanceProperties ip = InstanceProperties.
                     createInstanceProperties(url, username, password, 
-                    displayName);
+                    getDisplayName());
             ip.setProperty(WSDeploymentFactory.SERVER_ROOT_ATTR, serverRoot);
             ip.setProperty(WSDeploymentFactory.DOMAIN_ROOT_ATTR, domainRoot);
             ip.setProperty(WSDeploymentFactory.IS_LOCAL_ATTR, isLocal);
@@ -176,7 +201,7 @@ public class WSInstantiatingIterator
         try {
             new Socket(getHost(), new Integer(getPort()).intValue());
         } catch (UnknownHostException e) {
-            JOptionPane.showMessageDialog(serverPropertiesPanel, 
+            JOptionPane.showMessageDialog(serverPropertiesPanel.getComponent(),
                     NbBundle.getMessage(WSInstantiatingIterator.class, 
                     "MSG_unknownHost", getHost()), 
                     NbBundle.getMessage(WSInstantiatingIterator.class, 
@@ -221,8 +246,7 @@ public class WSInstantiatingIterator
         this.serverRoot = serverRoot;
         
         // reinit the instances list
-        serverPropertiesPanel.getWizardServerProperties().
-                updateInstancesList(serverRoot);
+        serverPropertiesPanel.updateServerRoot(serverRoot);
     }
     
     /**
@@ -400,28 +424,22 @@ public class WSInstantiatingIterator
     /**
      * The steps names for the wizard: Server Location & Instance properties
      */
-    private Vector steps = new Vector();
+    private String[] steps = new String[]
     {
-        steps.add(NbBundle.getMessage(ServerPropertiesPanel.class, 
-                "SERVER_LOCATION_STEP"));                              // NOI18N
-        steps.add(NbBundle.getMessage(ServerPropertiesPanel.class, 
-                "SERVER_PROPERTIES_STEP"));                            // NOI18N
-    }
+        NbBundle.getMessage(ServerPropertiesPanel.class, 
+                "SERVER_LOCATION_STEP"),                           // NOI18N
+        NbBundle.getMessage(ServerPropertiesPanel.class, 
+                "SERVER_PROPERTIES_STEP")                       // NOI18N
+    };
     
     /**
      * The wizard's panels
      */
-    private Vector panels = new Vector();
-    private ServerLocationPanel serverLocationPanel = 
-            new ServerLocationPanel(
-                    (String[]) steps.toArray(new String[steps.size()]), 
-                    0, 
-                    new IteratorListener(), this);
+    private Vector<WizardDescriptor.Panel> panels = new Vector<WizardDescriptor.Panel>() ;
+    private ServerLocationPanel serverLocationPanel =
+            new ServerLocationPanel(this);
     private ServerPropertiesPanel serverPropertiesPanel = 
-            new ServerPropertiesPanel(
-                    (String[]) steps.toArray(new String[steps.size()]), 
-                    1, 
-                    new IteratorListener(), this);
+            new ServerPropertiesPanel( this);
     {
         panels.add(serverLocationPanel);
         panels.add(serverPropertiesPanel);
