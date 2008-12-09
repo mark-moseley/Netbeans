@@ -335,7 +335,7 @@ is divided into following sections:
                     </attribute>
                     <attribute>
                         <xsl:attribute name="name">sourcepath</xsl:attribute>
-                        <xsl:attribute name="default"/>
+                        <xsl:attribute name="default">/does/not/exist</xsl:attribute>
                     </attribute>
                     <element>
                         <xsl:attribute name="name">customize</xsl:attribute>
@@ -481,7 +481,7 @@ is divided into following sections:
                 </macrodef>
             </target>
             
-            <target name="-init-macrodef-nbjpda">
+            <target name="-init-macrodef-nbjpda" depends="-init-debug-args">
                 <macrodef>
                     <xsl:attribute name="name">nbjpdastart</xsl:attribute>
                     <xsl:attribute name="uri">http://www.netbeans.org/ns/j2se-project/1</xsl:attribute>
@@ -498,7 +498,7 @@ is divided into following sections:
                         <xsl:attribute name="default"></xsl:attribute>
                     </attribute>
                     <sequential>
-                        <nbjpdastart transport="dt_socket" addressproperty="jpda.address" name="@{{name}}" stopclassname="@{{stopclassname}}">
+                        <nbjpdastart transport="${{debug-transport}}" addressproperty="jpda.address" name="@{{name}}" stopclassname="@{{stopclassname}}">
                             <classpath>
                                 <path path="@{{classpath}}"/>
                             </classpath>
@@ -550,6 +550,12 @@ is divided into following sections:
                 <condition property="debug-args-line" value="-Xdebug -Xnoagent -Djava.compiler=none" else="-Xdebug">
                     <istrue value="${{have-jdk-older-than-1.4}}"/>
                 </condition>
+                <condition property="debug-transport-by-os" value="dt_shmem" else="dt_socket">
+                    <os family="windows"/>
+                </condition>
+                <condition property="debug-transport" value="${{debug.transport}}" else="${{debug-transport-by-os}}">
+                    <isset property="debug.transport"/>
+                </condition>
             </target>
             
             <target name="-init-macrodef-debug" depends="-init-debug-args">
@@ -575,7 +581,7 @@ is divided into following sections:
                                 <xsl:attribute name="jvm">${platform.java}</xsl:attribute>
                             </xsl:if>
                             <jvmarg line="${{debug-args-line}}"/>
-                            <jvmarg value="-Xrunjdwp:transport=dt_socket,address=${{jpda.address}}"/>
+                            <jvmarg value="-Xrunjdwp:transport=${{debug-transport}},address=${{jpda.address}}"/>
                             <jvmarg line="${{run.jvmargs}}"/>
                             <classpath>
                                 <path path="@{{classpath}}"/>
@@ -598,6 +604,10 @@ is divided into following sections:
                         <xsl:attribute name="name">classname</xsl:attribute>
                         <xsl:attribute name="default">${main.class}</xsl:attribute>
                     </attribute>
+                    <attribute>
+                        <xsl:attribute name="name">classpath</xsl:attribute>
+                        <xsl:attribute name="default">${run.classpath}</xsl:attribute>
+                    </attribute>
                     <element>
                         <xsl:attribute name="name">customize</xsl:attribute>
                         <xsl:attribute name="optional">true</xsl:attribute>
@@ -610,7 +620,7 @@ is divided into following sections:
                             </xsl:if>
                             <jvmarg line="${{run.jvmargs}}"/>
                             <classpath>
-                                <path path="${{run.classpath}}"/>
+                                <path path="@{{classpath}}"/>
                             </classpath>
                             <syspropertyset>
                                 <propertyref prefix="run-sys-prop."/>
@@ -741,6 +751,19 @@ is divided into following sections:
                 </target>
             </xsl:if>
             
+            <target name="-verify-automatic-build">
+                <xsl:attribute name="depends">init,-check-automatic-build,-clean-after-automatic-build</xsl:attribute>
+            </target>
+            
+            <target name="-check-automatic-build">
+                <xsl:attribute name="depends">init</xsl:attribute>
+                <available file="${{build.classes.dir}}/.netbeans_automatic_build" property="netbeans.automatic.build"/>
+            </target>
+            
+            <target name="-clean-after-automatic-build" depends="init" if="netbeans.automatic.build">
+                <antcall target="clean" />
+            </target>
+            
             <target name="-pre-pre-compile">
                 <xsl:attribute name="depends">init,deps-jar<xsl:if test="/p:project/p:configuration/jaxrpc:web-service-clients/jaxrpc:web-service-client">,web-service-client-generate</xsl:if></xsl:attribute>
                 <mkdir dir="${{build.classes.dir}}"/>
@@ -773,7 +796,7 @@ is divided into following sections:
             </target>
             
             <target name="compile">
-                <xsl:attribute name="depends">init,deps-jar,-pre-pre-compile,-pre-compile,-do-compile,-post-compile</xsl:attribute>
+                <xsl:attribute name="depends">init,deps-jar,-verify-automatic-build,-pre-pre-compile,-pre-compile,-do-compile,-post-compile</xsl:attribute>
                 <xsl:attribute name="description">Compile project.</xsl:attribute>
             </target>
             
@@ -803,7 +826,7 @@ is divided into following sections:
             </target>
             
             <target name="compile-single">
-                <xsl:attribute name="depends">init,deps-jar,-pre-pre-compile,-pre-compile-single,-do-compile-single,-post-compile-single</xsl:attribute>
+                <xsl:attribute name="depends">init,deps-jar,-verify-automatic-build,-pre-pre-compile,-pre-compile-single,-do-compile-single,-post-compile-single</xsl:attribute>
             </target>
             
             <xsl:comment>
@@ -924,7 +947,13 @@ is divided into following sections:
                 <fail unless="run.class">Must select one file in the IDE or set run.class</fail>
                 <j2seproject1:java classname="${{run.class}}"/>
             </target>
-            
+
+            <target name="run-test-with-main">
+                <xsl:attribute name="depends">init,-do-not-recompile,compile-test-single</xsl:attribute>
+                <fail unless="run.class">Must select one file in the IDE or set run.class</fail>
+                <j2seproject1:java classname="${{run.class}}" classpath="${{run.test.classpath}}"/>
+            </target>
+
             <xsl:comment>
                 =================
                 DEBUGGING SECTION
@@ -935,6 +964,12 @@ is divided into following sections:
                 <xsl:attribute name="if">netbeans.home</xsl:attribute>
                 <xsl:attribute name="depends">init</xsl:attribute>
                 <j2seproject1:nbjpdastart name="${{debug.class}}"/>
+            </target>
+
+            <target name="-debug-start-debugger-main-test">
+                <xsl:attribute name="if">netbeans.home</xsl:attribute>
+                <xsl:attribute name="depends">init</xsl:attribute>
+                <j2seproject1:nbjpdastart name="${{debug.class}}" classpath="${{debug.test.classpath}}"/>
             </target>
             
             <target name="-debug-start-debuggee">
@@ -973,6 +1008,18 @@ is divided into following sections:
             <target name="debug-single">
                 <xsl:attribute name="if">netbeans.home</xsl:attribute>
                 <xsl:attribute name="depends">init,-do-not-recompile,compile-single,-debug-start-debugger,-debug-start-debuggee-single</xsl:attribute>
+            </target>
+
+            <target name="-debug-start-debuggee-main-test">
+                <xsl:attribute name="if">netbeans.home</xsl:attribute>
+                <xsl:attribute name="depends">init,compile-test-single</xsl:attribute>
+                <fail unless="debug.class">Must select one file in the IDE or set debug.class</fail>
+                <j2seproject3:debug classname="${{debug.class}}" classpath="${{debug.test.classpath}}"/>
+            </target>
+
+            <target name="debug-test-with-main">
+                <xsl:attribute name="if">netbeans.home</xsl:attribute>
+                <xsl:attribute name="depends">init,-do-not-recompile,compile-test-single,-debug-start-debugger-main-test,-debug-start-debuggee-main-test</xsl:attribute>
             </target>
             
             <target name="-pre-debug-fix">
