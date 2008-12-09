@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,12 +42,15 @@
 package org.netbeans.modules.subversion.ui.update;
 
 import java.util.Iterator;
+import java.util.regex.Matcher;
 import org.netbeans.modules.subversion.ui.actions.ContextAction;
 import org.netbeans.modules.subversion.util.Context;
 import org.netbeans.modules.subversion.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.regex.Pattern;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.subversion.client.SvnClient;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
@@ -55,16 +58,17 @@ import org.netbeans.modules.subversion.client.SvnProgressSupport;
 import org.netbeans.modules.subversion.util.SvnUtils;
 import org.netbeans.modules.versioning.util.Utils;
 import org.netbeans.modules.versioning.util.VersioningOutputManager;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.nodes.Node;
 import org.openide.awt.StatusDisplayer;
 import org.openide.util.RequestProcessor;
+import org.tigris.subversion.svnclientadapter.ISVNInfo;
 import org.tigris.subversion.svnclientadapter.ISVNNotifyListener;
-import org.tigris.subversion.svnclientadapter.ISVNStatus;
 import org.tigris.subversion.svnclientadapter.SVNClientException;
 import org.tigris.subversion.svnclientadapter.SVNNodeKind;
 import org.tigris.subversion.svnclientadapter.SVNRevision;
 import org.tigris.subversion.svnclientadapter.SVNUrl;
-import org.tigris.subversion.svnclientadapter.utils.SVNStatusUtils;
 
 /**
  * Update action
@@ -116,9 +120,16 @@ public class UpdateAction extends ContextAction {
                
         File[] roots = ctx.getRootFiles();
         
-        final SVNUrl repositoryUrl; 
+        SVNUrl repositoryUrl = null;
         try {
-            repositoryUrl = SvnUtils.getRepositoryRootUrl(roots[0]);
+            for (File root : roots) {
+                repositoryUrl = SvnUtils.getRepositoryRootUrl(root);
+                if(repositoryUrl != null) {
+                    break;
+                } else {
+                    Subversion.LOG.log(Level.WARNING, "Could not retrieve repository root for context file {0}", new Object[]{root});
+                }
+            }
         } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, true, true);
             return;
@@ -145,7 +156,11 @@ public class UpdateAction extends ContextAction {
         SvnClient client;
         UpdateOutputListener listener = new UpdateOutputListener();
         try {
-            client = Subversion.getInstance().getClient(repositoryUrl);            
+            client = Subversion.getInstance().getClient(repositoryUrl); 
+            // this isn't clean - the client notifies only files which realy were updated. 
+            // The problem here is that the revision in the metadata is set to HEAD even if the file didn't change =>
+            // we have to explicitly force the refresh for the relevant context - see bellow in updateRoots
+            client.removeNotifyListener(Subversion.getInstance().getRefreshHandler());
             client.addNotifyListener(listener);            
         } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, true, true);
@@ -153,11 +168,29 @@ public class UpdateAction extends ContextAction {
         }
 
         try {                    
-            updateRoots(recursiveFiles, progress, client, true);
-            if(progress.isCanceled()) {                
-                return;
+            UpdateNotifyListener l = new UpdateNotifyListener();            
+            client.addNotifyListener(l);            
+            try {
+                updateRoots(recursiveFiles, progress, client, true);
+                if(progress.isCanceled()) {                
+                    return;
+                }
+                updateRoots(flatFiles, progress, client, false);
+            } finally {
+                client.removeNotifyListener(l);
             }
-            updateRoots(flatFiles, progress, client, false);
+            if (l.causedConflict) {
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        NotifyDescriptor nd = new NotifyDescriptor.Message(
+                                org.openide.util.NbBundle.getMessage(UpdateAction.class, "MSG_UpdateCausedConflicts_Prompt"), //NOI18N
+                                NotifyDescriptor.WARNING_MESSAGE);
+                        DialogDisplayer.getDefault().notify(nd);
+                    }
+                });
+            } else {
+                StatusDisplayer.getDefault().setStatusText(org.openide.util.NbBundle.getMessage(UpdateAction.class, "MSG_Update_Completed")); // NOI18N
+            }                  
         } catch (SVNClientException e1) {
             progress.annotate(e1);
         } finally {            
@@ -176,50 +209,64 @@ public class UpdateAction extends ContextAction {
     }
     
     private static void updateRoots(List<File> roots, SvnProgressSupport support, SvnClient client, boolean recursive) throws SVNClientException {
-        boolean conflict = false;
-roots_loop:        
         for (Iterator<File> it = roots.iterator(); it.hasNext();) {
             File root = it.next();
             if(support.isCanceled()) {
                 break;
             }
-            client.update(root, SVNRevision.HEAD, recursive);
-            
-            // XXX this isn't clean - the cache gets notified only about files which realy were updated. 
-            // However, the revision in the metadata is set to HEAD even if the file didn't change =>
-            // the status is refresh twice for each file which was updated just because we want to refresh 
-            // the cahced revision value...
-            if(recursive) {
-                SvnUtils.refreshRecursively(root);
-            } else {                
-                FileStatusCache cache = Subversion.getInstance().getStatusCache();
-                cache.onNotify(root, null);
-                if(root.isDirectory()) {
-                    File[] files = root.listFiles();
-                    if(files != null) {                        
-                        for(File f : files) {
-                            cache.onNotify(f, null);
-                        }
-                    }
-                }
-            }
-            ISVNStatus status[] = client.getStatus(root, true, false);
-            for (int k = 0; k<status.length; k++) {
-                ISVNStatus s = status[k];
-                if (SVNStatusUtils.isTextConflicted(s) || SVNStatusUtils.isPropConflicted(s)) {
-                    conflict = true;
-                    break roots_loop;
-                }
-            }
-        }
-        if (conflict) {
-            StatusDisplayer.getDefault().setStatusText(org.openide.util.NbBundle.getMessage(UpdateAction.class, "MSG_Update_Conflicts")); // NOI18N
-        } else {
-            StatusDisplayer.getDefault().setStatusText(org.openide.util.NbBundle.getMessage(UpdateAction.class, "MSG_Update_Completed")); // NOI18N
+            long rev = client.update(root, SVNRevision.HEAD, recursive);
+            revisionUpdateWorkaround(recursive, root, client, rev);
         }
         return;
     }
 
+    private static void revisionUpdateWorkaround(final boolean recursive, final File root, final SvnClient client, final long revision) throws SVNClientException {
+        Utils.post(new Runnable() {
+            public void run() {
+                // this isn't clean - the client notifies only files which realy were updated.
+                // The problem here is that the revision in the metadata is set to HEAD even if the file didn't change         
+                List<File> filesToRefresh;
+                if (recursive) {
+                    filesToRefresh = SvnUtils.listRecursively(root);
+                } else {
+                    filesToRefresh = new ArrayList<File>();
+                    filesToRefresh.add(root);
+                    File[] files = root.listFiles();
+                    if (files != null) {
+                        for (File file : files) {
+                            filesToRefresh.add(file);
+                        }
+                    }
+                }
+                File[] fileArray = filesToRefresh.toArray(new File[filesToRefresh.size()]);
+
+                SVNRevision.Number svnRevision = null;
+                if(revision < -1) {
+                    ISVNInfo info = null;
+                    try {
+                        info = client.getInfoFromWorkingCopy(root); // try to retrieve from local WC first
+                        svnRevision = info.getRevision();
+                        if(svnRevision == null) {
+                            info = client.getInfo(root); // contacts the server
+                            svnRevision = info.getRevision();
+                        }
+                    } catch (SVNClientException ex) {
+                        SvnClientExceptionHandler.notifyException(ex, true, true);
+                    }
+                } else {
+                    svnRevision = new SVNRevision.Number(revision);
+                }
+
+                Subversion.getInstance().getStatusCache().patchRevision(fileArray, svnRevision);
+
+                // the cache fires status change events to trigger the annotation refresh.
+                // unfortunatelly, we have to call the refresh explicitly for each file from this place
+                // as the revision label was changed even if the files status wasn't
+                Subversion.getInstance().refreshAnnotations(fileArray);
+            }
+        });
+    }
+    
     public static void performUpdate(final Context context, final String contextDisplayName) {                
         if(!Subversion.getInstance().checkClientAvailable()) {            
             return;
@@ -284,5 +331,24 @@ roots_loop:
         }
         
     };
+
+    private static class UpdateNotifyListener implements ISVNNotifyListener {
+        private Pattern p = Pattern.compile("C   (.+)");
+        boolean causedConflict = false;
+        public void logMessage(String msg) {
+            // XXX JAVAHL - different msg in case of conflicts
+            if(causedConflict) return;
+            Matcher m = p.matcher(msg);
+            if(m.matches()) {
+                causedConflict = true;
+            }
+        }
+        public void setCommand(int arg0)                    { /* boring */  }
+        public void logCommandLine(String arg0)             { /* boring */  }
+        public void logError(String arg0)                   { /* boring */  }
+        public void logRevision(long arg0, String arg1)     { /* boring */  }
+        public void logCompleted(String arg0)               { /* boring */  }
+        public void onNotify(File arg0, SVNNodeKind arg1)   { /* boring */  }
+    }
     
 }
