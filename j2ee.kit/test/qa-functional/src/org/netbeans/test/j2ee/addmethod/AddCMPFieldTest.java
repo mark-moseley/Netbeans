@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,19 +41,27 @@
 
 package org.netbeans.test.j2ee.addmethod;
 
-import java.io.File;
+import java.awt.PopupMenu;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.io.IOException;
+import javax.swing.JDialog;
+import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
+import javax.swing.tree.TreePath;
+import org.netbeans.api.project.Project;
 import org.netbeans.jellytools.*;
+import org.netbeans.jellytools.MainWindowOperator;
 import org.netbeans.jellytools.actions.ActionNoBlock;
-import org.netbeans.jellytools.actions.OpenAction;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jemmy.JemmyException;
-import org.netbeans.jemmy.Waitable;
-import org.netbeans.jemmy.Waiter;
 import org.netbeans.jemmy.operators.*;
-import org.netbeans.jemmy.util.PNGEncoder;
-import org.netbeans.test.j2ee.*;
+import org.netbeans.jellytools.modules.java.editor.GenerateCodeOperator;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.nodes.ProjectRootNode;
+import org.netbeans.jellytools.nodes.SourcePackagesNode;
+import org.netbeans.jemmy.TimeoutExpiredException;
+import org.netbeans.modules.j2ee.ddloaders.multiview.EjbNode;
+import org.netbeans.test.j2ee.EJBValidation;
+import org.openide.actions.PopupAction;
 
 /**
  *
@@ -80,14 +88,15 @@ public class AddCMPFieldTest extends AddMethodBase {
         junit.textui.TestRunner.run(new AddCMPFieldTest("testAddCMPField1InEB"));
     }
     
-    public void setUp() {
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
         System.out.println("########  "+getName()+"  #######");
     }
     
     public void testAddCMPField1InEB()  throws IOException{
         beanName = "TestingEntity";
-        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_EJBActionGroup")
-                               +"|"+Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddCmpFieldAction");
+        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddCmpFieldAction");
         methodName = "cmpTestField1x";
         description = null;
         returnType = "String";
@@ -98,8 +107,7 @@ public class AddCMPFieldTest extends AddMethodBase {
 
     public void testAddCMPField2InEB()  throws IOException{
         beanName = "TestingEntity";
-        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_EJBActionGroup")
-                               +"|"+Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddCmpFieldAction");
+        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.ejb.action.Bundle", "LBL_AddCmpFieldAction");
         methodName = "cmpTestField2x";
         description = null; //"Test Field";
         returnType = "int";
@@ -113,11 +121,15 @@ public class AddCMPFieldTest extends AddMethodBase {
     }
     
     protected void addMethod() throws IOException {
-        EditorOperator editor = new EditorWindowOperator().getEditor(beanName+"Bean.java");
+        EditorOperator editor = EditorWindowOperator.getEditor(beanName+"Bean.java");
         editor.select(11);
 
-        // invoke Add Business Method dialog
-        new ActionNoBlock(null,editorPopup).perform(editor);
+        // invoke Add CMP Field dialog
+        ProjectsTabOperator prj = new ProjectsTabOperator();
+        ProjectRootNode prjnd = prj.getProjectRootNode(EJBValidation.EJB_PROJECT_NAME);
+        Node node = new Node(prjnd, "Enterprise Beans|"+beanName);
+        node.performPopupActionNoBlock("Add|Add CMP Field...");
+
         AddCMPFieldDialog dialog = new AddCMPFieldDialog();
         JLabelOperator lblOper = new JLabelOperator(dialog, "Name");
         new JTextFieldOperator((JTextField)lblOper.getLabelFor()).setText(methodName);
@@ -125,11 +137,11 @@ public class AddCMPFieldTest extends AddMethodBase {
             dialog.setDescription(description);
             lblOper = new JLabelOperator(dialog, "Description");
             new JTextFieldOperator((JTextField)lblOper.getLabelFor()).setText(description);
-        }
+        } 
         
         lblOper = new JLabelOperator(dialog, "Type");
         new JTextFieldOperator((JTextField)lblOper.getLabelFor()).setText(returnType);
-                
+
         if (localGetter != null)
             dialog.checkLocalGetter(localGetter.booleanValue());
         if (localSetter != null)
@@ -139,7 +151,7 @@ public class AddCMPFieldTest extends AddMethodBase {
         if (remoteSetter != null)
             dialog.checkRemoteSetter(remoteSetter.booleanValue());
         dialog.ok();
-        
+
         if (saveFile) 
             editor.save();
         
