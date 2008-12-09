@@ -9,27 +9,31 @@
 
 package org.netbeans.test.subversion.main.archeology;
 
+import java.awt.event.InputEvent;
 import java.io.File;
 import java.io.PrintStream;
-import junit.textui.TestRunner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
+import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputOperator;
-import org.netbeans.jellytools.OutputTabOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jemmy.QueueTool;
+import org.netbeans.jemmy.EventTool;
+import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.JButtonOperator;
+import org.netbeans.jemmy.operators.JPopupMenuOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.test.subversion.operators.CheckoutWizardOperator;
 import org.netbeans.test.subversion.operators.RepositoryStepOperator;
 import org.netbeans.test.subversion.operators.WorkDirStepOperator;
+import org.netbeans.test.subversion.utils.MessageHandler;
 import org.netbeans.test.subversion.utils.RepositoryMaintenance;
 import org.netbeans.test.subversion.utils.TestKit;
-import org.netbeans.junit.ide.ProjectSupport;
 
 /**
  *
@@ -43,52 +47,49 @@ public class AnnotationsTest extends JellyTestCase {
     public static final String PROJECT_NAME = "JavaApp";
     public File projectPath;
     public PrintStream stream;
-    String os_name;
     Operator.DefaultStringComparator comOperator;
     Operator.DefaultStringComparator oldOperator;
+    static Logger log;
     
     /** Creates a new instance of AnnotationsTest */
     public AnnotationsTest(String name) {
         super(name);
     }
     
+    @Override
     protected void setUp() throws Exception {
-        os_name = System.getProperty("os.name");
-        //System.out.println(os_name);
         System.out.println("### "+getName()+" ###");
-        
-    }
-    
-    protected boolean isUnix() {
-        boolean unix = false;
-        if (os_name.indexOf("Windows") == -1) {
-            unix = true;
+        if (log == null) {
+            log = Logger.getLogger(TestKit.LOGGER_NAME);
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
         }
-        return unix;
     }
     
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new AnnotationsTest("testShowAnnotations"));
-        return suite;
-    }
+    public static Test suite() {
+         return NbModuleSuite.create(
+                 NbModuleSuite.createConfiguration(AnnotationsTest.class).addTest(
+                    "testShowAnnotations"
+                 )
+                 .enableModules(".*")
+                 .clusters(".*")
+        );
+     }
     
     public void testShowAnnotations() throws Exception {
-        //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 30000);
-        //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 30000);
         try {
+            MessageHandler mh = new MessageHandler("Checking out");
+            log.addHandler(mh);
             TestKit.closeProject(PROJECT_NAME);
-            OutputOperator.invoke();
+            if (TestKit.getOsName().indexOf("Mac") > -1)
+                NewProjectWizardOperator.invoke().close();
             stream = new PrintStream(new File(getWorkDir(), getName() + ".log"));
             comOperator = new Operator.DefaultStringComparator(true, true);
             oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
             Operator.setDefaultStringComparator(comOperator);
-            CheckoutWizardOperator co = CheckoutWizardOperator.invoke();
+            CheckoutWizardOperator.invoke();
             Operator.setDefaultStringComparator(oldOperator);
             RepositoryStepOperator rso = new RepositoryStepOperator();
             
@@ -97,7 +98,6 @@ public class AnnotationsTest extends JellyTestCase {
             new File(TMP_PATH).mkdirs();
             work.mkdirs();
             RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + REPO_PATH));
-            //RepositoryMaintenance.deleteFolder(new File(TMP_PATH + File.separator + WORK_PATH));
             RepositoryMaintenance.createRepository(TMP_PATH + File.separator + REPO_PATH);
             RepositoryMaintenance.loadRepositoryFromFile(TMP_PATH + File.separator + REPO_PATH, getDataDir().getCanonicalPath() + File.separator + "repo_dump");
             rso.setRepositoryURL(RepositoryStepOperator.ITEM_FILE + RepositoryMaintenance.changeFileSeparator(TMP_PATH + File.separator + REPO_PATH, false));
@@ -109,30 +109,46 @@ public class AnnotationsTest extends JellyTestCase {
             wdso.checkCheckoutContentOnly(false);
             
             wdso.finish();
-            OutputTabOperator oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            //            oto.clear();
-            //open project
-            oto.waitText("Checking out... finished.");
+            TestKit.waitText(mh);
+
             NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
             JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
             open.push();
-            
             TestKit.waitForScanFinishedAndQueueEmpty();
-            
-            oto = new OutputTabOperator("file:///tmp/repo");
-            oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-            oto.clear();
+
+            mh = new MessageHandler("Annotating");
+            TestKit.removeHandlers(log);
+            log.addHandler(mh);
+
+            try {
+                EditorOperator.closeDiscardAll();
+            } catch (Throwable e) {
+                System.out.println("Exception while closing files.");
+            }
             Node node = new Node(new SourcePackagesNode(PROJECT_NAME), "javaapp|Main.java");
             node.performPopupAction("Subversion|Show Annotations");
-            oto.waitText("Annotating... finished.");
-            
+            TestKit.waitText(mh);
+            EditorOperator eo = new EditorOperator("Main.java");
+            eo.clickMouse(40, 50, 1, InputEvent.BUTTON3_MASK);
+            JPopupMenuOperator pmo = new JPopupMenuOperator();
+            pmo.pushMenu("Hide Annotations");
+
+            new EventTool().waitNoEvent(2000);
+            try {
+                EditorOperator.closeDiscardAll();
+            } catch (Throwable e) {
+                System.out.println("Exception while closing files.");
+            }
+            new EventTool().waitNoEvent(2000);
+
             stream.flush();
             stream.close();
         } catch (Exception e) {
             throw new Exception("Test failed: " + e);
         } finally {
-            TestKit.closeProject(PROJECT_NAME);
+            try {
+                TestKit.closeProject(PROJECT_NAME);
+            } catch (TimeoutExpiredException e) {/* OK */}
         }
     }
 }
