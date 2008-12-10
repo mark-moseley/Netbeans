@@ -49,20 +49,23 @@ import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
+import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.junit.Log;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.modules.project.ui.actions.TestSupport;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
@@ -72,6 +75,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.util.RequestProcessor;
 import org.openide.util.lookup.Lookups;
 
 /** Tests fix of issue 56454.
@@ -87,6 +91,11 @@ public class OpenProjectListTest extends NbTestCase {
 
     public OpenProjectListTest (String testName) {
         super (testName);
+    }
+
+    @Override
+    protected Level logLevel() {
+        return Level.FINE;
     }
 
     protected void setUp () throws Exception {
@@ -126,6 +135,7 @@ public class OpenProjectListTest extends NbTestCase {
         OpenProjectList.getDefault().close(new Project[] {project1, project2}, false);
     }
 
+    @RandomlyFails // NB-Core-Build #1691
     public void testOpen () throws Exception {
         assertTrue ("No project is open.", OpenProjectList.getDefault ().getOpenProjects ().length == 0);
         CharSequence log = Log.enable("org.netbeans.ui", Level.FINE);
@@ -141,7 +151,8 @@ public class OpenProjectListTest extends NbTestCase {
         assertTrue ("Document f1_2_open is loaded.", handler.openFiles.contains (f1_2_open.getURL ().toExternalForm ()));
         assertFalse ("Document f2_1_open isn't loaded.", handler.openFiles.contains (f2_1_open.getURL ().toExternalForm ()));
     }
-    
+
+    @RandomlyFails // NB-Core-Build #1767
     public void testListenerOpenClose () throws Exception {
         assertTrue ("No project is open.", OpenProjectList.getDefault ().getOpenProjects ().length == 0); 
         ChangeListener list = new ChangeListener();
@@ -165,7 +176,8 @@ public class OpenProjectListTest extends NbTestCase {
         assertEquals(1, list.oldCount);
         assertEquals(0, list.newCount);
     }
-    
+
+    @RandomlyFails // NB-Core-Build #1855
     public void testClose () throws Exception {
         testOpen ();
         
@@ -195,7 +207,8 @@ public class OpenProjectListTest extends NbTestCase {
         assertFalse ("Document f1_2_open isn't loaded.", handler.openFiles.contains (f1_2_open.getURL ().toExternalForm ()));
         assertTrue ("Document f2_1_open is still loaded.", handler.openFiles.contains (f2_1_open.getURL ().toExternalForm ()));
     }
-    
+
+    @RandomlyFails // NB-Core-Build #810
     public void testSerialize() throws Exception {
         testOpen();
         
@@ -307,6 +320,7 @@ public class OpenProjectListTest extends NbTestCase {
         assertFalse("project2 is not in recent projects list", OpenProjectList.getDefault().getRecentProjects().contains(project2));
     }
     
+    @RandomlyFails
     public void testMainProject() throws Exception {
         FileObject workDir = FileUtil.toFileObject (getWorkDir ());
         
@@ -436,19 +450,37 @@ public class OpenProjectListTest extends NbTestCase {
         }
     }
     
-    private static class TestProjectOpenedHookImpl extends ProjectOpenedHook {
+    private static class TestProjectOpenedHookImpl extends ProjectOpenedHook 
+    implements Runnable {
         
         public static int opened = 0;
         public static int closed = 0;
         
+        private Object result;
+        
         protected void projectClosed() {
             closed++;
+            assertFalse("Working on", OpenProjects.getDefault().openProjects().isDone());
+            RequestProcessor.getDefault().post(this).waitFinished();
+            assertNotNull("some result computed", result);
+            assertEquals("It is time out exception", TimeoutException.class, result.getClass());
         }
         
         protected void projectOpened() {
             opened++;
+            assertFalse("Working on", OpenProjects.getDefault().openProjects().isDone());
+            RequestProcessor.getDefault().post(this).waitFinished();
+            assertNotNull("some result computed", result);
+            assertEquals("It is time out exception", TimeoutException.class, result.getClass());
         }
         
+        public void run() {
+            try {
+                result = OpenProjects.getDefault().openProjects().get(100, TimeUnit.MILLISECONDS);
+            } catch (Exception ex) {
+                result = ex;
+    }
+        }
     }
     
     private class ChangeListener implements PropertyChangeListener {
