@@ -46,6 +46,8 @@ import java.util.Hashtable;
 import java.util.Enumeration;
 import java.awt.Color;
 import java.awt.Font;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.StyledDocument;
 import javax.swing.text.Style;
@@ -81,6 +83,9 @@ public class GuardedDocument extends BaseDocument
     private static final boolean debugAtomic = Boolean.getBoolean("netbeans.debug.editor.atomic"); // NOI18N
     private static final boolean debugAtomicStack = Boolean.getBoolean("netbeans.debug.editor.atomic.stack"); // NOI18N
 
+    // -J-Dorg.netbeans.editor.GuardedDocument.level=FINEST
+    private static final Logger LOG = Logger.getLogger(GuardedDocument.class.getName());
+
     // Add the attributes to sets
     static {
         guardedSet.addAttribute(GUARDED_ATTRIBUTE, Boolean.TRUE);
@@ -108,27 +113,70 @@ public class GuardedDocument extends BaseDocument
     */
     protected String normalStyleName;
 
+    /**
+     * Create a new guarded document.
+     * 
+     * @param kitClass The implementation class of the editor kit that
+     *   should be used for this document.
+     * 
+     * @deprecated The use of editor kit's implementation classes is deprecated
+     *   in favor of mime types.
+     */
     public GuardedDocument(Class kitClass) {
         this(kitClass, true, new StyleContext());
     }
 
-    /** Create base document with a specified syntax and style context.
+    /**
+     * Create a new guarded document.
+     * 
+     * @param mimeType The mime type for this document.
+     * 
+     * @since 1.26
+     */
+    public GuardedDocument(String mimeType) {
+        this(mimeType, true, new StyleContext());
+    }
+    
+    /** 
+     * Creates base document with specified style context.
+     * 
     * @param kitClass class used to initialize this document with proper settings
     *   category based on the editor kit for which this document is created
-    * @param syntax syntax scanner to use with this document
+     * @param addToRegistry XXX
     * @param styles style context to use
+     * 
+     * @deprecated The use of editor kit's implementation classes is deprecated
+     *   in favor of mime types.
     */
     public GuardedDocument(Class kitClass, boolean addToRegistry, StyleContext styles) {
         super(kitClass, addToRegistry);
+        init(styles);
+    }
+    
+    /**
+     * Creates base document with specified style context.
+     * 
+     * @param mimeType The mime type for this document.
+     * @param addToRegistry XXX
+     * @param styles style context to use
+     * 
+     * @since 1.26
+     */
+    public GuardedDocument(String mimeType, boolean addToRegistry, StyleContext styles) {
+        super(addToRegistry, mimeType);
+        init(styles);
+    }
+    
+    private void init(StyleContext styles) {
         this.styles = styles;
         stylesToLayers = new Hashtable(5);
         guardedBlockChain = new MarkBlockChain(this) {
-            protected Mark createBlockStartMark() {
+            protected @Override Mark createBlockStartMark() {
                 MarkFactory.ContextMark startMark = new MarkFactory.ContextMark(Position.Bias.Forward, false);
                 return startMark;
             }
 
-            protected Mark createBlockEndMark() {
+            protected @Override Mark createBlockEndMark() {
                 MarkFactory.ContextMark endMark = new MarkFactory.ContextMark(Position.Bias.Backward, false);
                 return endMark;
             }
@@ -152,7 +200,7 @@ public class GuardedDocument extends BaseDocument
     * @param evt document event containing the change including array
     *  of characters that will be inserted
     */
-    protected void preInsertCheck(int offset, String text, AttributeSet a)
+    protected @Override void preInsertCheck(int offset, String text, AttributeSet a)
     throws BadLocationException {
         super.preInsertCheck(offset, text, a);
 
@@ -168,22 +216,31 @@ public class GuardedDocument extends BaseDocument
             }
         }
 
-        if (text.length() > 0
-                && (rel & MarkBlock.OVERLAP) != 0
+        boolean guarded = (rel & MarkBlock.OVERLAP) != 0
                 && rel != MarkBlock.INSIDE_END // guarded blocks have insertAfter endMark
-                && !(text.charAt(text.length() - 1) == '\n'
-                     && rel == MarkBlock.INSIDE_BEGIN)
-           ) {
+                && !(text.charAt(text.length() - 1) == '\n' && rel == MarkBlock.INSIDE_BEGIN);
+        if (guarded) {
             if (!breakGuarded || atomicAsUser) {
-                throw new GuardedException(
-                    MessageFormat.format(
-                        NbBundle.getBundle(BaseKit.class).getString(FMT_GUARDED_INSERT_LOCALE),
-                        new Object [] {
-                            new Integer(offset)
-                        }
-                    ),
-                    offset
-                );
+                CharSequence docText = org.netbeans.lib.editor.util.swing.DocumentUtilities.getText(this);
+                // Allow mod when inserting "inside" line and right at the begining of the guarded block
+                boolean insertAtLineBegin = (offset == 0 || docText.charAt(offset - 1) == '\n');
+                guarded = (rel != MarkBlock.INSIDE_BEGIN) || insertAtLineBegin;
+                if (guarded) {
+                    if (LOG.isLoggable(Level.FINE)) {
+                        LOG.fine("GuardedDocument.preInsertCheck(): offset:" + Utilities.debugPosition(this, offset) +
+                                ", relation: " + rel + "; guardedBlockChain:\n" + guardedBlockChain + "\n");
+                    }
+
+                    throw new GuardedException(
+                        MessageFormat.format(
+                            NbBundle.getBundle(BaseKit.class).getString(FMT_GUARDED_INSERT_LOCALE),
+                            new Object [] {
+                                new Integer(offset)
+                            }
+                        ),
+                        offset
+                    );
+                }
             }
         }
     }
@@ -191,7 +248,7 @@ public class GuardedDocument extends BaseDocument
     /** This method is called automatically before the document
     * is updated as result of removal.
     */
-    protected void preRemoveCheck(int offset, int len)
+    protected @Override void preRemoveCheck(int offset, int len)
     throws BadLocationException {
         int rel = guardedBlockChain.compareBlock(offset, offset + len);
 
@@ -205,11 +262,27 @@ public class GuardedDocument extends BaseDocument
             }
         }
 
-        if ((rel & MarkBlock.OVERLAP) != 0
-                || (rel == MarkBlock.CONTINUE_BEGIN
-                    && !(offset == 0 || getChars(offset - 1, 1)[0] == '\n'))
-           ) {
+        // Check if removed block overlaps any guarded block(s)
+        // Also check that if an area right before GB gets removed (including ending newline)
+        // that the area does not start in the middle of the line (GB would then start in the middle of line
+        // after the removal).
+        // For GBs that already start in the middle of a line this does not apply
+        boolean guarded = ((rel & MarkBlock.OVERLAP) != 0);
+        if (!guarded && (rel == MarkBlock.CONTINUE_BEGIN)) { // GB starts right after removed area
+            CharSequence docText = org.netbeans.lib.editor.util.swing.DocumentUtilities.getText(this);
+            int gbStartOffset = offset + len;
+            // To allow removal either GB starts in a middle of line
+            // or (if starts at line begining) check that a character in front of first removed char is newline
+            boolean gbStartsAtLineBegin = (gbStartOffset == 0 || docText.charAt(gbStartOffset - 1) == '\n');
+            guarded = gbStartsAtLineBegin && (offset != 0 && docText.charAt(offset - 1) != '\n');
+        }
+        if (guarded) {
             if (!breakGuarded || atomicAsUser) {
+                if (LOG.isLoggable(Level.FINE)) {
+                    LOG.fine("GuardedDocument.preRemoveCheck(): offset:" + Utilities.debugPosition(this, offset) +
+                            ", relation: " + rel + "; guardedBlockChain:\n" + guardedBlockChain + "\n");
+                }
+
                 // test whether the previous char before removed text is '\n'
                 throw new GuardedException(
                     MessageFormat.format(
@@ -235,7 +308,7 @@ public class GuardedDocument extends BaseDocument
         }
     }
 
-    public void runAtomic(Runnable r) {
+    public @Override void runAtomic(Runnable r) {
         if (debugAtomic) {
             System.out.println("GuardedDocument.runAtomic() called"); // NOI18N
             if (debugAtomicStack) {
@@ -244,7 +317,7 @@ public class GuardedDocument extends BaseDocument
         }
 
         boolean completed = false;
-        atomicLock();
+        atomicLockImpl ();
         boolean origBreakGuarded = breakGuarded;
         try {
             breakGuarded = true;
@@ -257,7 +330,7 @@ public class GuardedDocument extends BaseDocument
                     breakAtomicLock();
                 }
             } finally {
-                atomicUnlock();
+                atomicUnlockImpl ();
             }
             if (debugAtomic) {
                 System.out.println("GuardedDocument.runAtomic() finished"); // NOI18N
@@ -265,7 +338,7 @@ public class GuardedDocument extends BaseDocument
         }
     }
 
-    public void runAtomicAsUser(Runnable r) {
+    public @Override void runAtomicAsUser(Runnable r) {
         if (debugAtomic) {
             System.out.println("GuardedDocument.runAtomicAsUser() called"); // NOI18N
             if (debugAtomicStack) {
@@ -274,7 +347,7 @@ public class GuardedDocument extends BaseDocument
         }
 
         boolean completed = false;
-        atomicLock();
+        atomicLockImpl ();
         boolean origAtomicAsUser = atomicAsUser;
         try {
             atomicAsUser = true;
@@ -287,7 +360,7 @@ public class GuardedDocument extends BaseDocument
                     breakAtomicLock();
                 }
             } finally {
-                atomicUnlock();
+                atomicUnlockImpl ();
             }
             if (debugAtomic) {
                 System.out.println("GuardedDocument.runAtomicAsUser() finished"); // NOI18N
@@ -295,7 +368,7 @@ public class GuardedDocument extends BaseDocument
         }
     }
 
-    protected BaseDocumentEvent createDocumentEvent(int offset, int length,
+    protected @Override BaseDocumentEvent createDocumentEvent(int offset, int length,
             DocumentEvent.EventType type) {
         return new GuardedDocumentEvent(this, offset, length, type);
     }
@@ -467,7 +540,7 @@ public class GuardedDocument extends BaseDocument
     protected DrawLayer addStyledLayer(String layerName, Style style) {
         if (layerName != null) {
             try {
-                int indColon = layerName.indexOf(':');
+                int indColon = layerName.indexOf(':'); //NOI18N
                 int layerVisibility = Integer.parseInt(layerName.substring(indColon + 1));
                 DrawLayer layer = new DrawLayerFactory.StyleLayer(layerName, this, style);
 
@@ -481,7 +554,7 @@ public class GuardedDocument extends BaseDocument
         return null;
     }
 
-    public String toStringDetail() {
+    public @Override String toStringDetail() {
         return super.toStringDetail()
                + getDrawLayerList()
                + ",\nGUARDED blocks:\n" + guardedBlockChain; // NOI18N
