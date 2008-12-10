@@ -48,6 +48,7 @@ import java.util.HashMap;
 import java.util.List;
 import javax.swing.text.Document;
 import javax.swing.text.Position.Bias;
+import javax.swing.text.StyledDocument;
 import org.netbeans.junit.NbTestCase;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileLock;
@@ -56,6 +57,7 @@ import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.text.CloneableEditorSupport;
+import org.openide.text.NbDocument;
 import org.openide.text.PositionRef;
 
 /**
@@ -142,6 +144,31 @@ public class ModificationResultTest extends NbTestCase {
         compareReferenceFiles();
     }
     
+    private void performTestToGuardedDocument(String creator) throws Exception {
+        prepareTest();
+        
+        StyledDocument doc = ces.openDocument();
+        
+        NbDocument.markGuarded(doc, 4, 6);
+        
+        Method m = ModificationResultTest.class.getDeclaredMethod(creator, new Class[0]);
+        
+        ModificationResult result = (ModificationResult) m.invoke(this, new Object[0]);
+        
+        for (FileObject fo : result.getModifiedFileObjects()) {
+            for (ModificationResult.Difference diff : result.getDifferences(fo)) {
+                diff.setCommitToGuards(true);
+            }
+        }
+
+        
+        result.commit();
+        
+        ref(doc.getText(0, doc.getLength()));
+        
+        compareReferenceFiles();
+    }
+    
     private ModificationResult prepareRemoveResult() throws Exception {
         PositionRef start1 = ces.createPositionRef(5, Bias.Forward);
         PositionRef end1 = ces.createPositionRef(9, Bias.Forward);
@@ -198,6 +225,10 @@ public class ModificationResultTest extends NbTestCase {
         performTestToDocument("prepareInsertResult");
     }
     
+    public void testInsertToGuardedDocument() throws Exception {
+        performTestToGuardedDocument("prepareInsertResult");
+    }
+    
     public void testRemoveFromFile() throws Exception {
         performTestToFile("prepareRemoveResult");
     }
@@ -220,6 +251,21 @@ public class ModificationResultTest extends NbTestCase {
     
     public void testModification2ToDocument() throws Exception {
         performTestToDocument("prepareModificationResult2");
+    }
+    
+    public void test152941() throws Exception {
+        prepareTest();
+
+        ModificationResult result = new ModificationResult(null);
+
+        result.diffs = new HashMap<FileObject, List<ModificationResult.Difference>>();
+
+        try {
+            result.getResultingSource(testFile);
+            fail("No exception");
+        } catch (IllegalArgumentException ex) {
+            //correct exception
+        }
     }
     
 }
