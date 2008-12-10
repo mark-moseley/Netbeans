@@ -29,9 +29,12 @@
 package org.apache.tools.ant.module.bridge.impl;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Vector;
+import java.util.regex.Pattern;
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Task;
@@ -40,7 +43,9 @@ import org.apache.tools.ant.taskdefs.ExecuteStreamHandler;
 import org.apache.tools.ant.taskdefs.Java;
 import org.apache.tools.ant.taskdefs.LogOutputStream;
 import org.apache.tools.ant.taskdefs.Redirector;
+import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
+import org.openide.windows.OutputWriter;
 
 /**
  * Replacement for Ant's java task which directly sends I/O to the output without line buffering.
@@ -51,6 +56,10 @@ public class ForkedJavaOverride extends Java {
 
     private static final RequestProcessor PROCESSOR = new RequestProcessor(ForkedJavaOverride.class.getName(), Integer.MAX_VALUE);
 
+    // should be consistent with java.project.JavaAntLogger.STACK_TRACE
+    private static final Pattern STACK_TRACE = Pattern.compile(
+    "(?:\t|\\[catch\\] )at ((?:[a-zA-Z_$][a-zA-Z0-9_$]*\\.)*)[a-zA-Z_$][a-zA-Z0-9_$]*\\.[a-zA-Z_$<][a-zA-Z0-9_$>]*\\(([a-zA-Z_$][a-zA-Z0-9_$]*\\.java):([0-9]+)\\)"); // NOI18N
+
     public ForkedJavaOverride() {
         redirector = new NbRedirector(this);
         super.setFork(true);
@@ -59,6 +68,16 @@ public class ForkedJavaOverride extends Java {
     @Override
     public void setFork(boolean fork) {
         // #47465: ignore! Does not work to be set to false.
+    }
+
+    // #121512: NbRedirector does not work with custom input
+    public @Override void setInput(File input) {
+        redirector = new Redirector(this);
+        super.setInput(input);
+    }
+    public @Override void setInputString(String inputString) {
+        redirector = new Redirector(this);
+        super.setInputString(inputString);
     }
 
     private class NbRedirector extends Redirector {
@@ -87,26 +106,25 @@ public class ForkedJavaOverride extends Java {
 
         private class NbOutputStreamHandler implements ExecuteStreamHandler {
 
-            private RequestProcessor.Task outTask;
-            private RequestProcessor.Task errTask;
-            //private RequestProcessor.Task inTask;
+            private Thread outTask;
+            private Thread errTask;
 
-            //long init = System.currentTimeMillis();
             NbOutputStreamHandler() {}
 
             public void start() throws IOException {}
 
             public void stop() {
-                /* XXX causes process to hang at end
-                if (inTask != null) {
-                    inTask.waitFinished();
-                }
-                */
                 if (errTask != null) {
-                    errTask.waitFinished();
+                    try {
+                        errTask.join();
+                    } catch (InterruptedException ex) {
+                    }
                 }
                 if (outTask != null) {
-                    outTask.waitFinished();
+                    try {
+                        outTask.join();
+                    } catch (InterruptedException ex) {
+                    }
                 }
             }
 
@@ -117,7 +135,9 @@ public class ForkedJavaOverride extends Java {
                     os = AntBridge.delegateOutputStream(false);
                     logLevel = Project.MSG_INFO;
                 }
-                outTask = PROCESSOR.post(new Copier(inputStream, os, logLevel, outEncoding/*, init*/));
+                outTask = new Thread(Thread.currentThread().getThreadGroup(), new Copier(inputStream, os, logLevel, outEncoding), 
+                        "Out Thread for " + getProject().getName()); // NOI18N
+                outTask.start();
             }
 
             public void setProcessErrorStream(InputStream inputStream) throws IOException {
@@ -127,7 +147,9 @@ public class ForkedJavaOverride extends Java {
                     os = AntBridge.delegateOutputStream(true);
                     logLevel = Project.MSG_WARN;
                 }
-                errTask = PROCESSOR.post(new Copier(inputStream, os, logLevel, errEncoding/*, init*/));
+                errTask = new Thread(Thread.currentThread().getThreadGroup(), new Copier(inputStream, os, logLevel, errEncoding), 
+                        "Err Thread for " + getProject().getName()); // NOI18N
+                errTask.start();
             }
 
             public void setProcessInputStream(OutputStream outputStream) throws IOException {
@@ -135,7 +157,8 @@ public class ForkedJavaOverride extends Java {
                 if (is == null) {
                     is = AntBridge.delegateInputStream();
                 }
-                /*inTask = */PROCESSOR.post(new Copier(is, outputStream, null, null/*, init*/));
+                new Thread(Thread.currentThread().getThreadGroup(), new Copier(is, outputStream, null, null), 
+                        "In Thread for " + getProject().getName()).start(); // NOI18N
             }
 
         }
@@ -146,18 +169,17 @@ public class ForkedJavaOverride extends Java {
 
         private final InputStream in;
         private final OutputStream out;
-        //final long init;
         private final Integer logLevel;
         private final String encoding;
         private final RequestProcessor.Task flusher;
         private final ByteArrayOutputStream currentLine;
+        private OutputWriter ow = null;
 
         public Copier(InputStream in, OutputStream out, Integer logLevel, String encoding/*, long init*/) {
             this.in = in;
             this.out = out;
             this.logLevel = logLevel;
             this.encoding = encoding;
-            //this.init = init;
             if (logLevel != null) {
                 flusher = PROCESSOR.create(new Runnable() {
                     public void run() {
@@ -177,29 +199,40 @@ public class ForkedJavaOverride extends Java {
             long tick = System.currentTimeMillis();
             content.append(String.format("[init: %1.1fsec]", (tick - init) / 1000.0));
              */
+            
+            if (ow == null && logLevel != null) {
+                Vector v = getProject().getBuildListeners();
+                for (Object o : v) {
+                    if (o instanceof NbBuildLogger) {
+                        NbBuildLogger l = (NbBuildLogger) o;
+                        ow = logLevel == Project.MSG_INFO ? l.out : l.err;
+                        break;
+                    }
+                }
+            }
             try {
                 try {
                     int c;
                     while ((c = in.read()) != -1) {
-                        /*
-                        long newtick = System.currentTimeMillis();
-                        if (newtick - tick > 100) {
-                            content.append(String.format("[%1.1fsec]", (newtick - tick) / 1000.0));
-                        }
-                        tick = newtick;
-                        content.append((char) c);
-                         */
                         if (logLevel == null) {
                             // Input gets sent immediately.
                             out.write(c);
                             out.flush();
                         } else {
-                            // Output and err are buffered (for a time) looking for a complete line.
                             synchronized (this) {
                                 if (c == '\n') {
-                                    log(currentLine.toString(encoding), logLevel);
+                                    String str = currentLine.toString(encoding);
+                                    int len = str.length();
+                                    if (len > 0 && str.charAt(len - 1) == '\r') {
+                                        str = str.substring(0, len - 1);
+                                    }
+                                    // skip stack traces (hyperlinks are created by JavaAntLogger), everything else write directly
+                                    if (!STACK_TRACE.matcher(str).matches() && !org.apache.tools.ant.module.run.StandardLogger.HYPERLINK.matcher(str).matches()) {
+                                        ow.println(str);
+                                    }
+                                    log(str, logLevel);
                                     currentLine.reset();
-                                } else if (c != '\r') {
+                                } else {
                                     currentLine.write(c);
                                     flusher.schedule(250);
                                 }
@@ -222,8 +255,11 @@ public class ForkedJavaOverride extends Java {
 
         private synchronized void maybeFlush() {
             try {
-                currentLine.writeTo(out);
-                out.flush();
+                if (currentLine.size() > 0) {
+                    String str = currentLine.toString(encoding);
+                    ow.write(str);
+                    log(str, logLevel);
+                }
             } catch (IOException x) {
                 // probably safe to ignore
             } catch (ThreadDeath d) {
