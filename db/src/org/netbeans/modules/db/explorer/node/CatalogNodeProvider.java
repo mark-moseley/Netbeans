@@ -43,17 +43,16 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import org.netbeans.api.db.explorer.node.BaseNode;
 import org.netbeans.api.db.explorer.node.NodeProvider;
 import org.netbeans.api.db.explorer.node.NodeProviderFactory;
 import org.netbeans.modules.db.explorer.DatabaseConnection;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.DataWrapper;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadListener;
+import org.netbeans.modules.db.metadata.model.api.Action;
 import org.netbeans.modules.db.metadata.model.api.Catalog;
 import org.netbeans.modules.db.metadata.model.api.Metadata;
 import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
 import org.netbeans.modules.db.metadata.model.api.MetadataModel;
-import org.netbeans.modules.db.metadata.model.api.Schema;
+import org.netbeans.modules.db.metadata.model.api.MetadataModelException;
 import org.openide.nodes.Node;
 import org.openide.util.Lookup;
 
@@ -61,7 +60,7 @@ import org.openide.util.Lookup;
  *
  * @author Rob Englander
  */
-public class SchemaNodeProvider extends NodeProvider {
+public class CatalogNodeProvider extends NodeProvider {
 
     // lazy initialization holder class idiom for static fields is used
     // for retrieving the factory
@@ -71,85 +70,80 @@ public class SchemaNodeProvider extends NodeProvider {
 
     private static class FactoryHolder {
         static final NodeProviderFactory FACTORY = new NodeProviderFactory() {
-            public SchemaNodeProvider createInstance(Lookup lookup) {
-                SchemaNodeProvider provider = new SchemaNodeProvider(lookup);
+            public CatalogNodeProvider createInstance(Lookup lookup) {
+                CatalogNodeProvider provider = new CatalogNodeProvider(lookup);
                 return provider;
             }
         };
     }
 
     private final DatabaseConnection connection;
-    private final MetadataElementHandle<Catalog> catalogHandle;
-    private MetadataModel metaDataModel;
 
-    private SchemaNodeProvider(Lookup lookup) {
-        super(lookup, new SchemaComparator());
+    private CatalogNodeProvider(Lookup lookup) {
+        super(lookup, new CatalogComparator());
         connection = getLookup().lookup(DatabaseConnection.class);
-        catalogHandle = getLookup().lookup(MetadataElementHandle.class);
-        metaDataModel = getLookup().lookup(MetadataModel.class);
     }
 
-    public Catalog getCatalog() {
-        DataWrapper<Catalog> wrapper = new DataWrapper<Catalog>();
-        MetadataReader.readModel(metaDataModel, wrapper,
-            new MetadataReadListener() {
-                public void run(Metadata metaData, DataWrapper wrapper) {
-                    Catalog catalog = catalogHandle.resolve(metaData);
-                    wrapper.setObject(catalog);
-                }
-            }
-        );
-
-        return wrapper.getObject();
-    }
-
+    @Override
     protected synchronized void initialize() {
-        List<Node> newList = new ArrayList<Node>();
+        final List<Node> newList = new ArrayList<Node>();
 
-        boolean connected = !connection.getConnector().isDisconnected();
+        final MetadataModel metaDataModel = getLookup().lookup(MetadataModel.class);
 
-        if (connected) {
-            Catalog cat = getCatalog();
+        boolean isConnected = !connection.getConnector().isDisconnected();
 
-            if (cat != null) {
-                Schema syntheticSchema = cat.getSyntheticSchema();
+        if (isConnected && metaDataModel != null) {
+            try {
+                metaDataModel.runReadAction(
+                    new Action<Metadata>() {
+                        public void run(Metadata metaData) {
+                            Collection<Catalog> catalogs = metaData.getCatalogs();
 
-                if (syntheticSchema != null) {
-                    updateNode(newList, syntheticSchema, metaDataModel);
-                } else {
-                    Collection<Schema> schemas = cat.getSchemas();
-                    for (Schema schema : schemas) {
-                        updateNode(newList, schema, metaDataModel);
+                            String defaultCatalog = metaData.getDefaultCatalog().getName();
+
+                            for (Catalog catalog : catalogs) {
+                                boolean oneCatalog = catalogs.size() == 1;
+                                if (catalog.getName() != null || oneCatalog) {
+
+                                    boolean use = true;
+                                    if (defaultCatalog != null) {
+                                        use = defaultCatalog.equals(catalog.getName());
+                                    }
+
+                                    if (use) {
+                                        MetadataElementHandle<Catalog> catalogHandle = MetadataElementHandle.create(catalog);
+                                        Collection<Node> matches = getNodes(catalogHandle);
+                                        if (matches.size() > 0) {
+                                            newList.addAll(matches);
+                                        } else {
+                                            NodeDataLookup lookup = new NodeDataLookup();
+                                            lookup.add(connection);
+                                            lookup.add(catalogHandle);
+                                            lookup.add(metaDataModel);
+                                            newList.add(CatalogNode.create(lookup, CatalogNodeProvider.this));
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (newList.size() == 1) {
+                                setProxyNodes(newList);
+                            } else {
+                                setNodes(newList);
+                            }
+                        }
                     }
-                }
-                
-                if (syntheticSchema != null) {
-                    setProxyNodes(newList);
-                } else {
-                    setNodes(newList);
-                }
+                );
+            } catch (MetadataModelException e) {
+
             }
-        } else {
-            setNodes(newList);
+        } else if (!isConnected) {
+           setNodes(newList);
         }
+
     }
 
-    private void updateNode(List<Node> newList, Schema schema, MetadataModel metadataModel) {
-        MetadataElementHandle<Schema> schemaHandle = MetadataElementHandle.create(schema);
-        Collection<Node> matches = getNodes(schemaHandle);
-        if (matches.size() > 0) {
-            newList.addAll(matches);
-        } else {
-            NodeDataLookup lookup = new NodeDataLookup();
-            lookup.add(connection);
-            lookup.add(schemaHandle);
-            lookup.add(metadataModel);
-
-            newList.add(SchemaNode.create(lookup, this));
-        }
-    }
-
-    static class SchemaComparator implements Comparator<Node> {
+    static class CatalogComparator implements Comparator<Node> {
 
         public int compare(Node node1, Node node2) {
             return node1.getDisplayName().compareToIgnoreCase(node2.getDisplayName());
