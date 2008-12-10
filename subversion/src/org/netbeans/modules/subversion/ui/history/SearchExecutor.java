@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -76,8 +76,6 @@ class SearchExecutor implements Runnable {
     private Map<SVNUrl, Set<File>>      workFiles;
     private Map<String,File>            pathToRoot;
     private final SearchCriteriaPanel   criteria;
-    private boolean                     filterUsername;
-    private boolean                     filterMessage;
     
     private int                         completedSearches;
     private boolean                     searchCanceled;
@@ -86,28 +84,28 @@ class SearchExecutor implements Runnable {
     public SearchExecutor(SearchHistoryPanel master) {
         this.master = master;
         criteria = master.getCriteria();
-        filterUsername = criteria.getUsername() != null;
-        filterMessage = criteria.getCommitMessage() != null;
-        
-        pathToRoot = new HashMap<String, File>(); 
+    }
+
+    private void populatePathToRoot() {
+        pathToRoot = new HashMap<String, File>();
         try {
             if (searchingUrl()) {
                 String rootPath = SvnUtils.getRepositoryPath(master.getRoots()[0]);
-                pathToRoot.put(rootPath, master.getRoots()[0]); 
+                pathToRoot.put(rootPath, master.getRoots()[0]);
             } else {
                 workFiles = new HashMap<SVNUrl, Set<File>>();
                 for (File file : master.getRoots()) {
                     populatePathToRoot(file);
-                    
+
                     SVNUrl rootUrl = SvnUtils.getRepositoryRootUrl(file);
                     Set<File> set = workFiles.get(rootUrl);
                     if (set == null) {
                         set = new HashSet<File>(2);
                         workFiles.put(rootUrl, set);
                     }
-                    set.add(file);                    
+                    set.add(file);
                 }
-            }                
+            }
         } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, true, true);
             return;
@@ -121,7 +119,7 @@ class SearchExecutor implements Runnable {
         int commonPathLength = getCommonPostfixLength(rootPath, fileAbsPath);
         pathToRoot.put(rootPath.substring(0, rootPath.length() - commonPathLength),
                        new File(fileAbsPath.substring(0, fileAbsPath.length() - commonPathLength)));
-        
+
         File[] files = file.listFiles();
         if(files == null || files.length == 0) {
             return; 
@@ -129,7 +127,7 @@ class SearchExecutor implements Runnable {
         
         FileStatusCache cache = Subversion.getInstance().getStatusCache();
         for(File f : files) {
-            if(Subversion.getInstance().isAdministrative(f)) {
+            if(SvnUtils.isAdministrative(f)) {
                 continue;
             }
             int status = cache.getStatus(f).getStatus();
@@ -164,6 +162,7 @@ class SearchExecutor implements Runnable {
 
     
     public void run() {
+        populatePathToRoot();
 
         final SVNRevision fromRevision = criteria.getFrom();
         final SVNRevision toRevision = criteria.getTo();
@@ -203,7 +202,7 @@ class SearchExecutor implements Runnable {
         if (progressSupport.isCanceled()) {
             searchCanceled = true;
             return;
-        }        
+        }
         if (searchingUrl()) {
             try {
                 ISVNLogMessage [] messages = client.getLogMessages(rootUrl, null, fromRevision, toRevision, false, true, 0);
@@ -218,13 +217,17 @@ class SearchExecutor implements Runnable {
             int idx = 0;
             try {       
                 for (File file : files) {
-                    paths[idx++] = SvnUtils.getRelativePath(rootUrl, file);
+                    String p = SvnUtils.getRelativePath(file);
+                    if(p != null && p.startsWith("/")) {
+                        p = p.substring(1, p.length());
+                    }
+                    paths[idx++] = p;
                 }                
-                ISVNLogMessage [] messages = client.getLogMessages(rootUrl, paths, fromRevision, toRevision, false, true);
+                ISVNLogMessage [] messages = SvnUtils.getLogMessages(client, rootUrl, paths, fromRevision, toRevision, false, true);
                 appendResults(rootUrl, messages);
             } catch (SVNClientException e) {                
                 try {    
-                    // XXX WORKAROUND issue #110034 
+                    // WORKAROUND issue #110034 
                     // the client.getLogMessages(rootUrl, paths[] ... seems to touch also the repository root even if it's not 
                     // listed in paths[]. This causes problems when the given user has restricted access only to a specific folder.
                     if(SvnClientExceptionHandler.isHTTP403(e.getMessage())) { // 403 forbidden
@@ -261,8 +264,12 @@ class SearchExecutor implements Runnable {
         // traverse in reverse chronological order
         for (int i = logMessages.length - 1; i >= 0; i--) {
             ISVNLogMessage logMessage = logMessages[i];
-            if (filterUsername && !criteria.getUsername().equals(logMessage.getAuthor())) continue;
-            if (filterMessage && logMessage.getMessage().indexOf(criteria.getCommitMessage()) == -1) continue;
+            if(logMessage == null) continue;
+            String username = criteria.getUsername();
+            String msg = criteria.getCommitMessage();
+            String logMsg = logMessage.getMessage();
+            if (username != null && !username.equals(logMessage.getAuthor())) continue;
+            if (msg != null && logMsg != null && logMsg.indexOf(msg) == -1) continue;
             RepositoryRevision rev = new RepositoryRevision(logMessage, rootUrl);
             for (RepositoryRevision.Event event : rev.getEvents()) {
                 if (event.getChangedPath().getAction() == 'A' && event.getChangedPath().getCopySrcPath() != null) {
