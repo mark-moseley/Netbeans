@@ -67,6 +67,8 @@ import java.util.SortedSet;
 import java.util.Stack;
 import java.util.StringTokenizer;
 import java.util.TreeSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.ComboBoxModel;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.Icon;
@@ -112,6 +114,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.NbCollections;
 import org.openide.util.Utilities;
@@ -371,10 +374,19 @@ public final class UIUtil {
     
     /**
      * Create combobox containing packages from the given {@link SourceGroup}.
+     *
+     * When null srcRoot is passed, combo box is disabled and shows a warning message (#143392).
      */
     public static JComboBox createPackageComboBox(SourceGroup srcRoot) {
-        JComboBox packagesComboBox = new JComboBox(PackageView.createListView(srcRoot));
-        packagesComboBox.setRenderer(PackageView.listRenderer());
+        JComboBox packagesComboBox;
+        if (srcRoot != null) {
+            packagesComboBox = new JComboBox(PackageView.createListView(srcRoot));
+            packagesComboBox.setRenderer(PackageView.listRenderer());
+        } else {
+            packagesComboBox = new JComboBox();
+            packagesComboBox.addItem(NbBundle.getMessage(UIUtil.class, "MSG_Missing_Source_Root"));
+            packagesComboBox.setEnabled(false);
+        }
         return packagesComboBox;
     }
     
@@ -463,6 +475,7 @@ public final class UIUtil {
         private final FileObject item;
         private final FileObject root;
         private final boolean contentType;
+        private static Logger LOGGER = Logger.getLogger(LayerItemPresenter.class.getName());
         
         public LayerItemPresenter(final FileObject item,
                 final FileObject root,
@@ -487,6 +500,7 @@ public final class UIUtil {
         public String getDisplayName() {
             if (displayName == null) {
                 displayName = computeDisplayName();
+                LOGGER.log(Level.FINE, "Computed display name '" + displayName + "'");
             }
             return displayName;
         }
@@ -509,6 +523,7 @@ public final class UIUtil {
             try {
                 name = fo.getFileSystem().getStatus().annotateName(
                         fo.getNameExt(), Collections.singleton(fo));
+                LOGGER.log(Level.FINER, "getFileObjectName for '" + fo.getPath() + "': " + name);
             } catch (FileStateInvalidException ex) {
                 name = fo.getName();
             }
@@ -657,11 +672,11 @@ public final class UIUtil {
         Image base = null;
         Icon baseIcon = UIManager.getIcon(opened ? OPENED_ICON_KEY_UIMANAGER : ICON_KEY_UIMANAGER); // #70263
         if (baseIcon != null) {
-            base = Utilities.icon2Image(baseIcon);
+            base = ImageUtilities.icon2Image(baseIcon);
         } else {
             base = (Image) UIManager.get(opened ? OPENED_ICON_KEY_UIMANAGER_NB : ICON_KEY_UIMANAGER_NB); // #70263
             if (base == null) { // fallback to our owns
-                base = Utilities.loadImage(opened ? OPENED_ICON_PATH : ICON_PATH, true);
+                base = ImageUtilities.loadImage(opened ? OPENED_ICON_PATH : ICON_PATH, true);
             }
         }
         assert base != null;
@@ -791,10 +806,34 @@ public final class UIUtil {
      * @return true if user accepted the dialog
      */
     public static boolean showAcceptCancelDialog(String title, String message, String acceptButton, String cancelButton, int messageType) {
+        return showAcceptCancelDialog(title, message, acceptButton, null , 
+                cancelButton, messageType) ;
+    }
+    
+    /**
+     * Show an OK/cancel-type dialog with customized button texts.
+     * Only a separate method because it is otherwise cumbersome to replace
+     * the OK button with a button that is set as the default.
+     * @param title the dialog title
+     * @param message the body of the message (usually HTML text)
+     * @param acceptButton a label for the default accept button; should not use mnemonics
+     * @param accDescrAcceptButton a accessible description for acceptButton 
+     * @param cancelButton a label for the cancel button (or null for default); should not use mnemonics
+     * @param messageType {@link NotifyDescriptor#WARNING_MESSAGE} or similar
+     * @return true if user accepted the dialog
+     */
+    public static boolean showAcceptCancelDialog(String title, String message, 
+            String acceptButton, String accDescrAcceptButton , 
+            String cancelButton, int messageType) 
+    {
         DialogDescriptor d = new DialogDescriptor(message, title);
         d.setModal(true);
         JButton accept = new JButton(acceptButton);
         accept.setDefaultCapable(true);
+        if ( accDescrAcceptButton != null ){
+            accept.getAccessibleContext().
+            setAccessibleDescription( accDescrAcceptButton);
+        }
         d.setOptions(new Object[] {
             accept,
             cancelButton != null ? new JButton(cancelButton) : NotifyDescriptor.CANCEL_OPTION,
