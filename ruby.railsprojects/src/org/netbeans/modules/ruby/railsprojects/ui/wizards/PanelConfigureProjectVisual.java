@@ -42,28 +42,21 @@
 package org.netbeans.modules.ruby.railsprojects.ui.wizards;
 
 import javax.swing.JPanel;
+import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.modules.ruby.platform.gems.GemManager;
 import org.openide.WizardDescriptor;
 import org.openide.WizardValidationException;
 import org.openide.util.NbBundle;
 
 /**
- * First panel in the NewProject wizard. Used for filling in
- * name, and directory of the project.
+ * First panel in the NewProject wizard. Used for filling in name, and directory
+ * of the project.
  */
 public class PanelConfigureProjectVisual extends JPanel {
 
     private PanelConfigureProject panel;
-        
-    private boolean ignoreProjectDirChanges;
-    
-    private boolean ignoreRakeProjectNameChanges;
-    
-    private boolean noDir = true;
-    
     private SettingsPanel projectLocationPanel;
-    
     private PanelOptionsVisual optionsPanel;
-    
     private int type;
     
     public PanelConfigureProjectVisual( PanelConfigureProject panel, int type ) {
@@ -85,9 +78,17 @@ public class PanelConfigureProjectVisual extends JPanel {
             getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(PanelConfigureProjectVisual.class, "ACSD_RoRExtSourcesProjectLocation")); // NOI18N
         }
         locationContainer.add( projectLocationPanel, java.awt.BorderLayout.CENTER );
-        optionsPanel = new PanelOptionsVisual( panel, type );
+        optionsPanel = new PanelOptionsVisual(panel);
         projectLocationPanel.addPropertyChangeListener(optionsPanel);
         optionsContainer.add( optionsPanel, java.awt.BorderLayout.CENTER );
+    }
+    
+    RubyPlatform getPlatform() {
+        return optionsPanel.getPlatform();
+    }
+
+    boolean needWarSupport() {
+        return optionsPanel.needWarSupport();
     }
     
     boolean valid( WizardDescriptor wizardDescriptor ) {
@@ -96,21 +97,41 @@ public class PanelConfigureProjectVisual extends JPanel {
             return false;
         }
 
+        if (!checkWarbler(wizardDescriptor)) {
+            return false;
+        }
         // Temporary workaround
         // Spaces in paths won't work for now with Rails
         //if (Utilities.isWindows()) {
         //    String rails = RubyInstallation.getInstance().getRails();
         //    if (rails.indexOf(' ') != -1) {
-        //         wizardDescriptor.putProperty("WizardPanel_errorMessage", "Rails path contains spaces; fails on Windows.\n " + rails);
+        //         wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, "Rails path contains spaces; fails on Windows.\n " + rails);
         //         //return false;
         //    }
         //}
         
-        
-        wizardDescriptor.putProperty( "WizardPanel_errorMessage", "" ); //NOI18N
+        wizardDescriptor.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE, "" ); //NOI18N
         return projectLocationPanel.valid( wizardDescriptor ) && optionsPanel.valid(wizardDescriptor);
     }
-    
+
+    private boolean checkWarbler(WizardDescriptor descriptor) {
+        // see #152726
+        if (!(projectLocationPanel instanceof PanelProjectLocationExtSrc)) {
+            return true;
+        }
+        if (!needWarSupport()) {
+            return true;
+        }
+        RubyPlatform platform = getPlatform();
+        GemManager gemManager = platform.getGemManager();
+        if (gemManager != null && gemManager.isGemInstalled("warbler")) { //NOI18N
+            return true;
+        }
+        descriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(PanelConfigureProjectVisual.class, "MSG_InstallWarbler"));
+        return false;
+
+    }
+
     void read (WizardDescriptor d) {
         Integer lastType = (Integer) d.getProperty("rails-wizard-type");  //NOI18N        
         if (lastType == null || lastType.intValue() != this.type) {
@@ -179,9 +200,6 @@ public class PanelConfigureProjectVisual extends JPanel {
 
     }//GEN-END:initComponents
 
-    /** Currently only handles the "Browse..." button
-     */
-           
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JSeparator jSeparator1;
     private javax.swing.JPanel locationContainer;
