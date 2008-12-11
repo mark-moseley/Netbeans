@@ -37,56 +37,47 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi.indexing.support;
+package org.netbeans.modules.parsing.impl.indexing.lucene;
 
-import java.net.URL;
-import org.netbeans.modules.parsing.impl.indexing.IndexDocumentImpl;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.URLMapper;
-import org.openide.util.Parameters;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldSelector;
+import org.apache.lucene.document.Fieldable;
+import org.apache.lucene.document.SetBasedFieldSelector;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
 
 /**
  *
  * @author Tomas Zezula
  */
-public final class IndexResult {
-    
-    private final IndexDocumentImpl spi;
-    private final URL root;
+public class DocumentUtil {
 
-    private volatile FileObject cachedFile;
+    static final String FIELD_SOURCE_NAME = "_sn";  //NOI18N
 
-    public IndexResult (final IndexDocumentImpl spi, final URL root) {
-        assert spi != null;
-        assert root != null;
-        this.spi = spi;
-        this.root = root;
+    static Fieldable sourceNameField(String relativePath) {
+        return new Field(DocumentUtil.FIELD_SOURCE_NAME, relativePath, Field.Store.YES, Field.Index.NO_NORMS);
+    }
+    static Query sourceNameQuery(String relativePath) {
+        return new TermQuery(sourceNameTerm(relativePath));
     }
 
-    public String getValue (final String key) {
-        Parameters.notEmpty("key", key);
-        return this.spi.getValue (key);
+    static Term sourceNameTerm (final String relativePath) {
+        assert relativePath != null;
+        return new Term (FIELD_SOURCE_NAME, relativePath);
     }
 
-    public String[] getValues (final String key) {
-        Parameters.notEmpty("key", key);
-        return this.spi.getValues (key);
+    static FieldSelector selector (String... fieldNames) {
+        assert fieldNames != null;
+        final Set<String> fields = new HashSet<String>(Arrays.asList(fieldNames));
+        fields.add(FIELD_SOURCE_NAME);
+        final FieldSelector selector = new SetBasedFieldSelector(fields,
+                Collections.<String>emptySet());
+        return selector;
     }
 
-    public FileObject getFile () {
-        if (cachedFile == null) {
-            final String path = spi.getSourceName();
-            final FileObject rootFo = URLMapper.findFileObject(root);
-            FileObject resource = null;
-            if (rootFo != null) {
-                resource = rootFo.getFileObject(path);                
-            }
-            synchronized (this) {
-                if (cachedFile == null) {
-                    cachedFile = resource;
-                }
-            }
-        }
-        return cachedFile;
-    }
 }
