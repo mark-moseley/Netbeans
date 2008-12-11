@@ -60,7 +60,6 @@ import org.netbeans.modules.db.dataview.meta.DBException;
 import org.netbeans.modules.db.dataview.util.DataViewUtils;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
-import org.openide.util.Exceptions;
 
 /**
  * Renders rows and columns of a given ResultSet via JTable.
@@ -70,10 +69,9 @@ import org.openide.util.Exceptions;
 class DataViewTablePanel extends JPanel {
 
     private final DataViewDBTable tblMeta;
-    private final UpdatedRowContext tblContext;
+    private final UpdatedRowContext updatedRowCtx;
     private final DataViewUI dataViewUI;
     private final DataViewTableUI tableUI;
-    private final SQLStatementGenerator stmtGenerator;
     private boolean isEditable = true;
     private boolean isDirty = false;
     private int MAX_COLUMN_WIDTH = 25;
@@ -91,8 +89,7 @@ class DataViewTablePanel extends JPanel {
         JScrollPane sp = new JScrollPane(tableUI);
         this.add(sp, BorderLayout.CENTER);
 
-        stmtGenerator = dataView.getSQLStatementGenerator();
-        tblContext = new UpdatedRowContext(stmtGenerator);
+        updatedRowCtx = new UpdatedRowContext();
         columnWidthList = getColumnWidthList();
     }
 
@@ -114,7 +111,7 @@ class DataViewTablePanel extends JPanel {
     public void setDirty(boolean dirty) {
         isDirty = dirty;
         if (!isDirty) {
-            tblContext.resetUpdateState();
+            updatedRowCtx.removeAllUpdates();
         }
     }
 
@@ -123,7 +120,7 @@ class DataViewTablePanel extends JPanel {
     }
 
     UpdatedRowContext getUpdatedRowContext() {
-        return tblContext;
+        return updatedRowCtx;
     }
 
     DataViewDBTable getDataViewDBTable() {
@@ -150,6 +147,10 @@ class DataViewTablePanel extends JPanel {
             }
         };
         SwingUtilities.invokeLater(run);
+    }
+
+    public void setValueAt(Object value, int row, int col){
+        model.setValueAt(value, row, col);
     }
 
     private void setHeader(JTable table, List<Integer> columnWidthList) {
@@ -182,7 +183,7 @@ class DataViewTablePanel extends JPanel {
                 colWidthList.add(colWidth);
             }
         } catch (Exception e) {
-            mLogger.log(Level.INFO, "Failed to set the size of the table headers" + e);
+            mLogger.log(Level.INFO, "Failed to set the size of the table headers" + e); // NOI18N
         }
         return colWidthList;
     }
@@ -264,7 +265,7 @@ class DataViewTablePanel extends JPanel {
 
             try {
                 Object newVal = DBReadWriteHelper.validate(value, tblMeta.getColumn(col));
-                tblContext.createUpdateStatement(row, col, newVal, model);
+                updatedRowCtx.addUpdates(row, col, newVal, model);
                 isDirty = true;
                 super.setValueAt(newVal, row, col);
                 dataViewUI.setCommitEnabled(true);
