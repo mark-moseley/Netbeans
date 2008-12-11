@@ -56,8 +56,10 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import javax.swing.*;
+import javax.swing.event.ChangeEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.event.CaretListener;
+import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentListener;
 import javax.swing.plaf.TextUI;
 import javax.swing.text.*;
@@ -65,20 +67,22 @@ import javax.swing.text.*;
 import org.netbeans.api.editor.EditorRegistry;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.api.editor.mimelookup.MimePath;
+import org.netbeans.api.editor.settings.KeyBindingSettings;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.BaseKit;
 import org.netbeans.editor.GuardedDocument;
-import org.netbeans.editor.Settings;
-import org.netbeans.editor.SettingsChangeListener;
-import org.netbeans.editor.SettingsNames;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.lib.editor.util.swing.DocumentListenerPriority;
 import org.netbeans.editor.Utilities;
 import org.netbeans.editor.ext.ExtKit;
 import org.netbeans.spi.editor.completion.*;
 import org.openide.ErrorManager;
+import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
+import org.openide.util.LookupEvent;
+import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
 
 /**
  * Implementation of the completion processing.
@@ -96,7 +100,7 @@ import org.openide.util.NbBundle;
  */
 
 public class CompletionImpl extends MouseAdapter implements DocumentListener,
-CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChangeListener, SettingsChangeListener {
+CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChangeListener, ChangeListener {
     
     // -J-Dorg.netbeans.modules.editor.completion.CompletionImpl.level=FINE
     private static final Logger LOG = Logger.getLogger(CompletionImpl.class.getName());
@@ -201,6 +205,17 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
     private boolean pleaseWaitDisplayed = false;
     private String completionShortcut = null;
     
+    private Lookup.Result<KeyBindingSettings> kbs;
+    private final LookupListener shortcutsTracker = new LookupListener() {
+        public void resultChanged(LookupEvent ev) {
+            Utilities.runInEventDispatchThread(new Runnable(){
+                public void run(){
+                    installKeybindings();
+                }
+            });
+        }
+    };
+    
     private CompletionImpl() {
         EditorRegistry.addPropertyChangeListener(this);
         completionAutoPopupTimer = new Timer(0, new ActionListener() {
@@ -211,6 +226,7 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
                 }
                 if (localCompletionResult != null && !localCompletionResult.isQueryInvoked()) {
                     pleaseWaitTimer.restart();
+                    CompletionImpl.this.refreshedQuery = false;
                     queryResultSets(localCompletionResult.getResultSets());
                     localCompletionResult.queryInvoked();
                 }
@@ -244,12 +260,14 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
                     }
                 }
                 layout.showCompletion(Collections.singletonList(waitText),
-                        null, -1, CompletionImpl.this, null, 0);
+                        null, -1, CompletionImpl.this, null, null, 0);
                 pleaseWaitDisplayed = true;                
             }
         });
         pleaseWaitTimer.setRepeats(false);
-        Settings.addSettingsChangeListener(this);
+        
+        kbs = MimeLookup.getLookup(MimePath.EMPTY).lookupResult(KeyBindingSettings.class);
+        kbs.addLookupListener(WeakListeners.create(LookupListener.class, shortcutsTracker, kbs));
     }
     
     private JTextComponent getActiveComponent() {
@@ -288,10 +306,10 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
                         completionResultNull = (completionResult == null);
                     }
                     if ((type & CompletionProvider.COMPLETION_QUERY_TYPE) != 0 &&
-                            CompletionSettings.INSTANCE.completionAutoPopup()) {
+                            CompletionSettings.getInstance().completionAutoPopup()) {
                         autoModEndOffset = modEndOffset;
                         if (completionResultNull)
-                            showCompletion(false, true, CompletionProvider.COMPLETION_QUERY_TYPE);
+                            showCompletion(false, false, true, CompletionProvider.COMPLETION_QUERY_TYPE);
                     }
 
                     boolean tooltipResultNull;
@@ -363,10 +381,15 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
         hideAll();
     }
 
+    @Override
     public void mouseClicked(MouseEvent e) {
         hideAll();
     }
     
+    public void stateChanged(ChangeEvent e) {
+        hideAll();
+    }
+
     public void hideAll() {
         hideToolTip();
         hideCompletion(true);
@@ -380,7 +403,7 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
         assert (SwingUtilities.isEventDispatchThread());
 
         documentationCancel();
-        if (layout.isDocumentationVisible() || CompletionSettings.INSTANCE.documentationAutoPopup()) {
+        if (layout.isDocumentationVisible() || CompletionSettings.getInstance().documentationAutoPopup()) {
             restartDocumentationAutoPopupTimer();
         }
     }
@@ -395,11 +418,17 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
         JTextComponent component = EditorRegistry.lastFocusedComponent();
         if (component != getActiveComponent()) {
             initActiveProviders(component);
-            if (getActiveComponent() != null) {
-                getActiveComponent().removeCaretListener(this);
-                getActiveComponent().removeKeyListener(this);
-                getActiveComponent().removeFocusListener(this);
-                getActiveComponent().removeMouseListener(this);
+            JTextComponent activeJtc = getActiveComponent();
+            if (activeJtc != null) {
+                activeJtc.removeCaretListener(this);
+                activeJtc.removeKeyListener(this);
+                activeJtc.removeFocusListener(this);
+                activeJtc.removeMouseListener(this);
+                Container parent = activeJtc.getParent();
+                if (parent instanceof JViewport) {
+                    JViewport viewport = (JViewport) parent;
+                    viewport.removeChangeListener(this);
+                }
             }
             if (component != null) {
                 if (activeProviders != null) {
@@ -407,12 +436,17 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
                     component.addKeyListener(this);
                     component.addFocusListener(this);
                     component.addMouseListener(this);
+                    Container parent = component.getParent();
+                    if (parent instanceof JViewport) {
+                        JViewport viewport = (JViewport) parent;
+                        viewport.addChangeListener(this);
+                    }
                 }
             }
             activeComponent = (component != null)
                     ? new WeakReference<JTextComponent>(component)
                     : null;
-            CompletionSettings.INSTANCE.notifyEditorComponentChange(getActiveComponent());
+            CompletionSettings.getInstance().notifyEditorComponentChange(getActiveComponent());
             layout.setEditorComponent(getActiveComponent());
             installKeybindings();
             cancel = true;
@@ -457,7 +491,7 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
     private void restartCompletionAutoPopupTimer() {
         assert (SwingUtilities.isEventDispatchThread()); // expect in AWT only
 
-        int completionDelay = CompletionSettings.INSTANCE.completionAutoPopupDelay();
+        int completionDelay = CompletionSettings.getInstance().completionAutoPopupDelay();
         completionAutoPopupTimer.setInitialDelay(completionDelay);
         completionAutoPopupTimer.restart();
     }
@@ -465,7 +499,7 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
     private void restartDocumentationAutoPopupTimer() {
         assert (SwingUtilities.isEventDispatchThread()); // expect in AWT only
 
-        int docDelay = CompletionSettings.INSTANCE.documentationAutoPopupDelay();
+        int docDelay = CompletionSettings.getInstance().documentationAutoPopupDelay();
         docAutoPopupTimer.setInitialDelay(docDelay);
         docAutoPopupTimer.restart();
     }
@@ -537,9 +571,13 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
                     if (guardedPos) {
                         Toolkit.getDefaultToolkit().beep();
                     } else if (compEditable) {
+                        // Consuming completion
+                        if ((e.getModifiers() & InputEvent.CTRL_MASK) > 0) { // CTRL+ENTER
+                            consumeIdentifier();
+                        }
                         LogRecord r = new LogRecord(Level.FINE, "COMPL_KEY_SELECT_DEFAULT"); // NOI18N
-                        r.setParameters(new Object[] {'\n', layout.getSelectedIndex(), item.getClass().getSimpleName()});
-                            item.defaultAction(getActiveComponent());
+                        r.setParameters(new Object[]{'\n', layout.getSelectedIndex(), item.getClass().getSimpleName()});
+                        item.defaultAction(getActiveComponent());
                         uilog(r);
                     }
                     return;
@@ -561,9 +599,7 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
         layout.processKeyEvent(e);
     }
     
-    private void completionQuery(boolean delayQuery, int queryType) {
-        refreshedQuery = false;
-        
+    private void completionQuery(boolean refreshedQuery, boolean delayQuery, int queryType) {
         Result newCompletionResult = new Result(activeProviders.length);
         synchronized (this) {
             assert (completionResult == null);
@@ -588,12 +624,14 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
                 restartCompletionAutoPopupTimer();
             } else {
                 pleaseWaitTimer.restart();
+                this.refreshedQuery = refreshedQuery;
                 queryResultSets(completionResultSets);
                 newCompletionResult.queryInvoked();
             }
         } else {
             completionCancel();
-            layout.showCompletion(Collections.singletonList(NO_SUGGESTIONS), null, -1, CompletionImpl.this, null, 0);
+            if (explicitQuery)
+                layout.showCompletion(Collections.singletonList(NO_SUGGESTIONS), null, -1, CompletionImpl.this, null, null, 0);
             pleaseWaitDisplayed = false;
         }
     }
@@ -626,6 +664,31 @@ CaretListener, KeyListener, FocusListener, ListSelectionListener, PropertyChange
         }
         if (oldCompletionResult != null) {
             oldCompletionResult.cancel();
+        }
+    }
+
+    /** 
+     * Consumes identifier part of text behind caret upto first non-identifier
+     * char.
+     */
+    private void consumeIdentifier() {
+        JTextComponent comp = getActiveComponent();
+        BaseDocument doc = (BaseDocument) comp.getDocument();
+        int initCarPos = comp.getCaretPosition();
+        int carPos = initCarPos;
+        boolean nonChar = false;
+        char c;
+        try {
+            while(nonChar == false) {
+                c = doc.getChars(carPos, 1)[0];
+                if(!Character.isJavaIdentifierPart(c)) {
+                    nonChar = true;
+                }
+                carPos++;
+            }
+            doc.remove(initCarPos, carPos - initCarPos -1);
+        } catch (BadLocationException ex) {
+            Exceptions.printStackTrace(ex);
         }
     }
     
@@ -713,10 +776,10 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
      * May be called from any thread but it will be rescheduled into AWT.
      */
     public void showCompletion() {
-        showCompletion(true, false, CompletionProvider.COMPLETION_QUERY_TYPE);
+        showCompletion(true, false, false, CompletionProvider.COMPLETION_QUERY_TYPE);
     }
 
-    private void showCompletion(boolean explicitQuery, boolean delayQuery, int queryType) {
+    private void showCompletion(boolean explicitQuery, boolean refreshedQuery, boolean delayQuery, int queryType) {
         if (!SwingUtilities.isEventDispatchThread()) {
             // Re-call this method in AWT if necessary
             SwingUtilities.invokeLater(new ParamRunnable(ParamRunnable.SHOW_COMPLETION, explicitQuery, delayQuery, queryType));
@@ -743,7 +806,7 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
                 }
             }
             completionCancel(); // cancel possibly pending query
-            completionQuery(delayQuery, queryType);
+            completionQuery(refreshedQuery, delayQuery, queryType);
         }
     }
 
@@ -758,18 +821,25 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
         // Compute total count of the result sets
         int size = 0;
         int qType = 0;
+        boolean hasAdditionalItems = false;
+        final StringBuilder hasAdditionalItemsText = new StringBuilder();
         List<CompletionResultSetImpl> completionResultSets = result.getResultSets();
         for (int i = completionResultSets.size() - 1; i >= 0; i--) {
             CompletionResultSetImpl resultSet = completionResultSets.get(i);
             size += resultSet.getItems().size();
             qType = resultSet.getQueryType();
+            if (resultSet.hasAdditionalItems()) {
+                hasAdditionalItems = true;
+                String s = resultSet.getHasAdditionalItemsText();
+                if (s != null)
+                    hasAdditionalItemsText.append(s);
+            }
         }
         
         // Collect and sort the gathered completion items
         List<CompletionItem> resultItems = new ArrayList<CompletionItem>(size);
         String title = null;
         int anchorOffset = -1;
-        boolean hasAdditionalItems = false;
         if (size > 0) {
             for (int i = 0; i < completionResultSets.size(); i++) {
                 CompletionResultSetImpl resultSet = completionResultSets.get(i);
@@ -778,8 +848,6 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
                     resultItems.addAll(items);
                     if (title == null)
                         title = resultSet.getTitle();
-                    if (!hasAdditionalItems)
-                        hasAdditionalItems = resultSet.hasAdditionalItems();
                     if (anchorOffset == -1)
                         anchorOffset = resultSet.getAnchorOffset();
                 }
@@ -806,9 +874,15 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
         }
 
         final boolean noSuggestions = sortedResultItems.size() == 0;
-        if (noSuggestions && qType == CompletionProvider.COMPLETION_QUERY_TYPE) {
-            showCompletion(this.explicitQuery, false, CompletionProvider.COMPLETION_ALL_QUERY_TYPE);
-            return;
+        if (noSuggestions) {
+            if (hasAdditionalItems && qType == CompletionProvider.COMPLETION_QUERY_TYPE) {
+                showCompletion(this.explicitQuery, this.refreshedQuery, false, CompletionProvider.COMPLETION_ALL_QUERY_TYPE);
+                return;
+            }
+            if (!explicitQuery) {                
+                hideAll();
+                return;
+            }
         }
        
         // Request displaying of the completion pane in AWT thread
@@ -821,7 +895,7 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
                 int caretOffset = c.getSelectionStart();
                 // completionResults = null;
                 if (sortedResultItems.size() == 1 && !refreshedQuery && explicitQuery
-                        && CompletionSettings.INSTANCE.completionInstantSubstitution()
+                        && CompletionSettings.getInstance().completionInstantSubstitution()
                         && c.isEditable() && !(c.getDocument() instanceof GuardedDocument && ((GuardedDocument)c.getDocument()).isPosGuarded(caretOffset))) {
                     try {
                         int[] block = Utilities.getIdentifierBlock(c, caretOffset);
@@ -837,11 +911,11 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
                 
                 int selectedIndex = getCompletionPreSelectionIndex(sortedResultItems);
                 getActiveComponent().putClientProperty("completion-visible", Boolean.TRUE);
-                layout.showCompletion(noSuggestions ? Collections.singletonList(NO_SUGGESTIONS) : sortedResultItems, displayTitle, displayAnchorOffset, CompletionImpl.this, displayAdditionalItems ? completionShortcut : null, selectedIndex);
+                layout.showCompletion(noSuggestions ? Collections.singletonList(NO_SUGGESTIONS) : sortedResultItems, displayTitle, displayAnchorOffset, CompletionImpl.this, displayAdditionalItems ? hasAdditionalItemsText.toString() : null, displayAdditionalItems ? completionShortcut : null, selectedIndex);
                 pleaseWaitDisplayed = false;
 
                 // Show documentation as well if set by default
-                if (CompletionSettings.INSTANCE.documentationAutoPopup()) {
+                if (CompletionSettings.getInstance().documentationAutoPopup()) {
                     if (noSuggestions) {
                         docAutoPopupTimer.stop(); // Ensure the popup timer gets stopped
                         documentationCancel();
@@ -907,11 +981,14 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
         pleaseWaitTimer.stop();
         boolean hidePerformed = layout.hideCompletion();
         pleaseWaitDisplayed = false;
-        if (!completionOnly && hidePerformed && CompletionSettings.INSTANCE.documentationAutoPopup()) {
+        if (!completionOnly && hidePerformed && CompletionSettings.getInstance().documentationAutoPopup()) {
             hideDocumentation(true);
         }
-        getActiveComponent().putClientProperty("completion-visible", Boolean.FALSE);
-        getActiveComponent().putClientProperty("completion-active", Boolean.FALSE);
+        JTextComponent jtc = getActiveComponent();
+        if (jtc != null) {
+            jtc.putClientProperty("completion-visible", Boolean.FALSE);
+            jtc.putClientProperty("completion-active", Boolean.FALSE);
+        }
         return hidePerformed;
     }
     
@@ -1034,7 +1111,7 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
         docAutoPopupTimer.stop();
         boolean hidePerformed = layout.hideDocumentation();
  // Also hide completion if documentation pops automatically
-        if (!documentationOnly && hidePerformed && CompletionSettings.INSTANCE.documentationAutoPopup()) {
+        if (!documentationOnly && hidePerformed && CompletionSettings.getInstance().documentationAutoPopup()) {
             hideCompletion(true);
         }
         return hidePerformed;
@@ -1364,7 +1441,7 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
     void testSetActiveComponent(JTextComponent component) {
         activeComponent = new WeakReference<JTextComponent>(component);
     }
-    
+
     // ..........................................................................
     
     private final class CompletionShowAction extends AbstractAction {
@@ -1375,7 +1452,7 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
         }
 
         public void actionPerformed(ActionEvent e) {
-            showCompletion(true, false, queryType);
+            showCompletion(true, false, false, queryType);
         }
     }
 
@@ -1423,7 +1500,7 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
         public void run() {
             switch (opCode) {
                 case SHOW_COMPLETION:
-                    showCompletion(explicitQuery, delayQuery, type);
+                    showCompletion(explicitQuery, false, delayQuery, type);
                     break;
 
                 case SHOW_DOCUMENTATION:
@@ -1494,20 +1571,6 @@ outer:      for (Iterator it = localCompletionResult.getResultSets().iterator();
         }
     }
 
-    public void settingsChange(org.netbeans.editor.SettingsChangeEvent evt) {
-        if( evt == null) {
-            return;
-        }
-        String settingName = evt.getSettingName();
-        if (SettingsNames.KEY_BINDING_LIST.equals(settingName) || settingName == null){
-            Utilities.runInEventDispatchThread(new Runnable(){
-                public void run(){
-                    installKeybindings();
-                }
-            });
-        }
-    }
-    
     /**
      * Result holding list of completion result sets.
      * <br>
