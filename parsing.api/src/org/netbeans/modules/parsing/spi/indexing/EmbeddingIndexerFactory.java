@@ -39,19 +39,44 @@
 
 package org.netbeans.modules.parsing.spi.indexing;
 
-import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.parsing.api.Snapshot;
 
 /**
- * Indexer of the embedded document.
- * The embedding is obtained using the parser registered in the parsing API.
+ *
  * @author Tomas Zezula
  */
-public abstract class EmbeddingIndexer {
+public abstract class EmbeddingIndexerFactory {
 
     /**
-     * Indexes the given AST (parser result).
-     * @param parserResult to be indexed
-     * @param context of indexer, contains information about index storage, indexed root
+     * Creates  new {@link Indexer}.
+     * @param indexing for which the indexer should be created
+     * @param snapshot for which the indexer should be created
+     * @return an indexer
      */
-    protected abstract void index (Indexable indexable, Parser.Result parserResult, Context context);
+    public abstract EmbeddingIndexer createIndexer (final Indexable indexable, final Snapshot snapshot);
+    
+
+    /**
+     * Return the name of this indexer. This name should be unique because GSF
+     * will use this name to produce a separate data directory for each indexer
+     * where it has its own storage.
+     *
+     * @return The indexer name. This does not need to be localized since it is
+     * never shown to the user, but should contain filesystem safe characters.
+     */
+    public abstract String getIndexerName ();
+
+
+    /**
+     * Return the version stamp of the schema that is currently being stored
+     * by this indexer. Along with the index name this string will be used to
+     * create a unique data directory for the database.
+     *
+     * Whenever you incompatibly change what is stored by the indexer,
+     * update the version stamp.
+     *
+     * @return The version stamp of the current index.
+     */
+    public abstract int getIndexVersion ();
+
 }
