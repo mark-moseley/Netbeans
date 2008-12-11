@@ -47,7 +47,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import org.netbeans.modules.derby.ui.DerbySystemHomePanel;
+import org.netbeans.modules.derby.ui.DerbyPropertiesPanel;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileLock;
@@ -61,6 +61,7 @@ import org.openide.util.NbBundle;
  * @author Andrei Badea
  */
 public class Util {
+    private static final String DERBY_CLIENT = "derbyclient.jar"; // NOI18N
 
     private Util() {
     }
@@ -97,7 +98,7 @@ public class Util {
         if (DerbyOptions.getDefault().getSystemHome().length() <= 0) {
             return Mutex.EVENT.writeAccess(new Mutex.Action<Boolean>() {
                 public Boolean run() {
-                    return DerbySystemHomePanel.showDerbySettings();
+                    return DerbyPropertiesPanel.showDerbyProperties();
                 }
             });
         }
@@ -122,7 +123,12 @@ public class Util {
         if (libs == null || libs.length <= 0) {
             return false;
         }
-        return true;
+        for (File lib : libs) {
+            if (lib.getName().equals(DERBY_CLIENT)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void extractZip(File source, FileObject target) throws IOException {
