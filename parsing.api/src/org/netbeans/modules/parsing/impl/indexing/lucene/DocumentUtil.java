@@ -37,24 +37,44 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl.indexing;
+package org.netbeans.modules.parsing.impl.indexing.lucene;
 
-import java.io.IOException;
-import java.util.Collection;
-import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
-
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldSelector;
+import org.apache.lucene.document.Fieldable;
+import org.apache.lucene.document.SetBasedFieldSelector;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
 
 /**
  *
  * @author Tomas Zezula
  */
-public interface IndexImpl {
+public class DocumentUtil {
 
-    public void addDocument (IndexDocumentImpl document);
+    static final String FIELD_SOURCE_NAME = "_sn";  //NOI18N
 
-    public void removeDocument (String relativePath);
+    static Fieldable sourceNameField(String relativePath) {
+        return new Field(DocumentUtil.FIELD_SOURCE_NAME, relativePath, Field.Store.YES, Field.Index.NO_NORMS);
+    }
+    static Query sourceNameQuery(String relativePath) {
+        return new TermQuery(sourceNameTerm(relativePath));
+    }
 
-    public void store () throws IOException;
+    static Term sourceNameTerm (final String relativePath) {
+        assert relativePath != null;
+        return new Term (FIELD_SOURCE_NAME, relativePath);
+    }
 
-    public Collection<? extends IndexDocumentImpl> query (String fieldName, String value, QuerySupport.Kind kind, String... fieldsToLoad) throws IOException;
+    static FieldSelector selector (String... fieldNames) {
+        assert fieldNames != null;
+        final FieldSelector selector = new SetBasedFieldSelector(new HashSet<String>(Arrays.asList(fieldNames)),
+                Collections.<String>emptySet());
+        return selector;
+    }
+
 }

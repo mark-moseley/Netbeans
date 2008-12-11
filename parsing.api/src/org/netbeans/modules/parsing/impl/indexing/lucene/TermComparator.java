@@ -37,24 +37,22 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.impl.indexing;
+package org.netbeans.modules.parsing.impl.indexing.lucene;
 
-import java.io.IOException;
-import java.util.Collection;
-import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
-
+import java.util.Comparator;
+import org.apache.lucene.index.Term;
 
 /**
  *
  * @author Tomas Zezula
  */
-public interface IndexImpl {
+class TermComparator implements Comparator<Term> {
 
-    public void addDocument (IndexDocumentImpl document);
-
-    public void removeDocument (String relativePath);
-
-    public void store () throws IOException;
-
-    public Collection<? extends IndexDocumentImpl> query (String fieldName, String value, QuerySupport.Kind kind, String... fieldsToLoad) throws IOException;
+    public int compare (Term t1, Term t2) {
+            int ret = t1.field().compareTo(t2.field());
+            if (ret == 0) {
+                ret = t1.text().compareTo(t2.text());
+            }
+            return ret;
+        }
 }
