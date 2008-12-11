@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.j2ee.common.method.impl;
 
-import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
@@ -51,7 +50,6 @@ import java.util.List;
 import java.util.Set;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
-import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.netbeans.api.java.source.ClassIndex.NameKind;
@@ -64,13 +62,14 @@ import org.netbeans.modules.j2ee.common.method.MethodModel;
 /**
  *
  * @author Martin Adamek
+ * @author Petr Slechta
  */
 public final class MethodCustomizerPanel extends javax.swing.JPanel {
 
-    public static final String NAME = "name";
-    public static final String RETURN_TYPE = "returnType";
-    public static final String INTERFACES = "interfaces";
-    public static final String PARAMETERS = "parameters";
+    public static final String NAME = "name";  // NOI18N
+    public static final String RETURN_TYPE = "returnType";  // NOI18N
+    public static final String INTERFACES = "interfaces";  // NOI18N
+    public static final String PARAMETERS = "parameters";  // NOI18N
     // immutable method prototype
     private final MethodModel methodModel;
     private final ParametersPanel parametersPanel;
@@ -105,15 +104,18 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
             ejbqlTextArea.setText(ejbql);
         }
         cardinalityPanel.setVisible(hasFinderCardinality);
-        exceptionsContainerPanel.setVisible(hasExceptions);
         interfacesPanel.setVisible(hasInterfaces);
 
         parametersPanel = new ParametersPanel(cpInfo, methodModel.getParameters());
         parametersContainerPanel.add(parametersPanel);
 
-        exceptionsPanel = hasExceptions ? new ExceptionsPanel(methodModel.getExceptions(), cpInfo) : null;
         if (hasExceptions) {
+            exceptionsPanel = new ExceptionsPanel(methodModel.getExceptions(), cpInfo);
             exceptionsContainerPanel.add(exceptionsPanel);
+        }
+        else {
+            exceptionsPanel = null;
+            exceptionsContainerPanel.setVisible(false);
         }
 
         // listeners
@@ -155,7 +157,6 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
         exceptionAndParameterPane = new javax.swing.JTabbedPane();
         parametersContainerPanel = new javax.swing.JPanel();
         exceptionsContainerPanel = new javax.swing.JPanel();
-        errorTextField = new javax.swing.JTextField();
         returnTypeLabel = new javax.swing.JLabel();
         returnTypeTextField = new javax.swing.JTextField();
         nameTextField = new javax.swing.JTextField();
@@ -177,13 +178,11 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
 
         parametersContainerPanel.setLayout(new java.awt.BorderLayout());
         exceptionAndParameterPane.addTab(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "MethodCustomizerPanel.parametersContainerPanel.TabConstraints.tabTitle"), parametersContainerPanel); // NOI18N
+        parametersContainerPanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_ParametersTab")); // NOI18N
 
         exceptionsContainerPanel.setLayout(new java.awt.BorderLayout());
         exceptionAndParameterPane.addTab(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "MethodCustomizerPanel.exceptionsPanel.TabConstraints.tabTitle"), exceptionsContainerPanel); // NOI18N
-
-        errorTextField.setBackground(java.awt.SystemColor.control);
-        errorTextField.setEditable(false);
-        errorTextField.setBorder(null);
+        exceptionsContainerPanel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_ExceptionsTab")); // NOI18N
 
         returnTypeLabel.setLabelFor(returnTypeTextField);
         org.openide.awt.Mnemonics.setLocalizedText(returnTypeLabel, org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "MethodCustomizerPanel.returnTypeLabel.text")); // NOI18N
@@ -232,7 +231,7 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
                 .add(remoteRadio)
                 .add(18, 18, 18)
                 .add(bothRadio)
-                .addContainerGap(174, Short.MAX_VALUE))
+                .addContainerGap(222, Short.MAX_VALUE))
         );
         interfacesPanelLayout.setVerticalGroup(
             interfacesPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -268,7 +267,7 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
                 .add(oneRadioButton)
                 .add(18, 18, 18)
                 .add(manyRadioButton)
-                .addContainerGap(251, Short.MAX_VALUE))
+                .addContainerGap(299, Short.MAX_VALUE))
         );
         cardinalityPanelLayout.setVerticalGroup(
             cardinalityPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -278,6 +277,10 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
                 .add(manyRadioButton))
         );
 
+        oneRadioButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_OneRadioButton")); // NOI18N
+        manyRadioButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_ManyRadioButton")); // NOI18N
+
+        ejbqlLabel.setLabelFor(ejbqlTextArea);
         org.openide.awt.Mnemonics.setLocalizedText(ejbqlLabel, org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "MethodCustomizerPanel.ejbqlLabel.text")); // NOI18N
 
         ejbqlScrollPane.setBorder(null);
@@ -291,6 +294,7 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
             }
         });
         ejbqlScrollPane.setViewportView(ejbqlTextArea);
+        ejbqlTextArea.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_EJB_QL")); // NOI18N
 
         org.jdesktop.layout.GroupLayout ejbqlPanelLayout = new org.jdesktop.layout.GroupLayout(ejbqlPanel);
         ejbqlPanel.setLayout(ejbqlPanelLayout);
@@ -298,8 +302,8 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
             ejbqlPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(ejbqlPanelLayout.createSequentialGroup()
                 .add(ejbqlLabel)
-                .addContainerGap(461, Short.MAX_VALUE))
-            .add(ejbqlScrollPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 504, Short.MAX_VALUE)
+                .addContainerGap(499, Short.MAX_VALUE))
+            .add(ejbqlScrollPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 542, Short.MAX_VALUE)
         );
         ejbqlPanelLayout.setVerticalGroup(
             ejbqlPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -324,9 +328,8 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, exceptionAndParameterPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 504, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, exceptionAndParameterPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 542, Short.MAX_VALUE)
                     .add(ejbqlPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .add(errorTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 504, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, cardinalityPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, interfacesPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .add(layout.createSequentialGroup()
@@ -336,10 +339,10 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                             .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                                .add(returnTypeTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 322, Short.MAX_VALUE)
+                                .add(returnTypeTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 368, Short.MAX_VALUE)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                                 .add(jButton1))
-                            .add(nameTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 415, Short.MAX_VALUE))))
+                            .add(nameTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 462, Short.MAX_VALUE))))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -362,12 +365,13 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
                 .add(cardinalityPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(ejbqlPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(errorTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap())
         );
 
+        exceptionAndParameterPane.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_TabPane")); // NOI18N
         returnTypeLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_ReturnType")); // NOI18N
         jLabel1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_Name")); // NOI18N
+        jButton1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MethodCustomizerPanel.class, "ACSD_MethodCustomizerPanel_Browse")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
     private void nameTextFieldFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_nameTextFieldFocusGained
@@ -405,7 +409,6 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
     private javax.swing.JPanel ejbqlPanel;
     private javax.swing.JScrollPane ejbqlScrollPane;
     private javax.swing.JTextArea ejbqlTextArea;
-    private javax.swing.JTextField errorTextField;
     private javax.swing.JTabbedPane exceptionAndParameterPane;
     private javax.swing.JPanel exceptionsContainerPanel;
     private javax.swing.ButtonGroup finderCardinalityButtonGroup;
@@ -424,16 +427,6 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
     private javax.swing.JTextField returnTypeTextField;
     // End of variables declaration//GEN-END:variables
 
-    public void setError(String message) {
-        setErrorFieldColor(true);
-        errorTextField.setText(message);
-    }
-
-    public void setWarning(String message) {
-        setErrorFieldColor(false);
-        errorTextField.setText(message);
-    }
-
     public String getMethodName() {
         return nameTextField.getText().trim();
     }
@@ -450,7 +443,7 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
         List<String> result = new ArrayList<String>();
         if (exceptionsPanel != null) {
             for (String exception : exceptionsPanel.getExceptions()) {
-                if (!"".equals(exception.trim())) {
+                if (!"".equals(exception.trim())) {  // NOI18N
                     result.add(exception);
                 }
             }
@@ -500,17 +493,7 @@ public final class MethodCustomizerPanel extends javax.swing.JPanel {
         returnTypeTextField.setVisible(false);
     }
 
-    private void setErrorFieldColor(boolean error) {
-        if (error) {
-            Color color = UIManager.getColor("nb.errorForeground"); //NOI18N
-            errorTextField.setForeground(color == null ? new Color(89, 79, 191) : color);
-        } else {
-            Color color = UIManager.getColor("nb.warningForeground"); //NOI18N
-            errorTextField.setForeground(color == null ? Color.DARK_GRAY : color);
-        }
-    }
-
-/**
+    /**
      * Listener on text fields.
      * Fires change event for specified property of this JPanel,
      * old and new value of event is null.

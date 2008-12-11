@@ -10,6 +10,7 @@
   <AuxValues>
     <AuxValue name="FormSettings_autoResourcing" type="java.lang.Integer" value="1"/>
     <AuxValue name="FormSettings_autoSetComponentName" type="java.lang.Boolean" value="false"/>
+    <AuxValue name="FormSettings_generateFQN" type="java.lang.Boolean" value="true"/>
     <AuxValue name="FormSettings_generateMnemonicsCode" type="java.lang.Boolean" value="true"/>
     <AuxValue name="FormSettings_i18nAutoMode" type="java.lang.Boolean" value="true"/>
     <AuxValue name="FormSettings_layoutCodeTarget" type="java.lang.Integer" value="2"/>
@@ -24,9 +25,8 @@
           <Group type="102" alignment="0" attributes="0">
               <EmptySpace max="-2" attributes="0"/>
               <Group type="103" groupAlignment="0" attributes="0">
-                  <Component id="exceptionAndParameterPane" alignment="1" pref="504" max="32767" attributes="0"/>
+                  <Component id="exceptionAndParameterPane" alignment="1" pref="542" max="32767" attributes="0"/>
                   <Component id="ejbqlPanel" alignment="0" max="32767" attributes="0"/>
-                  <Component id="errorTextField" alignment="0" pref="504" max="32767" attributes="0"/>
                   <Component id="cardinalityPanel" alignment="1" max="32767" attributes="0"/>
                   <Component id="interfacesPanel" alignment="1" max="32767" attributes="0"/>
                   <Group type="102" alignment="0" attributes="0">
@@ -37,11 +37,11 @@
                       <EmptySpace max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="0" attributes="0">
                           <Group type="102" alignment="1" attributes="0">
-                              <Component id="returnTypeTextField" pref="322" max="32767" attributes="0"/>
+                              <Component id="returnTypeTextField" pref="368" max="32767" attributes="0"/>
                               <EmptySpace max="-2" attributes="0"/>
                               <Component id="jButton1" min="-2" max="-2" attributes="0"/>
                           </Group>
-                          <Component id="nameTextField" alignment="0" pref="415" max="32767" attributes="0"/>
+                          <Component id="nameTextField" alignment="0" pref="462" max="32767" attributes="0"/>
                       </Group>
                   </Group>
               </Group>
@@ -72,17 +72,26 @@
               <EmptySpace min="-2" max="-2" attributes="0"/>
               <Component id="ejbqlPanel" max="32767" attributes="0"/>
               <EmptySpace min="-2" max="-2" attributes="0"/>
-              <Component id="errorTextField" min="-2" max="-2" attributes="0"/>
           </Group>
       </Group>
     </DimensionLayout>
   </Layout>
   <SubComponents>
     <Container class="javax.swing.JTabbedPane" name="exceptionAndParameterPane">
+      <AccessibilityProperties>
+        <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="ACSD_TabPane" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+      </AccessibilityProperties>
 
       <Layout class="org.netbeans.modules.form.compat2.layouts.support.JTabbedPaneSupportLayout"/>
       <SubComponents>
         <Container class="javax.swing.JPanel" name="parametersContainerPanel">
+          <AccessibilityProperties>
+            <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+              <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="ACSD_ParametersTab" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+            </Property>
+          </AccessibilityProperties>
           <Constraints>
             <Constraint layoutClass="org.netbeans.modules.form.compat2.layouts.support.JTabbedPaneSupportLayout" value="org.netbeans.modules.form.compat2.layouts.support.JTabbedPaneSupportLayout$JTabbedPaneConstraintsDescription">
               <JTabbedPaneConstraints tabName="Parameters">
@@ -96,6 +105,11 @@
           <Layout class="org.netbeans.modules.form.compat2.layouts.DesignBorderLayout"/>
         </Container>
         <Container class="javax.swing.JPanel" name="exceptionsContainerPanel">
+          <AccessibilityProperties>
+            <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+              <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="ACSD_ExceptionsTab" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+            </Property>
+          </AccessibilityProperties>
           <Constraints>
             <Constraint layoutClass="org.netbeans.modules.form.compat2.layouts.support.JTabbedPaneSupportLayout" value="org.netbeans.modules.form.compat2.layouts.support.JTabbedPaneSupportLayout$JTabbedPaneConstraintsDescription">
               <JTabbedPaneConstraints tabName="Exceptions">
@@ -110,17 +124,6 @@
         </Container>
       </SubComponents>
     </Container>
-    <Component class="javax.swing.JTextField" name="errorTextField">
-      <Properties>
-        <Property name="background" type="java.awt.Color" editor="org.netbeans.beaninfo.editors.ColorEditor">
-          <Color blue="c0" green="c0" id="Control" palette="2" red="c0" type="palette"/>
-        </Property>
-        <Property name="editable" type="boolean" value="false"/>
-        <Property name="border" type="javax.swing.border.Border" editor="org.netbeans.modules.form.editors2.BorderEditor">
-          <Border info="null"/>
-        </Property>
-      </Properties>
-    </Component>
     <Component class="javax.swing.JLabel" name="returnTypeLabel">
       <Properties>
         <Property name="labelFor" type="java.awt.Component" editor="org.netbeans.modules.form.ComponentChooserEditor">
@@ -184,7 +187,7 @@
                   <Component id="remoteRadio" min="-2" max="-2" attributes="0"/>
                   <EmptySpace type="separate" max="-2" attributes="0"/>
                   <Component id="bothRadio" min="-2" max="-2" attributes="0"/>
-                  <EmptySpace pref="174" max="32767" attributes="0"/>
+                  <EmptySpace pref="222" max="32767" attributes="0"/>
               </Group>
           </Group>
         </DimensionLayout>
@@ -269,7 +272,7 @@
                   <Component id="oneRadioButton" min="-2" max="-2" attributes="0"/>
                   <EmptySpace type="separate" max="-2" attributes="0"/>
                   <Component id="manyRadioButton" min="-2" max="-2" attributes="0"/>
-                  <EmptySpace pref="251" max="32767" attributes="0"/>
+                  <EmptySpace pref="299" max="32767" attributes="0"/>
               </Group>
           </Group>
         </DimensionLayout>
@@ -304,6 +307,11 @@
               <Insets value="[0, 0, 0, 0]"/>
             </Property>
           </Properties>
+          <AccessibilityProperties>
+            <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+              <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="ACSD_OneRadioButton" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+            </Property>
+          </AccessibilityProperties>
         </Component>
         <Component class="javax.swing.JRadioButton" name="manyRadioButton">
           <Properties>
@@ -317,6 +325,11 @@
               <Insets value="[0, 0, 0, 0]"/>
             </Property>
           </Properties>
+          <AccessibilityProperties>
+            <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+              <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="ACSD_ManyRadioButton" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+            </Property>
+          </AccessibilityProperties>
         </Component>
       </SubComponents>
     </Container>
@@ -327,9 +340,9 @@
           <Group type="103" groupAlignment="0" attributes="0">
               <Group type="102" alignment="0" attributes="0">
                   <Component id="ejbqlLabel" min="-2" max="-2" attributes="0"/>
-                  <EmptySpace pref="461" max="32767" attributes="0"/>
+                  <EmptySpace pref="499" max="32767" attributes="0"/>
               </Group>
-              <Component id="ejbqlScrollPane" alignment="0" pref="504" max="32767" attributes="0"/>
+              <Component id="ejbqlScrollPane" alignment="0" pref="542" max="32767" attributes="0"/>
           </Group>
         </DimensionLayout>
         <DimensionLayout dim="1">
@@ -346,6 +359,9 @@
       <SubComponents>
         <Component class="javax.swing.JLabel" name="ejbqlLabel">
           <Properties>
+            <Property name="labelFor" type="java.awt.Component" editor="org.netbeans.modules.form.ComponentChooserEditor">
+              <ComponentRef name="ejbqlTextArea"/>
+            </Property>
             <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
               <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="MethodCustomizerPanel.ejbqlLabel.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
             </Property>
@@ -373,6 +389,11 @@
                   </Border>
                 </Property>
               </Properties>
+              <AccessibilityProperties>
+                <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+                  <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="ACSD_EJB_QL" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+                </Property>
+              </AccessibilityProperties>
               <Events>
                 <EventHandler event="focusGained" listener="java.awt.event.FocusListener" parameters="java.awt.event.FocusEvent" handler="ejbqlTextAreaFocusGained"/>
               </Events>
@@ -387,6 +408,11 @@
           <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="MethodCustomizerPanel.jButton1.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
         </Property>
       </Properties>
+      <AccessibilityProperties>
+        <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+          <ResourceString bundle="org/netbeans/modules/j2ee/common/method/impl/Bundle.properties" key="ACSD_MethodCustomizerPanel_Browse" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+        </Property>
+      </AccessibilityProperties>
       <Events>
         <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="jButton1ActionPerformed"/>
       </Events>
