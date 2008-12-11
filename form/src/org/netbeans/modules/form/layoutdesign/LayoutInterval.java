@@ -65,6 +65,8 @@ public final class LayoutInterval implements LayoutConstants {
     static final int ATTR_ALIGN_PRE = 64;
     static final int ATTR_ALIGN_POST = 128;
 
+    static final int ATTR_FORCED_DEFAULT = 256;
+
     static final int DESIGN_ATTRS = ATTR_DESIGN_CONTAINER_GAP
                                     | ATTR_DESIGN_RESIZING
                                     | ATTR_DESIGN_SUPPRESSED_RESIZING
@@ -439,6 +441,9 @@ public final class LayoutInterval implements LayoutConstants {
     }
 
     int add(LayoutInterval interval, int index) {
+        if (getParent() == interval) {
+            throw new IllegalArgumentException("Cannot add parent as a sub-interval!"); // NOI18N
+        }
         if (index < 0) {
             index = subIntervals.size();
         }
@@ -471,7 +476,7 @@ public final class LayoutInterval implements LayoutConstants {
         return subIntervals != null ? subIntervals.indexOf(interval) : -1;
     }
 
-    boolean isParentOf(LayoutInterval interval) {
+    public boolean isParentOf(LayoutInterval interval) {
         if (isGroup()) {
             do {
                 interval = interval.getParent();
@@ -481,6 +486,10 @@ public final class LayoutInterval implements LayoutConstants {
             while (interval != null);
         }
         return false;
+    }
+
+    public LayoutInterval getRoot() {
+        return LayoutInterval.getRoot(this);
     }
 
     // -----
@@ -1038,10 +1047,18 @@ public final class LayoutInterval implements LayoutConstants {
             return edge;
         if (!beforeFixed && afterFixed)
             return edge^1;
-        if (beforeFixed && afterFixed)
-            return wantResize ? edge : parent.getAlignment();
+        if (beforeFixed && afterFixed) {
+            if (wantResize) {
+                return edge;
+            } else {
+                int parentAlignment = parent.getAlignment();
+                if (parentAlignment == LEADING || parentAlignment == TRAILING) {
+                    return parentAlignment;
+                }
+            }
+        }
 
-        return DEFAULT; // !leadingFixed && !trailingFixed
+        return DEFAULT;
     }
 
     /**
