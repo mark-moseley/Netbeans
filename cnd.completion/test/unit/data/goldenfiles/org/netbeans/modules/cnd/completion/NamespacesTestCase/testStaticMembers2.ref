@@ -1,7 +1,12 @@
-argc int
-argv char**
 GtkZZZZZ
+str
+si int
+sfoo() void
+sfoo2() void
+i1 int
+q str
 aliases() void
+f1() void
 foo() int
 innerNS3Func() void
 main(int argc, char** argv) int
@@ -12,4 +17,5 @@ AliasS1
 AliasS2
 Gtk
 S1
+S2
 S3
