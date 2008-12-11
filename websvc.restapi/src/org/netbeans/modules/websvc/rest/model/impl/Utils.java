@@ -42,29 +42,18 @@
 package org.netbeans.modules.websvc.rest.model.impl;
 
 import java.io.IOException;
-import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.netbeans.modules.websvc.rest.model.api.RestConstants;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.ErrorType;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.tools.Diagnostic;
 import javax.tools.Diagnostic.Kind;
-import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.java.queries.UnitTestForSourceQuery;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.CompilationController;
@@ -73,12 +62,9 @@ import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.api.project.SourceGroup;
+import org.netbeans.modules.j2ee.metadata.model.api.support.annotation.AnnotationModelHelper;
 import org.netbeans.modules.websvc.rest.spi.RestSupport;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
 
 /**
@@ -166,14 +152,15 @@ public class Utils {
         return value.substring(value.indexOf("\"") + 1, value.lastIndexOf("\""));
     }
     
-    public static boolean checkForJsr311Bootstrap(TypeElement element, Project project) {
+    public static boolean checkForJsr311Bootstrap(TypeElement element, Project project, AnnotationModelHelper helper) {
         RestSupport restSupport = project.getLookup().lookup(RestSupport.class);
-        if (restSupport != null && ! restSupport.isRestSupportOn() && hasJsr311ApiError(element, restSupport)) {
+        if (restSupport != null && ! restSupport.isRestSupportOn() && 
+                (hasJsr311ApiError(element, restSupport) || Utils.isRest(element, helper))) {
             try {
                 restSupport.ensureRestDevelopmentReady();
                 return true;
             } catch (IOException ex) {
-                Logger.getLogger(Utils.class.getName()).log(Level.INFO, ex.getLocalizedMessage(), ex);
+                Exceptions.printStackTrace(ex);
             }
         }
         return false;
@@ -185,16 +172,11 @@ public class Utils {
         if (cpi != null) {
             FileObject fo = SourceUtils.getFile(ElementHandle.create(top), cpi);
             for (String d : getDiagnostics(fo)) {
-                if (d.contains(RestConstants.PATH) ||
-                    d.contains(RestConstants.PATH_ANNOTATION) ||
-                    d.contains(RestConstants.GET) ||
-                    d.contains(RestConstants.GET_ANNOTATION) ||
-                    d.contains(RestConstants.PUT) ||
-                    d.contains(RestConstants.PUT_ANNOTATION) ||
-                    d.contains(RestConstants.POST) ||
-                    d.contains(RestConstants.POST_ANNOTATION) ||
-                    d.contains(RestConstants.DELETE) ||
-                    d.contains(RestConstants.DELETE_ANNOTATION)) {
+                if (d.equals(RestConstants.PATH) ||
+                    d.equals(RestConstants.GET) ||
+                    d.equals(RestConstants.PUT) ||
+                    d.equals(RestConstants.POST) ||
+                    d.equals(RestConstants.DELETE)) {
                     return true;
                 }
             }
@@ -212,6 +194,9 @@ public class Utils {
     
     public static List<String> getDiagnostics(FileObject fileObject) {
         final List<String> result = new ArrayList<String>();
+        if (fileObject == null) {
+            return result;
+        }
         JavaSource js = JavaSource.forFileObject(fileObject);
         try {
             js.runUserActionTask(new CancellableTask<CompilationController>() {
@@ -242,6 +227,24 @@ public class Utils {
             Exceptions.printStackTrace(ex);
         }        
         return result;
+    }
+    
+    public static boolean isRest(TypeElement type, AnnotationModelHelper helper) {
+        boolean isRest = false;
+        if (type.getKind() != ElementKind.INTERFACE) { // don't consider interfaces
+
+            if (helper.hasAnnotation(type.getAnnotationMirrors(), RestConstants.PATH)) { // NOI18N
+                isRest = true;
+            } else {
+                for (Element element : type.getEnclosedElements()) {
+                    if (Utils.hasHttpMethod(element)) {
+                        isRest = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return isRest;
     }
 
 }
