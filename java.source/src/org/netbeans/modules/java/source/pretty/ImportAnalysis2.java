@@ -300,20 +300,6 @@ public class ImportAnalysis2 {
             }
         }
 
-        //in the same package:
-        if (element.getKind().isClass() || element.getKind().isInterface()) {
-            Element parent = element.getEnclosingElement();
-
-            if (pack != null && pack.equals(parent)) {
-                //in the same package:
-                return make.Identifier(element.getSimpleName());
-            }
-        }
-
-        if (imported.contains(element)) {
-            return make.Identifier(element.getSimpleName());
-        }
-        
         String simpleName = element.getSimpleName().toString();
         Element alreadyImported = simpleNames2Elements.get(simpleName);
         
@@ -331,6 +317,28 @@ public class ImportAnalysis2 {
         }
 
         boolean clash = alreadyImported != null && !element.equals(alreadyImported);
+        
+        //in the same package:
+        if (!clash && (element.getKind().isClass() || element.getKind().isInterface())) {
+            Element parent = element.getEnclosingElement();
+
+            if (pack != null && pack.equals(parent)) {
+                //in the same package:
+                return make.Identifier(element.getSimpleName());
+            }
+        }
+
+        if (imported.contains(element)) {
+            return make.Identifier(element.getSimpleName());
+        }
+
+        if (elements.getPackageOf(element) != null && elements.getPackageOf(element).isUnnamed()) {
+            if (orig.getExpression().getKind() == Kind.MEMBER_SELECT) {
+                return make.MemberSelect(resolveImport((MemberSelectTree) orig.getExpression(), element.getEnclosingElement()),
+                                         element.getSimpleName());
+            }
+            return orig;
+        }
         
         if (!clash && javaLangElements.contains(simpleName) && !element.getEnclosingElement().equals(javaLang)) {
             //check clashes between (hidden) java.lang and the newly added element:
