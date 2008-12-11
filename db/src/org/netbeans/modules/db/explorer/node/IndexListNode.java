@@ -42,56 +42,46 @@ package org.netbeans.modules.db.explorer.node;
 import org.netbeans.api.db.explorer.node.BaseNode;
 import org.netbeans.api.db.explorer.node.ChildNodeFactory;
 import org.netbeans.api.db.explorer.node.NodeProvider;
-import org.netbeans.lib.ddl.impl.AbstractCommand;
-import org.netbeans.lib.ddl.impl.Specification;
-import org.netbeans.modules.db.explorer.DatabaseConnection;
-import org.netbeans.modules.db.explorer.DatabaseConnector;
-import org.netbeans.modules.db.explorer.action.RefreshAction;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader.DataWrapper;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadListener;
 import org.netbeans.modules.db.metadata.model.api.Metadata;
 import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
 import org.netbeans.modules.db.metadata.model.api.MetadataModel;
-import org.netbeans.modules.db.metadata.model.api.Schema;
 import org.netbeans.modules.db.metadata.model.api.Table;
-import org.openide.nodes.Node;
-import org.openide.util.actions.SystemAction;
 
 /**
  *
- * @author Rob Englander
+ * @author rob
  */
-public class TableNode extends BaseNode implements SchemaProvider {
-    private static final String ICONBASE = "org/netbeans/modules/db/resources/table.gif";
-    private static final String FOLDER = "Table"; //NOI18N
+public class IndexListNode extends BaseNode {
+    private static final String NAME = "Indexes"; // NOI18N
+    private static final String DISPLAYNAME = "Indexes"; // NOI18N
+    private static final String ICONBASE = "org/netbeans/modules/db/resources/folder.gif";
+    private static final String FOLDER = "IndexList"; //NOI18N
+
+    private MetadataModel metaDataModel;
+    private MetadataElementHandle<Table> tableHandle;
 
     /**
-     * Create an instance of TableNode.
+     * Create an instance of IndexListNode.
      *
      * @param dataLookup the lookup to use when creating node providers
-     * @return the TableNode instance
+     * @return the TableListNode instance
      */
-    public static TableNode create(NodeDataLookup dataLookup, NodeProvider provider) {
-        TableNode node = new TableNode(dataLookup, provider);
+    public static IndexListNode create(NodeDataLookup dataLookup, NodeProvider provider) {
+        IndexListNode node = new IndexListNode(dataLookup, provider);
         node.setup();
         return node;
     }
 
-    private String name;
-    private MetadataModel metaDataModel;
-    private MetadataElementHandle<Table> tableHandle;
-
-    private TableNode(NodeDataLookup lookup, NodeProvider provider) {
+    private IndexListNode(NodeDataLookup lookup, NodeProvider provider) {
         super(new ChildNodeFactory(lookup), lookup, FOLDER, provider);
     }
 
     protected void initialize() {
         metaDataModel = getLookup().lookup(MetadataModel.class);
         tableHandle = getLookup().lookup(MetadataElementHandle.class);
-
-        Table table = getTable();
-        name = table.getName();
     }
 
     public Table getTable() {
@@ -108,49 +98,18 @@ public class TableNode extends BaseNode implements SchemaProvider {
         return wrapper.getObject();
     }
 
-    public Schema getSchema() {
-        Table table = getTable();
-        return table.getParent();
-    }
-
-    @Override
-    public void destroy() {
-        DatabaseConnector connector = getLookup().lookup(DatabaseConnection.class).getConnector();
-        Specification spec = connector.getDatabaseSpecification();
-
-        try {
-            AbstractCommand command = spec.createCommandDropTable(getName());
-            command.setObjectOwner(MetadataReader.getSchemaWorkingName(getSchema()));
-            command.execute();
-        } catch (Exception e) {
-        }
-
-        SystemAction.get(RefreshAction.class).performAction(new Node[] { getParentNode() });
-    }
-
-    @Override
-    public boolean canDestroy() {
-        DatabaseConnector connector = getLookup().lookup(DatabaseConnection.class).getConnector();
-        return connector.supportsCommand(Specification.DROP_TABLE);
-    }
-
     @Override
     public String getName() {
-        return name;
+        return NAME;
     }
 
     @Override
     public String getDisplayName() {
-        return getName();
+        return DISPLAYNAME;
     }
 
     @Override
     public String getIconBase() {
         return ICONBASE;
-    }
-
-    @Override
-    public String getShortDescription() {
-        return bundle().getString("ND_Table"); //NOI18N
     }
 }
