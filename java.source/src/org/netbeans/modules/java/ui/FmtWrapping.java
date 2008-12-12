@@ -41,18 +41,20 @@
 
 package org.netbeans.modules.java.ui;
 
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import org.netbeans.api.java.source.CodeStyle;
 import static org.netbeans.modules.java.ui.FmtOptions.*;
 import static org.netbeans.modules.java.ui.FmtOptions.CategorySupport.OPTION_ID;
 import org.netbeans.modules.java.ui.FmtOptions.CategorySupport;
-import org.openide.util.NbBundle;
+import org.netbeans.modules.options.editor.spi.PreferencesCustomizer;
 
 
 /**
  *
  * @author  phrebejk
  */
-public class FmtWrapping extends javax.swing.JPanel {
+public class FmtWrapping extends javax.swing.JPanel implements FocusListener {
     
     /** Creates new form FmtWrapping */
     public FmtWrapping() {
@@ -60,46 +62,72 @@ public class FmtWrapping extends javax.swing.JPanel {
         
         scrollPane.getViewport().setBackground(java.awt.SystemColor.controlLtHighlight);
         
-        
         extendsImplementsKeywordCombo.putClientProperty(OPTION_ID, wrapExtendsImplementsKeyword);
+        extendsImplementsKeywordCombo.addFocusListener(this);
         extendsImplementsListCombo.putClientProperty(OPTION_ID, wrapExtendsImplementsList);
+        extendsImplementsListCombo.addFocusListener(this);
         methodParamsCombo.putClientProperty(OPTION_ID, wrapMethodParams);
+        methodParamsCombo.addFocusListener(this);
         methodCallArgsCombo.putClientProperty(OPTION_ID, wrapMethodCallArgs);
+        methodCallArgsCombo.addFocusListener(this);
+        annotationArgsCombo.putClientProperty(OPTION_ID, wrapAnnotationArgs);
+        annotationArgsCombo.addFocusListener(this);
         chainedMethodCallsCombo.putClientProperty(OPTION_ID, wrapChainedMethodCalls);
+        chainedMethodCallsCombo.addFocusListener(this);
         throwsKeywordCombo.putClientProperty(OPTION_ID, wrapThrowsKeyword);
+        throwsKeywordCombo.addFocusListener(this);
         throwsListCombo.putClientProperty(OPTION_ID, wrapThrowsList);
+        throwsListCombo.addFocusListener(this);
         arrayInitCombo.putClientProperty(OPTION_ID, wrapArrayInit);
+        arrayInitCombo.addFocusListener(this);
         forCombo.putClientProperty(OPTION_ID, wrapFor);
+        forCombo.addFocusListener(this);
         forStatementCombo.putClientProperty(OPTION_ID, wrapForStatement );
+        forStatementCombo.addFocusListener(this);
         ifStatementCombo.putClientProperty(OPTION_ID, wrapIfStatement);
+        ifStatementCombo.addFocusListener(this);
         whileStatementComboBox.putClientProperty(OPTION_ID, wrapWhileStatement);
+        whileStatementComboBox.addFocusListener(this);
         doWhileStatementCombo.putClientProperty(OPTION_ID, wrapDoWhileStatement);
+        doWhileStatementCombo.addFocusListener(this);
         assertCombo.putClientProperty(OPTION_ID, wrapAssert);
+        assertCombo.addFocusListener(this);
         enumConstantsCombo.putClientProperty(OPTION_ID, wrapEnumConstants);
+        enumConstantsCombo.addFocusListener(this);
         annotationsCombo.putClientProperty(OPTION_ID, wrapAnnotations);
+        annotationsCombo.addFocusListener(this);
         binaryOpsCombo.putClientProperty(OPTION_ID, wrapBinaryOps);
+        binaryOpsCombo.addFocusListener(this);
         ternaryOpsCombo.putClientProperty(OPTION_ID, wrapTernaryOps);
+        ternaryOpsCombo.addFocusListener(this);
         assignOpsCombo.putClientProperty(OPTION_ID, wrapAssignOps);
+        assignOpsCombo.addFocusListener(this);
     }
     
-    public static FormatingOptionsPanel.Category getController() {
-        return new CategorySupport("LBL_Wrapping", // NOI18N
-                new FmtWrapping(),
-                NbBundle.getMessage(FmtWrapping.class, "SAMPLE_Wrapping"),
-                new String[] { FmtOptions.rightMargin, "30" },
+    public static PreferencesCustomizer.Factory getController() {
+        return new CategorySupport.Factory("wrapping", FmtWrapping.class, //NOI18N
+                org.openide.util.NbBundle.getMessage(FmtWrapping.class, "SAMPLE_Wrapping"), //NOI18N
+                new String[] { FmtOptions.rightMargin, "30" }, //NOI18N
                 new String[] { FmtOptions.redundantDoWhileBraces, CodeStyle.BracesGenerationStyle.LEAVE_ALONE.name() },
                 new String[] { FmtOptions.redundantForBraces, CodeStyle.BracesGenerationStyle.LEAVE_ALONE.name() },
                 new String[] { FmtOptions.redundantIfBraces, CodeStyle.BracesGenerationStyle.LEAVE_ALONE.name() },
                 new String[] { FmtOptions.redundantWhileBraces, CodeStyle.BracesGenerationStyle.LEAVE_ALONE.name() }
         ); // NOI18N
     }
-    
+
+    public void focusGained(FocusEvent e) {
+        scrollPane.getViewport().scrollRectToVisible(e.getComponent().getBounds());
+    }
+
+    public void focusLost(FocusEvent e) {
+    }
+
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
@@ -113,6 +141,8 @@ public class FmtWrapping extends javax.swing.JPanel {
         methodParamsCombo = new javax.swing.JComboBox();
         methodCallArgsLabel = new javax.swing.JLabel();
         methodCallArgsCombo = new javax.swing.JComboBox();
+        annotationArgsLabel = new javax.swing.JLabel();
+        annotationArgsCombo = new javax.swing.JComboBox();
         chainedMethodCallsLabel = new javax.swing.JLabel();
         chainedMethodCallsCombo = new javax.swing.JComboBox();
         throwsKeywordLabel = new javax.swing.JLabel();
@@ -145,10 +175,13 @@ public class FmtWrapping extends javax.swing.JPanel {
         assignOpsCombo = new javax.swing.JComboBox();
         spacerPanel1 = new javax.swing.JPanel();
 
+        setName(org.openide.util.NbBundle.getMessage(FmtWrapping.class, "LBL_Wrapping")); // NOI18N
         setOpaque(false);
         setLayout(new java.awt.BorderLayout());
 
         scrollPane.setBackground(java.awt.SystemColor.controlLtHighlight);
+        scrollPane.setMinimumSize(new java.awt.Dimension(300, 200));
+        scrollPane.setPreferredSize(new java.awt.Dimension(350, 600));
 
         panel1.setOpaque(false);
         panel1.setLayout(new java.awt.GridBagLayout());
@@ -209,6 +242,20 @@ public class FmtWrapping extends javax.swing.JPanel {
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         gridBagConstraints.insets = new java.awt.Insets(0, 6, 4, 8);
         panel1.add(methodCallArgsCombo, gridBagConstraints);
+
+        annotationArgsLabel.setLabelFor(annotationArgsCombo);
+        org.openide.awt.Mnemonics.setLocalizedText(annotationArgsLabel, org.openide.util.NbBundle.getMessage(FmtWrapping.class, "LBL_wrp_annotationArgs")); // NOI18N
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
+        gridBagConstraints.insets = new java.awt.Insets(0, 8, 4, 0);
+        panel1.add(annotationArgsLabel, gridBagConstraints);
+
+        annotationArgsCombo.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
+        gridBagConstraints.insets = new java.awt.Insets(0, 6, 4, 8);
+        panel1.add(annotationArgsCombo, gridBagConstraints);
 
         chainedMethodCallsLabel.setLabelFor(chainedMethodCallsCombo);
         org.openide.awt.Mnemonics.setLocalizedText(chainedMethodCallsLabel, org.openide.util.NbBundle.getMessage(FmtWrapping.class, "LBL_wrp_chainedMethodCalls")); // NOI18N
@@ -435,6 +482,8 @@ public class FmtWrapping extends javax.swing.JPanel {
     }// </editor-fold>//GEN-END:initComponents
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JComboBox annotationArgsCombo;
+    private javax.swing.JLabel annotationArgsLabel;
     private javax.swing.JComboBox annotationsCombo;
     private javax.swing.JLabel annotationsLabel;
     private javax.swing.JComboBox arrayInitCombo;
@@ -477,5 +526,5 @@ public class FmtWrapping extends javax.swing.JPanel {
     private javax.swing.JComboBox whileStatementComboBox;
     private javax.swing.JLabel whileStatementLabel;
     // End of variables declaration//GEN-END:variables
-    
+
 }
