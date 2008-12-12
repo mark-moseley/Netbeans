@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.ruby;
 
+import java.util.Arrays;
+import java.util.Collections;
 import junit.framework.TestCase;
 
 /**
@@ -85,26 +87,26 @@ public class RubyUtilsTest extends TestCase {
     }
 
     public void testModuleStrings() {
-        assertTrue(RubyUtils.isValidRubyModuleName("A"));
-        assertTrue(RubyUtils.isValidRubyModuleName("AB::B::C"));
-        assertTrue(RubyUtils.isValidRubyModuleName("Abc::D1_3"));
+        assertTrue(RubyUtils.isValidConstantFQN("A"));
+        assertTrue(RubyUtils.isValidConstantFQN("AB::B::C"));
+        assertTrue(RubyUtils.isValidConstantFQN("Abc::D1_3"));
 
-        assertFalse(RubyUtils.isValidRubyModuleName("Abc::1_3"));
-        assertFalse(RubyUtils.isValidRubyModuleName("Abc:D1_3"));
-        assertFalse(RubyUtils.isValidRubyModuleName(""));
-        assertFalse(RubyUtils.isValidRubyModuleName("@foo"));
-        assertFalse(RubyUtils.isValidRubyModuleName("1::B"));
+        assertFalse(RubyUtils.isValidConstantFQN("Abc::1_3"));
+        assertFalse(RubyUtils.isValidConstantFQN("Abc:D1_3"));
+        assertFalse(RubyUtils.isValidConstantFQN(""));
+        assertFalse(RubyUtils.isValidConstantFQN("@foo"));
+        assertFalse(RubyUtils.isValidConstantFQN("1::B"));
     }
     
     public void testClassIdentifiers() {
-        assertTrue(RubyUtils.isValidRubyClassName("A"));
-        assertTrue(RubyUtils.isValidRubyClassName("AB"));
-        assertTrue(RubyUtils.isValidRubyClassName("Abc"));
-        assertTrue(!RubyUtils.isValidRubyClassName(""));
-        assertTrue(!RubyUtils.isValidRubyClassName("abc"));
-        assertTrue(!RubyUtils.isValidRubyClassName(" Abc"));
-        assertTrue(!RubyUtils.isValidRubyClassName(":Abc"));
-        assertTrue(!RubyUtils.isValidRubyClassName("def"));
+        assertTrue(RubyUtils.isValidConstantName("A"));
+        assertTrue(RubyUtils.isValidConstantName("AB"));
+        assertTrue(RubyUtils.isValidConstantName("Abc"));
+        assertTrue(!RubyUtils.isValidConstantName(""));
+        assertTrue(!RubyUtils.isValidConstantName("abc"));
+        assertTrue(!RubyUtils.isValidConstantName(" Abc"));
+        assertTrue(!RubyUtils.isValidConstantName(":Abc"));
+        assertTrue(!RubyUtils.isValidConstantName("def"));
     }
 
     public void testMethodIdentifiers() {
@@ -147,7 +149,7 @@ public class RubyUtilsTest extends TestCase {
         
         for (String s : RUBY_BUILTINS) {
             assertTrue(!RubyUtils.isValidRubyMethodName(s));
-            assertTrue(!RubyUtils.isValidRubyClassName(s));
+            assertTrue(!RubyUtils.isValidConstantName(s));
         }
     }
 
@@ -168,7 +170,50 @@ public class RubyUtilsTest extends TestCase {
         assertTrue(RubyUtils.isValidRubyLocalVarName("abcDef"));
     
     }
-    
+
+    public void testNumericIdentifiers() {
+        assertFalse(RubyUtils.isSafeIdentifierName("1", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("1a", 0));
+
+        assertFalse(RubyUtils.isSafeIdentifierName("@1", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("@1a", 0));
+
+        assertFalse(RubyUtils.isSafeIdentifierName("@@1", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("@@1a", 0));
+
+        assertFalse(RubyUtils.isSafeIdentifierName("$1", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("$1a", 0));
+
+        assertFalse(RubyUtils.isSafeIdentifierName(":1", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName(":1a", 0));
+
+        assertTrue(RubyUtils.isSafeIdentifierName("a1", 0));
+        assertTrue(RubyUtils.isSafeIdentifierName("@a1", 0));
+        assertTrue(RubyUtils.isSafeIdentifierName("@@a1", 0));
+        assertTrue(RubyUtils.isSafeIdentifierName(":a1", 0));
+        assertTrue(RubyUtils.isSafeIdentifierName("$a1", 0));
+    }
+
+    public void testVariableNameAndKind() {
+        assertTrue(RubyUtils.isSafeIdentifierName("a", 0));
+        assertTrue(RubyUtils.isSafeIdentifierName("@a", 0));
+        assertTrue(RubyUtils.isSafeIdentifierName("@@a", 0));
+        assertTrue(RubyUtils.isSafeIdentifierName(":a", 0));
+        assertTrue(RubyUtils.isSafeIdentifierName("$a", 0));
+
+        assertFalse(RubyUtils.isSafeIdentifierName("", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName(" ", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("@@", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("$", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName(":", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("@@@", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("@@@a", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("$$", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("$$a", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("::", 0));
+        assertFalse(RubyUtils.isSafeIdentifierName("::a", 0));
+    }
+
     private static final String[] RUBY_BUILTINS =
         new String[] {
             // Keywords
@@ -178,86 +223,6 @@ public class RubyUtilsTest extends TestCase {
             "undef", "unless", "until", "when", "while", "yield",
         };
     
-    public void testGetRowStart() throws Exception {
-        assertEquals(0, RubyUtils.getRowStart("", 0));
-        assertEquals(0, RubyUtils.getRowStart("abc", 0));
-        assertEquals(0, RubyUtils.getRowStart("abc", 1));
-        assertEquals(0, RubyUtils.getRowStart("abc\n", 2));
-        assertEquals(4, RubyUtils.getRowStart("abc\n", 4));
-        assertEquals(4, RubyUtils.getRowStart("abc\nab\n", 4));
-        assertEquals(4, RubyUtils.getRowStart("abc\nab\n", 5));
-        assertEquals(4, RubyUtils.getRowStart("abc\nab\n", 6));
-        assertEquals(4, RubyUtils.getRowStart("abc\n\n", 4));
-        assertEquals(4, RubyUtils.getRowStart("abc\na\rb\n", 4));
-        assertEquals(4, RubyUtils.getRowStart("abc\na\rb\n", 6));
-    }
-
-    public void testGetRowLastNonWhite() throws Exception {
-        assertEquals(-1, RubyUtils.getRowLastNonWhite("", 0));
-        assertEquals(2, RubyUtils.getRowLastNonWhite("abc", 0));
-        assertEquals(2, RubyUtils.getRowLastNonWhite("abc\r", 3));
-        assertEquals(2, RubyUtils.getRowLastNonWhite("abc\r\n", 3));
-        assertEquals(2, RubyUtils.getRowLastNonWhite("abc       ", 10));
-        assertEquals(2, RubyUtils.getRowLastNonWhite("abc       ", 5));
-        assertEquals(7, RubyUtils.getRowLastNonWhite("\ndef\nabc\r", 6));
-        assertEquals(-1, RubyUtils.getRowLastNonWhite("x\n", 2));
-    }
-    
-    public void testGetRowFirstNonWhite() throws Exception {
-        assertEquals(-1, RubyUtils.getRowFirstNonWhite("", 0));
-        assertEquals(-1, RubyUtils.getRowFirstNonWhite("   ", 0));
-        assertEquals(-1, RubyUtils.getRowFirstNonWhite("abc\r\n", 5));
-        assertEquals(-1, RubyUtils.getRowFirstNonWhite("\nabc", 0));
-        assertEquals(4, RubyUtils.getRowFirstNonWhite("    a", 0));
-        assertEquals(6, RubyUtils.getRowFirstNonWhite("\r\n    a", 2));
-        assertEquals(6, RubyUtils.getRowFirstNonWhite("\r\n    a", 4));
-        assertEquals(6, RubyUtils.getRowFirstNonWhite("\r\n    a", 6));
-        assertEquals(2, RubyUtils.getRowFirstNonWhite("\r\nxy", 4));
-    }
-    
-    public void testIsRowEmpty() throws Exception {
-        // TODO - test fake \r without \n's in there
-        assertTrue(RubyUtils.isRowEmpty("", 0));
-        assertTrue(RubyUtils.isRowEmpty("a\n\n", 2));
-        assertTrue(RubyUtils.isRowEmpty("a\n\n", 3));
-        assertTrue(RubyUtils.isRowEmpty("\n", 0));
-        assertTrue(RubyUtils.isRowEmpty("a\n\r\n", 2));
-        assertFalse(RubyUtils.isRowEmpty("a", 0));
-        assertFalse(RubyUtils.isRowEmpty("a", 1));
-        assertFalse(RubyUtils.isRowEmpty("ab", 1));
-        assertFalse(RubyUtils.isRowEmpty("ab\n", 2));
-        assertFalse(RubyUtils.isRowEmpty("ab\n", 0));
-    }
-
-    public void testIsRowWhite() throws Exception {
-        assertTrue(RubyUtils.isRowWhite("", 0));
-        assertTrue(RubyUtils.isRowWhite("  ", 0));
-        assertTrue(RubyUtils.isRowWhite("  ", 1));
-        assertTrue(RubyUtils.isRowWhite("  ", 2));
-        assertFalse(RubyUtils.isRowWhite("a ", 2));
-        assertFalse(RubyUtils.isRowWhite("a ", 1));
-        assertFalse(RubyUtils.isRowWhite("a ", 0));
-        assertTrue(RubyUtils.isRowWhite("\n  \n", 0));
-        assertTrue(RubyUtils.isRowWhite("\n  \n", 1));
-        assertTrue(RubyUtils.isRowWhite("\n  \r\n", 1));
-        assertTrue(RubyUtils.isRowWhite("a\n  \r\n", 2));
-        assertFalse(RubyUtils.isRowWhite("a\na  \r\n", 2));
-        assertFalse(RubyUtils.isRowWhite("a\na  \r\n", 3));
-        assertFalse(RubyUtils.isRowWhite("a\n  a\r\n", 2));
-    }
-    
-    public void testEndsWith() throws Exception {
-        assertTrue(RubyUtils.endsWith(new StringBuilder("hello"), "lo"));
-        assertTrue(RubyUtils.endsWith(new StringBuilder("hello"), "hello"));
-        assertTrue(RubyUtils.endsWith(new StringBuilder("hello"), ""));
-        assertTrue(RubyUtils.endsWith(new StringBuilder("hello"), "o"));
-        assertTrue(RubyUtils.endsWith(new StringBuilder("<br><br>"), "<br>"));
-
-        assertFalse(RubyUtils.endsWith(new StringBuilder("hello"), "hallo"));
-        assertFalse(RubyUtils.endsWith(new StringBuilder("hello"), "foohallo"));
-        assertFalse(RubyUtils.endsWith(new StringBuilder(""), "o"));
-    }
-
     public void testPluralize() throws Exception {
         assertEquals("posts", RubyUtils.pluralize("post"));
         assertEquals("axes", RubyUtils.pluralize("axis"));
@@ -292,5 +257,16 @@ public class RubyUtilsTest extends TestCase {
         assertEquals("raw_scaled_scorers", RubyUtils.tableize("RawScaledScorer"));
         assertEquals("egg_and_hams", RubyUtils.tableize("egg_and_ham"));
         assertEquals("fancy_categories", RubyUtils.tableize("fancyCategory"));
+    }
+
+    public void testParseConstantName() {
+        assertEquals(Arrays.asList("Kernel", "RED"), Arrays.asList(RubyUtils.parseConstantName("RED")));
+        assertEquals(Arrays.asList("Colors", "RED"), Arrays.asList(RubyUtils.parseConstantName("Colors::RED")));
+        assertEquals(Arrays.asList("HTML::Colors", "RED"), Arrays.asList(RubyUtils.parseConstantName("HTML::Colors::RED")));
+    }
+
+    public void testJoin() {
+        assertEquals("one, two, three", RubyUtils.join(new String[]{"one", "two", "three"}, ", "));
+        assertEquals("", RubyUtils.join(Collections.<String>emptySet(), ", "));
     }
 }
