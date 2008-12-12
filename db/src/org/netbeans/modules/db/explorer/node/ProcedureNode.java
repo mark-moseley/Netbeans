@@ -40,66 +40,68 @@
 package org.netbeans.modules.db.explorer.node;
 
 import org.netbeans.api.db.explorer.node.BaseNode;
+import org.netbeans.api.db.explorer.node.ChildNodeFactory;
 import org.netbeans.api.db.explorer.node.NodeProvider;
+import org.netbeans.lib.ddl.impl.AbstractCommand;
+import org.netbeans.lib.ddl.impl.Specification;
 import org.netbeans.modules.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.explorer.DatabaseConnector;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader.DataWrapper;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadListener;
 import org.netbeans.modules.db.metadata.model.api.Metadata;
 import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
 import org.netbeans.modules.db.metadata.model.api.MetadataModel;
-import org.netbeans.modules.db.metadata.model.api.ForeignKeyColumn;
+import org.netbeans.modules.db.metadata.model.api.Procedure;
 
 /**
  *
  * @author Rob Englander
  */
-public class ForeignKeyColumnNode extends BaseNode {
-    private static final String ICON = "org/netbeans/modules/db/resources/columnForeign.gif";
-    private static final String FOLDER = "ForeignKeyColumn"; //NOI18N
+public class ProcedureNode extends BaseNode {
+    private static final String ICONBASE = "org/netbeans/modules/db/resources/procedure.gif";
+    private static final String FOLDER = "Procedure"; //NOI18N
 
     /**
-     * Create an instance of ForeignKeyColumnNode.
+     * Create an instance of ProcedureNode.
      *
      * @param dataLookup the lookup to use when creating node providers
-     * @return the ForeignKeyColumnNode instance
+     * @return the ProcedureNode instance
      */
-    public static ForeignKeyColumnNode create(NodeDataLookup dataLookup, NodeProvider provider) {
-        ForeignKeyColumnNode node = new ForeignKeyColumnNode(dataLookup, provider);
+    public static ProcedureNode create(NodeDataLookup dataLookup, NodeProvider provider) {
+        ProcedureNode node = new ProcedureNode(dataLookup, provider);
         node.setup();
         return node;
     }
 
     private String name = ""; // NOI18N
-    private MetadataElementHandle<ForeignKeyColumn> keyColumnHandle;
+    private MetadataElementHandle<Procedure> procedureHandle;
     private final DatabaseConnection connection;
 
-    private ForeignKeyColumnNode(NodeDataLookup lookup, NodeProvider provider) {
-        super(lookup, FOLDER, provider);
+    private ProcedureNode(NodeDataLookup lookup, NodeProvider provider) {
+        super(new ChildNodeFactory(lookup), lookup, FOLDER, provider);
         connection = getLookup().lookup(DatabaseConnection.class);
     }
 
     protected void initialize() {
-        keyColumnHandle = getLookup().lookup(MetadataElementHandle.class);
+        procedureHandle = getLookup().lookup(MetadataElementHandle.class);
 
         boolean connected = !connection.getConnector().isDisconnected();
         MetadataModel metaDataModel = connection.getMetadataModel();
         if (connected && metaDataModel != null) {
-        ForeignKeyColumn column = getForeignKeyColumn();
-        name = column.getReferringColumn().getName()
-                + " -> " + column.getReferredColumn().getParent().getName() + "." // NOI18N
-                + column.getReferredColumn().getName(); // NOI18N
+            Procedure proc = getProcedure();
+            name = proc.getName();
         }
     }
 
-    public ForeignKeyColumn getForeignKeyColumn() {
+    public Procedure getProcedure() {
         MetadataModel metaDataModel = connection.getMetadataModel();
-        DataWrapper<ForeignKeyColumn> wrapper = new DataWrapper<ForeignKeyColumn>();
+        DataWrapper<Procedure> wrapper = new DataWrapper<Procedure>();
         MetadataReader.readModel(metaDataModel, wrapper,
             new MetadataReadListener() {
                 public void run(Metadata metaData, DataWrapper wrapper) {
-                    ForeignKeyColumn column = keyColumnHandle.resolve(metaData);
-                    wrapper.setObject(column);
+                    Procedure procedure = procedureHandle.resolve(metaData);
+                    wrapper.setObject(procedure);
                 }
             }
         );
@@ -107,9 +109,23 @@ public class ForeignKeyColumnNode extends BaseNode {
         return wrapper.getObject();
     }
 
-    public int getPosition() {
-        ForeignKeyColumn column = getForeignKeyColumn();
-        return column.getPosition();
+    @Override
+    public void destroy() {
+        DatabaseConnector connector = connection.getConnector();
+        Specification spec = connector.getDatabaseSpecification();
+
+        try {
+            AbstractCommand command = spec.createCommandDropProcedure(getName());
+            command.execute();
+            remove();
+        } catch (Exception e) {
+        }
+    }
+
+    @Override
+    public boolean canDestroy() {
+        DatabaseConnector connector = connection.getConnector();
+        return connector.supportsCommand(Specification.DROP_PROCEDURE);
     }
 
     @Override
@@ -124,6 +140,6 @@ public class ForeignKeyColumnNode extends BaseNode {
 
     @Override
     public String getIconBase() {
-        return ICON;
+        return ICONBASE;
     }
 }

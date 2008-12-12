@@ -40,76 +40,59 @@
 package org.netbeans.modules.db.explorer.node;
 
 import org.netbeans.api.db.explorer.node.BaseNode;
+import org.netbeans.api.db.explorer.node.ChildNodeFactory;
 import org.netbeans.api.db.explorer.node.NodeProvider;
 import org.netbeans.modules.db.explorer.DatabaseConnection;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader.DataWrapper;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadListener;
+import org.netbeans.modules.db.metadata.model.api.Catalog;
 import org.netbeans.modules.db.metadata.model.api.Metadata;
 import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
 import org.netbeans.modules.db.metadata.model.api.MetadataModel;
-import org.netbeans.modules.db.metadata.model.api.ForeignKeyColumn;
 
 /**
  *
  * @author Rob Englander
  */
-public class ForeignKeyColumnNode extends BaseNode {
-    private static final String ICON = "org/netbeans/modules/db/resources/columnForeign.gif";
-    private static final String FOLDER = "ForeignKeyColumn"; //NOI18N
+public class CatalogNode extends BaseNode {
+    private static final String ICONBASE = "org/netbeans/modules/db/resources/database.gif";
+    private static final String FOLDER = "Catalog"; //NOI18N
 
     /**
-     * Create an instance of ForeignKeyColumnNode.
+     * Create an instance of CatalogNode.
      *
      * @param dataLookup the lookup to use when creating node providers
-     * @return the ForeignKeyColumnNode instance
+     * @return the CatalogNode instance
      */
-    public static ForeignKeyColumnNode create(NodeDataLookup dataLookup, NodeProvider provider) {
-        ForeignKeyColumnNode node = new ForeignKeyColumnNode(dataLookup, provider);
+    public static CatalogNode create(NodeDataLookup dataLookup, NodeProvider provider) {
+        CatalogNode node = new CatalogNode(dataLookup, provider);
         node.setup();
         return node;
     }
 
     private String name = ""; // NOI18N
-    private MetadataElementHandle<ForeignKeyColumn> keyColumnHandle;
     private final DatabaseConnection connection;
 
-    private ForeignKeyColumnNode(NodeDataLookup lookup, NodeProvider provider) {
-        super(lookup, FOLDER, provider);
+    private CatalogNode(NodeDataLookup lookup, NodeProvider provider) {
+        super(new ChildNodeFactory(lookup), lookup, FOLDER, provider);
         connection = getLookup().lookup(DatabaseConnection.class);
     }
 
     protected void initialize() {
-        keyColumnHandle = getLookup().lookup(MetadataElementHandle.class);
+        final MetadataElementHandle<Catalog> catalogHandle = getLookup().lookup(MetadataElementHandle.class);
+        MetadataModel metaDataModel = connection.getMetadataModel();
 
         boolean connected = !connection.getConnector().isDisconnected();
-        MetadataModel metaDataModel = connection.getMetadataModel();
         if (connected && metaDataModel != null) {
-        ForeignKeyColumn column = getForeignKeyColumn();
-        name = column.getReferringColumn().getName()
-                + " -> " + column.getReferredColumn().getParent().getName() + "." // NOI18N
-                + column.getReferredColumn().getName(); // NOI18N
-        }
-    }
-
-    public ForeignKeyColumn getForeignKeyColumn() {
-        MetadataModel metaDataModel = connection.getMetadataModel();
-        DataWrapper<ForeignKeyColumn> wrapper = new DataWrapper<ForeignKeyColumn>();
-        MetadataReader.readModel(metaDataModel, wrapper,
-            new MetadataReadListener() {
-                public void run(Metadata metaData, DataWrapper wrapper) {
-                    ForeignKeyColumn column = keyColumnHandle.resolve(metaData);
-                    wrapper.setObject(column);
+            MetadataReader.readModel(metaDataModel, null,
+                new MetadataReader.MetadataReadListener() {
+                    public void run(Metadata metaData, DataWrapper wrapper) {
+                        Catalog catalog = catalogHandle.resolve(metaData);
+                        renderNames(catalog);
+                    }
                 }
-            }
-        );
-
-        return wrapper.getObject();
-    }
-
-    public int getPosition() {
-        ForeignKeyColumn column = getForeignKeyColumn();
-        return column.getPosition();
+            );
+        }
     }
 
     @Override
@@ -119,11 +102,22 @@ public class ForeignKeyColumnNode extends BaseNode {
 
     @Override
     public String getDisplayName() {
-        return getName();
+        return name;
+    }
+
+    private void renderNames(Catalog catalog) {
+        if (catalog == null) {
+            name = "";
+        }
+
+        name = catalog.getName();
+        if (name == null) {
+            name = "Default"; // NOI18N
+        }
     }
 
     @Override
     public String getIconBase() {
-        return ICON;
+        return ICONBASE;
     }
 }

@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,65 +31,78 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
+ * 
  * Contributor(s):
- *
+ * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.action;
+package org.netbeans.modules.db.explorer.node;
 
 import org.netbeans.api.db.explorer.node.BaseNode;
-import org.netbeans.modules.db.explorer.DatabaseConnection;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.DataWrapper;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadListener;
-import org.netbeans.modules.db.metadata.model.api.Metadata;
-import org.netbeans.modules.db.metadata.model.api.MetadataModel;
-import org.openide.nodes.Node;
-import org.openide.util.RequestProcessor;
+import org.netbeans.api.db.explorer.node.ChildNodeFactory;
+import org.netbeans.modules.db.explorer.ConnectionList;
 
 /**
- *
- * @author Rob
- */
-public class RefreshAction extends BaseAction {
+ * This is the root node for the database explorer.  This is a singleton
+ * instance since the database explorer only uses 1 root node.
+ * 
+ * @author Rob Englander
+ */ 
+public class RootNode extends BaseNode {
+    private static final String NAME = "Databases"; //NOI18N
+    private static final String DISPLAYNAME = "Databases"; //NOI18N
+    private static final String ICONBASE = "org/netbeans/modules/db/resources/database.gif"; //NOI18N
+    private static final String FOLDER = "Root"; //NOI18N
+
+    /** the singleton instance */
+    private static RootNode instance = null;
+    
+    /**
+     * Gets the singleton instance.
+     * 
+     * @return the singleton instance
+     */
+    public static RootNode instance() {
+        if (instance == null) { 
+            NodeDataLookup lookup = new NodeDataLookup();
+            lookup.add(ConnectionList.getDefault());
+            instance = new RootNode(lookup);
+            instance.setup();
+        }
+        
+        return instance;
+    }
+
+    public static boolean isCreated() {
+        return instance != null;
+    }
+
+    /**
+     * Constructor.  This is private to prevent multiple instances from
+     * being created.
+     * 
+     * @param lookup the associated lookup
+     */
+    private RootNode(NodeDataLookup lookup) {
+        super(new ChildNodeFactory(lookup), lookup, FOLDER, null);
+    }
+    
+    protected void initialize() {
+    }
+    
     @Override
     public String getName() {
-        return bundle().getString("Refresh"); // NOI18N
-    }
-
-    protected boolean enable(Node[] activatedNodes) {
-        boolean enabled = false;
-
-        if (activatedNodes.length == 1) {
-            enabled = null != activatedNodes[0].getLookup().lookup(BaseNode.class);
-        }
-
-        return enabled;
+        return NAME;
     }
 
     @Override
-    public void performAction(Node[] activatedNodes) {
-        final BaseNode baseNode = activatedNodes[0].getLookup().lookup(BaseNode.class);
-        RequestProcessor.getDefault().post(
-            new Runnable() {
-                public void run() {
-                    MetadataModel model = baseNode.getLookup().lookup(DatabaseConnection.class).getMetadataModel();
-                    if (model != null) {
-                        MetadataReader.readModel(model, null,
-                            new MetadataReadListener() {
-                                public void run(Metadata metaData, DataWrapper wrapper) {
-                                    metaData.refresh();
-                                }
-                            }
-                        );
-                    }
-
-                    baseNode.refresh();
-                }
-            }
-        );
+    public String getDisplayName() {
+        return DISPLAYNAME;
     }
 
+    @Override
+    public String getIconBase() {
+        return ICONBASE;
+    }
 }

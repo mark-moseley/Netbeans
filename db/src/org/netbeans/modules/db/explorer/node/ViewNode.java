@@ -40,66 +40,69 @@
 package org.netbeans.modules.db.explorer.node;
 
 import org.netbeans.api.db.explorer.node.BaseNode;
+import org.netbeans.api.db.explorer.node.ChildNodeFactory;
 import org.netbeans.api.db.explorer.node.NodeProvider;
+import org.netbeans.lib.ddl.impl.AbstractCommand;
+import org.netbeans.lib.ddl.impl.Specification;
 import org.netbeans.modules.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.explorer.DatabaseConnector;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader.DataWrapper;
 import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadListener;
 import org.netbeans.modules.db.metadata.model.api.Metadata;
 import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
 import org.netbeans.modules.db.metadata.model.api.MetadataModel;
-import org.netbeans.modules.db.metadata.model.api.ForeignKeyColumn;
+import org.netbeans.modules.db.metadata.model.api.Schema;
+import org.netbeans.modules.db.metadata.model.api.View;
 
 /**
  *
- * @author Rob Englander
+ * @author rob
  */
-public class ForeignKeyColumnNode extends BaseNode {
-    private static final String ICON = "org/netbeans/modules/db/resources/columnForeign.gif";
-    private static final String FOLDER = "ForeignKeyColumn"; //NOI18N
+public class ViewNode extends BaseNode implements SchemaProvider {
+    private static final String ICONBASE = "org/netbeans/modules/db/resources/view.gif";
+    private static final String FOLDER = "View"; //NOI18N
 
     /**
-     * Create an instance of ForeignKeyColumnNode.
+     * Create an instance of ViewNode.
      *
      * @param dataLookup the lookup to use when creating node providers
-     * @return the ForeignKeyColumnNode instance
+     * @return the ViewNode instance
      */
-    public static ForeignKeyColumnNode create(NodeDataLookup dataLookup, NodeProvider provider) {
-        ForeignKeyColumnNode node = new ForeignKeyColumnNode(dataLookup, provider);
+    public static ViewNode create(NodeDataLookup dataLookup, NodeProvider provider) {
+        ViewNode node = new ViewNode(dataLookup, provider);
         node.setup();
         return node;
     }
 
     private String name = ""; // NOI18N
-    private MetadataElementHandle<ForeignKeyColumn> keyColumnHandle;
+    private MetadataElementHandle<View> viewHandle;
     private final DatabaseConnection connection;
 
-    private ForeignKeyColumnNode(NodeDataLookup lookup, NodeProvider provider) {
-        super(lookup, FOLDER, provider);
+    private ViewNode(NodeDataLookup lookup, NodeProvider provider) {
+        super(new ChildNodeFactory(lookup), lookup, FOLDER, provider);
         connection = getLookup().lookup(DatabaseConnection.class);
     }
 
     protected void initialize() {
-        keyColumnHandle = getLookup().lookup(MetadataElementHandle.class);
+        viewHandle = getLookup().lookup(MetadataElementHandle.class);
 
         boolean connected = !connection.getConnector().isDisconnected();
         MetadataModel metaDataModel = connection.getMetadataModel();
         if (connected && metaDataModel != null) {
-        ForeignKeyColumn column = getForeignKeyColumn();
-        name = column.getReferringColumn().getName()
-                + " -> " + column.getReferredColumn().getParent().getName() + "." // NOI18N
-                + column.getReferredColumn().getName(); // NOI18N
+            View view = getView();
+            name = view.getName();
         }
     }
 
-    public ForeignKeyColumn getForeignKeyColumn() {
+    public View getView() {
         MetadataModel metaDataModel = connection.getMetadataModel();
-        DataWrapper<ForeignKeyColumn> wrapper = new DataWrapper<ForeignKeyColumn>();
+        DataWrapper<View> wrapper = new DataWrapper<View>();
         MetadataReader.readModel(metaDataModel, wrapper,
             new MetadataReadListener() {
                 public void run(Metadata metaData, DataWrapper wrapper) {
-                    ForeignKeyColumn column = keyColumnHandle.resolve(metaData);
-                    wrapper.setObject(column);
+                    View view = viewHandle.resolve(metaData);
+                    wrapper.setObject(view);
                 }
             }
         );
@@ -107,9 +110,29 @@ public class ForeignKeyColumnNode extends BaseNode {
         return wrapper.getObject();
     }
 
-    public int getPosition() {
-        ForeignKeyColumn column = getForeignKeyColumn();
-        return column.getPosition();
+    @Override
+    public void destroy() {
+        DatabaseConnector connector = connection.getConnector();
+        Specification spec = connector.getDatabaseSpecification();
+
+        try {
+            AbstractCommand command = spec.createCommandDropView(getName());
+            command.execute();
+            remove();
+        } catch (Exception e) {
+        }
+    }
+
+    @Override
+    public boolean canDestroy() {
+        DatabaseConnector connector = connection.getConnector();
+        return connector.supportsCommand(Specification.DROP_VIEW);
+    }
+
+
+    public Schema getSchema() {
+        View view = getView();
+        return view.getParent();
     }
 
     @Override
@@ -124,6 +147,6 @@ public class ForeignKeyColumnNode extends BaseNode {
 
     @Override
     public String getIconBase() {
-        return ICON;
+        return ICONBASE;
     }
 }

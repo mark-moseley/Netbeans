@@ -37,59 +37,14 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.action;
+package org.netbeans.modules.db.explorer.node;
 
-import org.netbeans.api.db.explorer.node.BaseNode;
-import org.netbeans.modules.db.explorer.DatabaseConnection;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.DataWrapper;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadListener;
-import org.netbeans.modules.db.metadata.model.api.Metadata;
-import org.netbeans.modules.db.metadata.model.api.MetadataModel;
-import org.openide.nodes.Node;
-import org.openide.util.RequestProcessor;
+import org.netbeans.modules.db.metadata.model.api.Column;
 
 /**
  *
- * @author Rob
+ * @author Rob Englander
  */
-public class RefreshAction extends BaseAction {
-    @Override
-    public String getName() {
-        return bundle().getString("Refresh"); // NOI18N
-    }
-
-    protected boolean enable(Node[] activatedNodes) {
-        boolean enabled = false;
-
-        if (activatedNodes.length == 1) {
-            enabled = null != activatedNodes[0].getLookup().lookup(BaseNode.class);
-        }
-
-        return enabled;
-    }
-
-    @Override
-    public void performAction(Node[] activatedNodes) {
-        final BaseNode baseNode = activatedNodes[0].getLookup().lookup(BaseNode.class);
-        RequestProcessor.getDefault().post(
-            new Runnable() {
-                public void run() {
-                    MetadataModel model = baseNode.getLookup().lookup(DatabaseConnection.class).getMetadataModel();
-                    if (model != null) {
-                        MetadataReader.readModel(model, null,
-                            new MetadataReadListener() {
-                                public void run(Metadata metaData, DataWrapper wrapper) {
-                                    metaData.refresh();
-                                }
-                            }
-                        );
-                    }
-
-                    baseNode.refresh();
-                }
-            }
-        );
-    }
-
+public interface ColumnProvider {
+    public Column getColumn();
 }

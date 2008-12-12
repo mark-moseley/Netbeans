@@ -48,57 +48,63 @@ import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadList
 import org.netbeans.modules.db.metadata.model.api.Metadata;
 import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
 import org.netbeans.modules.db.metadata.model.api.MetadataModel;
-import org.netbeans.modules.db.metadata.model.api.ForeignKeyColumn;
+import org.netbeans.modules.db.metadata.model.api.IndexColumn;
+import org.netbeans.modules.db.metadata.model.api.Ordering;
 
 /**
  *
  * @author Rob Englander
  */
-public class ForeignKeyColumnNode extends BaseNode {
-    private static final String ICON = "org/netbeans/modules/db/resources/columnForeign.gif";
-    private static final String FOLDER = "ForeignKeyColumn"; //NOI18N
+public class IndexColumnNode extends BaseNode {
+    private static final String ICONDOWN = "org/netbeans/modules/db/resources/indexDown.gif";
+    private static final String ICONUP = "org/netbeans/modules/db/resources/indexUp.gif";
+    private static final String FOLDER = "IndexColumn"; //NOI18N
 
     /**
-     * Create an instance of ForeignKeyColumnNode.
+     * Create an instance of IndexColumnNode.
      *
      * @param dataLookup the lookup to use when creating node providers
-     * @return the ForeignKeyColumnNode instance
+     * @return the IndexColumnNode instance
      */
-    public static ForeignKeyColumnNode create(NodeDataLookup dataLookup, NodeProvider provider) {
-        ForeignKeyColumnNode node = new ForeignKeyColumnNode(dataLookup, provider);
+    public static IndexColumnNode create(NodeDataLookup dataLookup, NodeProvider provider) {
+        IndexColumnNode node = new IndexColumnNode(dataLookup, provider);
         node.setup();
         return node;
     }
 
     private String name = ""; // NOI18N
-    private MetadataElementHandle<ForeignKeyColumn> keyColumnHandle;
+    private String icon = ""; // NOI18N
+    private MetadataElementHandle<IndexColumn> indexColumnHandle;
     private final DatabaseConnection connection;
 
-    private ForeignKeyColumnNode(NodeDataLookup lookup, NodeProvider provider) {
+    private IndexColumnNode(NodeDataLookup lookup, NodeProvider provider) {
         super(lookup, FOLDER, provider);
         connection = getLookup().lookup(DatabaseConnection.class);
     }
 
     protected void initialize() {
-        keyColumnHandle = getLookup().lookup(MetadataElementHandle.class);
+        indexColumnHandle = getLookup().lookup(MetadataElementHandle.class);
 
         boolean connected = !connection.getConnector().isDisconnected();
         MetadataModel metaDataModel = connection.getMetadataModel();
         if (connected && metaDataModel != null) {
-        ForeignKeyColumn column = getForeignKeyColumn();
-        name = column.getReferringColumn().getName()
-                + " -> " + column.getReferredColumn().getParent().getName() + "." // NOI18N
-                + column.getReferredColumn().getName(); // NOI18N
+            IndexColumn column = getIndexColumn();
+            name = column.getName();
+            if (column.getOrdering() == Ordering.DESCENDING) {
+                icon = ICONUP;
+            } else {
+                icon = ICONDOWN;
+            }
         }
     }
 
-    public ForeignKeyColumn getForeignKeyColumn() {
+    public IndexColumn getIndexColumn() {
         MetadataModel metaDataModel = connection.getMetadataModel();
-        DataWrapper<ForeignKeyColumn> wrapper = new DataWrapper<ForeignKeyColumn>();
+        DataWrapper<IndexColumn> wrapper = new DataWrapper<IndexColumn>();
         MetadataReader.readModel(metaDataModel, wrapper,
             new MetadataReadListener() {
                 public void run(Metadata metaData, DataWrapper wrapper) {
-                    ForeignKeyColumn column = keyColumnHandle.resolve(metaData);
+                    IndexColumn column = indexColumnHandle.resolve(metaData);
                     wrapper.setObject(column);
                 }
             }
@@ -108,7 +114,7 @@ public class ForeignKeyColumnNode extends BaseNode {
     }
 
     public int getPosition() {
-        ForeignKeyColumn column = getForeignKeyColumn();
+        IndexColumn column = getIndexColumn();
         return column.getPosition();
     }
 
@@ -124,6 +130,6 @@ public class ForeignKeyColumnNode extends BaseNode {
 
     @Override
     public String getIconBase() {
-        return ICON;
+        return icon;
     }
 }

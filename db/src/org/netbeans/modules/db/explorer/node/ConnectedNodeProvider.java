@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,65 +31,71 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
+ * 
  * Contributor(s):
- *
+ * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.action;
+package org.netbeans.modules.db.explorer.node;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import org.netbeans.api.db.explorer.node.BaseNode;
+import org.netbeans.api.db.explorer.node.NodeProvider;
 import org.netbeans.modules.db.explorer.DatabaseConnection;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.DataWrapper;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader.MetadataReadListener;
-import org.netbeans.modules.db.metadata.model.api.Metadata;
-import org.netbeans.modules.db.metadata.model.api.MetadataModel;
+import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
+import org.netbeans.modules.db.metadata.model.api.Schema;
 import org.openide.nodes.Node;
-import org.openide.util.RequestProcessor;
+import org.openide.util.Lookup;
 
 /**
+ * ConnectedNodeprovider serves as a base class for all node providers
+ * that work with a database connection.
  *
- * @author Rob
+ * @author Rob Englander
  */
-public class RefreshAction extends BaseAction {
-    @Override
-    public String getName() {
-        return bundle().getString("Refresh"); // NOI18N
+public abstract class ConnectedNodeProvider  extends NodeProvider {
+
+    private final DatabaseConnection connection;
+    private boolean setup = false;
+
+    protected ConnectedNodeProvider(Lookup lookup) {
+        super(lookup);
+        connection = getLookup().lookup(DatabaseConnection.class);
     }
 
-    protected boolean enable(Node[] activatedNodes) {
-        boolean enabled = false;
+    /**
+     * Create a BaseNode instance.
+     *
+     * @param lookup the lookup to use to create the node
+     * @return the created baseNode
+     */
+    protected abstract BaseNode createNode(NodeDataLookup lookup);
 
-        if (activatedNodes.length == 1) {
-            enabled = null != activatedNodes[0].getLookup().lookup(BaseNode.class);
-        }
+    protected synchronized void initialize() {
+        if (connection.getConnector().isDisconnected()) {
+            removeAllNodes();
+            setup = false;
+        } else {
+            if (!setup) {
+                NodeDataLookup lookup = new NodeDataLookup();
+                lookup.add(connection);
 
-        return enabled;
-    }
-
-    @Override
-    public void performAction(Node[] activatedNodes) {
-        final BaseNode baseNode = activatedNodes[0].getLookup().lookup(BaseNode.class);
-        RequestProcessor.getDefault().post(
-            new Runnable() {
-                public void run() {
-                    MetadataModel model = baseNode.getLookup().lookup(DatabaseConnection.class).getMetadataModel();
-                    if (model != null) {
-                        MetadataReader.readModel(model, null,
-                            new MetadataReadListener() {
-                                public void run(Metadata metaData, DataWrapper wrapper) {
-                                    metaData.refresh();
-                                }
-                            }
-                        );
-                    }
-
-                    baseNode.refresh();
+                MetadataElementHandle<Schema> schemaHandle = getLookup().lookup(MetadataElementHandle.class);
+                if (schemaHandle != null) {
+                    lookup.add(schemaHandle);
                 }
-            }
-        );
-    }
 
+                List<Node> newList = new ArrayList<Node>();
+
+                newList.add(createNode(lookup));
+
+                setNodes(newList);
+                setup = true;
+            }
+        }
+    }
 }
