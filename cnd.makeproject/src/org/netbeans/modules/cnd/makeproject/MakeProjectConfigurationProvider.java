@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject;
 
 import java.beans.PropertyChangeEvent;
@@ -46,78 +45,90 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.cnd.makeproject.api.MakeCustomizerProvider;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
 import org.netbeans.spi.project.ProjectConfiguration;
 import org.netbeans.spi.project.ProjectConfigurationProvider;
 
 public class MakeProjectConfigurationProvider implements ProjectConfigurationProvider, PropertyChangeListener {
+
     private final Project project;
     private ConfigurationDescriptorProvider projectDescriptorProvider;
     private PropertyChangeSupport pcs = new PropertyChangeSupport(this);
+    public static final boolean ASYNC_LOAD = Boolean.getBoolean("cnd.async.root");// NOI18N
 
     public MakeProjectConfigurationProvider(Project project, ConfigurationDescriptorProvider projectDescriptorProvider) {
         this.project = project;
         this.projectDescriptorProvider = projectDescriptorProvider;
     }
 
-    public Collection getConfigurations() {
-        return projectDescriptorProvider.getConfigurationDescriptor().getConfs().getConfsAsCollection();
+    public Collection<Configuration> getConfigurations() {
+        if (projectDescriptorProvider.getConfigurationDescriptor(!ASYNC_LOAD) == null) {
+            return Collections.<Configuration>emptySet();
+        }
+        return projectDescriptorProvider.getConfigurationDescriptor(!ASYNC_LOAD).getConfs().getConfsAsCollection();
     }
 
     public ProjectConfiguration getActiveConfiguration() {
-        return projectDescriptorProvider.getConfigurationDescriptor().getConfs().getActive();
+        if (projectDescriptorProvider.getConfigurationDescriptor(!ASYNC_LOAD) == null) {
+            return null;
+        }
+        return projectDescriptorProvider.getConfigurationDescriptor(!ASYNC_LOAD).getConfs().getActive();
     }
 
     public void setActiveConfiguration(ProjectConfiguration configuration) throws IllegalArgumentException, IOException {
-        if (configuration instanceof Configuration)
-            projectDescriptorProvider.getConfigurationDescriptor().getConfs().setActive((Configuration)configuration);
+        if (configuration instanceof Configuration) {
+            projectDescriptorProvider.getConfigurationDescriptor().getConfs().setActive((Configuration) configuration);
+        }
     }
 
     public void addPropertyChangeListener(PropertyChangeListener lst) {
         pcs.addPropertyChangeListener(lst);
-        if (projectDescriptorProvider != null && projectDescriptorProvider.getConfigurationDescriptor() != null) { // IZ 122372
-            projectDescriptorProvider.getConfigurationDescriptor().getConfs().addPropertyChangeListener(this);
+        if (projectDescriptorProvider != null && projectDescriptorProvider.getConfigurationDescriptor(!ASYNC_LOAD) != null) { // IZ 122372
+            projectDescriptorProvider.getConfigurationDescriptor(!ASYNC_LOAD).getConfs().addPropertyChangeListener(this);
         }
     }
 
     public void removePropertyChangeListener(PropertyChangeListener lst) {
         pcs.removePropertyChangeListener(lst);
-        if (projectDescriptorProvider != null && projectDescriptorProvider.getConfigurationDescriptor() != null) {
-            projectDescriptorProvider.getConfigurationDescriptor().getConfs().removePropertyChangeListener(this);
+        if (projectDescriptorProvider != null && projectDescriptorProvider.getConfigurationDescriptor(!ASYNC_LOAD) != null) {
+            projectDescriptorProvider.getConfigurationDescriptor(!ASYNC_LOAD).getConfs().removePropertyChangeListener(this);
         }
     }
 
     public boolean hasCustomizer() {
-        return false;
+        return true;
     }
 
     public void customize() {
-        throw new UnsupportedOperationException("Not supported yet."); // NOI18N
+        MakeCustomizerProvider makeCustomizer = project.getLookup().lookup(MakeCustomizerProvider.class);
+        makeCustomizer.showCustomizer("Build"); // NOI18N
     }
 
     public boolean configurationsAffectAction(String command) {
         return false;
-        /*
-        return command.equals(ActionProvider.COMMAND_RUN) ||
-        command.equals(ActionProvider.COMMAND_BUILD) ||
-        command.equals(ActionProvider.COMMAND_CLEAN) ||
-        command.equals(ActionProvider.COMMAND_DEBUG);
-        */
+    /*
+    return command.equals(ActionProvider.COMMAND_RUN) ||
+    command.equals(ActionProvider.COMMAND_BUILD) ||
+    command.equals(ActionProvider.COMMAND_CLEAN) ||
+    command.equals(ActionProvider.COMMAND_DEBUG);
+     */
     }
-    
+
     public void propertyChange(PropertyChangeEvent evt) {
         assert pcs != null;
-        
+
         pcs.firePropertyChange(ProjectConfigurationProvider.PROP_CONFIGURATION_ACTIVE, null, null);
         pcs.firePropertyChange(ProjectConfigurationProvider.PROP_CONFIGURATIONS, null, null);
-        /*
-        if (evt.getNewValue() != evt.getOldValue()) {
-            ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider) p.getLookup().lookup(ConfigurationDescriptorProvider.class );
-            if (pdp != null)
-                pdp.getConfigurationDescriptor().setModified();
-        }
-        */
+    /*
+    if (evt.getNewValue() != evt.getOldValue()) {
+    ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider) p.getLookup().lookup(ConfigurationDescriptorProvider.class );
+    if (pdp != null)
+    pdp.getConfigurationDescriptor().setModified();
+    }
+     */
     }
 }
