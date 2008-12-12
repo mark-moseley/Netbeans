@@ -37,72 +37,39 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.action;
+package org.netbeans.modules.db.explorer.node;
 
-import java.sql.Connection;
-import java.sql.SQLException;
 import org.netbeans.api.db.explorer.node.BaseNode;
-import org.netbeans.modules.db.explorer.DatabaseConnection;
-import org.netbeans.modules.db.explorer.dlg.CreateTableDialog;
-import org.netbeans.modules.db.explorer.metadata.MetadataReader;
-import org.netbeans.modules.db.metadata.model.api.Schema;
-import org.openide.nodes.Node;
-import org.openide.util.RequestProcessor;
-import org.openide.util.actions.SystemAction;
+import org.netbeans.api.db.explorer.node.NodeProviderFactory;
+import org.openide.util.Lookup;
 
 /**
  *
  * @author Rob Englander
  */
-public class CreateTableAction extends BaseAction {
+public class ForeignKeyListNodeProvider extends ConnectedNodeProvider {
 
-    protected boolean enable(Node[] activatedNodes) {
-        if (activatedNodes == null || activatedNodes.length != 1) {
-            return false;
-        }
-
-        boolean enabled = false;
-        DatabaseConnection dbconn = activatedNodes[0].getLookup().lookup(DatabaseConnection.class);
-
-        if (dbconn != null) {
-            Connection conn = dbconn.getConnection();
-            try {
-                if (conn != null) {
-                    enabled = !conn.isClosed();
-                }
-            } catch (SQLException e) {
-
-            }
-        }
-
-        return enabled;
+    // lazy initialization holder class idiom for static fields is used
+    // for retrieving the factory
+    public static NodeProviderFactory getFactory() {
+        return FactoryHolder.FACTORY;
     }
 
-    public void performAction (Node[] activatedNodes) {
-        final BaseNode node = activatedNodes[0].getLookup().lookup(BaseNode.class);
-        RequestProcessor.getDefault().post(
-            new Runnable() {
-                public void run() {
-                    perform(node);
-                }
+    private static class FactoryHolder {
+        static final NodeProviderFactory FACTORY = new NodeProviderFactory() {
+            public ForeignKeyListNodeProvider createInstance(Lookup lookup) {
+                ForeignKeyListNodeProvider provider = new ForeignKeyListNodeProvider(lookup);
+                return provider;
             }
-        );
+        };
     }
 
-    private void perform(final BaseNode node) {
-        DatabaseConnection connection = node.getLookup().lookup(DatabaseConnection.class);
-
-        Schema schema = MetadataReader.findSchema(node.getLookup());
-        String name = MetadataReader.getSchemaWorkingName(schema);
-
-        final CreateTableDialog dlg = new CreateTableDialog(connection.getConnector().getDatabaseSpecification(), name);
-        if (dlg.run()) {
-            SystemAction.get(RefreshAction.class).performAction(new Node[] { node });
-        }
+    private ForeignKeyListNodeProvider(Lookup lookup) {
+        super(lookup);
     }
 
     @Override
-    public String getName() {
-        return bundle().getString("CreateTable"); // NOI18N
+    protected BaseNode createNode(NodeDataLookup lookup) {
+        return ForeignKeyListNode.create(lookup, this);
     }
 }
