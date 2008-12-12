@@ -6,6 +6,7 @@
 package org.netbeans.modules.uml.diagrams.options;
 
 import java.lang.reflect.InvocationTargetException;
+import org.netbeans.modules.uml.core.metamodel.core.foundation.IElement;
 import org.netbeans.modules.uml.drawingarea.view.ResourceValue;
 import java.awt.Color;
 import java.awt.Component;
@@ -20,6 +21,7 @@ import java.beans.PropertyEditorManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,11 +36,11 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.netbeans.api.visual.border.BorderFactory;
 import org.netbeans.api.visual.graph.layout.GraphLayout;
-import org.netbeans.api.visual.graph.layout.GraphLayoutFactory;
 import org.netbeans.api.visual.model.ObjectScene;
 import org.netbeans.api.visual.widget.Scene;
 import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
+import org.netbeans.modules.uml.drawingarea.layout.HierarchicalLayout;
 import org.netbeans.modules.uml.drawingarea.view.Customizable;
 import org.netbeans.modules.uml.drawingarea.view.ResourceType;
 import org.netbeans.modules.uml.resources.images.ImageUtil;
@@ -132,8 +134,16 @@ public class ElementCustomizationPanel extends JPanel implements ItemListener
         for (IPresentationElement e : elements)
         {
             Widget w = scene.addNode(e);
-            widgets[i++] = w;
+//            if(w != null)
+//            {
+                widgets[i++] = w;
+//            }
+//            else
+//            {
+//                scene.removeNode(e);
+//            }
         }       
+        Arrays.sort(widgets, new WidgetComparator());
         DefaultComboBoxModel model = new DefaultComboBoxModel(widgets);
         typeComboBox.setModel(model);
 
@@ -164,7 +174,7 @@ public class ElementCustomizationPanel extends JPanel implements ItemListener
             {
                 public void run()
                 {
-                    GraphLayout gLayout = GraphLayoutFactory.createHierarchicalGraphLayout(scene, true);
+                    GraphLayout gLayout = new HierarchicalLayout();
                     gLayout.layoutGraph(scene);
                 }
             });
@@ -272,11 +282,11 @@ public class ElementCustomizationPanel extends JPanel implements ItemListener
                             .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
                                 .add(typeLbl)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                                .add(typeComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 172, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 144, Short.MAX_VALUE)
+                                .add(typeComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 216, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 106, Short.MAX_VALUE)
                         .add(restoreBtn))
                     .add(layout.createSequentialGroup()
-                        .add(previewPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 153, Short.MAX_VALUE)
+                        .add(previewPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 171, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING, false)
                             .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 233, Short.MAX_VALUE)
@@ -314,7 +324,7 @@ public class ElementCustomizationPanel extends JPanel implements ItemListener
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                        .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 176, Short.MAX_VALUE)
+                        .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 195, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                             .add(fontLbl)
@@ -328,7 +338,7 @@ public class ElementCustomizationPanel extends JPanel implements ItemListener
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                             .add(bgcolorLbl)
                             .add(bgComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, previewPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 276, Short.MAX_VALUE))
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, previewPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 295, Short.MAX_VALUE))
                 .addContainerGap())
         );
     }// </editor-fold>//GEN-END:initComponents
@@ -351,7 +361,7 @@ public class ElementCustomizationPanel extends JPanel implements ItemListener
                     widget.setVisible(true);
                 }
             } 
-            GraphLayout gLayout = GraphLayoutFactory.createHierarchicalGraphLayout(scene, true);
+            GraphLayout gLayout = new HierarchicalLayout();
             gLayout.layoutGraph(scene);
         } else
         {
@@ -646,14 +656,17 @@ private void restoreBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FI
 
         Point location = w.convertLocalToScene(new Point());
         Rectangle rec = w.getClientArea();
-        blinkWidget.setPreferredLocation(location);
-        Insets insets = w.getBorder().getInsets();
-        blinkWidget.setPreferredBounds(new Rectangle((rec.x - insets.left),
-                rec.y - insets.top, rec.width + insets.left + insets.right,
-                rec.height + insets.bottom + insets.top));
-        
-        blinkSequence = 5;
-        task.schedule(0);
+        if(rec != null)
+        {
+            blinkWidget.setPreferredLocation(location);
+            Insets insets = w.getBorder().getInsets();
+            blinkWidget.setPreferredBounds(new Rectangle((rec.x - insets.left),
+                    rec.y - insets.top, rec.width + insets.left + insets.right,
+                    rec.height + insets.bottom + insets.top));
+
+            blinkSequence = 5;
+            task.schedule(0);
+        }
     }
 
     private String fontToString(Font f)
@@ -725,9 +738,11 @@ private void restoreBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FI
             } else
             {
                 IPresentationElement element = ((IPresentationElement) ((ObjectScene) w.getScene()).findObject(w));
-                String name = element.getFirstSubject().getExpandedElementType();
-                setText(name);
-                String imageName = CommonResourceManager.instance().getIconDetailsForElementType(name);
+                String elementName = element.getFirstSubject().getExpandedElementType();
+                String displayName = element.getFirstSubject().getDisplayElementType();
+                
+                setText(displayName);
+                String imageName = CommonResourceManager.instance().getIconDetailsForElementType(elementName);
                 imageName = imageName.substring(imageName.lastIndexOf("/") + 1);
                 setIcon(ImageUtil.instance().getIcon(imageName));
             }
@@ -736,6 +751,69 @@ private void restoreBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FI
             setFont(list.getFont());
             setBorder(cellHasFocus ? UIManager.getBorder("List.focusCellHighlightBorder") : noFocusBorder);
             return this;
+        }
+    }
+
+    private static class WidgetComparator implements Comparator<Widget>
+    {
+
+        public WidgetComparator()
+        {
+        }
+
+        public int compare(Widget widget1, Widget widget2)
+        {
+            int retVal = 0;
+            // Put all NULLs to the back of the list.  We should never have
+            // a null widget, but just in case.
+            if ((widget1 == null) || (widget2 != null))
+            {
+                return retVal = -1;
+            }
+            else if ((widget1 != null) || (widget2 == null))
+            {
+                return retVal = 1;
+            }
+
+            // Always make the scene the first item in the list.
+            if (widget1 instanceof Scene)
+            {
+                retVal = 1;
+            }
+            else if (widget2 instanceof Scene)
+            {
+                retVal = -1;
+            }
+            else
+            {
+                Object data1 = ((ObjectScene) widget1.getScene()).findObject(widget1);
+                String widget1Name = "";
+                if (data1 instanceof IPresentationElement)
+                {
+                    IPresentationElement presentation = (IPresentationElement) data1;
+                    IElement subject = presentation.getFirstSubject();
+                    if (subject != null)
+                    {
+                        widget1Name = subject.getDisplayElementType();
+                    }
+                }
+
+                Object data2 = ((ObjectScene) widget2.getScene()).findObject(widget2);
+                String widget2Name = "";
+                if (data2 instanceof IPresentationElement)
+                {
+                    IPresentationElement presentation = (IPresentationElement) data2;
+                    IElement subject = presentation.getFirstSubject();
+                    if (subject != null)
+                    {
+                        widget2Name = subject.getDisplayElementType();
+                    }
+                }
+                retVal = widget2Name.compareTo(widget1Name);
+            }
+
+
+            return retVal;
         }
     }
 }
