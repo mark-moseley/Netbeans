@@ -42,9 +42,11 @@ import java.io.File;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -60,7 +62,6 @@ import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.SourceGroup;
-import org.netbeans.modules.hibernate.util.CustomClassLoader;
 import org.netbeans.modules.hibernate.hqleditor.ui.HQLEditorTopComponent;
 import org.netbeans.modules.hibernate.service.api.HibernateEnvironment;
 import org.netbeans.modules.hibernate.util.HibernateUtil;
@@ -102,8 +103,8 @@ public class HQLEditorController {
             for (FileObject mappingFO : env.getAllHibernateMappingFileObjects()) {
                 localResourcesURLList.add(mappingFO.getURL());
             }
-            final CustomClassLoader customClassLoader = new CustomClassLoader(localResourcesURLList.toArray(new URL[]{}),
-                    this.getClass().getClassLoader());
+            final ClassLoader customClassLoader = env.getProjectClassLoader(
+                    localResourcesURLList.toArray(new URL[]{}));
 
             Thread t = new Thread() {
 
@@ -147,9 +148,9 @@ public class HQLEditorController {
     }
 
     public SessionFactory getHibernateSessionFactoryForThisContext(FileObject configFileObject,
-            List<FileObject> mappingFOList,
+            Set<FileObject> mappingFOList,
             List<Class> annotatedClassList,
-            CustomClassLoader customClassLoader) throws Exception {
+            ClassLoader customClassLoader) throws Exception {
 
         AnnotationConfiguration customConfiguration = null;
         try {
@@ -174,30 +175,28 @@ public class HQLEditorController {
                 logger.fine("Removing mapping element ..  " + node);
                 node.getParent().remove(node);
             }
-            
+
             // Fix for 142899.  The actual exception generated while creating SessionFactory is not 
             // catchable so this pre-check ensures that there's no exception window comes up during 
             // query execution. 
             String sessionName = sessionFactoryElement.attributeValue("name");
-            if(sessionName != null && (!sessionName.trim().equals(""))) {
+            if (sessionName != null && (!sessionName.trim().equals(""))) {
                 java.util.Properties prop = new java.util.Properties();
                 Iterator propertyIterator = sessionFactoryElement.elementIterator("property");
-                while(propertyIterator.hasNext()) {
-                    org.dom4j.Element propNode = (org.dom4j.Element)propertyIterator.next();
-                    if(org.hibernate.cfg.Environment.JNDI_CLASS.equals(propNode.attributeValue("name"))) {
+                while (propertyIterator.hasNext()) {
+                    org.dom4j.Element propNode = (org.dom4j.Element) propertyIterator.next();
+                    if (org.hibernate.cfg.Environment.JNDI_CLASS.equals(propNode.attributeValue("name"))) {
                         prop.setProperty(
                                 javax.naming.Context.INITIAL_CONTEXT_FACTORY,
-                                propNode.getTextTrim()
-                                );
+                                propNode.getTextTrim());
                     }
-                    if(org.hibernate.cfg.Environment.JNDI_URL.equals(propNode.attributeValue("name"))) {
+                    if (org.hibernate.cfg.Environment.JNDI_URL.equals(propNode.attributeValue("name"))) {
                         prop.setProperty(
                                 javax.naming.Context.PROVIDER_URL,
-                                propNode.getTextTrim()
-                                );
+                                propNode.getTextTrim());
                     }
                 }
-                
+
                 try {
                     javax.naming.InitialContext context = new javax.naming.InitialContext(prop);
                     context.bind("dummy", new Object());
@@ -206,9 +205,9 @@ public class HQLEditorController {
                     logger.log(Level.INFO, "Incorrect JNDI properties", namingException);
                     throw namingException;
                 }
-                
+
             }
-            
+
             // End fix for 142899.
 
             //   add mappings
@@ -245,7 +244,7 @@ public class HQLEditorController {
     }
 
     public SessionFactory processAndConstructSessionFactory(String hql, FileObject configFileObject,
-            CustomClassLoader customClassLoader, Project project) throws Exception {
+            ClassLoader customClassLoader, Project project) throws Exception {
         HibernateEnvironment env = project.getLookup().lookup(HibernateEnvironment.class);
 
         StringTokenizer hqlTokenizer = new StringTokenizer(hql, " \n\r\f\t(),"); //NOI18N
@@ -255,7 +254,8 @@ public class HQLEditorController {
         }
 
         // Process Mappings
-        List<FileObject> matchedMappingFOList = new ArrayList<FileObject>();
+        Set<FileObject> matchedMappingFOList = new HashSet<FileObject>();
+        List<FileObject> mappingFOList = new ArrayList<FileObject>();
         Map<FileObject, List<String>> mappingPOJOMap = env.getAllPOJONamesFromConfiguration(configFileObject);
 
         for (FileObject mappingFO : mappingPOJOMap.keySet()) {
@@ -273,7 +273,9 @@ public class HQLEditorController {
                         logger.info("Got clazz " + clazz);
                         if (clazz != null) {
                             matchedMappingFOList.add(mappingFO);
-                            for (FileObject relatedMappingFO : getRelatedMappings(mappingFO, mappingPOJOMap)) {
+                            mappingFOList.add(mappingFO);
+                            getRelatedMappings(mappingFO, matchedMappingFOList, mappingPOJOMap);
+                            for (FileObject relatedMappingFO : matchedMappingFOList) {
                                 List<String> relatedPojoNames = mappingPOJOMap.get(relatedMappingFO);
                                 if (relatedPojoNames != null) {
                                     logger.info("Processing relationships from " + relatedMappingFO + " mapping file.");
@@ -282,7 +284,7 @@ public class HQLEditorController {
                                         Class relatedClazz = processMatchingClass(relatedClassName, customClassLoader, project);
                                         logger.info("Got related POJO clazz " + relatedClazz);
                                         if (relatedClazz != null) {
-                                            matchedMappingFOList.add(relatedMappingFO);
+                                            mappingFOList.add(relatedMappingFO);
                                         }
                                     }
                                 }
@@ -323,14 +325,14 @@ public class HQLEditorController {
     }
 
     private List<Class> getRelatedPOJOClasses(Class clazz, List<String> annotatedPOJOClassNameList,
-            CustomClassLoader ccl, Project project) {
+            ClassLoader ccl, Project project) {
         List<Class> relatedPOJOClasses = new ArrayList<Class>();
         getRelatedPOJOClassesByType(clazz, annotatedPOJOClassNameList, relatedPOJOClasses, ccl, project);
         return relatedPOJOClasses;
     }
 
     private void getRelatedPOJOClassesByType(Class clazz, List<String> annotatedPOJOClassNameList, List<Class> relatedPOJOClasses,
-            CustomClassLoader ccl, Project project) {
+            ClassLoader ccl, Project project) {
 
         AnnotationAccessType annotationAccessType = findAnnotationAccessType(clazz);
         if (annotationAccessType == AnnotationAccessType.METHOD_TYPE) {
@@ -356,7 +358,7 @@ public class HQLEditorController {
     }
 
     private void getRelatedPOJOClassesByMethodType(Class clazz, List<String> annotatedPOJOClassNameList, List<Class> relatedPOJOClasses,
-            CustomClassLoader ccl, Project project) {
+            ClassLoader ccl, Project project) {
 
         for (java.lang.reflect.Method m : clazz.getMethods()) {
             if (m.isAnnotationPresent(javax.persistence.ManyToOne.class) || m.isAnnotationPresent(javax.persistence.OneToOne.class) ||
@@ -453,7 +455,7 @@ public class HQLEditorController {
     }
 
     private void getRelatedPOJOClassesByFieldType(Class clazz, List<String> annotatedPOJOClassNameList,
-            List<Class> relatedPOJOClasses, CustomClassLoader ccl, Project project) {
+            List<Class> relatedPOJOClasses, ClassLoader ccl, Project project) {
         // Process declared variables.
         for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
             if (field.isAnnotationPresent(javax.persistence.ManyToOne.class) || field.isAnnotationPresent(javax.persistence.OneToOne.class) ||
@@ -551,18 +553,29 @@ public class HQLEditorController {
         }
     }
 
-    private List<FileObject> getRelatedMappings(FileObject mappingFO, Map<FileObject, List<String>> mappingPOJOMap) {
-        List<FileObject> relatedMappings = new ArrayList<FileObject>();
+    private Set<FileObject> getRelatedMappings(FileObject mappingFO, Set<FileObject> relatedMappings, Map<FileObject, List<String>> mappingPOJOMap) {
         try {
             org.dom4j.io.SAXReader xmlReader = new org.dom4j.io.SAXReader();
             org.dom4j.Document document = xmlReader.read(FileUtil.toFile(mappingFO));
             Iterator classElementIterator = document.getRootElement().elementIterator("class");
             while (classElementIterator.hasNext()) {
                 org.dom4j.Element classElement = (org.dom4j.Element) classElementIterator.next();
-                relatedMappings.addAll(
-                        processMappingRelationships(classElement.elementIterator("many-to-one"), mappingPOJOMap));
-                relatedMappings.addAll(
-                        processMappingRelationships(classElement.elementIterator("one-to-one"), mappingPOJOMap));
+                logger.info("Processing many-to-one");
+                processMappingRelationships(classElement.elementIterator("many-to-one"), relatedMappings, mappingPOJOMap);
+                logger.info("Processing one-to-one");
+                processMappingRelationships(classElement.elementIterator("one-to-one"), relatedMappings, mappingPOJOMap);
+                logger.info("Processing set");
+                processMappingRelationships(classElement.elementIterator("set"), relatedMappings, mappingPOJOMap);
+                logger.info("Processing idbag");
+                processMappingRelationships(classElement.elementIterator("idbag"), relatedMappings, mappingPOJOMap);
+                logger.info("Processing map");
+                processMappingRelationships(classElement.elementIterator("map"), relatedMappings, mappingPOJOMap);
+                logger.info("Processing bag");
+                processMappingRelationships(classElement.elementIterator("bag"), relatedMappings, mappingPOJOMap);
+                logger.info("Processing list");
+                processMappingRelationships(classElement.elementIterator("list"), relatedMappings, mappingPOJOMap);
+                logger.info("Processing array");
+                processMappingRelationships(classElement.elementIterator("array"), relatedMappings, mappingPOJOMap);
 
             }
         } catch (Exception e) {
@@ -572,13 +585,30 @@ public class HQLEditorController {
         return relatedMappings;
     }
 
-    private List<FileObject> processMappingRelationships(Iterator relationshipIterator, Map<FileObject, List<String>> mappingPOJOMap) {
-        List<FileObject> relatedMappings = new ArrayList<FileObject>();
+    private Set<FileObject> processMappingRelationships(Iterator relationshipIterator, Set<FileObject> relatedMappings, Map<FileObject, List<String>> mappingPOJOMap) {
         while (relationshipIterator.hasNext()) {
             org.dom4j.Element relationshipElement = (org.dom4j.Element) relationshipIterator.next();
-            FileObject relatedMappingFO = findRelatedMappingFO(relationshipElement.attributeValue("class"), mappingPOJOMap);
-            if (relatedMappingFO != null) {
+            String pojoName = relationshipElement.attributeValue("class");
+            if (pojoName == null) {
+                // Check for Collection based relationship types.
+                org.dom4j.Element connectionTypeElement = relationshipElement.element("one-to-many");
+                if (connectionTypeElement == null) {
+                    connectionTypeElement = relationshipElement.element("composite-element");
+                }
+                if (connectionTypeElement == null) {
+                    connectionTypeElement = relationshipElement.element("one-to-many");
+                }
+                if (connectionTypeElement == null) {
+                    connectionTypeElement = relationshipElement.element("many-to-many");
+                }
+                if (connectionTypeElement != null) {
+                    pojoName = connectionTypeElement.attributeValue("class");
+                }
+            }
+            FileObject relatedMappingFO = findRelatedMappingFO(pojoName, mappingPOJOMap);
+            if (relatedMappingFO != null && (!relatedMappings.contains(relatedMappingFO))) {
                 relatedMappings.add(relatedMappingFO);
+                getRelatedMappings(relatedMappingFO, relatedMappings, mappingPOJOMap);
             }
         }
         logger.info("Related mapping files : " + relatedMappings);
@@ -589,6 +619,7 @@ public class HQLEditorController {
         for (FileObject mappingFile : mappingPOJOMap.keySet()) {
             List<String> pojoNameList = mappingPOJOMap.get(mappingFile);
             if (pojoNameList.contains(pojoName)) {
+                logger.info("Related POJO : " + pojoName);
                 return mappingFile;
             }
         }
@@ -616,13 +647,16 @@ public class HQLEditorController {
         return foundMatch;
     }
 
-    private Class processMatchingClass(String className, CustomClassLoader customClassLoader, Project project) {
+    private Class processMatchingClass(String className, ClassLoader customClassLoader, Project project) {
         FileObject clazzFO = HibernateUtil.findJavaFileObjectInProject(className, project);
         FileObject buildFolderFO = HibernateUtil.getBuildFO(project);
+        if (buildFolderFO == null) {
+            return null; // Unable to find the build folder.
+        }
         return checkAndCompile(className, clazzFO, buildFolderFO, customClassLoader, project);
     }
 
-    private Class checkAndCompile(String className, FileObject sourceFO, FileObject buildFolderFO, CustomClassLoader customClassLoader, Project project) {
+    private Class checkAndCompile(String className, FileObject sourceFO, FileObject buildFolderFO, ClassLoader customClassLoader, Project project) {
         Class clazz = null;
 
         try {
@@ -671,6 +705,13 @@ public class HQLEditorController {
                 //TODO diagnostic listener - plugin log
                 Boolean b = javaCompiler.getTask(null, fileManager, null, options, null, compilationUnits).call();
                 logger.info("b = " + b);
+                if (b == false) { // Compilation errors.
+                    FileObject classfileFO = buildFolderFO.getFileObject(className + ".class");
+                    if (classfileFO != null && classfileFO.isValid()) {
+                        classfileFO.delete();
+                    }
+                    return clazz;
+                }
                 try {
                     className = className.replace(File.separator, ".");
                     clazz = customClassLoader.loadClass(className);
