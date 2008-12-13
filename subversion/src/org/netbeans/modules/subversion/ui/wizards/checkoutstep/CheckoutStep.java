@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -77,6 +77,7 @@ public class CheckoutStep extends AbstractStep implements ActionListener, Docume
     private CheckoutPanel workdirPanel;
     private RepositoryPaths repositoryPaths;
 
+    @Override
     public HelpCtx getHelp() {    
         return new HelpCtx(CheckoutStep.class);
     }    
@@ -132,7 +133,7 @@ public class CheckoutStep extends AbstractStep implements ActionListener, Docume
             if (file.exists() == false) {
                 boolean done = file.mkdirs();
                 if (done == false) {
-                    invalid(org.openide.util.NbBundle.getMessage(CheckoutWizard.class, "BK2013") + file.getPath());// NOI18N
+                    invalid(new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(CheckoutWizard.class, "BK2013") + file.getPath(), false));// NOI18N
                 }
             }
         }
@@ -143,21 +144,21 @@ public class CheckoutStep extends AbstractStep implements ActionListener, Docume
             try {           
                 repositoryPaths.getRepositoryFiles();
             } catch (NumberFormatException ex) {
-                invalid(org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2018"));// NOI18N
+                invalid(new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2018"), false));// NOI18N
                 return false;
             } catch (MalformedURLException ex) {
-                invalid(org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2015"));// NOI18N
+                invalid(new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2015"), true));// NOI18N
                 return false;
             }
         }
         
         String text = workdirPanel.workdirTextField.getText();
         if (text == null || text.length() == 0) {
-            invalid(org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2014"));// NOI18N
+            invalid(new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2014"), true));// NOI18N
             return false;
         }                
         
-        String errorMessage = null;
+        AbstractStep.WizardMessage errorMessage = null;
         if (full) {
             File file = new File(text);
             if (file.exists() == false) {
@@ -166,7 +167,7 @@ public class CheckoutStep extends AbstractStep implements ActionListener, Docume
                 while (parent != null) {
                     if (parent.exists()) {
                         if (parent.canWrite() == false) {
-                            errorMessage = org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2016") + parent.getPath();// NOI18N
+                            errorMessage = new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2016") + parent.getPath(), false);// NOI18N
                         }
                         break;
                     }
@@ -174,7 +175,7 @@ public class CheckoutStep extends AbstractStep implements ActionListener, Docume
                 }
             } else {
                 if (file.isFile()) {
-                    errorMessage = org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2017");// NOI18N
+                    errorMessage = new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(CheckoutStep.class, "BK2017"), false);// NOI18N
                 }
             }
         }
