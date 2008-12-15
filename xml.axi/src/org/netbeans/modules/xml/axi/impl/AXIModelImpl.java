@@ -195,10 +195,12 @@ public class AXIModelImpl extends AXIModel {
         propertyListener.clearEvents();
     }
     
-    /**
-     * Overwrite sync.
-     */
+    @Override
     public void sync() {
+        //fix for issue 155428.
+        //lock schemaModel (below) when there is a need.
+        if(!needsSync())
+            return;
         try {
             synchronized(getSchemaModel()) {
                 super.sync();
@@ -226,7 +228,7 @@ public class AXIModelImpl extends AXIModel {
 	
     public void setSchemaDesignPattern(SchemaGenerator.Pattern schemaDesignPattern) {
         this.schemaDesignPattern = schemaDesignPattern;
-    }	
+    }
 	
     /**
      * Returns the PCL who listens to this model changes.
@@ -353,6 +355,12 @@ public class AXIModelImpl extends AXIModel {
     public void setForceSync(boolean b) {
         isForceSync = b;
     }
+    
+    public AXIComponent findChild(SchemaComponent child) {
+        AXIDocumentImpl doc = (AXIDocumentImpl)getRoot();
+        return doc.findChild(child);
+    }
+    
 
     /**
      * PCL to be used by code generator.
