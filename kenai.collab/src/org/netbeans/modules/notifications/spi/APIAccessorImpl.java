@@ -39,77 +39,16 @@
 
 package org.netbeans.modules.notifications.spi;
 
-import javax.swing.Icon;
+import java.util.SortedSet;
+import org.netbeans.modules.kenai.collab.notifications.APIAccessor;
 
 /**
- * Base class for implementing notifications
- * TODO: should be moved to org.openide.awt?
+ *
  * @author Jan Becicka
  */
-public abstract class Notification implements Comparable<Notification> {
+class APIAccessorImpl extends APIAccessor {
 
-    /**
-     * Getter for LinkTitle
-     * @return
-     */
-    public abstract String getLinkTitle();
-
-    /**
-     * getter for title. HTML tags are supported
-     * @return
-     */
-    public abstract String getTitle();
-
-    /**
-     * getter for description. HTML tags are supported
-     * @return
-     */
-    public abstract String getDescription();
-
-    /**
-     * What to do, when clicked on link
-     */
-    public abstract void showDetails();
-
-    /**
-     * Priority of this Notification
-     * @return
-     */
-    public abstract Priority getPriority();
-
-    /**
-     * Icon
-     * @return
-     */
-    public abstract Icon getIcon();
-
-    /**
-     * Priority of Notification
-     */
-    public static enum Priority {
-        HIGH,
-        NORMAL,
-        LOW,
-    }
-
-    @Override
-    public final int compareTo(Notification o) {
-        return getPriority().compareTo(o.getPriority());
-    }
-
-    /**
-     * Add this to notifications pool
-     * @return <tt>true</tt> if the pool already contained the specified element.
-     */
-    public final boolean remove() {
-        return Notifications.getDefault().remove(this);
-    }
-
-    /**
-     * Add this to notifications pool
-     * @return <tt>true</tt> if this set did not already contain the specified
-     */
-    public final boolean add() {
-        return Notifications.getDefault().add(this);
+    public SortedSet<Notification> getNotifications() {
+        return Notifications.getDefault().notifications;
     }
 }

@@ -37,61 +37,18 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.notifications.api;
+package org.netbeans.modules.kenai.collab.notifications;
 
-import java.util.Collections;
 import java.util.SortedSet;
-import java.util.TreeSet;
 import org.netbeans.modules.notifications.spi.Notification;
 
 /**
  *
- * @author Jan Becicka
+ * @author beci
  */
-public class Notifications {
+public abstract class APIAccessor {
 
-    private static Notifications instance;
-
-    //TODO: should not be public
-    public final SortedSet<Notification> notifications;
-    private Notifications() {
-        notifications = Collections.synchronizedSortedSet(new TreeSet<Notification>());
-    }
-
-    /**
-     * singleton instance
-     * @return
-     */
-    public static synchronized Notifications getDefault() {
-        if (instance==null)
-            instance = new Notifications();
-        return instance;
-    }
-
-    /**
-     * adds notification to pool
-     * @param notification
-     * @return
-     */
-    public boolean add(Notification notification) {
-        return notifications.add(notification);
-    }
-
-    /**
-     * removes notification from pool
-     * @param notification
-     * @return
-     */
-    public boolean remove(Notification notification) {
-        return notifications.remove(notification);
-    }
-
-    /**
-     * Return Notification with highest priority
-     * @return
-     */
-    public Notification top() {
-        return notifications.first();
-    }
+    public static APIAccessor DEFAULT;
+    public abstract SortedSet<Notification> getNotifications() ;
 
 }

@@ -39,77 +39,71 @@
 
 package org.netbeans.modules.notifications.spi;
 
-import javax.swing.Icon;
+import java.util.Collections;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import org.netbeans.modules.kenai.collab.notifications.APIAccessor;
+import org.netbeans.modules.kenai.collab.notifications.NotifyIndicator;
 
 /**
- * Base class for implementing notifications
- * TODO: should be moved to org.openide.awt?
+ * Pool of notifications
+ * Use add(Notification) to add new and Notification.remove() to remove notification
+ * TODO: should be moved to org.openide.awt
  * @author Jan Becicka
  */
-public abstract class Notification implements Comparable<Notification> {
+final class Notifications {
 
-    /**
-     * Getter for LinkTitle
-     * @return
-     */
-    public abstract String getLinkTitle();
-
-    /**
-     * getter for title. HTML tags are supported
-     * @return
-     */
-    public abstract String getTitle();
-
-    /**
-     * getter for description. HTML tags are supported
-     * @return
-     */
-    public abstract String getDescription();
-
-    /**
-     * What to do, when clicked on link
-     */
-    public abstract void showDetails();
-
-    /**
-     * Priority of this Notification
-     * @return
-     */
-    public abstract Priority getPriority();
-
-    /**
-     * Icon
-     * @return
-     */
-    public abstract Icon getIcon();
-
-    /**
-     * Priority of Notification
-     */
-    public static enum Priority {
-        HIGH,
-        NORMAL,
-        LOW,
+    static {
+        APIAccessor.DEFAULT = new APIAccessorImpl();
     }
 
-    @Override
-    public final int compareTo(Notification o) {
-        return getPriority().compareTo(o.getPriority());
+    private static Notifications instance;
+
+    
+    final SortedSet<Notification> notifications;
+    private Notifications() {
+        notifications = Collections.synchronizedSortedSet(new TreeSet<Notification>());
     }
 
     /**
-     * Add this to notifications pool
-     * @return <tt>true</tt> if the pool already contained the specified element.
+     * singleton instance
+     * @return
      */
-    public final boolean remove() {
-        return Notifications.getDefault().remove(this);
+    public static synchronized Notifications getDefault() {
+        if (instance==null)
+            instance = new Notifications();
+        return instance;
     }
 
     /**
-     * Add this to notifications pool
-     * @return <tt>true</tt> if this set did not already contain the specified
+     * adds notification to pool
+     * Use Notification.remove() to remove from the pool
+     * @param notification
+     * @return
      */
-    public final boolean add() {
-        return Notifications.getDefault().add(this);
+    public boolean add(Notification notification) {
+        final boolean result = notifications.add(notification);
+        NotifyIndicator.getDefault().update();
+        return result;
     }
+
+    /**
+     * removes notification from pool
+     * @param notification
+     * @return
+     */
+    public boolean remove(Notification notification) {
+        final boolean result = notifications.remove(notification);
+        NotifyIndicator.getDefault().update();
+        return result;
+    }
+
+    /**
+     * Return Notification with highest priority
+     * @return
+     */
+    public Notification top() {
+        return notifications.isEmpty()?null:notifications.first();
+    }
+
 }
