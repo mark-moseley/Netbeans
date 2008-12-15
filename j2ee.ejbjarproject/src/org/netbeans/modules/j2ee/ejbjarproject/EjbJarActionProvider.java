@@ -58,12 +58,17 @@ import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
+import org.netbeans.modules.j2ee.common.project.ui.DeployOnSaveUtils;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.deployment.plugins.api.ServerDebugInfo;
+import org.netbeans.modules.j2ee.ejbjarproject.ui.customizer.CustomizerProviderImpl;
 import org.netbeans.modules.j2ee.ejbjarproject.ui.customizer.EjbJarProjectProperties;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
+import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
 import org.openide.DialogDisplayer;
@@ -80,7 +85,9 @@ import org.openide.util.NbBundle;
  * strange things to Web actions. E.g. compile-single.
  */
 class EjbJarActionProvider implements ActionProvider {
-    
+
+    private static final String DIRECTORY_DEPLOYMENT_SUPPORTED = "directory.deployment.supported"; // NOI18N
+
     // Definition of commands
     
     private static final String COMMAND_COMPILE = "compile"; //NOI18N
@@ -116,11 +123,16 @@ class EjbJarActionProvider implements ActionProvider {
     // Ant project helper of the project
     private final AntProjectHelper antProjectHelper;
     private ReferenceHelper refHelper;
-    
+
+    private final PropertyEvaluator evaluator;
+
+    private final UpdateHelper updateHelper;
+
     /** Map from commands to ant targets */
     Map<String,String[]> commands;
     
-    public EjbJarActionProvider(EjbJarProject project, AntProjectHelper antProjectHelper, ReferenceHelper refHelper) {
+    public EjbJarActionProvider(EjbJarProject project, AntProjectHelper antProjectHelper,
+            ReferenceHelper refHelper, UpdateHelper updateHelper, PropertyEvaluator evaluator) {
         commands = new HashMap<String,String[]>();
         commands.put(COMMAND_BUILD, new String[] {"dist"}); // NOI18N
         commands.put(COMMAND_CLEAN, new String[] {"clean"}); // NOI18N
@@ -141,6 +153,8 @@ class EjbJarActionProvider implements ActionProvider {
         this.antProjectHelper = antProjectHelper;
         this.project = project;
         this.refHelper = refHelper;
+        this.updateHelper = updateHelper;
+        this.evaluator = evaluator;
     }
     
     private FileObject findBuildXml() {
@@ -171,13 +185,32 @@ class EjbJarActionProvider implements ActionProvider {
             DefaultProjectOperations.performDefaultRenameOperation(project, null);
             return ;
         }
+
+        String realCommand = command;
+        if (COMMAND_BUILD.equals(realCommand) && isDosEnabled()
+                && DeployOnSaveUtils.containsIdeArtifacts(evaluator, updateHelper, "build.classes.dir")) {
+            boolean cleanAndBuild = DeployOnSaveUtils.showBuildActionWarning(project,
+                    new DeployOnSaveUtils.CustomizerPresenter() {
+
+                public void showCustomizer(String category) {
+                    CustomizerProviderImpl provider = project.getLookup().lookup(CustomizerProviderImpl.class);
+                    provider.showCustomizer(category);
+                }
+            });
+            if (cleanAndBuild) {
+                realCommand = COMMAND_REBUILD;
+            } else {
+                return;
+            }
+        }
         
+        final String commandToExecute = realCommand;
         Runnable action = new Runnable() {
             public void run() {
                 Properties p = new Properties();
                 String[] targetNames;
                 
-                targetNames = getTargetNames(command, context, p);
+                targetNames = getTargetNames(commandToExecute, context, p);
                 if (targetNames == null) {
                     return;
                 }
@@ -214,6 +247,7 @@ class EjbJarActionProvider implements ActionProvider {
         
         //EXECUTION PART
         if (command.equals(COMMAND_RUN_SINGLE)) {
+            setDirectoryDeploymentProperty(p);
             FileObject[] files = findTestSources(context, false);
             if (files != null) {
                 targetNames = setupTestSingle(p, files);
@@ -254,8 +288,10 @@ class EjbJarActionProvider implements ActionProvider {
             } else {
                 p.setProperty("forceRedeploy", "false"); //NOI18N
             }
+            setDirectoryDeploymentProperty(p);
         //DEBUGGING PART
         } else if (command.equals(COMMAND_DEBUG) || command.equals(COMMAND_DEBUG_SINGLE)) {
+            setDirectoryDeploymentProperty(p);
             FileObject[] javaFiles = findJavaSources(context);
             if (javaFiles != null && javaFiles.length == 1 && !SourceUtils.getMainClasses(javaFiles[0]).isEmpty()) {
                 FileObject javaFile = javaFiles[0];
@@ -271,7 +307,8 @@ class EjbJarActionProvider implements ActionProvider {
                 targetNames = new String [] {"debug-single-main"};
                 return targetNames;
             }
-            
+
+            setDirectoryDeploymentProperty(p);
             FileObject[] testFiles = findTestSources(context, false);
             if (testFiles != null) {
                 targetNames = setupDebugTestSingle(p, testFiles);
@@ -285,6 +322,7 @@ class EjbJarActionProvider implements ActionProvider {
             }
         // APPLY CODE CHANGES DEBUGGING
         } else if (command.equals(JavaProjectConstants.COMMAND_DEBUG_FIX)) {
+            setDirectoryDeploymentProperty(p);
             FileObject[] files = findJavaSources(context);
             String path = null;
             final String[] classes = { "" };
@@ -344,9 +382,11 @@ class EjbJarActionProvider implements ActionProvider {
             }
         // TEST PART
         } else if ( command.equals( COMMAND_TEST_SINGLE ) ) {
+            setDirectoryDeploymentProperty(p);
             FileObject[] files = findTestSourcesForSources(context);
             targetNames = setupTestSingle(p, files);
         } else if ( command.equals( COMMAND_DEBUG_TEST_SINGLE ) ) {
+            setDirectoryDeploymentProperty(p);
             FileObject[] files = findTestSourcesForSources(context);
             targetNames = setupDebugTestSingle(p, files);
         } else {
@@ -357,7 +397,20 @@ class EjbJarActionProvider implements ActionProvider {
         
         return targetNames;
     }
-    
+
+     private void setDirectoryDeploymentProperty(Properties p) {
+        String instance = updateHelper.getAntProjectHelper().getStandardPropertyEvaluator().getProperty(EjbJarProjectProperties.J2EE_SERVER_INSTANCE);
+        if (instance != null) {
+            J2eeModuleProvider jmp = project.getLookup().lookup(J2eeModuleProvider.class);
+            String sdi = jmp.getServerInstanceID();
+            J2eeModule mod = jmp.getJ2eeModule();
+            if (sdi != null && mod != null) {
+                boolean cFD = Deployment.getDefault().canFileDeploy(instance, mod);
+                p.setProperty(DIRECTORY_DEPLOYMENT_SUPPORTED, "" + cFD); // NOI18N
+            }
+        }
+    }
+
     private String[] setupTestSingle(Properties p, FileObject[] files) {
         FileObject[] testSrcPath = project.getTestSourceRoots().getRoots();
         FileObject root = getRoot(testSrcPath, files[0]);
@@ -380,6 +433,12 @@ class EjbJarActionProvider implements ActionProvider {
         if (buildXml == null || !buildXml.isValid()) {
             return false;
         }
+
+        if (isDosEnabled() && DeployOnSaveUtils.containsIdeArtifacts(evaluator, updateHelper, "build.classes.dir")
+                && COMMAND_COMPILE_SINGLE.equals(command)) {
+            return false;
+        }
+
         if ( command.equals( COMMAND_VERIFY ) ) {
             return project.getEjbModule().hasVerifierSupport();
         }
@@ -580,4 +639,7 @@ class EjbJarActionProvider implements ActionProvider {
         EjbJarProjectProperties.setServerInstance(project, antProjectHelper, serverInstanceId);
     }
     
+    private boolean isDosEnabled() {
+        return Boolean.parseBoolean(project.evaluator().getProperty(EjbJarProjectProperties.J2EE_DEPLOY_ON_SAVE));
+    }
 }
