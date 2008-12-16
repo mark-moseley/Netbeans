@@ -1,0 +1,15 @@
+Code completion result for source line:
+(1..10).a|
+(QueryType=COMPLETION, prefixSearch=true, caseSensitive=true)
+------------------------------------
+METHOD     add(E)                          [PUBLIC]   boolean
+METHOD     add(int, E)                     [PUBLIC]   void
+METHOD     addAll(Collection<? extends E>  [PUBLIC]   boolean
+METHOD     addAll(int, Collection<? exten  [PUBLIC]   boolean
+METHOD     addShutdownHook(Closure)                   void
+METHOD     any()                                      boolean
+METHOD     any(Closure)                               boolean
+METHOD     asImmutable()                              List
+METHOD     asList()                                   List
+METHOD     asSynchronized()                           List
+METHOD     asType(Class)                              Object

@@ -1,0 +1,8 @@
+Code completion result for source line:
+stringField.spli|
+(QueryType=COMPLETION, prefixSearch=true, caseSensitive=true)
+------------------------------------
+METHOD     split()                                    String[]
+METHOD     split(String)                   [PUBLIC]   String[]
+METHOD     split(String, int)              [PUBLIC]   String[]
+METHOD     splitEachLine(String, Closure)             Object
