@@ -37,30 +37,39 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.verification;
 
+import java.util.Collections;
 import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+import java.util.Set;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.HintSeverity;
+import org.netbeans.modules.gsf.api.Rule.AstRule;
+import org.netbeans.modules.gsf.api.RuleContext;
+import org.netbeans.modules.php.editor.model.ModelScope;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    List<? extends InterfaceScope> getInterfaces();
-    List<? extends MethodScope> getAllMethods();
-    List<? extends MethodScope> getMethods(final int... modifiers);
-    List<? extends MethodScope> getMethods(final String queryName, final int... modifiers);
-    List<? extends MethodScope> getMethods(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends MethodScope> getAllInheritedMethods();
-    List<? extends MethodScope> getInheritedMethods(final String queryName);
-    List<? extends ClassConstantElement> getAllConstants();
-    List<? extends ClassConstantElement> getConstants(final String... queryName);
-    List<? extends ClassConstantElement> getConstants(final NameKind nameKind, final String... queryName);
-    List<? extends ClassConstantElement> getInheritedConstants(String constName);
+abstract class ModelRule implements AstRule {
+    private ModelScope modelScope;
+    abstract void check (ModelScope modelScope, RuleContext context, List<Hint> hints);
 
-    //List<? extends MethodScope> getTopInheritedMethods(final String queryName, final int... modifiers);
+    @Override
+    public Set<? extends Object> getKinds() {
+        return Collections.singleton(PHPHintsProvider.MODEL_HINTS);
+    }
 
-    //TODO: ...
+    public boolean getDefaultEnabled() {
+        return true;
+    }
 
+    public boolean appliesTo(RuleContext context) {
+        return true;
+    }
+
+    public HintSeverity getDefaultSeverity() {
+        return HintSeverity.WARNING;
+    }
 }

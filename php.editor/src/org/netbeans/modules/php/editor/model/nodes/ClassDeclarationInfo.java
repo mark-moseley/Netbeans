@@ -37,30 +37,64 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.model.nodes;
 
 import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.php.editor.model.PhpModifiers;
+import org.netbeans.modules.php.editor.model.nodes.ASTNodeInfo.Kind;
+import org.netbeans.modules.php.editor.parser.astnodes.BodyDeclaration;
+import org.netbeans.modules.php.editor.parser.astnodes.ClassDeclaration;
+import org.netbeans.modules.php.editor.parser.astnodes.ClassDeclaration.Modifier;
+import org.netbeans.modules.php.editor.parser.astnodes.Identifier;
 
 /**
  * @author Radek Matous
  */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    List<? extends InterfaceScope> getInterfaces();
-    List<? extends MethodScope> getAllMethods();
-    List<? extends MethodScope> getMethods(final int... modifiers);
-    List<? extends MethodScope> getMethods(final String queryName, final int... modifiers);
-    List<? extends MethodScope> getMethods(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends MethodScope> getAllInheritedMethods();
-    List<? extends MethodScope> getInheritedMethods(final String queryName);
-    List<? extends ClassConstantElement> getAllConstants();
-    List<? extends ClassConstantElement> getConstants(final String... queryName);
-    List<? extends ClassConstantElement> getConstants(final NameKind nameKind, final String... queryName);
-    List<? extends ClassConstantElement> getInheritedConstants(String constName);
+public class ClassDeclarationInfo extends ASTNodeInfo<ClassDeclaration> {
+    ClassDeclarationInfo(ClassDeclaration node) {
+        super(node);
+    }
 
-    //List<? extends MethodScope> getTopInheritedMethods(final String queryName, final int... modifiers);
+    public static ClassDeclarationInfo create(ClassDeclaration classDeclaration) {
+        return new ClassDeclarationInfo(classDeclaration);
+    }
 
-    //TODO: ...
+    @Override
+    public Kind getKind() {
+        return Kind.CLASS;
+    }
+
+    @Override
+    public String getName() {
+        ClassDeclaration classDeclaration = getOriginalNode();
+        return classDeclaration.getName().getName();
+    }
+
+    @Override
+    public OffsetRange getRange() {
+        ClassDeclaration classDeclaration = getOriginalNode();
+        Identifier name = classDeclaration.getName();
+        return new OffsetRange(name.getStartOffset(), name.getEndOffset());
+    }
+
+    public Identifier getSuperClass() {
+        return getOriginalNode().getSuperClass();
+    }
+
+    public List<? extends Identifier> getInterfaces() {
+        return getOriginalNode().getInterfaes();
+    }
+
+    public PhpModifiers getAccessModifiers() {
+        Modifier modifier = getOriginalNode().getModifier();
+
+        if (modifier.equals(Modifier.ABSTRACT)) {
+            return new PhpModifiers(PhpModifiers.PUBLIC, PhpModifiers.ABSTRACT);
+        } else if (modifier.equals(Modifier.FINAL)) {
+            return new PhpModifiers(PhpModifiers.PUBLIC, PhpModifiers.FINAL);
+        }
+        return new PhpModifiers(PhpModifiers.PUBLIC);
+    }
 
 }
