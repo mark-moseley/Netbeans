@@ -57,9 +57,12 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
+import org.netbeans.modules.vmd.midp.components.databinding.MidpDatabindingSupport;
 
 /**
  * @author David Kaspar
@@ -69,6 +72,8 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
     private JPanel panel;
     private JLabel label;
     private JComponent contentComponent;
+
+    private static final JButton BUTTON = new JButton();
     
     public ItemDisplayPresenter() {
         panel = new JPanel() {
@@ -79,6 +84,22 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
         };
         panel.setLayout(new GridBagLayout());
         panel.setOpaque(false);
+
+        // Fix for #79636 - Screen designer tab traversal
+        panel.setInputMap( JComponent.WHEN_FOCUSED, BUTTON.getInputMap());
+        panel.addFocusListener( new FocusAdapter() {
+
+            @Override
+            public void focusGained(FocusEvent e) {
+
+                getComponent().getDocument().getTransactionManager().writeAccess(new Runnable() {
+                    public void run() {
+                        getComponent().getDocument().setSelectedComponents(
+                                "screen", Collections.singleton(getComponent()));   // NOI18N
+                    }
+                });
+            }
+        });
         
         label = new JLabel();
         Font bold = label.getFont().deriveFont(Font.BOLD);
@@ -136,7 +157,12 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
     }
     
     public void reload(ScreenDeviceInfo deviceInfo) {
-        String text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(ItemCD.PROP_LABEL));
+        String text = null;
+        if (MidpDatabindingSupport.getConnector(getComponent(), ItemCD.PROP_LABEL) != null) {
+            text = java.util.ResourceBundle.getBundle("org/netbeans/modules/vmd/midp/screen/display/Bundle").getString("LBL_Databinding"); //NOI18N 
+        } else {
+            text = text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(ItemCD.PROP_LABEL));
+        }
         label.setText(text);
     }
     
