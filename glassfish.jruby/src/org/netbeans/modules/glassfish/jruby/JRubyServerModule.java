@@ -43,6 +43,7 @@ import java.io.File;
 import java.io.FileFilter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -56,23 +57,33 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JPanel;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.extexecution.print.ConvertedLine;
+import org.netbeans.api.extexecution.print.LineConvertor;
+import org.netbeans.api.extexecution.print.LineConvertors;
+import org.netbeans.api.extexecution.print.LineConvertors.FileLocator;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.glassfish.jruby.ui.JRubyServerCustomizer;
+import org.netbeans.modules.glassfish.spi.Recognizer;
 import org.netbeans.modules.ruby.railsprojects.server.spi.RubyInstance;
 import org.netbeans.modules.glassfish.spi.CustomizerCookie;
 import org.netbeans.modules.glassfish.spi.GlassfishModule;
 import org.netbeans.modules.glassfish.spi.OperationStateListener;
+import org.netbeans.modules.glassfish.spi.RecognizerCookie;
 import org.netbeans.modules.glassfish.spi.ServerCommand;
 import org.netbeans.modules.glassfish.spi.ServerUtilities;
+import org.netbeans.modules.ruby.platform.execution.DirectoryFileLocator;
+import org.netbeans.modules.ruby.platform.execution.RubyLineConvertorFactory;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
 import org.openide.util.RequestProcessor;
+import org.openide.windows.OutputListener;
 
 
 /**
  *
  * @author Peter Williams
  */
-public class JRubyServerModule implements RubyInstance, CustomizerCookie {
+public class JRubyServerModule implements RubyInstance, CustomizerCookie, RecognizerCookie {
 
     public static final String USE_ROOT_CONTEXT_ATTR = "jruby.useRootContext"; // NOI18N
     
@@ -84,7 +95,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
     
     @Override
     public String toString() {
-        return "GlassFish V3 / JRuby Support"; // NOI18N
+        return "GlassFish v3 / JRuby Support"; // NOI18N
     }
     
     // ------------------------------------------------------------------------
@@ -178,7 +189,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
             throw new IllegalStateException("No V3 Common Server support found for V3/Ruby server instance");
         }
     }
-    
+
     private static class RunAppTask implements 
             Callable<OperationState>,
             OperationStateListener 
@@ -423,6 +434,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
         // JVM properties
         builder.append(" -Djruby.home=");
         builder.append(ServerUtilities.quote(platform.getHome().getAbsolutePath()));
+        builder.append(" -Djruby.runtime.max=1");
 
         String grizzlyVMParams = System.getProperty("grizzly.jruby.vm.params");
         if(grizzlyVMParams != null) {
@@ -614,4 +626,29 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
         return result;
     }
 
+    // ------------------------------------------------------------------------
+    // RecognizerCookie support
+    // ------------------------------------------------------------------------
+    
+    public Collection<? extends Recognizer> getRecognizers() {
+        FileLocator locator = new DirectoryFileLocator(FileUtil.toFileObject(FileUtil.normalizeFile(new File("/")))); //NOI18N
+        LineConvertor convertor = LineConvertors.filePattern(locator, RubyLineConvertorFactory.RAILS_RECOGNIZER, RubyLineConvertorFactory.EXT_RE, 1, 2);
+        return Collections.singleton(wrapRubyRecognizer(convertor));
+    }
+
+    private Recognizer wrapRubyRecognizer(final LineConvertor convertor) {
+        return new Recognizer() {
+            public OutputListener processLine(String text) {
+                OutputListener result = null;
+                List<ConvertedLine> match = convertor.convert(text);
+                if (match != null && !match.isEmpty()) {
+                    // relies on an implementation detail of FilePatternConvertor in that
+                    // this assumes the returned listener to be an instance of FindFileListener
+                    result = match.get(0).getListener();
+                }
+                return result;
+            }
+        };
+    }
+    
 }
