@@ -55,7 +55,6 @@ import org.netbeans.modules.php.editor.index.PHPIndex;
 import org.netbeans.modules.php.editor.model.ClassScope;
 import org.netbeans.modules.php.editor.model.ClassConstantElement;
 import org.netbeans.modules.php.editor.model.ConstantElement;
-import org.netbeans.modules.php.editor.model.FieldElement;
 import org.netbeans.modules.php.editor.model.FunctionScope;
 import org.netbeans.modules.php.editor.model.IncludeElement;
 import org.netbeans.modules.php.editor.model.InterfaceScope;
@@ -83,7 +82,6 @@ import org.netbeans.modules.php.editor.parser.astnodes.ASTNode;
 import org.netbeans.modules.php.editor.parser.astnodes.ClassDeclaration;
 import org.netbeans.modules.php.editor.parser.astnodes.ClassInstanceCreation;
 import org.netbeans.modules.php.editor.parser.astnodes.ClassName;
-import org.netbeans.modules.php.editor.parser.astnodes.Expression;
 import org.netbeans.modules.php.editor.parser.astnodes.FieldAccess;
 import org.netbeans.modules.php.editor.parser.astnodes.FunctionDeclaration;
 import org.netbeans.modules.php.editor.parser.astnodes.FunctionInvocation;
@@ -277,7 +275,7 @@ class OccurenceBuilder {
 
     void prepare(PHPDocTypeTag pHPDocTag, Scope scope) {
         if (canBePrepared(pHPDocTag, scope)) {
-            List<? extends PhpDocTypeTagInfo> infos = PhpDocTypeTagInfo.create(pHPDocTag);
+            List<? extends PhpDocTypeTagInfo> infos = PhpDocTypeTagInfo.create(pHPDocTag, scope);
             for (PhpDocTypeTagInfo typeTagInfo : infos) {
                 docTags.put(typeTagInfo, scope);
                 setOccurenceAsCurrent(typeTagInfo);
@@ -690,6 +688,33 @@ class OccurenceBuilder {
             }
         }
     }
+    private void buildDocTagsForFields(String queryName, FileScope fileScope) {
+        for (Entry<PhpDocTypeTagInfo, Scope> entry : docTags.entrySet()) {
+            PhpDocTypeTagInfo nodeInfo = entry.getKey();
+            String name = nodeInfo.getName();
+            Scope scope = entry.getValue();
+            if (Kind.FIELD.equals(nodeInfo.getKind()) && scope instanceof ClassScope && queryName.equalsIgnoreCase(name)) {
+                List<? extends ClassScope> classes = CachedModelSupport.getClasses(scope.getName(), scope);
+
+                List<ModelElement> allFields = new ArrayList<ModelElement>();
+                if (!classes.isEmpty()) {
+                    for (ClassScope clz : classes) {
+                        List<? extends ModelElement> fields = CachedModelSupport.getInheritedFields(
+                                clz, queryName, fileScope);
+                        //TODO: if not found, then lookup inherited
+                        //use ClassScope.getTopInheritedMethods(final String queryName, final int... modifiers)
+                        allFields.addAll(fields);
+                        if (allFields.isEmpty()) {
+                            fileScope.addOccurence(new OccurenceImpl(clz, nodeInfo.getRange(), fileScope));
+                        }
+                    }
+                } 
+                if (!allFields.isEmpty()) {
+                    fileScope.addOccurence(new OccurenceImpl(allFields, nodeInfo.getRange(), fileScope));
+                }
+            }
+        }
+    }
 
     private void buildVariables(String queryName, FileScope fileScope) {
         for (Entry<ASTNodeInfo<Variable>, Scope> entry : variables.entrySet()) {
@@ -737,6 +762,7 @@ class OccurenceBuilder {
                     buildFieldDeclarations(name, fileScope);
                     buildFieldInvocations(name, fileScope);
                     buildStaticFieldInvocations(name, fileScope);
+                    buildDocTagsForFields(name, fileScope);
                     break;
 
                 case CONSTANT:
@@ -858,7 +884,7 @@ class OccurenceBuilder {
     private static List<MethodScopeImpl> name2Methods(FileScope fileScope, final String name, ASTNodeInfo<MethodInvocation> nodeInfo ) {
         IndexScopeImpl indexScope = fileScope.getIndexScope();
         PHPIndex index = indexScope.getIndex();
-        Set<String> typeNamesForIdentifier = index.typeNamesForIdentifier(name, null, NameKind.CASE_INSENSITIVE_PREFIX, EnumSet.of(SearchScope.SOURCE));
+        Set<String> typeNamesForIdentifier = index.typeNamesForIdentifier(name, null, NameKind.CASE_INSENSITIVE_PREFIX, EnumSet.of(SearchScope.SOURCE, SearchScope.DEPENDENCIES));
         List<MethodScopeImpl> methods = Collections.emptyList();
         FunctionInvocation functionInvocation = nodeInfo.getOriginalNode().getMethod();
         int paramCount = functionInvocation.getParameters().size();
