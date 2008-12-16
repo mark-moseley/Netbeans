@@ -316,6 +316,7 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         }
     }
 
+    @SuppressWarnings("unchecked")
     private List<NativeProjectItemsListener> getListenersCopy() {
         synchronized (listeners) {
             return (listeners.size() == 0) ? Collections.EMPTY_LIST : new ArrayList<NativeProjectItemsListener>(listeners);
@@ -379,6 +380,9 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
             return;
         }
 
+        CompilerSet oldCompilerSet = oldMConf.getCompilerSet().getCompilerSet();
+        CompilerSet newCompilerSet = newMConf.getCompilerSet().getCompilerSet();
+
         // Check all items
         Item[] items = getMakeConfigurationDescriptor().getProjectItems();
         Project proj = getMakeConfigurationDescriptor().getProject();
@@ -412,7 +416,7 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
                     list.add(items[i]);
                     continue;
                 }
-                if (!oldItemConf.getCCompilerConfiguration().getIncludeDirectoriesOptions().equals(newItemConf.getCCompilerConfiguration().getIncludeDirectoriesOptions())) {
+                if (!oldItemConf.getCCompilerConfiguration().getIncludeDirectoriesOptions(oldCompilerSet).equals(newItemConf.getCCompilerConfiguration().getIncludeDirectoriesOptions(newCompilerSet))) {
                     list.add(items[i]);
                     continue;
                 }
@@ -422,7 +426,7 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
                     list.add(items[i]);
                     continue;
                 }
-                if (!oldItemConf.getCCCompilerConfiguration().getIncludeDirectoriesOptions().equals(newItemConf.getCCCompilerConfiguration().getIncludeDirectoriesOptions())) {
+                if (!oldItemConf.getCCCompilerConfiguration().getIncludeDirectoriesOptions(oldCompilerSet).equals(newItemConf.getCCCompilerConfiguration().getIncludeDirectoriesOptions(newCompilerSet))) {
                     list.add(items[i]);
                     continue;
                 }
@@ -454,13 +458,13 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         boolean ccFiles = false;
         boolean libsChanged = false;
         boolean projectChanged = false;
-        VectorConfiguration cIncludeDirectories;
+        VectorConfiguration<String> cIncludeDirectories;
         BooleanConfiguration cInheritIncludes;
-        VectorConfiguration cPpreprocessorOption;
+        VectorConfiguration<String> cPpreprocessorOption;
         BooleanConfiguration cInheritMacros;
-        VectorConfiguration ccIncludeDirectories;
+        VectorConfiguration<String> ccIncludeDirectories;
         BooleanConfiguration ccInheritIncludes;
-        VectorConfiguration ccPreprocessorOption;
+        VectorConfiguration<String> ccPreprocessorOption;
         BooleanConfiguration ccInheritMacros;
         Item[] items;
 
@@ -522,6 +526,8 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
             ccInheritMacros = makeConfiguration.getCCCompilerConfiguration().getInheritPreprocessor();
             items = getMakeConfigurationDescriptor().getProjectItems();
             projectChanged = true;
+            cFiles = true;
+            ccFiles = true;
         }
 
         if (cIncludeDirectories.getDirty() || cPpreprocessorOption.getDirty() ||
