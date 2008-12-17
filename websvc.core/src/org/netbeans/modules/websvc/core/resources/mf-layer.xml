@@ -75,6 +75,7 @@ made subject to such option by the copyright holder.
             <file name="WebServiceFromWSDL.java">
                 <attr name="template" boolvalue="true"/>
                 <attr name="position" intvalue="200"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingIterator" methodvalue="org.netbeans.modules.websvc.core.dev.wizard.NewWebServiceFromWSDLWizardIterator.create"/>
                 <attr name="templateCategory" stringvalue="web-services"/>
                 <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/websvc/core/dev/resources/WebServiceFromWSDL.html"/>
@@ -116,24 +117,27 @@ made subject to such option by the copyright holder.
     <folder name="Editors">
         <folder name="text">
             <folder name="x-java">
+                <folder name="CodeGenerators">
+                    <file name="org-netbeans-modules-websvc-core-jaxws-actions-AddOperationActionGenerator$Factory.instance">
+                        <attr name="position" intvalue="3700"/>
+                    </file>
+                    <file name="org-netbeans-modules-websvc-core-jaxws-actions-SetSoapVersionActionGenerator$Factory.instance">
+                        <attr name="position" intvalue="3705"/>
+                    </file>
+                    <!--
+                    <file name="org-netbeans-modules-websvc-core-jaxws-actions-CallWsOperationAction$Factory.instance">
+                        <attr name="position" intvalue="3710"/>
+                    </file>
+                    -->
+                </folder>
                 <folder name="CompletionProviders">
                     <file name="org-netbeans-modules-websvc-editor-completion-WSCompletionProvider.instance"/>
                 </folder>
-            </folder>
-        </folder>
-    </folder>
-
-    <folder name="Editors">
-        <folder name="text">
-            <folder name="x-java">
                 <folder name="Popup">
                     <!-- Place after EnterpriseRefActionGroup (position 9500) -->
                     <file name="SeparatorBeforeWS.instance">
 			<attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="9600"/>
-                    </file>
-                    <file name="org-netbeans-modules-websvc-core-webservices-action-WebServiceActionGroup.instance">
-                        <attr name="position" intvalue="9610"/>
                     </file>
                     <file name="org-netbeans-modules-websvc-core-webservices-action-WebServiceClientActionGroup.instance">
                         <attr name="position" intvalue="9620"/>
@@ -157,31 +161,22 @@ made subject to such option by the copyright holder.
     <folder name="Projects">
         <!-- populate J2SE Project Lookup with WS Client Support -->
         <folder name="org-netbeans-modules-java-j2seproject">
-            <folder name="Lookup">
-                <file name="org.netbeans.modules.websvc.core.jaxws.projects.J2SEWSSupportLookupProvider.instance"/>
-            </folder>
             <folder name="Nodes">
-                <file name="org-netbeans-modules-websvc-core-jaxws-nodes-WebServicesNodeFactory.instance">
+                <file name="org-netbeans-modules-websvc-core-ProjectWebServiceNodeFactory.instance">
                     <attr name="position" intvalue="260"/>
                 </file>
             </folder>
         </folder>
         <folder name="org-netbeans-modules-web-project">
-            <folder name="Lookup">
-                <file name="org.netbeans.modules.websvc.core.jaxws.projects.JavaEEWSSupportLookupProvider.instance"/>
-            </folder>  
             <folder name="Nodes">
-                <file name="org-netbeans-modules-websvc-core-jaxws-nodes-WebServicesNodeFactory.instance">
+                <file name="org-netbeans-modules-websvc-core-ProjectWebServiceNodeFactory.instance">
                     <attr name="position" intvalue="400"/>
                 </file>
                 </folder>
         </folder>
         <folder name="org-netbeans-modules-j2ee-ejbjarproject">
-            <folder name="Lookup">
-                <file name="org.netbeans.modules.websvc.core.jaxws.projects.JavaEEWSSupportLookupProvider.instance"/>
-            </folder>
             <folder name="Nodes">
-                <file name="org-netbeans-modules-websvc-core-jaxws-nodes-WebServicesNodeFactory.instance">
+                <file name="org-netbeans-modules-websvc-core-ProjectWebServiceNodeFactory.instance">
                     <attr name="position" intvalue="155"/>
                 </file>
             </folder>
@@ -199,4 +194,5 @@ made subject to such option by the copyright holder.
             </folder>
         </folder>
     </folder>
+
 </filesystem>
