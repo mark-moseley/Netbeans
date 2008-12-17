@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,48 +44,40 @@ import java.awt.Image;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.List;
-import java.util.List;
-import java.util.Set;
 import java.util.Set;
 
-import org.jruby.ast.ArgumentNode;
-import org.jruby.ast.ClassNode;
-import org.jruby.ast.ClassVarDeclNode;
-import org.jruby.ast.ClassVarNode;
-import org.jruby.ast.ConstDeclNode;
-import org.jruby.ast.ConstNode;
-import org.jruby.ast.InstAsgnNode;
-import org.jruby.ast.InstVarNode;
-import org.jruby.ast.MethodDefNode;
-import org.jruby.ast.ModuleNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.SClassNode;
-import org.jruby.ast.SymbolNode;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Modifier;
-import org.netbeans.api.gsf.Modifier;
-
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.SymbolNode;
+import org.jruby.nb.ast.types.INameNode;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.ElementKind;
+import org.netbeans.modules.gsf.api.Modifier;
+import org.netbeans.modules.ruby.RubyType;
 
 /**
- * A Ruby element coming from a JRuby parse tree
+ * A Ruby element coming from a JRuby parse tree.
  *
  * @author Tor Norbye
  */
 public abstract class AstElement extends RubyElement {
+
     protected Node node;
+    protected CompilationInfo info;
     protected ArrayList<AstElement> children;
     protected String name;
     private String in;
     protected Set<Modifier> modifiers;
+    private RubyType type;
 
-    public AstElement(Node node) {
+    public AstElement(CompilationInfo info, Node node) {
         super();
+        this.info = info;
         this.node = node;
+        this.type = RubyType.createUnknown(); // by defaul unknown
+    }
+
+    public String getFqn() {
+        return name;
     }
 
     public Node getNode() {
@@ -110,12 +102,11 @@ public abstract class AstElement extends RubyElement {
         return getName();
     }
 
-    @SuppressWarnings("unchecked")
     public List<AstElement> getChildren() {
         //        if (children == null) {
         //            children = new ArrayList<AstElement>();
         //
-        //            for (Node child : (List<Node>)node.childNodes()) {
+        //            for (Node child : node.childNodes()) {
         //                addInterestingChildren(this, children, child);
         //            }
         //        }
@@ -135,32 +126,35 @@ public abstract class AstElement extends RubyElement {
         children.add(child);
     }
 
-    public static AstElement create(Node node) {
+    public static AstElement create(CompilationInfo info, Node node) {
         switch (node.nodeId) {
-        case NodeTypes.DEFNNODE:
-        case NodeTypes.DEFSNODE:
-            return new AstMethodElement(node);
-        case NodeTypes.CLASSNODE:
-        case NodeTypes.SCLASSNODE:
-            return new AstClassElement(node);
-        case NodeTypes.MODULENODE:
-            return new AstModuleElement(node);
-        case NodeTypes.CONSTNODE:
-            return new AstVariableElement(node, ((ConstNode)node).getName());
-        case NodeTypes.CLASSVARNODE:
-        case NodeTypes.CLASSVARDECLNODE:
-        case NodeTypes.INSTASGNNODE:
-        case NodeTypes.INSTVARNODE:
-            return new AstFieldElement(node);
-        case NodeTypes.CONSTDECLNODE:
-            return new AstConstantElement((ConstDeclNode)node);
-        case NodeTypes.SYMBOLNODE:
-            return new AstAttributeElement((SymbolNode)node, null);
+        case DEFNNODE:
+        case DEFSNODE:
+            return new AstMethodElement(info, node);
+        case CLASSNODE:
+        case SCLASSNODE:
+            return new AstClassElement(info, node);
+        case MODULENODE:
+            return new AstModuleElement(info, node);
+        case CONSTNODE:
+            return new AstNameElement(info, node, ((INameNode)node).getName(),
+                    ElementKind.VARIABLE); // Why VARIABLE instead of CONSTANT?
+        case CLASSVARNODE:
+        case CLASSVARDECLNODE:
+        case INSTASGNNODE:
+        case INSTVARNODE:
+            return new AstFieldElement(info, node);
+        case CONSTDECLNODE:
+            return new AstNameElement(info, node, ((INameNode)node).getName(),
+                    ElementKind.CONSTANT);
+        case SYMBOLNODE:
+            return new AstAttributeElement(info, (SymbolNode)node, null);
         default:
             return null;
         }
     }
 
+    @Override
     public String toString() {
         String clz = getClass().getName();
 
@@ -171,6 +165,7 @@ public abstract class AstElement extends RubyElement {
         return null;
     }
 
+    @Override
     public String getIn() {
         // TODO - compute signature via AstUtilities
         return in;
@@ -180,11 +175,26 @@ public abstract class AstElement extends RubyElement {
         this.in = in;
     }
 
+    @Override
     public ElementKind getKind() {
         return ElementKind.OTHER;
     }
 
+    @Override
     public Set<Modifier> getModifiers() {
         return Collections.emptySet();
+    }
+
+    public CompilationInfo getInfo() {
+        return info;
+    }
+
+    public void setType(final RubyType type) {
+        assert type != null : "Cannot pass null to AstElement#setTypes";
+        this.type = type;
+    }
+
+    public RubyType getType() {
+        return type;
     }
 }

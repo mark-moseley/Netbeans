@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.ruby;
 
 import org.jruby.nb.ast.MethodDefNode;
@@ -54,13 +53,13 @@ import org.openide.filesystems.FileObject;
  * @author Tor Norbye
  */
 public class RubyTypeAnalyzerTest extends RubyTestBase {
-    
+
     public RubyTypeAnalyzerTest(String testName) {
         super(testName);
     }
 
     private RubyTypeAnalyzer getAnalyzer(String file, String caretLine, boolean findMethod) throws Exception {
-        FileObject fo = getTestFile(file);
+        FileObject fo = getTestFile("testfiles/" + file);
         BaseDocument doc = getDocument(fo);
         GsfTestCompilationInfo info = getInfo(fo);
         Node root = AstUtilities.getRoot(info);
@@ -73,75 +72,105 @@ public class RubyTypeAnalyzerTest extends RubyTestBase {
             assertTrue(caretDelta != -1);
             caretLine = caretLine.substring(0, caretDelta) + caretLine.substring(caretDelta + 1);
             int lineOffset = info.getText().indexOf(caretLine);
-            assertTrue(lineOffset != -1);
+            assertTrue("unable to find offset for give carretLine: " + caretLine, lineOffset != -1);
             caretOffset = lineOffset + caretDelta;
         }
-        
+
         AstPath path = new AstPath(root, caretOffset);
         Node node = path.leaf();
-        
+
         if (findMethod) {
             MethodDefNode method = AstUtilities.findMethodAtOffset(root, caretOffset);
             assertNotNull(method);
-            
+
             root = method;
         }
-        
+
         RubyTypeAnalyzer instance = new RubyTypeAnalyzer(index, root, node, caretOffset, caretOffset, doc, fo);
 
         return instance;
     }
-    
-    public void testGetType() throws Exception {
-        RubyTypeAnalyzer instance = getAnalyzer("testfiles/types.rb", " l^oc = {", false);
 
-        assertEquals("Integer", instance.getType("x"));
+    private void assertTypes(final RubyType actualTypes, final String... expectedTypes) {
+        assertTypes(null, actualTypes, expectedTypes);
+    }
+
+    private void assertTypes(final String message, final RubyType actualTypes, final String... expectedTypes) {
+        assertTypes(message, actualTypes, false, expectedTypes);
+    }
+
+    private void assertTypes(final String message, final RubyType actualTypes,
+            final boolean hasUnknownMember, final String... expectedTypes) {
+        RubyType expected = new RubyType(expectedTypes);
+        if (hasUnknownMember) {
+            expected.append(RubyType.createUnknown());
+        }
+        assertTrue(message + ":" +
+                "\n  actualTypes:   " + actualTypes +
+                "\n  expectedTypes: " + expected, actualTypes.equals(expected));
+    }
+
+    private void assertTypes(String relFilePath, String matchingLine,
+            String exprToInfer, String... expectedTypes) throws Exception {
+        assertTypes(relFilePath, matchingLine, exprToInfer, false, expectedTypes);
+    }
+    private void assertTypes(String relFilePath, String matchingLine,
+            String exprToInfer, boolean hasUnknownMember, String... expectedTypes) throws Exception {
+        RubyTypeAnalyzer instance = getAnalyzer(relFilePath, matchingLine, false);
+        assertTypes("Types correctly inferred", instance.inferTypes(exprToInfer), hasUnknownMember, expectedTypes);
+    }
+
+    public void testGetType() throws Exception {
+        RubyTypeAnalyzer instance = getAnalyzer("types.rb", " l^oc = {", false);
+
+        assertTypes(instance.inferTypes("x"), "Integer");
         // y is reassigned later in the file - make sure that at this
         // point in scope we have the right type
-        assertEquals("File", instance.getType("y"));
-        assertEquals("Hash", instance.getType("$baz"));
-        assertEquals("Fixnum", instance.getType("@bar"));
-        assertEquals("Array", instance.getType("@foo"));
+        assertTypes(instance.inferTypes("y"), "File");
+        assertTypes(instance.inferTypes("$baz"), "Hash");
+        assertTypes(instance.inferTypes("@bar"), "Fixnum");
+        assertTypes(instance.inferTypes("@foo"), "Array");
     }
 
     public void testGetType2() throws Exception {
-        RubyTypeAnalyzer instance = getAnalyzer("testfiles/types.rb", " # d^one", false);
+        RubyTypeAnalyzer instance = getAnalyzer("types.rb", " # d^one", false);
 
         // Y is assigned different types - make sure that at this position, it's a number
-        assertEquals("Fixnum", instance.getType("y"));
+        assertTypes(instance.inferTypes("y"), "Fixnum");
         // Lots of reassignments - track types through vars, statics, fields, classvars
-        assertEquals("Hash", instance.getType("loc"));
-        assertEquals("Hash", instance.getType("$glob"));
-        assertEquals("Hash", instance.getType("@field"));
-        assertEquals("Hash", instance.getType("@@clsvar"));
-        assertEquals("Hash", instance.getType("loc2"));
+        assertTypes(instance.inferTypes("loc"), "Hash");
+        assertTypes(instance.inferTypes("$glob"), "Hash");
+        assertTypes(instance.inferTypes("@field"), "Hash");
+        assertTypes(instance.inferTypes("@@clsvar"), "Hash");
+        assertTypes(instance.inferTypes("loc2"), "Hash");
     }
- 
+
     public void testTypeAssertions() throws Exception {
-        RubyTypeAnalyzer instance = getAnalyzer("testfiles/types.rb", " l^oc = {", true);
-        assertEquals("String", instance.getType("param1"));
-        assertEquals("Hash", instance.getType("param2"));
+        RubyTypeAnalyzer instance = getAnalyzer("types.rb", " l^oc = {", true);
+        assertTypes(instance.inferTypes("param1"), "String");
+        assertTypes(instance.inferTypes("param2"), "Hash");
     }
 
     public void testBegin() throws Exception {
-        RubyTypeAnalyzer instance = getAnalyzer("testfiles/types2.rb", " @f^iles = ARGV.dup", true);
-        assertEquals("GetoptLong", instance.getType("go"));
+        RubyTypeAnalyzer instance = getAnalyzer("types2.rb", " @f^iles = ARGV.dup", true);
+        assertTypes(instance.inferTypes("go"), "GetoptLong");
     }
 
     public void testRailsController() throws Exception {
-        RubyTypeAnalyzer instance = getAnalyzer("testfiles/type_controller.rb", "^end", false);
-        assertEquals("ActionController::CgiRequest", instance.getType("request"));
+        assertTypes("type_controller.rb", "^end", "request", "ActionController::CgiRequest");
+        RubyTypeAnalyzer instance = getAnalyzer("type_controller.rb", "^end", false);
+        assertTypes(instance.inferTypes("request"), "ActionController::CgiRequest");
     }
 
 // This test doesn't work; the behavior works in the IDE but the
 // Lucene index isn't returning local symbols in the testing framework yet    
 //    public void testComplex1() throws Exception {
-//        RubyTypeAnalyzer instance = getAnalyzer("testfiles/types3.rb", "^caret", false);
+//        RubyTypeAnalyzer instance = getAnalyzer("types3.rb", "^caret", false);
 //        assertEquals("Product", instance.getType("@product"));
 //    }
 
 //    public void testComplex2() throws Exception {
-//        RubyTypeAnalyzer instance = getAnalyzer("testfiles/types3.rb", "^caret", true);
+//        RubyTypeAnalyzer instance = getAnalyzer("types3.rb", "^caret", true);
 //        assertEquals("ActiveRecord::ConnectionAdapters::TableDefinition", instance.getType("t"));
 //    }
 
@@ -150,13 +179,62 @@ public class RubyTypeAnalyzerTest extends RubyTestBase {
     //    assertFalse("Check that I do closures for each, collect, map, etc.", true);
     //    // also check to_s
     //}
-    
     // TODO: Make sure I can handle compound expressions like this one:
     //  Product.find(params[:id]).destroy
-
     public void testMigrationType() throws Exception {
-        RubyTypeAnalyzer instance = getAnalyzer("testfiles/migrate/20080726182725_create_posts.rb", " t.^time", true);
+        RubyTypeAnalyzer instance = getAnalyzer("migrate/20080726182725_create_posts.rb", " t.^time", true);
+        assertTypes(instance.inferTypes("t"), "ActiveRecord::ConnectionAdapters::TableDefinition");
+    }
 
-        assertEquals("ActiveRecord::ConnectionAdapters::TableDefinition", instance.getType("t"));
+    public void testIfType() throws Exception {
+        assertTypes("if_type.rb", "p va^r.in", "var", "String", "NilClass");
+    }
+
+    public void testIfElseType() throws Exception {
+        assertTypes("if_else_type.rb", "p va^r.in", "var", "String", "Array");
+    }
+
+    public void testIfElseType2() throws Exception {
+        assertTypes("if_else_type_2.rb", "p va^r.in", "var", "String", "NilClass");
+    }
+
+    public void testIfElseWithInBlockReassignmentType() throws Exception {
+        assertTypes("if_else_with_block_reassignment_type.rb", "p va^r.in", "var", "Hash", "Array");
+    }
+
+    public void testIfElseIfElseType() throws Exception {
+        assertTypes("if_elsif_else_type.rb", "p va^r.in", "var", "String", "Array", "Hash");
+    }
+
+    public void testUnlessType() throws Exception {
+        assertTypes("unless_type.rb", "var.i^", "var", "Array", "Hash");
+    }
+
+    public void testIfWithFailingInferenceInBranchType() throws Exception {
+        assertTypes("if_with_failing_inference_in_branch_type.rb", "var.to_^", "var", true, "NilClass");
+    }
+
+    // TODO inference is still not able to do the below
+    public void FIXME_testIfElseNestedSimpleType() throws Exception {
+        assertTypes("if_else_nested_simple_type.rb", "var.^ifcond1b", "var", "Float");
+        assertTypes("if_else_nested_simple_type.rb", "var.^aa", "var", "NilClass", "Float");
+    }
+
+    // TODO inference is still not able to do the below
+    public void FIXME_testIfElseNestedType() throws Exception {
+        assertTypes("if_else_nested_type.rb", "va^r.ifcond2", "var", "Hash");
+        // XXX more, see the if_else_nested_type.rb
+    }
+
+    public void testConstant() throws Exception {
+        assertTypes("constants.rb", "Colors::RED.byte^", "RED", "String");
+        // TODO fix and uncomment when reindexed
+        // assertTypes("indexed constants type inference", "constants.rb", "REXML::COPY^RIGHT", "COPYRIGHT", "String");
+    }
+
+    public void testCoreMethodType() throws Exception {
+        assertTypes("core_methods.rb", "ance^stors.delete(String)", "ancestors", "Array");
+        assertTypes("core_methods.rb", "puts has_^one.t", "has_one", "TrueClass", "FalseClass");
+        assertTypes("core_methods.rb", "huh = a.eq^l?(123)", "a", "Fixnum");
     }
 }
