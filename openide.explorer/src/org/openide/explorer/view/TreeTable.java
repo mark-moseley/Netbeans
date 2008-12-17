@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,7 +40,6 @@
  */
 package org.openide.explorer.view;
 import javax.swing.table.TableColumnModel;
-import org.openide.awt.MouseUtils;
 import org.openide.explorer.propertysheet.PropertyPanel;
 import org.openide.nodes.Node;
 import org.openide.nodes.Node.Property;
@@ -73,7 +72,9 @@ import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.tree.*;
+import org.openide.nodes.Children;
 import org.openide.util.Exceptions;
+import org.openide.util.Mutex;
 
 
 /**
@@ -223,6 +224,7 @@ class TreeTable extends JTable implements Runnable {
         am.put("previous", new NavigationAction(false));
     }
 
+    @Override
     public TableCellEditor getDefaultEditor(Class columnClass) {
         if (!edCreated && (columnClass == TreeTableModelAdapter.class)) {
             //Creating this editor in the constructor can take > 100ms even
@@ -235,6 +237,7 @@ class TreeTable extends JTable implements Runnable {
         return super.getDefaultEditor(columnClass);
     }
 
+    @Override
     public void selectAll() {
         //#48242 - select all over 1000 nodes generates 1000 re-sorts
         inSelectAll = true;
@@ -250,6 +253,7 @@ class TreeTable extends JTable implements Runnable {
     /*
      * Overridden to message super and forward the method to the tree.
      */
+    @Override
     public void updateUI() {
         super.updateUI();
 
@@ -289,6 +293,7 @@ class TreeTable extends JTable implements Runnable {
      * is not the right thing to do for an editor. Returning -1 for the
      * editing row in this case, ensures the editor is never painted.
      */
+    @Override
     public int getEditingRow() {
         return (getColumnClass(editingColumn) == TreeTableModelAdapter.class) ? (-1) : editingRow;
     }
@@ -296,6 +301,7 @@ class TreeTable extends JTable implements Runnable {
     /** Overridden - JTable's implementation of the method will
      *  actually attach (and leave behind) a gratuitous border
      *  on the enclosing scroll pane. */
+    @Override
     protected final void configureEnclosingScrollPane() {
         Container p = getParent();
 
@@ -321,10 +327,62 @@ class TreeTable extends JTable implements Runnable {
         }
     }
 
+    private class GuardedActions implements Mutex.Action<Object> {
+
+        private int type;
+        private Object p1;
+        final Object ret;
+
+        public GuardedActions(int type, Object p1) {
+            this.type = type;
+            this.p1 = p1;
+            ret = Children.MUTEX.readAccess(this);
+        }
+
+        public Object run() {
+            switch (type) {
+                case 0:
+                    paintImpl((Graphics) p1);
+                    break;
+                case 1:
+                    TreeTable.super.validateTree();
+                    break;
+                case 2:
+                    TreeTable.super.doLayout();
+                    break;
+                case 3:
+                    repaintSelection((Boolean) p1);
+                    break;
+                case 4:
+                    TreeTable.super.processEvent((AWTEvent) p1);
+                    break;
+                case 5:
+                    return TreeTable.super.getPreferredSize();
+                case 6:
+                    //return getToolTipTextImpl((MouseEvent) p1);
+                case 10:
+                    Object[] arr = (Object[]) p1;
+                    return TreeTable.super.processKeyBinding(
+                            (KeyStroke) arr[0],
+                            (KeyEvent) arr[1],
+                            (Integer) arr[2],
+                            (Boolean) arr[3]);                
+                default:
+                    throw new IllegalStateException("type: " + type);
+            }
+
+            return null;
+        }
+    } 
+
+    @Override
     public void paint(Graphics g) {
+         new GuardedActions(0, g);
+    }
+    
+    public void paintImpl(Graphics g) {
         if (needCalcRowHeight) {
             calcRowHeight(g);
-
             return;
         }
 
@@ -341,6 +399,27 @@ class TreeTable extends JTable implements Runnable {
          */
     }
 
+    @Override
+    protected void validateTree() {
+        new GuardedActions(1, null);
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        return (Dimension) new GuardedActions(5, null).ret;
+    }
+
+    @Override
+    public void doLayout() {
+        new GuardedActions(2, null);
+    }
+
+    @Override
+    protected boolean processKeyBinding(KeyStroke ks, KeyEvent e, int condition, boolean pressed) {
+        return (Boolean) new GuardedActions(10, new Object[]{ks, e, condition, pressed}).ret;
+    }
+
+    
     //   private static final sun.misc.Perf perf = sun.misc.Perf.getPerf();
     //   private static double total = 0; 
 
@@ -351,11 +430,11 @@ class TreeTable extends JTable implements Runnable {
     private void calcRowHeight(Graphics g) {
         Font f = getFont();
         FontMetrics fm = g.getFontMetrics(f);
-        int rowHeight = fm.getHeight() + fm.getMaxDescent();
+        int rh = fm.getHeight() + fm.getMaxDescent();
         needCalcRowHeight = false;
-        rowHeight = Math.max(20, rowHeight);
-        tree.setRowHeight(rowHeight);
-        setRowHeight(rowHeight);
+        rh = Math.max(20, rh);
+        tree.setRowHeight(rh);
+        setRowHeight(rh);
     }
 
     /**
@@ -387,6 +466,7 @@ class TreeTable extends JTable implements Runnable {
 
     /* Overriden to do not clear a selection upon model changes.
      */
+    @Override
     public void clearSelection() {
         if (!ignoreClearSelection) {
             super.clearSelection();
@@ -395,6 +475,7 @@ class TreeTable extends JTable implements Runnable {
     
     /* Updates tree column name and sets ignoreClearSelection flag.
      */
+    @Override
     public void tableChanged(TableModelEvent e) {
         // update tree column name
         int modelColumn = getTreeColumnIndex();
@@ -418,10 +499,11 @@ class TreeTable extends JTable implements Runnable {
         }
     }
 
+    @Override
     public void processKeyEvent(KeyEvent e) {
         //Manually hook in the bindings for tab - does not seem to get called
         //automatically
-        if (isEditing() && ((e.getKeyCode() == e.VK_DOWN) || (e.getKeyCode() == e.VK_UP))) {
+        if (isEditing() && ((e.getKeyCode() == KeyEvent.VK_DOWN) || (e.getKeyCode() == KeyEvent.VK_UP))) {
             return; //XXX
         }
 
@@ -429,25 +511,27 @@ class TreeTable extends JTable implements Runnable {
         //actions instead
         if (
             !isEditing() ||
-                (((e.getKeyCode() != e.VK_TAB) && (e.getKeyCode() != e.VK_ESCAPE)) ||
-                ((e.getModifiers() & e.CTRL_MASK) != 0))
+                (((e.getKeyCode() != KeyEvent.VK_TAB) && (e.getKeyCode() != KeyEvent.VK_ESCAPE)) ||
+                ((e.getModifiers() & KeyEvent.CTRL_MASK) != 0))
         ) {
             super.processKeyEvent(e);
         } else {
             processKeyBinding(
-                KeyStroke.getKeyStroke(e.getKeyCode(), e.getModifiersEx(), e.getID() == e.KEY_RELEASED), e,
-                JComponent.WHEN_FOCUSED, e.getID() == e.KEY_PRESSED
+                KeyStroke.getKeyStroke(e.getKeyCode(), e.getModifiersEx(), e.getID() == KeyEvent.KEY_RELEASED), e,
+                JComponent.WHEN_FOCUSED, e.getID() == KeyEvent.KEY_PRESSED
             );
         }
     }
 
     /* Performs horizontal scrolling of the tree when editing is started.
      */
+    @SuppressWarnings("unchecked")
+    @Override
     public boolean editCellAt(int row, int column, EventObject e) {
         if (e instanceof MouseEvent && (column != 0)) {
             MouseEvent me = (MouseEvent) e;
 
-            if (!SwingUtilities.isLeftMouseButton(me) || (me.getID() != me.MOUSE_PRESSED)) {
+            if (!SwingUtilities.isLeftMouseButton(me) || (me.getID() != MouseEvent.MOUSE_PRESSED)) {
                 return false;
             }
         }
@@ -542,6 +626,7 @@ class TreeTable extends JTable implements Runnable {
                 } else if (canTryCustomEditor && !Boolean.TRUE.equals(p.getValue("suppressCustomEditor"))) { //NOI18N
 
                     PropertyPanel panel = new PropertyPanel(p);
+                    @SuppressWarnings("deprecation")
                     PropertyEditor ed = panel.getPropertyEditor();
 
                     if ((ed != null) && ed.supportsCustomEditor()) {
@@ -599,6 +684,7 @@ class TreeTable extends JTable implements Runnable {
 
     /*
      */
+    @Override
     public void valueChanged(ListSelectionEvent e) {
         if (getSelectedRowCount() == 1) {
             lastRow = getSelectedRow();
@@ -611,6 +697,7 @@ class TreeTable extends JTable implements Runnable {
 
     /* Updates tree column index
      */
+    @Override
     public void columnAdded(TableColumnModelEvent e) {
         super.columnAdded(e);
         updateTreeColumnIndex();
@@ -618,6 +705,7 @@ class TreeTable extends JTable implements Runnable {
 
     /* Updates tree column index
      */
+    @Override
     public void columnRemoved(TableColumnModelEvent e) {
         super.columnRemoved(e);
         updateTreeColumnIndex();
@@ -625,6 +713,7 @@ class TreeTable extends JTable implements Runnable {
 
     /* Updates tree column index
      */
+    @Override
     public void columnMoved(TableColumnModelEvent e) {
         super.columnMoved(e);
         updateTreeColumnIndex();
@@ -683,6 +772,7 @@ class TreeTable extends JTable implements Runnable {
     }
 
     /** Overridden to manually draw the focused rectangle for the tree column */
+    @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
 
@@ -735,6 +825,7 @@ class TreeTable extends JTable implements Runnable {
         return true;
     }
 
+    @Override
     public void paintImmediately(int x, int y, int w, int h) {
         //Eliminate duplicate repaints in an editor change request
         if (inEditorChangeRequest) {
@@ -744,12 +835,13 @@ class TreeTable extends JTable implements Runnable {
         super.paintImmediately(x, y, w, h);
     }
 
+    @Override
     protected void processFocusEvent(FocusEvent fe) {
         super.processFocusEvent(fe);
 
         //Remove the editor here if the new focus owner is not
         //known to the table & the focus event is not temporary
-        if ((fe.getID() == fe.FOCUS_LOST) && !fe.isTemporary() && !inRemoveRequest && !inEditRequest) {
+        if ((fe.getID() == FocusEvent.FOCUS_LOST) && !fe.isTemporary() && !inRemoveRequest && !inEditRequest) {
             boolean stopEditing = ((fe.getOppositeComponent() != getParent()) &&
                 !isKnownComponent(fe.getOppositeComponent()) && (fe.getOppositeComponent() != null));
 
@@ -762,10 +854,11 @@ class TreeTable extends JTable implements Runnable {
         //paint all selected rows for the color to change when focus
         //is lost/gained
         if (!inRemoveRequest && !inEditRequest) {
-            repaintSelection(fe.getID() == fe.FOCUS_GAINED);
+            repaintSelection(fe.getID() == FocusEvent.FOCUS_GAINED);
         }
     }
 
+    @Override
     public void removeEditor() {
         inRemoveRequest = true;
 
@@ -780,30 +873,34 @@ class TreeTable extends JTable implements Runnable {
 
     /** Repaint the selected row */
     private void repaintSelection(boolean focused) {
-        int start = getSelectionModel().getMinSelectionIndex();
-        int end = getSelectionModel().getMaxSelectionIndex();
+        if (Children.MUTEX.isReadAccess() || Children.MUTEX.isWriteAccess()) {
+            int start = getSelectionModel().getMinSelectionIndex();
+            int end = getSelectionModel().getMaxSelectionIndex();
 
-        if (end != -1) {
-            if (end != start) {
-                Rectangle begin = getCellRect(start, 0, false);
-                Rectangle r = getCellRect(end, 0, false);
+            if (end != -1) {
+                if (end != start) {
+                    Rectangle begin = getCellRect(start, 0, false);
+                    Rectangle r = getCellRect(end, 0, false);
 
-                r.y = begin.y;
-                r.x = 0;
-                r.width = getWidth();
-                r.height = (r.y + r.height) - begin.y;
-                repaint(r.x, r.y, r.width, r.height);
-            } else {
-                Rectangle r = getCellRect(start, 0, false);
-                r.width = getWidth();
-                r.x = 0;
-                repaint(r.x, r.y, r.width, r.height);
+                    r.y = begin.y;
+                    r.x = 0;
+                    r.width = getWidth();
+                    r.height = (r.y + r.height) - begin.y;
+                    repaint(r.x, r.y, r.width, r.height);
+                } else {
+                    Rectangle r = getCellRect(start, 0, false);
+                    r.width = getWidth();
+                    r.x = 0;
+                    repaint(r.x, r.y, r.width, r.height);
+                }
             }
-        }
 
-        if (isEditing() && (editorComp != null)) {
-            editorComp.setBackground(focused ? getSelectionBackground() : getUnfocusedSelectedBackground());
-            editorComp.setForeground(focused ? getSelectionForeground() : getUnfocusedSelectedForeground());
+            if (isEditing() && (editorComp != null)) {
+                editorComp.setBackground(focused ? getSelectionBackground() : getUnfocusedSelectedBackground());
+                editorComp.setForeground(focused ? getSelectionForeground() : getUnfocusedSelectedForeground());
+            }
+        } else {
+            new GuardedActions(3, focused);
         }
     }
 
@@ -851,6 +948,7 @@ class TreeTable extends JTable implements Runnable {
         return unfocusedSelFg;
     }
 
+    @Override
     protected JTableHeader createDefaultTableHeader() {
         return new TreeTableHeader( getColumnModel() );
     }
@@ -864,6 +962,7 @@ class TreeTable extends JTable implements Runnable {
             super( columnModel );
         }
 
+        @Override
         public Dimension getPreferredSize() {
 
             Dimension retValue = super.getPreferredSize();
@@ -894,18 +993,22 @@ class TreeTable extends JTable implements Runnable {
             putClientProperty("JTree.lineStyle", "None"); // NOI18N
         }
 
+        @Override
         public void validate() {
             //do nothing
         }
 
+        @Override
         public void repaint(long tm, int x, int y, int width, int height) {
             //do nothing
         }
 
+        @Override
         public void addHierarchyListener(java.awt.event.HierarchyListener hl) {
             //do nothing
         }
 
+        @Override
         public void addComponentListener(java.awt.event.ComponentListener cl) {
             //do nothing
         }
@@ -925,6 +1028,7 @@ class TreeTable extends JTable implements Runnable {
          * Sets the row height of the tree, and forwards the row height to
          * the table.
          */
+        @Override
         public void setRowHeight(int rowHeight) {
             if (rowHeight > 0) {
                 super.setRowHeight(rowHeight);
@@ -936,6 +1040,7 @@ class TreeTable extends JTable implements Runnable {
          * Overridden to always set the size to the height of the TreeTable
          * and the width of column 0.  The paint() method will translate the
          * coordinates to the correct position. */
+        @Override
         public void setBounds(int x, int y, int w, int h) {
             transY = -y;
             super.setBounds(0, 0, TreeTable.this.getColumnModel().getColumn(0).getWidth(), TreeTable.this.getHeight());
@@ -943,21 +1048,24 @@ class TreeTable extends JTable implements Runnable {
 
         /* Fire width property change so that we can revalidate horizontal scrollbar in TreeTableView.
          */
+        @Override
         @SuppressWarnings("deprecation")
         public void reshape(int x, int y, int w, int h) {
-            int oldWidth = getWidth();
-            super.reshape(x, y, w, h);
+            int oldW = getWidth();
+            super.setBounds (x, y, w, h);
 
-            if (oldWidth != w) {
-                firePropertyChange("width", oldWidth, w);
+            if (oldW != w) {
+                firePropertyChange("width", oldW, w);
             }
         }
 
+        @Override
         public void paint(Graphics g) {
             g.translate(-getPositionX(), transY);
             super.paint(g);
         }
 
+        @Override
         public Rectangle getVisibleRect() {
             Rectangle visibleRect = TreeTable.this.getVisibleRect();
             visibleRect.x = positionX;
@@ -968,6 +1076,7 @@ class TreeTable extends JTable implements Runnable {
 
         /* Overriden to use this call for moving tree renderer.
          */
+        @Override
         public void scrollRectToVisible(Rectangle aRect) {
             Rectangle rect = getVisibleRect();
             rect.y = aRect.y;
@@ -988,6 +1097,7 @@ class TreeTable extends JTable implements Runnable {
             TreeTable.this.setPositionX(x);
         }
 
+        @Override
         public String getToolTipText(MouseEvent event) {
             if (event != null) {
                 Point p = event.getPoint();
@@ -1034,8 +1144,10 @@ class TreeTable extends JTable implements Runnable {
             return this;
         }
 
+        @Override
         protected TreeModelListener createTreeModelListener() {
             return new JTree.TreeModelHandler() {
+                    @Override
                     public void treeNodesRemoved(TreeModelEvent e) {
                         if (tree.getSelectionCount() == 0) {
                             TreePath path = TreeView.findSiblingTreePath(e.getTreePath(), e.getChildIndices());
@@ -1048,14 +1160,23 @@ class TreeTable extends JTable implements Runnable {
                 };
         }
 
+        @Override
         public void fireTreeCollapsed(TreePath path) {
             super.fireTreeCollapsed(path);
             firePropertyChange("width", -1, getWidth());
         }
 
+        @Override
         public void fireTreeExpanded(TreePath path) {
             super.fireTreeExpanded(path);
             firePropertyChange("width", -1, getWidth());
+        }
+
+        boolean treeTableHasFocus() {
+            Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+            boolean tableHasFocus = (focusOwner == this) || (focusOwner == TreeTable.this) ||
+                TreeTable.this.isAncestorOf(focusOwner) || focusOwner instanceof JRootPane; //RootPane == popup menu
+            return tableHasFocus;
         }
     }
 
@@ -1086,6 +1207,7 @@ class TreeTable extends JTable implements Runnable {
          * <p>The offset is then set on the TreeTableTextField component
          * created in the constructor, and returned.
          */
+        @Override
         public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int r, int c) {
             Component component = super.getTableCellEditorComponent(table, value, isSelected, r, c);
 
@@ -1098,6 +1220,7 @@ class TreeTable extends JTable implements Runnable {
         /**
          * This is overridden to forward the event to the tree and start editor timer.
          */
+        @Override
         public boolean isCellEditable(EventObject e) {
             if (lastRow != -1) {
                 org.openide.nodes.Node n = Visualizer.findNode(tree.getPathForRow(lastRow).getLastPathComponent());
@@ -1122,7 +1245,7 @@ class TreeTable extends JTable implements Runnable {
                 MouseEvent me = (MouseEvent) e;
                 int column = getTreeColumnIndex();
 
-                if (MouseUtils.isLeftMouseButton(me) && (me.getClickCount() == 2)) {
+                if (SwingUtilities.isLeftMouseButton(me) && (me.getClickCount() == 2)) {
                     TreePath path = tree.getPathForRow(TreeTable.this.rowAtPoint(me.getPoint()));
                     Rectangle r = tree.getPathBounds(path);
 
@@ -1132,7 +1255,7 @@ class TreeTable extends JTable implements Runnable {
                 }
 
                 MouseEvent newME = new MouseEvent(
-                        TreeTable.this.tree, me.getID(), me.getWhen(), me.getModifiers(),
+                        TreeTable.this.tree, me.getID(), me.getWhen(), me.getModifiers()+me.getModifiersEx(),
                         me.getX() - getCellRect(0, column, true).x + positionX, me.getY(), me.getClickCount(),
                         me.isPopupTrigger()
                     );
@@ -1164,7 +1287,7 @@ class TreeTable extends JTable implements Runnable {
             if ((event instanceof MouseEvent) && SwingUtilities.isLeftMouseButton((MouseEvent) event)) {
                 MouseEvent me = (MouseEvent) event;
 
-                return ((me.getID() == me.MOUSE_PRESSED) && (me.getClickCount() == 1) && inHitRegion(me));
+                return ((me.getID() == MouseEvent.MOUSE_PRESSED) && (me.getClickCount() == 1) && inHitRegion(me));
             }
 
             return false;
@@ -1335,17 +1458,12 @@ class TreeTable extends JTable implements Runnable {
     static class TreeTableTextField extends JTextField {
         public int offset;
 
-        @SuppressWarnings("deprecation")
-        public void reshape(int x, int y, int w, int h) {
+        @Override
+        public void setBounds(int x, int y, int w, int h) {
             int newX = Math.max(x, offset);
-            super.reshape(newX, y, w - (newX - x), h);
+            super.setBounds(newX, y, w - (newX - x), h);
         }
 
-        public void addNotify() {
-            super.addNotify();
-
-            //requestFocus();  //no longer necessary, STPolicy will do it - Tim
-        }
     }
     /**
      * ListToTreeSelectionModelWrapper extends DefaultTreeSelectionModel
@@ -1377,6 +1495,7 @@ class TreeTable extends JTable implements Runnable {
          * and message super. This is the only place DefaultTreeSelectionModel
          * alters the ListSelectionModel.
          */
+        @Override
         public void resetRowSelection() {
             if (!updatingListSelectionModel) {
                 updatingListSelectionModel = true;
@@ -1469,12 +1588,14 @@ class TreeTable extends JTable implements Runnable {
      * the overridden method TreeTable.clearSelection()
      */
     class TreeTableSelectionModel extends DefaultListSelectionModel {
+        @Override
         public void setAnchorSelectionIndex(int anchorIndex) {
             if( ignoreClearSelection )
                 return;
             super.setAnchorSelectionIndex(anchorIndex);
         }
 
+        @Override
         public void setLeadSelectionIndex(int leadIndex) {
             if( ignoreClearSelection )
                 return;
@@ -1489,6 +1610,7 @@ class TreeTable extends JTable implements Runnable {
         /**
          * Creates the mouse listener for the JTable.
          */
+        @Override
         protected MouseInputListener createMouseInputListener() {
             return new TreeTableMouseInputHandler();
         }
@@ -1498,14 +1620,17 @@ class TreeTable extends JTable implements Runnable {
             private Component dispatchComponent;
 
             //  The Table's mouse listener methods.
+            @Override
             public void mouseClicked(MouseEvent e) {
                 processMouseEvent(e);
             }
 
+            @Override
             public void mousePressed(MouseEvent e) {
                 processMouseEvent(e);
             }
 
+            @Override
             public void mouseReleased(MouseEvent e) {
                 if (shouldIgnore(e)) {
                     return;
@@ -1520,6 +1645,7 @@ class TreeTable extends JTable implements Runnable {
                 }
             }
 
+            @Override
             public void mouseDragged(MouseEvent e) {
                 return;
             }
@@ -1610,6 +1736,7 @@ class TreeTable extends JTable implements Runnable {
                     table.changeSelection(row, column, 
                             Utilities.isMac() ? e.isMetaDown() : e.isControlDown(), //use META key on Mac to toggle selection
                             e.isShiftDown());
+                    setValueIsAdjusting(false);
                 }
             }
             
@@ -1667,6 +1794,7 @@ class TreeTable extends JTable implements Runnable {
     /** Focus transfer policy that retains focus after closing an editor.
      * Copied wholesale from org.openide.explorer.propertysheet.SheetTable */
     private class STPolicy extends ContainerOrderFocusTraversalPolicy {
+        @Override
         public Component getComponentAfter(Container focusCycleRoot, Component aComponent) {
             if (inRemoveRequest) {
                 return TreeTable.this;
@@ -1677,6 +1805,7 @@ class TreeTable extends JTable implements Runnable {
             }
         }
 
+        @Override
         public Component getComponentBefore(Container focusCycleRoot, Component aComponent) {
             if (inRemoveRequest) {
                 return TreeTable.this;
@@ -1685,6 +1814,7 @@ class TreeTable extends JTable implements Runnable {
             }
         }
 
+        @Override
         public Component getFirstComponent(Container focusCycleRoot) {
             if (!inRemoveRequest && isEditing()) {
                 return editorComp;
@@ -1693,6 +1823,7 @@ class TreeTable extends JTable implements Runnable {
             }
         }
 
+        @Override
         public Component getDefaultComponent(Container focusCycleRoot) {
             if (inRemoveRequest && isEditing() && editorComp.isShowing()) {
                 return editorComp;
@@ -1701,6 +1832,7 @@ class TreeTable extends JTable implements Runnable {
             }
         }
 
+        @Override
         protected boolean accept(Component aComponent) {
             //Do not allow focus to go to a child of the editor we're using if
             //we are in the process of removing the editor
@@ -1826,8 +1958,9 @@ class TreeTable extends JTable implements Runnable {
             editCellAt(row, col, null);
         }
 
+        @Override
         public boolean isEnabled() {
-            return (getSelectedRow() != -1) && (getSelectedColumn() != -1) && !isEditing();
+            return (getSelectedRow() != -1) && (getSelectedColumn() != -1) && !isEditing() && getSelectedColumn() != getTreeColumnIndex();
         }
     }
 
@@ -1868,6 +2001,7 @@ class TreeTable extends JTable implements Runnable {
             }
         }
 
+        @Override
         public boolean isEnabled() {
             return isEditing();
         }
@@ -1886,6 +2020,7 @@ class TreeTable extends JTable implements Runnable {
             }
         }
 
+        @Override
         public boolean isEnabled() {
             return !isEditing() && !inRemoveRequest;
         }
