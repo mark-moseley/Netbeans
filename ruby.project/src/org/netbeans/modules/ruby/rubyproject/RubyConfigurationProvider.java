@@ -99,7 +99,7 @@ public final class RubyConfigurationProvider implements ProjectConfigurationProv
     private static final Config DEFAULT = new Config(null,
             NbBundle.getMessage(RubyConfigurationProvider.class, "RubyConfigurationProvider.default.label"));
 
-    private final RubyProject p;
+    private final RubyBaseProject p;
     private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
     private final FileChangeListener fcl = new FileChangeAdapter() {
         public void fileFolderCreated(FileEvent fe) {
@@ -115,15 +115,15 @@ public final class RubyConfigurationProvider implements ProjectConfigurationProv
             update(fe);
         }
         private void update(FileEvent ev) {
-            LOGGER.log(Level.FINEST, "Received {0}", ev);
+            LOGGER.log(Level.FINER, "Received {0}", ev);
             Set<String> oldConfigs = configs != null ? configs.keySet() : Collections.<String>emptySet();
             configDir = p.getProjectDirectory().getFileObject("nbproject/configs"); // NOI18N
             if (configDir != null) {
                 configDir.removeFileChangeListener(fclWeak);
                 configDir.addFileChangeListener(fclWeak);
-                LOGGER.log(Level.FINEST, "(Re-)added listener to {0}", configDir);
+                LOGGER.log(Level.FINER, "(Re-)added listener to {0}", configDir);
             } else {
-                LOGGER.log(Level.FINEST, "No nbproject/configs exists");
+                LOGGER.log(Level.FINER, "No nbproject/configs exists");
             }
             calculateConfigs();
             Set<String> newConfigs = configs.keySet();
@@ -138,17 +138,17 @@ public final class RubyConfigurationProvider implements ProjectConfigurationProv
     private FileObject configDir;
     private Map<String,Config> configs;
 
-    public RubyConfigurationProvider(RubyProject p) {
+    public RubyConfigurationProvider(RubyBaseProject p) {
         this.p = p;
         fclWeak = FileUtil.weakFileChangeListener(fcl, null);
         FileObject nbp = p.getProjectDirectory().getFileObject("nbproject"); // NOI18N
         if (nbp != null) {
             nbp.addFileChangeListener(fclWeak);
-            LOGGER.log(Level.FINEST, "Added listener to {0}", nbp);
+            LOGGER.log(Level.FINER, "Added listener to {0}", nbp);
             configDir = nbp.getFileObject("configs"); // NOI18N
             if (configDir != null) {
                 configDir.addFileChangeListener(fclWeak);
-                LOGGER.log(Level.FINEST, "Added listener to {0}", configDir);
+                LOGGER.log(Level.FINER, "Added listener to {0}", configDir);
             }
         }
         p.evaluator().addPropertyChangeListener(new PropertyChangeListener() {
@@ -184,7 +184,7 @@ public final class RubyConfigurationProvider implements ProjectConfigurationProv
                 }
             }
         }
-        LOGGER.log(Level.FINEST, "Calculated configurations: {0}", configs);
+        LOGGER.log(Level.FINER, "Calculated configurations: {0}", configs);
     }
 
     public Collection<Config> getConfigurations() {
