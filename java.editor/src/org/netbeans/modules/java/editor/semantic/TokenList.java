@@ -36,6 +36,7 @@ import com.sun.source.util.TreePath;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -97,37 +98,47 @@ public class TokenList {
                 if (cancel.get())
                     return ;
                 
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
+                
                 if (topLevelIsJava) {
                     while (ts.offset() < offset) {
                         if (!ts.moveNext())
                             return ;
                     }
                 } else {
-                    while (true) {
-                        if (ts == null) {
-                            List<? extends TokenSequence> seqs = new ArrayList<TokenSequence>(embeddedTokenSequences(TokenHierarchy.get(doc), offset));
+                    Iterator<? extends TokenSequence> embeddedSeqs = null;
+                    if (ts == null) {
+                        List<? extends TokenSequence> seqs = new ArrayList<TokenSequence>(embeddedTokenSequences(TokenHierarchy.get(doc), offset));
+                        Collections.reverse(seqs);
+                        embeddedSeqs = seqs.iterator();
+                        while (embeddedSeqs.hasNext()) {
+                            TokenSequence tseq = embeddedSeqs.next();
+                            if (tseq.language() == JavaTokenId.language()) {
+                                ts = tseq;
+                                break;
+                            }
+                        }
+                    }
 
-                            Collections.reverse(seqs);
-
-                            for (TokenSequence tseq : seqs) {
+                    while (ts != null && ts.offset() < offset) {
+                        if (!ts.moveNext()) {
+                            ts = null;
+                            if (embeddedSeqs == null) {
+                                List<? extends TokenSequence> seqs = new ArrayList<TokenSequence>(embeddedTokenSequences(TokenHierarchy.get(doc), offset));
+                                Collections.reverse(seqs);
+                                embeddedSeqs = seqs.iterator();
+                            }
+                            while (embeddedSeqs.hasNext()) {
+                                TokenSequence tseq = embeddedSeqs.next();
                                 if (tseq.language() == JavaTokenId.language()) {
                                     ts = tseq;
+                                    break;
                                 }
                             }
                         }
-
-                        if (ts == null) {
-                            return;
-                        }
-
-                        while (ts.offset() < offset) {
-                            if (!ts.moveNext()) {
-                                ts = null;
-                                return;
-                            }
-                        }
-                        
-                        return;
                     }
                 }
             }
@@ -165,6 +176,11 @@ public class TokenList {
                 if (cancel.get())
                     return ;
                 
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
+                
                 if (ts == null)
                     return ;
                 
@@ -190,6 +206,11 @@ public class TokenList {
                 if (cancel.get())
                     return ;
                 
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
+                
                 if (ts == null)
                     return ;
                 
@@ -210,6 +231,11 @@ public class TokenList {
             public void run() {
                 if (cancel.get())
                     return ;
+                
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
                 
                 if (ts == null)
                     return ;
@@ -237,6 +263,11 @@ public class TokenList {
             public void run() {
                 if (cancel.get())
                     return ;
+                
+                if (ts != null && !ts.isValid()) {
+                    cancel.set(true);
+                    return ;
+                }
                 
                 if (ts == null)
                     return ;
