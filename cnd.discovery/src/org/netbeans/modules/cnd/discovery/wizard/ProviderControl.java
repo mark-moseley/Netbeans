@@ -64,6 +64,7 @@ import org.netbeans.modules.cnd.discovery.api.ProviderProperty;
 import org.netbeans.modules.cnd.discovery.wizard.api.DiscoveryDescriptor;
 import org.netbeans.modules.cnd.api.utils.ElfDynamicLibraryFileFilter;
 import org.netbeans.modules.cnd.api.utils.ElfStaticLibraryFileFilter;
+import org.netbeans.modules.cnd.api.utils.FileChooser;
 import org.netbeans.modules.cnd.api.utils.MacOSXDynamicLibraryFileFilter;
 import org.netbeans.modules.cnd.api.utils.MacOSXExecutableFileFilter;
 import org.netbeans.modules.cnd.api.utils.PeDynamicLibraryFileFilter;
@@ -99,6 +100,20 @@ public class ProviderControl {
         Mnemonics.setLocalizedText(label, property.getName());
         switch(property.getKind()) {
             case MakeLogFile:
+                field = new JTextField();
+                chooserMode = JFileChooser.FILES_ONLY;
+                initBuildOrRoot(wizardDescriptor);
+                button = new JButton();
+                Mnemonics.setLocalizedText(button, getString("ROOT_DIR_BROWSE_BUTTON_TXT"));
+                layout(panel);
+                button.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent evt) {
+                        rootFolderButtonActionPerformed(evt, ProviderControl.this.property.getKind()==PropertyKind.BinaryFile,
+                                                        getString("LOG_FILE_CHOOSER_TITLE_TXT"));
+                    }
+                });
+                addListeners();
+                break;
             case BinaryFile:
                 field = new JTextField();
                 chooserMode = JFileChooser.FILES_ONLY;
@@ -108,7 +123,8 @@ public class ProviderControl {
                 layout(panel);
                 button.addActionListener(new ActionListener() {
                     public void actionPerformed(ActionEvent evt) {
-                        rootFolderButtonActionPerformed(evt, ProviderControl.this.property.getKind()==PropertyKind.BinaryFile);
+                        rootFolderButtonActionPerformed(evt, ProviderControl.this.property.getKind()==PropertyKind.BinaryFile,
+                                                        getString("BINARY_FILE_CHOOSER_TITLE_TXT"));
                     }
                 });
                 addListeners();
@@ -122,7 +138,7 @@ public class ProviderControl {
                 layout(panel);
                 button.addActionListener(new ActionListener() {
                     public void actionPerformed(ActionEvent evt) {
-                        rootFolderButtonActionPerformed(evt, true);
+                        rootFolderButtonActionPerformed(evt, true, getString("ROOT_DIR_CHOOSER_TITLE_TXT"));
                     }
                 });
                 addListeners();
@@ -311,31 +327,24 @@ public class ProviderControl {
         while (tokenizer.hasMoreTokens()) {
             list.add(tokenizer.nextToken());
         }
-        AdditionalLibrariesListPanel libPanel = new AdditionalLibrariesListPanel(list.toArray());
+        AdditionalLibrariesListPanel libPanel = new AdditionalLibrariesListPanel(list);
         DialogDescriptor dialogDescriptor = new DialogDescriptor(AdditionalLibrariesListPanel.wrapPanel(libPanel),
                 getString("ADDITIONAL_LIBRARIES_TXT"));
         DialogDisplayer.getDefault().notify(dialogDescriptor);
         if (dialogDescriptor.getValue()  == DialogDescriptor.OK_OPTION) {
             Vector newList = libPanel.getListData();
-            String includes = ""; // NOI18N
+            StringBuilder includes = new StringBuilder();
             for (int i = 0; i < newList.size(); i++) {
-                if (i > 0)
-                    includes += ";"; // NOI18N
-                includes += newList.elementAt(i);
+                if (i > 0) {
+                    includes.append(';'); // NOI18N
+                }
+                includes.append(newList.elementAt(i));
             }
-            field.setText(includes);
+            field.setText(includes.toString());
         }
     }
     
-    private void rootFolderButtonActionPerformed(ActionEvent evt, boolean isBinary) {
-        String seed = null;
-        if (field.getText().length() > 0) {
-            seed = field.getText();
-        } else            if (FileChooser.getCurrectChooserFile()  != null) {
-            seed = FileChooser.getCurrectChooserFile().getPath();
-        }  else {
-            seed = System.getProperty("user.home"); // NOI18N
-        }
+    private void rootFolderButtonActionPerformed(ActionEvent evt, boolean isBinary, String title) {
         FileFilter[] filters = null;
         if (chooserMode == JFileChooser.FILES_ONLY){
             if (isBinary) {
@@ -361,16 +370,17 @@ public class ProviderControl {
         }
         
         JFileChooser fileChooser = new FileChooser(
-                getString("ROOT_DIR_CHOOSER_TITLE_TXT"), // NOI18N
+                title,
                 getString("ROOT_DIR_BUTTON_TXT"), // NOI18N
-                chooserMode, false,
+                chooserMode,
                 filters,
-                seed,
+                field.getText(),
                 false
                 );
         int ret = fileChooser.showOpenDialog(panel);
-        if (ret == JFileChooser.CANCEL_OPTION)
+        if (ret == JFileChooser.CANCEL_OPTION) {
             return;
+        }
         String path = fileChooser.getSelectedFile().getPath();
         //path = FilePathAdaptor.normalize(path);
         field.setText(path);

@@ -42,6 +42,7 @@
 package org.netbeans.modules.cnd.discovery.wizard;
 
 import java.awt.Dimension;
+import java.util.List;
 import java.util.Vector;
 import javax.swing.JFileChooser;
 import javax.swing.JPanel;
@@ -50,6 +51,7 @@ import org.netbeans.modules.cnd.api.utils.ElfExecutableFileFilter;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.api.utils.ElfDynamicLibraryFileFilter;
 import org.netbeans.modules.cnd.api.utils.ElfStaticLibraryFileFilter;
+import org.netbeans.modules.cnd.api.utils.FileChooser;
 import org.netbeans.modules.cnd.api.utils.MacOSXDynamicLibraryFileFilter;
 import org.netbeans.modules.cnd.api.utils.MacOSXExecutableFileFilter;
 import org.netbeans.modules.cnd.makeproject.ui.utils.ListEditorPanel;
@@ -66,7 +68,7 @@ import org.openide.util.Utilities;
  *
  * @author Alexander Simon
  */
-public class AdditionalLibrariesListPanel extends ListEditorPanel {
+public class AdditionalLibrariesListPanel extends ListEditorPanel<String> {
     
     public static JPanel wrapPanel(ListEditorPanel innerPanel) {
         JPanel outerPanel = new JPanel();
@@ -81,7 +83,7 @@ public class AdditionalLibrariesListPanel extends ListEditorPanel {
         return outerPanel;
     }
     
-    public AdditionalLibrariesListPanel(Object[] objects) {
+    public AdditionalLibrariesListPanel(List<String> objects) {
         super(objects);
         getDefaultButton().setVisible(false);
         getUpButton().setVisible(false);
@@ -90,12 +92,7 @@ public class AdditionalLibrariesListPanel extends ListEditorPanel {
     }
     
     @Override
-    public Object addAction() {
-        String seed = null;
-        if (FileChooser.getCurrectChooserFile()  != null)
-            seed = FileChooser.getCurrectChooserFile().getPath();
-        if (seed == null)
-            seed = System.getProperty("user.home"); // NOI18N
+    public String addAction() {
         FileFilter[] filters;
         if (Utilities.isWindows()){
             filters = new FileFilter[] {PeExecutableFileFilter.getInstance(),
@@ -114,13 +111,13 @@ public class AdditionalLibrariesListPanel extends ListEditorPanel {
                 getString("LIBRARY_CHOOSER_TITLE_TXT"),
                 getString("LIBRARY_CHOOSER_BUTTON_TXT"),
                 JFileChooser.FILES_ONLY,
-                false,
                 filters,
-                seed,
+                "",
                 false);
         int ret = fileChooser.showOpenDialog(this);
-        if (ret == JFileChooser.CANCEL_OPTION)
+        if (ret == JFileChooser.CANCEL_OPTION) {
             return null;
+        }
         String itemPath = fileChooser.getSelectedFile().getPath();
         itemPath = FilePathAdaptor.normalize(itemPath);
         return itemPath;
@@ -154,20 +151,21 @@ public class AdditionalLibrariesListPanel extends ListEditorPanel {
     }
     
     @Override
-    public Object copyAction(Object o) {
-        return new String((String) o);
+    public String copyAction(String o) {
+        return o;
     }
     
     @SuppressWarnings("unchecked") // NOI18N
     @Override
-    public void editAction(Object o) {
-        String s = (String)o;
+    public void editAction(String o) {
+        String s = o;
         
         InputLine notifyDescriptor = new NotifyDescriptor.InputLine(getString("EDIT_DIALOG_LABEL_TXT"), getString("EDIT_DIALOG_TITLE_TXT"));
         notifyDescriptor.setInputText(s);
         DialogDisplayer.getDefault().notify(notifyDescriptor);
-        if (notifyDescriptor.getValue()  != NotifyDescriptor.OK_OPTION)
+        if (notifyDescriptor.getValue() != NotifyDescriptor.OK_OPTION) {
             return;
+        }
         String newS = notifyDescriptor.getInputText();
         Vector vector = getListData();
         Object[] arr = getListData().toArray();
