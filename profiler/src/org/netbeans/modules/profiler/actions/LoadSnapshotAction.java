@@ -47,6 +47,7 @@ import org.netbeans.modules.profiler.heapwalk.HeapWalkerManager;
 import org.netbeans.modules.profiler.utils.IDEUtils;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -79,6 +80,8 @@ public final class LoadSnapshotAction extends AbstractAction {
     private static final String PROFILER_SNAPSHOT_HEAPDUMP_FILE_FILTER = NbBundle.getMessage(LoadSnapshotAction.class,
                                                                                              "LoadSnapshotAction_ProfilerSnapshotHeapdumpFileFilter"); // NOI18N
                                                                                                                                                        // -----
+    private static final String CANNOT_OPEN_SNAPSHOT_MSG = NbBundle.getMessage(LoadSnapshotAction.class,
+                                                                                    "LoadSnapshotAction_No_Snapshot_Selected"); // NOI18N
     private static File importDir;
 
     //~ Constructors -------------------------------------------------------------------------------------------------------------
@@ -87,7 +90,7 @@ public final class LoadSnapshotAction extends AbstractAction {
         putValue(Action.NAME, ACTION_NAME);
         putValue(Action.SHORT_DESCRIPTION, ACTION_DESCR);
         putValue(Action.SMALL_ICON,
-                 new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/actions/resources/openSnapshot.png")) //NOI18N
+                 new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/actions/resources/openSnapshot.png")) //NOI18N
         );
     }
 
@@ -162,6 +165,11 @@ public final class LoadSnapshotAction extends AbstractAction {
                 LoadedSnapshot[] imported = ResultsManager.getDefault()
                                                           .loadSnapshots(snapshotsFOArr.toArray(new FileObject[snapshotsFOArr.size()]));
                 ResultsManager.getDefault().openSnapshots(imported);
+            } else if (!handleHeapdumps) {
+                NetBeansProfiler.getDefaultNB()
+                        .displayError(MessageFormat
+                        .format(CANNOT_OPEN_SNAPSHOT_MSG, null));
+
             }
 
             if (heapdumpsFArr.size() > 0) {
