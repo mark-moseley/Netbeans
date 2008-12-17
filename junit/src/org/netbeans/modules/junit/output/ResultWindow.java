@@ -45,10 +45,9 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.lang.ref.WeakReference;
-import javax.accessibility.AccessibleContext;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 
@@ -107,6 +106,8 @@ public final class ResultWindow extends TopComponent {
     /** Creates a new instance of ResultWindow */
     public ResultWindow() {
         super();
+        setToolTipText(NbBundle.getMessage(ResultWindow.class,
+                                           "TOOLTIP_TEST_RESULTS"));
         setFocusable(true);
         setLayout(new BorderLayout());
         //add(tabbedPanel = new JTabbedPane(), BorderLayout.CENTER);
@@ -114,11 +115,11 @@ public final class ResultWindow extends TopComponent {
         setName(ID);
         setDisplayName(NbBundle.getMessage(ResultWindow.class,
                                            "TITLE_TEST_RESULTS"));      //NOI18N
-        setIcon(Utilities.loadImage(
+        setIcon(ImageUtilities.loadImage(
                 "org/netbeans/modules/junit/output/res/testResults.png",//NOI18N
 	        true));
         
-        AccessibleContext accessibleContext = getAccessibleContext();
+        accessibleContext = getAccessibleContext();
         accessibleContext.setAccessibleName(
                 NbBundle.getMessage(getClass(), "ACSN_TestResults"));   //NOI18N
         accessibleContext.setAccessibleDescription(
@@ -143,13 +144,7 @@ public final class ResultWindow extends TopComponent {
         this.view = view;
         add(view);
     }
-    
-    /**
-     */
-    private boolean isActivated() {
-        return TopComponent.getRegistry().getActivated() == this;
-    }
-    
+        
     /**
      */
     void promote() {
@@ -189,6 +184,5 @@ public final class ResultWindow extends TopComponent {
      */
     private Object readResolve() throws java.io.ObjectStreamException {
         return ResultWindow.getDefault();
-    }
-    
+    }    
 }
