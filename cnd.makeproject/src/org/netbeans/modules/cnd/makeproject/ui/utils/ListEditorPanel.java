@@ -52,24 +52,23 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.ListSelectionModel;
-import javax.swing.SwingUtilities;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import org.openide.util.NbBundle;
 
-public class ListEditorPanel extends javax.swing.JPanel {
+public class ListEditorPanel<E> extends javax.swing.JPanel {
 
     private JList targetList = null;
-    protected Vector listData = new Vector();
+    protected Vector<E> listData = new Vector<E>();
     private boolean allowedToRemoveAll = true;
     protected JButton[] extraButtons;
     private boolean isChanged = false;
 
-    public ListEditorPanel(Object[] objects) {
+    public ListEditorPanel(List<E> objects) {
         this(objects, null);
     }
 
-    public ListEditorPanel(Object[] objects, JButton[] extraButtons) {
+    public ListEditorPanel(List<E> objects, JButton[] extraButtons) {
         initComponents();
 
         this.extraButtons = extraButtons;
@@ -101,8 +100,8 @@ public class ListEditorPanel extends javax.swing.JPanel {
         defaultButton.getAccessibleContext().setAccessibleDescription(getDefaultButtonAD());
 
         if (objects != null) {
-            for (int i = 0; i < objects.length; i++) {
-                listData.add(objects[i]);
+            for (int i = 0; i < objects.size(); i++) {
+                listData.add(objects.get(i));
             }
         }
         targetList = new JList();
@@ -118,9 +117,10 @@ public class ListEditorPanel extends javax.swing.JPanel {
         });
         targetList.addMouseListener(new MouseAdapter() {
 
+            @SuppressWarnings("unchecked")
             @Override
             public void mouseClicked(MouseEvent me) {
-                Object ob[] = targetList.getSelectedValues();
+                E ob[] = (E[]) targetList.getSelectedValues();
                 if (ob.length != 1) {
                     return;
                 }
@@ -503,7 +503,7 @@ public class ListEditorPanel extends javax.swing.JPanel {
         add(dataPanel, gridBagConstraints);
     }// </editor-fold>//GEN-END:initComponents
 
-    public void defaultAction(Object o) {
+    public void defaultAction(E o) {
     }
 
     private void defaultObjectAction() {
@@ -527,7 +527,7 @@ public class ListEditorPanel extends javax.swing.JPanel {
         defaultObjectAction();
     }//GEN-LAST:event_defaultButtonActionPerformed
 
-    public void editAction(Object o) {
+    public void editAction(E o) {
     }
 
     private void editObjectAction() {
@@ -551,7 +551,7 @@ public class ListEditorPanel extends javax.swing.JPanel {
         editObjectAction();
     }//GEN-LAST:event_renameButtonActionPerformed
 
-    public Object copyAction(Object o) {
+    public E copyAction(E o) {
         return null;
     }
 
@@ -563,7 +563,7 @@ public class ListEditorPanel extends javax.swing.JPanel {
         if (selectedIndex >= (listData.size())) {
             return;
         }
-        Object newObject = copyAction(listData.elementAt(selectedIndex));
+        E newObject = copyAction(listData.elementAt(selectedIndex));
         if (newObject == null) {
             return;
         }
@@ -596,15 +596,18 @@ public class ListEditorPanel extends javax.swing.JPanel {
         }
         // Update GUI
         isChanged = true;
-        Object tmp = listData.elementAt(selectedIndex);
+        E tmp = listData.elementAt(selectedIndex);
         listData.removeElementAt(selectedIndex);
         listData.add(++selectedIndex, tmp);
         setData(listData);
         if (selectedIndex >= 0) {
             ensureIndexIsVisible(selectedIndex);
+            checkSelection(selectedIndex);
             setSelectedIndex(selectedIndex);
         }
-        checkSelection();
+        else {
+            checkSelection();
+        }
         if (downButton.isEnabled()) {
             downButton.requestFocus();
         } else {
@@ -623,15 +626,18 @@ public class ListEditorPanel extends javax.swing.JPanel {
         }
         // Update GUI
         isChanged = true;
-        Object tmp = listData.elementAt(selectedIndex);
+        E tmp = listData.elementAt(selectedIndex);
         listData.removeElementAt(selectedIndex);
         listData.add(--selectedIndex, tmp);
         setData(listData);
         if (selectedIndex >= 0) {
             ensureIndexIsVisible(selectedIndex);
+            checkSelection(selectedIndex);
             setSelectedIndex(selectedIndex);
         }
-        checkSelection();
+        else {
+            checkSelection();
+        }
         if (upButton.isEnabled()) {
             upButton.requestFocus();
         } else {
@@ -643,7 +649,7 @@ public class ListEditorPanel extends javax.swing.JPanel {
         upAction();
     }//GEN-LAST:event_upButtonActionPerformed
 
-    public void removeAction(Object o) {
+    public void removeAction(E o) {
     }
 
     private void removeObjectAction() {
@@ -659,9 +665,11 @@ public class ListEditorPanel extends javax.swing.JPanel {
         selectedIndex = (selectedIndex >= listData.size()) ? selectedIndex - 1 : selectedIndex;
         if (selectedIndex >= 0) {
             ensureIndexIsVisible(selectedIndex);
+            checkSelection(selectedIndex);
             setSelectedIndex(selectedIndex);
+        } else {
+            checkSelection();
         }
-        checkSelection();
         if (removeButton.isEnabled()) {
             removeButton.requestFocus();
         } else {
@@ -673,31 +681,31 @@ public class ListEditorPanel extends javax.swing.JPanel {
         removeObjectAction();
     }//GEN-LAST:event_removeButtonActionPerformed
 
-    public Object addAction() {
-        return "shouldbeoverridden"; // NOI18N
+    public E addAction() {
+        return null; // "shouldbeoverridden"; // NOI18N
     }
 
     private void addObjectAction() {
         addObjectAction(addAction());
     }
 
-    public void addObjectAction(Object newObject) {
+    public void addObjectAction(E newObject) {
         if (newObject == null) {
             return;
         }
-        ArrayList<Object> listToAdd = new ArrayList<Object>();
+        ArrayList<E> listToAdd = new ArrayList<E>();
         listToAdd.add(newObject);
         addObjectsAction(listToAdd);
     }
 
-    public void addObjectsAction(List listToAdd) {
+    public void addObjectsAction(List<E> listToAdd) {
         if (listToAdd == null || listToAdd.size() == 0) {
             return;
         }
         // Update gui
         this.isChanged = true;
         int addAtIndex = listData.size();
-        Vector newListData = new Vector();
+        Vector<E> newListData = new Vector<E>();
         newListData.addAll(listData);
         newListData.addAll(listToAdd);
         listData = newListData;
@@ -730,7 +738,10 @@ public class ListEditorPanel extends javax.swing.JPanel {
     // End of variables declaration//GEN-END:variables
 
     protected void checkSelection() {
-        int i = getSelectedIndex();
+        checkSelection(getSelectedIndex());
+    }
+
+    protected void checkSelection(int i) {
         if (i >= 0 && listData.size() > 0) {
             addButton.setEnabled(true);
             copyButton.setEnabled(true);
@@ -764,15 +775,15 @@ public class ListEditorPanel extends javax.swing.JPanel {
         }
     }
 
-    public Vector getListData() {
+    public Vector<E> getListData() {
         return listData;
     }
 
-    public void setListData(Object[] objects) {
+    public void setListData(List<E> objects) {
         listData.removeAllElements();
         if (objects != null) {
-            for (int i = 0; i < objects.length; i++) {
-                listData.add(objects[i]);
+            for (int i = 0; i < objects.size(); i++) {
+                listData.add(objects.get(i));
             }
         }
         setData(listData);
