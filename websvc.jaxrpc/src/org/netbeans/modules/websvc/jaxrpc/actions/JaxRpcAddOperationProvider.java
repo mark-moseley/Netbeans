@@ -42,15 +42,16 @@
 package org.netbeans.modules.websvc.jaxrpc.actions;
 
 import org.netbeans.modules.websvc.api.webservices.WebServicesSupport;
-import org.netbeans.modules.websvc.core.AddOperationActionProvider;
-import org.netbeans.modules.websvc.core.AddOperationCookie;
+import org.netbeans.modules.websvc.spi.support.AddOperationActionProvider;
+import org.netbeans.modules.websvc.api.support.AddOperationCookie;
 import org.openide.filesystems.FileObject;
 
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.spi.support.AddOperationActionProvider.class)
 public class JaxRpcAddOperationProvider implements AddOperationActionProvider {
 	public AddOperationCookie getAddOperationCookie(FileObject fileObject) {
         WebServicesSupport support = WebServicesSupport.getWebServicesSupport(fileObject);
         if (support!=null && support.getServices().size()>0) 
-            return new JaxRpcAddOperation();
+            return new JaxRpcAddOperation(fileObject);
         return null;
     }
 

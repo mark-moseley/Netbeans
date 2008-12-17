@@ -38,41 +38,22 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.jaxws.actions;
 
-import org.netbeans.modules.websvc.api.support.AddOperationCookie;
-import org.netbeans.modules.websvc.core.WebServiceActionProvider;
+package org.netbeans.modules.websvc.spi.support;
+
+import org.netbeans.modules.websvc.api.support.InvokeOperationCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.util.HelpCtx;
-import org.openide.util.NbBundle;
-import org.openide.nodes.Node;
-import org.openide.util.actions.NodeAction;
 
-public class AddOperationAction extends NodeAction  {
-    
-    public String getName() {
-        return NbBundle.getMessage(AddOperationAction.class, "LBL_OperationAction");
-    }
-    
-    public HelpCtx getHelpCtx() {
-        return HelpCtx.DEFAULT_HELP;
-    }
-        
-    protected boolean asynchronous() {
-        return false;
-    }
-    
-    protected boolean enable(Node[] activatedNodes) {
-        if (activatedNodes.length != 1) return false;
-        FileObject implClassFo = activatedNodes[0].getLookup().lookup(FileObject.class);
-        return implClassFo != null && WebServiceActionProvider.getAddOperationAction(implClassFo) != null;
-    }
-    
-    protected void performAction(Node[] activatedNodes) {
+/** Provider for {#link org.netbeans.modules.websvc.api.support.InvokeOperationCookie}.
+ *
+ * @author mkuchtiak
+ */
+public interface InvokeOperationActionProvider {
 
-        FileObject implClassFo = activatedNodes[0].getLookup().lookup(FileObject.class);
-        AddOperationCookie addOperationCookie = WebServiceActionProvider.getAddOperationAction(implClassFo);
-        addOperationCookie.addOperation();
-    }
+    /** Get InvokeOperationCookie for given source.
+     *
+     * @param targetSource target source
+     * @return InvokeOperationCookie object
+     */
+    InvokeOperationCookie getInvokeOperationCookie(FileObject targetSource);
 }
-

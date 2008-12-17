@@ -38,16 +38,26 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-package org.netbeans.modules.websvc.core;
-
-import org.openide.filesystems.FileObject;
+package org.netbeans.modules.websvc.api.support;
 import org.openide.nodes.Node;
+import org.openide.util.Lookup;
 
 /**
- *
- * @author mkuchtiak
+ * Provides a facility for obtaining the addOperation feature
+ * for both JAX-WS and JAX-RPC web service.
  */
-public interface InvokeOperationActionProvider {
-    public InvokeOperationCookie getInvokeOperationCookie(FileObject targetSource,Node node);
+public interface AddOperationCookie extends Node.Cookie {
+
+    /**
+     * Adds a method definition to the the implementation class, possibly to SEI.
+     */
+    void addOperation();
+
+    /**
+     * Determines if the Add Operation pop up menu is enabled in source editor.
+     * @param nodeLookup lookup of node for which AddOperationCookie action should be enabled or disabled
+     * @return true if enabled false if not
+     */
+    boolean isEnabledInEditor(Lookup nodeLookup);
+
 }

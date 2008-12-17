@@ -38,10 +38,9 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.jaxws.actions;
+package org.netbeans.modules.maven.jaxws.actions;
 
 import org.netbeans.modules.websvc.api.support.AddOperationCookie;
-import org.netbeans.modules.websvc.core.WebServiceActionProvider;
 import org.openide.filesystems.FileObject;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
@@ -65,14 +64,37 @@ public class AddOperationAction extends NodeAction  {
     protected boolean enable(Node[] activatedNodes) {
         if (activatedNodes.length != 1) return false;
         FileObject implClassFo = activatedNodes[0].getLookup().lookup(FileObject.class);
-        return implClassFo != null && WebServiceActionProvider.getAddOperationAction(implClassFo) != null;
+        return implClassFo != null;
     }
     
     protected void performAction(Node[] activatedNodes) {
-
+        
         FileObject implClassFo = activatedNodes[0].getLookup().lookup(FileObject.class);
-        AddOperationCookie addOperationCookie = WebServiceActionProvider.getAddOperationAction(implClassFo);
+        AddOperationCookie addOperationCookie = new JaxWsAddOperation(implClassFo);
         addOperationCookie.addOperation();
+//        
+//        Project prj = FileOwnerQuery.getOwner(implClassFo);
+//        NbMavenProject mp = prj.getLookup().lookup(NbMavenProject.class);
+//        System.out.println("mp = "+mp);
+//        if (mp != null) {
+//            //if jaxws-plugin not in project at all, add to pom.xml!
+//            String[] filepaths = PluginPropertyUtils.getPluginPropertyList(prj, "org.codehaus.mojo", "jaxws-maven-plugin", "wsdlFiles", "wsdlFile",
+//                    "wsimport");
+//            System.out.println("filePath = "+filepaths);
+//            if (filepaths != null) {
+//                
+//            } else {
+//                String dirpath = PluginPropertyUtils.getPluginProperty(prj, "org.codehaus.mojo", "jaxws-maven-plugin", "wsdlDirectory", 
+//                        "wsimport");
+//                if (dirpath == null) {
+//                    dirpath = "src/wsdl";
+//                }
+//                File dir = FileUtilities.resolveFilePath(FileUtil.toFile(prj.getProjectDirectory()), dirpath);
+//                System.out.println("dir = "+dir+":"+dir.exists());
+//                if (!dir.exists()) dir.mkdirs();
+//            }
+//        } 
+        
     }
 }
 

@@ -46,7 +46,7 @@ import org.openide.util.NbBundle;
 import org.openide.nodes.Node;
 import org.openide.filesystems.FileObject;
 
-import org.netbeans.modules.websvc.core.AddOperationCookie;
+import org.netbeans.modules.websvc.api.support.AddOperationCookie;
 import org.netbeans.modules.websvc.core.WebServiceActionProvider;
 
 public class AddOperationAction extends CookieAction {
@@ -92,7 +92,7 @@ public class AddOperationAction extends CookieAction {
         FileObject implClassFo = activatedNodes[0].getLookup().lookup(FileObject.class);
         if (implClassFo!=null) {
             AddOperationCookie addOperationCookie = WebServiceActionProvider.getAddOperationAction(implClassFo);
-            if (addOperationCookie!=null) addOperationCookie.addOperation(implClassFo);
+            if (addOperationCookie!=null) addOperationCookie.addOperation();
         }
     }
     

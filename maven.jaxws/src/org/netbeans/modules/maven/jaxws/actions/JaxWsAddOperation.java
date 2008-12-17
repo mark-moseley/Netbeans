@@ -39,42 +39,36 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.websvc.core.jaxws.actions;
+package org.netbeans.modules.maven.jaxws.actions;
 
-import org.netbeans.modules.websvc.core._RetoucheUtil;
-import org.netbeans.modules.websvc.core.AddWsOperationHelper;
+import java.util.List;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.TypeElement;
+import org.netbeans.api.java.source.CompilationController;
+import org.netbeans.modules.maven.jaxws._RetoucheUtil;
 import org.netbeans.modules.websvc.api.support.AddOperationCookie;
 import java.io.IOException;
-import java.util.List;
-import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.project.FileOwnerQuery;
-import org.netbeans.api.project.Project;
-import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
-import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
-import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
+import org.netbeans.modules.websvc.api.support.java.SourceUtils;
 import org.openide.util.Lookup;
 import org.openide.util.RequestProcessor;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
-/** JaxWsAddOperation.java
+/** JaxWsAddOperation.java.
  * Created on December 12, 2006, 4:36 PM
  *
  * @author mkuchtiak
  */
 public class JaxWsAddOperation implements AddOperationCookie {
     private FileObject implClassFo;
-    private Service service;
-    
-    /** Creates a new instance of JaxWsAddOperation */
+
+    /** Creates a new instance of JaxWsAddOperation.
+     */
     public JaxWsAddOperation(FileObject implClassFo) {
         this.implClassFo=implClassFo;
-        service = getService();
     }
-    
+
     public void addOperation() {
         final AddWsOperationHelper strategy = new AddWsOperationHelper(
                 NbBundle.getMessage(JaxWsAddOperation.class, "TITLE_OperationAction"));  //NOI18N
@@ -94,62 +88,76 @@ public class JaxWsAddOperation implements AddOperationCookie {
 
     @Override
     public boolean isEnabledInEditor(Lookup nodeLookup) {
-        return isJaxWsImplementationClass() && !isFromWSDL() && !isProvider();
-    }
-    
-    private boolean isJaxWsImplementationClass() {
-        return service != null;
-    }
-  
-    private Service getService(){
-        JAXWSSupport jaxWsSupport = JAXWSSupport.getJAXWSSupport(implClassFo);
-        if (jaxWsSupport!=null) {
-            List services = jaxWsSupport.getServices();
-            for (int i=0;i<services.size();i++) {
-                Service serv = (Service)services.get(i);
-                if (serv.getWsdlUrl()==null) {
-                    String implClass = serv.getImplementationClass();
-                    if (implClass.equals(getPackageName(implClassFo))) {
-                        return serv;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-    
-    private boolean isFromWSDL() {
-        if(service != null){
-            return service.getWsdlUrl()!=null;
+        CompilationController controller = nodeLookup.lookup(CompilationController.class);
+        if (controller != null) {
+            TypeElement classEl = SourceUtils.getPublicTopLevelElement(controller);
+            return isJaxWsImplementationClass(classEl, controller);
         }
         return false;
     }
-    
-    private boolean isProvider() {
-        if(service != null){
-            return service.isUseProvider();
-        }
-        return false;
-    }
-    
-    private String getPackageName(FileObject fo) {
-        Project project = FileOwnerQuery.getOwner(fo);
-        Sources sources = project.getLookup().lookup(Sources.class);
-        if (sources!=null) {
-            SourceGroup[] groups = sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
-            if (groups!=null) {
-                for (SourceGroup group: groups) {
-                    FileObject rootFolder = group.getRootFolder();
-                    if (FileUtil.isParentOf(rootFolder, fo)) {
-                        String relativePath = FileUtil.getRelativePath(rootFolder, fo).replace('/', '.');
-                        return (relativePath.endsWith(".java")? //NOI18N
-                            relativePath.substring(0,relativePath.length()-5):
-                            relativePath);
-                    }
+
+    private boolean isJaxWsImplementationClass(TypeElement classEl, CompilationController controller) {
+        TypeElement wsElement = controller.getElements().getTypeElement("javax.jws.WebService"); //NOI18N
+        if (wsElement != null) {
+            List<? extends AnnotationMirror> annotations = classEl.getAnnotationMirrors();
+            for (AnnotationMirror anMirror : annotations) {
+                if (controller.getTypes().isSameType(wsElement.asType(), anMirror.getAnnotationType())) {
+                    return true;
                 }
             }
         }
-        return null;
+        return false;
     }
-    
+//
+//    private Service getService(){
+//        JAXWSSupport jaxWsSupport = JAXWSSupport.getJAXWSSupport(implClassFo);
+//        if (jaxWsSupport!=null) {
+//            List services = jaxWsSupport.getServices();
+//            for (int i=0;i<services.size();i++) {
+//                Service serv = (Service)services.get(i);
+//                if (serv.getWsdlUrl()==null) {
+//                    String implClass = serv.getImplementationClass();
+//                    if (implClass.equals(getPackageName(implClassFo))) {
+//                        return serv;
+//                    }
+//                }
+//            }
+//        }
+//        return null;
+//    }
+//
+//    private boolean isFromWSDL() {
+//        if(service != null){
+//            return service.getWsdlUrl()!=null;
+//        }
+//        return false;
+//    }
+//
+//    private boolean isProvider() {
+//        if(service != null){
+//            return service.isUseProvider();
+//        }
+//        return false;
+//    }
+//
+//    private String getPackageName(FileObject fo) {
+//        Project project = FileOwnerQuery.getOwner(fo);
+//        Sources sources = project.getLookup().lookup(Sources.class);
+//        if (sources!=null) {
+//            SourceGroup[] groups = sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
+//            if (groups!=null) {
+//                for (SourceGroup group: groups) {
+//                    FileObject rootFolder = group.getRootFolder();
+//                    if (FileUtil.isParentOf(rootFolder, fo)) {
+//                        String relativePath = FileUtil.getRelativePath(rootFolder, fo).replace('/', '.');
+//                        return (relativePath.endsWith(".java")? //NOI18N
+//                            relativePath.substring(0,relativePath.length()-5):
+//                            relativePath);
+//                    }
+//                }
+//            }
+//        }
+//        return null;
+//    }
+
 }

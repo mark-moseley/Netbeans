@@ -46,8 +46,7 @@ import com.sun.source.tree.MethodTree;
 import org.netbeans.modules.websvc.api.support.java.SourceUtils;
 import org.netbeans.modules.websvc.core._RetoucheUtil;
 import org.netbeans.modules.websvc.core.AddWsOperationHelper;
-import org.netbeans.modules.websvc.core.AddOperationCookie;
-import org.openide.filesystems.FileObject;
+import org.netbeans.modules.websvc.api.support.AddOperationCookie;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -69,6 +68,7 @@ import org.netbeans.modules.j2ee.dd.api.webservices.Webservices;
 import org.netbeans.modules.j2ee.dd.api.webservices.ServiceImplBean;
 import org.netbeans.modules.j2ee.dd.api.webservices.WebserviceDescription;
 import org.netbeans.modules.websvc.api.webservices.WebServicesSupport;
+import org.openide.util.Lookup;
 import static org.netbeans.api.java.source.JavaSource.Phase;
 import org.openide.ErrorManager;
 import org.openide.cookies.SaveCookie;
@@ -84,12 +84,14 @@ import org.openide.util.NbBundle;
 public class JaxRpcAddOperation implements AddOperationCookie {
 
     private static final String Remote_Exception = "java.rmi.RemoteException"; //NOI18N
+    private FileObject implementationClass;
 
     /** Creates a new instance of JaxWsAddOperation */
-    public JaxRpcAddOperation() {
+    public JaxRpcAddOperation(FileObject implementationClass) {
+        this.implementationClass = implementationClass;
     }
 
-    public void addOperation(FileObject implementationClass) {
+    public void addOperation() {
         WebserviceDescription wsDesc = findWSDescriptionFromClass(implementationClass);
         if (wsDesc == null)
             return; //this will never happen
@@ -118,8 +120,9 @@ public class JaxRpcAddOperation implements AddOperationCookie {
         }
     }
 
-    public boolean isEnabledInEditor(FileObject implClass) {
-        return isWsImplBeanOrInterface(implClass);
+    @Override
+    public boolean isEnabledInEditor(Lookup nodeLookup) {
+        return isWsImplBeanOrInterface(implementationClass);
     }
 
     private boolean hasRemoteException(final List<String> exceptions) {
@@ -236,7 +239,10 @@ public class JaxRpcAddOperation implements AddOperationCookie {
     static WebserviceDescription findWSDescriptionFromClass(FileObject implClassFO) {
         WebServicesSupport wsSupport = WebServicesSupport.getWebServicesSupport(implClassFO);
         ClassPath classPath = ClassPath.getClassPath(implClassFO, ClassPath.SOURCE);
-        String implClassPath = classPath.getResourceName(implClassFO, '.', false);
+        String implClassPath = null;
+        if(classPath==null || (implClassPath = classPath.getResourceName(implClassFO, '.', false))==null) {
+            return null;
+        }
         if (wsSupport != null) {
             DDProvider wsDDProvider = DDProvider.getDefault();
             Webservices webServices = null;

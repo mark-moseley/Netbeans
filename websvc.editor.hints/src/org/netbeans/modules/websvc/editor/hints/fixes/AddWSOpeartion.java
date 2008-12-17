@@ -47,7 +47,7 @@ import org.openide.util.NbBundle;
 import org.netbeans.spi.editor.hints.ChangeInfo;
 import org.netbeans.spi.editor.hints.Fix;
 
-import org.netbeans.modules.websvc.core.AddOperationCookie;
+import org.netbeans.modules.websvc.api.support.AddOperationCookie;
 import org.netbeans.modules.websvc.core.WebServiceActionProvider;
 
 /**
@@ -63,7 +63,7 @@ public class AddWSOpeartion implements Fix {
     
     public ChangeInfo implement(){
         AddOperationCookie cookie = WebServiceActionProvider.getAddOperationAction(fileObject);
-        if(cookie !=null) cookie.addOperation(fileObject);
+        if(cookie !=null) cookie.addOperation();
         return null;
     }
     
