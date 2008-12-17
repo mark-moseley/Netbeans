@@ -401,7 +401,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
 
     private static Node findProjectNode(Node root, Project p) {
         Node[] n = root.getChildren().getNodes(true);
-        Template t = new Template(null, null, p);
+        Template<Project> t = new Template<Project>(null, null, p);
 
         for (int cntr = 0; cntr < n.length; cntr++) {
             if (n[cntr].getLookup().lookupItem(t) != null) {
@@ -416,8 +416,18 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
     public static boolean hasBrokenLinks() {
         return false;
     }
-    private static Image brokenProjectBadge = ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/brokenProjectBadge.gif"); // NOI18N
-    private static Image brokenIncludeBadge = ImageUtilities.loadImage("org/netbeans/modules/cnd/makeproject/ui/resources/brokenIncludeBadge.gif"); // NOI18N
+    private static final String brokenProjectBadgePath = "org/netbeans/modules/cnd/makeproject/ui/resources/brokenProjectBadge.gif"; // NOI18N
+    private static final String brokenIncludeImgPath = "org/netbeans/modules/cnd/makeproject/ui/resources/brokenIncludeBadge.gif"; // NOI18N
+    private static final Image brokenProjectBadge = loadToolTipImage(brokenProjectBadgePath, "BrokenProjectTxt"); // NOI18N
+    private static final Image brokenIncludeBadge = loadToolTipImage(brokenIncludeImgPath, "BrokenIncludeTxt"); // NOI18N
+
+    private static Image loadToolTipImage(String imgResouce, String textResource) {
+        Image img = ImageUtilities.loadImage(imgResouce);
+        img = ImageUtilities.assignToolTipToImage(img,
+                "<img src=\"" + MakeLogicalViewRootNode.class.getClassLoader().getResource(imgResouce) + "\">&nbsp;" // NOI18N
+                + NbBundle.getMessage(MakeLogicalViewRootNode.class, textResource));
+        return img;
+    }
 
     private static Node getWaitNode() {
         return new LoadingNode();
@@ -518,13 +528,9 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
 
         @Override
         public String getShortDescription() {
-            if (brokenIncludes) {
-                return NbBundle.getMessage(getClass(), "BrokenIncludeTxt");
-            } else {
-                return super.getShortDescription();
-            }
+            String prjDirDispName = FileUtil.getFileDisplayName(project.getProjectDirectory());
+            return NbBundle.getMessage(MakeLogicalViewProvider.class, "HINT_project_root_node", prjDirDispName);
         }
-
         /*
          * Something in the folder has changed
          **/
@@ -652,6 +658,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                         ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_CLEAN, bundle.getString("LBL_CleanAction_Name"), null), // NOI18N
                         ProjectSensitiveActions.projectCommandAction(MakeActionProvider.COMMAND_BATCH_BUILD, bundle.getString("LBL_BatchBuildAction_Name"), null), // NOI18N
                         ProjectSensitiveActions.projectCommandAction(MakeActionProvider.COMMAND_BUILD_PACKAGE, bundle.getString("LBL_BuildPackagesAction_Name"), null), // NOI18N
+                        new RemoteDevelopmentAction(project),
                         new SetConfigurationAction(project),
                         null,
                         ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_RUN, bundle.getString("LBL_RunAction_Name"), null), // NOI18N
@@ -720,6 +727,13 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
         public boolean canRename() {
             return false;
         }
+
+        @Override
+        public String getShortDescription() {
+            String prjDirDispName = FileUtil.getFileDisplayName(project.getProjectDirectory());
+            return NbBundle.getMessage(MakeLogicalViewProvider.class, "HINT_project_root_node", prjDirDispName);
+        }
+
     }
 
     private class LogicalViewChildren extends BaseMakeViewChildren {
@@ -764,12 +778,12 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             return new Node[]{node};
         }
 
-        protected Collection getKeys() {
-            Collection collection = getFolder().getElements();
+        protected Collection<Object> getKeys() {
+            Collection<Object> collection = getFolder().getElements();
             switch (getFolder().getConfigurationDescriptor().getState()) {
                 case READING:
                     if (collection.size() == 0) {
-                        collection = Collections.singletonList(new LoadingNode());
+                        collection = Collections.singletonList((Object)new LoadingNode());
                     }
                     break;
                 case BROKEN:
@@ -830,7 +844,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
 
             @Override
             public void run() {
-                setFiles(Collections.EMPTY_SET /*folder.getAllItemsAsFileObjectSet(true)*/); // See IZ 100394 for details
+                setFiles(new HashSet<FileObject>() /*Collections.EMPTY_SET*/ /*folder.getAllItemsAsFileObjectSet(true)*/); // See IZ 100394 for details
                 List<Folder> allFolders = new ArrayList<Folder>();
                 allFolders.add(folder);
                 allFolders.addAll(folder.getAllFolders(true));
@@ -1143,7 +1157,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
     }
     private static final int WAIT_DELAY = 50;
 
-    private abstract class BaseMakeViewChildren extends Children.Keys
+    private abstract class BaseMakeViewChildren extends Children.Keys<Object>
             implements ChangeListener, RefreshableItemsContainer {
 
         private final Folder folder;
@@ -1193,6 +1207,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         protected void removeNotify() {
             setKeys(Collections.EMPTY_SET);
             folder.removeChangeListener(this);
@@ -1214,7 +1229,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             }
         }
 
-        abstract protected Collection getKeys();
+        abstract protected Collection<Object> getKeys();
 
         public Folder getFolder() {
             return folder;
@@ -1246,7 +1261,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             return new Node[]{node};
         }
 
-        protected Collection getKeys() {
+        protected Collection<Object> getKeys() {
             return getFolder().getElements();
         }
     }
@@ -1394,7 +1409,15 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
         @Override
         public String getHtmlDisplayName() {
             if (isExcluded()) {
-                return "<font color='!controlShadow'>" + getDisplayName(); // NOI18N
+                String baseName = super.getHtmlDisplayName();
+                if (baseName != null && baseName.toLowerCase().contains("color=")) { // NOI18N
+                    // decorating node already has color, leave it
+                    return baseName;
+                } else {
+                    // add own "disabled" color
+                    baseName = baseName != null ? baseName : getDisplayName();
+                    return "<font color='!controlShadow'>" + baseName; // NOI18N
+                }
             }
             return super.getHtmlDisplayName();
         }
@@ -1556,7 +1579,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             return true;
         }
 
-        public Iterator objectsToSearch() {
+        public Iterator<DataObject> objectsToSearch() {
             return folder.getAllItemsAsDataObjectSet(false, "text/").iterator(); // NOI18N
         }
     }
