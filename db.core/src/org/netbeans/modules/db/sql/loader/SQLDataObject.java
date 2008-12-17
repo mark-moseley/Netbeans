@@ -41,42 +41,43 @@
 
 package org.netbeans.modules.db.sql.loader;
 
-import java.nio.charset.Charset;
-import org.netbeans.spi.queries.FileEncodingQueryImplementation;
+import java.io.IOException;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.loaders.DataObjectExistsException;
 import org.openide.loaders.MultiDataObject;
-import org.openide.loaders.UniFileLoader;
+import org.openide.loaders.MultiFileLoader;
+import org.openide.loaders.SaveAsCapable;
 import org.openide.nodes.CookieSet;
 import org.openide.nodes.Node;
 import org.openide.util.Lookup;
-import org.openide.util.lookup.Lookups;
-import org.openide.util.lookup.ProxyLookup;
 
 /**
  *
- * @author Andrei Badea
+ * @author Andrei Badea, John Baker
  */
 public class SQLDataObject extends MultiDataObject {
 
-    private Lookup lookup;
-
-    public SQLDataObject(FileObject primaryFile, UniFileLoader loader) throws DataObjectExistsException {
+    public SQLDataObject(FileObject primaryFile, MultiFileLoader loader) throws DataObjectExistsException {
         super(primaryFile, loader);
         CookieSet cookies = getCookieSet();
-        cookies.add(new SQLEditorSupport(this));
+        final SQLEditorSupport sqlEditorSupport = new SQLEditorSupport(this);
+        cookies.add(sqlEditorSupport);
+        cookies.assign( SaveAsCapable.class, new SaveAsCapable() {
+            public void saveAs(FileObject folder, String fileName) throws IOException {
+                sqlEditorSupport.saveAs( folder, fileName );
+            }
+        });
     }
 
+    @Override
     protected Node createNodeDelegate() {
         return new SQLNode(this);
     }
 
-    public synchronized Lookup getLookup() {
-        if (lookup == null) {
-            lookup = new ProxyLookup(getCookieSet().getLookup(), Lookups.singleton(new FileEncodingQueryImpl()));
-        }
-        return lookup;
+    @Override
+    public Lookup getLookup() {
+        return getCookieSet().getLookup();
     }
 
     public boolean isConsole() {
@@ -94,16 +95,5 @@ public class SQLDataObject extends MultiDataObject {
 
     void removeCookie(Node.Cookie cookie) {
         getCookieSet().remove(cookie);
-    }
-
-    private final class FileEncodingQueryImpl extends FileEncodingQueryImplementation {
-
-        public Charset getEncoding(FileObject file) {
-            // the "console" files are always in UTF-8
-            if (isConsole()) {
-                return Charset.forName("UTF-8"); // NOI18N
-            }
-            return null;
-        }
     }
 }
