@@ -38,7 +38,6 @@
  */
 package org.netbeans.modules.xml.text;
 
-import org.netbeans.modules.xml.text.indent.*;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -49,7 +48,7 @@ import junit.framework.*;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.api.xml.lexer.XMLTokenId;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.BaseKit;
+import org.netbeans.modules.xml.text.syntax.XMLSyntaxSupport;
 import org.netbeans.modules.xml.xam.ModelSource;
 import org.netbeans.modules.xml.xdm.XDMModel;
 import org.netbeans.modules.xml.xdm.diff.DefaultElementIdentity;
@@ -86,7 +85,7 @@ public class AbstractTestCase extends TestCase {
                  
     protected static BaseDocument getResourceAsDocument(String path) throws Exception {
         InputStream in = AbstractTestCase.class.getResourceAsStream(path);
-        BaseDocument sd = new BaseDocument(BaseKit.class, false);
+        BaseDocument sd = new BaseDocument(true, "text/xml"); //NOI18N
         BufferedReader br = new BufferedReader(new InputStreamReader(in,"UTF-8"));
         StringBuffer sbuf = new StringBuffer();
         try {
@@ -121,5 +120,12 @@ public class AbstractTestCase extends TestCase {
             return true;
         
         return false;        
+    }
+
+    protected XMLSyntaxSupport getSyntaxSupport(String path) throws Exception {
+        BaseDocument doc = getResourceAsDocument(path);
+        //must set the language inside unit tests
+        doc.putProperty(Language.class, XMLTokenId.language());
+        return ((XMLSyntaxSupport)doc.getSyntaxSupport());
     }
 }
