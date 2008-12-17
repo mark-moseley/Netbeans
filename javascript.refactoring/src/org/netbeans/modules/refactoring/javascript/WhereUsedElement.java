@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.refactoring.ruby;
+package org.netbeans.modules.refactoring.javascript;
 
 
 import java.util.Collections;
@@ -52,16 +52,15 @@ import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.napi.gsfret.source.UiUtils;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
-import org.netbeans.modules.refactoring.ruby.ui.tree.ElementGripFactory;
+import org.netbeans.modules.refactoring.javascript.ui.tree.ElementGripFactory;
 import org.netbeans.modules.refactoring.spi.SimpleRefactoringElementImplementation;
-import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.lexer.LexUtilities;
+import org.netbeans.modules.javascript.editing.AstUtilities;
+import org.netbeans.modules.javascript.editing.lexer.LexUtilities;
 import org.openide.filesystems.FileObject;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.text.PositionBounds;
 import org.openide.text.PositionRef;
 import org.openide.util.Exceptions;
-import org.openide.util.Lookup;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 
@@ -114,17 +113,21 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         return parentFile;
     }
 
-    public static WhereUsedElement create(RubyElementCtx tree) {
+    public static WhereUsedElement create(JsElementCtx tree) {
         CompilationInfo info = tree.getInfo();
         OffsetRange range = AstUtilities.getNameRange(tree.getNode());
         assert range != OffsetRange.NONE;
 
         range = LexUtilities.getLexerOffsets(info, range);
-        assert range != OffsetRange.NONE : tree;
+        assert range != OffsetRange.NONE;
         
         Set<Modifier> modifiers = Collections.emptySet();
         if (tree.getElement() != null) {
-            modifiers = tree.getElement().getModifiers();
+            if (tree.getElement().getName() == null) {
+                modifiers = Collections.emptySet();
+            } else {
+                modifiers = tree.getElement().getModifiers();
+            }
         }
         Icon icon = UiUtils.getElementIcon(tree.getKind(), modifiers);
         return create(info, tree.getName(), range, icon);
@@ -142,6 +145,7 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         BaseDocument bdoc = RetoucheUtils.getDocument(info, info.getFileObject());
         try {
             bdoc.readLock();
+
             // I should be able to just call tree.getInfo().getText() to get cached
             // copy - but since I'm playing fast and loose with compilationinfos
             // for for example find subclasses (using a singly dummy FileInfo) I need
@@ -179,16 +183,19 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         }
 
         StringBuilder sb = new StringBuilder();
+        if (end < sta) {
+            // XXX Shouldn't happen, but I still have AST offset errors
+            sta = end;
+        }
         if (start < sta) {
-            System.out.println("Problem!");
+            // XXX Shouldn't happen, but I still have AST offset errors
             start = sta;
         }
         if (en < end) {
-            System.out.println("Problem!");
+            // XXX Shouldn't happen, but I still have AST offset errors
             en = end;
         }
-        final CharSequence subSequence = content.subSequence(sta, start);
-        sb.append(RetoucheUtils.getHtml(subSequence.toString()));
+        sb.append(RetoucheUtils.getHtml(content.subSequence(sta, start).toString()));
         sb.append("<b>"); // NOI18N
         sb.append(content.subSequence(start, end));
         sb.append("</b>"); // NOI18N

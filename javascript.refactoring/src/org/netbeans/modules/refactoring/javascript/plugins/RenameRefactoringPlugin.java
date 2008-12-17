@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,49 +38,47 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.refactoring.ruby.plugins;
+package org.netbeans.modules.refactoring.javascript.plugins;
 
-import org.jruby.nb.ast.ClassVarAsgnNode;
-import org.jruby.nb.ast.ClassVarDeclNode;
-import org.jruby.nb.ast.ClassVarNode;
-import org.jruby.nb.ast.Colon2Node;
-import org.jruby.nb.ast.GlobalAsgnNode;
-import org.jruby.nb.ast.GlobalVarNode;
-import org.jruby.nb.ast.InstAsgnNode;
-import org.jruby.nb.ast.InstVarNode;
-import org.jruby.nb.ast.MethodDefNode;
-import org.jruby.nb.ast.Node;
-import org.jruby.nb.ast.SymbolNode;
-import org.jruby.nb.ast.types.INameNode;
+import java.io.IOException;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import org.mozilla.nb.javascript.Token;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsf.api.ElementKind;
 import org.netbeans.modules.gsf.api.Error;
 import org.netbeans.modules.gsf.api.Severity;
+import org.netbeans.napi.gsfret.source.ClasspathInfo;
+import org.netbeans.napi.gsfret.source.CompilationController;
+import org.netbeans.napi.gsfret.source.ModificationResult.Difference;
+import org.netbeans.napi.gsfret.source.Source;
 import org.netbeans.editor.Utilities;
-import org.netbeans.modules.ruby.AstPath;
-import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.RubyIndex;
-import org.netbeans.modules.ruby.RubyStructureAnalyzer.AnalysisResult;
-import org.netbeans.modules.ruby.elements.AstElement;
+import org.netbeans.modules.refactoring.javascript.RetoucheUtils;
+import org.netbeans.modules.refactoring.api.Problem;
+import org.netbeans.modules.refactoring.api.ProgressEvent;
+import org.netbeans.modules.refactoring.javascript.JsElementCtx;
+import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
+import org.netbeans.modules.javascript.editing.AstPath;
+import org.netbeans.modules.javascript.editing.AstPath;
+import org.netbeans.modules.javascript.editing.AstUtilities;
+import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.util.Exceptions;
+import org.openide.util.Exceptions;
+import org.openide.util.NbBundle;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.Position.Bias;
-import org.jruby.nb.ast.ArgumentNode;
-import org.jruby.nb.ast.ClassNode;
-import org.jruby.nb.ast.DAsgnNode;
-import org.jruby.nb.ast.DVarNode;
-import org.jruby.nb.ast.LocalAsgnNode;
-import org.jruby.nb.ast.LocalVarNode;
-import org.jruby.nb.ast.ModuleNode;
-import org.jruby.nb.ast.SClassNode;
+import org.mozilla.nb.javascript.Node;
 import org.netbeans.modules.gsf.api.CancellableTask;
 import org.netbeans.modules.gsf.api.ElementKind;
 import org.netbeans.modules.gsf.api.OffsetRange;
-import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
@@ -92,21 +90,26 @@ import org.netbeans.napi.gsfret.source.ModificationResult.Difference;
 import org.netbeans.napi.gsfret.source.Source;
 import org.netbeans.napi.gsfret.source.WorkingCopy;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.refactoring.ruby.DiffElement;
+import org.netbeans.modules.gsf.spi.GsfUtilities;
+import org.netbeans.modules.javascript.editing.Element;
+import org.netbeans.modules.javascript.editing.JsAnalyzer.AnalysisResult;
+import org.netbeans.modules.javascript.editing.AstElement;
+import org.netbeans.modules.javascript.editing.JsParseResult;
+import org.netbeans.modules.javascript.editing.JsUtils;
+import org.netbeans.modules.javascript.editing.ParseTreeWalker;
+import org.netbeans.modules.javascript.editing.VariableVisitor;
+import org.netbeans.modules.refactoring.javascript.DiffElement;
 import org.netbeans.modules.refactoring.api.*;
-import org.netbeans.modules.refactoring.ruby.RetoucheUtils;
-import org.netbeans.modules.refactoring.ruby.RubyElementCtx;
-import org.netbeans.modules.ruby.RubyUtils;
+import org.netbeans.modules.refactoring.javascript.RetoucheUtils;
+import org.netbeans.modules.refactoring.javascript.JsElementCtx;
 import org.openide.filesystems.FileObject;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
-import org.netbeans.modules.ruby.RubyParseResult;
-import org.netbeans.modules.ruby.elements.Element;
-import org.netbeans.modules.ruby.lexer.LexUtilities;
+import org.netbeans.modules.javascript.editing.lexer.LexUtilities;
 import org.openide.text.PositionRef;
 import org.openide.util.NbBundle;
 
 /**
- * The actual Renaming refactoring work for Ruby. The skeleton (name checks etc.) based
+ * The actual Renaming refactoring work for Js. The skeleton (name checks etc.) based
  * on the Java refactoring module by Jan Becicka, Martin Matula, Pavel Flaska and Daniel Prusa.
  * 
  * @author Jan Becicka
@@ -126,19 +129,19 @@ import org.openide.util.NbBundle;
  *
  * @todo Complete this. Most of the prechecks are not implemented - and the refactorings themselves need a lot of work.
  */
-public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
+public class RenameRefactoringPlugin extends JsRefactoringPlugin {
     
-    private RubyElementCtx treePathHandle = null;
+    private JsElementCtx treePathHandle = null;
     private Collection overriddenByMethods = null; // methods that override the method to be renamed
     private Collection overridesMethods = null; // methods that are overridden by the method to be renamed
-//    private boolean doCheckName = true;
+    private boolean doCheckName = true;
     
     private RenameRefactoring refactoring;
     
     /** Creates a new instance of RenameRefactoring */
     public RenameRefactoringPlugin(RenameRefactoring rename) {
         this.refactoring = rename;
-        RubyElementCtx tph = rename.getRefactoringSource().lookup(RubyElementCtx.class);
+        JsElementCtx tph = rename.getRefactoringSource().lookup(JsElementCtx.class);
         if (tph!=null) {
             treePathHandle = tph;
         } else {
@@ -150,19 +153,19 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                     
                     public void run(CompilationController co) throws Exception {
                         co.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
-                        org.jruby.nb.ast.Node root = AstUtilities.getRoot(co);
+                        org.mozilla.nb.javascript.Node root = AstUtilities.getRoot(co);
                         if (root != null) {
-                            RubyParseResult rpr = AstUtilities.getParseResult(co);
+                            JsParseResult rpr = AstUtilities.getParseResult(co);
                             if (rpr != null) {
                                 AnalysisResult ar = rpr.getStructure();
                                 List<? extends AstElement> els = ar.getElements();
                                 if (els.size() > 0) {
                                     // TODO - try to find the outermost or most "relevant" module/class in the file?
                                     // In Java, we look for a class with the name corresponding to the file.
-                                    // It's not as simple in Ruby.
+                                    // It's not as simple in Js.
                                     AstElement element = els.get(0);
-                                    org.jruby.nb.ast.Node node = element.getNode();
-                                    treePathHandle = new RubyElementCtx(root, node, element, co.getFileObject(), co);
+                                    org.mozilla.nb.javascript.Node node = element.getNode();
+                                    treePathHandle = new JsElementCtx(root, node, element, co.getFileObject(), co);
                                     refactoring.getContext().add(co);
                                 }
                             }
@@ -177,7 +180,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         }
     }
     
-    protected Source getRubySource(Phase p) {
+    protected Source getJsSource(Phase p) {
         if (treePathHandle == null) {
             return null;
         }
@@ -198,7 +201,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
     
     protected Problem preCheck(CompilationController info) throws IOException {
         Problem preCheckProblem = null;
-        fireProgressListenerStart(RenameRefactoring.PRE_CHECK, 4);
+        fireProgressListenerStart(refactoring.PRE_CHECK, 4);
         info.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
 //        Element el = treePathHandle.resolveElement(info);
 //        preCheckProblem = isElementAvail(treePathHandle, info);
@@ -212,7 +215,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //        }
 //        
 //        if (!RetoucheUtils.isElementInOpenProject(file)) {
-//            preCheckProblem = new Problem(true, NbBundle.getMessage(RubyRefactoringPlugin.class, "ERR_ProjectNotOpened"));
+//            preCheckProblem = new Problem(true, NbBundle.getMessage(JsRefactoringPlugin.class, "ERR_ProjectNotOpened"));
 //            return preCheckProblem;
 //        }
 //        
@@ -304,23 +307,23 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             
         }
         
-        // TODO - get a better ruby name picker - and check for invalid Ruby symbol names etc.
-        // TODO - call RubyUtils.isValidLocalVariableName if we're renaming a local symbol!
-        if (kind == ElementKind.CLASS && !RubyUtils.isValidConstantName(newName)) {
+        // TODO - get a better Js name picker - and check for invalid Js symbol names etc.
+        // TODO - call JsUtils.isValidLocalVariableName if we're renaming a local symbol!
+        /*if (kind == ElementKind.CLASS && !JsUtils.isValidJsClassName(newName)) {
             String s = getString("ERR_InvalidClassName"); //NOI18N
             String msg = new MessageFormat(s).format(
                     new Object[] {newName}
             );
             fastCheckProblem = createProblem(fastCheckProblem, true, msg);
             return fastCheckProblem;
-        } else if (kind == ElementKind.METHOD && !RubyUtils.isValidRubyMethodName(newName)) {
+        } else*/ if (kind == ElementKind.METHOD && !JsUtils.isValidJsMethodName(newName)) {
             String s = getString("ERR_InvalidMethodName"); //NOI18N
             String msg = new MessageFormat(s).format(
                     new Object[] {newName}
             );
             fastCheckProblem = createProblem(fastCheckProblem, true, msg);
             return fastCheckProblem;
-        } else if (!RubyUtils.isValidRubyIdentifier(newName)) {
+        } else if (!JsUtils.isValidJsIdentifier(newName)) {
             String s = getString("ERR_InvalidIdentifier"); //NOI18N
             String msg = new MessageFormat(s).format(
                     new Object[] {newName}
@@ -330,7 +333,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         }
         
         
-        String msg = RubyUtils.getIdentifierWarning(newName, 0);
+        String msg = JsUtils.getIdentifierWarning(newName, 0);
         if (msg != null) {
             fastCheckProblem = createProblem(fastCheckProblem, false, msg);
         }
@@ -401,14 +404,14 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             steps += overridesMethods.size();
         }
         
-        fireProgressListenerStart(RenameRefactoring.PARAMETERS_CHECK, 8 + 3*steps);
+        fireProgressListenerStart(refactoring.PARAMETERS_CHECK, 8 + 3*steps);
         
         info.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
 //        Element element = treePathHandle.resolveElement(info);
         
         fireProgressListenerStep();
         fireProgressListenerStep();
-//        String msg;
+        String msg;
         
         // TODO - check more parameters
         //System.out.println("TODO - need to check parameters for hiding etc.");
@@ -449,7 +452,10 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
     
     @Override
     public Problem preCheck() {
-        if (treePathHandle == null || treePathHandle.getFileObject() == null || !treePathHandle.getFileObject().isValid()) {
+        if (treePathHandle == null) {
+            return null;
+        }
+        if (!treePathHandle.getFileObject().isValid()) {
             return new Problem(true, NbBundle.getMessage(RenameRefactoringPlugin.class, "DSC_ElNotAvail")); // NOI18N
         }
         
@@ -475,7 +481,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                         // For local variables, only look in the current file!
                         set.add(info.getFileObject());
                     }  else {
-                        set.addAll(RetoucheUtils.getRubyFilesInProject(info.getFileObject()));
+                        set.addAll(RetoucheUtils.getJsFilesInProject(info.getFileObject()));
                     }
 //                    final ClassIndex idx = info.getClasspathInfo().getClassIndex();
 //                    info.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
@@ -523,7 +529,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //        allMethods.add(ElementHandle.create(e));
 //    }
     
-    private Set<RubyElementCtx> allMethods;
+    private Set<JsElementCtx> allMethods;
     
     public Problem prepare(RefactoringElementsBag elements) {
         if (treePathHandle == null) {
@@ -548,15 +554,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                 }
             }
         }
-        // see #126733. need to set a correct new name for the file rename plugin
-        // that gets invoked after this plugin when the refactoring is invoked on a file.
-        if (refactoring.getRefactoringSource().lookup(FileObject.class) != null) {
-            String newName = RubyUtils.camelToUnderlinedName(refactoring.getNewName());
-            refactoring.setNewName(newName);
-        }
-
         fireProgressListenerStop();
-                
         return null;
     }
 
@@ -721,7 +719,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
      */
     public class RenameTransformer extends SearchVisitor {
 
-        private Set<RubyElementCtx> allMethods;
+        private Set<JsElementCtx> allMethods;
         private String newName;
         private String oldName;
         private CloneableEditorSupport ces;
@@ -735,7 +733,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             super.setWorkingCopy(workingCopy);
         }
         
-        public RenameTransformer(String newName, Set<RubyElementCtx> am) {
+        public RenameTransformer(String newName, Set<JsElementCtx> am) {
             this.newName = newName;
             this.oldName = treePathHandle.getSimpleName();
             this.allMethods = am;
@@ -747,38 +745,54 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             //compiler.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
 
             diffs = new ArrayList<Difference>();
-            RubyElementCtx searchCtx = treePathHandle;
+            JsElementCtx searchCtx = treePathHandle;
             Error error = null;
             Node root = AstUtilities.getRoot(workingCopy);
             if (root != null) {
-                
-                Element element = AstElement.create(workingCopy, root);
-                Node node = searchCtx.getNode();
-                RubyElementCtx fileCtx = new RubyElementCtx(root, node, element, workingCopy.getFileObject(), workingCopy);
-                Node method = null;
-                if (node instanceof ArgumentNode) {
-                    AstPath path = searchCtx.getPath();
-                    assert path.leaf() == node;
-                    Node parent = path.leafParent();
-
-                    if (!(parent instanceof MethodDefNode)) {
-                        method = AstUtilities.findLocalScope(node, path);
+                BaseDocument doc = GsfUtilities.getDocument(workingCopy.getFileObject(), true);
+                try {
+                    if (doc != null) {
+                        doc.readLock();
                     }
-                } else if (node instanceof LocalVarNode || node instanceof LocalAsgnNode || node instanceof DAsgnNode || 
-                        node instanceof DVarNode) {
-                    // A local variable read or a parameter read, or an assignment to one of these
-                    AstPath path = searchCtx.getPath();
-                    method = AstUtilities.findLocalScope(node, path);
-                }
 
-                if (method != null) {
-                    findLocal(searchCtx, fileCtx, method, oldName);
-                } else {
-                    // Full AST search
-                    AstPath path = new AstPath();
-                    path.descend(root);
-                    find(path, searchCtx, fileCtx, root, oldName, Character.isUpperCase(oldName.charAt(0)));
-                    path.ascend();
+                    Element element = AstElement.getElement(workingCopy, root);
+                    Node node = searchCtx.getNode();
+
+                    JsElementCtx fileCtx = new JsElementCtx(root, node, element, workingCopy.getFileObject(), workingCopy);
+
+                    Node scopeNode = null;
+                    if (workingCopy.getFileObject() == searchCtx.getFileObject()) {
+                        if (node.getType() == org.mozilla.nb.javascript.Token.NAME ||
+                            node.getType() == org.mozilla.nb.javascript.Token.BINDNAME ||
+                            node.getType() == org.mozilla.nb.javascript.Token.PARAMETER) {
+
+
+                            // TODO - map this node to our new tree.
+                            // In the mean time, just search in the old seach tree.
+                            Node searchRoot = node;
+                            while (searchRoot.getParentNode() != null) {
+                                searchRoot = searchRoot.getParentNode();
+                            }
+
+                            VariableVisitor v = new VariableVisitor();
+                            new ParseTreeWalker(v).walk(searchRoot);
+                            scopeNode = v.getDefiningScope(node);
+                        }
+                    }
+
+                    if (scopeNode != null) {
+                        findLocal(searchCtx, fileCtx, scopeNode, oldName);
+                    } else {
+                        // Full AST search
+                        AstPath path = new AstPath();
+                        path.descend(root);
+                        find(path, searchCtx, fileCtx, root, oldName);
+                        path.ascend();
+                    }
+                } finally {
+                    if (doc != null) {
+                        doc.readUnlock();
+                    }
                 }
             } else {
                 //System.out.println("Skipping file " + workingCopy.getFileObject());
@@ -856,7 +870,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         private void searchTokenSequence(TokenSequence<?> ts) {
             if (ts.moveNext()) {
                 do {
-                    Token<?> token = ts.token();
+                    org.netbeans.api.lexer.Token<?> token = ts.token();
                     TokenId id = token.id();
 
                     String primaryCategory = id.primaryCategory();
@@ -898,6 +912,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             }
         }
 
+        @SuppressWarnings("fallthrough")
         private void rename(Node node, String oldCode, String newCode, String desc) {
             OffsetRange range = AstUtilities.getNameRange(node);
             assert range != OffsetRange.NONE;
@@ -905,26 +920,49 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 
             if (desc == null) {
                 // TODO - insert "method call", "method definition", "class definition", "symbol", "attribute" etc. and from and too?
-                if (node instanceof MethodDefNode) {
+                switch (node.getType()) {
+                case Token.OBJLITNAME: {
+                    if (!AstUtilities.isLabelledFunction(node)) {
+                        desc = NbBundle.getMessage(RenameRefactoringPlugin.class, "UpdateRef", oldCode);
+                        break;
+                    } else {
+                        // Fall through
+                    }
+                }
+                case Token.FUNCNAME:
+                case Token.FUNCTION:
                     desc = getString("UpdateMethodDef");
-                } else if (AstUtilities.isCall(node)) {
+                    break;
+                case Token.NEW:
+                case Token.CALL:
                     desc = getString("UpdateCall");
-                } else if (node instanceof SymbolNode) {
-                    desc = getString("UpdateSymbol");
-                } else if (node instanceof ClassNode || node instanceof SClassNode) {
-                    desc = getString("UpdateClassDef");
-                } else if (node instanceof ModuleNode) {
-                    desc = getString("UpdateModule");
-                } else if (node instanceof LocalVarNode || node instanceof LocalAsgnNode || node instanceof DVarNode || node instanceof DAsgnNode) {
+                    break;
+                case Token.NAME:
+                    if (node.getParentNode() != null && 
+                            (node.getParentNode().getType() == Token.CALL ||
+                             node.getParentNode().getType() == Token.NEW)) {
+                        // Ignore 
+                        desc = getString("UpdateCall");
+                        break;
+                    }
+                    // Fallthrough
+                case Token.BINDNAME:
+                    if (oldCode != null && oldCode.length() > 0 && Character.isUpperCase(oldCode.charAt(0))) {
+                        desc = getString("UpdateClass");
+                        break;
+                    }
                     desc = getString("UpdateLocalvar");
-                } else if (node instanceof GlobalVarNode || node instanceof GlobalAsgnNode) {
-                    desc = getString("UpdateGlobal");
-                } else if (node instanceof InstVarNode || node instanceof InstAsgnNode) {
-                    desc = getString("UpdateInstance");
-                } else if (node instanceof ClassVarNode || node instanceof ClassVarDeclNode || node instanceof ClassVarAsgnNode) {
-                    desc = getString("UpdateClassvar");
-                } else {
+                    break;
+                case Token.PARAMETER:
+                    desc = getString("UpdateParameter");
+                    break;
+//                case Token.GLOBAL:
+//                    desc = getString("UpdateGlobal");
+//                case Token.PROPERTY:
+//                    desc = getString("UpdateProperty");
+                default:
                     desc = NbBundle.getMessage(RenameRefactoringPlugin.class, "UpdateRef", oldCode);
+                    break;
                 }
             }
 
@@ -1024,54 +1062,34 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         }
     
         /** Search for local variables in local scope */
-        private void findLocal(RubyElementCtx searchCtx, RubyElementCtx fileCtx, Node node, String name) {
-            switch (node.nodeId) {
-            case ARGUMENTNODE:
-                // TODO - check parent and make sure it's not a method of the same name?
-                // e.g. if I have "def foo(foo)" and I'm searching for "foo" (the parameter),
-                // I don't want to pick up the ArgumentNode under def foo that corresponds to the
-                // "foo" method name!
-                if (((ArgumentNode)node).getName().equals(name)) {
+        @SuppressWarnings("fallthrough")
+        private void findLocal(JsElementCtx searchCtx, JsElementCtx fileCtx, Node node, String name) {
+            switch (node.getType()) {
+            case Token.PARAMETER:
+                if (node.getString().equals(name)) {
                     rename(node, name, null, getString("RenameParam"));
                 }
                 break;
-// I don't have alias nodes within a method, do I?                
-//            } else if (node instanceof AliasNode) { 
-//                AliasNode an = (AliasNode)node;
-//                if (an.getNewName().equals(name) || an.getOldName().equals(name)) {
-//                    elements.add(refactoring, WhereUsedElement.create(matchCtx));
-//                }
-//                break;
-            case LOCALVARNODE:
-            case LOCALASGNNODE:
-                if (((INameNode)node).getName().equals(name)) {
-                    rename(node, name, null, getString("UpdateLocalvar"));
+            case Token.NAME:
+                if ((node.getParentNode() != null && node.getParentNode().getType() == Token.CALL ||
+                     node.getParentNode() != null && node.getParentNode().getType() == Token.NEW) &&
+                        node.getParentNode().getFirstChild() == node) {
+                    // Ignore calls
+                    break;
                 }
-                break;
-            case DVARNODE:
-            case DASGNNODE:
-                 if (((INameNode)node).getName().equals(name)) {
-                    // Found a method call match
-                    // TODO - make a node on the same line
-                    // TODO - check arity - see OccurrencesFinder
-                    rename(node, name, null, getString("UpdateDynvar"));
-                 }                 
-                 break;
-            case SYMBOLNODE:
-                // XXX Can I have symbols to local variables? Try it!!!
-                if (((SymbolNode)node).getName().equals(name)) {
-                    rename(node, name, null, getString("UpdateSymbol"));
+                // Fallthrough
+            case Token.BINDNAME:
+                if (node.getString().equals(name)) {
+                    rename(node, name, null, Character.isUpperCase(name.charAt(0)) ? getString("UpdateClass") : getString("UpdateLocalvar"));
                 }
-                break;
             }
 
-            List<Node> list = node.childNodes();
+            if (node.hasChildren()) {
+                Node child = node.getFirstChild();
 
-            for (Node child : list) {
-                if (child.isInvisible()) {
-                    continue;
+                for (; child != null; child = child.getNext()) {
+                    findLocal(searchCtx, fileCtx, child, name);
                 }
-                findLocal(searchCtx, fileCtx, child, name);
             }
         }
         
@@ -1082,136 +1100,105 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
          * @todo Arity matching on the methods to preclude methods that aren't overriding or aliasing!
          */
         @SuppressWarnings("fallthrough")
-        private void find(AstPath path, RubyElementCtx searchCtx, RubyElementCtx fileCtx, Node node, String name, boolean upperCase) {
-            /* TODO look for both old and new and attempt to fix
-             if (node instanceof AliasNode) {
-                AliasNode an = (AliasNode)node;
-                if (an.getNewName().equals(name) || an.getOldName().equals(name)) {
-                    RubyElementCtx matchCtx = new RubyElementCtx(fileCtx, node);
-                    elements.add(refactoring, WhereUsedElement.create(matchCtx));
+        private void find(AstPath path, JsElementCtx searchCtx, JsElementCtx fileCtx, Node node, String name) {
+            switch (node.getType()) {
+            case org.mozilla.nb.javascript.Token.OBJLITNAME: {
+                if (node.getString().equals(name) && AstUtilities.isLabelledFunction(node)) {
+                    // TODO - implement skip semantics here, as is done for functions!
+                    // AstUtilities.getLabelledFunction(node);
+                    rename(node, name, null, getString("UpdateMethodDef"));
                 }
-            } else*/ if (!upperCase) {
-                // Local variables - I can be smarter about context searches here!
                 
-                // Methods, attributes, etc.
-                // TODO - be more discriminating on the filetype
-                switch (node.nodeId) {
-                case DEFNNODE:
-                case DEFSNODE: {
-                    if (((MethodDefNode)node).getName().equals(name)) {
-                                                
-                        boolean skip = false;
-
-                        // Check that we're in a class or module we're interested in
-                        String fqn = AstUtilities.getFqnName(path);
-                        if (fqn == null || fqn.length() == 0) {
-                            fqn = RubyIndex.OBJECT;
-                        }
-                        
-                        if (!fqn.equals(searchCtx.getDefClass())) {
-                            // XXX THE ABOVE IS NOT RIGHT - I shouldn't
-                            // use equals on the class names, I should use the
-                            // index and see if one derives fromor includes the other
-                            skip = true;
-                        }
-
-                        // Check arity
-                        if (!skip && AstUtilities.isCall(searchCtx.getNode())) {
-                            // The reference is a call and this is a definition; see if
-                            // this looks like a match
-                            // TODO - enforce that this method is also in the desired
-                            // target class!!!
-                            if (!AstUtilities.isCallFor(searchCtx.getNode(), searchCtx.getArity(), node)) {
-                                skip = true;
-                            }
-                        } else {
-                            // The search handle is a method def, as is this, with the same name.
-                            // Now I need to go and see if this is an override (e.g. compatible
-                            // arglist...)
-                            // XXX TODO
-                        }
-                        
-                        if (!skip) {
-                            // Found a method match
-                            // TODO - check arity - see OccurrencesFinder
-                            node = AstUtilities.getDefNameNode((MethodDefNode)node);
-                            rename(node, name, null, getString("UpdateMethodDef"));
-                        }
-                    }
-                    break;
-                }
-                case FCALLNODE:
-                    if (AstUtilities.isAttr(node)) {
-                        SymbolNode[] symbols = AstUtilities.getAttrSymbols(node);
-                        for (SymbolNode symbol : symbols) {
-                            if (symbol.getName().equals(name)) {
-                                // TODO - can't replace the whole node here - I need to replace only the text!
-                                rename(node, name, null, null);
-                            }
-                        }
-                    }
-                    // Fall through for other call checking
-                case VCALLNODE:
-                case CALLNODE:
-                     if (((INameNode)node).getName().equals(name)) {
-                         // TODO - if it's a call without a lhs (e.g. Call.LOCAL),
-                         // make sure that we're referring to the same method call
-                        // Found a method call match
-                        // TODO - make a node on the same line
-                        // TODO - check arity - see OccurrencesFinder
-                        rename(node, name, null, null);
-                     }
-                     break;
-                case SYMBOLNODE:
-                    if (((SymbolNode)node).getName().equals(name)) {
-                        // TODO do something about the colon?
-                        rename(node, name, null, null);
-                    }
-                    break;
-                case GLOBALVARNODE:
-                case GLOBALASGNNODE:
-                case INSTVARNODE:
-                case INSTASGNNODE:
-                case CLASSVARNODE:
-                case CLASSVARASGNNODE:
-                case CLASSVARDECLNODE:
-                    if (((INameNode)node).getName().equals(name)) {
-                        rename(node, name, null, null);
-                    }
-                    break;
-                }
-            } else {
-                // Classes, modules, constants, etc.
-                switch (node.nodeId) {
-                case COLON2NODE: {
-                    Colon2Node c2n = (Colon2Node)node;
-                    if (c2n.getName().equals(name)) {
-                        rename(node, name, null, null);
-                    }
-                    
-                    break;
-                }
-                case CONSTNODE:
-                case CONSTDECLNODE:
-                    if (((INameNode)node).getName().equals(name)) {
-                        rename(node, name, null, null);
-                    }
-                    break;
-                }
+                // No children to consider
+                return;
             }
             
-            List<Node> list = node.childNodes();
+            case org.mozilla.nb.javascript.Token.FUNCNAME: {
+                if (node.getString().equals(name)) {
+                    boolean skip = false;
+//
+//                        // Check that we're in a class or module we're interested in
+//                        String fqn = AstUtilities.getFqnName(path);
+//                        if (fqn == null || fqn.length() == 0) {
+//                            fqn = JsIndex.OBJECT;
+//                        }
+//                        
+//                        if (!fqn.equals(searchCtx.getDefClass())) {
+//                            // XXX THE ABOVE IS NOT RIGHT - I shouldn't
+//                            // use equals on the class names, I should use the
+//                            // index and see if one derives fromor includes the other
+//                            skip = true;
+//                        }
+//
+//                        // Check arity
+//                        if (!skip && AstUtilities.isCall(searchCtx.getNode())) {
+//                            // The reference is a call and this is a definition; see if
+//                            // this looks like a match
+//                            // TODO - enforce that this method is also in the desired
+//                            // target class!!!
+//                            if (!AstUtilities.isCallFor(searchCtx.getNode(), searchCtx.getArity(), node)) {
+//                                skip = true;
+//                            }
+//                        } else {
+//                            // The search handle is a method def, as is this, with the same name.
+//                            // Now I need to go and see if this is an override (e.g. compatible
+//                            // arglist...)
+//                            // XXX TODO
+//                        }
 
-            for (Node child : list) {
-                if (child.isInvisible()) {
-                    continue;
+                    if (!skip) {
+                        // Found a method match
+                        // TODO - check arity - see OccurrencesFinder
+                        //node = AstUtilities.getDefNameNode((MethodDefNode)node);
+                        rename(node, name, null, getString("UpdateMethodDef"));
+                    }
                 }
-                path.descend(child);
-                find(path, searchCtx, fileCtx, child, name, upperCase);
-                path.ascend();
+                break;
+            }
+            case org.mozilla.nb.javascript.Token.NEW:
+            case org.mozilla.nb.javascript.Token.CALL: {
+                String s = AstUtilities.getCallName(node, false);
+                if (s.equals(name)) {
+                     // TODO - if it's a call without a lhs (e.g. Call.LOCAL),
+                     // make sure that we're referring to the same method call
+                    // Found a method call match
+                    // TODO - make a node on the same line
+                    // TODO - check arity - see OccurrencesFinder
+                    rename(node, name, null, null);
+                 }
+                 break;
+            }
+            case org.mozilla.nb.javascript.Token.NAME:
+                if (node.getParentNode().getType() == org.mozilla.nb.javascript.Token.CALL ||
+                        node.getParentNode().getType() == org.mozilla.nb.javascript.Token.NEW) {
+                    // Skip - call name is already handled as part of parent
+                    break;
+                }
+                // Fallthrough
+            case org.mozilla.nb.javascript.Token.STRING: {
+                int parentType = node.getParentNode().getType();
+                if (!(parentType == org.mozilla.nb.javascript.Token.GETPROP ||
+                        parentType == org.mozilla.nb.javascript.Token.SETPROP)) {
+                    break;
+                }
+                // Fallthrough
+            }
+            case org.mozilla.nb.javascript.Token.BINDNAME: {
+                // Global vars
+                if (node.getString().equals(name)) {
+                    rename(node, name, null, null);
+                }
+                break;
+            }
+            }
+            
+            if (node.hasChildren()) {
+                Node child = node.getFirstChild();
+
+                for (; child != null; child = child.getNext()) {
+                    find(path, searchCtx, fileCtx, child, name);
+                }
             }
         }
-    
     }
-    
 }

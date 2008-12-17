@@ -25,8 +25,9 @@
  *
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.ruby.hints.infrastructure;
+package org.netbeans.modules.javascript.hints.infrastructure;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -34,39 +35,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import org.jruby.nb.ast.Node;
-import org.jruby.nb.ast.NodeType;
-import org.jruby.nb.common.IRubyWarnings.ID;
+import org.mozilla.nb.javascript.Node;
 import org.netbeans.modules.gsf.api.CompilationInfo;
 import org.netbeans.modules.gsf.api.Error;
-import org.netbeans.modules.gsf.api.ParserResult;
 import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.HintSeverity;
 import org.netbeans.modules.gsf.api.HintsProvider;
 import org.netbeans.modules.gsf.api.HintsProvider.HintsManager;
+import org.netbeans.modules.gsf.api.ParserResult;
 import org.netbeans.modules.gsf.api.Rule;
 import org.netbeans.modules.gsf.api.RuleContext;
-import org.netbeans.modules.ruby.AstPath;
-import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.RubyParser.RubyError;
+import org.netbeans.modules.javascript.editing.AstPath;
+import org.netbeans.modules.javascript.editing.AstUtilities;
+import org.netbeans.modules.javascript.hints.StrictWarning;
 
 /**
  * Class which acts on the rules and suggestions by iterating the 
  * AST and invoking applicable rules
  * 
- * 
  * @author Tor Norbye
  */
-public class RubyHintsProvider implements HintsProvider {
+public class JsHintsProvider implements HintsProvider {
     private boolean cancelled;
-    
-    public RubyHintsProvider() {
+ 
+    public JsHintsProvider() {
     }
 
-    public RuleContext createRuleContext() {
-        return new RubyRuleContext();
-    }
-
-    @SuppressWarnings("unchecked")
     public void computeErrors(HintsManager manager, RuleContext context, List<Hint> result, List<Error> unhandled) {
         ParserResult parserResult = context.parserResult;
         if (parserResult == null) {
@@ -81,7 +75,7 @@ public class RubyHintsProvider implements HintsProvider {
         cancelled = false;
         
         @SuppressWarnings("unchecked")
-        Map<ID,List<RubyErrorRule>> hints = (Map)manager.getErrors();
+        Map<String,List<JsErrorRule>> hints = (Map)manager.getErrors();
 
         if (hints.isEmpty() || isCancelled()) {
             unhandled.addAll(errors);
@@ -91,37 +85,29 @@ public class RubyHintsProvider implements HintsProvider {
         try {
             context.doc.readLock();
             for (Error error : errors) {
-                if (error instanceof RubyError) {
-                    if (!applyRules(manager, (RubyError)error, context, hints, result)) {
-                        unhandled.add(error);
-                    }
+                if (!applyErrorRules(manager, context, error, hints, result)) {
+                    unhandled.add(error);
                 }
             }
         } finally {
             context.doc.readUnlock();
         }
     }
-    
-    public List<Rule> getBuiltinRules() {
-        return null;
-    }
 
-    @SuppressWarnings("unchecked")
     public void computeSelectionHints(HintsManager manager, RuleContext context, List<Hint> result, int start, int end) {
         cancelled = false;
         
-        ParserResult parserResult = context.parserResult;
-        if (parserResult == null) {
+        if (context.parserResult == null) {
             return;
         }
-        Node root = AstUtilities.getRoot(parserResult);
+        Node root = AstUtilities.getRoot(context.parserResult);
 
         if (root == null) {
             return;
         }
 
         @SuppressWarnings("unchecked")
-        List<RubySelectionRule> hints = (List<RubySelectionRule>)manager.getSelectionHints();
+        List<JsSelectionRule> hints = (List<JsSelectionRule>) manager.getSelectionHints();
 
         if (hints.isEmpty()) {
             return;
@@ -130,11 +116,10 @@ public class RubyHintsProvider implements HintsProvider {
         if (isCancelled()) {
             return;
         }
-
-
+        
         try {
             context.doc.readLock();
-            applyRules(manager, context, hints, result);
+            applySelectionRules(manager, context, hints, result);
         } finally {
             context.doc.readUnlock();
         }
@@ -143,18 +128,17 @@ public class RubyHintsProvider implements HintsProvider {
     public void computeHints(HintsManager manager, RuleContext context, List<Hint> result) {
         cancelled = false;
         
-        ParserResult parserResult = context.parserResult;
-        if (parserResult == null) {
+        if (context.parserResult == null) {
             return;
         }
-        Node root = AstUtilities.getRoot(parserResult);
+        Node root = AstUtilities.getRoot(context.parserResult);
 
         if (root == null) {
             return;
         }
-        
+
         @SuppressWarnings("unchecked")
-        Map<NodeType,List<RubyAstRule>> hints = (Map)manager.getHints(false, context);
+        Map<Integer,List<JsAstRule>> hints = (Map)manager.getHints(false, context);
 
         if (hints.isEmpty()) {
             return;
@@ -167,42 +151,40 @@ public class RubyHintsProvider implements HintsProvider {
         AstPath path = new AstPath();
         path.descend(root);
         
+        //applyRules(manager, NodeTypes.ROOTNODE, root, path, info, hints, descriptions);
         try {
             context.doc.readLock();
-            applyRules(manager, context, NodeType.ROOTNODE, root, path, hints, result);
+            applyHints(manager, context, -1, root, path, hints, result);
             scan(manager, context, root, path, hints, result);
         } finally {
             context.doc.readUnlock();
         }
-        
         path.ascend();
     }
     
     @SuppressWarnings("unchecked")
     public void computeSuggestions(HintsManager manager, RuleContext context, List<Hint> result, int caretOffset) {
         cancelled = false;
-        ParserResult parserResult = context.parserResult;
-        if (parserResult == null) {
+        if (context.parserResult == null) {
             return;
         }
         
-        Node root = AstUtilities.getRoot(parserResult);
+        Node root = AstUtilities.getRoot(context.parserResult);
 
         if (root == null) {
             return;
         }
 
-        Map<NodeType, List<RubyAstRule>> suggestions = new HashMap<NodeType, List<RubyAstRule>>();
+        Map<Integer, List<JsAstRule>> suggestions = new HashMap<Integer, List<JsAstRule>>();
    
-        Map<NodeType,List<RubyAstRule>> hintsMap = (Map)manager.getHints(true, context);
-        suggestions.putAll(hintsMap);
+        suggestions.putAll((Map)manager.getHints(true, context));
 
-        Set<Entry<NodeType, List<RubyAstRule>>> suggestionsSet = (Set)manager.getSuggestions().entrySet();
-        for (Entry<NodeType, List<RubyAstRule>> e : suggestionsSet) {
-            List<RubyAstRule> rules = suggestions.get(e.getKey());
+        Set<Entry<Integer, List<JsAstRule>>> entrySet = (Set)manager.getSuggestions().entrySet();
+        for (Entry<Integer, List<JsAstRule>> e : entrySet) {
+            List<JsAstRule> rules = suggestions.get(e.getKey());
 
             if (rules != null) {
-                List<RubyAstRule> res = new LinkedList<RubyAstRule>();
+                List<JsAstRule> res = new LinkedList<JsAstRule>();
 
                 res.addAll(rules);
                 res.addAll(e.getValue());
@@ -222,13 +204,12 @@ public class RubyHintsProvider implements HintsProvider {
             return;
         }
         
-        CompilationInfo info = context.compilationInfo;
-        int astOffset = AstUtilities.getAstOffset(info, caretOffset);
-
-        AstPath path = new AstPath(root, astOffset);
-        
         try {
             context.doc.readLock();
+            CompilationInfo info = context.compilationInfo;
+            int astOffset = AstUtilities.getAstOffset(info, caretOffset);
+
+            AstPath path = new AstPath(root, astOffset);
             Iterator<Node> it = path.leafToRoot();
             while (it.hasNext()) {
                 if (isCancelled()) {
@@ -236,65 +217,63 @@ public class RubyHintsProvider implements HintsProvider {
                 }
 
                 Node node = it.next();
-                applyRules(manager, context, node.nodeId, node, path, suggestions, result);
+                applyHints(manager, context, node.getType(), node, path, suggestions, result);
             }
         } finally {
             context.doc.readUnlock();
         }
         
-        //applyRules(NodeType.ROOTNODE, path, info, suggestions, caretOffset, result);
+        //applyRules(NodeTypes.ROOTNODE, path, info, suggestions, caretOffset, result);
     }
 
-    private void applyRules(HintsManager manager, RuleContext context, NodeType nodeType, Node node, AstPath path, Map<NodeType,List<RubyAstRule>> hints,
+    private void applyHints(HintsManager manager, RuleContext context, int nodeType, Node node, AstPath path, Map<Integer,List<JsAstRule>> hints,
             List<Hint> result) {
-        List<RubyAstRule> rules = hints.get(nodeType);
+        List<JsAstRule> rules = hints.get(nodeType);
 
         if (rules != null) {
-            RubyRuleContext rubyContext = (RubyRuleContext)context;
-            rubyContext.node = node;
-            rubyContext.path = path;
+            JsRuleContext jsContext = (JsRuleContext)context;
+            jsContext.node = node;
+            jsContext.path = path;
             
-            for (RubyAstRule rule : rules) {
+            for (JsAstRule rule : rules) {
                 if (manager.isEnabled(rule)) {
-                    rule.run(rubyContext, result);
+                    rule.run(jsContext, result);
                 }
             }
         }
     }
 
     /** Apply error rules and return true iff somebody added an error description for it */
-    private boolean applyRules(HintsManager manager, RubyError error, RuleContext context, Map<ID,List<RubyErrorRule>> hints,
+    private boolean applyErrorRules(HintsManager manager, RuleContext context, Error error, Map<String,List<JsErrorRule>> hints,
             List<Hint> result) {
-        ID code = error.getId();
+        String code = error.getKey();
         if (code != null) {
-            List<RubyErrorRule> rules = hints.get(code);
+            List<JsErrorRule> rules = hints.get(code);
 
             if (rules != null) {
                 int countBefore = result.size();
-                RubyRuleContext rubyContext = (RubyRuleContext)context;
+                JsRuleContext jsContext = (JsRuleContext)context;
                 
-                for (RubyErrorRule rule : rules) {
+                boolean disabled = false;
+                for (JsErrorRule rule : rules) {
                     if (!manager.isEnabled(rule)) {
-                        continue;
+                        disabled = true;
+                    } else if (rule.appliesTo(context)) {
+                        rule.run(jsContext, error, result);
                     }
-                    if (!rule.appliesTo(context)) {
-                        continue;
-                    }
-                    rule.run(rubyContext, error, result);
                 }
                 
-                return countBefore < result.size();
+                return disabled || countBefore < result.size() || jsContext.remove;
             }
         }
         
         return false;
     }
 
-    private void applyRules(HintsManager manager, RuleContext context, List<RubySelectionRule> rules, List<Hint> result) {
-
-        RubyRuleContext rubyContext = (RubyRuleContext)context;
+    private void applySelectionRules(HintsManager manager, RuleContext context, List<JsSelectionRule> rules,
+            List<Hint> result) {
         
-        for (RubySelectionRule rule : rules) {
+        for (JsSelectionRule rule : rules) {
             if (!rule.appliesTo(context)) {
                 continue;
             }
@@ -303,20 +282,15 @@ public class RubyHintsProvider implements HintsProvider {
                 continue;
             }
 
-            rule.run(rubyContext, result);
+            rule.run(context, result);
         }
     }
     
-    private void scan(HintsManager manager, RuleContext context, Node node, AstPath path, Map<NodeType,List<RubyAstRule>> hints, 
+    private void scan(HintsManager manager, RuleContext context, Node node, AstPath path, Map<Integer,List<JsAstRule>> hints,
             List<Hint> result) {
-        applyRules(manager, context, node.nodeId, node, path, hints, result);
+        applyHints(manager, context, node.getType(), node, path, hints, result);
         
-        List<Node> list = node.childNodes();
-
-        for (Node child : list) {
-            if (child.isInvisible()) {
-                continue;
-            }
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
             if (isCancelled()) {
                 return;
             }
@@ -333,5 +307,24 @@ public class RubyHintsProvider implements HintsProvider {
 
     private boolean isCancelled() {
         return cancelled;
+    }
+
+    public RuleContext createRuleContext() {
+        return new JsRuleContext();
+    }
+    
+    public List<Rule> getBuiltinRules() {
+        List<Rule> rules = new ArrayList<Rule>(StrictWarning.KNOWN_STRICT_ERROR_KEYS.length);
+
+        // Add builtin wrappers for strict warnings
+        for (String key : StrictWarning.KNOWN_STRICT_ERROR_KEYS) {
+            StrictWarning rule = new StrictWarning(key);
+            if (StrictWarning.RESERVED_KEYWORD.equals(key) || StrictWarning.TRAILING_COMMA.equals(key)) { // NOI18N
+                rule.setDefaultSeverity(HintSeverity.ERROR);
+            }
+            rules.add(rule);
+        }
+
+        return rules;
     }
 }
