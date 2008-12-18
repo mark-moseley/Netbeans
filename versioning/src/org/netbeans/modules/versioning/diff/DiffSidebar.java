@@ -85,7 +85,7 @@ import java.text.MessageFormat;
  * 
  * @author Maros Sandor
  */
-class DiffSidebar extends JComponent implements DocumentListener, ComponentListener, FoldHierarchyListener, FileChangeListener {
+class DiffSidebar extends JPanel implements DocumentListener, ComponentListener, FoldHierarchyListener, FileChangeListener {
     
     private static final int BAR_WIDTH = 9;
     
@@ -116,6 +116,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
 
     private RequestProcessor.Task   refreshDiffTask;
     private VersioningSystem ownerVersioningSystem;
+    private File tempFolder;
 
     public DiffSidebar(JTextComponent target, File file) {
         this.textComponent = target;
@@ -134,8 +135,8 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
 
     private void refreshOriginalContent() {
-        File file = FileUtil.toFile(fileObject);
-        ownerVersioningSystem = VersioningManager.getInstance().getOwner(file);
+        File file = fileObject != null ? FileUtil.toFile(fileObject) : null;
+        ownerVersioningSystem = file != null ? VersioningManager.getInstance().getOwner(file) : null;
         originalContentSerial++;
         refreshDiff();
     }
@@ -211,7 +212,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         try {
             DiffController view = DiffController.create(new SidebarStreamSource(true), new SidebarStreamSource(false));
             DiffTopComponent tc = new DiffTopComponent(view);
-            tc.setName(fileObject.getNameExt() + " [Diff]"); // NOI18N
+            tc.setName(NbBundle.getMessage(DiffSidebar.class, "CTL_DiffPanel_Title", new Object[] {fileObject.getNameExt()})); // NOI18N
             tc.open();
             tc.requestActive();
             view.setLocation(DiffController.DiffPane.Modified, DiffController.LocationType.DifferenceIndex, getDiffIndex(diff));
@@ -227,15 +228,25 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         return -1;
     }
 
+    private int computeEndOffset(Difference diff) {
+        int end = Utilities.getRowStartFromLineOffset(document, diff.getSecondEnd());
+        if (end == -1) {
+            Element lineRoot = document.getParagraphElement(0).getParentElement();
+            for (end = lineRoot.getElement(diff.getSecondEnd() - 1).getEndOffset(); end > document.getLength(); end--) {
+            }
+        }
+        return end;
+    }
+
     void onRollback(Difference diff) {
         try {
             if (diff.getType() == Difference.ADD) {
                 int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart() - 1);
-                int end = Utilities.getRowStartFromLineOffset(document, diff.getSecondEnd());
+                int end = computeEndOffset(diff);
                 document.remove(start, end - start);
             } else if (diff.getType() == Difference.CHANGE) {
                 int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart() - 1);
-                int end = Utilities.getRowStartFromLineOffset(document, diff.getSecondEnd());
+                int end = computeEndOffset(diff);
                 document.replace(start, end - start, diff.getFirstText(), null);
             } else {
                 int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart());
@@ -385,9 +396,11 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         if (editorUI != null) {
             try{
                 JTextComponent component = editorUI.getComponent();
-                BaseTextUI textUI = (BaseTextUI)component.getUI();
-                int clickOffset = textUI.viewToModel(component, new Point(0, e.getY()));
-                line = Utilities.getLineOffset(document, clickOffset);
+                if (component != null) {
+                    BaseTextUI textUI = (BaseTextUI)component.getUI();
+                    int clickOffset = textUI.viewToModel(component, new Point(0, e.getY()));
+                    line = Utilities.getLineOffset(document, clickOffset);
+                }
             }catch (BadLocationException ble){
                 Logger.getLogger(DiffSidebar.class.getName()).log(Level.WARNING, "getLineFromMouseEvent", ble); // NOI18N
             }
@@ -424,7 +437,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     
     private void initialize() {
         assert SwingUtilities.isEventDispatchThread();
-        
+
         document.addDocumentListener(this);
         textComponent.addComponentListener(this);
         foldHierarchy.addFoldHierarchyListener(this);
@@ -436,6 +449,10 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
 
     private void shutdown() {
         assert SwingUtilities.isEventDispatchThread();
+
+        if(tempFolder != null) {
+            Utils.deleteRecursively(tempFolder);
+        }
 
         if (fileObject != null) {
             fileObject.removeFileChangeListener(this);
@@ -726,9 +743,13 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         if (vs == null) return null;
         File mainFile = FileUtil.toFile(fileObject);
         if (mainFile == null) return null;
-        
-        File tempFolder = Utils.getTempFolder();
-        
+
+        if(tempFolder != null) {
+            Utils.deleteRecursively(tempFolder);
+        }
+        tempFolder = Utils.getTempFolder();
+        tempFolder.deleteOnExit();
+
         Set<File> filesToCheckout = new HashSet<File>(2);
         filesToCheckout.add(mainFile);
         DataObject dao = null;
@@ -748,6 +769,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         try {            
             for (File file : filesToCheckout) {
                 File originalFile = new File(tempFolder, file.getName());
+                originalFile.deleteOnExit();
                 vs.getOriginalFile(file, originalFile);
                 originalFiles.add(originalFile);
             }         
@@ -762,7 +784,6 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
             if(encodinqQuery != null) {
                 encodinqQuery.resetEncodingForFiles(originalFiles);
             }
-            Utils.deleteRecursively(tempFolder);
         }
     }
     
