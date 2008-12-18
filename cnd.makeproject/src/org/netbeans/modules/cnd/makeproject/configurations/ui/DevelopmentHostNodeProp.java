@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,28 +40,31 @@
  */
 package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
+import java.awt.Component;
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
-import org.netbeans.modules.cnd.makeproject.api.configurations.IntConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.DevelopmentHostConfiguration;
+import org.netbeans.modules.cnd.makeproject.ui.customizer.DevelopmentHostCustomizer;
+import org.openide.explorer.propertysheet.ExPropertyEditor;
+import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.nodes.Node;
+import org.openide.util.NbBundle;
 
-public class IntNodeProp extends Node.Property {
+public class DevelopmentHostNodeProp extends Node.Property {
 
-    private final IntConfiguration intConfiguration;
-    private final String unused;
-    private final String name;
-    private final String description;
+    private DevelopmentHostConfiguration configuration;
     private boolean canWrite;
-    IntEditor intEditor = null;
+    private String name;
+    private String description;
 
     @SuppressWarnings("unchecked")
-    public IntNodeProp(IntConfiguration intConfiguration, boolean canWrite, String unused, String name, String description) {
+    public DevelopmentHostNodeProp(DevelopmentHostConfiguration configuration, boolean canWrite, String name, String description) {
         super(Integer.class);
-        this.intConfiguration = intConfiguration;
+        this.configuration = configuration;
         this.canWrite = canWrite;
-        this.unused = unused;
         this.name = name;
         this.description = description;
+        setValue("title", NbBundle.getMessage(DevelopmentHostNodeProp.class, "DLG_TITLE_Connect")); // NOI18N
     }
 
     @Override
@@ -76,24 +79,24 @@ public class IntNodeProp extends Node.Property {
 
     @Override
     public String getHtmlDisplayName() {
-        if (intConfiguration.getModified()) {
-            return "<b>" + getDisplayName(); // NOI18N
+        if (configuration.getModified()) {
+            return "<b>" + getDisplayName() + "</b>"; // NOI18N
         } else {
             return null;
         }
     }
 
     public Object getValue() {
-        return Integer.valueOf(intConfiguration.getValue());
+        return configuration.getValue();
     }
 
-    public void setValue(Object v) {
-        intConfiguration.setValue((String) v);
+    public void setValue(Object value) {
+        configuration.setValue((String) value, true);
     }
 
     @Override
     public void restoreDefaultValue() {
-        intConfiguration.reset();
+        configuration.reset();
     }
 
     @Override
@@ -103,15 +106,11 @@ public class IntNodeProp extends Node.Property {
 
     @Override
     public boolean isDefaultValue() {
-        return !intConfiguration.getModified();
+        return !configuration.getModified();
     }
 
     public boolean canWrite() {
         return canWrite;
-    }
-
-    public void setCanWrite(boolean canWrite) {
-        this.canWrite = canWrite;
     }
 
     public boolean canRead() {
@@ -120,13 +119,12 @@ public class IntNodeProp extends Node.Property {
 
     @Override
     public PropertyEditor getPropertyEditor() {
-        if (intEditor == null) {
-            intEditor = new IntEditor();
-        }
-        return intEditor;
+        return new IntEditor();
     }
 
-    private class IntEditor extends PropertyEditorSupport {
+    private class IntEditor extends PropertyEditorSupport implements ExPropertyEditor {
+
+        private PropertyEnv env;
 
         @Override
         public String getJavaInitializationString() {
@@ -135,17 +133,31 @@ public class IntNodeProp extends Node.Property {
 
         @Override
         public String getAsText() {
-            return intConfiguration.getName();
+            return configuration.getDisplayName(true);
         }
 
         @Override
-        public void setAsText(String text) throws java.lang.IllegalArgumentException {
+        public void setAsText(String text) throws IllegalArgumentException {
             super.setValue(text);
         }
 
         @Override
         public String[] getTags() {
-            return intConfiguration.getNames();
+            return configuration.getServerNames();
+        }
+
+        @Override
+        public boolean supportsCustomEditor() {
+            return true;
+        }
+
+        @Override
+        public Component getCustomEditor() {
+            return new DevelopmentHostCustomizer(configuration, env);
+        }
+
+        public void attachEnv(PropertyEnv env) {
+            this.env = env;
         }
     }
 }

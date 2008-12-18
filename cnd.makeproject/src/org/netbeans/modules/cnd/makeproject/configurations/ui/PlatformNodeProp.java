@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,30 +38,31 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+
 package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
-import org.netbeans.modules.cnd.makeproject.api.configurations.IntConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.PlatformConfiguration;
 import org.openide.nodes.Node;
 
-public class IntNodeProp extends Node.Property {
-
-    private final IntConfiguration intConfiguration;
-    private final String unused;
-    private final String name;
-    private final String description;
+public class PlatformNodeProp extends Node.Property {
+    
+    private PlatformConfiguration platformConfiguration;
+    private PlatformEditor editor;
     private boolean canWrite;
-    IntEditor intEditor = null;
+    private String name;
+    private String description;
 
     @SuppressWarnings("unchecked")
-    public IntNodeProp(IntConfiguration intConfiguration, boolean canWrite, String unused, String name, String description) {
+    public PlatformNodeProp(PlatformConfiguration platformConfiguration, boolean canWrite, String name, String description) {
         super(Integer.class);
-        this.intConfiguration = intConfiguration;
+        this.platformConfiguration = platformConfiguration;
         this.canWrite = canWrite;
-        this.unused = unused;
         this.name = name;
         this.description = description;
+        platformConfiguration.setPlatformNodeProp(this);
+        editor = null;
     }
 
     @Override
@@ -73,79 +74,82 @@ public class IntNodeProp extends Node.Property {
     public String getShortDescription() {
         return description;
     }
-
+    
     @Override
     public String getHtmlDisplayName() {
-        if (intConfiguration.getModified()) {
-            return "<b>" + getDisplayName(); // NOI18N
+        if (platformConfiguration.getModified()) {
+            return platformConfiguration.isDevHostOnline() ? "<b>" + getDisplayName() : getDisplayName(); // NOI18N
         } else {
             return null;
         }
     }
-
+    
     public Object getValue() {
-        return Integer.valueOf(intConfiguration.getValue());
+        return Integer.valueOf(platformConfiguration.getValue());
     }
-
+    
     public void setValue(Object v) {
-        intConfiguration.setValue((String) v);
+        platformConfiguration.setValue((String)v);
     }
-
+    
     @Override
     public void restoreDefaultValue() {
-        intConfiguration.reset();
+        platformConfiguration.reset();
     }
-
+    
     @Override
     public boolean supportsDefaultValue() {
         return true;
     }
-
+    
     @Override
     public boolean isDefaultValue() {
-        return !intConfiguration.getModified();
+        return !platformConfiguration.getModified();
     }
 
     public boolean canWrite() {
         return canWrite;
     }
-
-    public void setCanWrite(boolean canWrite) {
-        this.canWrite = canWrite;
-    }
-
+    
     public boolean canRead() {
         return true;
     }
 
     @Override
     public PropertyEditor getPropertyEditor() {
-        if (intEditor == null) {
-            intEditor = new IntEditor();
+        if (editor == null) {
+            editor = new PlatformEditor();
         }
-        return intEditor;
+        return editor;
+    }
+    
+    public void repaint() {
+        ((PlatformEditor) getPropertyEditor()).repaint();
     }
 
-    private class IntEditor extends PropertyEditorSupport {
-
+    private class PlatformEditor extends PropertyEditorSupport {
         @Override
         public String getJavaInitializationString() {
             return getAsText();
         }
-
+        
         @Override
         public String getAsText() {
-            return intConfiguration.getName();
+            return platformConfiguration.getName();
         }
-
+        
         @Override
-        public void setAsText(String text) throws java.lang.IllegalArgumentException {
+        public void setAsText(String text) throws IllegalArgumentException {
             super.setValue(text);
         }
-
+        
         @Override
         public String[] getTags() {
-            return intConfiguration.getNames();
+            return platformConfiguration.getNames();
+        }
+        
+        public void repaint() {
+            firePropertyChange();
         }
     }
 }

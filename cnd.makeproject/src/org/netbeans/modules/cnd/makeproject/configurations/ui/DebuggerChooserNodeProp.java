@@ -42,24 +42,20 @@ package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
-import org.netbeans.modules.cnd.makeproject.api.configurations.IntConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.DebuggerChooserConfiguration;
 import org.openide.nodes.Node;
 
-public class IntNodeProp extends Node.Property {
+public class DebuggerChooserNodeProp extends Node.Property {
 
-    private final IntConfiguration intConfiguration;
-    private final String unused;
+    private final DebuggerChooserConfiguration debuggerChooserConfiguration;
     private final String name;
     private final String description;
-    private boolean canWrite;
     IntEditor intEditor = null;
 
     @SuppressWarnings("unchecked")
-    public IntNodeProp(IntConfiguration intConfiguration, boolean canWrite, String unused, String name, String description) {
+    public DebuggerChooserNodeProp(DebuggerChooserConfiguration debuggerChooserConfiguration, String name, String description) {
         super(Integer.class);
-        this.intConfiguration = intConfiguration;
-        this.canWrite = canWrite;
-        this.unused = unused;
+        this.debuggerChooserConfiguration = debuggerChooserConfiguration;
         this.name = name;
         this.description = description;
     }
@@ -76,7 +72,7 @@ public class IntNodeProp extends Node.Property {
 
     @Override
     public String getHtmlDisplayName() {
-        if (intConfiguration.getModified()) {
+        if (debuggerChooserConfiguration.getModified()) {
             return "<b>" + getDisplayName(); // NOI18N
         } else {
             return null;
@@ -84,16 +80,16 @@ public class IntNodeProp extends Node.Property {
     }
 
     public Object getValue() {
-        return Integer.valueOf(intConfiguration.getValue());
+        return Integer.valueOf(debuggerChooserConfiguration.getValue());
     }
 
     public void setValue(Object v) {
-        intConfiguration.setValue((String) v);
+        debuggerChooserConfiguration.setValue((String) v);
     }
 
     @Override
     public void restoreDefaultValue() {
-        intConfiguration.reset();
+        debuggerChooserConfiguration.reset();
     }
 
     @Override
@@ -103,15 +99,11 @@ public class IntNodeProp extends Node.Property {
 
     @Override
     public boolean isDefaultValue() {
-        return !intConfiguration.getModified();
+        return !debuggerChooserConfiguration.getModified();
     }
 
     public boolean canWrite() {
-        return canWrite;
-    }
-
-    public void setCanWrite(boolean canWrite) {
-        this.canWrite = canWrite;
+        return true;
     }
 
     public boolean canRead() {
@@ -135,7 +127,7 @@ public class IntNodeProp extends Node.Property {
 
         @Override
         public String getAsText() {
-            return intConfiguration.getName();
+            return debuggerChooserConfiguration.getName();
         }
 
         @Override
@@ -145,7 +137,7 @@ public class IntNodeProp extends Node.Property {
 
         @Override
         public String[] getTags() {
-            return intConfiguration.getNames();
+            return debuggerChooserConfiguration.getNames();
         }
     }
 }
