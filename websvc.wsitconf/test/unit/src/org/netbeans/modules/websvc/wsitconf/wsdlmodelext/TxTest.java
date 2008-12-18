@@ -46,10 +46,10 @@ import junit.framework.*;
 import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
 import org.netbeans.modules.websvc.wsitconf.util.TestCatalogModel;
 import org.netbeans.modules.websvc.wsitconf.util.TestUtil;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import org.netbeans.modules.xml.wsdl.model.Binding;
 import org.netbeans.modules.xml.wsdl.model.BindingOperation;
 import org.netbeans.modules.xml.wsdl.model.Definitions;
-import org.netbeans.modules.xml.wsdl.model.WSDLComponentFactory;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 
 /**
@@ -73,8 +73,10 @@ public class TxTest extends TestCase {
     public void testTx() throws Exception {
         TestCatalogModel.getDefault().setDocumentPooling(true);
         WSDLModel model = TestUtil.loadWSDLModel("../wsdlmodelext/resources/policy.xml");
-        WSDLComponentFactory fact = model.getFactory();
-        
+        File f = new File("TxTest.wsdl");
+        if (f.exists()) {
+            f.delete();
+        }        
         model.startTransaction();
 
         Definitions d = model.getDefinitions();
@@ -83,20 +85,21 @@ public class TxTest extends TestCase {
         BindingOperation bop = (BindingOperation) b.getBindingOperations().toArray()[0];
         assertEquals("Tx enabled indicated on empty WSDL", ComboConstants.TX_NOTSUPPORTED, TxModelHelper.getTx(bop, null));
 
-        TxModelHelper.setTx(bop, null, ComboConstants.TX_MANDATORY);
+        TxModelHelper txHelper = TxModelHelper.getInstance(ConfigVersion.CONFIG_1_0);
+        txHelper.setTx(bop, null, ComboConstants.TX_MANDATORY);
         assertEquals("TxValue", ComboConstants.TX_MANDATORY, TxModelHelper.getTx(bop, null));
-        TxModelHelper.setTx(bop, null, ComboConstants.TX_NEVER);
+        txHelper.setTx(bop, null, ComboConstants.TX_NEVER);
         assertEquals("TxValue", ComboConstants.TX_NOTSUPPORTED, TxModelHelper.getTx(bop, null));
-        TxModelHelper.setTx(bop, null, ComboConstants.TX_REQUIRED);
+        txHelper.setTx(bop, null, ComboConstants.TX_REQUIRED);
         assertEquals("TxValue", ComboConstants.TX_REQUIRED, TxModelHelper.getTx(bop, null));
-        TxModelHelper.setTx(bop, null, ComboConstants.TX_REQUIRESNEW);
+        txHelper.setTx(bop, null, ComboConstants.TX_REQUIRESNEW);
         assertEquals("TxValue", ComboConstants.TX_REQUIRESNEW, TxModelHelper.getTx(bop, null));
-        TxModelHelper.setTx(bop, null, ComboConstants.TX_SUPPORTED);
+        txHelper.setTx(bop, null, ComboConstants.TX_SUPPORTED);
         assertEquals("TxValue", ComboConstants.TX_SUPPORTED, TxModelHelper.getTx(bop, null));
         
         model.endTransaction();
 
-        TestUtil.dumpToFile(model.getBaseDocument(), new File("C:\\TestService.wsdl"));
+        TestUtil.dumpToFile(model.getBaseDocument(), f);
     }
 
     public String getTestResourcePath() {
