@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -54,54 +54,53 @@ import java.util.Set;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 
-import org.jruby.ast.AliasNode;
-import org.jruby.ast.ArgsCatNode;
-import org.jruby.ast.ArgsNode;
-import org.jruby.ast.ArgumentNode;
-import org.jruby.ast.AssignableNode;
-import org.jruby.ast.AttrAssignNode;
-import org.jruby.ast.CallNode;
-import org.jruby.ast.ClassNode;
-import org.jruby.ast.Colon2Node;
-import org.jruby.ast.Colon3Node;
-import org.jruby.ast.ConstNode;
-import org.jruby.ast.FCallNode;
-import org.jruby.ast.IArgumentNode;
-import org.jruby.ast.IScopingNode;
-import org.jruby.ast.ListNode;
-import org.jruby.ast.LocalAsgnNode;
-import org.jruby.ast.MethodDefNode;
-import org.jruby.ast.ModuleNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.SClassNode;
-import org.jruby.ast.StrNode;
-import org.jruby.ast.SymbolNode;
-import org.jruby.ast.VCallNode;
-import org.jruby.ast.YieldNode;
-import org.jruby.ast.types.INameNode;
-import org.jruby.lexer.yacc.ISourcePosition;
+import org.jruby.nb.ast.AliasNode;
+import org.jruby.nb.ast.ArgsCatNode;
+import org.jruby.nb.ast.ArgsNode;
+import org.jruby.nb.ast.ArgumentNode;
+import org.jruby.nb.ast.AssignableNode;
+import org.jruby.nb.ast.CallNode;
+import org.jruby.nb.ast.ClassNode;
+import org.jruby.nb.ast.Colon2Node;
+import org.jruby.nb.ast.Colon3Node;
+import org.jruby.nb.ast.ConstNode;
+import org.jruby.nb.ast.FCallNode;
+import org.jruby.nb.ast.IScopingNode;
+import org.jruby.nb.ast.ListNode;
+import org.jruby.nb.ast.LocalAsgnNode;
+import org.jruby.nb.ast.MethodDefNode;
+import org.jruby.nb.ast.ModuleNode;
+import org.jruby.nb.ast.MultipleAsgnNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.jruby.nb.ast.SClassNode;
+import org.jruby.nb.ast.StrNode;
+import org.jruby.nb.ast.SymbolNode;
+import org.jruby.nb.ast.VCallNode;
+import org.jruby.nb.ast.types.INameNode;
+import org.jruby.nb.lexer.yacc.ISourcePosition;
 import org.jruby.util.ByteList;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.Modifier;
-import org.netbeans.api.gsf.NameKind;
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.api.gsf.ParserFile;
-import org.netbeans.api.gsf.ParserResult;
-import org.netbeans.api.gsf.SourceFileReader;
-import org.netbeans.api.gsf.SourceModel;
-import org.netbeans.api.gsf.SourceModelFactory;
+import org.netbeans.api.ruby.platform.RubyInstallation;
+import org.netbeans.modules.gsf.api.CancellableTask;
+import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.gsf.api.Modifier;
+import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.gsf.api.Parser;
+import org.netbeans.modules.gsf.api.ParserFile;
+import org.netbeans.modules.gsf.api.ParserResult;
+import org.netbeans.modules.gsf.api.SourceFileReader;
+import org.netbeans.modules.gsf.api.SourceModel;
+import org.netbeans.modules.gsf.api.SourceModelFactory;
+import org.netbeans.modules.gsf.api.TranslatedSource;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.modules.ruby.elements.IndexedElement;
 import org.netbeans.modules.ruby.elements.IndexedField;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
-import org.netbeans.spi.gsf.DefaultParseListener;
-import org.openide.cookies.EditorCookie;
+import org.netbeans.modules.gsf.spi.DefaultParseListener;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
 import org.openide.util.Exceptions;
 
 
@@ -116,75 +115,47 @@ import org.openide.util.Exceptions;
  * @author Tor Norbye
  */
 public class AstUtilities {
-    /** Whether or not the prefixes for defs should be highlighted, e.g. in
-     *   def HTTP.foo
-     * Should "HTTP." be highlighted, or just the foo portion?
+    
+    /**
+     * Whether or not the prefixes for defs should be highlighted, e.g. in def
+     * HTTP.foo should "HTTP." be highlighted, or just the foo portion?
      */
     private static final boolean INCLUDE_DEFS_PREFIX = false;
 
     public static int getAstOffset(CompilationInfo info, int lexOffset) {
-        return info.getPositionManager().getAstOffset(info.getParserResult(), lexOffset);
-        
-    }
-
-    public static OffsetRange getAstOffsets(CompilationInfo info, OffsetRange lexicalRange) {
-        int rangeStart = lexicalRange.getStart();
-        int start = info.getPositionManager().getAstOffset(info.getParserResult(), rangeStart);
-        if (start == rangeStart) {
-            return lexicalRange;
-        } else if (start == -1) {
-            return OffsetRange.NONE;
-        } else {
-            // Assumes the translated range maintains size
-            return new OffsetRange(start, start+lexicalRange.getLength());
+        ParserResult result = info.getEmbeddedResult(RubyInstallation.RUBY_MIME_TYPE, 0);
+        if (result != null) {
+            TranslatedSource ts = result.getTranslatedSource();
+            if (ts != null) {
+                return ts.getAstOffset(lexOffset);
+            }
         }
+              
+        return lexOffset;
+    }
+    
+    public static OffsetRange getAstOffsets(CompilationInfo info, OffsetRange lexicalRange) {
+        ParserResult result = info.getEmbeddedResult(RubyInstallation.RUBY_MIME_TYPE, 0);
+        if (result != null) {
+            TranslatedSource ts = result.getTranslatedSource();
+            if (ts != null) {
+                int rangeStart = lexicalRange.getStart();
+                int start = ts.getAstOffset(rangeStart);
+                if (start == rangeStart) {
+                    return lexicalRange;
+                } else if (start == -1) {
+                    return OffsetRange.NONE;
+                } else {
+                    // Assumes the translated range maintains size
+                    return new OffsetRange(start, start+lexicalRange.getLength());
+                }
+            }
+        }
+        return lexicalRange;
     }
     
     /** This is a utility class only, not instantiatiable */
     private AstUtilities() {
-    }
-
-    /** Move to a generic (non-AST-oriented) utility class? */
-    public static BaseDocument getBaseDocument(FileObject fileObject, boolean forceOpen) {
-        DataObject dobj;
-
-        try {
-            dobj = DataObject.find(fileObject);
-
-            EditorCookie ec = dobj.getCookie(EditorCookie.class);
-
-            if (ec == null) {
-                throw new IOException("Can't open " + fileObject.getNameExt());
-            }
-
-            Document document;
-
-            if (forceOpen) {
-                document = ec.openDocument();
-            } else {
-                document = ec.getDocument();
-            }
-
-            if (document instanceof BaseDocument) {
-                return ((BaseDocument)document);
-            } else {
-                // Must be testsuite execution
-                try {
-                    Class c = Class.forName("org.netbeans.modules.ruby.RubyTestBase");
-                    if (c != null) {
-                        @SuppressWarnings("unchecked")
-                        java.lang.reflect.Method m = c.getMethod("getDocumentFor", new Class[] { FileObject.class });
-                        return (BaseDocument) m.invoke(null, (Object[])new FileObject[] { fileObject });
-                    }
-                } catch (Exception ex) {
-                    Exceptions.printStackTrace(ex);
-                }
-            }
-        } catch (IOException ioe) {
-            Exceptions.printStackTrace(ioe);
-        }
-
-        return null;
     }
 
     /**
@@ -199,6 +170,7 @@ public class AstUtilities {
         }
 
         try {
+            baseDoc.readLock();
             if (elementBegin >= baseDoc.getLength()) {
                 return null;
             }
@@ -279,6 +251,8 @@ public class AstUtilities {
             }
         } catch (BadLocationException ble) {
             Exceptions.printStackTrace(ble);
+        } finally {
+            baseDoc.readUnlock();
         }
 
         return comments;
@@ -314,6 +288,60 @@ public class AstUtilities {
         }
     }
 
+    public static Node getForeignNode(final IndexedElement o, final CompilationInfo[] foreignInfoHolder) {
+        FileObject fo = o.getFileObject();
+        if (fo == null) {
+            return null;
+        }
+
+        SourceModel model = SourceModelFactory.getInstance().getModel(fo);
+        if (model == null) {
+            return null;
+        }
+
+        final Node[] nodeHolder = new Node[1];
+        try {
+            model.runUserActionTask(new CancellableTask<CompilationInfo>() {
+
+                public void cancel() {
+                }
+
+                public void run(CompilationInfo info) throws Exception {
+                    if (foreignInfoHolder != null) {
+                        assert foreignInfoHolder.length == 1;
+                        foreignInfoHolder[0] = info;
+
+                        Node root = AstUtilities.getRoot(info);
+
+                        if (root != null) {
+                            String signature = o.getSignature();
+
+                            if (signature != null) {
+                                Node node = AstUtilities.findBySignature(root, signature);
+
+                                // Special handling for "new" - these are synthesized from "initialize" methods
+                                if ((node == null) && "new".equals(o.getName())) { // NOI18N
+                                    if (signature.indexOf("#new") != -1) {
+                                        signature = signature.replaceFirst("#new", "#initialize"); //NOI18N
+                                    } else {
+                                        signature = signature.replaceFirst("new", "initialize"); //NOI18N
+                                    }
+                                    node = AstUtilities.findBySignature(root, signature);
+                                }
+
+                                nodeHolder[0] = node;
+                            }
+                        }
+                    }
+                }
+            }, true);
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+
+        return nodeHolder[0];
+    }
+
     public static Node getForeignNode(final IndexedElement o, Node[] foreignRootRet) {
         ParserFile file = o.getFile();
 
@@ -347,7 +375,10 @@ public class AstUtilities {
             };
 
         DefaultParseListener listener = new DefaultParseListener();
-        new RubyParser().parseFiles(files, listener, reader);
+        // TODO - embedding model?
+        TranslatedSource translatedSource = null; // TODO - determine this here?
+        Parser.Job job = new Parser.Job(files, listener, reader, translatedSource);
+        new RubyParser().parseFiles(job);
 
         ParserResult result = listener.getParserResult();
 
@@ -372,8 +403,8 @@ public class AstUtilities {
         Node node = AstUtilities.findBySignature(root, signature);
 
         // Special handling for "new" - these are synthesized from "initialize" methods
-        if ((node == null) && "new".equals(o.getName())) {
-            signature = signature.replaceFirst("new", "initialize");
+        if ((node == null) && "new".equals(o.getName())) { // NOI18N
+            signature = signature.replaceFirst("new", "initialize"); //NOI18N
             node = AstUtilities.findBySignature(root, signature);
         }
 
@@ -381,22 +412,17 @@ public class AstUtilities {
     }
 
     public static int boundCaretOffset(CompilationInfo info, int caretOffset) {
-        Document doc = null;
+        Document doc = info.getDocument();
+        if (doc != null) {
+            // If you invoke code completion while indexing is in progress, the
+            // completion job (which stores the caret offset) will be delayed until
+            // indexing is complete - potentially minutes later. When the job
+            // is finally run we need to make sure the caret position is still valid.
+            int length = doc.getLength();
 
-        try {
-            doc = info.getDocument();
-        } catch (IOException e) {
-            Exceptions.printStackTrace(e);
-        }
-
-        // If you invoke code completion while indexing is in progress, the
-        // completion job (which stores the caret offset) will be delayed until
-        // indexing is complete - potentially minutes later. When the job
-        // is finally run we need to make sure the caret position is still valid.
-        int length = doc.getLength();
-
-        if (caretOffset > length) {
-            caretOffset = length;
+            if (caretOffset > length) {
+                caretOffset = length;
+            }
         }
 
         return caretOffset;
@@ -414,9 +440,9 @@ public class AstUtilities {
     }
 
     private static void addRequires(Node node, Set<String> requires) {
-        if (node.nodeId == NodeTypes.FCALLNODE) {
+        if (node.nodeId == NodeType.FCALLNODE) {
             // A method call
-            String name = ((INameNode)node).getName();
+            String name = getName(node);
 
             if (name.equals("require")) { // XXX Load too?
 
@@ -440,16 +466,18 @@ public class AstUtilities {
                     }
                 }
             }
-        } else if (node.nodeId == NodeTypes.MODULENODE || node.nodeId == NodeTypes.CLASSNODE ||
-                node.nodeId == NodeTypes.DEFNNODE || node.nodeId == NodeTypes.DEFSNODE) {
+        } else if (node.nodeId == NodeType.MODULENODE || node.nodeId == NodeType.CLASSNODE ||
+                node.nodeId == NodeType.DEFNNODE || node.nodeId == NodeType.DEFSNODE) {
             // Only look for require statements at the top level
             return;
         }
 
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             addRequires(child, requires);
         }
     }
@@ -457,8 +485,8 @@ public class AstUtilities {
     /** Locate the method of the given name and arity */
     public static MethodDefNode findMethod(Node node, String name, Arity arity) {
         // Recursively search for methods or method calls that match the name and arity
-        if ((node.nodeId == NodeTypes.DEFNNODE || node.nodeId == NodeTypes.DEFSNODE) &&
-            ((MethodDefNode)node).getName().equals(name)) {
+        if ((node.nodeId == NodeType.DEFNNODE || node.nodeId == NodeType.DEFSNODE) &&
+            getName(node).equals(name)) {
             Arity defArity = Arity.getDefArity(node);
 
             if (Arity.matches(arity, defArity)) {
@@ -466,10 +494,12 @@ public class AstUtilities {
             }
         }
 
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             MethodDefNode match = findMethod(child, name, arity);
 
             if (match != null) {
@@ -487,7 +517,7 @@ public class AstUtilities {
         while (it.hasNext()) {
             Node node = it.next();
 
-            if (node instanceof MethodDefNode) {
+            if (node.nodeId == NodeType.DEFNNODE || node.nodeId == NodeType.DEFSNODE) {
                 return (MethodDefNode)node;
             }
         }
@@ -518,11 +548,11 @@ public class AstUtilities {
             while (it.hasNext()) {
                 Node n = it.next();
                 switch (n.nodeId) {
-                case NodeTypes.DEFNNODE:
-                case NodeTypes.DEFSNODE:
-                case NodeTypes.CLASSNODE:
-                case NodeTypes.SCLASSNODE:
-                case NodeTypes.MODULENODE:
+                case DEFNNODE:
+                case DEFSNODE:
+                case CLASSNODE:
+                case SCLASSNODE:
+                case MODULENODE:
                     return n;
                 }
             }
@@ -537,7 +567,7 @@ public class AstUtilities {
         if (method == null) {
             method = path.leafParent();
 
-            if (method.nodeId == NodeTypes.NEWLINENODE) {
+            if (method.nodeId == NodeType.NEWLINENODE) {
                 method = path.leafGrandParent();
             }
 
@@ -570,15 +600,15 @@ public class AstUtilities {
         Node candidate = null;
         for (Node curr : path) {
             switch (curr.nodeId) {
-            //case NodeTypes.BLOCKNODE:
-            case NodeTypes.ITERNODE:
+            //case BLOCKNODE:
+            case ITERNODE:
                 candidate = curr;
                 break;
-            case NodeTypes.DEFNNODE:
-            case NodeTypes.DEFSNODE:
-            case NodeTypes.CLASSNODE:
-            case NodeTypes.SCLASSNODE:
-            case NodeTypes.MODULENODE:
+            case DEFNNODE:
+            case DEFSNODE:
+            case CLASSNODE:
+            case SCLASSNODE:
+            case MODULENODE:
                 return candidate;
             }
         }
@@ -589,8 +619,12 @@ public class AstUtilities {
     public static MethodDefNode findMethod(AstPath path) {
         // Find the closest block node enclosing the given node
         for (Node curr : path) {
-            if (curr.nodeId == NodeTypes.DEFNNODE || curr.nodeId == NodeTypes.DEFSNODE) {
+            if (curr.nodeId == NodeType.DEFNNODE || curr.nodeId == NodeType.DEFSNODE) {
                 return (MethodDefNode)curr;
+            }
+            if (curr.nodeId == NodeType.CLASSNODE || curr.nodeId == NodeType.SCLASSNODE ||
+                    curr.nodeId == NodeType.MODULENODE) {
+                break;
             }
         }
 
@@ -615,7 +649,7 @@ public class AstUtilities {
         // Find the closest block node enclosing the given node
         for (Node curr : path) {
             // XXX What about SClassNodes?
-            if (curr.nodeId == NodeTypes.CLASSNODE || curr.nodeId == NodeTypes.MODULENODE) {
+            if (curr.nodeId == NodeType.CLASSNODE || curr.nodeId == NodeType.MODULENODE) {
                 return (IScopingNode)curr;
             }
         }
@@ -624,16 +658,16 @@ public class AstUtilities {
     }
 
     public static boolean isCall(Node node) {
-        return node.nodeId == NodeTypes.FCALLNODE ||
-                node.nodeId == NodeTypes.VCALLNODE ||
-                node.nodeId == NodeTypes.CALLNODE;
+        return node.nodeId == NodeType.FCALLNODE ||
+                node.nodeId == NodeType.VCALLNODE ||
+                node.nodeId == NodeType.CALLNODE;
     }
     
     public static String getCallName(Node node) {
         assert isCall(node);
 
         if (node instanceof INameNode) {
-            return ((INameNode)node).getName();
+            return getName(node);
         }
         assert false : node;
 
@@ -642,7 +676,7 @@ public class AstUtilities {
 
     public static String getDefName(Node node) {
         if (node instanceof MethodDefNode) {
-            return ((MethodDefNode)node).getName();
+            return getName(node);
         }
         assert false : node;
 
@@ -667,29 +701,25 @@ public class AstUtilities {
      * @param namesOnly If true, return only the parameter names for rest args and
      *  blocks. If false, include "*" and "&".
      */
-    @SuppressWarnings("unchecked")
     public static List<String> getDefArgs(MethodDefNode node, boolean namesOnly) {
         // TODO - do anything special about (&), blocks, argument lists (*), etc?
-        List<Node> nodes = (List<Node>)node.childNodes();
+        List<Node> nodes = node.childNodes();
 
         // TODO - use AstElement.getParameters?
         for (Node c : nodes) {
             if (c instanceof ArgsNode) {
                 ArgsNode an = (ArgsNode)c;
 
-                List<Node> args = (List<Node>)an.childNodes();
+                List<Node> args = an.childNodes();
                 List<String> parameters = new ArrayList<String>();
 
                 for (Node arg : args) {
                     if (arg instanceof ListNode) {
-                        List<Node> args2 = (List<Node>)arg.childNodes();
+                        List<Node> args2 = arg.childNodes();
 
                         for (Node arg2 : args2) {
-                            if (arg2 instanceof ArgumentNode) {
-                                String name = ((ArgumentNode)arg2).getName();
-                                parameters.add(name);
-                            } else if (arg2 instanceof LocalAsgnNode) {
-                                String name = ((LocalAsgnNode)arg2).getName();
+                            if (arg2 instanceof ArgumentNode || arg2 instanceof LocalAsgnNode) {
+                                String name = getName(arg2);
                                 parameters.add(name);
                             }
                         }
@@ -753,20 +783,25 @@ public class AstUtilities {
      * Look for the caret offset in the parameter list; return the
      * index of the parameter that contains it.
      */
-    @SuppressWarnings("unchecked")
     public static int findArgumentIndex(Node node, int offset) {
         switch (node.nodeId) {
-        case NodeTypes.FCALLNODE: {
+        case FCALLNODE: {
             Node argsNode = ((FCallNode)node).getArgsNode();
+            if (argsNode == null) {
+                return -1;
+            }
 
             return findArgumentIndex(argsNode, offset);
         }
-        case NodeTypes.CALLNODE: {
+        case CALLNODE: {
             Node argsNode = ((CallNode)node).getArgsNode();
+            if (argsNode == null) {
+                return -1;
+            }
 
             return findArgumentIndex(argsNode, offset);
         }
-        case NodeTypes.ARGSCATNODE: {
+        case ARGSCATNODE: {
             ArgsCatNode acn = (ArgsCatNode)node;
 
             int index = findArgumentIndex(acn.getFirstNode(), offset);
@@ -787,8 +822,10 @@ public class AstUtilities {
             if ((offset >= pos.getStartOffset()) && (offset <= pos.getEndOffset())) {
                 return getConstantArgs(acn);
             }
+            
+            return -1;
         }
-        case NodeTypes.HASHNODE: 
+        case HASHNODE: 
             // Everything gets glommed into the same hash parameter offset
             return offset;
         default:
@@ -799,7 +836,10 @@ public class AstUtilities {
 
                 for (int index = 0; index < children.size(); index++) {
                     Node child = children.get(index);
-                    if (child.nodeId == NodeTypes.HASHNODE) {
+                    if (child.isInvisible()) {
+                        continue;
+                    }
+                    if (child.nodeId == NodeType.HASHNODE) {
                         // Invalid offsets - the hashnode often has the wrong offset
                         OffsetRange range = AstUtilities.getRange(child);
                         if ((offset <= range.getEnd()) &&
@@ -845,6 +885,7 @@ public class AstUtilities {
 
         if (node instanceof ListNode) {
             List children = node.childNodes();
+// TODO - if one of the children is Node.INVALID_POSITION perhaps I need to reduce the count            
 
             return children.size();
         } else {
@@ -872,28 +913,30 @@ public class AstUtilities {
 
         //String name = signature.split("(::)")
         // Find next name we're looking for
-        String name = getNextSigComponent(signature);
+        boolean[] lookingForMethod = new boolean[1];
+        String name = getNextSigComponent(signature, lookingForMethod);
         signature = signature.substring(name.length());
 
-        Node node = findBySignature(root, signature, name);
+        Node node = findBySignature(root, signature, name, lookingForMethod);
         
         // Handle top level methods
         if (node == null && originalSig.startsWith("Object#")) {
             // Just look for top level method definitions instead
             originalSig = originalSig.substring(originalSig.indexOf('#')+1);
-            name = getNextSigComponent(signature);
+            name = getNextSigComponent(signature, lookingForMethod);
             signature = originalSig.substring(name.length());
+            lookingForMethod[0] = true;
             
-            node = findBySignature(root, signature, name);
+            node = findBySignature(root, signature, name, lookingForMethod);
         }
-        
+
         return node;
     }
 
     // For a signature of the form Foo::Bar#baz(arg1,arg2,...)
     // pull out the next component; in the above, successively return
     // "Foo", "Bar", "baz", etc.
-    private static String getNextSigComponent(String signature) {
+    private static String getNextSigComponent(String signature, boolean[] lookingForMethod) {
         StringBuilder sb = new StringBuilder();
         int i = 0;
         int n = signature.length();
@@ -902,7 +945,10 @@ public class AstUtilities {
         for (; i < n; i++) {
             char c = signature.charAt(i);
 
-            if ((c == '#') || (c == ':') || (c == '(')) {
+            if (c == '#') {
+                lookingForMethod[0] = true;
+                continue;
+            } else if ((c == ':') || (c == '(')) {
                 continue;
             }
 
@@ -923,21 +969,21 @@ public class AstUtilities {
         return sb.toString();
     }
 
-    private static Node findBySignature(Node node, String signature, String name) {
+    private static Node findBySignature(Node node, String signature, String name, boolean[] lookingForMethod) {
         switch (node.nodeId) {
-        case NodeTypes.INSTASGNNODE:
+        case INSTASGNNODE:
             if (name.charAt(0) == '@') {
-                String n = ((INameNode)node).getName();
+                String n = getName(node);
                 //if (name.regionMatches(1, n, 0, n.length())) {
                 if (name.equals(n)) {
                     return node;
                 }
             }
             break;
-        case NodeTypes.CLASSVARDECLNODE:
-        case NodeTypes.CLASSVARASGNNODE:
+        case CLASSVARDECLNODE:
+        case CLASSVARASGNNODE:
             if (name.startsWith("@@")) {
-                String n = ((INameNode)node).getName();
+                String n = getName(node);
                 //if (name.regionMatches(2, n, 0, n.length())) {
                 if (name.equals(n)) {
                     return node;
@@ -945,10 +991,9 @@ public class AstUtilities {
             }
             break;
 
-        case NodeTypes.DEFNNODE:
-        case NodeTypes.DEFSNODE:
-            boolean lookingForMethod = (Character.isLowerCase(name.charAt(0)));
-            if (lookingForMethod && name.equals(AstUtilities.getDefName(node))) {
+        case DEFNNODE:
+        case DEFSNODE:
+            if (lookingForMethod[0] && name.equals(AstUtilities.getDefName(node))) {
                 // See if the parameter list matches
                 // XXX TODO
                 List<String> parameters = getDefArgs((MethodDefNode)node, false);
@@ -958,7 +1003,7 @@ public class AstUtilities {
                     // No args
                     return node;
                 } else if (signature.length() != 0) {
-                    assert signature.charAt(0) == '(';
+                    assert signature.charAt(0) == '(' : signature;
 
                     String argList = signature.substring(1, signature.length() - 1);
                     String[] args = argList.split(",");
@@ -990,8 +1035,13 @@ public class AstUtilities {
             }
             break;
             
-        case NodeTypes.CLASSNODE:
-        case NodeTypes.MODULENODE: {
+        case CONSTDECLNODE:
+            if (name.equals(getName(node))) {
+                return node;
+            }
+        break;
+        case CLASSNODE:
+        case MODULENODE: {
                 Colon3Node c3n = ((IScopingNode)node).getCPath();
 
                 if (c3n instanceof Colon2Node) {
@@ -999,7 +1049,7 @@ public class AstUtilities {
 
                     if (fqn.startsWith(name) && signature.startsWith(fqn.substring(name.length()))) {
                         signature = signature.substring(fqn.substring(name.length()).length());
-                        name = getNextSigComponent(signature);
+                        name = getNextSigComponent(signature, lookingForMethod);
 
                         if (name.length() == 0) {
                             // The signature points to a class (or module) - just return it
@@ -1011,7 +1061,7 @@ public class AstUtilities {
                         signature = signature.substring(index + name.length());
                     }
                 } else if (name.equals(AstUtilities.getClassOrModuleName(((IScopingNode)node)))) {
-                    name = getNextSigComponent(signature);
+                    name = getNextSigComponent(signature, lookingForMethod);
 
                     if (name.length() == 0) {
                         // The signature points to a class (or module) - just return it
@@ -1024,20 +1074,20 @@ public class AstUtilities {
                 }
             break;
         }
-        case NodeTypes.SCLASSNODE:
+        case SCLASSNODE:
             Node receiver = ((SClassNode)node).getReceiverNode();
             String rn = null;
 
             if (receiver instanceof Colon2Node) {
                 // TODO - check to see if we qualify
-                rn = ((Colon2Node)receiver).getName();
+                rn = getName(node);
             } else if (receiver instanceof ConstNode) {
-                rn = ((ConstNode)receiver).getName();
+                rn = getName(node);
             } // else: some other type of singleton class definition, like class << foo
 
             if (rn != null) {
                 if (name.equals(rn)) {
-                    name = getNextSigComponent(signature);
+                    name = getNextSigComponent(signature, lookingForMethod);
 
                     if (name.length() == 0) {
                         // The signature points to a class (or module) - just return it
@@ -1051,16 +1101,21 @@ public class AstUtilities {
             }
             break;
         }
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
+        boolean old = lookingForMethod[0];
+
         for (Node child : list) {
-            Node match = findBySignature(child, signature, name);
+            if (child.isInvisible()) {
+                continue;
+            }
+            Node match = findBySignature(child, signature, name, lookingForMethod);
 
             if (match != null) {
                 return match;
             }
         }
+        lookingForMethod[0] = old;
 
         return null;
     }
@@ -1075,22 +1130,25 @@ public class AstUtilities {
     /**
      * Return a range that matches the given node's source buffer range
      */
-    @SuppressWarnings("unchecked")
     public static OffsetRange getRange(Node node) {
-        if (node.nodeId == NodeTypes.NOTNODE) {
+        if (node.isInvisible()) {
+            return OffsetRange.NONE;
+        }
+
+        if (node.nodeId == NodeType.NOTNODE) {
             ISourcePosition pos = node.getPosition();
             // "unless !(x < 5)" gives a not-node with wrong offsets - starts
             // with ! but doesn't include the closing )
             List<Node> list = node.childNodes();
             if (list != null && list.size() > 0) {
                 Node first = list.get(0);
-                if (first.nodeId == NodeTypes.NEWLINENODE) {
+                if (first.nodeId == NodeType.NEWLINENODE) {
                     OffsetRange range = getRange(first);
                     return new OffsetRange(pos.getStartOffset(), range.getEnd());
                 }
             } 
             return new OffsetRange(pos.getStartOffset(), pos.getEndOffset());
-        } else if (node.nodeId == NodeTypes.HASHNODE) {
+        } else if (node.nodeId == NodeType.HASHNODE) {
             // Workaround for incorrect JRuby AST offsets for hashnodes :
             //   render :action => 'list'
             // has wrong argument offsets, which we want to correct.
@@ -1105,66 +1163,38 @@ public class AstUtilities {
                 ISourcePosition pos = node.getPosition();
                 return new OffsetRange(pos.getStartOffset(), pos.getEndOffset());
             }
+        } else if (node.nodeId == NodeType.NILNODE) {
+            return OffsetRange.NONE;
         } else {
             ISourcePosition pos = node.getPosition();
-            return new OffsetRange(pos.getStartOffset(), pos.getEndOffset());
+            try {
+                return new OffsetRange(pos.getStartOffset(), pos.getEndOffset());
+            } catch (Throwable t) {
+                // ...because there are some problems -- see AstUtilities.testStress
+                Exceptions.printStackTrace(t);
+                return OffsetRange.NONE;
+            }
         }
     }
     
     /**
-     * Get the range of a YieldNode. This is a workaround for offset problems
-     * in the JRuby AST.
-     * 
-     * This is tracked by JRuby bug 1435:
-     *   http://jira.codehaus.org/browse/JRUBY-1435
-     * 
-     * @param node The YieldNode whose offset range we want
-     * @param doc The BaseDocument for the code containing the yield node
-     * @return The offset range of the yield node
-     */
-    public static OffsetRange getYieldNodeRange(YieldNode node, BaseDocument doc) {
-        /* Yield in the following code has the wrong offsets in JRuby
-          if component.size == 1
-            yield component.first
-          else
-            raise Cyclic.new("topological sort failed: #{component.inspect}")
-          end
-         */
-        try {
-            ISourcePosition pos = node.getPosition();
-
-            int offset = pos.getStartOffset();
-            int lineStart = Utilities.getRowStart(doc, offset);
-            int lineLength = Utilities.getRowEnd(doc, offset) - lineStart;
-            String text = doc.getText(lineStart, lineLength);
-            int index = text.indexOf("yield"); // NOI18N
-
-            if ((index == -1) || (text.charAt(offset - lineStart) == 'y')) {
-                // The positions might be correct
-                return AstUtilities.getRange(node);
-            } else {
-                // Correct position
-                OffsetRange range =
-                    new OffsetRange(lineStart + index, lineStart + index + "yield".length()); // NOI18N
-                return range;
-            }
-        } catch (BadLocationException ble) {
-            Exceptions.printStackTrace(ble);
-        }
-
-        return OffsetRange.NONE;
-    }
-
-    /**
      * Return a range that matches the lvalue for an assignment. The node must be namable.
      */
     public static OffsetRange getLValueRange(AssignableNode node) {
-        assert node instanceof INameNode;
+        if (node instanceof MultipleAsgnNode) {
+            MultipleAsgnNode man = (MultipleAsgnNode)node;
+            if (man.getHeadNode() != null) {
+                return getNameRange(man.getHeadNode());
+            } else {
+                return getRange(node);
+            }
+        }
+        assert node instanceof INameNode : node;
 
         ISourcePosition pos = node.getPosition();
         OffsetRange range =
             new OffsetRange(pos.getStartOffset(),
-                pos.getStartOffset() + ((INameNode)node).getName().length());
+                pos.getStartOffset() + getName(node).length());
 
         return range;
     }
@@ -1223,22 +1253,21 @@ public class AstUtilities {
             // Here I'm only handling named nodes; there may be others
             Node receiver = ((CallNode)node).getReceiverNode();
 
-            if (receiver != null) {
+            if (receiver != null && !receiver.isInvisible()) {
                 start = receiver.getPosition().getEndOffset() + 1; // end of "Foo::bar" + "."
             }
         }
 
         if (node instanceof INameNode) {
-            end = start + ((INameNode)node).getName().length();
+            end = start + getName(node).length();
         }
 
         return new OffsetRange(start, end);
     }
 
-    @SuppressWarnings("unchecked")
     public static OffsetRange getFunctionNameRange(Node node) {
         // TODO - enforce MethodDefNode and call getNameNode on it!
-        for (Node child : (List<Node>)node.childNodes()) {
+        for (Node child : node.childNodes()) {
             if (child instanceof ArgumentNode) {
                 OffsetRange range = AstUtilities.getRange(child);
 
@@ -1247,7 +1276,7 @@ public class AstUtilities {
         }
 
         if (node instanceof MethodDefNode) {
-            for (Node child : (List<Node>)node.childNodes()) {
+            for (Node child : node.childNodes()) {
                 if (child instanceof ConstNode) {
                     ISourcePosition pos = child.getPosition();
                     int end = pos.getEndOffset();
@@ -1310,7 +1339,7 @@ public class AstUtilities {
     }
 
     public static String getClassOrModuleName(IScopingNode node) {
-        return ((INameNode)node.getCPath()).getName();
+        return getName(node.getCPath());
     }
 
     public static List<ClassNode> getClasses(Node root) {
@@ -1344,10 +1373,12 @@ public class AstUtilities {
             classes.add((ClassNode)node);
         }
 
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             addClasses(child, classes);
         }
     }
@@ -1367,7 +1398,7 @@ public class AstUtilities {
                 sb.append("::");
             }
 
-            sb.append(((INameNode)node).getName());
+            sb.append(getName(node));
         }
     }
 
@@ -1427,15 +1458,15 @@ public class AstUtilities {
             return false;
         }
 
-        String name = ((INameNode)node).getName();
+        String name = getName(node);
 
         if (name.startsWith("attr")) { // NOI18N
 
             if ("attr".equals(name) || "attr_reader".equals(name) || // NOI18N
                     "attr_accessor".equals(name) || "attr_writer".equals(name) || // NOI18N
-                                                                                      // Rails: Special definitions which builds methods that have actual fields
-                                                                                      // backing the attribute. Important to include these since they're
-                                                                                      // used for key Rails members like headers, session, etc.
+                  // Rails: Special definitions which builds methods that have actual fields
+                  // backing the attribute. Important to include these since they're
+                  // used for key Rails members like headers, session, etc.
                     "attr_internal".equals(name) || "attr_internal_reader".equals(name) ||
                     "attr_internal_writer".equals(name) || // NOI18N
                     "attr_internal_accessor".equals(name)) { // NOI18N
@@ -1447,7 +1478,6 @@ public class AstUtilities {
         return false;
     }
 
-    @SuppressWarnings("unchecked")
     public static SymbolNode[] getAttrSymbols(Node node) {
         assert isAttr(node);
 
@@ -1455,7 +1485,7 @@ public class AstUtilities {
 
         for (Node child : list) {
             if (child instanceof ListNode) {
-                List<Node> symbols = (List<Node>)child.childNodes();
+                List<Node> symbols = child.childNodes();
                 List<SymbolNode> symbolList = new ArrayList<SymbolNode>(symbols.size());
 
                 for (Node symbol : symbols) {
@@ -1471,9 +1501,22 @@ public class AstUtilities {
         return new SymbolNode[0];
     }
 
-    // TODO use this from all the various places that have this inlined...
+    public static RubyParseResult getParseResult(CompilationInfo info) {
+        ParserResult result = info.getEmbeddedResult(RubyInstallation.RUBY_MIME_TYPE, 0);
+
+        if (result == null) {
+            return null;
+        } else {
+            return ((RubyParseResult)result);
+        }
+    }
+
     public static Node getRoot(CompilationInfo info) {
-        ParserResult result = info.getParserResult();
+        return getRoot(info, RubyInstallation.RUBY_MIME_TYPE);
+    }
+
+    public static Node getRoot(CompilationInfo info, String mimeType) {
+        ParserResult result = info.getEmbeddedResult(mimeType, 0);
 
         if (result == null) {
             return null;
@@ -1487,17 +1530,7 @@ public class AstUtilities {
 
         RubyParseResult result = (RubyParseResult)r;
 
-        // TODO - just call result.getRoot()
-        // but I might have to compensate for the new RootNode behavior in JRuby
-        ParserResult.AstTreeNode ast = result.getAst();
-
-        if (ast == null) {
-            return null;
-        }
-
-        Node root = (Node)ast.getAstNode();
-
-        return root;
+        return result.getRootNode();
     }
 
     /**
@@ -1510,12 +1543,14 @@ public class AstUtilities {
         Set<String> privateMethodSymbols = new HashSet<String>();
         Set<Node> publicMethods = new HashSet<Node>();
 
-        @SuppressWarnings("unchecked")
         List<Node> list = clz.childNodes();
 
         Modifier access = Modifier.PUBLIC;
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             access = getMethodAccess(child, access, publicMethodSymbols, protectedMethodSymbols,
                     privateMethodSymbols, publicMethods, protectedMethods, privateMethods);
         }
@@ -1558,7 +1593,6 @@ public class AstUtilities {
      * @param access The "current" known access level (PUBLIC, PROTECTED or PRIVATE)
      * @return the access level to continue with at this syntactic level
      */
-    @SuppressWarnings("unchecked")
     private static Modifier getMethodAccess(Node node, Modifier access,
         Set<String> publicMethodSymbols, Set<String> protectedMethodSymbols,
         Set<String> privateMethodSymbols, Set<Node> publicMethods, Set<Node> protectedMethods,
@@ -1575,22 +1609,22 @@ public class AstUtilities {
             // XXX Can I have nested method definitions? If so I may have to continue here
             return access;
         } else if (node instanceof VCallNode || node instanceof FCallNode) {
-            String name = ((INameNode)node).getName();
+            String name = getName(node);
 
             if ("private".equals(name)) {
                 // TODO - see if it has arguments, if it does - it's just a single
                 // method defined to be private
                 // Iterate over arguments and add symbols...
                 if (Arity.callHasArguments(node)) {
-                    List<Node> params = (List<Node>)node.childNodes();
+                    List<Node> params = node.childNodes();
 
                     for (Node param : params) {
                         if (param instanceof ListNode) {
-                            List<Node> params2 = (List<Node>)param.childNodes();
+                            List<Node> params2 = param.childNodes();
 
                             for (Node param2 : params2) {
                                 if (param2 instanceof SymbolNode) {
-                                    String symbol = ((SymbolNode)param2).getName();
+                                    String symbol = getName(param2);
                                     privateMethodSymbols.add(symbol);
                                 }
                             }
@@ -1606,15 +1640,15 @@ public class AstUtilities {
                 // method defined to be private
                 // Iterate over arguments and add symbols...
                 if (Arity.callHasArguments(node)) {
-                    List<Node> params = (List<Node>)node.childNodes();
+                    List<Node> params = node.childNodes();
 
                     for (Node param : params) {
                         if (param instanceof ListNode) {
-                            List<Node> params2 = (List<Node>)param.childNodes();
+                            List<Node> params2 = param.childNodes();
 
                             for (Node param2 : params2) {
                                 if (param2 instanceof SymbolNode) {
-                                    String symbol = ((SymbolNode)param2).getName();
+                                    String symbol = getName(param2);
                                     protectedMethodSymbols.add(symbol);
                                 }
                             }
@@ -1631,15 +1665,15 @@ public class AstUtilities {
 
                     return access;
                 } else {
-                    List<Node> params = (List<Node>)node.childNodes();
+                    List<Node> params = node.childNodes();
 
                     for (Node param : params) {
                         if (param instanceof ListNode) {
-                            List<Node> params2 = (List<Node>)param.childNodes();
+                            List<Node> params2 = param.childNodes();
 
                             for (Node param2 : params2) {
                                 if (param2 instanceof SymbolNode) {
-                                    String symbol = ((SymbolNode)param2).getName();
+                                    String symbol = getName(param2);
                                     publicMethodSymbols.add(symbol);
                                 }
                             }
@@ -1653,10 +1687,12 @@ public class AstUtilities {
             return access;
         }
 
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             access = getMethodAccess(child, access, publicMethodSymbols, protectedMethodSymbols,
                     privateMethodSymbols, publicMethods, protectedMethods, privateMethods);
         }
@@ -1668,7 +1704,7 @@ public class AstUtilities {
      * Get the method name for the given offset - or null if it cannot be found. This
      * will initiate a new parse job if necessary.
      */
-    public static String getMethodName(FileObject fo, final int offset) {
+    public static String getMethodName(FileObject fo, final int lexOffset) {
         SourceModel js = SourceModelFactory.getInstance().getModel(fo);
 
         if (js == null) {
@@ -1687,14 +1723,19 @@ public class AstUtilities {
                     }
 
                     public void run(CompilationInfo info) {
-                        org.jruby.ast.Node root = AstUtilities.getRoot(info);
+                        org.jruby.nb.ast.Node root = AstUtilities.getRoot(info);
 
                         if (root == null) {
                             return;
                         }
 
-                        org.jruby.ast.MethodDefNode method =
-                            AstUtilities.findMethodAtOffset(root, offset);
+                        int astOffset = AstUtilities.getAstOffset(info, lexOffset);
+                        if (astOffset == -1) {
+                            return;
+                        }
+
+                        org.jruby.nb.ast.MethodDefNode method =
+                            AstUtilities.findMethodAtOffset(root, astOffset);
 
                         if (method == null) {
                             // It's possible the user had the caret on a line
@@ -1704,17 +1745,22 @@ public class AstUtilities {
                             // The latter isn't very likely, but the former can
                             // happen, so let's check the method bodies at the
                             // end of the current line
-                            try {
-                                BaseDocument doc = (BaseDocument)info.getDocument();
-                                int endOffset = Utilities.getRowEnd(doc, offset);
+                            BaseDocument doc = (BaseDocument)info.getDocument();
+                            if (doc != null) {
+                                try {
+                                    int endOffset = Utilities.getRowEnd(doc, lexOffset);
 
-                                if (endOffset != offset) {
-                                    method = AstUtilities.findMethodAtOffset(root, endOffset);
+                                    if (endOffset != lexOffset) {
+                                        astOffset = AstUtilities.getAstOffset(info, endOffset);
+                                        if (astOffset == -1) {
+                                            return;
+                                        }
+
+                                        method = AstUtilities.findMethodAtOffset(root, astOffset);
+                                    }
+                                } catch (BadLocationException ble) {
+                                    Exceptions.printStackTrace(ble);
                                 }
-                            } catch (BadLocationException ble) {
-                                Exceptions.printStackTrace(ble);
-                            } catch (IOException ioe) {
-                                Exceptions.printStackTrace(ioe);
                             }
                         }
 
@@ -1730,6 +1776,103 @@ public class AstUtilities {
         return result[0];
     }
 
+    /**
+     * Get the test name surrounding the given offset - or null if it cannot be found.
+     * NOTE: This will initiate a new parse job if necessary. 
+     */
+    public static String getTestName(FileObject fo, final int caretOffset) {
+        SourceModel js = SourceModelFactory.getInstance().getModel(fo);
+
+        if (js == null) {
+            return null;
+        }
+        
+        if (js.isScanInProgress()) {
+            return null;
+        }
+
+        final String[] result = new String[1];
+
+        try {
+            js.runUserActionTask(new CancellableTask<CompilationInfo>() {
+                    public void cancel() {
+                    }
+
+                    public void run(CompilationInfo info) {
+                    try {
+                        org.jruby.nb.ast.Node root = AstUtilities.getRoot(info);
+                        if (root == null) {
+                            return;
+                        }
+                        // Make sure the offset isn't at the beginning of a line
+                        BaseDocument doc = (BaseDocument) info.getDocument();
+                        int lexOffset = caretOffset;
+                        int rowStart = Utilities.getRowFirstNonWhite(doc, lexOffset);
+                        if (rowStart != -1 && lexOffset <= rowStart) {
+                            lexOffset = rowStart+1;
+                        }
+                        int astOffset = AstUtilities.getAstOffset(info, lexOffset);
+                        if (astOffset == -1) {
+                            return;
+                        }
+                        AstPath path = new AstPath(root, astOffset);
+                        Iterator<Node> it = path.leafToRoot();
+                        while (it.hasNext()) {
+                            Node node = it.next();
+                            if (node.nodeId == NodeType.FCALLNODE) {
+                                FCallNode fc = (FCallNode)node;
+                                if ("test".equals(fc.getName())) { // NOI18N
+                                    // Possibly a test node
+                                    // See http://github.com/rails/rails/commit/f74ba37f4e4175d5a1b31da59d161b0020b58e94
+                                    // test_name = "test_#{name.gsub(/[\s]/,'_')}".to_sym
+                                    if (fc.getIterNode() != null) { // NOI18N   // "it" without do/end: pending
+                                        Node argsNode = fc.getArgsNode();
+
+                                        if (argsNode instanceof ListNode) {
+                                            ListNode args = (ListNode)argsNode;
+
+                                            //  describe  ThingsController, "GET #index" do
+                                            // e.g. where the desc string is not first
+                                            String desc = null;
+                                            for (int i = 0, max = args.size(); i < max; i++) {
+                                                Node n = args.get(i);
+
+                                                // For dynamically computed strings, we have n instanceof DStrNode
+                                                // but I can't handle these anyway
+                                                if (n instanceof StrNode) {
+                                                    ByteList descBl = ((StrNode)n).getValue();
+
+                                                    if ((descBl != null) && (descBl.length() > 0)) {
+                                                        // No truncation? See 138259
+                                                        //desc = RubyUtils.truncate(descBl.toString(), MAX_RUBY_LABEL_LENGTH);
+                                                        desc = descBl.toString();
+                                                    }
+                                                    break;
+                                                }
+                                            }
+
+                                            result[0] = "test_" + desc.replace(' ', '_'); // NOI18N
+                                            return;
+                                        }
+                                    }
+                                }
+                            } else if (node.nodeId == NodeType.DEFNNODE || node.nodeId == NodeType.DEFSNODE) {
+                                result[0] = getName(node);
+                                return;
+                            }
+                        }
+                    } catch (BadLocationException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                    }
+                }, true);
+        } catch (IOException ioe) {
+            Exceptions.printStackTrace(ioe);
+        }
+
+        return result[0];
+    }
+    
     public static int findOffset(FileObject fo, final String methodName) {
         SourceModel js = SourceModelFactory.getInstance().getModel(fo);
 
@@ -1750,13 +1893,13 @@ public class AstUtilities {
                     }
 
                     public void run(CompilationInfo info) {
-                        org.jruby.ast.Node root = AstUtilities.getRoot(info);
+                        org.jruby.nb.ast.Node root = AstUtilities.getRoot(info);
 
                         if (root == null) {
                             return;
                         }
 
-                        org.jruby.ast.Node method =
+                        org.jruby.nb.ast.Node method =
                             AstUtilities.findMethod(root, methodName, Arity.UNKNOWN);
 
                         if (method != null) {
@@ -1772,8 +1915,8 @@ public class AstUtilities {
         return result[0];
     }
     
-    /** Collect nodes of the given types (node.nodeId==NodeTypes.x) under the given root */
-    public static void addNodesByType(Node root, int[] nodeIds, List<Node> result) {
+    /** Collect nodes of the given types (node.nodeId==NodeType.x) under the given root */
+    public static void addNodesByType(Node root, NodeType[] nodeIds, List<Node> result) {
         for (int i = 0; i < nodeIds.length; i++) {
             if (root.nodeId == nodeIds[i]) {
                 result.add(root);
@@ -1781,10 +1924,12 @@ public class AstUtilities {
             }
         }
 
-        @SuppressWarnings("unchecked")
         List<Node> list = root.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             addNodesByType(child, nodeIds, result);
         }
     }
@@ -1820,23 +1965,23 @@ public class AstUtilities {
         while (it.hasNext()) {
             Node n = it.next();
             switch (n.nodeId) {
-            //case NodeTypes.BLOCKNODE:
-            case NodeTypes.ITERNODE:
+            //case BLOCKNODE:
+            case ITERNODE:
                 leaf = n;
                 result.add(n);
                 break;
-            case NodeTypes.DEFNNODE:
-            case NodeTypes.DEFSNODE:
-            case NodeTypes.CLASSNODE:
-            case NodeTypes.SCLASSNODE:
-            case NodeTypes.MODULENODE:
+            case DEFNNODE:
+            case DEFSNODE:
+            case CLASSNODE:
+            case SCLASSNODE:
+            case MODULENODE:
                 leaf = n;
                 break while_loop;
             }
         }
 
         if (includeNested) {
-            addNodesByType(leaf, new int[] { /*NodeTypes.BLOCKNODE,*/ NodeTypes.ITERNODE }, result);
+            addNodesByType(leaf, new NodeType[] { /*NodeType.BLOCKNODE,*/ NodeType.ITERNODE }, result);
         }
         
         return result;
@@ -1851,8 +1996,8 @@ public class AstUtilities {
         Set<IndexedMethod>[] alternatesHolder = new Set[1];
         int[] paramIndexHolder = new int[1];
         int[] anchorOffsetHolder = new int[1];
-        if (!CodeCompleter.computeMethodCall(info, lexRange.getStart(), astRange.getStart(),
-                methodHolder, paramIndexHolder, anchorOffsetHolder, alternatesHolder)) {
+        if (!RubyMethodCompleter.computeMethodCall(info, lexRange.getStart(), astRange.getStart(),
+                methodHolder, paramIndexHolder, anchorOffsetHolder, alternatesHolder, NameKind.PREFIX)) {
 
             return guessedName;
         }
@@ -1865,7 +2010,11 @@ public class AstUtilities {
             return guessedName;
         }
         
-        return params.get(index);
+        String s = params.get(index);
+        if (s.startsWith("*") || s.startsWith("&")) { // Don't include * or & in variable name
+            s = s.substring(1);
+        }
+        return s;
     }
     
     public static Set<String> getUsedFields(RubyIndex index, AstPath path) {
@@ -1915,13 +2064,24 @@ public class AstUtilities {
         Node method = AstUtilities.findLocalScope(closest, path);
         Map<String, Node> variables = new HashMap<String, Node>();
         // Add locals
-        CodeCompleter.addLocals(method, variables);
+        RubyCodeCompleter.addLocals(method, variables);
 
         List<Node> applicableBlocks = AstUtilities.getApplicableBlocks(path, false);
         for (Node block : applicableBlocks) {
-            CodeCompleter.addDynamic(block, variables);
+            RubyCodeCompleter.addDynamic(block, variables);
         }
         
         return variables.keySet();
+    }
+
+    /**
+     * Throws {@link ClassCastException} if the given node is not instance of
+     * {@link INameNode}.
+     *
+     * @param node instance of {@link INameNode}.
+     * @return node's name
+     */
+    public static String getName(final Node node) {
+        return ((INameNode) node).getName();
     }
 }
