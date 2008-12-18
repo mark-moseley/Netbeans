@@ -47,26 +47,34 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringTokenizer;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.discovery.api.DiscoveryProvider;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
+import org.netbeans.modules.cnd.discovery.projectimport.ImportProject;
 import org.netbeans.modules.cnd.discovery.wizard.api.DiscoveryDescriptor;
 import org.netbeans.modules.cnd.discovery.wizard.bridge.DiscoveryProjectGenerator;
 import org.netbeans.modules.cnd.makeproject.api.wizards.IteratorExtension;
 import org.openide.WizardDescriptor;
+import org.openide.filesystems.FileObject;
 import org.openide.util.Lookup;
 
 /**
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.makeproject.api.wizards.IteratorExtension.class)
 public class DiscoveryExtension implements IteratorExtension {
     
     /** Creates a new instance of DiscoveryExtension */
     public DiscoveryExtension() {
     }
     
+    public Set<FileObject> createProject(WizardDescriptor wizard) throws IOException{
+        return new ImportProject(wizard).create();
+    }
+
     public void apply(WizardDescriptor wizard, Project project) throws IOException {
         DiscoveryDescriptor descriptor = DiscoveryWizardDescriptor.adaptee(wizard);
         descriptor.setProject(project);
@@ -149,9 +157,11 @@ public class DiscoveryExtension implements IteratorExtension {
         if (rootFolder == null) {
             return false;
         }
+        String logFile = descriptor.getBuildLog();
         ProjectProxy proxy = new ProjectProxyImpl(descriptor);
         DiscoveryProvider provider = findProvider("make-log"); // NOI18N
         if (provider != null && provider.isApplicable(proxy)){
+            provider.getProperty("make-log-file").setValue(logFile); // NOI18N
             if (provider.canAnalyze(proxy)>0){
                 descriptor.setProvider(provider);
                 return true;
@@ -211,8 +221,8 @@ public class DiscoveryExtension implements IteratorExtension {
         }
         SelectConfigurationPanel.buildModel(descriptor);
         return !descriptor.isInvokeProvider()
-        && descriptor.getConfigurations() != null
-                && descriptor.getIncludedFiles() != null;
+            && descriptor.getConfigurations() != null && descriptor.getConfigurations().size() > 0
+            && descriptor.getIncludedFiles() != null;
     }
     
     public boolean canApply(WizardDescriptor wizard, Project project) {
@@ -233,7 +243,7 @@ public class DiscoveryExtension implements IteratorExtension {
         return canApply(descriptor);
     }
     
-    private DiscoveryProvider findProvider(String providerID){
+    /*package-local*/ static DiscoveryProvider findProvider(String providerID){
         Lookup.Result<DiscoveryProvider> providers = Lookup.getDefault().lookup(new Lookup.Template<DiscoveryProvider>(DiscoveryProvider.class));
         for(DiscoveryProvider provider : providers.allInstances()){
             if (providerID.equals(provider.getID())) {
@@ -243,7 +253,7 @@ public class DiscoveryExtension implements IteratorExtension {
         }
         return null;
     }
-    
+
     private static class ProjectProxyImpl implements ProjectProxy {
             private DiscoveryDescriptor descriptor;
             private ProjectProxyImpl(DiscoveryDescriptor descriptor){
