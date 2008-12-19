@@ -38,60 +38,59 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.webservices.ui.panels;
+package org.netbeans.modules.maven.jaxws.actions;
 
 import java.awt.Image;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JPanel;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.modules.maven.jaxws.WSUtils;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.core.ProjectClientView;
-import org.netbeans.modules.websvc.core.JaxWsUtils;
+import org.netbeans.modules.websvc.api.support.InvokeOperationCookie;
+import org.netbeans.modules.websvc.project.api.WebService;
+import org.netbeans.modules.websvc.project.api.WebServiceData;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
+import org.openide.DialogDescriptor;
 import org.openide.explorer.ExplorerManager;
 import org.openide.explorer.view.BeanTreeView;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
-import org.openide.nodes.FilterNode;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.netbeans.modules.websvc.api.support.InvokeOperationCookie;
 
 /**
  *
  * @author Peter Williams, Milan Kuchtiak
  */
 public class ClientExplorerPanel extends InvokeOperationCookie.ClientSelectionPanel implements ExplorerManager.Provider, PropertyChangeListener {
-    
-    //private DialogDescriptor descriptor;
+
     private ExplorerManager manager;
     private BeanTreeView treeView;
-    private FileObject srcFileObject;
+    private FileObject targetSource;
     private Node selectedMethod;
-    private Project[] projects;
+    private Project[] sourceProjects;
     private Children rootChildren;
     private Node explorerClientRoot;
     private List<Node> projectNodeList;
-    
-    public ClientExplorerPanel( FileObject srcFileObject) {
-        this.srcFileObject=srcFileObject;
-        projects = OpenProjects.getDefault().getOpenProjects();
+
+    public ClientExplorerPanel(FileObject targetSource) {
+        this.targetSource = targetSource;
+        sourceProjects = OpenProjects.getDefault().getOpenProjects();
         rootChildren = new Children.Array();
         explorerClientRoot = new AbstractNode(rootChildren);
         projectNodeList = new ArrayList<Node>();
         manager = new ExplorerManager();
-        selectedMethod = null;
-        
         initComponents();
         initUserComponents();
     }
-    
+
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
@@ -113,17 +112,17 @@ public class ClientExplorerPanel extends InvokeOperationCookie.ClientSelectionPa
         gridBagConstraints.insets = new java.awt.Insets(11, 11, 0, 11);
         add(jLblTreeView, gridBagConstraints);
     }// </editor-fold>//GEN-END:initComponents
-    
-    
+
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JLabel jLblTreeView;
     // End of variables declaration//GEN-END:variables
-    
+
     private void initUserComponents() {
         treeView = new BeanTreeView();
         treeView.setRootVisible(false);
         treeView.setPopupAllowed(false);
-        
+
         java.awt.GridBagConstraints gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
@@ -132,43 +131,39 @@ public class ClientExplorerPanel extends InvokeOperationCookie.ClientSelectionPa
         gridBagConstraints.weighty = 1.0;
         add(treeView, gridBagConstraints);
         jLblTreeView.setLabelFor(treeView.getViewport().getView());
-        treeView.getAccessibleContext().setAccessibleName(NbBundle.getMessage(ClientExplorerPanel.class, "ACSD_AvailableWebServicesTree"));
-        treeView.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(ClientExplorerPanel.class, "ACSD_AvailableWebServicesTree"));
+        treeView.getAccessibleContext().setAccessibleName(
+                NbBundle.getMessage(ClientExplorerPanel.class, "ACSD_AvailableWebServicesTree"));
+        treeView.getAccessibleContext().setAccessibleDescription(
+                NbBundle.getMessage(ClientExplorerPanel.class, "ACSD_AvailableWebServicesTree"));
     }
-    
+
     public ExplorerManager getExplorerManager() {
         return manager;
     }
-    
+
     @Override
     public void addNotify() {
         super.addNotify();
         manager.addPropertyChangeListener(this);
-        
-        for (int i=0;i<projects.length;i++) {
-            Project srcFileProject = FileOwnerQuery.getOwner(srcFileObject);
-            if (srcFileProject!=null && JaxWsUtils.isProjectReferenceable(projects[i], srcFileProject)) {
-                LogicalViewProvider logicalProvider = (LogicalViewProvider)projects[i].getLookup().lookup(LogicalViewProvider.class);
-                if (logicalProvider!=null) {
+        for (int i = 0; i < sourceProjects.length; i++) {
+            Project targetProject = FileOwnerQuery.getOwner(targetSource);
+            if (targetProject != null
+                    && WSUtils.isProjectReferenceable(sourceProjects[i], targetProject)) {
+                LogicalViewProvider logicalProvider =
+                        (LogicalViewProvider) sourceProjects[i].getLookup().lookup(LogicalViewProvider.class);
+                if (logicalProvider != null) {
                     Node rootNode = logicalProvider.createLogicalView();
-                    Node[] servicesNodes = ProjectClientView.createClientView(projects[i]);
-                    if (servicesNodes!=null && servicesNodes.length>0) {
+                    Node[] servicesNodes = getClientNodes(sourceProjects[i]);
+                    if (servicesNodes.length > 0) {
                         Children children = new Children.Array();
-                        for(Node servicesNode:servicesNodes) {
-                            Node[] nodes= servicesNode.getChildren().getNodes();
-                            if (nodes!=null && nodes.length>0) {
-                                //jaxWsServices=true;
-                                Node[] filterNodes = new Node[nodes.length];
-                                for (int j=0;j<nodes.length;j++) filterNodes[j] = new FilterNode(nodes[j]);
-                                children.add(filterNodes);
-                            }
-                        }
-                        if(children.getNodesCount()>0) 
+                        children.add(servicesNodes);
+                        if (children.getNodesCount() > 0) {
                             projectNodeList.add(new ProjectNode(children, rootNode));
+                        }
                     }
                 }
             }
-            
+
         }
         Node[] projectNodes = new Node[projectNodeList.size()];
         projectNodeList.<Node>toArray(projectNodes);
@@ -176,24 +171,19 @@ public class ClientExplorerPanel extends InvokeOperationCookie.ClientSelectionPa
         manager.setRootContext(explorerClientRoot);
         treeView.expandAll();
     }
-    
-    @Override
+
     public void removeNotify() {
         manager.removePropertyChangeListener(this);
         super.removeNotify();
     }
-    
-    public Node getSelectedMethod() {
-        return selectedMethod;
-    }
-    
+
     public void propertyChange(PropertyChangeEvent evt) {
-        if(evt.getSource() == manager) {
-            if(ExplorerManager.PROP_SELECTED_NODES.equals(evt.getPropertyName())) {
-                Node nodes[] = manager.getSelectedNodes();
-                if(nodes != null && nodes.length > 0 ) {
+        if (evt.getSource() == manager) {
+            if (ExplorerManager.PROP_SELECTED_NODES.equals(evt.getPropertyName())) {
+                Node[] nodes = manager.getSelectedNodes();
+                if (nodes != null && nodes.length > 0) {
                     Node node = nodes[0];
-                    if(node.getLookup().lookup(WsdlOperation.class) != null) {
+                    if (node.getLookup().lookup(WsdlOperation.class) != null) {
                         // This is a method node.
                         selectedMethod = node;
                         setSelectionValid(true);
@@ -209,28 +199,40 @@ public class ClientExplorerPanel extends InvokeOperationCookie.ClientSelectionPa
 
     @Override
     public Lookup getSelectedClient() {
-        return getSelectedMethod().getLookup();
+        return selectedMethod.getLookup();
     }
-    
+
     private class ProjectNode extends AbstractNode {
         private Node rootNode;
-        
+
         ProjectNode(Children children, Node rootNode) {
             super(children);
-            this.rootNode=rootNode;
+            this.rootNode = rootNode;
             setName(rootNode.getDisplayName());
         }
-        
+
         @Override
         public Image getIcon(int type) {
             return rootNode.getIcon(type);
         }
-        
+
         @Override
         public Image getOpenedIcon(int type) {
             return rootNode.getOpenedIcon(type);
         }
-        
+
     }
-    
+
+    private Node[] getClientNodes(Project project) {
+        WebServiceData wsData = WebServiceData.getWebServiceData(project);
+        if (wsData != null) {
+            List<Node> nodes = new ArrayList<Node>();
+            for (WebService ws : wsData.getServiceConsumers()) {
+                nodes.add(ws.createNode());
+            }
+            return nodes.toArray(new Node[nodes.size()]);
+        }
+        return new Node[]{};
+    }
+
 }

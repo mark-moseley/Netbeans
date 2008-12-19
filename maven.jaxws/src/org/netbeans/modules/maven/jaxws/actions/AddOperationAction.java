@@ -38,42 +38,36 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.maven.jaxws.actions;
 
-package org.netbeans.modules.websvc.jaxrpc.actions;
-
-import javax.swing.text.JTextComponent;
-import org.netbeans.modules.websvc.api.support.InvokeOperationCookie;
+import org.netbeans.modules.websvc.api.support.AddOperationCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.util.Lookup;
+import org.openide.util.HelpCtx;
+import org.openide.util.NbBundle;
+import org.openide.nodes.Node;
+import org.openide.util.actions.NodeAction;
 
-/**
- *
- * @author mkuchtiak
- */
-public class JaxRpcInvokeOperation implements InvokeOperationCookie {
+public class AddOperationAction extends NodeAction  {
 
-    private FileObject targetSource;
-    /** Creates a new instance of JaxWsAddOperation.
-     * @param project Project
-    */
-    public JaxRpcInvokeOperation(FileObject targetSource) {
-        this.targetSource = targetSource;
+    public String getName() {
+        return NbBundle.getMessage(AddOperationAction.class, "LBL_OperationAction");
     }
 
-    @Override
-    public void invokeOperation(Lookup sourceNodeLookup, JTextComponent targetComponent) {
-        try {
-        DataObject dObj = DataObject.find(targetSource);
-            JaxrpcInvokeOperationGenerator.insertMethodCall(dObj, sourceNodeLookup);
-        } catch (DataObjectNotFoundException ex) {
-            ex.printStackTrace();
-        }
+    public HelpCtx getHelpCtx() {
+        return HelpCtx.DEFAULT_HELP;
     }
 
-    @Override
-    public InvokeOperationCookie.ClientSelectionPanel getDialogDescriptorPanel() {
-        return new ClientExplorerPanel(targetSource);
+    protected boolean enable(Node[] activatedNodes) {
+        if (activatedNodes.length != 1) return false;
+        FileObject implClassFo = activatedNodes[0].getLookup().lookup(FileObject.class);
+        return implClassFo != null;
+    }
+
+    protected void performAction(Node[] activatedNodes) {
+
+        FileObject implClassFo = activatedNodes[0].getLookup().lookup(FileObject.class);
+        AddOperationCookie addOperationCookie = new JaxWsAddOperation(implClassFo);
+        addOperationCookie.addOperation();
     }
 }
+

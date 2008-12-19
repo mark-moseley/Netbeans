@@ -38,42 +38,67 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-package org.netbeans.modules.websvc.jaxrpc.actions;
-
+package org.netbeans.modules.websvc.api.support;
+import javax.swing.JPanel;
 import javax.swing.text.JTextComponent;
-import org.netbeans.modules.websvc.api.support.InvokeOperationCookie;
-import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Lookup;
 
 /**
- *
- * @author mkuchtiak
+ * Provides a facility for obtaining the Invoke Operation feature.
+ * for both JAX-WS and JAX-RPC web service.
  */
-public class JaxRpcInvokeOperation implements InvokeOperationCookie {
+public interface InvokeOperationCookie {
 
-    private FileObject targetSource;
-    /** Creates a new instance of JaxWsAddOperation.
-     * @param project Project
-    */
-    public JaxRpcInvokeOperation(FileObject targetSource) {
-        this.targetSource = targetSource;
-    }
+    /** Adds a method definition to the the implementation class, possibly to SEI.
+     *
+     * @param sourceNodeLookup source node lookup
+     * @param targetComponent target text component where the code should be generated
+     */
+    void invokeOperation(Lookup sourceNodeLookup, JTextComponent targetComponent);
 
-    @Override
-    public void invokeOperation(Lookup sourceNodeLookup, JTextComponent targetComponent) {
-        try {
-        DataObject dObj = DataObject.find(targetSource);
-            JaxrpcInvokeOperationGenerator.insertMethodCall(dObj, sourceNodeLookup);
-        } catch (DataObjectNotFoundException ex) {
-            ex.printStackTrace();
+    /** provides JPanel for dialog descriptor to choose web service clients.
+     *
+     * @return ClientSelectionPanel panel
+     */
+    ClientSelectionPanel getDialogDescriptorPanel();
+
+    /** Abstract JPanel for Client selection.
+     *
+     */
+    public abstract static class ClientSelectionPanel extends JPanel {
+        /** Property to fire when the selection is valid, invalid. */
+        public static final String PROPERTY_SELECTION_VALID =
+                ClientSelectionPanel.class.getName() + ".SELECTION_VALID"; //NOI18N
+
+        private boolean selectionValid;
+
+        /** Set Node selection valid or invalid.
+         *
+         * @param selectionValid true node selection is valid fasle if not
+         */
+        protected final void setSelectionValid(boolean selectionValid) {
+            boolean wasSelectionValid = this.selectionValid;
+            if (wasSelectionValid != selectionValid) {
+                this.selectionValid = selectionValid;
+                firePropertyChange(PROPERTY_SELECTION_VALID, wasSelectionValid, selectionValid);
+            }
         }
-    }
 
-    @Override
-    public InvokeOperationCookie.ClientSelectionPanel getDialogDescriptorPanel() {
-        return new ClientExplorerPanel(targetSource);
+        /** Get lookup context of selected client node.
+         *
+         * @return lookup of selected client node
+         */
+        public abstract Lookup getSelectedClient();
+
+    }
+    /** Enumeration for target source type.
+     */
+    public enum TargetSourceType {
+        /** Target source is java class. */
+        JAVA,
+        /** Target source is JSP. */
+        JSP,
+        /** Target source is unknown. */
+        UNKNOWN;
     }
 }
