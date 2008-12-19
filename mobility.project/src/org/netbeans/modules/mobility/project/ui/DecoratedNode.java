@@ -41,6 +41,7 @@ package org.netbeans.modules.mobility.project.ui;
 import java.awt.EventQueue;
 import java.awt.Image;
 import java.io.CharConversionException;
+import org.netbeans.api.project.Project;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
@@ -61,10 +62,21 @@ class DecoratedNode extends AbstractNode {
     private final DisplayNameUpdater displayNameUpdater = new DisplayNameUpdater();
     private static final int INTERVAL = 200;
     private final BrokenStateUpdater brokenChecker = new BrokenStateUpdater();
-    private final RequestProcessor.Task task = RequestProcessor.getDefault().create(brokenChecker);
+    private final RequestProcessor rp;
+    private final RequestProcessor.Task task;
 
     DecoratedNode(Children ch, Lookup lkp) {
         super(ch, lkp);
+        RequestProcessor r = lkp.lookup(RequestProcessor.class);
+        if (r == null) {
+            Project p = lkp.lookup(Project.class);
+            r = p.getLookup().lookup(RequestProcessor.class);
+            if (r == null) {
+                r = new RequestProcessor();
+            }
+        }
+        rp = r;
+        task = rp.create(brokenChecker);
         task.schedule (400);
     }
 
@@ -80,13 +92,10 @@ class DecoratedNode extends AbstractNode {
     }
 
     protected boolean isAlive() {
-        Node parent = this;
-        while (parent != null) {
-            parent = parent.getParentNode();
-            if (parent != null && parent instanceof J2MEProjectRootNode) {
-                if (parent.getParentNode() != null) {
-                    return true;
-                }
+        for (Node parent = this; parent != null; parent = parent.getParentNode()) {
+            boolean isProjectRoot = parent instanceof J2MEProjectRootNode;
+            if (isProjectRoot) {
+                return true;
             }
         }
         return false;
