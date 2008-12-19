@@ -52,13 +52,13 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLStreamHandler;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Dictionary;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -72,8 +72,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.Icon;
 import javax.swing.JFileChooser;
-import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileSystemView;
+import org.netbeans.modules.openide.filesystems.declmime.MIMEResolverImpl;
 import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
@@ -109,16 +109,6 @@ public final class FileUtil extends Object {
         transientAttributes.add("SystemFileSystem.icon"); // NOI18N
         transientAttributes.add("SystemFileSystem.icon32"); // NOI18N
         transientAttributes.add("position"); // NOI18N
-    }
-
-    /* mapping of file extensions to content-types */
-    private static Dictionary<String, String> map = new Hashtable<String, String>();
-
-    static {
-        // Set up at least this one statically, because it is so basic;
-        // we do not want to rely on Lookup, MIMEResolver, declarative resolvers,
-        // XML layers, etc. just to find this.
-        setMIMEType("xml", "text/xml"); // NOI18N
     }
 
     /** Cache for {@link #isArchiveFile(FileObject)}. */
@@ -166,6 +156,7 @@ public final class FileUtil extends Object {
      */
     public static void refreshAll() {
         refreshFor(File.listRoots());
+        Repository.getDefault().getDefaultFileSystem().refresh(true);
     }         
     
     /**
@@ -498,8 +489,9 @@ public final class FileUtil extends Object {
 
                 if (f == null) {
                     try {
+                        LOG.finest("createFolder - before create folder if not exists.");
                         f = folder.createFolder(name);
-                    } catch (SyncFailedException ex) {
+                    } catch (IOException ex) {  // SyncFailedException or IOException when folder already exists
                         // there might be unconsistency between the cache
                         // and the disk, that is why
                         folder.refresh();
@@ -533,15 +525,9 @@ public final class FileUtil extends Object {
     * @return the data file for given name
     * @exception IOException if the creation fails
     */
-    public static FileObject createData(FileObject folder, String name)
-    throws IOException {
-        if (folder == null) {
-            throw new IllegalArgumentException("Null folder"); // NOI18N
-        }
-
-        if (name == null) {
-            throw new IllegalArgumentException("Null name"); // NOI18N
-        }
+    public static FileObject createData(FileObject folder, String name) throws IOException {
+        Parameters.notNull("folder", folder);  //NOI18N
+        Parameters.notNull("name", name);  //NOI18N
 
         String foldername;
         String dataname;
@@ -663,7 +649,7 @@ public final class FileUtil extends Object {
         FileObject retVal = null;
 
         try {
-            URL url = fileToURL(file);
+            URL url = file.toURI().toURL();
 
             if (
                 (url.getAuthority() != null) &&
@@ -692,23 +678,6 @@ public final class FileUtil extends Object {
         return retVal;
     }
         
-    static URL fileToURL(File file) throws MalformedURLException {
-        URL retVal = null;
-
-        if (!Utilities.isWindows() || canBeCanonicalizedOnWindows(file) || file.getPath().startsWith("\\\\")) {  //NOI18N
-            // all non-Windows files, canonicalizable files on windows, UNC files
-            retVal = file.toURI().toURL();
-        } else {
-            if (Utilities.isWindows() && file.getParentFile() == null) {
-                retVal = new URL("file:/" + file.getAbsolutePath().toUpperCase()); //NOI18N
-            } else {
-                retVal = new URL("file:/" + file.getAbsolutePath()); //NOI18N
-            }
-        }
-
-        return retVal;
-    }
-
     /** Finds appropriate FileObjects to java.io.File if possible.
      * If not possible then empty array is returned. More FileObjects may
      * correspond to one java.io.File that`s why array is returned.
@@ -1102,102 +1071,103 @@ public final class FileUtil extends Object {
     */
     @Deprecated
     public static String getMIMEType(String ext) {
-        String s = map.get(ext);
-
-        if (s != null) {
-            return s;
-        } else {
-            return map.get(ext.toLowerCase());
+        assert false : "FileUtil.getMIMEType(String extension) is deprecated. Please, use FileUtil.getMIMEType(FileObject).";  //NOI18N
+        if (ext.toLowerCase().equals("xml")) {  //NOI18N
+            return "text/xml"; // NOI18N
         }
+        return null;
     }
 
     /** Resolves MIME type. Registered resolvers are invoked and used to achieve this goal.
-    * Resolvers must subclass MIMEResolver. If resolvers don't recognize MIME type then
-    * MIME type is obtained  for a well-known extension.
+    * Resolvers must subclass MIMEResolver.
     * @param fo whose MIME type should be recognized
-    * @return the MIME type for the FileObject, or <code>null</code> if the FileObject is unrecognized
+    * @return the MIME type for the FileObject, or {@code null} if the FileObject is unrecognized.
+     * It may return {@code content/unknown} instead of {@code null}.
     */
     public static String getMIMEType(FileObject fo) {
-        String retVal = MIMESupport.findMIMEType(fo, null);
-
-        if (retVal == null) {
-            retVal = getMIMEType(fo.getExt());
-        }
-
-        return retVal;
+        return MIMESupport.findMIMEType(fo);
     }
 
     /** Resolves MIME type. Registered resolvers are invoked and used to achieve this goal.
-     * Resolvers must subclass MIMEResolver. If resolvers don't recognize MIME type then
-     * MIME type is obtained  for a well-known extension.
+     * Resolvers must subclass MIMEResolver.
      * @param fo whose MIME type should be recognized
      * @param withinMIMETypes an array of MIME types. Only resolvers whose
      * {@link MIMEResolver#getMIMETypes} contain one or more of the requested
      * MIME types will be asked if they recognize the file. It is possible for
      * the resulting MIME type to not be a member of this list.
      * @return the MIME type for the FileObject, or <code>null</code> if 
-     * the FileObject is unrecognized. It is possible for the resulting MIME type
-     * to not be a member of given list.
+     * the FileObject is unrecognized. It may return {@code content/unknown} instead of {@code null}.
+     * It is possible for the resulting MIME type to not be a member of given list.
      * @since 7.13
      */
     public static String getMIMEType(FileObject fo, String... withinMIMETypes) {
         Parameters.notNull("withinMIMETypes", withinMIMETypes);  //NOI18N
-        String retVal = MIMESupport.findMIMEType(fo, null, withinMIMETypes);
-
-        if (retVal == null) {
-            retVal = getMIMEType(fo.getExt());
-        }
-
-        return retVal;
+        return MIMESupport.findMIMEType(fo, withinMIMETypes);
     }
     
-    /** Finds mime type by calling getMIMEType, but
-     * instead of returning null it fallbacks to default type
-     * either text/plain or content/unknown (even for folders)
-     */
-    static String getMIMETypeOrDefault(FileObject fo) {
-        String def = getMIMEType(fo.getExt());
-        String t = MIMESupport.findMIMEType(fo, def);
-
-        if (t == null) {
-            // #42965: never allowed
-            t = "content/unknown"; // NOI18N
-        }
-
-        return t;
-    }
-
-    /**
-     * Register MIME type for a new extension.
+    /** Registers specified extension to be recognized as specified MIME type.
+     * If MIME type parameter is null, it cancels previous registration.
      * Note that you may register a case-sensitive extension if that is
-     * relevant (for example <samp>*.C</samp> for C++) but if you register
+     * relevant (for example {@literal *.C} for C++) but if you register
      * a lowercase extension it will by default apply to uppercase extensions
-     * too (for use on Windows or generally for situations where filenames
-     * become accidentally uppercase).
-     * @param ext the file extension (should be lowercase unless you specifically care about case)
-     * @param mimeType the new MIME type
-     * @throws IllegalArgumentException if this extension was already registered with a <em>different</em> MIME type
-     * @see #getMIMEType
-     * @deprecated You should instead use the more general {@link MIMEResolver} system.
+     * too on Windows.
+     * @param extension the file extension to be registered
+     * @param mimeType the MIME type to be registered for the extension or {@code null} to deregister
+     * @see #getMIMEType(FileObject)
+     * @see #getMIMETypeExtensions(String)
      */
-    @Deprecated
-    public static void setMIMEType(String ext, String mimeType) {
-        synchronized (map) {
-            String old = map.get(ext);
-
-            if (old == null) {
-                map.put(ext, mimeType);
-            } else {
-                if (!old.equals(mimeType)) {
-                    throw new IllegalArgumentException(
-                        "Cannot overwrite existing MIME type mapping for extension `" + // NOI18N
-                        ext + "' with " + mimeType + " (was " + old + ")"
-                    ); // NOI18N
-                }
-
-                // else do nothing
+    public static void setMIMEType(String extension, String mimeType) {
+        Parameters.notEmpty("extension", extension);  //NOI18N
+        final Map<String, Set<String>> mimeToExtensions = new HashMap<String, Set<String>>();
+        FileObject userDefinedResolverFO = MIMEResolverImpl.getUserDefinedResolver();
+        if (userDefinedResolverFO != null) {
+            // add all previous content
+            mimeToExtensions.putAll(MIMEResolverImpl.getMIMEToExtensions(userDefinedResolverFO));
+            // exclude extension possibly registered for other MIME types
+            for (Set<String> extensions : mimeToExtensions.values()) {
+                extensions.remove(extension);
             }
         }
+        if (mimeType != null) {
+            // add specified extension to our structure
+            Set<String> previousExtensions = mimeToExtensions.get(mimeType);
+            if (previousExtensions != null) {
+                previousExtensions.add(extension);
+            } else {
+                mimeToExtensions.put(mimeType, Collections.singleton(extension));
+            }
+        }
+        MIMEResolverImpl.storeUserDefinedResolver(mimeToExtensions);
+    }
+
+    /** Returns list of file extensions associated with specified MIME type. In
+     * other words files with those extensions are recognized as specified MIME type
+     * in NetBeans' filesystem. It never returns {@code null}.
+     * @param mimeType the MIME type (e.g. image/gif)
+     * @return list of file extensions associated with specified MIME type, never {@code null}
+     * @see #setMIMEType(String, String)
+     * @since org.openide.filesystems 7.18
+     */
+    public static List<String> getMIMETypeExtensions(String mimeType) {
+        Parameters.notEmpty("mimeType", mimeType);  //NOI18N
+        HashMap<String, String> extensionToMime = new HashMap<String, String>();
+        for (FileObject mimeResolverFO : MIMEResolverImpl.getOrderedResolvers().values()) {
+            Map<String, Set<String>> mimeToExtensions = MIMEResolverImpl.getMIMEToExtensions(mimeResolverFO);
+            for (Map.Entry<String, Set<String>> entry : mimeToExtensions.entrySet()) {
+                String mimeKey = entry.getKey();
+                Set<String> extensions = entry.getValue();
+                for (String extension : extensions) {
+                    extensionToMime.put(extension, mimeKey);
+                }
+            }
+        }
+        List<String> registeredExtensions = new ArrayList<String>();
+        for (Map.Entry<String, String> entry : extensionToMime.entrySet()) {
+            if (entry.getValue().equals(mimeType)) {
+                registeredExtensions.add(entry.getKey());
+            }
+        }
+        return registeredExtensions;
     }
 
     /**
@@ -1226,13 +1196,8 @@ public final class FileUtil extends Object {
      * @since 3.16
      */
     public static boolean isParentOf(FileObject folder, FileObject fo) {
-        if (folder == null) {
-            throw new IllegalArgumentException("Tried to pass null folder arg"); // NOI18N
-        }
-
-        if (fo == null) {
-            throw new IllegalArgumentException("Tried to pass null fo arg"); // NOI18N
-        }
+        Parameters.notNull("folder", folder);  //NOI18N
+        Parameters.notNull("fileObject", fo);  //NOI18N
 
         if (folder.isData()) {
             return false;
@@ -1404,8 +1369,7 @@ public final class FileUtil extends Object {
                 retVal = canonicalFile;
             }
         } catch (IOException ioe) {
-            LOG.warning("Normalization failed on file " + file + ": " + ioe);
-            LOG.log(Level.FINE, file.toString(), ioe);
+            LOG.log(Level.INFO, "Normalization failed on file " + file, ioe);
 
             // OK, so at least try to absolutize the path
             retVal = file.getAbsoluteFile();
@@ -1461,85 +1425,31 @@ public final class FileUtil extends Object {
     private static File normalizeFileOnWindows(final File file) {
         File retVal = null;
 
-        if (canBeCanonicalizedOnWindows(file)) {
-            try {
-                retVal = file.getCanonicalFile();
-            } catch (IOException e) {
-                LOG.warning("getCanonicalFile() on file " + file + " failed: " + e);
+        try {
+            retVal = file.getCanonicalFile();
+        } catch (IOException e) {
+            // report only other than UNC path \\ or \\computerName because these cannot be canonicalized
+            if (!file.getPath().equals("\\\\") && !("\\\\".equals(file.getParent()))) {  //NOI18N
+                LOG.warning("getCanonicalFile() on file " + file + " failed: " + e);  //NOI18N
                 LOG.log(Level.FINE, file.toString(), e);
             }
-            // #135547 - on Windows Vista map "Documents and Settings\<username>\My Documents" to "Users\<username>\Documents"
-            if((Utilities.getOperatingSystem() & Utilities.OS_WINVISTA) != 0) {
-                if(retVal == null) {
-                    retVal = file;
-                }
-                String absolutePath = retVal.getAbsolutePath();
-                if(absolutePath.contains(":\\Documents and Settings")) {  //NOI18N
-                    absolutePath = absolutePath.replaceFirst("Documents and Settings", "Users");  //NOI18N
-                    absolutePath = absolutePath.replaceFirst("My Documents", "Documents");  //NOI18N
-                    absolutePath = absolutePath.replaceFirst("My Pictures", "Pictures");  //NOI18N
-                    absolutePath = absolutePath.replaceFirst("My Music", "Music");  //NOI18N
-                    retVal = new File(absolutePath);
-                }
+        }
+        // #135547 - on Windows Vista map "Documents and Settings\<username>\My Documents" to "Users\<username>\Documents"
+        if((Utilities.getOperatingSystem() & Utilities.OS_WINVISTA) != 0) {
+            if(retVal == null) {
+                retVal = file.getAbsoluteFile();
+            }
+            String absolutePath = retVal.getAbsolutePath();
+            if(absolutePath.contains(":\\Documents and Settings")) {  //NOI18N
+                absolutePath = absolutePath.replaceFirst("Documents and Settings", "Users");  //NOI18N
+                absolutePath = absolutePath.replaceFirst("My Documents", "Documents");  //NOI18N
+                absolutePath = absolutePath.replaceFirst("My Pictures", "Pictures");  //NOI18N
+                absolutePath = absolutePath.replaceFirst("My Music", "Music");  //NOI18N
+                retVal = new File(absolutePath);
             }
         }
 
         return (retVal != null) ? retVal : file.getAbsoluteFile();
-    }
-
-    private static FileSystemView fileSystemView;
-    private static float javaSpecVersion;
-    private static boolean canBeCanonicalizedOnWindows(final File file) {
-        /*#4089199, #95031 - Flopy and empty CD-drives can't be canonicalized*/
-        // UNC path \\computerName can't be canonicalized - parent is "\\\\" and exists() returns false
-        // #137407 - "." can be canonicalized - parent == null and file.isAbsolute() returns false
-        String parent = file.getParent();
-        if (((parent == null && file.isAbsolute()) || (parent != null && parent.equals("\\\\"))) && Utilities.isWindows()) {//NOI18N
-            FileSystemView fsv = getFileSystemView();
-            return (fsv != null) ? !fsv.isFloppyDrive(file) && file.exists() : false;
-        }
-        return true;
-    }
-    
-    private static boolean is4089199() {
-        return /*98388*/Utilities.isWindows() && getJavaSpecVersion() < 1.6;
-    }
-    
-    private static float getJavaSpecVersion() {
-        synchronized(FileUtil.class) {
-            if (javaSpecVersion == 0) {
-                javaSpecVersion = Float.valueOf(System.getProperty("java.specification.version"));//NOI18N
-            }
-        }
-        return javaSpecVersion;
-    }
-
-    private static FileSystemView getFileSystemView() {
-        boolean init = false;
-        final FileSystemView[] fsv = {fileSystemView};
-        
-        synchronized(FileUtil.class) {
-            init = is4089199() && fsv[0] == null;
-        }
-        
-        if (init) {
-            if (SwingUtilities.isEventDispatchThread()) {
-                fsv[0] = javax.swing.filechooser.FileSystemView.getFileSystemView();                
-                synchronized(FileUtil.class) {
-                    fileSystemView = fsv[0];
-                }                
-            } else {
-                SwingUtilities.invokeLater(new java.lang.Runnable() {
-                    public void run() {
-                        fsv[0] = javax.swing.filechooser.FileSystemView.getFileSystemView();
-                        synchronized(FileUtil.class) {
-                            fileSystemView = fsv[0];
-                        }                        
-                    }
-                });
-            }                        
-        }
-        return fileSystemView;
     }
 
     /**
@@ -1647,9 +1557,7 @@ public final class FileUtil extends Object {
      * @since 4.48
      */
     public static boolean isArchiveFile(FileObject fo) {
-        if (fo == null) {
-            throw new IllegalArgumentException("Cannot pass null to FileUtil.isArchiveFile"); // NOI18N
-        }
+        Parameters.notNull("fileObject", fo);  //NOI18N
 
         if (!fo.isValid()) {
             return false;
@@ -1717,9 +1625,7 @@ public final class FileUtil extends Object {
      * @since 4.48
      */
     public static boolean isArchiveFile(URL url) {
-        if (url == null) {
-            throw new NullPointerException("Cannot pass null URL to FileUtil.isArchiveFile"); // NOI18N
-        }
+        Parameters.notNull("url", url);  //NOI18N
 
         if ("jar".equals(url.getProtocol())) { //NOI18N
 
