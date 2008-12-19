@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?> <!-- -*- sgml-indent-step: 2 -*- -->
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
@@ -41,7 +41,7 @@ Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
 
-<project name="org.netbeans.modules.visualweb.dataconnectivity" default="netbeans" basedir=".">
+<project name="visualweb.dataconnectivity" default="netbeans" basedir=".">
     <description>Builds, tests, and runs the project org.netbeans.modules.visualweb.dataconnectivity.</description>
     <import file="../nbbuild/templates/projectized.xml"/>
 

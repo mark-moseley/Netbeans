@@ -40,7 +40,7 @@ However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
-<project name="j2seexamples" default="netbeans" basedir=".">
+<project name="java.examples" default="netbeans" basedir=".">
 
     <import file="../nbbuild/templates/projectized.xml"/>
 
@@ -53,8 +53,8 @@ made subject to such option by the copyright holder.
             </fileset>
         </path>
         <path id="beans-binding-classpath">
-            <fileset dir="../form/external">
-                <include name="**/beansbinding*.jar"/>
+            <fileset dir="../o.jdesktop.beansbinding/external">
+                <include name="**/*.jar"/>
             </fileset>
         </path>
         <ant dir="ClientEditor" target="compile" inheritAll="false" >

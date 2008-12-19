@@ -41,7 +41,7 @@ Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
 
-<project name="org.netbeans.modules.visualweb.dataprovider" default="netbeans" basedir=".">
+<project name="visualweb.dataprovider" default="netbeans" basedir=".">
 
     <description>Builds and tests the project org.netbeans.modules.visualweb.dataprovider.</description>
     <import file="../nbbuild/templates/projectized.xml"/>
@@ -58,7 +58,9 @@ made subject to such option by the copyright holder.
     </target>
     
     <target name="javadoc-zip-init">
-        <ant dir="library" target="javadoc-zip" inheritAll="false"/>
+        <ant dir="library" target="javadoc-zip" inheritAll="false">
+            <property name="no.javadoc.preview" value="true"/>
+        </ant>
     </target>
     
     <target name="netbeans-extra" depends="init">

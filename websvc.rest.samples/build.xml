@@ -40,7 +40,7 @@ However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
-<project name="org.netbeans.modules.websvc.rest.samples" default="netbeans" basedir=".">
+<project name="websvc.rest.samples" default="netbeans" basedir=".">
 
     <import file="../nbbuild/templates/projectized.xml"/>
  
@@ -51,6 +51,7 @@ made subject to such option by the copyright holder.
     -->
     <target name="jar" depends="zip-rest-hello-world,
                                 zip-rest-customer-db,
+                                zip-rest-customer-db-spring,
                                 zip-rest-customer-db-client,
                                 projectized-common.jar"/>
 
@@ -74,6 +75,14 @@ made subject to such option by the copyright holder.
         <zip destfile="${rest.samples.resources}/CustomerDB.zip"
             update="true">
         <zipfileset dir="CustomerDB"/>
+        </zip>
+    </target>
+    
+      <!-- Target for CustomerDBSpring sample -->
+    <target name="zip-rest-customer-db-spring" depends="init-zip-samples">
+        <zip destfile="${rest.samples.resources}/CustomerDBSpring.zip"
+            update="true">
+        <zipfileset dir="CustomerDBSpring"/>
         </zip>
     </target>
     
