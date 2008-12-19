@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.webservices.ui.panels;
+package org.netbeans.modules.websvc.jaxrpc.actions;
 
 import java.awt.Image;
 import java.util.ArrayList;
@@ -46,9 +46,9 @@ import java.util.List;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
 import org.netbeans.modules.websvc.core.ProjectClientView;
 import org.netbeans.modules.websvc.core.JaxWsUtils;
+import org.netbeans.modules.websvc.jaxrpc.ServiceInformation;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.AbstractNode;
@@ -96,6 +96,7 @@ public class ClientExplorerPanel extends DefaultClientSelectionPanel {
                         for(Node servicesNode:servicesNodes) {
                             Node[] nodes= servicesNode.getChildren().getNodes();
                             if (nodes!=null && nodes.length>0) {
+                                //jaxWsServices=true;
                                 Node[] filterNodes = new Node[nodes.length];
                                 for (int j=0;j<nodes.length;j++) filterNodes[j] = new FilterNode(nodes[j]);
                                 children.add(filterNodes);
@@ -116,7 +117,14 @@ public class ClientExplorerPanel extends DefaultClientSelectionPanel {
 
     @Override
     protected boolean isClientNode(Node node) {
-        return node.getLookup().lookup(WsdlOperation.class) != null;
+        Node portNode = node.getParentNode();
+        if (portNode != null) {
+            Node serviceNode = portNode.getParentNode();
+            if (serviceNode != null && serviceNode.getCookie(ServiceInformation.class) != null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private class ProjectNode extends AbstractNode {
@@ -124,7 +132,7 @@ public class ClientExplorerPanel extends DefaultClientSelectionPanel {
 
         ProjectNode(Children children, Node rootNode) {
             super(children);
-            this.rootNode = rootNode;
+            this.rootNode=rootNode;
             setName(rootNode.getDisplayName());
         }
 

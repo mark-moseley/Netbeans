@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.webservices.ui.panels;
+package org.netbeans.modules.maven.jaxws.actions;
 
 import java.awt.Image;
 import java.util.ArrayList;
@@ -46,16 +46,16 @@ import java.util.List;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.modules.maven.jaxws.WSUtils;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
-import org.netbeans.modules.websvc.core.ProjectClientView;
-import org.netbeans.modules.websvc.core.JaxWsUtils;
+import org.netbeans.modules.websvc.project.api.WebService;
+import org.netbeans.modules.websvc.project.api.WebServiceData;
+import org.netbeans.modules.websvc.spi.support.DefaultClientSelectionPanel;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
-import org.openide.nodes.FilterNode;
-import org.netbeans.modules.websvc.spi.support.DefaultClientSelectionPanel;
 
 /**
  *
@@ -63,14 +63,14 @@ import org.netbeans.modules.websvc.spi.support.DefaultClientSelectionPanel;
  */
 public class ClientExplorerPanel extends DefaultClientSelectionPanel {
 
-    private Project[] projects;
+    private Project[] sourceProjects;
     private Children rootChildren;
     private Node explorerClientRoot;
     private List<Node> projectNodeList;
 
-    public ClientExplorerPanel(FileObject srcFileObject) {
-        super(srcFileObject);
-        projects = OpenProjects.getDefault().getOpenProjects();
+    public ClientExplorerPanel(FileObject targetSource) {
+        super(targetSource);
+        sourceProjects = OpenProjects.getDefault().getOpenProjects();
         rootChildren = new Children.Array();
         explorerClientRoot = new AbstractNode(rootChildren);
         projectNodeList = new ArrayList<Node>();
@@ -84,25 +84,21 @@ public class ClientExplorerPanel extends DefaultClientSelectionPanel {
 
     @Override
     protected Node getRootContext() {
-        for (int i=0;i<projects.length;i++) {
-            Project srcFileProject = FileOwnerQuery.getOwner(getTargetFile());
-            if (srcFileProject!=null && JaxWsUtils.isProjectReferenceable(projects[i], srcFileProject)) {
-                LogicalViewProvider logicalProvider = (LogicalViewProvider)projects[i].getLookup().lookup(LogicalViewProvider.class);
-                if (logicalProvider!=null) {
+        for (int i = 0; i < sourceProjects.length; i++) {
+            Project targetProject = FileOwnerQuery.getOwner(getTargetFile());
+            if (targetProject != null
+                    && WSUtils.isProjectReferenceable(sourceProjects[i], targetProject)) {
+                LogicalViewProvider logicalProvider =
+                        (LogicalViewProvider) sourceProjects[i].getLookup().lookup(LogicalViewProvider.class);
+                if (logicalProvider != null) {
                     Node rootNode = logicalProvider.createLogicalView();
-                    Node[] servicesNodes = ProjectClientView.createClientView(projects[i]);
-                    if (servicesNodes!=null && servicesNodes.length>0) {
+                    Node[] servicesNodes = getClientNodes(sourceProjects[i]);
+                    if (servicesNodes.length > 0) {
                         Children children = new Children.Array();
-                        for(Node servicesNode:servicesNodes) {
-                            Node[] nodes= servicesNode.getChildren().getNodes();
-                            if (nodes!=null && nodes.length>0) {
-                                Node[] filterNodes = new Node[nodes.length];
-                                for (int j=0;j<nodes.length;j++) filterNodes[j] = new FilterNode(nodes[j]);
-                                children.add(filterNodes);
-                            }
-                        }
-                        if(children.getNodesCount()>0)
+                        children.add(servicesNodes);
+                        if (children.getNodesCount() > 0) {
                             projectNodeList.add(new ProjectNode(children, rootNode));
+                        }
                     }
                 }
             }
@@ -138,6 +134,18 @@ public class ClientExplorerPanel extends DefaultClientSelectionPanel {
             return rootNode.getOpenedIcon(type);
         }
 
+    }
+
+    private Node[] getClientNodes(Project project) {
+        WebServiceData wsData = WebServiceData.getWebServiceData(project);
+        if (wsData != null) {
+            List<Node> nodes = new ArrayList<Node>();
+            for (WebService ws : wsData.getServiceConsumers()) {
+                nodes.add(ws.createNode());
+            }
+            return nodes.toArray(new Node[nodes.size()]);
+        }
+        return new Node[]{};
     }
 
 }
