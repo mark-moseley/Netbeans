@@ -41,7 +41,6 @@
 package org.netbeans.modules.debugger.jpda.ui;
 
 import com.sun.jdi.AbsentInformationException;
-import com.sun.jdi.StackFrame;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.util.ArrayList;
@@ -49,21 +48,18 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.WeakHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.api.debugger.Properties;
 import org.netbeans.spi.debugger.ContextProvider;
 
 import org.netbeans.api.debugger.DebuggerManager;
-import org.netbeans.api.debugger.Session;
 import org.netbeans.api.debugger.jpda.CallStackFrame;
 import org.netbeans.api.debugger.jpda.Field;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.JPDAThread;
-import org.netbeans.api.debugger.jpda.LineBreakpoint;
-import org.netbeans.api.debugger.jpda.LocalVariable;
-import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.spi.debugger.jpda.EditorContext;
 import org.netbeans.spi.debugger.jpda.EditorContext.Operation;
 import org.netbeans.spi.debugger.jpda.SourcePathProvider;
@@ -85,8 +81,7 @@ public class SourcePath {
 
     public SourcePath (ContextProvider contextProvider) {
         this.contextProvider = contextProvider;
-        debugger = (JPDADebugger) contextProvider.lookupFirst 
-            (null, JPDADebugger.class);
+        debugger = contextProvider.lookupFirst(null, JPDADebugger.class);
         getContext();// To initialize the source path provider
     }
 
@@ -151,26 +146,17 @@ public class SourcePath {
      * @return url
      */
     public String getURL (String relativePath, boolean global) {
-        return getContext ().getURL (relativePath, global);
-    }
-    
-    public String getURL (
-        StackFrame sf,
-        String stratumn
-    ) {
-        try {
-            return getURL (
-                convertSlash (sf.location ().sourcePath (stratumn)), 
-                true
-            );
-        } catch (AbsentInformationException e) {
-            return getURL (
-                convertClassNameToRelativePath (
-                    sf.location ().declaringType ().name ()
-                ),
-                true
-            );
+        String url = getContext ().getURL (relativePath, global);
+        if (url != null) {
+            try {
+                new java.net.URL(url);
+            } catch (java.net.MalformedURLException muex) {
+                Logger.getLogger(SourcePath.class.getName()).log(Level.WARNING,
+                        "Malformed URL '"+url+"' produced by "+getContext (), muex);
+                return null;
+            }
         }
+        return url;
     }
     
     /**
@@ -382,34 +368,42 @@ public class SourcePath {
         JPDAThread t,
         String stratumn
     ) {
+        return annotate(t, stratumn, true);
+    }
+    
+    public Object annotate (
+        JPDAThread t,
+        String stratumn,
+        boolean isCurrent
+    ) {
         int lineNumber = t.getLineNumber (stratumn);
         if (lineNumber < 1) return null;
-        //AST ast = t.getAST(stratumn);
-        Operation operation = t.getCurrentOperation();
         String url;
         try {
             url = getURL (convertSlash (t.getSourcePath (stratumn)), true);
         } catch (AbsentInformationException e) {
             url = getURL (convertClassNameToRelativePath (t.getClassName ()), true);
         }
-        List operationsAnn = annotateOperations(debugger, url, operation, t.getLastOperations(), lineNumber);
+        Operation operation;
+        List operationsAnn;
+        if (isCurrent) {
+            operation = t.getCurrentOperation();
+            operationsAnn = annotateOperations(debugger, url, operation, t.getLastOperations(), lineNumber);
+        } else {
+            operation = null;
+            operationsAnn = Collections.EMPTY_LIST;
+        }
         if (operation == null) {
             if (operationsAnn.size() == 0) {
                 return EditorContextBridge.getContext().annotate (
                     url,
                     lineNumber,
-                    EditorContext.CURRENT_LINE_ANNOTATION_TYPE,
-                    debugger
+                    isCurrent ?
+                        EditorContext.CURRENT_LINE_ANNOTATION_TYPE :
+                        EditorContext.OTHER_THREAD_ANNOTATION_TYPE,
+                    debugger,
+                    t
                 );
-            } else {
-                /*
-                operationsAnn.add(EditorContextBridge.annotate (
-                    url,
-                    lineNumber,
-                    EditorContext.CURRENT_LINE_ANNOTATION_TYPE,
-                    debugger
-                ));
-                 */
             }
         }
         return operationsAnn;
@@ -464,23 +458,27 @@ public class SourcePath {
                                            Operation currentOperation, List lastOperations,
                                            int locLineNumber) {
         List annotations = null;
+        int currentOperationLine = -1;
         if (currentOperation != null) {
             annotations = new ArrayList();
-            annotations.add(createAnnotation(debugger, url, currentOperation,
-                                             EditorContext.CURRENT_LINE_ANNOTATION_TYPE,
-                                             true));
+            Object ann = createAnnotation(debugger, url, currentOperation,
+                                          EditorContext.CURRENT_LINE_ANNOTATION_TYPE,
+                                          true);
+            if (ann != null) annotations.add(ann);
             int lineNumber;
             if (currentOperation.getMethodName() != null) {
                 lineNumber = currentOperation.getMethodStartPosition().getLine();
             } else {
                 lineNumber = currentOperation.getStartPosition().getLine();
             }
-            annotations.add(EditorContextBridge.getContext().annotate (
+            ann = EditorContextBridge.getContext().annotate (
                 url,
                 lineNumber,
                 EditorContext.CURRENT_EXPRESSION_CURRENT_LINE_ANNOTATION_TYPE,
                 debugger
-            ));
+            );
+            currentOperationLine = lineNumber;
+            if (ann != null) annotations.add(ann);
         }
         boolean isNewLineExp = false;
         if (lastOperations != null && lastOperations.size() > 0) {
@@ -491,33 +489,39 @@ public class SourcePath {
             for (int i = 0; i < lastOperations.size(); i++) {
                 Operation lastOperation = (Operation) lastOperations.get(i);
                 if (currentOperation == lastOperation && i == lastOperations.size() - 1) {
-                    annotations.add(createAnnotation(debugger, url,
-                                                     lastOperation,
-                                                     EditorContext.CURRENT_OUT_OPERATION_ANNOTATION_TYPE,
-                                                     false));
+                    Object ann = createAnnotation(debugger, url,
+                                                  lastOperation,
+                                                  EditorContext.CURRENT_OUT_OPERATION_ANNOTATION_TYPE,
+                                                  false);
+                    if (ann != null) annotations.add(ann);
                     int lineNumber = lastOperation.getEndPosition().getLine();
-                    annotations.add(EditorContextBridge.getContext().annotate (
-                        url,
-                        lineNumber,
-                        EditorContext.CURRENT_EXPRESSION_CURRENT_LINE_ANNOTATION_TYPE,
-                        debugger
-                    ));
+                    if (currentOperationLine != lineNumber) {
+                        ann = EditorContextBridge.getContext().annotate (
+                            url,
+                            lineNumber,
+                            EditorContext.CURRENT_EXPRESSION_CURRENT_LINE_ANNOTATION_TYPE,
+                            debugger
+                        );
+                        if (ann != null) annotations.add(ann);
+                    }
                     isNewLineExp = false;
                 } else {
-                    annotations.add(createAnnotation(debugger, url,
-                                                     lastOperation,
-                                                     EditorContext.CURRENT_LAST_OPERATION_ANNOTATION_TYPE,
-                                                     true));
+                    Object ann = createAnnotation(debugger, url,
+                                                  lastOperation,
+                                                  EditorContext.CURRENT_LAST_OPERATION_ANNOTATION_TYPE,
+                                                  true);
+                    if (ann != null) annotations.add(ann);
                 }
             }
         }
         if (isNewLineExp) {
-            annotations.add(EditorContextBridge.getContext().annotate (
+            Object ann = EditorContextBridge.getContext().annotate (
                 url,
                 locLineNumber,
                 EditorContext.CURRENT_LINE_ANNOTATION_TYPE,
                 debugger
-            ));
+            );
+            if (ann != null) annotations.add(ann);
         }
         if (annotations != null) {
             return annotations;
@@ -564,8 +568,26 @@ public class SourcePath {
 
         public String getURL (String relativePath, boolean global) {
             String p1 = cp1.getURL (relativePath, global);
-            if (p1 != null) return p1;
-            return cp2.getURL (relativePath, global);
+            if (p1 != null) {
+                try {
+                    new java.net.URL(p1);
+                    return p1;
+                } catch (java.net.MalformedURLException muex) {
+                    Logger.getLogger(SourcePath.class.getName()).log(Level.WARNING,
+                            "Malformed URL '"+p1+"' produced by "+cp1, muex);
+                } 
+            }
+            p1 = cp2.getURL (relativePath, global);
+            if (p1 != null) {
+                try {
+                    new java.net.URL(p1);
+                } catch (java.net.MalformedURLException muex) {
+                    Logger.getLogger(SourcePath.class.getName()).log(Level.WARNING,
+                            "Malformed URL '"+p1+"' produced by "+cp2, muex);
+                    p1 = null;
+                }
+            }
+            return p1;
         }
 
         public String getRelativePath (
@@ -636,6 +658,12 @@ public class SourcePath {
             String root = (String) enabledSourceRoots.next ();
             if (originalSourceRoots.contains (root)) 
                 sourceRoots.add (root);
+        }
+        Iterator additionalSourceRoots = properties.getProperties("additional_source_roots").
+                getCollection("src_roots", Collections.EMPTY_LIST).iterator();
+        while (additionalSourceRoots.hasNext()) {
+            String root = (String) additionalSourceRoots.next ();
+            sourceRoots.add (root);
         }
         Iterator disabledSourceRoots = properties.getProperties ("source_roots").
             getCollection ("disabled", Collections.EMPTY_SET).iterator ();
