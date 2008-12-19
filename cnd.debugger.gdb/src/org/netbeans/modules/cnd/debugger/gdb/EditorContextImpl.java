@@ -41,45 +41,34 @@
 
 package org.netbeans.modules.cnd.debugger.gdb;
 
-import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeSupport;
-import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.net.MalformedURLException;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Logger;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import javax.swing.text.Caret;
 import javax.swing.text.StyledDocument;
 import javax.swing.JEditorPane;
-import javax.swing.SwingUtilities;
 
-import org.openide.ErrorManager;
-import org.openide.cookies.EditorCookie;
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.openide.cookies.LineCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
-import org.openide.loaders.DataShadow;
 import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.nodes.Node;
 import org.openide.text.Line;
-import org.openide.text.NbDocument;
-import org.openide.util.Lookup;
-import org.openide.util.LookupEvent;
-import org.openide.util.LookupListener;
 import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
-import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.URLMapper;
 
 import org.netbeans.modules.cnd.debugger.gdb.breakpoints.DebuggerAnnotation;
+import org.netbeans.modules.cnd.debugger.gdb.breakpoints.DebuggerBreakpointAnnotation;
+import org.netbeans.modules.cnd.debugger.gdb.breakpoints.GdbBreakpoint;
 import org.netbeans.modules.cnd.loaders.CppEditorSupport.CppEditorComponent;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
+import org.openide.text.Annotation;
 
 /**
  *
@@ -89,35 +78,11 @@ public class EditorContextImpl extends EditorContext {
     
     private static String fronting = System.getProperty("netbeans.debugger.fronting"); // NOI18N
     
-    private PropertyChangeSupport   pcs;
-    private Map                     annotationToURL = new HashMap();
     private ChangeListener          changedFilesListener;
-    private Map                     timeStampToRegistry = new HashMap();
-    private Set                     modifiedDataObjects;
-    private PropertyChangeListener  editorObservableListener;
+    private Map<Object, Registry>   timeStampToRegistry = new HashMap<Object, Registry>();
+    private Set<DataObject>         modifiedDataObjects;
 
-    private Lookup.Result resDataObject;
-    private Lookup.Result resEditorCookie;
-    private Lookup.Result resNode;
-
-    private Object currentLock = new Object();
-    private String currentURL = null;
-    private EditorCookie currentEditorCookie = null;
-    private Logger log = Logger.getLogger("gdb.logger"); // NOI18N
-    
-    {
-        pcs = new PropertyChangeSupport(this);
-
-        resDataObject = Utilities.actionsGlobalContext().lookup(new Lookup.Template(DataObject.class));
-        resDataObject.addLookupListener(new EditorLookupListener(DataObject.class));
-
-        resEditorCookie = Utilities.actionsGlobalContext().lookup(new Lookup.Template(EditorCookie.class));
-        resEditorCookie.addLookupListener(new EditorLookupListener(EditorCookie.class));
-
-        resNode = Utilities.actionsGlobalContext().lookup(new Lookup.Template(Node.class));
-        resNode.addLookupListener(new EditorLookupListener(Node.class));
-
-    }
+    //private Logger log = Logger.getLogger("gdb.logger"); // NOI18N
     
     
     /**
@@ -128,26 +93,29 @@ public class EditorContextImpl extends EditorContext {
      * @param timeStamp a time stamp to be used
      */
     public boolean showSource(String url, int lineNumber, Object timeStamp) {
-        Line l = getLine(url, lineNumber, timeStamp); // false = use original ln
+        return showSource(getDataObject(url), lineNumber, timeStamp);
+    }
+    
+    public boolean showSource(DataObject dobj, int lineNumber, Object timeStamp) {
+        Line l = getLine(dobj, lineNumber, timeStamp); // false = use original ln
         if (l == null) {
             return false;
         }
         if (fronting != null) {
             if (fronting.equals("true")) { // NOI18N
-                l.show(Line.SHOW_TOFRONT); //FIX 47825
+                l.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.FRONT); //FIX 47825
             } else {
-                l.show(Line.SHOW_GOTO);
+                l.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.FOCUS);
             }
             return true;
         }
         if (Utilities.isWindows()) {
-            l.show(Line.SHOW_TOFRONT); //FIX 47825
+            l.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.FRONT); //FIX 47825
         } else  {
-            l.show(Line.SHOW_GOTO);
+            l.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.FOCUS);
         }
         return true;
     }
-    
     
     /**
      * Creates a new time stamp.
@@ -155,12 +123,11 @@ public class EditorContextImpl extends EditorContext {
      * @param timeStamp a new time stamp
      */
     public void createTimeStamp(Object timeStamp) {
-        modifiedDataObjects = new HashSet(DataObject.getRegistry().getModifiedSet());
+        modifiedDataObjects = new HashSet<DataObject>(DataObject.getRegistry().getModifiedSet());
         Registry r = new Registry();
         timeStampToRegistry.put(timeStamp, r);
-        Iterator i = modifiedDataObjects.iterator();
-        while (i.hasNext()) {
-            r.register ((DataObject) i.next ());
+        for (DataObject dataObject : modifiedDataObjects) {
+            r.register(dataObject);
         }
         if (changedFilesListener == null) {
             changedFilesListener = new ChangedFilesListener();
@@ -182,15 +149,28 @@ public class EditorContextImpl extends EditorContext {
     }
     
     public Object annotate(String url, int lineNumber, String annotationType, Object timeStamp) {
-        Line l =  getLine(url, lineNumber, timeStamp);
+        return annotate(getDataObject(url), lineNumber, annotationType, timeStamp);
+    }
+    
+    public Object annotate(DataObject dobj, int lineNumber, String annotationType, Object timeStamp) {
+        GdbBreakpoint b = null;
+        if (timeStamp instanceof GdbBreakpoint) {
+            b = (GdbBreakpoint) timeStamp;
+            timeStamp = null;
+        }
+        Line l =  getLine(dobj, lineNumber, timeStamp);
         if (l == null) {
             return null;
         }
-        DebuggerAnnotation annotation = new DebuggerAnnotation(annotationType, l);
-        annotationToURL.put(annotation, url);
-        
+        Annotation annotation;
+        if (b == null) {
+            annotation = new DebuggerAnnotation(annotationType, l);
+        } else {
+            annotation = new DebuggerBreakpointAnnotation(annotationType, l, b);
+        }
         return annotation;
     }
+
 
     /**
      * Removes given annotation.
@@ -200,10 +180,6 @@ public class EditorContextImpl extends EditorContext {
     public void removeAnnotation(Object a) {
         DebuggerAnnotation annotation = (DebuggerAnnotation) a;
         annotation.detach();
-        
-        if (annotationToURL.remove(annotation) == null) {
-            return;
-        }
     }
 
     /**
@@ -219,9 +195,13 @@ public class EditorContextImpl extends EditorContext {
         if (timeStamp == null) {
             return a.getLine().getLineNumber() + 1;
         }
-        String url = (String) annotationToURL.get(a);
-        Line.Set lineSet = getLineSet(url, timeStamp);
-        return lineSet.getOriginalLineNumber(a.getLine()) + 1;
+        DataObject dobj = a.getLine().getLookup().lookup(DataObject.class);
+        if (dobj != null) {
+            Line.Set lineSet = getLineSet(dobj, timeStamp);
+            return lineSet.getOriginalLineNumber(a.getLine()) + 1;
+        } else {
+            return -1;
+        }
     }
     
     /**
@@ -231,7 +211,7 @@ public class EditorContextImpl extends EditorContext {
      * @param url an url
      */
     public void updateTimeStamp(Object timeStamp, String url) {
-        Registry registry = (Registry) timeStampToRegistry.get(timeStamp);
+        Registry registry = timeStampToRegistry.get(timeStamp);
         registry.register(getDataObject(url));
     }
 
@@ -241,24 +221,7 @@ public class EditorContextImpl extends EditorContext {
      * @return number of line currently selected in editor or <code>-1</code>
      */
     public int getCurrentLineNumber() {
-        EditorCookie e = getCurrentEditorCookie();
-        if (e == null) {
-            return -1;
-        }
-        JEditorPane ep = getCurrentEditor();
-        if (ep == null) {
-            return -1;
-        }
-        StyledDocument d = e.getDocument();
-        if (d == null) {
-            return -1;
-        }
-        Caret caret = ep.getCaret();
-        if (caret == null) {
-            return -1;
-        }
-        int ln = NbDocument.findLineNumber(d, caret.getDot());
-        return ln + 1;
+        return EditorContextDispatcher.getDefault().getCurrentLineNumber();
     }
 
     /**
@@ -267,24 +230,7 @@ public class EditorContextImpl extends EditorContext {
      * @return number of line most recently selected in editor or <code>-1</code>
      */
     public int getMostRecentLineNumber() {
-        EditorCookie e = getMostRecentEditorCookie();
-        if (e == null) {
-            return -1;
-        }
-        JEditorPane ep = getMostRecentEditor();
-        if (ep == null) {
-            return -1;
-        }
-        StyledDocument d = e.getDocument();
-        if (d == null) {
-            return -1;
-        }
-        Caret caret = ep.getCaret();
-        if (caret == null) {
-            return -1;
-        }
-        int ln = NbDocument.findLineNumber(d, caret.getDot());
-        return ln + 1;
+        return EditorContextDispatcher.getDefault().getMostRecentLineNumber();
     }
     
     /**
@@ -293,40 +239,18 @@ public class EditorContextImpl extends EditorContext {
      * @return URL of source currently selected in editor or empty string
      */
     public String getCurrentURL() {
-        synchronized (currentLock) {
-            if (currentURL == null || currentURL.length() == 0) {
-                DataObject[] nodes = (DataObject[]) resDataObject.allInstances().toArray(new DataObject[0]);
-
-                if (nodes.length != 1) {
-                    currentURL = digForIt();
-                } else {
-                    DataObject dobj = nodes[0];
-                    if (dobj instanceof DataShadow) {
-                        dobj = ((DataShadow) dobj).getOriginal();
-                    }
-
-                    try {
-                        currentURL = dobj.getPrimaryFile().getURL().toString();
-                    } catch (FileStateInvalidException ex) {
-                        currentURL = "";
-                    }
-                }
-                if (Utilities.isWindows()) {
-                    // We need consistent because sometimes we compare to URLs...
-                    currentURL = currentURL.replace("\\", "/"); // NOI18N
-                }
-            }
-
-            return currentURL;
+        String currentURL = EditorContextDispatcher.getDefault().getCurrentURLAsString();
+        if (Utilities.isWindows()) {
+            // We need consistent because sometimes we compare to URLs...
+            currentURL = currentURL.replace("\\", "/"); // NOI18N
         }
+        return currentURL;
     }
     
     /** Look in all open C/C++ files and find the one showing. Return its URL */
     private String digForIt() {
         TopComponent.Registry reg = TopComponent.getRegistry();
-        Iterator iter = reg.getOpened().iterator();
-        while (iter.hasNext()) {
-            Object o = iter.next();
+        for (TopComponent o : reg.getOpened()) {
             if (o instanceof CppEditorComponent) {
                 CppEditorComponent cec = (CppEditorComponent) o;
                 if (cec.isShowing()) {
@@ -350,24 +274,12 @@ public class EditorContextImpl extends EditorContext {
      *  @return url in string form
      */
     public String getMostRecentURL() {
-	String url = getCurrentURL();
-	
-	if (url.length() == 0) {
-	    Node[] nodes = TopComponent.getRegistry().getActivatedNodes();
-	    if (nodes != null) {
-		for (int i = 0; i < nodes.length; i++) {
-		    DataObject dobj = (DataObject) nodes[i].getCookie(DataObject.class);
-		    if (dobj != null) {
-			try {
-			    url = dobj.getPrimaryFile().getURL().toExternalForm();
-			    break;
-			} catch (FileStateInvalidException ex) {
-			}
-		    }
-		}
-	    }
-	}
-	return url;
+        String currentURL = EditorContextDispatcher.getDefault().getMostRecentURLAsString();
+        if (Utilities.isWindows()) {
+            // We need consistent because sometimes we compare to URLs...
+            currentURL = currentURL.replace("\\", "/"); // NOI18N
+        }
+        return currentURL;
     }
 
     /**
@@ -385,27 +297,23 @@ public class EditorContextImpl extends EditorContext {
      * @return function name currently selected in editor or empty string
      */
     public String getSelectedFunctionName() {
-        EditorCookie e = getCurrentEditorCookie();
-        if (e == null) {
-            return "";  // NOI18N
-        }
         JEditorPane ep = getCurrentEditor();
         if (ep == null) {
             return "";  // NOI18N
         }
-        StyledDocument doc = e.getDocument();
+        StyledDocument doc = (StyledDocument) ep.getDocument();
         if (doc == null) {
             return "";  // NOI18N
         }
-        int offset = ep.getCaret().getDot();
-        String t = null;
+        //int offset = ep.getCaret().getDot();
+        //String t = null;
 //        if ( (ep.getSelectionStart () <= offset) &&
 //             (offset <= ep.getSelectionEnd ())
 //        )   t = ep.getSelectedText ();
 //        if (t != null) return t;
         
-        int line = NbDocument.findLineNumber(doc, offset);
-        int col = NbDocument.findLineColumn(doc, offset);
+        //int line = NbDocument.findLineNumber(doc, offset);
+        //int col = NbDocument.findLineColumn(doc, offset);
         // XXX - Fixup
         /*
         try {
@@ -494,27 +402,19 @@ public class EditorContextImpl extends EditorContext {
      * @return The MIME type of the current file
      */
     public String getCurrentMIMEType() {
-        FileObject fo;
-        
-        synchronized (currentLock) {
-            DataObject[] nodes = (DataObject[]) resDataObject.allInstances().toArray(new DataObject[0]);
-
-            if (nodes.length != 1) {
-                return ""; // NOI18N
-            }
-
-            DataObject dobj = nodes[0];
-            if (dobj instanceof DataShadow) {
-                dobj = ((DataShadow) dobj).getOriginal();
-            }
-
-            try {
-                fo = URLMapper.findFileObject(dobj.getPrimaryFile().getURL());
-            } catch (FileStateInvalidException ex) {
-                fo = null;
-            }
-
-            return fo != null ? fo.getMIMEType() : ""; // NOI18N
+        FileObject fo = EditorContextDispatcher.getDefault().getCurrentFile();
+        return fo != null ? fo.getMIMEType() : ""; // NOI18N
+    }
+    
+    public DataObject getCurrentDataObject() {
+        FileObject fo = EditorContextDispatcher.getDefault().getCurrentFile();
+        if (fo == null) {
+            return null;
+        }
+        try {
+            return DataObject.find(fo);
+        } catch (DataObjectNotFoundException donfex) {
+            return null;
         }
     }
     
@@ -524,28 +424,8 @@ public class EditorContextImpl extends EditorContext {
      * @return The MIME type of the most recent selected file
      */
     public String getMostRecentMIMEType() {
-	String mime = getCurrentMIMEType();
-        
-	if (mime.length() == 0) {
-	    Node[] nodes = TopComponent.getRegistry().getActivatedNodes();
-	    if (nodes != null) {
-		for (int i = 0; i < nodes.length; i++) {
-		    DataObject dobj = (DataObject) nodes[i].getCookie(DataObject.class);
-		    if (dobj != null) {
-			if (dobj instanceof DataShadow) {
-			    dobj = ((DataShadow) dobj).getOriginal();
-			}
-			try {
-			    FileObject fo = URLMapper.findFileObject(dobj.getPrimaryFile().getURL());
-			    mime = fo.getMIMEType();
-			    break;
-			} catch (FileStateInvalidException ex) {
-			}
-		    }
-		}
-	    }
-	}
-	return mime;
+        FileObject fo = EditorContextDispatcher.getDefault().getMostRecentFile();
+        return fo != null ? fo.getMIMEType() : ""; // NOI18N
     }
     
     /**
@@ -554,7 +434,10 @@ public class EditorContextImpl extends EditorContext {
      * @param l the listener to add
      */
     public void addPropertyChangeListener(PropertyChangeListener l) {
-        pcs.addPropertyChangeListener(l);
+        EditorContextDispatcher.getDefault().addPropertyChangeListener(MIMENames.C_MIME_TYPE, l);
+        EditorContextDispatcher.getDefault().addPropertyChangeListener(MIMENames.CPLUSPLUS_MIME_TYPE, l);
+        EditorContextDispatcher.getDefault().addPropertyChangeListener(MIMENames.HEADER_MIME_TYPE, l);
+        EditorContextDispatcher.getDefault().addPropertyChangeListener(MIMENames.ASM_MIME_TYPE, l);
     }
     
     /**
@@ -563,132 +446,21 @@ public class EditorContextImpl extends EditorContext {
      * @param l the listener to remove
      */
     public void removePropertyChangeListener(PropertyChangeListener l) {
-        pcs.removePropertyChangeListener(l);
-    }
-    
-    /**
-     * Adds a property change listener.
-     *
-     * @param propertyName the name of property
-     * @param l the listener to add
-     */
-    public void addPropertyChangeListener(String propertyName, PropertyChangeListener l) {
-        pcs.addPropertyChangeListener(propertyName, l);
-    }
-    
-    /**
-     * Removes a property change listener.
-     *
-     * @param propertyName the name of property
-     * @param l the listener to remove
-     */
-    public void removePropertyChangeListener(String propertyName, PropertyChangeListener l) {
-        pcs.removePropertyChangeListener(propertyName, l);
+        EditorContextDispatcher.getDefault().removePropertyChangeListener(l);
     }
     
     private JEditorPane getCurrentEditor() {
-        EditorCookie e = getCurrentEditorCookie();
-        if (e == null){
-            return null;
-        }
-        JEditorPane[] op = getOpenedPanes(e);
-        // We listen on open panes if e implements EditorCookie.Observable
-        if ((op == null) || (op.length < 1)) {
-            return null;
-        }
-        return op [0];
+        return EditorContextDispatcher.getDefault().getCurrentEditor();
     }
     
-    private JEditorPane getMostRecentEditor() {
-        EditorCookie e = getMostRecentEditorCookie();
-        if (e == null){
-            return null;
-        }
-        JEditorPane[] op = getOpenedPanes(e);
-        // We listen on open panes if e implements EditorCookie.Observable
-        if ((op == null) || (op.length < 1)) {
-            return null;
-        }
-        return op [0];
-    }
-    
-    /**
-     * In NB6 JEditorPane.getOpenedPanes() must be called from the event dispatch
-     * thread. Ensure its correct now.
-     */
-    public static JEditorPane[] getOpenedPanes(final EditorCookie e) {
-	if (SwingUtilities.isEventDispatchThread()) {
-	    return e.getOpenedPanes();
-	} else {
-	    final JEditorPane[][] pane = new JEditorPane[1][1];
-            try {
-                SwingUtilities.invokeAndWait(new Runnable() {
-                    public void run() {
-                        pane[0] = e.getOpenedPanes();
-                    }
-                });
-            } catch (InvocationTargetException ex) {
-                ErrorManager.getDefault().notify(ex.getTargetException());
-            } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
-            }
-	    return pane[0];
-	}
-    }
-
-    
-    private EditorCookie getCurrentEditorCookie() {
-        synchronized (currentLock) {
-            if (currentEditorCookie == null) {
-                TopComponent tc = TopComponent.getRegistry().getActivated();
-                if (tc != null) {
-                    currentEditorCookie = (EditorCookie) tc.getLookup().lookup(EditorCookie.class);
-                }
-                // Listen on open panes if currentEditorCookie implements EditorCookie.Observable
-                if (currentEditorCookie instanceof EditorCookie.Observable) {
-                    if (editorObservableListener == null) {
-                        editorObservableListener = new EditorLookupListener(EditorCookie.Observable.class);
-                    }
-                    ((EditorCookie.Observable) currentEditorCookie).addPropertyChangeListener(editorObservableListener);
-                }
-            }
-            return currentEditorCookie;
-        }
-    }
-    
-    private EditorCookie getMostRecentEditorCookie() {
-	EditorCookie ec = getCurrentEditorCookie();
-	
-	if (ec == null) {
-	    Node[] nodes = TopComponent.getRegistry().getActivatedNodes();
-	    if (nodes != null) {
-		for (int i = 0; i < nodes.length; i++) {
-		    ec = (EditorCookie) nodes[i].getCookie(EditorCookie.class);
-		    if (ec != null) {
-			System.err.println("Got it!"); // NOI18N
-		    }
-		}
-	    }
-//	    // Listen on open panes if currentEditorCookie implements EditorCookie.Observable
-//	    if (currentEditorCookie instanceof EditorCookie.Observable) {
-//		if (editorObservableListener == null) {
-//		    editorObservableListener = new EditorLookupListener(EditorCookie.Observable.class);
-//		}
-//		((EditorCookie.Observable) currentEditorCookie).addPropertyChangeListener(editorObservableListener);
-//	    }
-	}
-	return ec;
-    }
-
-    private Line.Set getLineSet(String url, Object timeStamp) {
-        DataObject dataObject = getDataObject(url);
+    private Line.Set getLineSet(DataObject dataObject, Object timeStamp) {
         if (dataObject == null) {
             return null;
         }
         
         if (timeStamp != null) {
             // get original
-            Registry registry = (Registry) timeStampToRegistry.get(timeStamp);
+            Registry registry = timeStampToRegistry.get(timeStamp);
             Line.Set ls = null;
             
             // Workaround for #54754 
@@ -704,23 +476,24 @@ public class EditorContextImpl extends EditorContext {
         }
         
         // get current
-        LineCookie lineCookie = (LineCookie) dataObject.getCookie(LineCookie.class);
+        LineCookie lineCookie = dataObject.getCookie(LineCookie.class);
         if (lineCookie == null) {
             return null;
         }
         return lineCookie.getLineSet();
     }
 
-    private Line getLine(String url, int lineNumber, Object timeStamp) {
-        Line.Set ls = getLineSet(url, timeStamp);
+    private Line getLine(DataObject dobj, int lineNumber, Object timeStamp) {
+        Line.Set ls = getLineSet(dobj, timeStamp);
         if (ls == null) {
             return null;
         }
         try {
-            if (timeStamp == null)
+            if (timeStamp == null) {
                 return ls.getCurrent(lineNumber - 1);
-            else
+            } else {
                 return ls.getOriginal(lineNumber - 1);
+            }
         } catch (IndexOutOfBoundsException e) {
         } catch (IllegalArgumentException e) {
         }
@@ -753,10 +526,10 @@ public class EditorContextImpl extends EditorContext {
     
     private static class Registry {
         
-        private Map dataObjectToLineSet = new HashMap();
+        private Map<DataObject, Line.Set> dataObjectToLineSet = new HashMap<DataObject, Line.Set>();
         
         void register(DataObject dataObject) {
-            LineCookie lc = (LineCookie) dataObject.getCookie(LineCookie.class);
+            LineCookie lc = dataObject.getCookie(LineCookie.class);
             if (lc == null) {
                 return;
             }
@@ -764,65 +537,21 @@ public class EditorContextImpl extends EditorContext {
         }
         
         Line.Set getLineSet (DataObject dataObject) {
-            return (Line.Set) dataObjectToLineSet.get(dataObject);
+            return dataObjectToLineSet.get(dataObject);
         }
     }
     
     private class ChangedFilesListener implements ChangeListener {
         public void stateChanged(ChangeEvent e) {
-            Set newDOs = new HashSet(DataObject.getRegistry().getModifiedSet());
+            Set<DataObject> newDOs = new HashSet<DataObject>(DataObject.getRegistry().getModifiedSet());
             newDOs.removeAll(modifiedDataObjects);
-            Iterator i1 = timeStampToRegistry.values().iterator();
-            while (i1.hasNext()) {
-                Registry r = (Registry) i1.next();
-                Iterator i2 = newDOs.iterator();
-                while (i2.hasNext()) {
-                    r.register ((DataObject) i2.next());
+            for (Registry r : timeStampToRegistry.values()) {
+                for (DataObject dataObject : newDOs) {
+                    r.register(dataObject);
                 }
             }
-            modifiedDataObjects = new HashSet(DataObject.getRegistry().getModifiedSet());
+            modifiedDataObjects = new HashSet<DataObject>(DataObject.getRegistry().getModifiedSet());
         }
     }
     
-    private class EditorLookupListener extends Object implements LookupListener, PropertyChangeListener {
-        
-        private Class type;
-        
-        public EditorLookupListener(Class type) {
-            this.type = type;
-        }
-        
-        public void resultChanged(LookupEvent ev) {
-            if (type == DataObject.class) {
-                synchronized (currentLock) {
-                    currentURL = null;
-                    if (currentEditorCookie instanceof EditorCookie.Observable) {
-                        ((EditorCookie.Observable) currentEditorCookie).
-                                removePropertyChangeListener(editorObservableListener);
-                    }
-                    currentEditorCookie = null;
-                }
-                pcs.firePropertyChange(TopComponent.Registry.PROP_CURRENT_NODES, null, null);
-            } else if (type == EditorCookie.class) {
-                synchronized (currentLock) {
-                    currentURL = null;
-                    if (currentEditorCookie instanceof EditorCookie.Observable) {
-                        ((EditorCookie.Observable) currentEditorCookie).
-                                removePropertyChangeListener(editorObservableListener);
-                    }
-                    currentEditorCookie = null;
-                }
-                pcs.firePropertyChange(TopComponent.Registry.PROP_CURRENT_NODES, null, null);
-            } else if (type == Node.class) {
-                pcs.firePropertyChange (TopComponent.Registry.PROP_CURRENT_NODES, null, null);
-            }
-        }
-        
-        public void propertyChange(PropertyChangeEvent evt) {
-            if (evt.getPropertyName().equals(EditorCookie.Observable.PROP_OPENED_PANES)) {
-                pcs.firePropertyChange(EditorCookie.Observable.PROP_OPENED_PANES, null, null);
-            }
-        }
-        
-    }
 }
