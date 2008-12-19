@@ -41,21 +41,34 @@
 
 package org.netbeans.modules.debugger.jpda.expr;
 
+import com.sun.jdi.ArrayReference;
+import com.sun.jdi.ClassNotLoadedException;
+import com.sun.jdi.ClassType;
 import com.sun.jdi.Field;
 import com.sun.jdi.IncompatibleThreadStateException;
+import com.sun.jdi.InvalidTypeException;
 import com.sun.jdi.LocalVariable;
+import com.sun.jdi.Mirror;
 import com.sun.jdi.ObjectReference;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
+import com.sun.jdi.Type;
+import com.sun.jdi.Value;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.Trees;
 
 import java.util.*;
-import javax.lang.model.element.TypeElement;
 
+import org.netbeans.api.debugger.jpda.InvalidExpressionException;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
+import org.netbeans.modules.debugger.jpda.jdi.IllegalThreadStateExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.InternalExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ObjectCollectedExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ThreadReferenceWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.VMDisconnectedExceptionWrapper;
+import org.openide.util.Exceptions;
 
 /**
  * Defines the exection context in which to evaluate a given expression. The context consists of:
@@ -77,11 +90,14 @@ public class EvaluationContext {
     private boolean canInvokeMethods;
     private Runnable methodInvokePreproc;
     private JPDADebuggerImpl debugger;
-    
+
     private Trees trees;
     private CompilationUnitTree compilationUnitTree;
     private TreePath treePath;
+
     private Map<Tree, VariableInfo> variables = new HashMap<Tree, VariableInfo>();
+    private Stack<Map<String, ScriptVariable>> stack = new Stack<Map<String, ScriptVariable>>();
+    private Map<String, ScriptVariable> scriptLocalVariables = new HashMap<String, ScriptVariable>();
 
     /**
      * Creates a new context in which to evaluate expresions.
@@ -106,6 +122,8 @@ public class EvaluationContext {
         this.canInvokeMethods = canInvokeMethods;
         this.methodInvokePreproc = methodInvokePreproc;
         this.debugger = debugger;
+
+        stack.push(new HashMap<String, ScriptVariable>());
     }
 
     public List<String> getStaticImports() {
@@ -119,76 +137,235 @@ public class EvaluationContext {
     public StackFrame getFrame() {
         return frame;
     }
-    
+
     public boolean canInvokeMethods() {
         return canInvokeMethods;
     }
-    
+
     void setCanInvokeMethods(boolean canInvokeMethods) {
         this.canInvokeMethods = canInvokeMethods;
     }
-    
+
     void methodToBeInvoked() {
         if (methodInvokePreproc != null) {
             methodInvokePreproc.run();
         }
     }
-    
+
     void methodInvokeDone() throws IncompatibleThreadStateException {
-        // Refresh the stack frame
-        frame = thread.frame(frameDepth);
+        try {
+            // Refresh the stack frame
+            frame = ThreadReferenceWrapper.frame(thread, frameDepth);
+        } catch (InternalExceptionWrapper ex) {
+            InvalidExpressionException ieex = new InvalidExpressionException (ex);
+            ieex.initCause(ex);
+            throw new IllegalStateException(ieex);
+        } catch (VMDisconnectedExceptionWrapper ex) {
+            // Ignore
+        } catch (ObjectCollectedExceptionWrapper ex) {
+            InvalidExpressionException ieex = new InvalidExpressionException (ex);
+            ieex.initCause(ex);
+            throw new IllegalStateException(ieex);
+        } catch (IllegalThreadStateExceptionWrapper ex) {
+            InvalidExpressionException ieex = new InvalidExpressionException (ex);
+            ieex.initCause(ex);
+            throw new IllegalStateException(ieex);
+        }
     }
-    
+
     JPDADebuggerImpl getDebugger() {
         return debugger;
     }
-    
+
     public void setTrees(Trees trees) {
         this.trees = trees;
     }
-    
+
     Trees getTrees() {
         return trees;
     }
-    
+
     public void setCompilationUnit(CompilationUnitTree compilationUnitTree) {
         this.compilationUnitTree = compilationUnitTree;
     }
-    
+
     CompilationUnitTree getCompilationUnit() {
         return compilationUnitTree;
     }
-    
+
     public void setTreePath(TreePath treePath) {
         this.treePath = treePath;
     }
-    
+
     TreePath getTreePath() {
         return treePath;
     }
-    
-    Map<Tree, VariableInfo> getVariables() {
-        return variables;
-    }
-    
-    static final class VariableInfo {
-        public Field field;
-        public ObjectReference fieldObject;
-        public LocalVariable var;
-        
-        public VariableInfo(Field field) {
-            this.field = field;
-        }
-        
-        public VariableInfo(Field field, ObjectReference fieldObject) {
-            this.field = field;
-            this.fieldObject = fieldObject;
-        }
-        
-        public VariableInfo(LocalVariable var) {
-            this.var = var;
-        }
-    }
-    
-}
 
+    public VariableInfo getVariableInfo(Tree tree) {
+        return variables.get(tree);
+    }
+
+    public void putField(Tree tree, Field field, ObjectReference objectRef) {
+        VariableInfo info = new VariableInfo.FieldInf(field, objectRef);
+        variables.put(tree, info);
+    }
+
+    public void putLocalVariable(Tree tree, LocalVariable var) {
+        VariableInfo info = new VariableInfo.LocalVarInf(var, this);
+        variables.put(tree, info);
+    }
+
+    public void putArrayAccess(Tree tree, ArrayReference array, int index) {
+        VariableInfo info = new VariableInfo.ArrayElementInf(array, index);
+        variables.put(tree, info);
+    }
+
+    public void putScriptVariable(Tree tree, ScriptVariable var) {
+        VariableInfo info = new VariableInfo.ScriptLocalVarInf(var);
+        variables.put(tree, info);
+    }
+
+    public ScriptVariable getScriptVariableByName(String name) {
+        return scriptLocalVariables.get(name);
+    }
+
+    public ScriptVariable createScriptLocalVariable(String name, Type type) {
+        Map<String, ScriptVariable> map = stack.peek();
+        ScriptVariable var = new ScriptVariable(name, type);
+        map.put(name, var);
+        scriptLocalVariables.put(name, var);
+        return var;
+    }
+
+    public void pushBlock() {
+        stack.push(new HashMap<String, ScriptVariable>());
+    }
+
+    public void popBlock() {
+        Map<String, ScriptVariable> map = stack.pop();
+        for (String name : map.keySet()) {
+            scriptLocalVariables.remove(name);
+        }
+    }
+
+    // *************************************************************************
+
+    public static class ScriptVariable {
+        private String name;
+        private Type type;
+        private Mirror value;
+        private boolean valueInited = false;
+
+        public ScriptVariable(String name, Type type) {
+            this.name = name;
+            this.type = type;
+        }
+
+        public Mirror getValue() {
+            // check if value is inited [TODO]
+            return value;
+        }
+
+        public void setValue(Mirror value) {
+            this.value = value;
+            // check value type [TODO]
+            valueInited = true;
+        }
+
+    }
+
+    public static abstract class VariableInfo {
+
+        public abstract void setValue(Value value);
+
+        private static class FieldInf extends VariableInfo {
+
+            private Field field;
+            private ObjectReference fieldObject;
+
+            FieldInf(Field field) {
+                this.field = field;
+            }
+
+            FieldInf(Field field, ObjectReference fieldObject) {
+                this.field = field;
+                this.fieldObject = fieldObject;
+            }
+
+            @Override
+            public void setValue(Value value) {
+                try {
+                    if (fieldObject != null) {
+                        fieldObject.setValue(field, value);
+                    } else {
+                        ((ClassType) field.declaringType()).setValue(field, value);
+                    }
+                } catch (InvalidTypeException itex) {
+                    throw new IllegalStateException(new InvalidExpressionException (itex));
+                } catch (ClassNotLoadedException cnlex) {
+                    throw new IllegalStateException(cnlex);
+                }
+            }
+        } // FieldI class
+
+        private static class LocalVarInf extends VariableInfo {
+
+            private LocalVariable var;
+            private EvaluationContext context;
+
+            LocalVarInf(LocalVariable var, EvaluationContext context) {
+                this.var = var;
+                this.context = context;
+            }
+
+            @Override
+            public void setValue(Value value) {
+                try {
+                    context.getFrame().setValue(var, value);
+                } catch (InvalidTypeException itex) {
+                    throw new IllegalStateException(new InvalidExpressionException (itex));
+                } catch (ClassNotLoadedException cnlex) {
+                    throw new IllegalStateException(cnlex);
+                }
+            }
+        } // LocalVarI class
+
+        private static class ArrayElementInf extends VariableInfo {
+
+            private ArrayReference array;
+            private int index;
+
+            ArrayElementInf(ArrayReference array, int index) {
+                this.array = array;
+                this.index = index;
+            }
+
+            @Override
+            public void setValue(Value value) {
+                try {
+                    array.setValue(index, value);
+                } catch (ClassNotLoadedException ex) {
+                    throw new IllegalStateException(ex);
+                } catch (InvalidTypeException ex) {
+                    throw new IllegalStateException(new InvalidExpressionException (ex));
+                }
+            }
+        } // ArrayElementI class
+
+        private static class ScriptLocalVarInf extends VariableInfo {
+
+            private ScriptVariable variable;
+
+            ScriptLocalVarInf(ScriptVariable variable) {
+                this.variable = variable;
+            }
+
+            @Override
+            public void setValue(Value value) {
+                variable.setValue(value);
+            }
+
+        } // ScriptLocalVarI class
+    }
+
+}

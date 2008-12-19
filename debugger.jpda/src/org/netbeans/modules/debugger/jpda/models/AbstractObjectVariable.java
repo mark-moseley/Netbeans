@@ -79,6 +79,21 @@ import org.netbeans.api.debugger.jpda.Super;
 import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
 import org.netbeans.modules.debugger.jpda.Java6Methods;
+import org.netbeans.modules.debugger.jpda.jdi.ArrayReferenceWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ArrayTypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ClassNotPreparedExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ClassTypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.InternalExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.MethodWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ObjectCollectedExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ObjectReferenceWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ReferenceTypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.StringReferenceWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.TypeComponentWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.TypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.VMDisconnectedExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ValueWrapper;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.WeakListeners;
 
@@ -135,11 +150,7 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
         Value v = getInnerValue ();
         if (v == null) return 0;
         if (v instanceof ArrayReference) {
-            try {
-                return ((ArrayReference) v).length ();
-            } catch (ObjectCollectedException ocex) {
-                return 0;
-            }
+            return ArrayReferenceWrapper.length0((ArrayReference) v);
         } else {
             if (fields == null || refreshFields) {
                 initFields ();
@@ -156,11 +167,18 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
      * @return field defined in this object
      */
     public Field getField (String name) {
-        if (getInnerValue() == null) return null;
+        Value v = getInnerValue();
+        if (v == null) return null;
         com.sun.jdi.Field f;
         try {
-            f = ((ReferenceType) this.getInnerValue().type()).fieldByName(name);
-        } catch (ObjectCollectedException ocex) {
+            f = ReferenceTypeWrapper.fieldByName((ReferenceType) ValueWrapper.type(v), name);
+        } catch (ClassNotPreparedExceptionWrapper ex) {
+            return null;
+        } catch (InternalExceptionWrapper iex) {
+            return null;
+        } catch (ObjectCollectedExceptionWrapper ocex) {
+            return null;
+        } catch (VMDisconnectedExceptionWrapper e) {
             return null;
         }
         if (f == null) return null;
@@ -179,14 +197,14 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
         Value v = getInnerValue ();
         if (v == null) return new Field[] {};
         try {
-            if (v instanceof ArrayReference && (from > 0 || to < ((ArrayReference) v).length())) {
+            if (v instanceof ArrayReference && (from > 0 || to < ArrayReferenceWrapper.length((ArrayReference) v))) {
                 // compute only requested elements
-                Type type = v.type ();
+                Type type = ValueWrapper.type(v);
                 ReferenceType rt = (ReferenceType) type;
-                if (to == 0) to = ((ArrayReference) v).length();
+                if (to == 0) to = ArrayReferenceWrapper.length((ArrayReference) v);
                 Field[] elements = getFieldsOfArray (
                         (ArrayReference) v, 
-                        ((ArrayType) rt).componentTypeName (),
+                        ArrayTypeWrapper.componentTypeName((ArrayType) rt),
                         this.getID (),
                         from, to);
                 return elements;
@@ -204,7 +222,11 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
                 }
                 return fields;
             }
-        } catch (ObjectCollectedException ocex) {
+        } catch (InternalExceptionWrapper e) {
+            return new Field[] {};
+        } catch (ObjectCollectedExceptionWrapper e) {
+            return new Field[] {};
+        } catch (VMDisconnectedExceptionWrapper e) {
             return new Field[] {};
         }
     }
@@ -259,10 +281,11 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
         if (getInnerValue () == null) 
             return null;
         try {
-            Type t = this.getInnerValue().type();
+            Type t = ValueWrapper.type(this.getInnerValue());
             if (!(t instanceof ClassType)) 
                 return null;
-            ClassType superType = ((ClassType) t).superclass ();
+            ClassType superType;
+            superType = ClassTypeWrapper.superclass((ClassType) t);
             if (superType == null) 
                 return null;
             return new SuperVariable(
@@ -271,7 +294,11 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
                     superType,
                     getID()
                     );
-        } catch (ObjectCollectedException ocex) {
+        } catch (ObjectCollectedExceptionWrapper ocex) {
+            return null;
+        } catch (InternalExceptionWrapper ex) {
+            return null;
+        } catch (VMDisconnectedExceptionWrapper e) {
             return null;
         }
     }
@@ -301,7 +328,7 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
     static String getToStringValue (Value v, JPDADebuggerImpl debugger, int maxLength) throws InvalidExpressionException {
         if (v == null) return null;
         try {
-            if (!(v.type () instanceof ClassType)) 
+            if (!(ValueWrapper.type (v) instanceof ClassType))
                 return AbstractVariable.getValue (v);
             if (v instanceof CharValue)
                 return "\'" + v.toString () + "\'";
@@ -309,8 +336,8 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
             boolean addDots = false;
             StringReference sr;
             if (maxLength > 0 && maxLength < Integer.MAX_VALUE) {
-                Method toStringMethod = ((ClassType) v.type ()).
-                    concreteMethodByName ("toString", "()Ljava/lang/String;");  // NOI18N
+                Method toStringMethod = ClassTypeWrapper.concreteMethodByName((ClassType) ValueWrapper.type (v),
+                     "toString", "()Ljava/lang/String;");  // NOI18N
                 sr = (StringReference) debugger.invokeMethod (
                     (ObjectReference) v,
                     toStringMethod,
@@ -321,8 +348,8 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
                 sr = (StringReference) v;
                 addQuotation = true;
             } else {
-                Method toStringMethod = ((ClassType) v.type ()).
-                    concreteMethodByName ("toString", "()Ljava/lang/String;");  // NOI18N
+                Method toStringMethod = ClassTypeWrapper.concreteMethodByName((ClassType) ValueWrapper.type (v),
+                    "toString", "()Ljava/lang/String;");  // NOI18N
                 sr = (StringReference) debugger.invokeMethod (
                     (ObjectReference) v,
                     toStringMethod,
@@ -332,7 +359,7 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
             if (sr == null) {
                 return null;
             }
-            String str = sr.value();
+            String str = StringReferenceWrapper.value(sr);
             if (maxLength > 0 && maxLength < Integer.MAX_VALUE && str.length() > maxLength) {
                 str = str.substring(0, maxLength) + "..."; // NOI18N
             }
@@ -340,10 +367,14 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
                 str = "\"" + str + "\""; // NOI18N
             }
             return str;
-        } catch (VMDisconnectedException ex) {
+        } catch (InternalExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        } catch (VMDisconnectedExceptionWrapper ex) {
             return NbBundle.getMessage(AbstractVariable.class, "MSG_Disconnected");
-        } catch (ObjectCollectedException ocex) {
+        } catch (ObjectCollectedExceptionWrapper ocex) {
             return NbBundle.getMessage(AbstractVariable.class, "MSG_ObjCollected");
+        } catch (ClassNotPreparedExceptionWrapper cnpex) {
+            return cnpex.getLocalizedMessage();
         }
     }
     
@@ -385,18 +416,21 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
         try {
              
             // 1) find corrent method
-            if (this.getInnerValue () == null) return null;
+            Value v = this.getInnerValue ();
+            if (v == null) return null;
             Method method = null;
             if (signature != null)
-                method = ((ClassType) this.getInnerValue ().type ()).
-                    concreteMethodByName (methodName, signature);
+                method = ClassTypeWrapper.concreteMethodByName(
+                        (ClassType) ValueWrapper.type(v),
+                        methodName, signature);
             else {
-                List l = ((ClassType) this.getInnerValue ().type ()).
-                    methodsByName (methodName);
+                List l = ReferenceTypeWrapper.methodsByName(
+                        (ClassType) ValueWrapper.type(v),
+                        methodName);
                 int j, jj = l.size ();
                 for (j = 0; j < jj; j++)
-                    if ( !((Method) l.get (j)).isAbstract () &&
-                         ((Method) l.get (j)).argumentTypeNames ().size () == 0
+                    if ( !MethodWrapper.isAbstract((Method) l.get (j)) &&
+                         MethodWrapper.argumentTypeNames((Method) l.get (j)).size () == 0
                     ) {
                         method = (Method) l.get (j);
                         break;
@@ -405,13 +439,13 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
             
             // 2) method not found => print all method signatures
             if (method == null) {
-                List l = ((ClassType) this.getInnerValue ().type ()).
-                    methodsByName (methodName);
+                List l = ReferenceTypeWrapper.methodsByName(
+                        (ClassType) ValueWrapper.type(v), methodName);
                 int j, jj = l.size ();
                 for (j = 0; j < jj; j++)
-                    System.out.println (((Method) l.get (j)).signature ());
+                    System.out.println (TypeComponentWrapper.signature((Method) l.get (j)));
                 throw new NoSuchMethodException (
-                    this.getInnerValue ().type ().name () + "." + 
+                    TypeWrapper.name(ValueWrapper.type(v)) + "." +
                         methodName + " : " + signature
                 );
             }
@@ -421,9 +455,9 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
             int i, k = arguments.length;
             for (i = 0; i < k; i++)
                 vs [i] = ((AbstractVariable) arguments [i]).getInnerValue ();
-            Value v = getDebugger().invokeMethod (
+            v = getDebugger().invokeMethod (
                 (JPDAThreadImpl) thread,
-                (ObjectReference) this.getInnerValue(),
+                (ObjectReference) v,
                 method,
                 vs
             );
@@ -436,9 +470,13 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
                         getID() + method + "^"
                     );
             return new AbstractVariable (getDebugger(), v, getID() + method);
-        } catch (VMDisconnectedException ex) {
+        } catch (InternalExceptionWrapper ex) {
             return null;
-        } catch (ObjectCollectedException ocex) {
+        } catch (ClassNotPreparedExceptionWrapper ex) {
+            return null;
+        } catch (VMDisconnectedExceptionWrapper ex) {
+            return null;
+        } catch (ObjectCollectedExceptionWrapper ocex) {
             return null;
         }
     }
@@ -450,25 +488,37 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
      */
     public String getType () {
         if (genericType != null) return genericType;
-        if (getInnerValue () == null) return "";
+        Value v = getInnerValue ();
+        if (v == null) return "";
         try {
-            return this.getInnerValue().type().name ();
-        } catch (VMDisconnectedException vmdex) {
+            return TypeWrapper.name(ValueWrapper.type(v));
+        } catch (InternalExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        } catch (VMDisconnectedExceptionWrapper vmdex) {
             // The session is gone.
             return NbBundle.getMessage(AbstractVariable.class, "MSG_Disconnected");
-        } catch (ObjectCollectedException ocex) {
+        } catch (ObjectCollectedExceptionWrapper ocex) {
             // The object is gone.
             return NbBundle.getMessage(AbstractVariable.class, "MSG_ObjCollected");
         }
     }
     
+    @Override
     public JPDAClassType getClassType() {
         Value value = getInnerValue();
         if (value == null) return null;
-        com.sun.jdi.Type type = value.type();
-        if (type instanceof ReferenceType) {
-            return new JPDAClassTypeImpl(getDebugger(), (ReferenceType) type);
-        } else {
+        try {
+            com.sun.jdi.Type type = ValueWrapper.type (value);
+            if (type instanceof ReferenceType) {
+                return new JPDAClassTypeImpl(getDebugger(), (ReferenceType) type);
+            } else {
+                return null;
+            }
+        } catch (ObjectCollectedExceptionWrapper e) {
+            return null;
+        } catch (InternalExceptionWrapper e) {
+            return null;
+        } catch (VMDisconnectedExceptionWrapper e) {
             return null;
         }
     }
@@ -569,8 +619,12 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
         Type type;
         if (value != null) {
             try {
-                type = value.type ();
-            } catch (ObjectCollectedException ocex) {
+                type = ValueWrapper.type(value);
+            } catch (InternalExceptionWrapper ocex) {
+                type = null;
+            } catch (ObjectCollectedExceptionWrapper ocex) {
+                type = null;
+            } catch (VMDisconnectedExceptionWrapper e) {
                 type = null;
             }
         } else {
@@ -589,17 +643,19 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
                 if (or instanceof ArrayReference) {
                     this.fields = getFieldsOfArray (
                         (ArrayReference) or, 
-                        ((ArrayType) rt).componentTypeName (),
+                        ArrayTypeWrapper.componentTypeName((ArrayType) rt),
                         this.getID (),
-                        0, ((ArrayReference) or).length());
+                        0, ArrayReferenceWrapper.length((ArrayReference) or));
                     this.staticFields = new Field[0];
                     this.inheritedFields = new Field[0];
                 }
                 else {
                     initFieldsOfClass(or, rt, this.getID ());
                 }
-            } catch (ObjectCollectedException ocex) {
+            } catch (InternalExceptionWrapper iex) {
+            } catch (ObjectCollectedExceptionWrapper iex) {
                 // The object is gone => no fields
+            } catch (VMDisconnectedExceptionWrapper e) {
             }
         }
     }
@@ -611,12 +667,7 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
             int from,
             int to
         ) {
-            List l;
-            try {
-                l = ar.getValues(from, to - from);
-            } catch (ObjectCollectedException ocex) {
-                l = java.util.Collections.EMPTY_LIST;
-            }
+            List l = ArrayReferenceWrapper.getValues0(ar, from, to - from);
             int i, k = l.size ();
             Field[] ch = new Field [k];
             for (i = 0; i < k; i++) {
@@ -656,14 +707,14 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
         List<com.sun.jdi.Field> l;
         Set<com.sun.jdi.Field> s;
         try {
-            l = rt.allFields ();
-            s = new HashSet<com.sun.jdi.Field>(rt.fields ());
+            l = ReferenceTypeWrapper.allFields0(rt);
+            s = new HashSet<com.sun.jdi.Field>(ReferenceTypeWrapper.fields0(rt));
 
             int i, k = l.size();
             for (i = 0; i < k; i++) {
                 com.sun.jdi.Field f = l.get (i);
                 Field field = this.getField (f, or, this.getID());
-                if (f.isStatic ())
+                if (TypeComponentWrapper.isStatic(f))
                     classStaticFields.add(field);
                 else {
                     if (s.contains (f))
@@ -672,7 +723,9 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
                         allInheretedFields.add(field);
                 }
             }
-        } catch (VMDisconnectedException e) {
+        } catch (ClassNotPreparedExceptionWrapper e) {
+        } catch (InternalExceptionWrapper e) {
+        } catch (VMDisconnectedExceptionWrapper e) {
             classFields.clear();
             classStaticFields.clear();
             allInheretedFields.clear();
@@ -695,8 +748,12 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
             if (logger.isLoggable(Level.FINE)) {
                 logger.fine("STARTED : "+or+".getValue("+f+")");
             }
-            v = or.getValue (f);
-        } catch (ObjectCollectedException ocex) {
+            v = ObjectReferenceWrapper.getValue (or, f);
+        } catch (ObjectCollectedExceptionWrapper ocex) {
+            v = null;
+        } catch (InternalExceptionWrapper ocex) {
+            v = null;
+        } catch (VMDisconnectedExceptionWrapper ocex) {
             v = null;
         }
         if (logger.isLoggable(Level.FINE)) {
@@ -748,7 +805,15 @@ class AbstractObjectVariable extends AbstractVariable implements ObjectVariable 
         if (!(value instanceof ObjectReference)) { // null or anything else than Object
             return 0L;
         } else {
-            return ((ObjectReference) value).uniqueID();
+            try {
+                return ObjectReferenceWrapper.uniqueID((ObjectReference) value);
+            } catch (InternalExceptionWrapper ex) {
+                return 0L;
+            } catch (VMDisconnectedExceptionWrapper ex) {
+                return 0L;
+            } catch (ObjectCollectedExceptionWrapper ex) {
+                return 0L;
+            }
         }
     }
     

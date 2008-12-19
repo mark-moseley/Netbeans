@@ -43,6 +43,7 @@ package org.netbeans.modules.debugger.jpda.models;
 
 import com.sun.jdi.AbsentInformationException;
 import com.sun.jdi.ClassNotLoadedException;
+import com.sun.jdi.InvalidStackFrameException;
 import com.sun.jdi.InvalidTypeException;
 import com.sun.jdi.LocalVariable;
 import com.sun.jdi.ObjectReference;
@@ -51,6 +52,11 @@ import com.sun.jdi.Value;
 import org.netbeans.api.debugger.jpda.InvalidExpressionException;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
+import org.netbeans.modules.debugger.jpda.jdi.InternalExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.InvalidStackFrameExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.LocalVariableWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.StackFrameWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.VMDisconnectedExceptionWrapper;
 
 
 /**
@@ -68,16 +74,39 @@ org.netbeans.api.debugger.jpda.LocalVariable {
     ObjectLocalVariable (
         JPDADebuggerImpl debugger,
         ObjectReference value,
+        String className,
+        LocalVariable local,
+        String genericSignature,
+        CallStackFrameImpl frame
+    ) {
+        this(debugger, value, className, local, genericSignature,
+             getID(local),
+             frame);
+    }
+
+    private static String getID(LocalVariable local) {
+        try {
+            return LocalVariableWrapper.name(local) + LocalVariableWrapper.hashCode(local) + "^";
+        } catch (InternalExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        } catch (VMDisconnectedExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        }
+    }
+
+    private ObjectLocalVariable (
+        JPDADebuggerImpl debugger,
+        ObjectReference value,
         String className, 
         LocalVariable local, 
         String genericSignature,
+        String id,
         CallStackFrameImpl frame
     ) {
         super (debugger, 
             value, 
             genericSignature, 
-            local.name () + local.hashCode() +
-                (value instanceof ObjectReference ? "^" : ""));
+            id);
         this.local = local;
         if (frame != null) {
             this.thread = frame.getThread();
@@ -95,7 +124,13 @@ org.netbeans.api.debugger.jpda.LocalVariable {
     * @return string representation of type of this variable.
     */
     public String getName () {
-        return local.name ();
+        try {
+            return LocalVariableWrapper.name(local);
+        } catch (InternalExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        } catch (VMDisconnectedExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        }
     }
 
     /**
@@ -117,24 +152,37 @@ org.netbeans.api.debugger.jpda.LocalVariable {
     * @return string representation of type of this variable.
     */
     public String getDeclaredType () {
-        return local.typeName ();
+        try {
+            return LocalVariableWrapper.typeName(local);
+        } catch (InternalExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        } catch (VMDisconnectedExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        }
     }
     
     protected final void setValue (Value value) throws InvalidExpressionException {
         try {
             StackFrame sf = ((CallStackFrameImpl) thread.getCallStack(depth, depth + 1)[0]).getStackFrame();
-            sf.setValue (local, value);
+            StackFrameWrapper.setValue (sf, local, value);
+            setInnerValue(value);
         } catch (AbsentInformationException aiex) {
             throw new InvalidExpressionException(aiex);
         } catch (InvalidTypeException ex) {
             throw new InvalidExpressionException (ex);
         } catch (ClassNotLoadedException ex) {
             throw new InvalidExpressionException (ex);
+        } catch (InvalidStackFrameExceptionWrapper ex) {
+            throw new InvalidExpressionException (ex);
+        } catch (InternalExceptionWrapper ex) {
+        } catch (VMDisconnectedExceptionWrapper ex) {
         }
     }
     
+    private int cloneNumber = 1;
+
     public ObjectLocalVariable clone() {
-        ObjectLocalVariable clon = new ObjectLocalVariable(getDebugger(), (ObjectReference) getJDIValue(), className, local, genericSignature, null);
+        ObjectLocalVariable clon = new ObjectLocalVariable(getDebugger(), (ObjectReference) getJDIValue(), className, local, genericSignature, getID() + "_clone"+(cloneNumber++), null);
         clon.depth = this.depth;
         clon.thread = this.thread;
         return clon;
@@ -148,6 +196,12 @@ org.netbeans.api.debugger.jpda.LocalVariable {
     }
 
     public String toString () {
-        return "ObjectLocalVariable " + local.name ();
+        try {
+            return "ObjectLocalVariable " + LocalVariableWrapper.name(local);
+        } catch (InternalExceptionWrapper ex) {
+            return "ObjectLocalVariable " + ex.getLocalizedMessage();
+        } catch (VMDisconnectedExceptionWrapper ex) {
+            return ex.getLocalizedMessage();
+        }
     }
 }

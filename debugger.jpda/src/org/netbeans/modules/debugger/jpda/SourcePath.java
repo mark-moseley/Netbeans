@@ -46,12 +46,20 @@ import com.sun.jdi.StackFrame;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.netbeans.modules.debugger.jpda.jdi.InternalExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.InvalidStackFrameExceptionWrapper;
 import org.netbeans.spi.debugger.ContextProvider;
 
 import org.netbeans.api.debugger.jpda.CallStackFrame;
 import org.netbeans.api.debugger.jpda.Field;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.JPDAThread;
+import org.netbeans.modules.debugger.jpda.jdi.LocationWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ReferenceTypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.StackFrameWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.VMDisconnectedExceptionWrapper;
 import org.netbeans.spi.debugger.jpda.SourcePathProvider;
 import org.netbeans.spi.debugger.jpda.EditorContext;
 import org.openide.ErrorManager;
@@ -73,8 +81,7 @@ public class SourcePath {
 
     public SourcePath (ContextProvider lookupProvider) {
         this.lookupProvider = lookupProvider;
-        debugger = (JPDADebugger) lookupProvider.lookupFirst 
-            (null, JPDADebugger.class);
+        debugger = lookupProvider.lookupFirst(null, JPDADebugger.class);
     }
 
     public SourcePathProvider getContext () {
@@ -135,22 +142,32 @@ public class SourcePath {
      * @return url
      */
     public String getURL (String relativePath, boolean global) {
-        return getContext ().getURL (relativePath, global);
+        String url = getContext ().getURL (relativePath, global);
+        if (url != null) {
+            try {
+                new java.net.URL(url);
+            } catch (java.net.MalformedURLException muex) {
+                Logger.getLogger(SourcePath.class.getName()).log(Level.WARNING,
+                        "Malformed URL '"+url+"' produced by "+getContext (), muex);
+                return null;
+            }
+        }
+        return url;
     }
     
     public String getURL (
         StackFrame sf,
         String stratumn
-    ) {
+    ) throws InternalExceptionWrapper, VMDisconnectedExceptionWrapper, InvalidStackFrameExceptionWrapper {
         try {
             return getURL (
-                convertSlash (sf.location ().sourcePath (stratumn)),
+                convertSlash(LocationWrapper.sourcePath(StackFrameWrapper.location(sf), stratumn)),
                 true
             );
         } catch (AbsentInformationException e) {
             return getURL (
                 convertClassNameToRelativePath (
-                    sf.location ().declaringType ().name ()
+                    ReferenceTypeWrapper.name(LocationWrapper.declaringType(StackFrameWrapper.location(sf)))
                 ),
                 true
             );
@@ -160,16 +177,16 @@ public class SourcePath {
     public String getURL (
         Location loc,
         String stratumn
-    ) {
+    ) throws InternalExceptionWrapper, VMDisconnectedExceptionWrapper {
         try {
             return getURL (
-                convertSlash(loc.sourcePath(stratumn)),
+                convertSlash(LocationWrapper.sourcePath(loc, stratumn)),
                 true
             );
         } catch (AbsentInformationException e) {
             return getURL (
                 convertClassNameToRelativePath (
-                    loc.declaringType().name()
+                    ReferenceTypeWrapper.name(LocationWrapper.declaringType(loc))
                 ),
                 true
             );
@@ -414,8 +431,26 @@ public class SourcePath {
 
         public String getURL (String relativePath, boolean global) {
             String p1 = cp1.getURL (relativePath, global);
-            if (p1 != null) return p1;
-            return cp2.getURL (relativePath, global);
+            if (p1 != null) {
+                try {
+                    new java.net.URL(p1);
+                    return p1;
+                } catch (java.net.MalformedURLException muex) {
+                    Logger.getLogger(SourcePath.class.getName()).log(Level.WARNING,
+                            "Malformed URL '"+p1+"' produced by "+cp1, muex);
+                }
+            }
+            p1 = cp2.getURL (relativePath, global);
+            if (p1 != null) {
+                try {
+                    new java.net.URL(p1);
+                } catch (java.net.MalformedURLException muex) {
+                    Logger.getLogger(SourcePath.class.getName()).log(Level.WARNING,
+                            "Malformed URL '"+p1+"' produced by "+cp2, muex);
+                    p1 = null;
+                }
+            }
+            return p1;
         }
 
         public String getRelativePath (

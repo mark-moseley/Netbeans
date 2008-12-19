@@ -43,6 +43,7 @@ package org.netbeans.modules.debugger.jpda.actions;
 
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.event.Event;
+import com.sun.jdi.request.EventRequest;
 import java.io.IOException;
 
 import java.util.Collections;
@@ -58,6 +59,7 @@ import org.netbeans.api.debugger.jpda.AbstractDICookie;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.ListeningDICookie;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
+import org.netbeans.modules.debugger.jpda.jdi.VirtualMachineWrapper;
 import org.netbeans.modules.debugger.jpda.util.Operator;
 import org.netbeans.modules.debugger.jpda.util.Executor;
 import org.netbeans.spi.debugger.ActionsProvider;
@@ -117,8 +119,7 @@ public class StartActionProvider extends ActionsProvider implements Cancellable 
         
         
         debuggerImpl.setStarting ();
-        final AbstractDICookie cookie = (AbstractDICookie) lookupProvider.
-            lookupFirst (null, AbstractDICookie.class);
+        final AbstractDICookie cookie = lookupProvider.lookupFirst(null, AbstractDICookie.class);
         doStartDebugger(cookie);
         if (startVerbose)
             System.out.println ("\nS StartActionProvider." +
@@ -143,8 +144,7 @@ public class StartActionProvider extends ActionsProvider implements Cancellable 
         }
         
         
-        final AbstractDICookie cookie = (AbstractDICookie) lookupProvider.
-            lookupFirst (null, AbstractDICookie.class);
+        final AbstractDICookie cookie = lookupProvider.lookupFirst(null, AbstractDICookie.class);
         
         if (startVerbose)
             System.out.println ("\nS StartActionProvider." +
@@ -189,7 +189,7 @@ public class StartActionProvider extends ActionsProvider implements Cancellable 
             debuggerImpl.setAttaching(cookie);
             VirtualMachine virtualMachine = cookie.getVirtualMachine ();
             debuggerImpl.setAttaching(null);
-            virtualMachine.setDebugTraceMode (jdiTrace);
+            VirtualMachineWrapper.setDebugTraceMode (virtualMachine, jdiTrace);
 
             final Object startLock = new Object();
             Operator o = createOperator (virtualMachine, startLock);
@@ -237,7 +237,7 @@ public class StartActionProvider extends ActionsProvider implements Cancellable 
                 );
             debuggerImpl.setException (exception);
             // kill the session that did not start properly
-            final Session session = (Session) lookupProvider.lookupFirst(null, Session.class);
+            final Session session = lookupProvider.lookupFirst(null, Session.class);
             RequestProcessor.getDefault().post(new Runnable() {
                 public void run() {
                     // Kill it in a separate thread so that the startup sequence can be finished.
@@ -268,6 +268,9 @@ public class StartActionProvider extends ActionsProvider implements Cancellable 
                     }
                     return false;
                 }
+
+                public void removed(EventRequest eventRequest) {}
+                
             },
             new Runnable () {
                 public void run () {

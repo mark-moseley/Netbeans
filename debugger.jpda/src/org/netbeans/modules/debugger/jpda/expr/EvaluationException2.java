@@ -49,6 +49,13 @@ import com.sun.source.tree.Tree;
 import java.util.*;
 import java.text.MessageFormat;
 
+import org.netbeans.modules.debugger.jpda.jdi.ArrayReferenceWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.InternalExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ObjectCollectedExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ReferenceTypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.TypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.VMDisconnectedExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ValueWrapper;
 import org.openide.util.NbBundle;
 
 /**
@@ -84,11 +91,14 @@ public class EvaluationException2 extends RuntimeException {
 
         String [] msgParams = null;
 
+        try {
         if (reason.equals("internalError"))
             msgParams = new String [] { null };
         else if (reason.equals("invalidArrayInitializer"))
             msgParams = new String [] { params[0] == null ? null : params[0].toString() };
         else if (reason.equals("arraySizeBadType"))
+            msgParams = new String [] { params[0] == null ? null : params[0].toString() };
+        else if (reason.equals("notArrayType"))
             msgParams = new String [] { params[0] == null ? null : params[0].toString() };
         else if (reason.equals("arrayCreateError"))
             msgParams = new String [] { params[0] == null ? null : params[0].toString() };
@@ -117,15 +127,15 @@ public class EvaluationException2 extends RuntimeException {
         else if (reason.equals("internalErrorResolvingType"))
             msgParams = new String [] { params[0].toString() };
         else if (reason.equals("instanceOfLeftOperandNotAReference"))
-            msgParams = new String [] { ((Value)params[0]).type().name() };
+            msgParams = new String [] { TypeWrapper.name(ValueWrapper.type((Value) params[0])) };
         else if (reason.equals("conditionalOrAndBooleanOperandRequired"))
-            msgParams = new String [] { ((Value)params[0]).type().name() };
+            msgParams = new String [] { TypeWrapper.name(ValueWrapper.type((Value) params[0])) };
         else if (reason.equals("conditionalQuestionMarkBooleanOperandRequired"))
-            msgParams = new String [] { ((Value)params[0]).type().name() };
+            msgParams = new String [] { TypeWrapper.name(ValueWrapper.type((Value) params[0])) };
         else if (reason.equals("thisObjectUnavailable"))
             msgParams = null;
         else if (reason.equals("objectReferenceRequiredOnDereference"))
-            msgParams = new String [] { ((Value)params[0]).type().name() };
+            msgParams = new String [] { TypeWrapper.name(ValueWrapper.type((Value) params[0])) };
         else if (reason.equals("badArgument"))
             msgParams = new String [] { params[0].toString() };
         else if (reason.equals("argumentsBadSyntax"))
@@ -134,19 +144,23 @@ public class EvaluationException2 extends RuntimeException {
             msgParams = new String [] { params[0].toString(),  params[1].toString() };
         else if (reason.equals("noSuchMethod"))
             msgParams = new String [] { (String) params[0], (String) params[1] };
+        else if (reason.equals("noSuchMethodWithArgs"))
+            msgParams = new String [] { (String) params[0], (String) params[1], (String) params[2] };
+        else if (reason.equals("noSuchConstructorWithArgs"))
+            msgParams = new String [] { (String) params[0], (String) params[1] };
         else if (reason.equals("callException"))
             msgParams = new String [] { params[1].toString(), params[0].toString() };
         else if (reason.equals("calleeException"))
-            msgParams = new String [] { ((Identifier)params[1]).typeContext.name(),  ((Identifier)params[1]).identifier,
+            msgParams = new String [] { ReferenceTypeWrapper.name(((Identifier)params[1]).typeContext),  ((Identifier)params[1]).identifier,
                                         ((InvocationException)(params[0])).exception().toString() };
         else if (reason.equals("identifierNotAReference"))
-            msgParams = new String [] { ((Value)params[0]).type().name() };
+            msgParams = new String [] { TypeWrapper.name(ValueWrapper.type((Value) params[0])) };
         else if (reason.equals("notarray"))
             msgParams = new String [] { params[0].toString() };
         else if (reason.equals("arrayIndexNAN"))
             msgParams = new String [] { params[1].toString() };
         else if (reason.equals("arrayIndexOutOfBounds"))
-            msgParams = new String [] { params[1].toString(), Integer.toString(((ArrayReference)params[0]).length() - 1) };
+            msgParams = new String [] { params[1].toString(), Integer.toString(ArrayReferenceWrapper.length0((ArrayReference) params[0]) - 1) };
         else if (reason.equals("unknownVariable"))
             msgParams = new String [] { params[0].toString() };
         else if (reason.equals("integerLiteralTooBig"))
@@ -159,12 +173,16 @@ public class EvaluationException2 extends RuntimeException {
 //            return Assert.error(node, "evaluateError", value, ((Token) operators[i-1]).image, next);
             msgParams = new String [] { params[1].toString(), params[0].toString(), params[2].toString() };
         else if (reason.equals("notEnclosingType"))
-            msgParams = new String [] { ((Identifier)params[0]).typeContext.name(),  ((Identifier)params[0]).superQualifier };
+            msgParams = new String [] { params[0].toString() };
         else if (reason.equals("accessInstanceVariableFromStaticContext"))
-            msgParams = new String [] { ((Identifier)params[0]).identifier };
+            msgParams = new String [] { params[0].toString() };
+        else if (reason.equals("invokeInstanceMethodAsStatic"))
+            msgParams = new String [] { params[0].toString() };
         else if (reason.equals("methodCallOnNull"))
             msgParams = new String[] { params[0].toString() };
         else if (reason.equals("fieldOnNull"))
+            msgParams = new String[] { params[0].toString() };
+        else if (reason.equals("arrayIsNull"))
             msgParams = new String[] { params[0].toString() };
         else if (reason.equals("unsupported"))
             msgParams = new String[] { node.toString() };
@@ -174,9 +192,25 @@ public class EvaluationException2 extends RuntimeException {
             msgParams = new String [] { params[0].toString() };
         else if (reason.equals("unknownOuterClass"))
             msgParams = new String [] { params[0].toString() };
+        else if (reason.equals("notExpression"))
+            msgParams = new String [] {  };
+        else if (reason.equals("methOnArray"))
+            msgParams = new String [] {  };
+        else if (reason.equals("forEachNotApplicable"))
+            msgParams = new String [] {  };
+        else if (reason.equals("localVariableAlreadyDefined"))
+            msgParams = new String [] { params[0].toString() };
         else {
             msgParams = new String [] { reason };
             reason = "unknownInternalError";
+        }
+        } catch (InternalExceptionWrapper e) {
+            msgParams = new String [] { e.getLocalizedMessage() };
+            reason = "unknownInternalError";
+        } catch (VMDisconnectedExceptionWrapper e) {
+            msgParams = new String [] { e.getLocalizedMessage() };
+        } catch (ObjectCollectedExceptionWrapper e) {
+            msgParams = new String [] { e.getLocalizedMessage() };
         }
 
         message = formatMessage("CTL_EvalError_" + reason, msgParams);

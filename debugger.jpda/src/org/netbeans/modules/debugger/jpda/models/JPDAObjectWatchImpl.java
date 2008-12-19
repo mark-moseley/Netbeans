@@ -43,17 +43,32 @@ package org.netbeans.modules.debugger.jpda.models;
 
 import com.sun.jdi.AbsentInformationException;
 import com.sun.jdi.ClassNotLoadedException;
+import com.sun.jdi.ClassType;
 import com.sun.jdi.Field;
 import com.sun.jdi.InvalidTypeException;
-import com.sun.jdi.LocalVariable;
 import com.sun.jdi.ObjectReference;
+import com.sun.jdi.ReferenceType;
 import com.sun.jdi.Value;
 
 import org.netbeans.api.debugger.Watch;
 import org.netbeans.api.debugger.jpda.InvalidExpressionException;
 import org.netbeans.api.debugger.jpda.JPDAWatch;
+import org.netbeans.api.debugger.jpda.LocalVariable;
 import org.netbeans.api.debugger.jpda.ObjectVariable;
 import org.netbeans.modules.debugger.jpda.JPDADebuggerImpl;
+import org.netbeans.modules.debugger.jpda.jdi.ClassNotPreparedExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ClassTypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.InternalExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.InvalidStackFrameExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.LocationWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ObjectCollectedExceptionWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ObjectReferenceWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.ReferenceTypeWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.StackFrameWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.TypeComponentWrapper;
+import org.netbeans.modules.debugger.jpda.jdi.VMDisconnectedExceptionWrapper;
+import org.openide.util.Exceptions;
+import org.openide.util.NbBundle;
 
 
 /**
@@ -152,39 +167,71 @@ ObjectVariable {
             getCurrentCallStackFrame ();
         if (frame == null)
             throw new InvalidExpressionException ("No curent frame.");
-        
+
+        try {
         // 2) try to set as a local variable value
         try {
-            LocalVariable local = frame.getStackFrame ().visibleVariableByName 
-                (getExpression ());
-            if (local != null)
-                try {
-                    frame.getStackFrame ().setValue (local, value);
-                    return;
-                } catch (InvalidTypeException ex) {
-                    throw new InvalidExpressionException (ex);
-                } catch (ClassNotLoadedException ex) {
-                    throw new InvalidExpressionException (ex);
+            LocalVariable local = frame.getLocalVariable(getExpression ());
+            if (local != null) {
+                if (local instanceof Local) {
+                    ((Local) local).setValue(value);
+                } else {
+                    ((ObjectLocalVariable) local).setValue(value);
                 }
+                return;
+            }
         } catch (AbsentInformationException ex) {
             // no local variable visible in this case
         }
         
-        // 3) try tu set as a field
-        ObjectReference thisObject = frame.getStackFrame ().thisObject ();
-        if (thisObject == null)
-            throw new InvalidExpressionException 
-                ("Can not set value to expression.");
-        Field field = thisObject.referenceType ().fieldByName 
-            (getExpression ());
-        if (field == null)
-            throw new InvalidExpressionException 
-                ("Can not set value to expression.");
-        try {
-            thisObject.setValue (field, value);
-        } catch (InvalidTypeException ex) {
+        // 3) try to set as a field
+        ReferenceType clazz = LocationWrapper.declaringType(
+                StackFrameWrapper.location(frame.getStackFrame()));
+        Field field = ReferenceTypeWrapper.fieldByName(clazz, getExpression());
+        if (field == null) {
+            throw new InvalidExpressionException (
+                NbBundle.getMessage(JPDAWatchImpl.class, "MSG_CanNotSetValue", getExpression()));
+        }
+        if (TypeComponentWrapper.isStatic(field)) {
+            if (clazz instanceof ClassType) {
+                try {
+                    ClassTypeWrapper.setValue((ClassType) clazz, field, value);
+                } catch (InvalidTypeException ex) {
+                    throw new InvalidExpressionException (ex);
+                } catch (ClassNotLoadedException ex) {
+                    throw new InvalidExpressionException (ex);
+                } catch (IllegalArgumentException iaex) {
+                    throw new InvalidExpressionException (iaex);
+                }
+            } else {
+                throw new InvalidExpressionException (
+                    NbBundle.getMessage(JPDAWatchImpl.class, "MSG_CanNotSetValue", getExpression()));
+            }
+        } else {
+            ObjectReference thisObject = StackFrameWrapper.thisObject(frame.getStackFrame());
+            if (thisObject == null) {
+                throw new InvalidExpressionException ("no instance context.");
+            }
+            try {
+                ObjectReferenceWrapper.setValue(thisObject, field, value);
+            } catch (InvalidTypeException ex) {
+                throw new InvalidExpressionException (ex);
+            } catch (ClassNotLoadedException ex) {
+                throw new InvalidExpressionException (ex);
+            } catch (IllegalArgumentException iaex) {
+                throw new InvalidExpressionException (iaex);
+            } catch (ObjectCollectedExceptionWrapper ocex) {
+                throw new InvalidExpressionException (ocex);
+            }
+        }
+        } catch (InternalExceptionWrapper ex) {
             throw new InvalidExpressionException (ex);
-        } catch (ClassNotLoadedException ex) {
+        } catch (VMDisconnectedExceptionWrapper ex) {
+            // Ignore
+        } catch (ClassNotPreparedExceptionWrapper ex) {
+            throw new InvalidExpressionException (ex);
+        } catch (InvalidStackFrameExceptionWrapper ex) {
+            Exceptions.printStackTrace(ex);
             throw new InvalidExpressionException (ex);
         }
     }
