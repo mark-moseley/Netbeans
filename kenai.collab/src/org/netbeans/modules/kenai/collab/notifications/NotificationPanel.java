@@ -55,7 +55,6 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.UIManager;
 import javax.swing.event.HyperlinkEvent;
@@ -81,7 +80,7 @@ public class NotificationPanel extends javax.swing.JPanel {
         setLayout(layout);
     }
 
-    public void addNotification(Notification n) {
+    public void addNotification(final Notification n) {
         layout.setRows(layout.getRows()+1);
         final JEditorPane pane = new JEditorPane();
         final JPanel row = new JPanel();
@@ -102,13 +101,14 @@ public class NotificationPanel extends javax.swing.JPanel {
         pane.setEditable(false);
 
         pane.putClientProperty(BasicHTML.documentBaseKey, NotificationPanel.class.getResource("/org/netbeans/modules/kenai/collab/resources"));
-
-        pane.setText("<html>"+n.getTitle() + "<br><a href=\""+n.getLinkTitle()+"\">"+n.getLinkTitle()+"</a><br><br></html>");
+        String desc= n.getDescription();
+        String description = desc!=null&&desc.length()!=0?"<br>" + desc:"";
+        pane.setText("<html>"+n.getTitle() + description + "<br><a href=\""+n.getLinkTitle()+"\">"+n.getLinkTitle()+"</a><br><br></html>");
         pane.addHyperlinkListener(new HyperlinkListener() {
 
             public void hyperlinkUpdate(HyperlinkEvent e) {
-                if (e.getEventType()==HyperlinkEvent.EventType.ACTIVATED) {
-                        JOptionPane.showMessageDialog(NotificationPanel.this, e.getDescription());
+                if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+                    n.showDetails();
                 }
             }
         });
@@ -124,6 +124,7 @@ public class NotificationPanel extends javax.swing.JPanel {
                 NotificationPanel.this.remove(row);
                 layout.setRows(layout.getRows() - 1);
                 NotificationPanel.this.getParent().validate();
+                n.remove();
             }
         });
         JPanel closePane = new JPanel();
