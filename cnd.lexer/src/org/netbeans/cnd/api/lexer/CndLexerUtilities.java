@@ -46,6 +46,7 @@ import javax.swing.text.JTextComponent;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.modules.cnd.utils.MIMENames;
 
 /**
  *
@@ -53,10 +54,6 @@ import org.netbeans.api.lexer.TokenSequence;
  */
 public final class CndLexerUtilities {
 
-    public static final String C_MIME_TYPE = "text/x-c";// NOI18N
-    public static final String CPLUSPLUS_MIME_TYPE = "text/x-c++";    // NOI18N
-    public static final String PREPROC_MIME_TYPE = "text/x-cpp-preprocessor";// NOI18N
-    public static final String FORTRAN_MIME_TYPE = "text/x-fortran";// NOI18N
     public static final String LEXER_FILTER = "lexer-filter"; // NOI18N
     public static final String FORTRAN_FREE_FORMAT = "fortran-free-format"; // NOI18N
     public static final String FORTRAN_MAXIMUM_TEXT_WIDTH = "fortran-maximum-text-width"; // NOI18N
@@ -83,10 +80,12 @@ public final class CndLexerUtilities {
     }
 
     public static Language<CppTokenId> getLanguage(String mime) {
-        if (C_MIME_TYPE.equals(mime)) {
+        if (MIMENames.C_MIME_TYPE.equals(mime)) {
             return CppTokenId.languageC();
-        } else if (CPLUSPLUS_MIME_TYPE.equals(mime)) {
+        } else if (MIMENames.CPLUSPLUS_MIME_TYPE.equals(mime)) {
             return CppTokenId.languageCpp();
+        } else if (MIMENames.HEADER_MIME_TYPE.equals(mime)) {
+            return CppTokenId.languageHeader();
         }
         return null;
     }
@@ -481,6 +480,7 @@ public final class CndLexerUtilities {
             CppTokenId.__TYPEOF__,
             CppTokenId.__VOLATILE,
             CppTokenId.__VOLATILE__,
+            CppTokenId.__THREAD,
             CppTokenId.__UNUSED__,
         };
         addToFilter(ids, filterToModify);
@@ -521,7 +521,7 @@ public final class CndLexerUtilities {
 
     private static void addFortranKeywords(Filter<FortranTokenId> filterToModify) {
         FortranTokenId[] ids = new FortranTokenId[]{
-            // Keyword
+            // Keywords
             FortranTokenId.KW_ALLOCATABLE,
             FortranTokenId.KW_ALLOCATE,
             FortranTokenId.KW_APOSTROPHE,
@@ -573,6 +573,7 @@ public final class CndLexerUtilities {
             FortranTokenId.KW_ENDTYPE,
             FortranTokenId.KW_ENDUNION,
             FortranTokenId.KW_ENDWHERE,
+            FortranTokenId.KW_ENDWHILE,
             FortranTokenId.KW_ENTRY,
             FortranTokenId.KW_ENUM,
             FortranTokenId.KW_ENUMERATOR,
@@ -580,7 +581,6 @@ public final class CndLexerUtilities {
             FortranTokenId.KW_EXIT,
             FortranTokenId.KW_EXTERNAL,
             FortranTokenId.KW_FLUSH,
-            //            FortranTokenId.KW_FILE,
             FortranTokenId.KW_FORALL,
             FortranTokenId.KW_FORMAT,
             FortranTokenId.KW_FUNCTION,
@@ -647,6 +647,32 @@ public final class CndLexerUtilities {
             FortranTokenId.KW_WHERE,
             FortranTokenId.KW_WHILE,
             FortranTokenId.KW_WRITE,
+            // Keyword C Extensions
+            FortranTokenId.KW_INT,
+            FortranTokenId.KW_SHORT,
+            FortranTokenId.KW_LONG,
+            FortranTokenId.KW_SIGNED,
+            FortranTokenId.KW_UNSIGNED,
+            FortranTokenId.KW_SIZE_T,
+            FortranTokenId.KW_INT8_T,
+            FortranTokenId.KW_INT16_T,
+            FortranTokenId.KW_INT32_T,
+            FortranTokenId.KW_INT64_T,
+            FortranTokenId.KW_INT_LEAST8_T,
+            FortranTokenId.KW_INT_LEAST16_T,
+            FortranTokenId.KW_INT_LEAST32_T,
+            FortranTokenId.KW_INT_LEAST64_T,
+            FortranTokenId.KW_INT_FAST8_T,
+            FortranTokenId.KW_INT_FAST16_T,
+            FortranTokenId.KW_INT_FAST32_T,
+            FortranTokenId.KW_INT_FAST64_T,
+            FortranTokenId.KW_INTMAX_T,
+            FortranTokenId.KW_INTPTR_T,
+            FortranTokenId.KW_FLOAT,
+            FortranTokenId.KW__COMPLEX,
+            FortranTokenId.KW__BOOL,
+            FortranTokenId.KW_CHAR,
+            FortranTokenId.KW_BOOL,
             // Keyword Operator
             FortranTokenId.KWOP_EQ,
             FortranTokenId.KWOP_NE,
