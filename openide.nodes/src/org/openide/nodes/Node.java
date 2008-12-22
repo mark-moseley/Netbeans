@@ -406,6 +406,17 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
         }
     }
 
+    /**
+     * @deprecated Has no effect. To make a node disappear, simply remove it from the
+     *             children of its parent. For example, you might call
+     *             {@link Children.Keys#setKeys(Collection)} with a smaller collection.
+     */
+    @Deprecated
+    @Override
+    public void setHidden(boolean hidden) {
+        super.setHidden(hidden);
+    }
+
     /** Find an icon for this node (in the closed state).
     * @param type constant from {@link java.beans.BeanInfo}
     * @return icon to use to represent the node
@@ -1258,6 +1269,14 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
     * If that methods returns a non-<code>null</code> value, one can serialize it,
     * and after deserialization
     * use {@link #getNode} to obtain the original node.
+    * 
+    * <p><b>Related documentation</b>
+    * 
+    * <ul>
+    * <li><a href="http://blogs.sun.com/geertjan/entry/serializing_nodes">Serializing Nodes</a> 
+    * <li><a href="http://blogs.sun.com/geertjan/entry/multiple_nodes_serialization">Serializing Multiple Nodes</a> 
+    * </ul>
+    * 
     */
     public static interface Handle extends java.io.Serializable {
         /** @deprecated Only public by accident. */
