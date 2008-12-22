@@ -45,8 +45,11 @@ import java.io.File;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import org.apache.tools.ant.BuildEvent;
 import org.apache.tools.ant.BuildException;
+import org.apache.tools.ant.BuildListener;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Task;
 import org.apache.tools.ant.taskdefs.Ant;
@@ -60,6 +63,9 @@ public class SubAntJUnitReport extends Task {
 
     private Path buildPath;
     public void setBuildPath(Path buildPath) {
+        this.buildPath = buildPath;
+    }
+    public void addConfiguredBuildPath(Path buildPath) {
         this.buildPath = buildPath;
     }
 
@@ -87,14 +93,34 @@ public class SubAntJUnitReport extends Task {
             ant.init();
             ant.setTarget(targetToRun);
             ant.setDir(dir);
+            final StringBuilder errors = new StringBuilder();
+            BuildListener listener = new BuildListener() {
+                String task = null;
+                public void messageLogged(BuildEvent ev) {
+                    if (task != null && ev.getPriority() <= Project.MSG_WARN) {
+                        errors.append('\n').append(ev.getMessage());
+                    }
+                }
+                public void taskStarted(BuildEvent ev) {
+                    task = ev.getTask().getTaskName();
+                }
+                public void taskFinished(BuildEvent ev) {
+                    task = null;
+                }
+                public void buildStarted(BuildEvent ev) {}
+                public void buildFinished(BuildEvent ev) {}
+                public void targetStarted(BuildEvent ev) {}
+                public void targetFinished(BuildEvent ev) {}
+            };
             String msg = null;
+            getProject().addBuildListener(listener);
             try {
                 ant.execute();
             } catch (BuildException x) {
                 if (failOnError) {
                     throw x;
                 } else {
-                    msg = x.getMessage().replaceFirst("(?s).*The following error occurred while executing this line:\r?\n", "");
+                    msg = x.getMessage().replaceFirst("(?s).*The following error occurred while executing this line:\r?\n", "") + errors;
                 }
             } catch (Throwable x) {
                 if (failOnError) {
@@ -104,6 +130,8 @@ public class SubAntJUnitReport extends Task {
                     x.printStackTrace(new PrintWriter(sw));
                     msg = sw.toString();
                 }
+            } finally {
+                getProject().removeBuildListener(listener);
             }
             pseudoTests.put(path, msg);
             if (msg != null) {
@@ -112,8 +140,26 @@ public class SubAntJUnitReport extends Task {
                 log("Exiting: " + path);
             }
         }
-        // XXX would be nice to permit the 'classname' field to be customized in output...
-        JUnitReportWriter.writeReport(this, report, pseudoTests);
+        JUnitReportWriter.writeReport(this, SubAntJUnitReport.class.getName() + "." + targetToRun, report, deleteCommonKeyPrefixes(pseudoTests));
+    }
+
+    private static <T> Map<String,T> deleteCommonKeyPrefixes(Map<String,T> m) {
+        Iterator<String> keys = m.keySet().iterator();
+        if (!keys.hasNext()) {
+            return m;
+        }
+        String prefix = keys.next();
+        while (keys.hasNext()) {
+            String k = keys.next();
+            while (!k.startsWith(prefix)) {
+                prefix = prefix.substring(0, prefix.length() - 1);
+            }
+        }
+        Map<String,T> m2 = new HashMap<String,T>();
+        for (Map.Entry<String,T> entry : m.entrySet()) {
+            m2.put(entry.getKey().substring(prefix.length()), entry.getValue());
+        }
+        return m2;
     }
 
 }
