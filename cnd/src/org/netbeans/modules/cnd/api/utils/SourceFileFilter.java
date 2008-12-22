@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.api.utils;
 
 import java.io.File;
@@ -54,55 +53,59 @@ public abstract class SourceFileFilter extends javax.swing.filechooser.FileFilte
 
     public boolean accept(File f) {
         if (f != null) {
-            if (f.isDirectory())
+            if (f.isDirectory()) {
                 return true;
+            }
             int index = f.getName().lastIndexOf('.');
             if (index >= 0) {
                 // Match suffix
-                String suffix = f.getName().substring(index+1);
-                if (amongSuffixes(suffix, getSuffixes()))
+                String suffix = f.getName().substring(index + 1);
+                if (amongSuffixes(suffix, getSuffixes())) {
                     return true;
-            }
-            else {
+                }
+            } else {
                 // Match entire name
-                if (amongSuffixes(f.getName(), getSuffixes()))
+                if (amongSuffixes(f.getName(), getSuffixes())) {
                     return true;
+                }
             }
         }
         return false;
     }
-    
+
     public abstract String[] getSuffixes();
-    
+
     public String getSuffixesAsString() {
-        String ret = ""; // NOI18N
-        String space = ""; // NOI18N
-        for (int i = 0; i < getSuffixes().length; i++) {
-            ret = ret + space + "." + getSuffixes()[i]; // NOI18N
-            space = " "; // NOI18N
+        String[] suffixes = getSuffixes();
+        StringBuilder ret = new StringBuilder();
+        for (int i = 0; i < suffixes.length; i++) {
+            if (0 < i) {
+                ret.append(' '); // NOI18N
+            }
+            ret.append('.').append(suffixes[i]); // NOI18N
         }
-        return ret;
+        return ret.toString();
     }
-                    
+
     private boolean amongSuffixes(String suffix, String[] suffixes) {
-	for (int i = 0; i < suffixes.length; i++) {
+        for (int i = 0; i < suffixes.length; i++) {
             if (IpeUtils.areFilenamesEqual(suffixes[i], suffix)) {
                 return true;
             }
-	}
-	return false;
+        }
+        return false;
     }
-    
+
     protected String[] getSuffixList(ExtensionList elist) {
         Enumeration<String> en = elist.extensions();
         ArrayList<String> list = new ArrayList<String>();
-        
+
         while (en.hasMoreElements()) {
             list.add(en.nextElement());
         }
         return list.toArray(new String[list.size()]);
     }
-    
+
     @Override
     public String toString() {
         return getDescription();
