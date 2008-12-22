@@ -25,7 +25,7 @@
  *
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.visualweb.webui.themes;
+package org.netbeans.modules.visualweb.project.jsf.themenodes;
 
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.visualweb.project.jsf.api.JsfProjectUtils;
@@ -36,15 +36,16 @@ import org.openide.nodes.Node;
  * Implementation of ThemeNodeService
  * @author winstonp
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.visualweb.project.jsf.services.ThemeNodeService.class)
 public class ThemeNodeServiceImpl implements ThemeNodeService{
 
     public Node getThemeNode(Project project) {
         // find if project is of type j2ee 1.4 then return
         // Themes Folder Node else return null;
         if (JsfProjectUtils.isJavaEE5Project(project)){
-          return null;   
+            return new ThemesJ2ee5FolderNode(project);
         }else{
-            return new ThemesFolderNode(project);
+            return new ThemesJ2ee14FolderNode(project);
         }
     }
 

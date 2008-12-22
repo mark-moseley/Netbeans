@@ -39,8 +39,9 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.visualweb.webui.themes;
+package org.netbeans.modules.visualweb.project.jsf.themenodes;
 
+import java.awt.EventQueue;
 import org.netbeans.modules.visualweb.project.jsf.api.JsfProjectConstants;
 import org.netbeans.modules.visualweb.project.jsf.api.JsfProjectUtils;
 import org.netbeans.modules.visualweb.project.jsf.services.RefreshService;
@@ -50,9 +51,11 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.jar.Manifest;
@@ -70,6 +73,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.HelpCtx;
@@ -81,9 +85,8 @@ import org.openide.util.Utilities;
  *
  * @author Po-Ting Wu, Mark Dey, Winston Prakash
  */
-final class ThemesFolderNode extends AbstractNode {
-
-    static final String BraveHeart_ThemeVersion = "1.0"; // NOI18N
+final class ThemesJ2ee5FolderNode extends AbstractNode {
+    static final String WoodStock_ThemeVersion = "4.2"; // NOI18N
     static final RequestProcessor rp = new RequestProcessor();
     private final String displayName;
     private final Action[] themesNodeActions;
@@ -94,36 +97,42 @@ final class ThemesFolderNode extends AbstractNode {
      * and optionaly Java platform.
      * @param project {@link Project} used for reading and updating project's metadata
      */
-    ThemesFolderNode(Project project) {
+    ThemesJ2ee5FolderNode(Project project) {
         super(new ThemesChildren(project));
-        this.displayName = NbBundle.getMessage(ThemesFolderNode.class, "CTL_ThemesNode");
+        this.displayName = NbBundle.getMessage(ThemesJ2ee5FolderNode.class, "CTL_Themes5Node");
         this.themesNodeActions = new Action[]{
             /* TODO: Themes folder actions */
         };
         this.project = project;
     }
 
+    @Override
     public String getDisplayName() {
         return this.displayName;
     }
 
+    @Override
     public String getName() {
         return this.getDisplayName();
     }
 
+    @Override
     public Action[] getActions(boolean context) {
         return this.themesNodeActions;
     }
 
+    @Override
     public Image getIcon(int type) {
-        return Utilities.loadImage("org/netbeans/modules/visualweb/webui/themes/resources/JSF-themesFolder.png"); // NOI18N;
+        return ImageUtilities.loadImage("org/netbeans/modules/visualweb/webui/jsf/defaulttheme/resources/JSF-themesFolder.png"); // NOI18N;
     }
 
+    @Override
     public Image getOpenedIcon(int type) {
         // TODO: need graphic for opened folder icon
-        return Utilities.loadImage("org/netbeans/modules/visualweb/webui/themes/resources/JSF-themesFolder.png"); // NOI18N;
+        return ImageUtilities.loadImage("org/netbeans/modules/visualweb/webui/jsf/defaulttheme/resources/JSF-themesFolder.png"); // NOI18N;
     }
 
+    @Override
     public boolean canCopy() {
         return false;
     }
@@ -137,29 +146,46 @@ final class ThemesFolderNode extends AbstractNode {
     private static class ThemesChildren extends Children.Keys implements PropertyChangeListener {
 
         private final Project project;
+        private final LibraryManager projectLibraryManager;
+        private final LibraryManager globalLibraryManager;
 
         ThemesChildren(Project project) {
             this.project = project;
+            projectLibraryManager = JsfProjectUtils.getProjectLibraryManager(project);
+            globalLibraryManager  = LibraryManager.getDefault();
         }
 
         public void propertyChange(PropertyChangeEvent evt) {
-            this.setKeys(getKeys());
+            updateKeys();
         }
 
+        private void updateKeys() {
+            // XXX #152956 To avoid acquiring Children.MUTEX together with ProjectManager.mutex().
+            EventQueue.invokeLater(new Runnable() {
+                public void run() {
+                    setKeys(getKeys());
+                }
+            });
+        }
+
+        @Override
         protected void addNotify() {
-            LibraryManager.getDefault().addPropertyChangeListener(this);
+            projectLibraryManager.addPropertyChangeListener(this);
+            globalLibraryManager.addPropertyChangeListener(this);
             this.setKeys(getKeys());
         }
 
+        @Override
         protected void removeNotify() {
-            LibraryManager.getDefault().removePropertyChangeListener(this);
+            projectLibraryManager.removePropertyChangeListener(this);
+            globalLibraryManager.removePropertyChangeListener(this);
             this.setKeys(Collections.EMPTY_SET);
         }
 
         protected Node[] createNodes(Object obj) {
             String version = getThemeLibraryVersion((Library) obj);
 
-            if (BraveHeart_ThemeVersion.equals(version)) {
+            if (WoodStock_ThemeVersion.equals(version)) {
                 Node n = new ThemeNode((Library) obj, project, version);
                 return new Node[]{n};
             } else {
@@ -167,18 +193,25 @@ final class ThemesFolderNode extends AbstractNode {
             }
         }
 
-        private List getKeys() {
-            List themesList = new /*Library*/ ArrayList();
-            Library[] libraries = LibraryManager.getDefault().getLibraries();
-            for (int i = 0; i < libraries.length; i++) {
-                Library lib = libraries[i];
-                // XXX if (ThemeLibraryDefinition.LIBRARY_NAME.equals(lib.getType())) {
-                if ("theme".equals(lib.getType())) {
-                    themesList.add(lib);
+        private Collection getKeys() {
+            java.util.Map themesList = new HashMap();
+            Library[] projectLibraries = projectLibraryManager.getLibraries();
+            for (int i = 0; i < projectLibraries.length; i++) {
+                Library lib = projectLibraries[i];
+                if ("theme".equals(lib.getType()) && !themesList.containsKey(lib.getName())) {
+                    themesList.put(lib.getName(), lib);
+                }
+            }
+            
+            Library[] globalLibraries = globalLibraryManager.getLibraries();
+            for (int i = 0; i < globalLibraries.length; i++) {
+                Library lib = globalLibraries[i];
+                if ("theme".equals(lib.getType()) && !themesList.containsKey(lib.getName())) {
+                    themesList.put(lib.getName(), lib);
                 }
             }
 
-            return themesList;
+            return themesList.values();
         }
     }
 
@@ -205,6 +238,7 @@ final class ThemesFolderNode extends AbstractNode {
             theme.addPropertyChangeListener(org.openide.util.WeakListeners.propertyChange(this, theme));
         }
 
+        @Override
         public void destroy() throws IOException {
             JsfProjectUtils.removeProjectPropertyListener(project, this);
             super.destroy();
@@ -220,30 +254,32 @@ final class ThemesFolderNode extends AbstractNode {
             }
         }
 
+        @Override
         public Action[] getActions(boolean context) {
             return new Action[]{getAction()};
         }
 
         public Action getAction() {
             if (setCurrentThemeAction == null) {
-                setCurrentThemeAction = ThemesFolderNode.createSetAsCurrentThemeAction(theme, project);
+                setCurrentThemeAction = ThemesJ2ee5FolderNode.createSetAsCurrentThemeAction(theme, project);
             }
             return setCurrentThemeAction;
         }
 
+        @Override
         public Image getIcon(int type) {
-            Image baseImage = Utilities.loadImage("org/netbeans/modules/visualweb/webui/themes/resources/JSF-theme.png"); // NOI18N
+            Image baseImage = ImageUtilities.loadImage("org/netbeans/modules/visualweb/webui/jsf/defaulttheme/resources/JSF-theme.png"); // NOI18N
             String currentTheme = JsfProjectUtils.getProjectProperty(project, JsfProjectConstants.PROP_CURRENT_THEME);
             if (currentTheme != null && currentTheme.equals(theme.getName())) {
-                Image currentThemeBadge = Utilities.loadImage("org/netbeans/modules/visualweb/webui/themes/resources/JSF-currentThemeBadge.png"); // NOI18N
-                baseImage = Utilities.mergeImages(baseImage, currentThemeBadge, baseImage.getWidth(null), baseImage.getHeight(null) - currentThemeBadge.getHeight(null) + 1);
+                Image currentThemeBadge = ImageUtilities.loadImage("org/netbeans/modules/visualweb/webui/jsf/defaulttheme/resources/JSF-currentThemeBadge.png"); // NOI18N
+                baseImage = ImageUtilities.mergeImages(baseImage, currentThemeBadge, baseImage.getWidth(null), baseImage.getHeight(null) - currentThemeBadge.getHeight(null) + 1);
                 getAction().setEnabled(false);
             } else {
                 if (version != null) {
                     getAction().setEnabled(true);
                 } else {
-                    Image errorBadge = Utilities.loadImage("org/netbeans/modules/visualweb/webui/themes/resources/JSF-error-badge.gif"); // NOI18N
-                    baseImage = Utilities.mergeImages(baseImage, errorBadge, baseImage.getWidth(null), baseImage.getHeight(null) - errorBadge.getHeight(null) + 1);
+                    Image errorBadge = ImageUtilities.loadImage("org/netbeans/modules/visualweb/webui/jsf/defaulttheme/resources/JSF-error-badge.gif"); // NOI18N
+                    baseImage = ImageUtilities.mergeImages(baseImage, errorBadge, baseImage.getWidth(null), baseImage.getHeight(null) - errorBadge.getHeight(null) + 1);
 
                     getAction().setEnabled(false);
                 }
@@ -255,9 +291,9 @@ final class ThemesFolderNode extends AbstractNode {
         private void updateToolTip() {
             String toolTip;
             if (version != null) {
-                toolTip = NbBundle.getMessage(ThemesFolderNode.class, "LBL_ThemeLibraryDescription");
+                toolTip = NbBundle.getMessage(ThemesJ2ee5FolderNode.class, "LBL_Theme5LibraryDescription");
             } else {
-                toolTip = NbBundle.getMessage(ThemesFolderNode.class, "LBL_ThemeLibraryDescription_Invalid");
+                toolTip = NbBundle.getMessage(ThemesJ2ee5FolderNode.class, "LBL_Theme5LibraryDescription_Invalid");
             }
 
             setShortDescription(toolTip);
@@ -275,7 +311,7 @@ final class ThemesFolderNode extends AbstractNode {
         private final Library theme;
 
         public SetAsCurrentThemeAction(Library theme, Project project) {
-            super(NbBundle.getMessage(ThemesFolderNode.class, "LBL_SetAsCurrentTheme_Action"));
+            super(NbBundle.getMessage(ThemesJ2ee5FolderNode.class, "LBL_SetAsCurrentTheme5_Action"));
             this.project = project;
             this.theme = theme;
         }
@@ -295,7 +331,7 @@ final class ThemesFolderNode extends AbstractNode {
                 // TODO: Should scan all librefs for any theme libraries and remove them
                 oldTheme = "theme-default"; // NOI18N
             }
-            Library oldThemeLibrary = LibraryManager.getDefault().getLibrary(oldTheme);
+            Library oldThemeLibrary = JsfProjectUtils.getProjectLibraryManager(project).getLibrary(oldTheme);
             if (oldThemeLibrary != null) {
                 try {
                     JsfProjectUtils.removeLibraryReferences(project, new Library[]{oldThemeLibrary});
@@ -308,7 +344,7 @@ final class ThemesFolderNode extends AbstractNode {
             try {
                 JsfProjectUtils.addLibraryReferences(project, new Library[]{theme});
                 JsfProjectUtils.addLocalizedTheme(project, theme.getName());
-                String msg = NbBundle.getMessage(ThemesFolderNode.class, Utilities.isWindows() ? "MSG_ThemeChangeRestartIDE" : "MSG_ThemeChangeRebuild");
+                String msg = NbBundle.getMessage(ThemesJ2ee5FolderNode.class, Utilities.isWindows() ? "MSG_Theme5ChangeRestartIDE" : "MSG_Theme5ChangeRebuild");
                 DialogDescriptor nderr = new DialogDescriptor(msg, NbBundle.getMessage(NotifyDescriptor.class, "NTF_InformationTitle"), true, new Object[]{NotifyDescriptor.OK_OPTION}, NotifyDescriptor.OK_OPTION, DialogDescriptor.DEFAULT_ALIGN, new HelpCtx("projrave_ui_elements_dialogs_theme_switch_info_db"), null);
                 DialogDisplayer.getDefault().notify(nderr);
             } catch (Exception ex) {
@@ -325,13 +361,12 @@ final class ThemesFolderNode extends AbstractNode {
 
     private static String getThemeLibraryVersion(Library library) {
         // XXX It is a question whether to look for "classpath" or "runtime" or one of those.
-        List contents = library.getContent("classpath"); // TEMP
-        for (java.util.Iterator it = contents.iterator(); it.hasNext();) {
-            Object content = it.next();
-            if (content instanceof java.net.URL) {
-                java.net.URL url = (java.net.URL) content;
+        for (URL url : library.getContent("classpath")) {
                 try {
-                    url = extractFileUrlFromJarContentUrl(url);
+                    if (!url.getProtocol().equals("jar")) {
+                        continue; // ignore folders
+                    }
+                    url = FileUtil.getArchiveFile(url);
 
                     FileObject fo = org.openide.filesystems.URLMapper.findFileObject(url);
                     if (fo != null) {
@@ -342,25 +377,11 @@ final class ThemesFolderNode extends AbstractNode {
                     } else {
                         ErrorManager.getDefault().log("Cannot find file object for " + url.toString());
                     }
-                } catch (java.net.MalformedURLException mue) {
-                    ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, mue);
                 } catch (IOException ioe) {
                     ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ioe);
                 }
-            }
         }
         return null;
-    }
-
-    // XXX This shouldn't be needed if the URL is kept in the file form.
-    private static java.net.URL extractFileUrlFromJarContentUrl(java.net.URL jarContentUrl) throws java.net.MalformedURLException {
-        // XXX Horrible way hot to extract the file protocol from inside the jar one, is there a nicer way?
-        // If there is none, isn't it better to keep it in the lib as file protocol, and wrap it to jar
-        // only when needed. Otherwise this is forced, and that is very ugly and error-prone.
-        String externalForm = jarContentUrl.toExternalForm();
-        String newExternalForm = externalForm.replaceFirst("jar:", ""); // NOI18N
-        newExternalForm = newExternalForm.replaceFirst("!/", ""); // NOI18N
-        return new java.net.URL(newExternalForm);
     }
 
     private static String getThemeJarFileVersion(java.util.jar.JarFile jarFile) {
@@ -376,7 +397,7 @@ final class ThemesFolderNode extends AbstractNode {
                 while (iter.hasNext()) {
                     Attributes attrs = iter.next();
                     String version = attrs.getValue("X-SJWUIC-Theme-Version"); // NOI18N
-                    if (BraveHeart_ThemeVersion.equals(version)) {
+                    if (WoodStock_ThemeVersion.equals(version)) {
                         return version;
                     }
                 }
