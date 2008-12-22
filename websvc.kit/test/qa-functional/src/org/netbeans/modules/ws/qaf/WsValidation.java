@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,31 +43,37 @@ package org.netbeans.modules.ws.qaf;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import junit.framework.Test;
-import junit.framework.TestSuite;
-import junit.textui.TestRunner;
 import org.netbeans.api.project.Project;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.NewFileNameLocationStepOperator;
+import org.netbeans.jellytools.OutputOperator;
 import org.netbeans.jellytools.OutputTabOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.actions.ActionNoBlock;
+import org.netbeans.jellytools.actions.CleanProjectAction;
+import org.netbeans.jellytools.modules.java.editor.GenerateCodeOperator;
 import org.netbeans.jellytools.modules.web.NewJspFileNameStepOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.ProjectRootNode;
+import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.JemmyException;
 import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.Waitable;
 import org.netbeans.jemmy.Waiter;
 import org.netbeans.jemmy.operators.JButtonOperator;
+import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JComboBoxOperator;
+import org.netbeans.jemmy.operators.JDialogOperator;
 import org.netbeans.jemmy.operators.JTableOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
 import org.netbeans.modules.j2ee.dd.api.web.Listener;
 import org.netbeans.modules.j2ee.dd.api.web.Servlet;
@@ -93,12 +99,17 @@ import org.openide.filesystems.FileUtil;
 /**
  *  Basic validation suite for web services support in the IDE
  *
+ *  Duration of this test suite: aprox. 8min
+ *
  * @author lukas.jungmann@sun.com
  */
 public class WsValidation extends WebServicesTestBase {
 
     protected static final String WEB_SERVICES_NODE_NAME = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.nodes.Bundle", "LBL_WebServices");
     private static final String WEB_SERVICE_CLIENTS_NODE_NAME = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.nodes.Bundle", "LBL_ServiceReferences");
+    private static final Logger LOG = Logger.getLogger(WsValidation.class.getName());
+
+    private static int foId = 0;
 
     protected enum HandlerType {
 
@@ -154,7 +165,28 @@ public class WsValidation extends WebServicesTestBase {
     }
 
     protected String getWsClientPackage() {
-        return "o.n.m.ws.qaf.client"; //NOI18N
+        return getWsPackage(); //NOI18N
+    }
+
+    protected String getWsURL() {
+        int port;
+        String suffix = "?wsdl"; //NOI18N
+        switch (REGISTERED_SERVER) {
+            case TOMCAT:
+                port = 8084;
+                break;
+            case JBOSS:
+                port = 8080;
+                break;
+            case SJSAS:
+            case GLASSFISH:
+                port = 8080;
+                suffix = "?Tester"; //NOI18N
+                break;
+            default:
+                throw new AssertionError("Unsupported server"); //NOI18N
+        }
+        return "http://localhost:" + port + "/" + getProjectName() + "/" + getWsName() + "Service" + suffix;
     }
 
     /**
@@ -172,7 +204,7 @@ public class WsValidation extends WebServicesTestBase {
         op.setPackage(getWsPackage());
         op.finish();
         // needed for slower machines
-        JemmyProperties.setCurrentTimeout("JTreeOperator.WaitNextNodeTimeout", 30000); //NOI18N
+        JemmyProperties.setCurrentTimeout("JTreeOperator.WaitNextNodeTimeout", 60000); //NOI18N
         //TODO: following nodes should be expanded by default - this test should check it as well
         Node wsRootNode = new Node(getProjectRootNode(), WEB_SERVICES_NODE_NAME);
         wsRootNode.expand();
@@ -188,17 +220,17 @@ public class WsValidation extends WebServicesTestBase {
      */
     public void testAddOperation() {
         final EditorOperator eo = new EditorOperator(getWsName());
-        //Web Service
-        String actionGroupName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.webservices.action.Bundle", "LBL_WebServiceActionGroup");
-        //Add Operation...
-        String actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.webservices.action.Bundle", "LBL_OperationAction");
-        //invoke action from editor's context menu
-        new ActionNoBlock(null, actionGroupName + "|" + actionName).performPopup(eo);
+        //Add Web Service Operation...
+        String actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.actions.Bundle", "LBL_AddWsOperationAction");
+        //invoke action from editor's insert menu
+        GenerateCodeOperator.openDialog(actionName, eo);
         addWsOperation(eo, "myStringMethod", "String"); //NOI18N
         //invoke action from ws node's context menu
         Node wsRootNode = new Node(getProjectRootNode(), WEB_SERVICES_NODE_NAME);
         wsRootNode.expand();
         Node wsImplNode = new Node(wsRootNode, getWsName());
+        //Add Operation...
+        actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.actions.Bundle", "LBL_OperationAction");
         wsImplNode.callPopup().pushMenuNoBlock(actionName);
         addWsOperation(eo, "myIntMethod", "int[]"); //NOI18N
     //      wsImplNode.expand();
@@ -206,8 +238,115 @@ public class WsValidation extends WebServicesTestBase {
     //      assertTrue(wsImplNode.isChildPresent("myMethod2")); //NOI18N
     }
 
+    /**
+     * Tests setting SOAP version on the web service
+     * - check set to SOAP 1.2
+     * - check set to SOAP 1.1
+     */
+    public void testSetSOAP() {
+        //Switch to SOAP 1.2
+        String actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.actions.Bundle", "LBL_SetSoap12");
+        EditorOperator eo = new EditorOperator(getWsName() + ".java"); //NOI18N
+        GenerateCodeOperator.openDialog(actionName, eo);
+        eo.save();
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException ex) {
+            //ignore
+        }
+        assertTrue("missing @BindingType", eo.contains("@BindingType")); //NOI18N
+        assertTrue("missing namespace", eo.contains("http://java.sun.com/xml/ns/jaxws/2003/05/soap/bindings/HTTP/")); //NOI18N
+        //Switch to SOAP 1.1
+        actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.actions.Bundle", "LBL_SetSoap11");
+        GenerateCodeOperator.openDialog(actionName, eo);
+        eo.save();
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException ex) {
+            //ignore
+        }
+        assertFalse("has @BindingType", eo.getText().contains("@BindingType(value")); //NOI18N
+        assertFalse("has namespace", eo.getText().contains("http://java.sun.com/xml/ns/jaxws/2003/05/soap/bindings/HTTP/")); //NOI18N
+    }
+
     public void testDeployWsProject() throws IOException {
         deployProject(getProjectName());
+    }
+
+    /**
+     * Tests Test Web Service action on the web service node
+     * -check if a browser is opened on the correct URL
+     */
+    public void testTestWS() {
+        assertServerRunning();
+        TestURLDisplayer td = TestURLDisplayer.getInstance();
+        td.invalidateURL();
+        Node wsNode = new Node(getProjectRootNode(), WEB_SERVICES_NODE_NAME + "|" + getWsName()); //NOI18N
+        String testWsLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.actions.Bundle", "LBL_TesterPageAction");
+        wsNode.performPopupAction(testWsLabel);
+        try {
+            assertEquals("url was: " + td.getURL() + " expected: " + getWsURL(), getWsURL(), td.waitURL().toString()); //NOI18N
+        } catch (InterruptedException ex) {
+            //ignore
+        }
+        td.invalidateURL();
+    }
+
+    /**
+     * Tests Generate SOAP-over-HTTP Wrapper action on the web service node
+     * -check if a ws client is present
+     * -check if a RESTful service is generated and contains required operations
+     */
+    public void testGenerateWrapper() {
+        assertServerRunning();
+        Node wsNode = new Node(getProjectRootNode(), WEB_SERVICES_NODE_NAME + "|" + getWsName()); //NOI18N
+        String wrapperLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.actions.Bundle", "LBL_ConvertToRestAction");
+        wsNode.performPopupAction(wrapperLabel);
+        String progressLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.saas.Bundle", "MSG_GENERATING_REST_RESOURCE");
+        try {
+            // wait at most 60 second until progress dialog dismiss
+            JemmyProperties.setCurrentTimeout("ComponentOperator.WaitStateTimeout", 60000); //NOI18N
+            new JDialogOperator(progressLabel).waitClosed();
+        } catch (TimeoutExpiredException e) {
+            // ignore when progress dialog was closed before we started to wait for it
+        }
+
+        Node wsClientNode = new Node(getProjectRootNode(), WEB_SERVICE_CLIENTS_NODE_NAME + "|" + getWsName() + "Service"); //NOI18N
+        wsClientNode.expand();
+        String restLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.nodes.Bundle", "LBL_RestServices");
+        Node restNode = new Node(getProjectRootNode(), restLabel);
+        restNode.expand();
+        String restName = getWsName() + "Port"; //NOI18N
+        Node restWsNode = new Node(restNode, restName);
+        restWsNode.expand();
+        System.out.println("lookup  : " + getWsClientLookupCall());
+        System.out.println("expected: " + getWsClientLookupCall().replace(".ws.", ".ws_client."));
+        EditorOperator eo = new EditorOperator(restName + ".java"); //NOI18N
+        assertTrue("myIntMethod missing", eo.contains("myIntMethod")); //NOI18N
+        workaroundIZ152542(eo);
+        assertTrue("@GET missing", eo.contains("@GET")); //NOI18N
+        assertTrue("@Consumes missing", eo.contains("@Consumes")); //NOI18N
+        assertTrue("@Produces missing", eo.contains("@Produces")); //NOI18N
+        assertTrue("@Path missing", eo.contains("@Path")); //NOI18N
+        assertTrue("myStringMethod missing", eo.contains("myStringMethod")); //NOI18N
+        assertTrue("Lookup call missing", eo.contains(getWsClientLookupCall().replace(".ws.M", ".ws_client.M"))); //NOI18N
+        eo.close(true);
+    }
+
+    /**
+     * Tests Generate WSDL action on the web service node
+     */
+    public void testGenerateWSDL() throws IOException {
+        Node wsNode = new Node(getProjectRootNode(), WEB_SERVICES_NODE_NAME + "|" + getWsName()); //NOI18N
+        String genWSDLLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.actions.Bundle", "LBL_Generate_WSDL");
+        wsNode.performPopupAction(genWSDLLabel);
+        String genTitle = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.actions.Bundle", "TTL_GenCopyWSDL");
+        NbDialogOperator ndo = new NbDialogOperator(genTitle);
+        //Check do not copy WSDL
+        new JCheckBoxOperator(ndo).clickMouse();
+        ndo.ok();
+        waitForWsImport("(wsgen-" + getWsName()); //NOI18N
+        new CleanProjectAction().perform();
     }
 
     public void testDeployWsClientProject() throws IOException {
@@ -220,6 +359,7 @@ public class WsValidation extends WebServicesTestBase {
      * @throws java.io.IOException
      */
     public void testCreateWsClient() throws IOException {
+        assertServerRunning();
         //Web Service Client
         String wsClientLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.client.wizard.Bundle", "Templates/WebServices/WebServiceClient");
         createNewWSFile(getProject(), wsClientLabel);
@@ -231,7 +371,6 @@ public class WsValidation extends WebServicesTestBase {
         JTreeOperator jto = new JTreeOperator(ndo);
         jto.selectPath(jto.findPath(getWsProjectName() + "|" + getWsName())); //NOI18N
         ndo.ok();
-        new JComboBoxOperator(op, 0).typeText(getWsClientPackage()); //NOI18N
         op.finish();
         try {
             Thread.sleep(1000);
@@ -258,6 +397,7 @@ public class WsValidation extends WebServicesTestBase {
      * Tests Call Web Service Operation action in a servlet
      */
     public void testCallWsOperationInServlet() {
+        assertServerRunning();
         //create a servlet
         //Web
         String webLabel = Bundle.getStringTrimmed("org.netbeans.modules.web.core.Bundle", "Templates/JSP_Servlet");
@@ -277,7 +417,7 @@ public class WsValidation extends WebServicesTestBase {
         eo.setCaretPosition("\"</h1>\");", false); //NOI18N
         eo.insert("\n//xxx"); //NOI18N
         eo.select("//xxx"); //NOI18N
-        callWsOperation(eo, "myIntMethod", 40); //NOI18N
+        callWsOperation(eo, "myIntMethod", eo.getLineNumber()); //NOI18N
         assertTrue("@WebServiceRef has not been found", eo.contains("@WebServiceRef")); //NOI18N
         assertFalse("Lookup present", eo.contains(getWsClientLookupCall())); //NOI18N
         eo.close(true);
@@ -287,6 +427,7 @@ public class WsValidation extends WebServicesTestBase {
      * Test Call Web Service Operation action in a JSP
      */
     public void testCallWsOperationInJSP() {
+        assertServerRunning();
         //create new JSP
         //Web
         String webLabel = Bundle.getStringTrimmed("org.netbeans.modules.web.core.Bundle", "Templates/JSP_Servlet");
@@ -298,10 +439,10 @@ public class WsValidation extends WebServicesTestBase {
         op.finish();
         //edit code in JSP
         EditorOperator eo = new EditorOperator("index1"); //NOI18N
-        eo.setCaretPosition("</h2>", false); //NOI18N
+        eo.setCaretPosition("</h1>", false); //NOI18N
         eo.insert("\n<!-- xxx -->"); //NOI18N
         eo.select("<!-- xxx -->"); //NOI18N
-        callWsOperation(eo, "myStringMethod", 14); //NOI18N
+        callWsOperation(eo, "myStringMethod", eo.getLineNumber()); //NOI18N
         assertTrue("Lookup class has not been found", eo.contains(getWsClientLookupCall())); //NOI18N
         assertFalse("@WebServiceRef present", eo.contains("@WebServiceRef")); //NOI18N
         eo.close(true);
@@ -311,6 +452,7 @@ public class WsValidation extends WebServicesTestBase {
      * Test Call Web Service Operation action in a regular java file
      */
     public void testCallWsOperationInJavaClass() {
+        assertServerRunning();
         //Create new Java class
         //Java
         String javaAppLabel = Bundle.getStringTrimmed("org.netbeans.modules.java.project.Bundle", "Templates/Classes"); //NOI18N
@@ -324,7 +466,7 @@ public class WsValidation extends WebServicesTestBase {
         eo.select(13); //NOI18N
         eo.insert("    public void callMethod() {\n\t//xxx\n    }\n"); //NOI18N
         eo.select("//xxx"); //NOI18N
-        callWsOperation(eo, "myIntMethod", 13); //NOI18N
+        callWsOperation(eo, "myIntMethod", eo.getLineNumber()); //NOI18N
         assertTrue("Lookup class has not been found", eo.contains(getWsClientLookupCall())); //NOI18N
         assertFalse("@WebServiceRef present", eo.contains("@WebServiceRef")); //NOI18N
         eo.close(true);
@@ -343,16 +485,21 @@ public class WsValidation extends WebServicesTestBase {
     }
 
     public void testWsClientHandlers() throws IOException {
+        assertServerRunning();
         createHandler(getHandlersPackage(), "WsMsgHandler1", HandlerType.MESSAGE); //NOI18N
         createHandler(getHandlersPackage(), "WsMsgHandler2", HandlerType.MESSAGE); //NOI18N
         createHandler(getHandlersPackage(), "WsLogHandler1", HandlerType.LOGICAL); //NOI18N
         createHandler(getHandlersPackage(), "WsLogHandler2", HandlerType.LOGICAL); //NOI18N
-        String path = "xml-resources/web-service-references/" + getWsName() + "/bindings/"; //NOI18N
         FileObject fo = getProject().getProjectDirectory().getFileObject("src/conf/"); //NOI18N
         if (fo == null) {
             fo = getProject().getProjectDirectory();
         }
-        File handlerCfg = new File(FileUtil.toFile(fo), path + getWsName() + "_handler.xml"); //NOI18N
+        String wsName = getWsName();
+        if (wsName.contains("Web")) { //NOI18N
+            wsName += "Service"; //NOI18N
+        }
+        String path = "xml-resources/web-service-references/" + wsName + "/bindings/"; //NOI18N
+        File handlerCfg = new File(FileUtil.toFile(fo), path + wsName + "_handler.xml"); //NOI18N
         Node clientNode = new Node(getProjectRootNode(), WEB_SERVICE_CLIENTS_NODE_NAME + "|" + getWsName()); //NOI18N
         configureHandlers(clientNode, handlerCfg, false);
     }
@@ -365,56 +512,97 @@ public class WsValidation extends WebServicesTestBase {
         undeployProject(getWsClientProjectName());
     }
 
-    public static Test suite() {
-        TestSuite suite = new NbTestSuite();
-        suite.addTest(new WsValidation("testCreateNewWs")); //NOI18N
-        suite.addTest(new WsValidation("testAddOperation")); //NOI18N
-        suite.addTest(new WsValidation("testStartServer")); //NOI18N
-        suite.addTest(new WsValidation("testWsHandlers")); //NOI18N
-        suite.addTest(new WsValidation("testDeployWsProject")); //NOI18N
-        suite.addTest(new WsValidation("testCreateWsClient")); //NOI18N
-        suite.addTest(new WsValidation("testCallWsOperationInServlet")); //NOI18N
-        suite.addTest(new WsValidation("testCallWsOperationInJSP")); //NOI18N
-        suite.addTest(new WsValidation("testCallWsOperationInJavaClass")); //NOI18N
-        suite.addTest(new WsValidation("testWsClientHandlers")); //NOI18N
-        suite.addTest(new WsValidation("testDeployWsClientProject")); //NOI18N
-        suite.addTest(new WsValidation("testUndeployProjects")); //NOI18N
-        suite.addTest(new WsValidation("testStopServer")); //NOI18N
-        return suite;
+    /**
+     * Test for Refresh Service action of Web Services node (from WSDL)
+     */
+    public void testRefreshService() {
+        refreshWSDL("service", "", false);
     }
 
-    public static void main(java.lang.String[] args) {
-        TestRunner.run(suite());
+    /**
+     * Test for Refresh Client action of Web Services References node
+     */
+    public void testRefreshClient() {
+        refreshWSDL("client", "", false);
+    }
+
+    /**
+     * Test for Refresh Service action of Web Services node (from WSDL)
+     * including WSDL regeneration
+     */
+    public void testRefreshServiceAndReplaceWSDL() {
+        refreshWSDL("service", "", true);
+    }
+
+    /**
+     * Test for Refresh Client action of Web Services References node
+     * including WSDL regeneration
+     */
+    public void testRefreshClientAndReplaceWSDL() {
+        refreshWSDL("client", "", true);
+    }
+
+    public static Test suite() {
+        return NbModuleSuite.create(addServerTests(Server.GLASSFISH, NbModuleSuite.createConfiguration(WsValidation.class),
+                "testCreateNewWs",
+                "testAddOperation",
+                "testSetSOAP",
+                "testStartServer",
+                "testWsHandlers",
+                "testDeployWsProject",
+                "testTestWS",
+                "testGenerateWrapper",
+                "testGenerateWSDL",
+                "testDeployWsProject",
+                "testCreateWsClient",
+                "testCallWsOperationInServlet",
+                "testCallWsOperationInJSP",
+                "testCallWsOperationInJavaClass",
+                "testRefreshClient",
+                "testWsClientHandlers",
+                "testDeployWsClientProject",
+                "testUndeployProjects",
+                "testStopServer").enableModules(".*").clusters(".*"));
     }
 
     protected void addWsOperation(EditorOperator eo, String opName, String opRetVal) {
-        //Add Operation...
-        String actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.webservices.action.Bundle", "LBL_OperationAction");
+        //Add Operation
+        String actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.actions.Bundle", "TITLE_OperationAction");
         addMethod(eo, actionName, opName, opRetVal);
     }
 
     protected void addMethod(final EditorOperator eo, String dlgTitle, String opName, String opRetVal) {
         NbDialogOperator dialog = new NbDialogOperator(dlgTitle);
-        new JTextFieldOperator(dialog, 2).setText(opName);
-        new JTextFieldOperator(dialog, 1).setText(opRetVal);
+        JTextFieldOperator jtfo = new JTextFieldOperator(dialog, "operation"); //NOI18N
+        jtfo.clearText();
+        jtfo.typeText(opName);
+        jtfo = new JTextFieldOperator(dialog, "java.lang.String"); //NOI18N
+        jtfo.clearText();
+        jtfo.typeText(opRetVal);
         dialog.ok();
         eo.save();
         waitForTextInEditor(eo, opName);
     }
 
     protected void callWsOperation(final EditorOperator eo, String opName, int line) {
-        //Web Service Client Resources
-        String actionGroupName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.webservices.action.Bundle", "LBL_WebServiceClientActionGroup");
+        eo.select(line);
         //Call Web Service Operation...
-        String actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.webservices.action.Bundle", "LBL_CallWebServiceOperation");
-        try {
-            new ActionNoBlock(null, actionGroupName + "|" + actionName).performPopup(eo); //NOI18N
-        } catch (TimeoutExpiredException tee) {
-            eo.select(line);
-            new ActionNoBlock(null, actionGroupName + "|" + actionName).performPopup(eo); //NOI18N
+        String actionName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.actions.Bundle", "LBL_CallWebServiceOperation");
+        if (eo.getToolTipText().endsWith(".java")) { //NOI18N
+            //java files do have Insert code
+            GenerateCodeOperator.openDialog(actionName, eo);
+        } else {
+            //Web Service Client Resources
+            String actionGroupName = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.actions.Bundle", "LBL_WebServiceClientActionGroup");
+            try {
+                new ActionNoBlock(null, actionGroupName + "|" + actionName).performPopup(eo); //NOI18N
+            } catch (TimeoutExpiredException tee) {
+                eo.select(line);
+                new ActionNoBlock(null, actionGroupName + "|" + actionName).performPopup(eo); //NOI18N
+            }
         }
         //Select Operation to Invoke
-        String dlgTitle = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.webservices.action.Bundle", "TTL_SelectOperation");
+        String dlgTitle = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.actions.Bundle", "TTL_SelectOperation");
         NbDialogOperator ndo = new NbDialogOperator(dlgTitle);
         JTreeOperator jto = new JTreeOperator(ndo);
         jto.selectPath(jto.findPath(
@@ -423,8 +611,13 @@ public class WsValidation extends WebServicesTestBase {
                 + getWsName() + "Port|" + opName)); //NOI18N
         ndo.ok();
         waitForTextInEditor(eo, "port." + opName); //NOI18N
+        try {
+            Thread.sleep(1500);
+        } catch (InterruptedException ex) {
+            //ignore
+        }
     }
-    
+
     protected String getWsClientLookupCall() {
         return getWsClientPackage() + "." + getWsName() + "Service " +
                 "service = new " +
@@ -461,13 +654,20 @@ public class WsValidation extends WebServicesTestBase {
         if (isService) {
             eo = new EditorOperator(getWsName());
             assertTrue("missing @HandlerChain", //NOI18N
-                    eo.contains("@HandlerChain(file = \"MyWebWs_handler.xml\")")); //NOI18N
+                    eo.contains("@HandlerChain(file = \"" + getWsName() + "_handler.xml\")")); //NOI18N
+        } else {
+            waitForWsImport("wsimport-client"); //NOI18N
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException ex) {
+                //ignore
+            }
         }
         assertTrue(handlerCfg.exists());
         FileObject fo = FileUtil.toFileObject(handlerCfg);
         checkHandlers(new String[]{
-            "WsLogHandler1", "WsMsgHandler1" //NOI18N
-        }, fo, isService);
+                    "WsLogHandler1", "WsMsgHandler1" //NOI18N
+                }, fo, isService);
 
         //remove one handler
         n.performPopupActionNoBlock(handlersLabel);
@@ -476,7 +676,9 @@ public class WsValidation extends WebServicesTestBase {
         ndo.ok();
         if (isService) {
             assertTrue("missing @HandlerChain", //NOI18N
-                    eo.contains("@HandlerChain(file = \"MyWebWs_handler.xml\")")); //NOI18N
+                    eo.contains("@HandlerChain(file = \"" + getWsName() + "_handler.xml\")")); //NOI18N
+        } else {
+            waitForWsImport("wsimport-client"); //NOI18N
         }
         assertTrue(handlerCfg.exists());
         checkHandlers(new String[]{"WsMsgHandler1"}, fo, isService); //NOI18N
@@ -488,13 +690,15 @@ public class WsValidation extends WebServicesTestBase {
         ndo.ok();
         if (isService) {
             assertTrue("missing @HandlerChain", //NOI18N
-                    eo.contains("@HandlerChain(file = \"MyWebWs_handler.xml\")")); //NOI18N
+                    eo.contains("@HandlerChain(file = \"" + getWsName() + "_handler.xml\")")); //NOI18N
+        } else {
+            waitForWsImport("wsimport-client"); //NOI18N
         }
         assertTrue(handlerCfg.exists());
         checkHandlers(new String[]{
-            "WsLogHandler1", "WsLogHandler2", //NOI18N
-            "WsMsgHandler1", "WsMsgHandler2" //NOI18N
-        }, fo, isService);
+                    "WsLogHandler1", "WsLogHandler2", //NOI18N
+                    "WsMsgHandler1", "WsMsgHandler2" //NOI18N
+                }, fo, isService);
 
         //move up one handler
         n.performPopupActionNoBlock(handlersLabel);
@@ -503,13 +707,15 @@ public class WsValidation extends WebServicesTestBase {
         ndo.ok();
         if (isService) {
             assertTrue("missing @HandlerChain", //NOI18N
-                    eo.contains("@HandlerChain(file = \"MyWebWs_handler.xml\")")); //NOI18N
+                    eo.contains("@HandlerChain(file = \"" + getWsName() + "_handler.xml\")")); //NOI18N
+        } else {
+            waitForWsImport("wsimport-client"); //NOI18N
         }
         assertTrue(handlerCfg.exists());
         checkHandlers(new String[]{
-            "WsLogHandler2", "WsLogHandler1", //NOI18N
-            "WsMsgHandler1", "WsMsgHandler2" //NOI18N
-        }, fo, isService);
+                    "WsLogHandler2", "WsLogHandler1", //NOI18N
+                    "WsMsgHandler1", "WsMsgHandler2" //NOI18N
+                }, fo, isService);
 
         //move down another one
         n.performPopupActionNoBlock(handlersLabel);
@@ -518,26 +724,28 @@ public class WsValidation extends WebServicesTestBase {
         ndo.ok();
         if (isService) {
             assertTrue("missing @HandlerChain", //NOI18N
-                    eo.contains("@HandlerChain(file = \"MyWebWs_handler.xml\")")); //NOI18N
+                    eo.contains("@HandlerChain(file = \"" + getWsName() + "_handler.xml\")")); //NOI18N
+        } else {
+            waitForWsImport("wsimport-client"); //NOI18N
         }
         assertTrue(handlerCfg.exists());
         checkHandlers(new String[]{
-            "WsLogHandler2", "WsLogHandler1", //NOI18N
-            "WsMsgHandler2", "WsMsgHandler1" //NOI18N
-        }, fo, isService);
+                    "WsLogHandler2", "WsLogHandler1", //NOI18N
+                    "WsMsgHandler2", "WsMsgHandler1" //NOI18N
+                }, fo, isService);
 
         //finally remove all handlers
         n.performPopupActionNoBlock(handlersLabel);
         ndo = new NbDialogOperator(handlersDlgLabel);
         removeHandlers(ndo, new String[]{
-            "WsMsgHandler2", "WsLogHandler2", //NOI18N
-            "WsLogHandler1", "WsMsgHandler1"
-        }); //NOI18N
+                    "WsMsgHandler2", "WsLogHandler2", //NOI18N
+                    "WsLogHandler1", "WsMsgHandler1"
+                }); //NOI18N
         ndo.ok();
 
         if (isService) {
             assertFalse("offending @HandlerChain", //NOI18N
-                    eo.contains("@HandlerChain(file = \"MyWebWs_handler.xml\")")); //NOI18N
+                    eo.contains("@HandlerChain(file = \"" + getWsName() + "_handler.xml\")")); //NOI18N
             assertFalse(handlerCfg.exists());
         }
     }
@@ -582,11 +790,23 @@ public class WsValidation extends WebServicesTestBase {
     }
 
     protected void waitForWsImport(String targetName) throws IOException {
+        //make sure output window is visible
+        OutputOperator.invoke();
         OutputTabOperator oto = new OutputTabOperator(targetName); //NOI18N
-        JemmyProperties.setCurrentTimeout("ComponentOperator.WaitStateTimeout", 240000); //NOI18N
+        try {
+            Thread.sleep(1500);
+        } catch (InterruptedException ex) {
+            //ignore
+        }
+        JemmyProperties.setCurrentTimeout("ComponentOperator.WaitStateTimeout", 600000); //NOI18N
         oto.waitText("(total time: "); //NOI18N
         dumpOutput();
         assertTrue(oto.getText().indexOf("BUILD SUCCESSFUL") > -1); //NOI18N
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException ex) {
+            //ignore
+        }
     }
 
     protected void waitForTextInEditor(final EditorOperator eo, final String text) {
@@ -621,7 +841,7 @@ public class WsValidation extends WebServicesTestBase {
         //Add...
         JButtonOperator jbo = new JButtonOperator(ndo, 0);
         //Add Message Handler Class
-        String addHandlerDlg = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.nodes.Bundle", "TTL_SelectHandler");
+        String addHandlerDlg = Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.webservices.ui.Bundle", "TTL_SelectHandler");
         //Source Packages
         String srcPkgLabel = Bundle.getStringTrimmed("org.netbeans.modules.java.j2seproject.Bundle", "NAME_src.dir");
         for (int i = 0; i < handlers.length; i++) {
@@ -662,7 +882,65 @@ public class WsValidation extends WebServicesTestBase {
         new JButtonOperator(ndo, 3).pushNoBlock();
     }
 
+    /**
+     * According to parameter this method invokes Refresh action on proper node in
+     * Projects tab
+     * @param type
+     */
+    public void refreshWSDL(String type, java.lang.String wsname, boolean includeSources) {
+        ProjectsTabOperator prj = new ProjectsTabOperator();
+        JTreeOperator prjtree = new JTreeOperator(prj);
+        ProjectRootNode prjnd;
+        Node actual;
+        NbDialogOperator ccr;
+        if (type.equalsIgnoreCase("service")) {
+            prjnd = new ProjectRootNode(prjtree, getWsProjectName());
+            if (!wsname.equalsIgnoreCase("")) {
+                actual = new Node(prjnd, "Web Services|" + wsname); //NOI18N
+            } else {
+                actual = new Node(prjnd, "Web Services|" + getWsName()); //NOI18N
+            }
+            actual.performPopupActionNoBlock(org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.actions.Bundle", "LBL_RefreshServiceAction")); //NOI18N
+            ccr = new NbDialogOperator("Confirm Service Refresh"); //NOI18N
+            new EventTool().waitNoEvent(1000);
+            if (includeSources) {
+                new JCheckBoxOperator(ccr, 0).push();
+                new EventTool().waitNoEvent(1000);
+            }
+            ccr.yes();
+            try {
+                waitForWsImport("wsimport-service"); //NOI18N
+            } catch (IOException ex) {
+                LOG.log(Level.WARNING, null, ex);
+                fail("refreshing wsdl failed, see the log for stacktrace"); //NOI18N
+            }
+        } else {
+            prjnd = new ProjectRootNode(prjtree, getWsClientProjectName());
+            if (!getWsName().contains("Web")) {
+                actual = new Node(prjnd, "Web Service References|" + getWsName()); //NOI18N
+            } else {
+                actual = new Node(prjnd, "Web Service References|" + getWsName() + "Service"); //NOI18N
+            }
+            actual.performPopupActionNoBlock(org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.websvc.core.jaxws.actions.Bundle", "LBL_RefreshClientAction")); //NOI18N
+            ccr = new NbDialogOperator("Confirm Client Refresh"); //NOI18N
+            new EventTool().waitNoEvent(1000);
+            if (includeSources) {
+                new JCheckBoxOperator(ccr, 0).push();
+                new EventTool().waitNoEvent(1000);
+            }
+            ccr.yes();
+            try {
+                waitForWsImport("wsimport-client"); //NOI18N
+            } catch (IOException ex) {
+                LOG.log(Level.WARNING, null, ex);
+                fail("refreshing wsdl failed, see the log for stacktrace"); //NOI18N
+            }
+        }
+    }
+
     private void checkHandlers(String[] handlerClasses, FileObject handlerConfigFO, boolean isService) throws IOException {
+        //Let's keep the config file to resolve possible issues
+        handlerConfigFO.copy(FileUtil.toFileObject(getWorkDir()), handlerConfigFO.getName() + foId++, "xml"); //NOI18N
         if (isService) {
             HandlerChains hChains = HandlerChainsProvider.getDefault().getHandlerChains(handlerConfigFO);
             HandlerChain[] chains = hChains.getHandlerChains();
@@ -689,5 +967,13 @@ public class WsValidation extends WebServicesTestBase {
                 i++;
             }
         }
+    }
+
+    private void workaroundIZ152542(EditorOperator eo) {
+        for (int i = 54; i < 78; i++) {
+            eo.select(54);
+            eo.deleteLine(54);
+        }
+        eo.save();
     }
 }
