@@ -46,8 +46,8 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import org.netbeans.spi.options.OptionsCategory;
 import org.netbeans.spi.options.OptionsPanelController;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 public final class CndOptionsCategory extends OptionsCategory {
     
@@ -71,9 +71,10 @@ public final class CndOptionsCategory extends OptionsCategory {
         return getString("CndOptions_Title"); // NOI18N
     }  
 
+    @Override
     public Icon getIcon() {
         String path = "org/netbeans/modules/cnd/ui/options/cnd_32.png"; // NOI18N
-        Image image = Utilities.loadImage(path);
+        Image image = ImageUtilities.loadImage(path);
         if (image != null) {
             return new ImageIcon(image);
         } else {
