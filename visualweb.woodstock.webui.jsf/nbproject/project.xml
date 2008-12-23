@@ -174,11 +174,47 @@ made subject to such option by the copyright holder.
                     </run-dependency>
                 </dependency>
             </module-dependencies>
+            <test-dependencies>
+                <test-type>
+                    <name>qa-functional</name>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.libs.junit4</code-name-base>
+                        <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.java.j2seproject</code-name-base>
+                        <compile-dependency/>
+                        <test/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.jellytools</code-name-base>
+                        <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.jellytools.platform</code-name-base>
+                        <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.jemmy</code-name-base>
+                        <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.nbjunit</code-name-base>
+                        <recursive/>
+                        <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.visualweb.gravy</code-name-base>
+                        <compile-dependency/>
+                    </test-dependency>
+                </test-type>
+            </test-dependencies>
             <friend-packages>
                 <friend>org.netbeans.modules.visualweb.designer.jsf</friend>
                 <friend>org.netbeans.modules.visualweb.insync</friend>
                 <friend>org.netbeans.modules.visualweb.j2ee15classloaderprovider</friend>
                 <friend>org.netbeans.modules.visualweb.project.importpage</friend>
+                <friend>org.netbeans.modules.visualweb.runtime.kit</friend>
                 <package>com.sun.webui.html</package>
                 <package>com.sun.webui.jsf.bean</package>
                 <package>com.sun.webui.jsf.component</package>
@@ -222,13 +258,7 @@ made subject to such option by the copyright holder.
                 <runtime-relative-path>ext/json-2.jar</runtime-relative-path>
             </class-path-extension>
             <class-path-extension>
-                <runtime-relative-path>ext/prototype-1.5.0.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
                 <runtime-relative-path>ext/jsf-extensions-common-0.1.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/dojo-1.0.1.jar</runtime-relative-path>
             </class-path-extension>
             <class-path-extension>
                 <runtime-relative-path>ext/jsf-extensions-dynamic-faces-0.1.jar</runtime-relative-path>
