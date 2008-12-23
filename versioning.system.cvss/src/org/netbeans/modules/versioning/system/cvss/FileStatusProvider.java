@@ -51,22 +51,23 @@ import java.awt.Image;
  * Contract specific for Filesystem <-> UI interaction, to be replaced later with something more
  * sophisticated (hopefuly).
  *
- * <p>It's registered in default lookup (META-INF/services).
+ * <p>It's registered using {@link org.openide.util.lookup.ServiceProvider}.
  * 
  * @author Maros Sandor
  */
 class FileStatusProvider extends VCSAnnotator {
 
     private boolean shutdown; 
+    private static int INCLUDE_STATUS = FileInformation.STATUS_VERSIONED_UPTODATE | FileInformation.STATUS_LOCAL_CHANGE | FileInformation.STATUS_NOTVERSIONED_EXCLUDED;
 
     public String annotateName(String name, VCSContext context) {
         if (shutdown) return null;
-        return CvsVersioningSystem.getInstance().getAnnotator().annotateNameHtml(name, context, FileInformation.STATUS_VERSIONED_UPTODATE | FileInformation.STATUS_LOCAL_CHANGE | FileInformation.STATUS_NOTVERSIONED_EXCLUDED);
+        return CvsVersioningSystem.getInstance().getAnnotator().annotateNameHtml(name, context, INCLUDE_STATUS);
     }
 
     public Image annotateIcon(Image icon, VCSContext context) {
         if (shutdown) return null;
-        return CvsVersioningSystem.getInstance().getAnnotator().annotateIcon(icon, context);
+        return CvsVersioningSystem.getInstance().getAnnotator().annotateIcon(icon, context, INCLUDE_STATUS);
     }
 
     public Action[] getActions(VCSContext context, VCSAnnotator.ActionDestination destination) {

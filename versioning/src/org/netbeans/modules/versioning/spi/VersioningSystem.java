@@ -41,6 +41,7 @@
 package org.netbeans.modules.versioning.spi;
 
 import org.netbeans.modules.versioning.VersioningManager;
+import org.netbeans.spi.queries.CollocationQueryImplementation;
 
 import java.io.File;
 import java.beans.PropertyChangeListener;
@@ -55,9 +56,7 @@ import java.util.*;
  * - file system handler
  * - diff provider
  * 
- * Versioning system registration is done via META-INF/services (default Lookup). Create a file named
- * "org.netbeans.modules.versioning.spi.VersioningSystem" and place it inside your module's META-INF/services folder. 
- * The file should only contain one the name of your VS implementation class, eg "org.mymodule.MyVersioningSystem".  
+ * Versioning system registration is done via {@link org.openide.util.lookup.ServiceProvider}.  
  *
  * @author Maros Sandor
  */
@@ -169,6 +168,16 @@ public abstract class VersioningSystem {
     public void getOriginalFile(File workingCopy, File originalFile) {
         // default implementation does nothing
     }
+
+    /**
+     * Retrieves a CollocationQueryImplementation if this versioning system provides one.
+     * 
+     * @return CollocationQueryImplementation a CollocationQueryImplementation instance or null if the system does not provide the service
+     * @since 1.8
+     */
+    public CollocationQueryImplementation getCollocationQueryImplementation() {
+        return null;
+    }    
 
     /**
      * Adds a listener for change events.
