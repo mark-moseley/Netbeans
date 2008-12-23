@@ -3,59 +3,22 @@
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
-            <code-name-base>org.netbeans.modules.ruby.railsprojects</code-name-base>
+            <code-name-base>org.netbeans.modules.ruby.testrunner</code-name-base>
             <module-dependencies>
-                <dependency>
-                    <code-name-base>org.jdesktop.layout</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.4</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.jruby</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>0.92.5</specification-version>
-                    </run-dependency>
-                </dependency>
                 <dependency>
                     <code-name-base>org.netbeans.api.progress</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.8.0.1</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.db</code-name-base>
+                    <code-name-base>org.netbeans.core.multiview</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.25</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.db.mysql</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>0.1</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.editor.lib</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.27</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -73,34 +36,24 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>2</release-version>
-                        <specification-version>1.7.0</specification-version>
+                        <specification-version>1.8.0</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.gsfpath.api</code-name-base>
+                    <code-name-base>org.netbeans.modules.gsf.testrunner</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.project.libraries</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>0.30</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.options.api</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.5</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.options.editor</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.10</specification-version>
+                        <specification-version>1.14</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -109,7 +62,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.10</specification-version>
+                        <specification-version>1.15</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -118,16 +71,6 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.16.0.5</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.queries</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -136,7 +79,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>0.81.0</specification-version>
+                        <specification-version>0.87</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -171,41 +114,13 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>0.10</specification-version>
+                        <specification-version>0.13</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.ruby.rhtml</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>0.5</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.server</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>0-1</release-version>
-                        <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.web.client.tools.api</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
+                    <code-name-base>org.netbeans.modules.templates</code-name-base>
                     <run-dependency>
                         <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.actions</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>6.6.0.1</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -213,7 +128,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.8.0.1</specification-version>
+                        <specification-version>6.5</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -221,15 +136,15 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.8</specification-version>
+                        <specification-version>6.2</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.openide.execution</code-name-base>
+                    <code-name-base>org.openide.explorer</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>1.10</specification-version>
+                        <specification-version>6.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -237,7 +152,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.0</specification-version>
+                        <specification-version>7.9</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -245,7 +160,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>1.11</specification-version>
+                        <specification-version>1.14</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -253,7 +168,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>5.11</specification-version>
+                        <specification-version>1.0</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -261,7 +176,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.2</specification-version>
+                        <specification-version>7.7</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -269,7 +184,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.9.0.1</specification-version>
+                        <specification-version>7.4</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -293,61 +208,11 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.9</specification-version>
+                        <specification-version>6.2</specification-version>
                     </run-dependency>
                 </dependency>
             </module-dependencies>
-            <test-dependencies>
-                <test-type>
-                    <name>unit</name>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.core</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.gsf</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                        <test/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.masterfs</code-name-base>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.ruby</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                        <test/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.ruby.platform</code-name-base>
-                        <compile-dependency/>
-                        <test/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.ruby.project</code-name-base>
-                        <compile-dependency/>
-                        <test/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.ruby.railsprojects</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.openide.util</code-name-base>
-                        <compile-dependency/>
-                        <test/>
-                    </test-dependency>
-                </test-type>
-            </test-dependencies>
-            <friend-packages>
-                <friend>org.netbeans.modules.glassfish.jruby</friend>
-                <friend>org.netbeans.modules.portalpack.commons</friend>
-                <friend>org.netbeans.modules.portalpack.servers.base_psframework</friend>
-                <package>org.netbeans.modules.ruby.railsprojects.server.spi</package>
-            </friend-packages>
+            <public-packages/>
         </data>
     </configuration>
 </project>
