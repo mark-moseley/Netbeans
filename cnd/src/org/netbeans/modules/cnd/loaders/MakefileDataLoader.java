@@ -38,77 +38,39 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.loaders;
 
 import java.io.IOException;
-import org.netbeans.modules.cnd.MIMENames;
 
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.MultiDataObject;
 import org.openide.loaders.DataObjectExistsException;
-import org.openide.loaders.UniFileLoader;
-import org.openide.util.NbBundle;
-import org.openide.util.SharedClassObject;
-
 
 /** Recognizes single files in the Repository as being of a certain type */
-public class MakefileDataLoader extends UniFileLoader {
+public class MakefileDataLoader extends CndAbstractDataLoader {
 
     /** Serial version number */
     static final long serialVersionUID = -7148711275717543299L;
 
-    private static MakefileDataLoader instance = null;
-
     public MakefileDataLoader() {
-	super("org.netbeans.modules.cnd.loaders.MakefileDataObject"); // NOI18N
-        init();
-    }
-    
-    /** Do various initializations */
-    private void init() {
-        instance = this;
-        
-        /* initialize the extensions list */
-        super.getExtensions().addExtension("mk"); // NOI18N
+        super("org.netbeans.modules.cnd.loaders.MakefileDataObject"); // NOI18N
     }
 
-    public static MakefileDataLoader getInstance(){
-        if (instance == null) {
-            instance = SharedClassObject.findObject(MakefileDataLoader.class, true);
-        }
-        return instance;
-    }
-    
     @Override
-    protected String actionsContext () {
+    protected String actionsContext() {
         return "Loaders/text/x-make/Actions/"; // NOI18N
-    }
-
-    /** set the default display name */
-    @Override
-    protected String defaultDisplayName() {
-	return NbBundle.getMessage(MakefileDataLoader.class,
-			    "PROP_MakefileDataLoader_Name"); // NOI18N
     }
 
     /** Create the DataObject */
     protected MultiDataObject createMultiObject(FileObject primaryFile)
-                throws DataObjectExistsException, IOException {
-	return new MakefileDataObject(primaryFile, this);
+            throws DataObjectExistsException, IOException {
+        return new MakefileDataObject(primaryFile, this);
     }
 
-    /** Find the primary file */
     @Override
-    protected FileObject findPrimaryFile(FileObject fo) {
-        if (fo.isFolder()) {
-            return null;
-        }
-        String mimeType = fo.getMIMEType();
-        if (MIMENames.MAKEFILE_MIME_TYPE.equals(mimeType)) {
-            return fo;
-        }
-	return null;
+    protected String getMimeType() {
+        return MIMENames.MAKEFILE_MIME_TYPE;
     }
 }
 

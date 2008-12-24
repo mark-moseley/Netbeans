@@ -38,90 +38,34 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.loaders;
 
 import java.io.IOException;
 
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObjectExistsException;
 import org.openide.loaders.MultiDataObject;
-import org.openide.util.NbBundle;
-import org.openide.util.SharedClassObject;
-
-import org.netbeans.modules.cnd.MIMENames;
-import org.openide.util.io.SafeException;
 
 /**
  *
  * @author Alexander Simon
  */
-public class CCDataLoader extends CndAbstractDataLoader {
-    
-    private static CCDataLoader instance;
+public class CCDataLoader extends CndAbstractDataLoaderExt {
 
     /** Serial version number */
     static final long serialVersionUID = 6801389470714975684L;
 
-    /** The suffix list for C++ primary files */
-    private static final String[] cppExtensions =
-				{ "cc", "cpp", "c++", "cxx", "C", "mm" }; // NOI18N
-
-    protected CCDataLoader() {
-	super("org.netbeans.modules.cnd.loaders.CCDataObject"); // NOI18N
-        instance = this;
-        createExtentions(cppExtensions);
+    public CCDataLoader() {
+        super("org.netbeans.modules.cnd.loaders.CCDataObject"); // NOI18N
     }
 
-    public static CCDataLoader getInstance(){
-        if (instance == null) {
-            instance = SharedClassObject.findObject(CCDataLoader.class, true);
-        }
-        return instance;
-    }
-
-    /** set the default display name */
     @Override
-    protected String defaultDisplayName() {
-	return NbBundle.getMessage(CndAbstractDataLoader.class, "PROP_CCDataLoader_Name"); // NOI18N
-    }
-
-    protected String getMimeType(){
+    protected String getMimeType() {
         return MIMENames.CPLUSPLUS_MIME_TYPE;
     }
 
     protected MultiDataObject createMultiObject(FileObject primaryFile) throws DataObjectExistsException, IOException {
         return new CCDataObject(primaryFile, this);
     }
-
-    public String getDefaultExtension() {
-        String l = (String)getProperty (PROP_DEFAULT_EXTENSIONS);
-        if (l == null) {
-            l = cppExtensions[0];
-            putProperty (PROP_DEFAULT_EXTENSIONS, l, false);
-        }
-        return l;
-    }
-
-    public void setDefaultExtension(String defaultExtension) {
-        String oldExtension = getDefaultExtension();
-        if (!defaultExtension.equals(oldExtension) && getExtensions().isRegistered("a."+defaultExtension)){ // NOI18N
-            TemplateExtensionUtils.renameCppExtension(defaultExtension);
-            putProperty (PROP_DEFAULT_EXTENSIONS, defaultExtension, true);
-        }
-    }
-
-    @Override
-    public void writeExternal (java.io.ObjectOutput oo) throws IOException {
-        super.writeExternal (oo);
-        oo.writeObject (getProperty (PROP_DEFAULT_EXTENSIONS));
-    }
-
-    @Override
-    public void readExternal (java.io.ObjectInput oi)  throws IOException, ClassNotFoundException {
-        super.readExternal (oi);
-        setDefaultExtension((String)oi.readObject ());
-    }
-
-    public static final String PROP_DEFAULT_EXTENSIONS = "defaultExtension"; // NOI18N
 }
