@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.uml.core.typemanagement;
 
-import org.netbeans.modules.uml.core.IQueryUpdater;
 import org.netbeans.modules.uml.core.QueryManager;
 import java.io.BufferedReader;
 import java.io.File;
@@ -59,7 +58,6 @@ import org.dom4j.Element;
 import org.dom4j.IDResolver;
 import org.dom4j.Node;
 
-import sun.security.action.GetLongAction;
 
 import org.netbeans.modules.uml.common.generics.ETPairT;
 import org.netbeans.modules.uml.core.IApplication;
@@ -80,11 +78,10 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespace;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamespaceModifiedEventsSink;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IPresentationElement;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.IVersionableElement;
-import org.netbeans.modules.uml.core.metamodel.core.foundation.PreventReEntranceByValue;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.TypedFactoryRetriever;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.UMLXMLManip;
 import org.netbeans.modules.uml.core.metamodel.infrastructure.IPart;
-import org.netbeans.modules.uml.core.metamodel.infrastructure.coreinfrastructure.StructureConstants;
+import org.netbeans.modules.uml.core.metamodel.profiles.Profile;
 import org.netbeans.modules.uml.core.metamodel.structure.IProject;
 import org.netbeans.modules.uml.core.support.umlsupport.FileManip;
 import org.netbeans.modules.uml.core.support.umlsupport.IResultCell;
@@ -102,6 +99,7 @@ import org.netbeans.modules.uml.core.workspacemanagement.IWSProject;
 import org.netbeans.modules.uml.core.workspacemanagement.IWorkspace;
 import org.netbeans.modules.uml.core.workspacemanagement.WorkspaceManagementException;
 import org.netbeans.modules.uml.core.support.umlsupport.Log;
+import org.openide.util.Exceptions;
 
 /**
  */
@@ -231,30 +229,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
         if (projectNode != null)
         {
             loadAllExternalElements();
-            
-            // TODO: This stuff needs to be done to support external elements.
-//            CComPtr< IXMLDOMNodeList > nodes;
-//            ExternalFileManager manager;
-//            _VH( manager.GetExternalElements( projNode, &nodes ));
-//              if( nodes )
-//              {
-//                  USES_CONVERSION;
-//
-//                  long numNodes;
-//                  _VH( nodes->get_length( &numNodes ));
-//
-//                  for( long x = 0; x < numNodes; x++ )
-//                  {
-//                  CComPtr< IXMLDOMNode > node;
-//                      _VH( nodes->get_item( x, &node ));
-//                  ATLASSERT( node );
-//
-//                  if( node )
-//                  {
-//                     _VH( PopulateFromExternalNodes( node ));
-//                  }
-//               }
-//            }
         }
     }
     
@@ -361,7 +335,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 					modifiedNode = pNode;
 				}
 				
-				finalNode = fileMan.resolveExternalNode(modifiedNode);
+				finalNode = ExternalFileManager.resolveExternalNode(modifiedNode);
 				if (finalNode == null)
 				{
 					finalNode = modifiedNode;
@@ -412,7 +386,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 					{
 						modifiedNode = pNode;
 					}
-					finalNode = fileMan.resolveExternalNode(modifiedNode);
+					finalNode = ExternalFileManager.resolveExternalNode(modifiedNode);
 				}
 			}
 		}
@@ -1070,7 +1044,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 					if ((parentId == null || parentId.length() == 0) && man.isImportedElement(pNode))
 					{
 						// We've got an imported element that is coming from a .etup file
-						retNode = man.resolveExternalNode(pNode);
+						retNode = ExternalFileManager.resolveExternalNode(pNode);
 					}
 					else
 					{
@@ -1088,11 +1062,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 		if (pNode != null)
 		{
 			Node parent = getParentNode(pNode, false);
-			Node modChild = null;//getModNode(pNode, parent);
-//			if (parent != null )
-//			{
-//				modChild = getModNode(pNode, parent);
-//			}
+			Node modChild = null;
 			if (modChild != null)
 			{
 				retNode = verifyParentsLoaded(man, modChild);
@@ -1201,7 +1171,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 		// load it. However, if it isn't, we need to make sure that if any ancestor immediately
 		// above the element has an owner id that is decorated, then we must locate that
 		// node.
-		Node parent = getParentNode(extNode, false);
+		Node dummy = getParentNode(extNode, false);
 		String id = XMLManip.getAttributeValue(extNode, "xmi.id");
 		if (id != null && id.length() > 0)
 		{
@@ -1209,7 +1179,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 			if (projNode != null)
 			{
 				ExternalFileManager man = new ExternalFileManager();
-				Node dummy = resolveExternalNode(man, projNode, "");
+				dummy = resolveExternalNode(man, projNode, "");
 			}
 		}
 	}
@@ -1560,16 +1530,19 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 
 	private void connectToTypeFile()
     {
-        File typeFile = retrieveTypeFile(m_Project);
-        
-        IDResolver resolver = new IDResolver();
-        resolver.addNodeTypeId("Location", "locID");
-        resolver.addNodeTypeId("Type", "id");
-        resolver.addNodeTypeId("TypeManagement", "projectID");
-        m_Doc = XMLManip.getDOMDocument(typeFile.toString(), resolver);
-        if (m_Doc == null)
-        {
-            // TODO: Complain loudly.
+        try {
+            File typeFile = retrieveTypeFile(m_Project);
+
+            IDResolver resolver = new IDResolver();
+            resolver.addNodeTypeId("Location", "locID");
+            resolver.addNodeTypeId("Type", "id");
+            resolver.addNodeTypeId("TypeManagement", "projectID");
+            m_Doc = XMLManip.getDOMDocument(typeFile.getCanonicalPath(), resolver);
+            if (m_Doc == null) {
+                // TODO: Complain loudly.
+            }
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
         }
     }
     
@@ -1659,7 +1632,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 				File file = new File(fileName);
 				FileReader fileReader = new FileReader(file);
 				BufferedReader reader = new BufferedReader(fileReader);
-				String lineRead = "";//reader.readLine();
+				String lineRead = "";
 				while (true)
 				{
 					String str = reader.readLine();
@@ -1682,7 +1655,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 			}
 			catch (FileNotFoundException e)
 			{
-//				e.printStackTrace();
+				e.printStackTrace();
 			}
 			catch (IOException e)
 			{
@@ -1707,12 +1680,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 	{
 		//all code commented out in C++
 	}
-    
-    private File getUnresolvedFile()
-    {
-        // TODO:
-        return null;
-    }
 
 	/**
 	 *
@@ -1757,22 +1724,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
         return new File(
             StringUtilities.ensureExtension(project.getFileName(), ".ettm"));
     }
-
-	/**
-	 *
-	 * Retrieves the absolute path to the .ettm file, given the particular project.
-	 *
-	 * @param proj[in] The IProject
-	 */
-	private String retrieveTypeFileName(IProject project)
-	{
-		String fileName = project.getFileName();
-		if (fileName != null && fileName.length() > 0)
-		{
-			fileName = StringUtilities.ensureExtension( fileName, ".ettm" );
-		}
-		return fileName;
-	}
 
     /**
      * 
@@ -1998,24 +1949,11 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
             if (doc != null)
             {
 				   String rawID = retrieveRawXMIID(id);
-				
-				   //In C++ version this statement returns a node, I think there we search for this id in all files -
-				   //etd, ettm and etup
-            	//retNode = XMLManip.findElementByID(doc, rawID);
                
                retNode = XMLManip.findElementByID(doc, rawID);
                if(retNode == null)
                {
                	retNode = testFindElementByID(doc, rawID);
-//                  String projFileName = m_Project.getFileName();
-//                  ExternalFileManager.setRootFileName(projFileName);
-//                  ExternalFileManager man = new ExternalFileManager();
-//                  Node node = resolveExternalNode(man, retNode, rawID);
-//                  if (node != null)
-//                  {
-//                     retNode = null;
-//                     retNode = node;
-//                  }
                }
             	
                // Since we do not have source control or multiple projects working
@@ -2041,9 +1979,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
     {
     	Node retNode = null;
 
-    	//somehow findElementById returns me a node which does not have right parent and child set.
-//		String pattern = ".//*[@xmi.id=\"" + id + "\"]";
-
  		String filename = m_Project.getFileName();
          
          int dotpos = filename.lastIndexOf('.');
@@ -2053,16 +1988,14 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
  		Document etupDoc = XMLManip.getDOMDocumentUseWeakCache(etupFile);
  		if (etupDoc != null)
  		{
-			//retNode = ettmDoc.selectSingleNode(pattern);//XMLManip.findElementByID(ettmDoc, id);
-         retNode = XMLManip.findElementByID(etupDoc, id);
+            retNode = XMLManip.findElementByID(etupDoc, id);
 			if (retNode == null)
 			{
 				String ettmFile = stem + ".ettm";
 				Document ettmDoc = XMLManip.getDOMDocumentUseWeakCache(ettmFile);
 				if (ettmDoc != null)
 				{
-					//retNode = etupDoc.selectSingleNode(pattern);//XMLManip.findElementByID(etupDoc, id);
-               retNode = XMLManip.findElementByID(ettmDoc, id);
+                    retNode = XMLManip.findElementByID(ettmDoc, id);
 				}
 			}
  		}
@@ -2511,7 +2444,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 			List list = collector.selectNodes(doc, nameValue);
 			if (retObj != null)
 			{
-				//INamedElement dummy = null;
 				retObj = collector.populateCollection(list, INamedElement.class);
 			}
 		}
@@ -2611,17 +2543,10 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 	 */
     public void save(String location)
     {
-		try
-		{
-			if (m_Doc != null)
-			{
-				XMLManip.save(m_Doc,location);
-			}
-		}
-		catch(IOException e)
-		{
-			e.printStackTrace();
-		}
+        if (m_Doc != null)
+        {
+                XMLManip.save(m_Doc,location);
+        }
     }
 
 	/**
@@ -2659,9 +2584,8 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
     	{
     		IElement actual = (IElement)element;
     		IProject proj = actual.getProject();
-    		if (proj != null)
+    		if (proj != null || element instanceof Profile)
     		{
-    			State state = new State(m_State, proj, false);
     			addToTypes(element);
                         if (element instanceof INamedElement) {
                             getPickListManager().addExternalNamedType((INamedElement) element);
@@ -2903,11 +2827,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 						{
 							ImportInfo info = populateImportInfo(loc);
 							String absoluteDoc = null;
-//							boolean isImported = false;
-//							if (info.m_ProjectID != null && info.m_ProjectID.length() > 0)
-//							{
-//								isImported = true;
-//							}
 							if (info.isImported() == true)
 							{
 								absoluteDoc = retrieveAbsolutePathFromProject(info.m_ProjLocation);
@@ -3065,7 +2984,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
 		if (location != null && location.length() > 0)
 		{
 			ETPairT<String, String> obj = URILocator.uriparts(location);
-			String nodeLoc = obj.getParamTwo();
 			String docLoc = obj.getParamOne();
 			String relPath = makeRelativeToProject(docLoc);
 			String query = "//Location[@importProjectLoc=\"";
@@ -3148,7 +3066,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
     						Document doc = URILocator.retrieveDocument(absoluteURI);
     						if (doc != null)
     						{
-    							//Node node = doc.selectSingleNode("VersionedElement/child::*[1]");
                         Node verNode = doc.selectSingleNode("VersionedElement");
                         if(verNode instanceof Element)
                         {
@@ -3749,6 +3666,7 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
     	}
     }
 
+    @Override
     protected void finalize()
     {
         revokeEventSinks();
@@ -3901,7 +3819,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
     
     private class State
     {
-    	private State m_MemberState = null;
     	private boolean m_RecreatingTypeFile = false;
     	private IProject m_Project = null;
     	
@@ -3909,7 +3826,6 @@ public class TypeManager implements ITypeManager, IElementLifeTimeEventsSink,
     	{
     		m_Project = proj;
     		m_RecreatingTypeFile = recreating;
-    		m_MemberState = this;
     	}
     	
     	public String projectFileName()
