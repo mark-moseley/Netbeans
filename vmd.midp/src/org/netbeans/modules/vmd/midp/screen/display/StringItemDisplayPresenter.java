@@ -54,6 +54,7 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.Collection;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
+import org.netbeans.modules.vmd.midp.components.databinding.MidpDatabindingSupport;
 
 /**
  *
@@ -62,23 +63,36 @@ import org.netbeans.modules.vmd.api.model.PropertyValue;
  */
 public class StringItemDisplayPresenter extends ItemDisplayPresenter {
 
-    private JLabel label;
+    private WrappedLabel label;
+    private int preferedHeight =-1;
 
     public StringItemDisplayPresenter() {
-        label = new JLabel();
+        label = label = new WrappedLabel(){
+
+            @Override
+            protected int getLabelWidth() {
+                return (int)getView().getSize().getWidth();
+            }
+
+        };
         setContentComponent(label);
     }
 
     @Override
     public void reload(ScreenDeviceInfo deviceInfo) {
         super.reload(deviceInfo);
-
-        String text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(StringItemCD.PROP_TEXT));
-        PropertyValue value = getComponent().readProperty(ItemCD.PROP_APPEARANCE_MODE);
-        int appearanceMode = MidpTypes.getInteger(value);
+        
+        PropertyValue value = getComponent().readProperty(ItemCD.PROP_APPEARANCE_MODE);        
         if (!PropertyValue.Kind.USERCODE.equals(value.getKind())) {
+            int appearanceMode = MidpTypes.getInteger(value);
             label.setBorder(appearanceMode == ItemCD.VALUE_BUTTON ? BorderFactory.createRaisedBevelBorder() : null);
             label.setForeground(appearanceMode == ItemCD.VALUE_HYPERLINK ? Color.BLUE : UIManager.getDefaults().getColor("Label.foreground")); // NOI18N
+        }
+        String text = null;
+        if (MidpDatabindingSupport.getConnector(getComponent(), StringItemCD.PROP_TEXT) != null) {
+            text = java.util.ResourceBundle.getBundle("org/netbeans/modules/vmd/midp/screen/display/Bundle").getString("LBL_Databinding"); //NOI18N 
+        } else {
+            text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(StringItemCD.PROP_TEXT));
         }
         label.setText(text);
 
@@ -87,6 +101,31 @@ public class StringItemDisplayPresenter extends ItemDisplayPresenter {
             DesignComponent font = value.getComponent();
             label.setFont(ScreenSupport.getFont(deviceInfo, font));
         }
+
+        int width = Integer.parseInt( getComponent().readProperty(
+                ItemCD.PROP_PREFERRED_WIDTH).getPrimitiveValue().toString());
+        label.setPreferedWidth(width);
+
+        label.repaint();
+        label.revalidate();
+
+        int prefHeight = Integer.parseInt(getComponent().readProperty(
+                ItemCD.PROP_PREFERRED_HEIGHT).getPrimitiveValue().toString());
+        if ( prefHeight != -1 ){
+            Dimension dimension = getView().getPreferredSize();
+            if ( preferedHeight == -1){
+                preferedHeight = (int)dimension.getHeight();
+            }
+            getView().setPreferredSize( new Dimension ((int)dimension.getWidth(),
+                    prefHeight));
+        }
+        else if (preferedHeight != -1) {
+            Dimension dimension = getView().getPreferredSize();
+            getView().setPreferredSize(new Dimension((int) dimension.getWidth(),
+                    preferedHeight));
+        }
+        getView().revalidate();
+        getView().invalidate();
     }
 
     @Override
