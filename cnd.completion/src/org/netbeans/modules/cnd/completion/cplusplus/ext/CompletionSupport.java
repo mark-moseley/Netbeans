@@ -50,16 +50,22 @@ import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.cnd.api.lexer.CndLexerUtilities;
 import org.netbeans.cnd.api.lexer.CndTokenUtilities;
 import org.netbeans.cnd.api.lexer.CppTokenId;
-import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.Utilities;
 import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmClassifier;
+import org.netbeans.modules.cnd.api.model.CsmDeclaration;
+import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmFunction;
 import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmParameter;
 import org.netbeans.modules.cnd.api.model.CsmType;
+import org.netbeans.modules.cnd.api.model.CsmVariable;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.completion.cplusplus.CsmFinderFactory;
 import org.netbeans.modules.cnd.completion.csm.CompletionUtilities;
+import org.netbeans.modules.cnd.completion.csm.CsmContext;
+import org.netbeans.modules.cnd.completion.csm.CsmContextUtilities;
+import org.netbeans.modules.cnd.completion.csm.CsmOffsetResolver;
+import org.netbeans.modules.cnd.completion.csm.CsmOffsetUtilities;
 import org.netbeans.modules.cnd.completion.impl.xref.FileReferencesContext;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.openide.filesystems.FileObject;
@@ -69,9 +75,9 @@ import org.openide.loaders.DataObject;
  *
  * @author Vladimir Voskresensky
  */
-public class CompletionSupport {
+public final class CompletionSupport {
 
-    final Reference<Document> docRef;
+    private final Reference<Document> docRef;
     // not for external instantiation
 
     private CompletionSupport(Document doc) {
@@ -106,9 +112,29 @@ public class CompletionSupport {
     }
 
     public static boolean isPreprocCompletionEnabled(Document doc, int offset) {
-        return isIncludeCompletionEnabled(doc, offset);
+        return isIncludeCompletionEnabled(doc, offset) || isPreprocessorDirectiveCompletionEnabled(doc, offset);
     }
-    
+
+    public static boolean isPreprocessorDirectiveCompletionEnabled(Document doc, int offset) {
+        TokenSequence<CppTokenId> ts = CndLexerUtilities.getCppTokenSequence(doc, offset, false, true);
+        if (ts == null) {
+            return false;
+        }
+        if (ts.token().id() == CppTokenId.PREPROCESSOR_DIRECTIVE) {
+            @SuppressWarnings("unchecked")
+            TokenSequence<CppTokenId> embedded = (TokenSequence<CppTokenId>) ts.embedded();
+            embedded.moveStart();
+            embedded.moveNext();
+            // skip starting #
+            if (!embedded.moveNext()) {
+                return true; // the end of embedded token stream
+            }
+            CndTokenUtilities.shiftToNonWhite(embedded, false);
+            return embedded.offset() + embedded.token().length() >= offset;
+        }
+        return false;
+    }
+
     public static boolean isIncludeCompletionEnabled(Document doc, int offset) {
         TokenSequence<CppTokenId> ts = CndLexerUtilities.getCppTokenSequence(doc, offset, false, true);
         if (ts == null) {
@@ -129,27 +155,35 @@ public class CompletionSupport {
         return false;
     }
 
-    private static final char[] COMMAND_SEPARATOR_CHARS = new char[]{
-        ';', '{', '}'
-    };
-    private int lastSeparatorOffset = -1;
-
     public final CsmFinder getFinder() {
         DataObject dobj = NbEditorUtilities.getDataObject(getDocument());
         assert dobj != null;
         FileObject fo = dobj.getPrimaryFile();
-        return CsmFinderFactory.getDefault().getFinder(fo);        
+        return CsmFinderFactory.getDefault().getFinder(fo);
+    }
+    private static final char[] COMMAND_SEPARATOR_CHARS = new char[]{
+        ';', '{', '}'
+    };
+    private int lastSeparatorOffset = -1;
+    private int contextOffset = 0;
+
+    public void setContextOffset(int offset) {
+        this.contextOffset = offset;
     }
 
-    protected final void setLastSeparatorOffset(int lastSeparatorOffset) {
+    public int getContextOffset() {
+        return this.contextOffset;
+    }
+    
+    protected void setLastSeparatorOffset(int lastSeparatorOffset) {
         this.lastSeparatorOffset = lastSeparatorOffset;
     }
 
     /** Return the position of the last command separator before
      * the given position.
      */
-    public int getLastCommandSeparator(final int pos) throws BadLocationException {
-       if (pos < 0 || pos > getDocument().getLength()) {
+    protected int getLastCommandSeparator(final int pos) throws BadLocationException {
+        if (pos < 0 || pos > getDocument().getLength()) {
             throw new BadLocationException("position is out of range[" + 0 + "-" + getDocument().getLength() + "]", pos); // NOI18N
         }
         if (pos == 0) {
@@ -158,79 +192,8 @@ public class CompletionSupport {
         if (lastSeparatorOffset >= 0 && lastSeparatorOffset < pos) {
             return lastSeparatorOffset;
         }
-        TokenSequence<CppTokenId> ts = CndLexerUtilities.getCppTokenSequence(getDocument(), pos, true, true);
-        if (!(getDocument() instanceof BaseDocument)) {
-            return 0;
-        }
-        BaseDocument doc = (BaseDocument) getDocument();
-        int stLine = Utilities.getRowFirstNonWhite(doc, pos);
-        int lastPos = stLine;
-        if (ts == null) {
-            return lastPos;
-        }
-        return lastPos;
-//        TextBatchProcessor tbp = new TextBatchProcessor() {
-//
-//            public int processTextBatch(BaseDocument doc, int startPos, int endPos,
-//                    boolean lastBatch) {
-//                try {
-//                    int[] blks = getCommentBlocks(endPos, startPos);
-//                    FinderFactory.CharArrayBwdFinder cmdFinder = new FinderFactory.CharArrayBwdFinder(COMMAND_SEPARATOR_CHARS);
-//                    int lastSeparatorOffset = findOutsideBlocks(cmdFinder, startPos, endPos, blks);
-//                    if (lastSeparatorOffset < 1) {
-//                        return lastSeparatorOffset;
-//                    }
-//                    CppTokenId separatorID = getCppTokenId(lastSeparatorOffset);
-//                    if (separatorID.getNumericID() == CppTokenId.RBRACE_ID) {
-//                        int matchingBrkPos[] = findMatchingBlock(lastSeparatorOffset, true);
-//                        if (matchingBrkPos != null) {
-//                            int prev = Utilities.getFirstNonWhiteBwd(getDocument(), matchingBrkPos[0]);
-//                            if (prev > -1 && getCppTokenId(prev).getNumericID() == CppTokenId.RBRACKET_ID) {
-//                                return getLastCommandSeparator(prev);
-//                            }
-//                        }
-//                    } else if (separatorID.getCategory() == CppTokenId.CPP) {
-//                        // found preprocessor directive, skip till the end of it
-//                        int separatorLine = Utilities.getLineOffset(getDocument(), lastSeparatorOffset);
-//                        assert (separatorLine <= posLine);
-//                        if (separatorLine != posLine) {
-//                            lastSeparatorOffset = Utilities.getRowEnd(getDocument(), lastSeparatorOffset);
-//                        }
-//                    }
-//                    if (separatorID.getNumericID() != CppTokenId.LBRACE_ID &&
-//                            separatorID.getNumericID() != CppTokenId.RBRACE_ID &&
-//                            separatorID.getNumericID() != CppTokenId.SEMICOLON_ID &&
-//                            separatorID.getCategory() != CppTokenId.CPP) {
-//                        lastSeparatorOffset = processTextBatch(doc, lastSeparatorOffset, 0, lastBatch);
-//                    }
-//                    return lastSeparatorOffset;
-//                } catch (BadLocationException e) {
-//                    e.printStackTrace();
-//                    return -1;
-//                }
-//            }
-//        };
-//        int lastPos = getDocument().processText(tbp, pos, 0);
-//
-//        //ensure we return last command separator from last
-//        //block of C++ tokens from <startPos;endPos> offset interval
-//        //AFAIK this is currently needed only for JSP code completion
-//        TokenItem item = getTokenChain(pos - 1, pos);
-//        //go back throught the token chain and try to find last C++ token
-//        while (item != null) {
-//            int tokenOffset = item.getOffset();
-//            if (lastPos != -1 && tokenOffset < lastPos) {
-//                break; //stop backtracking if we met the lastPos
-//            }            //test token type
-//            if (!item.getTokenContextPath().contains(CppTokenId.contextPath)) {
-//                //return offset of last C++ token - this token isn't already a C++ token so return offset of next token
-//                lastPos = item.getNext() != null ? item.getNext().getOffset() : item.getOffset() + item.getImage().length();
-//                break;
-//            }
-//            item = item.getPrevious();
-//        }
-//
-//        return lastPos;
+        lastSeparatorOffset = CndTokenUtilities.getLastCommandSeparator(getDocument(), pos);
+        return lastSeparatorOffset;
     }
 
     /** Get the class from name. The import sections are consulted to find
@@ -263,22 +226,19 @@ public class CompletionSupport {
 
     /** Get the class that belongs to the given position */
     public CsmClass getClass(int pos) {
+        pos += getContextOffset();
         return CompletionUtilities.findClassOnPosition(getDocument(), pos);
     }
 
     /** Get the class or function definition that belongs to the given position */
     public CsmOffsetableDeclaration getDefinition(int pos, FileReferencesContext fileContext) {
+        pos += getContextOffset();
         return CompletionUtilities.findFunDefinitionOrClassOnPosition(getDocument(), pos, fileContext);
     }
 
     public boolean isStaticBlock(int pos) {
+        pos += getContextOffset();
         return false;
-    }
-
-    public int[] getFunctionBlock(int[] identifierBlock) throws BadLocationException {
-//        int[] retValue = super.getFunctionBlock(identifierBlock);
-//        return retValue;
-        return null;
     }
 
     public static boolean isAssignable(CsmType from, CsmType to) {
@@ -426,68 +386,13 @@ public class CompletionSupport {
         }
         return ret;
     }
-    
+
     ////////////////////////////////////////////////
     // overriden functions to resolve expressions
     /////////////////////////////////////////////////
 
     // utitlies
 
-//    public TokenItem getTokenItem(int offset) {
-//        TokenItem token;
-//        try {
-//            int checkOffset = offset;
-//            if (offset == getDocument().getLength()) {
-//                if (offset == 0) {
-//                    return null;
-//                }
-//                checkOffset--;
-//            }
-//            token = getTokenChain(checkOffset, checkOffset + 1);
-//        } catch (BadLocationException e) {
-//            token = null;
-//        }
-//        return token;
-//    }
-//
-//    public TokenItem shiftToNonWhiteBwd(TokenItem token) {
-//        if (token == null) {
-//            return null;
-//        }
-//        boolean checkedFirst = false;
-//        do {
-//            switch (token.getCppTokenId().getNumericID()) {
-//                case CppTokenId.WHITESPACE_ID:
-//                    if (checkedFirst) {
-//                        if (token.getImage().contains("\n")) { // NOI18N
-//                            return null;
-//                        }
-//                    }
-//                    break;
-//                case CppTokenId.BLOCK_COMMENT_ID:
-//                    // skip
-//                    break;
-//                default:
-//                    return token;
-//            }
-//            token = token.getPrevious();
-//            checkedFirst = true;
-//        } while (token != null);
-//        return null;
-//    }
-
-//    private static final CppTokenId[] BRACKET_SKIP_TOKENS = new CppTokenId[]{
-//        CppTokenId.LINE_COMMENT,
-//        CppTokenId.BLOCK_COMMENT,
-//        CppTokenId.CHAR_LITERAL,
-//        CppTokenId.STRING_LITERAL
-//    };
-//
-//    // tokens valid for include-completion provider
-//    private static final CppTokenId[] INCLUDE_COMPLETION_TOKENS = new CppTokenId[]{
-//        CppTokenId.PREPROCESSOR_USER_INCLUDE,
-//        CppTokenId.PREPROCESSOR_SYS_INCLUDE,
-//    };
     public static boolean isCompletionEnabled(Document doc, int offset) {
         if (doc.getLength() == 0) {
             // it's fine to show completion in empty doc
@@ -518,7 +423,7 @@ public class CompletionSupport {
             }
             if (CppTokenId.NUMBER_CATEGORY.equals(ts.token().id().primaryCategory())) {
                 return false;
-            }            
+            }
         }
         return true;
     }
@@ -563,5 +468,37 @@ public class CompletionSupport {
             return t1.equals(t2);
         }
         return false;
-    }    
+    }
+
+    CsmType findExactVarType(CsmFile file, String var, int pos, FileReferencesContext refContext) {
+        if (file == null) {
+            return null;
+        }
+        pos += getContextOffset();
+        CsmContext context = CsmOffsetResolver.findContext(file, pos, refContext);
+        if (var.length() == 0 && CsmKindUtilities.isVariable(context.getLastObject())) {
+            // probably in initializer of variable, like
+            // struct AAA a[] = { { .field = 1}, { .field = 2}};
+            CsmVariable varObj = (CsmVariable) context.getLastObject();
+            if (CsmOffsetUtilities.isInObject(varObj.getInitialValue(), pos)) {
+                CsmType type = varObj.getType();
+                if (type.getArrayDepth() > 0) {
+                    CsmClassifier cls = type.getClassifier();
+                    if (cls != null) {
+                        type = CsmCompletion.getType(cls, 0);
+                    }
+                }
+                return type;
+            }
+        }
+        for (CsmDeclaration decl : CsmContextUtilities.findFunctionLocalVariables(context)) {
+            if (decl instanceof CsmVariable) {
+                CsmVariable v = (CsmVariable) decl;
+                if (v.getName().toString().equals(var)) {
+                    return v.getType();
+                }
+            }
+        }
+        return null;
+    }
 }
