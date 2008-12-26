@@ -57,6 +57,7 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import org.netbeans.modules.vmd.midp.components.resources.FontCD;
 import org.openide.util.NbBundle;
 
 /**
@@ -76,8 +77,13 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
     private boolean hasModel;
     private boolean modelIsUserCode;
     private boolean drawBorders = true;
+    private String title;
     private String[] columnNames;
     private String[][] values;
+
+    private Font titleFont;
+    private Font headersFont;
+    private Font valuesFont;
 
     public TableItemDisplayPresenter() {
         tablePanel = new JPanel() {
@@ -91,36 +97,120 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
         tablePanel.setOpaque(false);
         tablePanel.setPreferredSize(new Dimension(200, 40)); // TODO compute it from fontSize
         setContentComponent(tablePanel);
+
+        titleFont = fontLabel.getFont();
+        headersFont = fontLabel.getFont().deriveFont(Font.BOLD);
+        valuesFont = fontLabel.getFont();
     }
 
+    /**
+     * prints ModelIsUserCode message 
+     * @param g
+     * @param currY currect Y coordiname
+     * @return new Y coordinate for the next drawing after message is printed
+     */
+    private int printModelIsUserCode(Graphics g, int currY){
+        int newY = printTitle(g, currY);
+
+        newY += ScreenSupport.getFontHeight(g, getValuesFont());
+        String msg = NbBundle.getMessage(TableItemDisplayPresenter.class, "DISP_table_is_user_code");
+        g.drawString(msg, CELL_INSETS, newY); // NOI18N
+
+        return newY;
+    }
+    
+    /**
+     * prints title message 
+     * @param g
+     * @param currY currect Y coordiname
+     * @return new Y coordinate for the next drawing after message is printed
+     */
+    private int printTitle(Graphics g, int currY){
+        int newY = currY;
+        if (title != null){
+            newY += ScreenSupport.getFontHeight(g, getTitleFont());
+            g.setFont(getTitleFont());
+
+            g.drawString(title, CELL_INSETS, newY);
+        }
+        return newY;
+    }
+    
+    /**
+     * prints NoModel message 
+     * @param g
+     * @param currY currect Y coordiname
+     * @return new Y coordinate for the next drawing after message is printed
+     */
+    private int printNoModel(Graphics g, int currY){
+        int newY = printTitle(g, currY);
+
+        newY += ScreenSupport.getFontHeight(g, getValuesFont());
+        String msg = NbBundle.getMessage(TableItemDisplayPresenter.class, "DISP_no_table_model_specified");
+        g.drawString(msg, CELL_INSETS, newY); // NOI18N
+
+        return newY;
+    }
+    
+    /**
+     * prints NoModel message 
+     * @param g
+     * @param currY currect Y coordiname
+     * @return new Y coordinate for the next drawing after message is printed
+     */
+    private int printEmptyModel(Graphics g, int currY){
+        int newY = currY + ScreenSupport.getFontHeight(g, getValuesFont());
+        
+        String msg = NbBundle.getMessage(TableItemDisplayPresenter.class, "DISP_no_table_model_specified");
+        g.drawString(msg, CELL_INSETS, newY); // NOI18N
+
+        return newY;
+    }
+    
+    private Font getTitleFont(){
+        return titleFont;
+    }
+    
+    private Font getHeadersFont(){
+        return headersFont;
+    }
+    
+    private Font getValuesFont(){
+        return valuesFont;
+    }
+    
     private void paintTable(Graphics g) {
-        Font headersFont = fontLabel.getFont().deriveFont(Font.BOLD);
-        Font valuesFont = fontLabel.getFont();
         int cummulativeY = 0;
 
         if (modelIsUserCode) {
-            cummulativeY += ScreenSupport.getFontHeight(g, valuesFont);
-            g.drawString(NbBundle.getMessage(TableItemDisplayPresenter.class, "DISP_table_is_user_code"), CELL_INSETS, cummulativeY); // NOI18N
+            cummulativeY = printModelIsUserCode(g, cummulativeY);
         } else if (!hasModel) {
-            cummulativeY += ScreenSupport.getFontHeight(g, valuesFont);
-            g.drawString(NbBundle.getMessage(TableItemDisplayPresenter.class, "DISP_no_table_model_specified"), CELL_INSETS, cummulativeY); // NOI18N
+            cummulativeY = printNoModel(g, cummulativeY);
         } else if (values == null || values.length < 1) {
-            cummulativeY += ScreenSupport.getFontHeight(g, valuesFont);
-            g.drawString(NbBundle.getMessage(TableItemDisplayPresenter.class, "DISP_empty_table_model"), CELL_INSETS, cummulativeY); // NOI18N
+            cummulativeY = printEmptyModel(g, cummulativeY);
         } else {
             Graphics2D g2D = (Graphics2D) g;
             Dimension oldSize = tablePanel.getSize();
             final int width = oldSize.width;
             final int height = oldSize.height;
 
-            int headersY = 0;
+            int firstRowY = 0;
 
-            int[] colWidths = getColWidths(g, values, columnNames, headersFont, valuesFont);
+            int[] colWidths = getColWidths(g, title, columnNames, values, 
+                    getTitleFont(), getHeadersFont(), getValuesFont());
 
+            if (title != null){
+                g.setFont(getTitleFont());
+                cummulativeY += ScreenSupport.getFontHeight(g, getTitleFont());
+                int titleX = CELL_INSETS + BORDER_LINE_WIDTH;
+                g.drawString(title, titleX, cummulativeY);
+                cummulativeY += DOUBLE_CELL_INSETS + BORDER_LINE_WIDTH;
+                firstRowY = cummulativeY;
+            }
             if (columnNames != null) {
-                g.setFont(headersFont);
-                headersY = cummulativeY;
-                cummulativeY += ScreenSupport.getFontHeight(g, headersFont);
+                g.setFont(getHeadersFont());
+                firstRowY = cummulativeY;
+                cummulativeY += ScreenSupport.getFontHeight(g, getHeadersFont());
                 int cummulativeX = CELL_INSETS + BORDER_LINE_WIDTH;
                 // draw headers ...
                 for (int i = 0; (i < columnNames.length) && (cummulativeX < width); i++) {
@@ -136,10 +226,10 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
             }
 
             if (values != null && values.length > 0) {
-                g.setFont(valuesFont);
+                g.setFont(getValuesFont());
                 for (int i = 0; (i < values.length) && (cummulativeY < height); i++) {
                     String[] row = values[i];
-                    cummulativeY += ScreenSupport.getFontHeight(g, valuesFont);
+                    cummulativeY += ScreenSupport.getFontHeight(g, getValuesFont());
                     int cummulativeX = CELL_INSETS + BORDER_LINE_WIDTH;
                     for (int j = 0; (j < row.length) && (cummulativeX < width); j++) {
                         String cell = row[j];
@@ -161,14 +251,14 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
                 g.drawLine(0, cummulativeY, width, cummulativeY);
                 int borderY = 0;
                 if (columnNames != null) {
-                    borderY += ScreenSupport.getFontHeight(g, headersFont) + DOUBLE_CELL_INSETS;
+                    borderY += ScreenSupport.getFontHeight(g, getHeadersFont()) + DOUBLE_CELL_INSETS;
                     g.drawLine(0, borderY, width, borderY);
                     borderY++;
                 }
                 if (values != null && values.length > 0) {
                     // horizontal lines
                     for (int i = 0; (i < values.length) && (borderY < height); i++) {
-                        borderY += ScreenSupport.getFontHeight(g, valuesFont) + DOUBLE_CELL_INSETS;
+                        borderY += ScreenSupport.getFontHeight(g, getValuesFont()) + DOUBLE_CELL_INSETS;
                         g.drawLine(0, borderY, width, borderY);
                         borderY++;
                     }
@@ -177,7 +267,7 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
                     int borderX = 0;
                     int rows = values[0].length;
                     for (int i = 0; (i < rows) && (borderX < width); i++) {
-                        g.drawLine(borderX, headersY, borderX, height - 1);
+                        g.drawLine(borderX, firstRowY, borderX, height - 1);
                         borderX += colWidths[i];
                     }
                 }
@@ -189,7 +279,13 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
     public void reload(ScreenDeviceInfo deviceInfo) {
         super.reload(deviceInfo);
 
-        PropertyValue value = getComponent().readProperty(TableItemCD.PROP_MODEL);
+        PropertyValue value = getComponent().readProperty(TableItemCD.PROP_TITLE);
+        if (PropertyValue.Kind.USERCODE.equals(value.getKind())) {
+            title = NbBundle.getMessage(TableItemDisplayPresenter.class, "DISP_title_is_user_code");
+        } else {
+            title = MidpTypes.getString(value);
+        }
+        value = getComponent().readProperty(TableItemCD.PROP_MODEL);
         modelIsUserCode = PropertyValue.Kind.USERCODE.equals(value.getKind());
         if (!modelIsUserCode) {
             DesignComponent tableModelComponent = value.getComponent();
@@ -228,6 +324,8 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
             hasModel = false;
         }
 
+        setFonts();
+
         tablePanel.setPreferredSize(calculatePrefferedSize());
         tablePanel.repaint();
     }
@@ -235,19 +333,30 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
     // TODO compute 14 from fontSize
     private Dimension calculatePrefferedSize() {
         final Dimension oldSize = tablePanel.getPreferredSize();
-        if (!hasModel || values == null) {
-            return oldSize;
-        }
-
         int height = 0;
-        if (columnNames != null) {
-            height += CELL_INSETS + 14 + BORDER_LINE_WIDTH;
+        if (title != null) {
+            height += DOUBLE_CELL_INSETS + getTitleFont().getSize() + BORDER_LINE_WIDTH;
         }
-        if (values != null) {
-            height += (DOUBLE_CELL_INSETS + 14 + BORDER_LINE_WIDTH) * values.length;
+        
+        if ( isMessageNoTable()) {
+            height += DOUBLE_CELL_INSETS + getValuesFont().getSize();
+        } else {
+            if (columnNames != null) {
+                height += CELL_INSETS + getHeadersFont().getSize() + BORDER_LINE_WIDTH;
+            }
+            if (values != null) {
+                height += (DOUBLE_CELL_INSETS + getValuesFont().getSize() 
+                        + BORDER_LINE_WIDTH) * values.length;
+            }
         }
         return new Dimension(oldSize.width, height);
     }
+    
+    private boolean isMessageNoTable(){
+       return   modelIsUserCode                         // user code model message
+                || !hasModel                            // no model message
+                || values == null || values.length < 1; // empty model message
+     }
 
     // TODO make parameter generic and move to ArraySupport class (gatherPrimitiveValues)
     private static List<String> gatherStringValues(List<PropertyValue> propertyValues) {
@@ -258,7 +367,7 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
         return list;
     }
 
-    private int[] getColWidths(Graphics g, String[][] values, String[] headers, Font headersFont, Font valuesFont) {
+    private int[] getColWidths(Graphics g, String title, String[] headers, String[][] values, Font titleFont, Font headersFont, Font valuesFont) {
         if (values == null || values.length == 0) {
             return null;
         }
@@ -289,5 +398,44 @@ public class TableItemDisplayPresenter extends ItemDisplayPresenter {
         }
         descriptors.add(new ScreenPropertyDescriptor(getComponent(), tablePanel, tableModelDescriptor));
         return descriptors;
+    }
+
+    private void setFonts() {
+        titleFont = getFont( TableItemCD.PROP_TITLE_FONT );
+        valuesFont = getFont( TableItemCD.PROP_VALUES_FONT);
+        headersFont = doGetFont( TableItemCD.PROP_HEADERS_FONT);
+        if ( headersFont == null ) {
+            headersFont = fontLabel.getFont().deriveFont(Font.BOLD);
+        }
+    }
+
+    private Font getFont( String property ){
+        Font font = doGetFont(property);
+        if ( font == null ){
+            return fontLabel.getFont();
+        }
+        else {
+            return font;
+        }
+    }
+
+    private Font doGetFont( String property ){
+        DesignComponent fontComponent = getComponent().readProperty(
+                property).getComponent();
+        if ( fontComponent != null ){
+            int kindCode = Integer.parseInt( fontComponent.readProperty(
+                    FontCD.PROP_FONT_KIND).getPrimitiveValue().toString());
+            int faceCode = Integer.parseInt( fontComponent.readProperty(
+                    FontCD.PROP_FACE).getPrimitiveValue().toString());
+            int styleCode = Integer.parseInt( fontComponent.readProperty(
+                    FontCD.PROP_STYLE).getPrimitiveValue().toString());
+            int sizeCode = Integer.parseInt( fontComponent.readProperty(
+                    FontCD.PROP_SIZE).getPrimitiveValue().toString());
+            return ScreenSupport.getFont( getComponent().getDocument(),
+                    kindCode, faceCode, styleCode, sizeCode);
+        }
+        else {
+            return null;
+        }
     }
 }
