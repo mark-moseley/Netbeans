@@ -41,34 +41,9 @@
 
 package org.netbeans.modules.cnd.debugger.gdb;
 
-import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeSupport;
-import java.io.File;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
-import javax.swing.JEditorPane;
-import javax.swing.text.Caret;
-import javax.swing.text.StyledDocument;
-import org.netbeans.modules.cnd.debugger.gdb.breakpoints.*;
-import org.openide.cookies.EditorCookie;
-import org.openide.cookies.LineCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.URLMapper;
 import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.loaders.DataShadow;
-import org.openide.nodes.Node;
-import org.openide.text.Line;
-import org.openide.text.NbDocument;
-import org.openide.util.Lookup;
-import org.openide.util.LookupEvent;
-import org.openide.util.LookupListener;
-import org.openide.util.Utilities;
-import org.openide.windows.TopComponent;
 
 /** 
  * Defines bridge to editor and src hierarchy. It allows use of different 
@@ -77,18 +52,21 @@ import org.openide.windows.TopComponent;
  */
 public abstract class EditorContext {
     
-    public static final String BREAKPOINT_ANNOTATION_TYPE = new String("Breakpoint"); //NOI18N
-    public static final String DISABLED_BREAKPOINT_ANNOTATION_TYPE =  new String("DisabledBreakpoint"); //NOI18N
-    public static final String CONDITIONAL_BREAKPOINT_ANNOTATION_TYPE =  new String("CondBreakpoint"); //NOI18N
-    public static final String DISABLED_CONDITIONAL_BREAKPOINT_ANNOTATION_TYPE =  new String("DisabledCondBreakpoint"); //NOI18N
-    public static final String CURRENT_LINE_ANNOTATION_TYPE =  new String("CurrentPC"); //NOI18N
-    public static final String CALL_STACK_FRAME_ANNOTATION_TYPE =  new String("CallSite"); //NOI18N
-    public static final String PROP_LINE_NUMBER = new String("lineNumber"); //NOI18N
-    public static final String FUNCTION_BREAKPOINT_ANNOTATION_TYPE = new String("FunctionBreakpoint"); //NOI18N
-    public static final String DISABLED_FUNCTION_BREAKPOINT_ANNOTATION_TYPE =  new String("DisabledFunctionBreakpoint"); //NOI18N
-    public static final String CONDITIONAL_FUNCTION_BREAKPOINT_ANNOTATION_TYPE =  new String("CondFuncBreakpoint"); //NOI18N
-    public static final String DISABLED_CONDITIONAL_FUNCTION_BREAKPOINT_ANNOTATION_TYPE =  new String("DisabledCondFuncBreakpoint"); //NOI18N
-
+    public static final String BREAKPOINT_ANNOTATION_TYPE = "Breakpoint"; //NOI18N
+    public static final String DISABLED_BREAKPOINT_ANNOTATION_TYPE =  "DisabledBreakpoint"; //NOI18N
+    public static final String CONDITIONAL_BREAKPOINT_ANNOTATION_TYPE =  "CondBreakpoint"; //NOI18N
+    public static final String DISABLED_CONDITIONAL_BREAKPOINT_ANNOTATION_TYPE =  "DisabledCondBreakpoint"; //NOI18N
+    public static final String CURRENT_LINE_ANNOTATION_TYPE =  "CurrentPC"; //NOI18N
+    public static final String CALL_STACK_FRAME_ANNOTATION_TYPE =  "CallSite"; //NOI18N
+    public static final String PROP_LINE_NUMBER = "lineNumber"; //NOI18N
+    public static final String FUNCTION_BREAKPOINT_ANNOTATION_TYPE = "FunctionBreakpoint"; //NOI18N
+    public static final String DISABLED_FUNCTION_BREAKPOINT_ANNOTATION_TYPE =  "DisabledFunctionBreakpoint"; //NOI18N
+    public static final String CONDITIONAL_FUNCTION_BREAKPOINT_ANNOTATION_TYPE =  "CondFuncBreakpoint"; //NOI18N
+    public static final String DISABLED_CONDITIONAL_FUNCTION_BREAKPOINT_ANNOTATION_TYPE =  "DisabledCondFuncBreakpoint"; //NOI18N
+    public static final String ADDRESS_BREAKPOINT_ANNOTATION_TYPE = "AddressBreakpoint"; //NOI18N
+    public static final String DISABLED_ADDRESS_BREAKPOINT_ANNOTATION_TYPE =  "DisabledAddressBreakpoint"; //NOI18N
+    public static final String CONDITIONAL_ADDRESS_BREAKPOINT_ANNOTATION_TYPE =  "CondAddrBreakpoint"; //NOI18N
+    public static final String DISABLED_CONDITIONAL_ADDRESS_BREAKPOINT_ANNOTATION_TYPE =  "DisabledCondAddrBreakpoint"; //NOI18N
 
     /**
      * Shows source with given url on given line number.
@@ -98,6 +76,8 @@ public abstract class EditorContext {
      * @param timeStamp a time stamp to be used
      */
     public abstract boolean showSource(String url,  int lineNumber, Object timeStamp);
+    
+    public abstract boolean showSource(DataObject dobj,  int lineNumber, Object timeStamp);
 
     /**
      * Creates a new time stamp.
@@ -133,6 +113,8 @@ public abstract class EditorContext {
      *         created at the given URL or line number.
      */
     public abstract Object annotate(String url, int lineNumber, String annotationType, Object timeStamp);
+    
+    public abstract Object annotate(DataObject dobj, int lineNumber, String annotationType, Object timeStamp);
 
     /**
      * Returns line number given annotation is associated with.
@@ -172,6 +154,13 @@ public abstract class EditorContext {
      * @return URL of source currently selected in editor or empty string
      */
     public abstract String getCurrentURL();
+
+    /**
+     * Returns file object of source currently selected in editor or null
+     *
+     * @return file object of source currently selected in editor or null
+     */
+    public abstract FileObject getCurrentFileObject();
     
     /**
      *  Return the most recent URL or empty string. The difference between this and getCurrentURL()
@@ -214,6 +203,8 @@ public abstract class EditorContext {
      */
     public abstract String getCurrentMIMEType();
     
+    public abstract DataObject getCurrentDataObject();
+    
     /**
      * Get the MIME type of the most recently selected file.
      *
@@ -235,19 +226,4 @@ public abstract class EditorContext {
      */
     public abstract void removePropertyChangeListener(PropertyChangeListener l);
     
-    /**
-     * Adds a property change listener.
-     *
-     * @param propertyName the name of property
-     * @param l the listener to add
-     */
-    public abstract void addPropertyChangeListener(String propertyName, PropertyChangeListener l);
-    
-    /**
-     * Removes a property change listener.
-     *
-     * @param propertyName the name of property
-     * @param l the listener to remove
-     */
-    public abstract void removePropertyChangeListener(String propertyName, PropertyChangeListener l);
 }
