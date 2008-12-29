@@ -44,6 +44,7 @@ package org.netbeans.modules.form.project;
 import java.io.InputStream;
 import java.io.IOException;
 import java.net.URL;
+import java.util.*;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
@@ -102,7 +103,17 @@ class ProjectClassLoader extends ClassLoader {
             // possible to load such a class from project. If we find a case
             // when the project class needs to be preferred over the system,
             // we'll need an additional category to SYSTEM_CLASS.]
-            c = systemClassLoader.loadClass(name);
+            try {
+                // See issue 135745, the classes that form module classloader
+                // is able to load should be the same as the one loaded
+                // by systemClassLoader, but there shouldn't be clash
+                // with a copy of GroupLayout hacked by libs.ppawtlayout module.
+                // The classes that cannot be loaded by form module classloader
+                // will be handled by systemClassLoader as before.
+                c = getClass().getClassLoader().loadClass(name);
+            } catch (ClassNotFoundException cnfe) {
+                c = systemClassLoader.loadClass(name);
+            }
         } else {
             String filename = name.replace('.', '/').concat(".class"); // NOI18N
             URL url = projectClassLoaderDelegate.getResource(filename);
@@ -177,4 +188,23 @@ class ProjectClassLoader extends ClassLoader {
         }
         return projectClassLoaderDelegate.getResource(name);
     }
+
+    @Override
+    protected Enumeration<URL> findResources(String name) throws IOException {
+        Set<URL> urls = new HashSet<URL>();
+        List<FileObject> fos = sources.findAllResources(name);
+        for (FileObject fo : fos) {
+            try {
+                urls.add(fo.getURL());
+            } catch (FileStateInvalidException ex) {
+                ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+            }
+        }
+        Enumeration<URL> e = projectClassLoaderDelegate.getResources(name);
+        while (e.hasMoreElements()) {
+            urls.add(e.nextElement());
+        }
+        return Collections.enumeration(urls);
+    }
+
 }
