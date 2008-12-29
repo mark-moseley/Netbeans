@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -71,6 +71,7 @@ import org.jruby.nb.ast.LocalAsgnNode;
 import org.jruby.nb.ast.MethodDefNode;
 import org.jruby.nb.ast.ModuleNode;
 import org.jruby.nb.ast.MultipleAsgnNode;
+import org.jruby.nb.ast.NewlineNode;
 import org.jruby.nb.ast.Node;
 import org.jruby.nb.ast.NodeType;
 import org.jruby.nb.ast.SClassNode;
@@ -115,9 +116,10 @@ import org.openide.util.Exceptions;
  * @author Tor Norbye
  */
 public class AstUtilities {
-    /** Whether or not the prefixes for defs should be highlighted, e.g. in
-     *   def HTTP.foo
-     * Should "HTTP." be highlighted, or just the foo portion?
+    
+    /**
+     * Whether or not the prefixes for defs should be highlighted, e.g. in def
+     * HTTP.foo should "HTTP." be highlighted, or just the foo portion?
      */
     private static final boolean INCLUDE_DEFS_PREFIX = false;
 
@@ -169,6 +171,7 @@ public class AstUtilities {
         }
 
         try {
+            baseDoc.readLock();
             if (elementBegin >= baseDoc.getLength()) {
                 return null;
             }
@@ -249,6 +252,8 @@ public class AstUtilities {
             }
         } catch (BadLocationException ble) {
             Exceptions.printStackTrace(ble);
+        } finally {
+            baseDoc.readUnlock();
         }
 
         return comments;
@@ -372,7 +377,7 @@ public class AstUtilities {
 
         DefaultParseListener listener = new DefaultParseListener();
         // TODO - embedding model?
-TranslatedSource translatedSource = null; // TODO - determine this here?                
+        TranslatedSource translatedSource = null; // TODO - determine this here?
         Parser.Job job = new Parser.Job(files, listener, reader, translatedSource);
         new RubyParser().parseFiles(job);
 
@@ -438,7 +443,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
     private static void addRequires(Node node, Set<String> requires) {
         if (node.nodeId == NodeType.FCALLNODE) {
             // A method call
-            String name = ((INameNode)node).getName();
+            String name = getName(node);
 
             if (name.equals("require")) { // XXX Load too?
 
@@ -482,7 +487,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
     public static MethodDefNode findMethod(Node node, String name, Arity arity) {
         // Recursively search for methods or method calls that match the name and arity
         if ((node.nodeId == NodeType.DEFNNODE || node.nodeId == NodeType.DEFSNODE) &&
-            ((MethodDefNode)node).getName().equals(name)) {
+            getName(node).equals(name)) {
             Arity defArity = Arity.getDefArity(node);
 
             if (Arity.matches(arity, defArity)) {
@@ -663,7 +668,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
         assert isCall(node);
 
         if (node instanceof INameNode) {
-            return ((INameNode)node).getName();
+            return getName(node);
         }
         assert false : node;
 
@@ -672,7 +677,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
 
     public static String getDefName(Node node) {
         if (node instanceof MethodDefNode) {
-            return ((MethodDefNode)node).getName();
+            return getName(node);
         }
         assert false : node;
 
@@ -714,11 +719,8 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
                         List<Node> args2 = arg.childNodes();
 
                         for (Node arg2 : args2) {
-                            if (arg2 instanceof ArgumentNode) {
-                                String name = ((ArgumentNode)arg2).getName();
-                                parameters.add(name);
-                            } else if (arg2 instanceof LocalAsgnNode) {
-                                String name = ((LocalAsgnNode)arg2).getName();
+                            if (arg2 instanceof ArgumentNode || arg2 instanceof LocalAsgnNode) {
+                                String name = getName(arg2);
                                 parameters.add(name);
                             }
                         }
@@ -972,7 +974,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
         switch (node.nodeId) {
         case INSTASGNNODE:
             if (name.charAt(0) == '@') {
-                String n = ((INameNode)node).getName();
+                String n = getName(node);
                 //if (name.regionMatches(1, n, 0, n.length())) {
                 if (name.equals(n)) {
                     return node;
@@ -982,7 +984,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
         case CLASSVARDECLNODE:
         case CLASSVARASGNNODE:
             if (name.startsWith("@@")) {
-                String n = ((INameNode)node).getName();
+                String n = getName(node);
                 //if (name.regionMatches(2, n, 0, n.length())) {
                 if (name.equals(n)) {
                     return node;
@@ -1034,6 +1036,11 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
             }
             break;
             
+        case CONSTDECLNODE:
+            if (name.equals(getName(node))) {
+                return node;
+            }
+        break;
         case CLASSNODE:
         case MODULENODE: {
                 Colon3Node c3n = ((IScopingNode)node).getCPath();
@@ -1074,9 +1081,9 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
 
             if (receiver instanceof Colon2Node) {
                 // TODO - check to see if we qualify
-                rn = ((Colon2Node)receiver).getName();
+                rn = getName(receiver);
             } else if (receiver instanceof ConstNode) {
-                rn = ((ConstNode)receiver).getName();
+                rn = getName(receiver);
             } // else: some other type of singleton class definition, like class << foo
 
             if (rn != null) {
@@ -1188,7 +1195,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
         ISourcePosition pos = node.getPosition();
         OffsetRange range =
             new OffsetRange(pos.getStartOffset(),
-                pos.getStartOffset() + ((INameNode)node).getName().length());
+                pos.getStartOffset() + getName(node).length());
 
         return range;
     }
@@ -1253,7 +1260,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
         }
 
         if (node instanceof INameNode) {
-            end = start + ((INameNode)node).getName().length();
+            end = start + getName(node).length();
         }
 
         return new OffsetRange(start, end);
@@ -1333,7 +1340,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
     }
 
     public static String getClassOrModuleName(IScopingNode node) {
-        return ((INameNode)node.getCPath()).getName();
+        return getName(node.getCPath());
     }
 
     public static List<ClassNode> getClasses(Node root) {
@@ -1392,7 +1399,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
                 sb.append("::");
             }
 
-            sb.append(((INameNode)node).getName());
+            sb.append(getName(node));
         }
     }
 
@@ -1452,7 +1459,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
             return false;
         }
 
-        String name = ((INameNode)node).getName();
+        String name = getName(node);
 
         if (name.startsWith("attr")) { // NOI18N
 
@@ -1603,7 +1610,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
             // XXX Can I have nested method definitions? If so I may have to continue here
             return access;
         } else if (node instanceof VCallNode || node instanceof FCallNode) {
-            String name = ((INameNode)node).getName();
+            String name = getName(node);
 
             if ("private".equals(name)) {
                 // TODO - see if it has arguments, if it does - it's just a single
@@ -1618,7 +1625,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
 
                             for (Node param2 : params2) {
                                 if (param2 instanceof SymbolNode) {
-                                    String symbol = ((SymbolNode)param2).getName();
+                                    String symbol = getName(param2);
                                     privateMethodSymbols.add(symbol);
                                 }
                             }
@@ -1642,7 +1649,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
 
                             for (Node param2 : params2) {
                                 if (param2 instanceof SymbolNode) {
-                                    String symbol = ((SymbolNode)param2).getName();
+                                    String symbol = getName(param2);
                                     protectedMethodSymbols.add(symbol);
                                 }
                             }
@@ -1667,7 +1674,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
 
                             for (Node param2 : params2) {
                                 if (param2 instanceof SymbolNode) {
-                                    String symbol = ((SymbolNode)param2).getName();
+                                    String symbol = getName(param2);
                                     publicMethodSymbols.add(symbol);
                                 }
                             }
@@ -1851,7 +1858,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
                                     }
                                 }
                             } else if (node.nodeId == NodeType.DEFNNODE || node.nodeId == NodeType.DEFSNODE) {
-                                result[0] = ((MethodDefNode)node).getName();
+                                result[0] = getName(node);
                                 return;
                             }
                         }
@@ -1990,7 +1997,7 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
         Set<IndexedMethod>[] alternatesHolder = new Set[1];
         int[] paramIndexHolder = new int[1];
         int[] anchorOffsetHolder = new int[1];
-        if (!RubyCodeCompleter.computeMethodCall(info, lexRange.getStart(), astRange.getStart(),
+        if (!RubyMethodCompleter.computeMethodCall(info, lexRange.getStart(), astRange.getStart(),
                 methodHolder, paramIndexHolder, anchorOffsetHolder, alternatesHolder, NameKind.PREFIX)) {
 
             return guessedName;
@@ -2066,5 +2073,88 @@ TranslatedSource translatedSource = null; // TODO - determine this here?
         }
         
         return variables.keySet();
+    }
+
+    /**
+     * Throws {@link ClassCastException} if the given node is not instance of
+     * {@link INameNode}.
+     *
+     * @param node instance of {@link INameNode}.
+     * @return node's name
+     */
+    public static String getName(final Node node) {
+        return ((INameNode) node).getName();
+    }
+
+    /**
+     * Finds exit points of a method definition for the given node.
+     *
+     * @param defNode {@link MethodDefNode method definition node}
+     * @param exits accumulator for found exit points
+     */
+    static void findExitPoints(final MethodDefNode defNode, final Set<? super Node> exits) {
+        Node body = defNode.getBodyNode();
+        findNonLastExitPoints(body, exits);
+        Node last = findLastNode(body);
+        if (last != null) {
+            exits.add(last);
+        }
+    }
+
+    private static Node findLastNode(final Node node) {
+        Node last = null;
+        List<Node> list = node.childNodes();
+        for (int i = list.size() - 1; i >= 0; i--) {
+            last = list.get(i);
+
+            if (last instanceof ArgsNode || last instanceof ArgumentNode) {
+                // Done - no valid statement
+                return null;
+            }
+
+            if (last instanceof ListNode) {
+                last = last.childNodes().get(last.childNodes().size() - 1);
+            }
+
+            if (last instanceof NewlineNode && (last.childNodes().size() > 0)) {
+                last = last.childNodes().get(last.childNodes().size() - 1);
+                break;
+            }
+            break;
+        }
+        return last;
+    }
+
+    /** Helper for {@link #findExitPoints}. */
+    private static void findNonLastExitPoints(final Node node, final Set<? super Node> exits) {
+        switch (node.nodeId) {
+            case RETURNNODE:
+            case YIELDNODE:
+                exits.add(node);
+                break;
+            case CLASSNODE:
+            case SCLASSNODE:
+            case MODULENODE:
+                return; // Don't go into sub methods, classes, etc
+            case FCALLNODE:
+                FCallNode fc = (FCallNode) node;
+                if ("fail".equals(fc.getName()) || "raise".equals(fc.getName())) { // NOI18N
+                    exits.add(node);
+                }
+                break;
+        }
+        if (node instanceof MethodDefNode) {
+            // Don't go into sub methods, classes, etc
+            return;
+        }
+
+        List<Node> children = node.childNodes();
+
+        for (Node child : children) {
+            if (child.isInvisible()) {
+                continue;
+            }
+            findNonLastExitPoints(child, exits);
+        }
     }
 }
