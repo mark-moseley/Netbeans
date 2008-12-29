@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,8 +41,10 @@
 
 package org.netbeans.modules.search;
 
+import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
 import org.openide.loaders.DataObject;
 import org.openidex.search.DataObjectSearchGroup;
 import org.openidex.search.SearchType;
@@ -50,6 +52,7 @@ import org.openidex.search.SearchType;
 /**
  *
  * @author  Marian Petras
+ * @author  kaktus
  */
 final class SpecialSearchGroup extends DataObjectSearchGroup {
 
@@ -57,6 +60,8 @@ final class SpecialSearchGroup extends DataObjectSearchGroup {
     final boolean hasExtraSearchTypes;
     private final SearchScope searchScope;
     private SearchTask listeningSearchTask;
+
+    private LinkedList searchItems;
     
     SpecialSearchGroup(BasicSearchCriteria basicCriteria,
                        Collection<SearchType> extraSearchTypes,
@@ -77,14 +82,28 @@ final class SpecialSearchGroup extends DataObjectSearchGroup {
             }
         }
     }
-    
+
     @Override
-    public void doSearch() {
-        for (Iterator j = searchScope.getSearchInfo().objectsToSearch(); j.hasNext(); ) {
+    protected void prepareSearch(){
+        searchItems = new LinkedList();
+        for (Iterator<DataObject> j = searchScope.getSearchInfo().objectsToSearch(); j.hasNext(); ) {
             if (stopped) {
                 return;
             }
-            processSearchObject(/*DataObject*/ j.next());
+            searchItems.add(j.next());
+        }
+    }
+
+    @Override
+    public void doSearch() {
+        notifyStarted(searchItems.size());
+        int index = 0;
+        while(!searchItems.isEmpty()) {
+            if (stopped) {
+                return;
+            }
+            processSearchObject(/*DataObject*/ searchItems.poll());
+            notifyProgress(index++);
         }
     }
 
@@ -119,19 +138,36 @@ final class SpecialSearchGroup extends DataObjectSearchGroup {
     protected void firePropertyChange(String name,
                                       Object oldValue,
                                       Object newValue) {
-        notifyMatchingObjectFound((DataObject) newValue);
-    }
+            notifyMatchingObjectFound((DataObject) newValue);
+        }
     
     private void notifyMatchingObjectFound(DataObject obj) {
         if (listeningSearchTask != null) {
-            listeningSearchTask.matchingObjectFound(obj);
-        } else {
-            assert false;
+            Charset charset = (basicCriteria != null)
+                              ? basicCriteria.getLastUsedCharset()
+                              : null;
+            listeningSearchTask.matchingObjectFound(obj, charset);
+        }
+    }
+
+    private void notifyStarted(int unitsCount) {
+        if (listeningSearchTask != null) {
+            listeningSearchTask.searchStarted(unitsCount);
+        }
+    }
+
+    private void notifyProgress(int progress) {
+        if (listeningSearchTask != null) {
+            listeningSearchTask.progress(progress);
         }
     }
     
     void setListeningSearchTask(SearchTask searchTask) {
         listeningSearchTask = searchTask;
+    }
+
+    SearchScope getSearchScope(){
+        return searchScope;
     }
     
 }
