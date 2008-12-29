@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.csm.deep;
 
 import java.util.*;
@@ -57,45 +56,54 @@ import java.io.IOException;
  * @author Vladimir Kvashin
  */
 public class CompoundStatementImpl extends StatementBase implements CsmCompoundStatement {
-    
+
     private List<CsmStatement> statements;
-    
+
     public CompoundStatementImpl(AST ast, CsmFile file, CsmScope scope) {
         super(ast, file, scope);
     }
-    
+
     public CsmStatement.Kind getKind() {
         return CsmStatement.Kind.COMPOUND;
     }
-    
-    public List<CsmStatement> getStatements() {
-        if( statements == null ) {
-            statements = new ArrayList<CsmStatement>();
-            renderStatements(getAst());
+
+    public final List<CsmStatement> getStatements() {
+        if (statements == null) {
+            renderStatements(getStartRenderingAst());
         }
         return statements;
     }
-    
-    protected void renderStatements(AST ast) {
-        for( AST token = ast.getFirstChild(); token != null; token = token.getNextSibling() ) {
-            CsmStatement stmt = AstRenderer.renderStatement(token, getContainingFile(), this);
-            if( stmt != null ) {
-                statements.add(stmt);
+
+    protected AST getStartRenderingAst() {
+        return getAst();
+    }
+
+    private void renderStatements(AST ast) {
+        List<CsmStatement> out = new ArrayList<CsmStatement>();
+        if (ast != null) {
+            for (AST token = ast.getFirstChild(); token != null; token = token.getNextSibling()) {
+                CsmStatement stmt = AstRenderer.renderStatement(token, getContainingFile(), this);
+                if (stmt != null) {
+                    out.add(stmt);
+                }
             }
         }
+        statements = out;
     }
 
     public Collection<CsmScopeElement> getScopeElements() {
-        return (List)getStatements();
+        @SuppressWarnings("unchecked")
+        Collection<CsmScopeElement> out = (List) getStatements();
+        return out;
     }
 
     @Override
     public void write(DataOutput output) throws IOException {
         super.write(output);
-    }    
-    
+    }
+
     public CompoundStatementImpl(DataInput input) throws IOException {
         super(input);
         this.statements = null;
-    }     
+    }
 }
