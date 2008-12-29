@@ -67,6 +67,7 @@ import org.jruby.nb.ast.FCallNode;
 import org.jruby.nb.ast.GlobalAsgnNode;
 import org.jruby.nb.ast.InstAsgnNode;
 import org.jruby.nb.ast.ListNode;
+import org.jruby.nb.ast.LocalAsgnNode;
 import org.jruby.nb.ast.MethodDefNode;
 import org.jruby.nb.ast.ModuleNode;
 import org.jruby.nb.ast.Node;
@@ -101,7 +102,6 @@ import org.netbeans.modules.ruby.elements.AstMethodElement;
 import org.netbeans.modules.ruby.elements.AstModuleElement;
 import org.netbeans.modules.ruby.elements.AstNameElement;
 import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 
 /**
@@ -383,7 +383,12 @@ public class RubyStructureAnalyzer implements StructureScanner {
         try {
             BaseDocument doc = (BaseDocument)info.getDocument();
             if (doc != null) {
-                addFolds(doc, analysisResult.getElements(), folds, codefolds);
+                try {
+                    doc.readLock(); // For Utilities.getRowStart access
+                    addFolds(doc, analysisResult.getElements(), folds, codefolds);
+                } finally {
+                    doc.readUnlock();
+                }
             }
         } catch (Exception ex) {
             Exceptions.printStackTrace(ex);
@@ -493,7 +498,7 @@ public class RubyStructureAnalyzer implements StructureScanner {
             Node receiver = ((SClassNode)node).getReceiverNode();
 
             if (receiver instanceof INameNode) {
-                in = ((INameNode)receiver).getName();
+                in = AstUtilities.getName(receiver);
             } else {
                 in = null;
             }
@@ -518,18 +523,18 @@ public class RubyStructureAnalyzer implements StructureScanner {
             co.setIn(in);
 
             // "initialize" methods are private
-            if ((node instanceof DefnNode) && "initialize".equals(((DefnNode)node).getName())) {
+            if ((node instanceof DefnNode) && "initialize".equals(AstUtilities.getName(node))) {
                 co.setAccess(Modifier.PRIVATE);
             } else if ((parent != null) && parent.getNode() instanceof SClassNode) {
                 // What about public/protected/private access?
                 co.setModifiers(EnumSet.of(Modifier.STATIC));
             }
-            
+
             // A module inclusion callback? These often (at least in Rails) call
             // extend() to insert the instance methods into the class
             if (node instanceof DefsNode &&
                     parent instanceof AstModuleElement &&
-                    "included".equals(((DefsNode)node).getName())) { // NOI18N
+                    "included".equals(AstUtilities.getName(node))) { // NOI18N
                 // Analyze the given method to see if it's doing a simple
                 // base.extend(Whatever) in the included method.
                 String extendWith = getExtendWith((DefsNode)node);
@@ -553,28 +558,11 @@ public class RubyStructureAnalyzer implements StructureScanner {
         }
         case CONSTDECLNODE: {
             ConstDeclNode constNode = (ConstDeclNode) node;
-            Node valueNode = constNode.getValueNode();
 
-            AstElement co = new AstNameElement(info, node, ((INameNode)node).getName(),
+            AstElement co = new AstNameElement(info, node, AstUtilities.getName(node),
                     ElementKind.CONSTANT);
 
-            if (info != null) {
-                int astOffset = node.getPosition().getStartOffset();
-                BaseDocument doc = (BaseDocument) info.getDocument();
-                FileObject fileObject = info.getFileObject();
-                // pass RubyIndex cautiously to prevent dangerous mutual recursion between
-                // RubyIndexer, RubyTypeAnalyzer and few other. Be sure to run ruby.hints tests
-                RubyTypeAnalyzer analyzer = new RubyTypeAnalyzer(null, constNode, valueNode, astOffset, -1, doc, fileObject);
-                Set<? extends String> types = analyzer.getTypes(constNode.getName());
-                if (types != null) {
-                    for (String type : types) {
-                        if (type != null) {
-                            co.setType(type); // TODO should *add* type
-                        }
-                    }
-                }
-            }
-
+            co.setType(RubyTypeInferencer.inferTypesOfRHS(constNode, null));
             co.setIn(in);
 
             if (parent != null) {
@@ -628,7 +616,7 @@ public class RubyStructureAnalyzer implements StructureScanner {
             break;
         }
         case VCALLNODE: {
-            String name = ((INameNode)node).getName();
+            String name = AstUtilities.getName(node);
 
             if (("private".equals(name) || "protected".equals(name)) &&
                     parent instanceof AstClassElement) { // NOI18N
@@ -643,7 +631,7 @@ public class RubyStructureAnalyzer implements StructureScanner {
                 // Make sure we're not inside a method
                 // TODO - avoid duplicates?
 
-                String name = ((INameNode)node).getName();
+                String name = AstUtilities.getName(node);
                 boolean found = false;
                 for (AstElement child : structure) {
                     if (child.getKind() == ElementKind.VARIABLE && name.equals(child.getName())) {
@@ -654,6 +642,8 @@ public class RubyStructureAnalyzer implements StructureScanner {
                 if (!found) {
                     AstElement co = new AstNameElement(info, node, name,
                             ElementKind.VARIABLE);
+                    assert node instanceof LocalAsgnNode : "LocalAsgnNode expected";
+                    co.setType(RubyTypeInferencer.inferTypesOfRHS(node, null));
                     co.setIn(in);
                     structure.add(co);
                 }
@@ -662,7 +652,7 @@ public class RubyStructureAnalyzer implements StructureScanner {
             break;
         }
         case FCALLNODE: {
-            String name = ((INameNode)node).getName();
+            String name = AstUtilities.getName(node);
 
             if (name.equals("require")) { // XXX Load too?
 
@@ -697,7 +687,7 @@ public class RubyStructureAnalyzer implements StructureScanner {
                         if (n instanceof Colon2Node) {
                             includes.add(AstUtilities.getFqn((Colon2Node)n));
                         } else if (n instanceof INameNode) {
-                            includes.add(((INameNode)n).getName());
+                            includes.add(AstUtilities.getName(n));
                         }
                     }
                 }
@@ -744,7 +734,7 @@ public class RubyStructureAnalyzer implements StructureScanner {
                         Node n = args.get(j);
 
                         if (n instanceof SymbolNode) {
-                            String func = ((SymbolNode)n).getName();
+                            String func = AstUtilities.getName(n);
 
                             if ((func != null) && (func.length() > 0)) {
                                 // Find existing method
@@ -771,7 +761,7 @@ public class RubyStructureAnalyzer implements StructureScanner {
 
                                     // "initialize" methods are private
                                     if ((dupeNode instanceof DefnNode) &&
-                                            "initialize".equals(((DefnNode)dupeNode).getName())) { // NOI18N
+                                            "initialize".equals(AstUtilities.getName(dupeNode))) { // NOI18N
                                         co.setAccess(Modifier.PRIVATE);
                                     }
 
@@ -889,7 +879,7 @@ public class RubyStructureAnalyzer implements StructureScanner {
             return null;
         }
         
-        String receiverName = ((INameNode)receiver).getName();
+        String receiverName = AstUtilities.getName(receiver);
         if (!param.equals(receiverName)) {
             return null;
         }
@@ -905,9 +895,9 @@ public class RubyStructureAnalyzer implements StructureScanner {
 
                 if (n instanceof Colon2Node) {
                     // TODO - check to see if we qualify
-                    rn = ((Colon2Node)n).getName();
+                    rn = AstUtilities.getName(n);
                 } else if (n instanceof ConstNode) {
-                    rn = ((ConstNode)n).getName();
+                    rn = AstUtilities.getName(n);
                 }
                 
                 return rn;
@@ -1044,9 +1034,10 @@ public class RubyStructureAnalyzer implements StructureScanner {
                 }
             }
 
-            if (node.getType() != null) {
+            RubyType type = node.getType();
+            if (type.isKnown()) {
                 formatter.appendHtml(" : ");
-                formatter.appendText(node.getType());
+                formatter.appendText(type.asIndexedString());
             }
 
             return formatter.getText();
