@@ -97,8 +97,9 @@ public class RenamePanel extends JPanel implements CustomRefactoringPanel {
     
     private boolean initialized = false;
     public void initialize() {
-        if (initialized)
-            return ;
+        if (initialized) {
+            return;
+        }
         //put initialization code here
         initialized = true;
         CsmObject resolvedObject = CsmRefactoringUtils.getReferencedElement(this.origObject);
@@ -264,13 +265,14 @@ textCheckBox.addItemListener(new java.awt.event.ItemListener() {
         return nameField.getText();
     }
     
-    public boolean searchJavadoc() {
+    public boolean searchInComments() {
         return textCheckBox.isSelected();
     }
     
     public boolean isUpdateReferences() {
-        if (updateReferencesCheckBox.isVisible() && updateReferencesCheckBox.isSelected())
+        if (updateReferencesCheckBox.isVisible() && updateReferencesCheckBox.isSelected()) {
             return false;
+        }
         return true;
     }
 
