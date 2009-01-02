@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,23 +34,15 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.ws.qaf.rest;
 
-import com.meterware.httpunit.GetMethodWebRequest;
-import com.meterware.httpunit.PostMethodWebRequest;
-import com.meterware.httpunit.PutMethodWebRequest;
-import com.meterware.httpunit.WebConversation;
-import com.meterware.httpunit.WebRequest;
-import com.meterware.httpunit.WebResponse;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.MalformedURLException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -60,11 +52,14 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.actions.SaveAllAction;
 import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jemmy.JemmyProperties;
+import org.netbeans.junit.ide.ProjectSupport;
 import org.netbeans.modules.ws.qaf.WebServicesTestBase;
 import org.netbeans.modules.ws.qaf.utilities.ContentComparator;
 import org.netbeans.modules.ws.qaf.utilities.FilteringLineDiff;
@@ -73,7 +68,7 @@ import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
-import org.xml.sax.SAXException;
+import org.openide.util.Utilities;
 
 /**
  * Base class for REST tests
@@ -81,16 +76,20 @@ import org.xml.sax.SAXException;
  */
 public abstract class RestTestBase extends WebServicesTestBase {
 
+    //don't try to (un)deploy REST apps on windows!!!
+    //see: https://jersey.dev.java.net/issues/show_bug.cgi?id=45
+    private static final boolean isWindows = Utilities.isWindows(); //NOI18N
+
+
     private static final String HOSTNAME = "localhost"; //NOI18N
     private static final int PORT = resolveServerPort();
     private static final String JDBC_DRIVER = "org.apache.derby.jdbc.ClientDriver"; //NOI18N
     private static final String JDBC_URL = "jdbc:derby://localhost:1527/sample"; //NOI18N
     private static final String DB_USERNAME = "app"; //NOI18N
     private static final String DB_PASSWORD = "app"; //NOI18N
-    private WebConversation wc;
     private Connection connection;
 
-    private static boolean CREATE_GOLDEN_FILES;
+    private static boolean CREATE_GOLDEN_FILES = Boolean.getBoolean("golden");
     private static final Logger LOGGER = Logger.getLogger(RestTestBase.class.getName());
 
     /**
@@ -126,7 +125,9 @@ public abstract class RestTestBase extends WebServicesTestBase {
     @Override
     public void setUp() throws Exception {
         super.setUp();
-        wc = new WebConversation();
+        //XXX - avoid doubled start/restart of the server
+        //because of JDBC driver deployment (IZ #106586)
+        workaroundIZ106586();
         try {
             Class.forName(JDBC_DRIVER);
             connection = DriverManager.getConnection(JDBC_URL, DB_USERNAME, DB_PASSWORD);
@@ -138,7 +139,6 @@ public abstract class RestTestBase extends WebServicesTestBase {
     @Override
     public void tearDown() throws Exception {
         super.tearDown();
-        wc = null;
         try {
             if (connection != null) {
                 connection.close();
@@ -168,6 +168,7 @@ public abstract class RestTestBase extends WebServicesTestBase {
         // Close
         String close = Bundle.getStringTrimmed("org.netbeans.core.ui.Bundle", "LBL_Close");
         getProjectRootNode().performPopupAction(close);
+        System.gc();
     }
 
     /**
@@ -180,11 +181,13 @@ public abstract class RestTestBase extends WebServicesTestBase {
 
     /**
      * Helper method to get RESTful Web Services node
-     * 
+     *
      * @return RESTful Web Services node
      */
     protected Node getRestNode() {
+        ProjectSupport.waitScanFinished();
         String restNodeLabel = Bundle.getStringTrimmed("org.netbeans.modules.websvc.rest.nodes.Bundle", "LBL_RestServices");
+        JemmyProperties.setCurrentTimeout("JTreeOperator.WaitNextNodeTimeout", 120000); //NOI18N
         Node restNode = new Node(getProjectRootNode(), restNodeLabel);
         if (restNode.isCollapsed()) {
             restNode.expand();
@@ -205,81 +208,6 @@ public abstract class RestTestBase extends WebServicesTestBase {
      */
     protected String getResourcesURL() {
         return getRestAppURL() + "/resources"; //NOI18N
-    }
-
-    /**
-     * Get instance of used <code>WebConversation</code>
-     *
-     * @return instance of <code>WebConversation</code>
-     */
-    protected WebConversation getWebConversation() {
-        return wc;
-    }
-
-    /**
-     * Run HTTP GET request on given <code>url</code> with given <code>mimeType</code>
-     *
-     * @param url where to send a request
-     * @param mimeType mime type to be used
-     * @return response of the request
-     * @throws java.net.MalformedURLException
-     * @throws java.io.IOException
-     * @throws org.xml.sax.SAXException
-     */
-    protected WebResponse doGet(String url, MimeType mimeType) throws MalformedURLException, IOException, SAXException {
-        WebRequest request = new GetMethodWebRequest(url);
-        request.setHeaderField("Accept", mimeType.toString()); //NOI18N
-        return getWebConversation().getResponse(request);
-    }
-
-    /**
-     * Run HTTP POST request on given <code>url</code> with given <code>mimeType</code>
-     *
-     * @param url where to send a request
-     * @param is InputStream containing data to be send within the request
-     * @param mimeType mime type to be used
-     * @return response of the request
-     * @throws java.net.MalformedURLException
-     * @throws java.io.IOException
-     * @throws org.xml.sax.SAXException
-     */
-    protected WebResponse doPost(String url, InputStream is, MimeType mimeType) throws MalformedURLException, IOException, SAXException {
-        PostMethodWebRequest request = new PostMethodWebRequest(url, is, mimeType.toString());
-        request.setHeaderField("Accept", mimeType.toString()); //NOI18N
-        return getWebConversation().getResponse(request);
-    }
-
-    /**
-     * Run HTTP PUT request on given <code>url</code> with given <code>mimeType</code>
-     *
-     * @param url where to send a request
-     * @param is InputStream containing data to be send within the request
-     * @param mimeType mime type to be used
-     * @return response of the request
-     * @throws java.net.MalformedURLException
-     * @throws java.io.IOException
-     * @throws org.xml.sax.SAXException
-     */
-    protected WebResponse doPut(String url, InputStream is, MimeType mimeType) throws MalformedURLException, IOException, SAXException {
-        WebRequest request = new PutMethodWebRequest(url, is, mimeType.toString());
-        request.setHeaderField("Accept", mimeType.toString()); //NOI18N
-        return getWebConversation().getResponse(request);
-    }
-
-    /**
-     * Run HTTP DELETE request on given <code>url</code> with given <code>mimeType</code>
-     *
-     * @param url where to send a request
-     * @param mimeType mime type to be used
-     * @return response of the request
-     * @throws java.net.MalformedURLException
-     * @throws java.io.IOException
-     * @throws org.xml.sax.SAXException
-     */
-    protected WebResponse doDelete(String url, MimeType mimeType) throws MalformedURLException, IOException, SAXException {
-        WebRequest request = new DeleteMethodWebRequest(url);
-        request.setHeaderField("Accept", mimeType.toString()); //NOI18N
-        return getWebConversation().getResponse(request);
     }
 
     /**
@@ -426,8 +354,45 @@ public abstract class RestTestBase extends WebServicesTestBase {
         assertTrue("Golden files generated.", false); //NOI18N
     }
 
+    @Override
+    protected void deployProject(String projectName) throws IOException {
+        if (!isWindows) {
+           super.deployProject(projectName);
+        }
+    }
+
+    @Override
+    protected void undeployProject(String projectName) throws IOException {
+        if (!isWindows) {
+            super.undeployProject(projectName);
+        }
+    }
+
     private static int resolveServerPort() {
         Integer i = Integer.getInteger("glassfish.server.port"); //NOI18N
         return i != null ? i.intValue() : 8080;
     }
+
+    private void workaroundIZ106586() {
+        String gfRoot = System.getProperty("glassfish.home"); //NOI18N
+        if (gfRoot == null) {
+            return;
+        }
+        File f = new File(gfRoot, "domains/domain1/lib/derbyclient.jar"); //NOI18N
+        if (f.exists() && f.isFile()) {
+            return;
+        }
+        f = FileUtil.normalizeFile(f);
+        File origDriver = new File(gfRoot, "javadb/lib/derbyclient.jar"); //NOI18N
+        origDriver = FileUtil.normalizeFile(origDriver);
+        FileObject targetFolder = FileUtil.toFileObject(f.getParentFile());
+        try {
+            FileUtil.copyFile(FileUtil.toFileObject(origDriver), targetFolder, "derbyclient"); //NOI18N
+        } catch (IOException ex) {
+            LOGGER.log(Level.WARNING, "JDBC Driver was not copied", ex); //NOI18N
+        }
+        File jar = FileUtil.toFile(targetFolder.getFileObject("derbyclient", "jar")); //NOI18N
+        LOGGER.info("JDBC Driver was copied to: " + jar.getAbsolutePath()); //NOI18N
+    }
+
 }
