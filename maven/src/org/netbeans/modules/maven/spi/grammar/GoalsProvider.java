@@ -37,50 +37,32 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.maven.grammar;
+package org.netbeans.modules.maven.spi.grammar;
 
-import java.util.List;
 import java.util.Set;
-import org.netbeans.modules.maven.spi.grammar.GoalsProvider;
-import org.netbeans.modules.maven.embedder.MavenSettingsSingleton;
-import java.util.Collections;
-import java.util.HashSet;
-import org.openide.util.Exceptions;
 
 /**
- *
+ * bridging interface, a single implementation is expected to reside
+ * in default lookup coming from the grammar module.
  * @author mkleint
  */
-@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.maven.spi.grammar.GoalsProvider.class)
-public class GoalsProviderImpl implements GoalsProvider {
-    
-    /** Creates a new instance of GoalsProviderImpl */
-    public GoalsProviderImpl() {
-    }
-    
-    
-    public Set<String> getAvailableGoals() {
-        //TODO we should have a "resolved instance here with defaults injected correctly
-        @SuppressWarnings("unchecked")
-        List<String> groups = MavenSettingsSingleton.getInstance().getSettings().getPluginGroups();
-        Set<String> grps = new HashSet<String>(groups);
-        grps.add("org.apache.maven.plugins"); //NOI18N
-        grps.add("org.codehaus.mojo"); //NOI18N
-        try {
-            return PluginIndexManager.getPluginGoalNames(grps);
-        } catch (Exception ex) {
-            Exceptions.printStackTrace(ex);
-        }
-        return Collections.<String>emptySet();
-    }
+public interface GoalsProvider {
 
-    public Set<String[]> getPluginPropertyExpression(String groupId, String artifactId, String version, String goal) {
-        try {
-            return PluginIndexManager.getPluginParameterExpressions(groupId, artifactId, version, goal);
-        } catch (Exception ex) {
-            Exceptions.printStackTrace(ex);
-        }
-        return Collections.<String[]>emptySet();
-    }
+    /**
+     * list of goals that are known.
+     * 
+     * @return
+     */
+    Set<String> getAvailableGoals();
 
+    /**
+     *
+     * @param groupId
+     * @param artifactId
+     * @param version
+     * @return set of arrays,
+     * the first element in array is the property name,
+     * the second element in array is the property expression
+     */
+    public Set<String[]> getPluginPropertyExpression(String groupId, String artifactId, String version, String goal);
 }
