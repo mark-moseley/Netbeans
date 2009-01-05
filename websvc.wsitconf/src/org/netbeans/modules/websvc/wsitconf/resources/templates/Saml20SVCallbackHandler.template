@@ -1,29 +1,37 @@
-/*
- * __NAME__.java
- *
- * Created on __DATE__, __TIME__
- */
+<#-- FreeMarker template (see http://freemarker.org/) -->
+<#assign licenseFirst = "/*">
+<#assign licensePrefix = " * ">
+<#assign licenseLast = " */">
+<#include "../Licenses/license-${project.license}.txt">
 
-package Templates.Saml20Sv;
+<#if package?? && package != "">
+package ${package};
+</#if>
 
-import java.io.*;
-import java.util.*;
-
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.security.KeyStore;
+import java.util.GregorianCalendar;
+import java.util.LinkedList;
+import java.util.List;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.UnsupportedCallbackException;
 
-import com.sun.xml.wss.impl.callback.*;
+import org.w3c.dom.Element;
 
-import com.sun.xml.wss.saml.*;
-
-import org.w3c.dom.*;
+import com.sun.xml.wss.impl.callback.SAMLCallback;
+import com.sun.xml.wss.saml.Assertion;
+import com.sun.xml.wss.saml.Conditions;
+import com.sun.xml.wss.saml.NameID;
+import com.sun.xml.wss.saml.SAMLAssertionFactory;
+import com.sun.xml.wss.saml.Subject;
+import com.sun.xml.wss.saml.SubjectConfirmation;
 
 /** 
  *
- * @author  __USER__
+ * @author  ${user}
  * @version
  * 
  * SAML 2.0 Sender Vouches Callback Handler
