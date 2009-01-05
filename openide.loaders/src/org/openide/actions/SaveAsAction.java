@@ -64,7 +64,9 @@ import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 import org.openide.util.Utilities;
+import org.openide.util.WeakListeners;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 
@@ -75,21 +77,25 @@ import org.openide.windows.WindowManager;
  * @since 6.3
  * @author S. Aubrecht
  */
-final class SaveAsAction extends AbstractAction implements ContextAwareAction, LookupListener, PropertyChangeListener {
+final class SaveAsAction extends AbstractAction implements ContextAwareAction {
 
     private Lookup context;
     private Lookup.Result<SaveAsCapable> lkpInfo;
-    private boolean isEditorWindowActivated;
-    
+    private boolean isGlobal = false;
+    private boolean isDirty = true;
+    private PropertyChangeListener registryListener;
+    private LookupListener lookupListener;
+
     private SaveAsAction() {
-        this( Utilities.actionsGlobalContext() );
-        TopComponent.getRegistry().addPropertyChangeListener( this );
+        this( Utilities.actionsGlobalContext(), true );
     }
     
-    private SaveAsAction( Lookup context ) {
+    private SaveAsAction( Lookup context, boolean isGlobal ) {
         super( NbBundle.getMessage(DataObject.class, "CTL_SaveAsAction") ); //NOI18N
         this.context = context;
+        this.isGlobal = isGlobal;
         putValue("noIconInMenu", Boolean.TRUE); //NOI18N
+        setEnabled( false );
     }
     
     /**
@@ -99,30 +105,18 @@ final class SaveAsAction extends AbstractAction implements ContextAwareAction, L
     public static ContextAwareAction create() {
         return new SaveAsAction();
     }
-
-    void init() {
-        assert SwingUtilities.isEventDispatchThread() 
-               : "this shall be called just from AWT thread";
-
-        if (lkpInfo != null) {
-            return;
-        }
-
-        //The thing we want to listen for the presence or absence of
-        //on the global selection
-        Lookup.Template<SaveAsCapable> tpl = new Lookup.Template<SaveAsCapable>(SaveAsCapable.class);
-        lkpInfo = context.lookup (tpl);
-        lkpInfo.addLookupListener(this);
-        propertyChange(null);
-    }
-
+    
+    @Override
     public boolean isEnabled() {
-        init();
+        if (isDirty
+            || null == changeSupport || !changeSupport.hasListeners("enabled") ) { //NOI18N
+            refreshEnabled();
+        }
         return super.isEnabled();
     }
 
     public void actionPerformed(ActionEvent e) {
-        init();
+        refreshListeners();
         Collection<? extends SaveAsCapable> inst = lkpInfo.allInstances();
         if( inst.size() > 0 ) {
             SaveAsCapable saveAs = inst.iterator().next();
@@ -150,15 +144,14 @@ final class SaveAsAction extends AbstractAction implements ContextAwareAction, L
                 try {
                     saveAs.saveAs( newFolder, newFile.getName() );
                 } catch( IOException ioE ) {
-                    Exceptions.attachLocalizedMessage( ioE, NbBundle.getMessage( DataObject.class, "MSG_SaveAsFailed" ) );  //NOI18N
-                    Logger.getLogger( getClass().getName() ).log( Level.WARNING, null, ioE );
+                    Exceptions.attachLocalizedMessage( ioE,
+                            NbBundle.getMessage( DataObject.class, "MSG_SaveAsFailed", // NOI18N
+                            newFile.getName (),
+                            ioE.getLocalizedMessage () ) );
+                    Logger.getLogger( getClass().getName() ).log( Level.SEVERE, null, ioE );
                 }
             }
         }
-    }
-    
-    public void resultChanged(LookupEvent ev) {
-        setEnabled (null != lkpInfo && lkpInfo.allItems().size() != 0 && isEditorWindowActivated );
     }
     
     /**
@@ -167,9 +160,15 @@ final class SaveAsAction extends AbstractAction implements ContextAwareAction, L
      */
     private File getNewFileName() {
         File newFile = null;
+        File currentFile = null;
         FileObject currentFileObject = getCurrentFileObject();
-        if( null != currentFileObject )
+        if( null != currentFileObject ) {
             newFile = FileUtil.toFile( currentFileObject );
+            currentFile = newFile;
+            if( null == newFile ) {
+                newFile = new File( currentFileObject.getNameExt() );
+            }
+        }
 
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle( NbBundle.getMessage(DataObject.class, "LBL_SaveAsTitle" ) ); //NOI18N
@@ -178,13 +177,33 @@ final class SaveAsAction extends AbstractAction implements ContextAwareAction, L
             chooser.setSelectedFile( newFile );
             FileUtil.preventFileChooserSymlinkTraversal( chooser, newFile.getParentFile() );
         }
+        File initialFolder = getInitialFolderFrom( newFile );
+        if( null != initialFolder )
+            chooser.setCurrentDirectory( initialFolder );
         File origFile = newFile;
-        if( JFileChooser.APPROVE_OPTION != chooser.showSaveDialog( WindowManager.getDefault().getMainWindow() ) ) {
-            return null;
+        while( true ) {
+            if( JFileChooser.APPROVE_OPTION != chooser.showSaveDialog( WindowManager.getDefault().getMainWindow() ) ) {
+                return null;
+            }
+            newFile = chooser.getSelectedFile();
+            if( null == newFile )
+                break;
+            if( newFile.equals( origFile ) ) {
+                NotifyDescriptor nd = new NotifyDescriptor(
+                        NbBundle.getMessage( DataObject.class, "MSG_SaveAs_SameFileSelected"), //NOI18N
+                        NbBundle.getMessage( DataObject.class, "MSG_SaveAs_SameFileSelected_Title"), //NOI18N
+                        NotifyDescriptor.DEFAULT_OPTION,
+                        NotifyDescriptor.INFORMATION_MESSAGE,
+                        new Object[] { NotifyDescriptor.OK_OPTION }, NotifyDescriptor.OK_OPTION );
+                DialogDisplayer.getDefault().notify( nd );
+            } else {
+                break;
+            }
         }
-        newFile = chooser.getSelectedFile();
-        if( null == newFile || newFile.equals( origFile ) )
-            return null;
+        if( isFromUserDir(currentFile) ) {
+            File lastUsedDir = chooser.getCurrentDirectory();
+            NbPreferences.forModule(SaveAction.class).put("lastUsedDir", lastUsedDir.getAbsolutePath()); //NOI18N
+        }
 
         return newFile;
     }
@@ -199,16 +218,123 @@ final class SaveAsAction extends AbstractAction implements ContextAwareAction, L
         return null;
     }
 
-    public Action createContextAwareInstance(Lookup actionContext) {
-        return new SaveAsAction( actionContext );
+    /**
+     * @param newFile File being 'saved as'
+     * @return Initial folder selected in file chooser. If the file is in netbeans
+     * user dir then user's os-dependent home dir or last used folder will be used
+     * instead of file's parent folder.
+     */
+    private File getInitialFolderFrom(File newFile) {
+        File res = new File(System.getProperty("user.home")); //NOI18N
+        if( null != newFile ) {
+            File parent = newFile.getParentFile();
+            if( isFromUserDir(parent) ) {
+                String strLastUsedDir = NbPreferences.forModule(SaveAction.class).get("lastUsedDir", res.getAbsolutePath()); //NOI18N
+                res = new File(strLastUsedDir);
+                if( !res.exists() || !res.isDirectory() ) {
+                    res = new File(System.getProperty("user.home")); //NOI18N
+                }
+            } else {
+                res = parent;
+            }
+        }
+        return res;
     }
 
-    public void propertyChange(PropertyChangeEvent arg0) {
+    /**
+     * @param file
+     * @return True if given file is netbeans user dir.
+     */
+    private boolean isFromUserDir( File file ) {
+        if( null == file )
+            return false;
+        File nbUserDir = new File(System.getProperty("netbeans.user")); //NOI18N
+        return file.getAbsolutePath().startsWith(nbUserDir.getAbsolutePath());
+    }
+
+    public Action createContextAwareInstance(Lookup actionContext) {
+        return new SaveAsAction( actionContext, false );
+    }
+    
+    @Override
+    public synchronized void addPropertyChangeListener(PropertyChangeListener listener) {
+        super.addPropertyChangeListener(listener);
+        refreshListeners();
+    }
+    
+    @Override
+    public synchronized void removePropertyChangeListener(PropertyChangeListener listener) {
+        super.removePropertyChangeListener(listener);
+        refreshListeners();
+    }
+    
+    private PropertyChangeListener createRegistryListener() {
+        return WeakListeners.propertyChange( new PropertyChangeListener() {
+                public void propertyChange(PropertyChangeEvent evt) {
+                    isDirty = true;
+                }
+            }, TopComponent.getRegistry() );
+    }
+    
+    private LookupListener createLookupListener() {
+        return WeakListeners.create(LookupListener.class, new LookupListener() {
+                public void resultChanged(LookupEvent ev) {
+                    isDirty = true;
+                }
+            }, lkpInfo);
+    }
+
+    private void refreshEnabled() {
+        if (lkpInfo == null) {
+            //The thing we want to listen for the presence or absence of
+            //on the global selection
+            Lookup.Template<SaveAsCapable> tpl = new Lookup.Template<SaveAsCapable>(SaveAsCapable.class);
+            lkpInfo = context.lookup (tpl);
+        }
+        
         TopComponent tc = TopComponent.getRegistry().getActivated();
+        boolean isEditorWindowActivated = null != tc && WindowManager.getDefault().isEditorTopComponent(tc);
+        setEnabled(null != lkpInfo && lkpInfo.allItems().size() != 0 && isEditorWindowActivated);
+        isDirty = false;
+    }
+    
+    private void refreshListeners() {
+        assert SwingUtilities.isEventDispatchThread() 
+               : "this shall be called just from AWT thread";
+
+        if (lkpInfo == null) {
+            //The thing we want to listen for the presence or absence of
+            //on the global selection
+            Lookup.Template<SaveAsCapable> tpl = new Lookup.Template<SaveAsCapable>(SaveAsCapable.class);
+            lkpInfo = context.lookup (tpl);
+        }
         
-        isEditorWindowActivated = null != tc && WindowManager.getDefault().isEditorTopComponent( tc );
-        
-        resultChanged( null );
+        if( null == changeSupport || !changeSupport.hasListeners("enabled") ) { //NOI18N
+            if( isGlobal && null != registryListener ) {
+                TopComponent.getRegistry().removePropertyChangeListener( registryListener );
+                registryListener = null;
+            }
+            if( null != lookupListener ) {
+                lkpInfo.removeLookupListener(lookupListener);
+                lookupListener = null;
+            }
+        } else {
+            if( null == registryListener ) {
+                registryListener = createRegistryListener();
+                TopComponent.getRegistry().addPropertyChangeListener( registryListener );
+            }
+
+            if( null == lookupListener ) {
+                lookupListener = createLookupListener();
+                lkpInfo.addLookupListener( lookupListener );
+            }
+            refreshEnabled();
+        }
+    }
+    
+    //for unit testing
+    boolean _isEnabled() {
+        return super.isEnabled();
     }
 }
 
