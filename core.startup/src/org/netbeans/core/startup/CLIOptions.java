@@ -53,6 +53,7 @@ import org.openide.util.NbBundle;
  * Handler for core options.
  * @author Jaroslav Tulach
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.CLIHandler.class)
 public class CLIOptions extends CLIHandler {
 
     /** directory for modules */
@@ -225,11 +226,11 @@ public class CLIOptions extends CLIHandler {
         w.println("  --fontsize <size>     set the base font size of the user interface, in points");
         w.println("  --locale <language[:country[:variant]]> use specified locale");
         w.println("  --userdir <path>      use specified directory to store user settings");
+        w.println("  --nosplash            do not show the splash screen");
         w.println("");
 //   \  --branding <token>    use specified branding (- for default)
 //   
 //   \  --nologging           do not create the log file\n\
-//   \  --nosplash            do not show the splash screen\n\
 //   \  --nogui               just start up internals, do not show GUI
     }
     
