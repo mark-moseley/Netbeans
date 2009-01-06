@@ -76,6 +76,7 @@ import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.awt.Mnemonics;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.windows.WindowManager;
@@ -122,12 +123,12 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
     
     /** the last position of the exception dialog window */
     private static Rectangle lastBounds;
+    
+    private static int extraH = 0, extraW = 0;
 
     /** Constructor.
     */
     private NotifyExcPanel () {
-        setPreferredSize(new Dimension(SIZE_PREFERRED_WIDTH,SIZE_PREFERRED_HEIGHT));
-
         java.util.ResourceBundle bundle = org.openide.util.NbBundle.getBundle(NotifyExcPanel.class);
         next = new JButton ();
         Mnemonics.setLocalizedText(next, bundle.getString("CTL_NextException"));
@@ -140,7 +141,7 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
         details.setDefaultCapable (false);
 
         output = new JTextPane() {
-            public boolean getScrollableTracksViewportWidth() {
+            public @Override boolean getScrollableTracksViewportWidth() {
                 return false;
             }
         };
@@ -177,6 +178,8 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
         descriptor.setModal( isModalDialogPresent() 
                 && WindowManager.getDefault().getMainWindow().isVisible() );
         
+        setPreferredSize(new Dimension(SIZE_PREFERRED_WIDTH + extraW, SIZE_PREFERRED_HEIGHT + extraH));
+
         dialog = DialogDisplayer.getDefault().createDialog(descriptor);
         if( null != lastBounds )
             dialog.setBounds( lastBounds );
@@ -211,6 +214,9 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
                 try {
                     Object o = ((Callable<?>)h).call();
                     assert o instanceof JButton;
+                    JButton b = (JButton) o;
+                    extraH += b.getPreferredSize ().height;
+                    extraW += b.getPreferredSize ().width;
                     arr.add(o);
                 } catch (Exception ex) {
                     Exceptions.printStackTrace(ex);
@@ -218,7 +224,7 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
             }
         }
         
-        arr.add(DialogDescriptor.CLOSED_OPTION);
+        arr.add(NotifyDescriptor.CANCEL_OPTION);
         return arr.toArray();
     }
     
@@ -262,9 +268,20 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
         }
         
         // #50018 Don't try to show any notify dialog when reporting headless exception
-        if ("java.awt.HeadlessException".equals(t.getClassName()) && GraphicsEnvironment.isHeadless()) {
+        if ("java.awt.HeadlessException".equals(t.getClassName()) && GraphicsEnvironment.isHeadless()) { // NOI18N
             t.printStackTrace(System.err);
             return;
+        }
+        //#133092: Error in JDK 5 during printing #6704417.
+        if ("java.lang.NullPointerException".equals(t.getClassName())) { // NOI18N
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            t.printStackTrace(pw);
+            if (sw.toString().contains("sun.awt.windows.WComponentPeer.nativeHandleEvent") && // NOI18N
+                System.getProperty("java.version").startsWith("1.5")) { // NOI18N
+                 t.printStackTrace(System.err);
+                 return;
+            }
         }
 
         SwingUtilities.invokeLater (new Runnable () {
@@ -486,10 +503,16 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
     //
 
     public void actionPerformed(final java.awt.event.ActionEvent ev) {
-        if (ev.getSource () == next && exceptions.setNextElement() || ev.getSource () == previous && exceptions.setPreviousElement()) {
+        Object source = ev.getSource();
+        if (source == next && exceptions.setNextElement() || source == previous && exceptions.setPreviousElement()) {
             current = exceptions.get();
             LogRecord rec = new LogRecord(Level.CONFIG, "NotifyExcPanel: " + ev.getActionCommand());// NOI18N
-            Object[] params = {current.getClassName()+": "+ current.getMessage(), current.getFirstStacktraceLine()}; // NOI18N
+            String message = current.getMessage();
+            String className = current.getClassName();
+            if (message != null){
+                className = className+": "+ message;
+            }
+            Object[] params = {className, current.getFirstStacktraceLine()}; // NOI18N
             rec.setParameters(params);
             //log changes in NotifyPanel - #119632
             Logger.getLogger("org.netbeans.ui.NotifyExcPanel").log(rec);// NOI18N
@@ -499,7 +522,7 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
             return;
         }
 
-        if (ev.getSource () == details) {
+        if (source == details) {
             showDetails = !showDetails;
             lastBounds = null;
             try {
@@ -517,7 +540,7 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
         }
 
         // bugfix #40834, remove all exceptions to notify when close a dialog
-        if (ev.getSource () == DialogDescriptor.OK_OPTION || ev.getSource () == DialogDescriptor.CLOSED_OPTION) {
+        if (source == NotifyDescriptor.OK_OPTION || source == NotifyDescriptor.CLOSED_OPTION || source == NotifyDescriptor.CANCEL_OPTION) {
             try {
                 exceptions.removeAll();
             //Fixed bug #9435, call of setVisible(false) replaced by call of dispose()
@@ -581,7 +604,7 @@ public final class NotifyExcPanel extends JPanel implements ActionListener {
     public static Component getNotificationVisualizer() {
         //do not create flashing icon if not allowed in system properties
         if( null == flasher ) {
-            ImageIcon img1 = new ImageIcon( Utilities.loadImage("org/netbeans/core/resources/exception.gif", true) );
+            ImageIcon img1 = new ImageIcon( ImageUtilities.loadImage("org/netbeans/core/resources/exception.gif", true) );
             flasher = new ExceptionFlasher( img1 );
         }
         return flasher;
