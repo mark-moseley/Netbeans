@@ -38,9 +38,9 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.vmd.midp.propertyeditors;
 
+import java.awt.Component;
 import java.awt.GridLayout;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
@@ -56,6 +56,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JToggleButton;
+import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
 import org.netbeans.modules.vmd.midp.components.general.Bitmask.BitmaskItem;
@@ -72,39 +73,82 @@ import org.openide.util.NbBundle;
  * @author Karol Harezlak
  */
 public class PropertyEditorConstraints extends PropertyEditorUserCode implements PropertyEditorElement {
-    
+
     private CustomEditorConstraints customEditor;
     private JRadioButton radioButton;
-    
+    private int bitMask;
+    private Constraints constraints;
+    private HashMap<Integer, BitmaskItem> bits;
+
     private PropertyEditorConstraints() {
         super(NbBundle.getMessage(PropertyEditorConstraints.class, "LBL_CONSTR_UCLABEL")); // NOI18N
-        initComponents();
-        
+        initMap();
         initElements(Collections.<PropertyEditorElement>singleton(this));
     }
-    
+
     public static final PropertyEditorConstraints createInstance() {
         return new PropertyEditorConstraints();
     }
-    
+
     private void initComponents() {
         radioButton = new JRadioButton();
         Mnemonics.setLocalizedText(radioButton, NbBundle.getMessage(PropertyEditorConstraints.class, "LBL_CONSTR_STR")); // NOI18N
-        customEditor = new CustomEditorConstraints(0);
+
+        radioButton.getAccessibleContext().setAccessibleName(
+                NbBundle.getMessage(PropertyEditorConstraints.class, "ACSN_CONSTR_STR")); // NOI18N
+        radioButton.getAccessibleContext().setAccessibleDescription(
+                NbBundle.getMessage(PropertyEditorConstraints.class, "ACSD_CONSTR_STR")); // NOI18N
+
+        customEditor = new CustomEditorConstraints();
+
     }
-    
+
+    @Override
+    public void cleanUp(DesignComponent component) {
+        super.cleanUp(component);
+        if (customEditor != null) {
+            customEditor.cleanUp();
+            customEditor = null;
+        }
+        customEditor = null;
+        radioButton = null;
+    }
+
+    private void combineMaskWithGuiName(Integer value, BitmaskItem bitmaskItem) {
+        //guiItem.setSelected(layouts.isSet(bitmaskItem));
+        bits.put(value, bitmaskItem);
+    }
+
+    void initMap() {
+        bits = new HashMap<Integer, BitmaskItem>();
+        constraints = new Constraints(0);
+        combineMaskWithGuiName(TextFieldCD.VALUE_ANY, constraints.getBitmaskItem(TextFieldCD.VALUE_ANY));
+        combineMaskWithGuiName(TextFieldCD.VALUE_PASSWORD, constraints.getBitmaskItem(TextFieldCD.VALUE_PASSWORD));
+        combineMaskWithGuiName(TextFieldCD.VALUE_NUMERIC, constraints.getBitmaskItem(TextFieldCD.VALUE_NUMERIC));
+        combineMaskWithGuiName(TextFieldCD.VALUE_UNEDITABLE, constraints.getBitmaskItem(TextFieldCD.VALUE_UNEDITABLE));
+        combineMaskWithGuiName(TextFieldCD.VALUE_EMAILADDR, constraints.getBitmaskItem(TextFieldCD.VALUE_EMAILADDR));
+        combineMaskWithGuiName(TextFieldCD.VALUE_SENSITIVE, constraints.getBitmaskItem(TextFieldCD.VALUE_SENSITIVE));
+        combineMaskWithGuiName(TextFieldCD.VALUE_PHONENUMBER, constraints.getBitmaskItem(TextFieldCD.VALUE_PHONENUMBER));
+        combineMaskWithGuiName(TextFieldCD.VALUE_NON_PREDICTIVE, constraints.getBitmaskItem(TextFieldCD.VALUE_NON_PREDICTIVE));
+        combineMaskWithGuiName(TextFieldCD.VALUE_URL, constraints.getBitmaskItem(TextFieldCD.VALUE_URL));
+        combineMaskWithGuiName(TextFieldCD.VALUE_INITIAL_CAPS_WORD, constraints.getBitmaskItem(TextFieldCD.VALUE_INITIAL_CAPS_WORD));
+        combineMaskWithGuiName(TextFieldCD.VALUE_NON_PREDICTIVE, constraints.getBitmaskItem(TextFieldCD.VALUE_NON_PREDICTIVE));
+        combineMaskWithGuiName(TextFieldCD.VALUE_DECIMAL, constraints.getBitmaskItem(TextFieldCD.VALUE_DECIMAL));
+        combineMaskWithGuiName(TextFieldCD.VALUE_INITIAL_CAPS_SENTENCE, constraints.getBitmaskItem(TextFieldCD.VALUE_INITIAL_CAPS_SENTENCE));
+    }
+
     public JComponent getCustomEditorComponent() {
         return customEditor;
     }
-    
+
     public JRadioButton getRadioButton() {
         return radioButton;
     }
-    
+
     public boolean isInitiallySelected() {
         return true;
     }
-    
+
     public boolean isVerticallyResizable() {
         return true;
     }
@@ -115,17 +159,50 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
         if (superText != null) {
             return superText;
         }
-        customEditor.setBitmask(MidpTypes.getInteger((PropertyValue) super.getValue()));
-        return customEditor.getBitmaskAsText();
+        if (constraints == null) {
+            return null;
+        }
+        setConstant(MidpTypes.getInteger((PropertyValue) super.getValue()));
+        return getBitmaskAsText();
     }
-    
-    public void setTextForPropertyValue (String text) {
+
+    private void setConstant(int bitmask) {
+        constraints.setBitmask(bitmask);
+        this.bitMask = bitmask;
     }
-    
-    public String getTextForPropertyValue () {
+
+    private String getBitmaskAsText() {
+
+        StringBuffer bitmaskAsTextRadioButton1 = new StringBuffer();
+        StringBuffer separator = new StringBuffer(" | "); // NOI18N
+
+        for (int intValue = 0; intValue <= 5; intValue++) {
+            if (constraints.isSet(bits.get(intValue)) && bits.get(intValue).getAffectedBits() <= 5) {
+                //bitmaskRadioButton1 = bits.get(intValue).getAffectedBits();
+                bitmaskAsTextRadioButton1 = new StringBuffer(bits.get(intValue).getName());
+                bitmaskAsTextRadioButton1.append(separator);
+            }
+        }
+
+        for (int intValue : bits.keySet()) {
+            if (constraints.isSet(bits.get(intValue)) && bits.get(intValue).getAffectedBits() > 5) {
+                bitmaskAsTextRadioButton1.append(bits.get(intValue).getName());
+                bitmaskAsTextRadioButton1.append(separator);
+            }
+        }
+
+        bitmaskAsTextRadioButton1.deleteCharAt(bitmaskAsTextRadioButton1.lastIndexOf(separator.toString().trim()));
+
+        return bitmaskAsTextRadioButton1.toString();
+    }
+
+    public void setTextForPropertyValue(String text) {
+    }
+
+    public String getTextForPropertyValue() {
         return null;
     }
-    
+
     public void updateState(PropertyValue value) {
         if (isCurrentValueANull() || value == null) {
             customEditor.setBitmask(0);
@@ -134,11 +211,21 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
         }
         radioButton.setSelected(!isCurrentValueAUserCodeType());
     }
-    
+
     private void saveValue() {
-        super.setValue(MidpTypes.createIntegerValue(customEditor.getBitMask()));
+        super.setValue(MidpTypes.createIntegerValue(bitMask));
     }
-    
+
+    @Override
+    public Component getCustomEditor() {
+        if (customEditor == null) {
+            initComponents();
+            initElements(Collections.<PropertyEditorElement>singleton(this));
+            customEditor = new CustomEditorConstraints();
+        }
+        return super.getCustomEditor();
+    }
+
     @Override
     public void customEditorOKButtonPressed() {
         super.customEditorOKButtonPressed();
@@ -146,39 +233,47 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             saveValue();
         }
     }
-    
+
     @Override
     public Boolean canEditAsText() {
         return false;
     }
-    
+
     private class CustomEditorConstraints extends JPanel implements ItemListener {
-        
-        private Constraints constraints;
+
         private Map<JToggleButton, BitmaskItem> radioButtonsMap;
         private Map<JToggleButton, BitmaskItem> checkBoxesMap;
         private List<JToggleButton> guiItems;
         private JRadioButton anyRadioButton;
         private JCheckBox passwordCheckBox;
-        
-        private int bitMask;
-        
-        public CustomEditorConstraints(int bitmask) {
-            this.constraints =  new Constraints(bitmask);
+
+        public CustomEditorConstraints() {
             this.radioButtonsMap = new HashMap<JToggleButton, BitmaskItem>();
             this.checkBoxesMap = new HashMap<JToggleButton, BitmaskItem>();
             this.guiItems = new ArrayList<JToggleButton>();
-            this.bitMask = bitmask;
             initComponents();
         }
-        
+
+        void cleanUp() {
+            constraints = null;
+            radioButtonsMap.clear();
+            radioButtonsMap = null;
+            checkBoxesMap.clear();
+            checkBoxesMap = null;
+            guiItems.clear();
+            guiItems = null;
+            anyRadioButton = null;
+            passwordCheckBox = null;
+            this.removeAll();
+        }
+
         private void initComponents() {
             JToggleButton guiItem;
             ButtonGroup buttonGroup = new ButtonGroup();
-            
-            setLayout(new GridLayout(6,2));
+
+            setLayout(new GridLayout(6, 2));
             this.setBorder(BorderFactory.createTitledBorder(Bundle.getMessage("PNL_TEXTFIELDPE_NAME"))); // NOI18N
-            
+
             // ANY
             anyRadioButton = new JRadioButton(constraints.getBitmaskItem(TextFieldCD.VALUE_ANY).getDisplayName());
             anyRadioButton.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_ANY")); // NOI18N
@@ -187,15 +282,20 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             //anyRadioButton.setSelected( bitmask == TextFieldCD.VALUE_ANY);
             guiItems.add(anyRadioButton);
             this.add(anyRadioButton);
-            
+            anyRadioButton.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintAny"));// NOI18N
+            anyRadioButton.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintAny"));// NOI18N
             // PASSWORD
             passwordCheckBox = new JCheckBox(constraints.getBitmaskItem(TextFieldCD.VALUE_PASSWORD).getDisplayName());
             passwordCheckBox.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_PASSWORD")); // NOI18N
-            checkBoxesMap.put(passwordCheckBox, constraints.getBitmaskItem(TextFieldCD.VALUE_PASSWORD)) ;
+            checkBoxesMap.put(passwordCheckBox, constraints.getBitmaskItem(TextFieldCD.VALUE_PASSWORD));
             guiItems.add(passwordCheckBox);
             this.add(passwordCheckBox);
-            
-            
+            passwordCheckBox.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintPasswd"));// NOI18N
+            passwordCheckBox.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintPasswd"));// NOI18N
             // NUMERIC
             guiItem = new JRadioButton(constraints.getBitmaskItem(TextFieldCD.VALUE_NUMERIC).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_NUMERIC")); // NOI18N
@@ -203,15 +303,21 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             radioButtonsMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_NUMERIC));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintNum"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintNum"));// NOI18N
+
             // UNEDITABLE
             guiItem = new JCheckBox(constraints.getBitmaskItem(TextFieldCD.VALUE_UNEDITABLE).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_UNEDITABLE")); // NOI18N
             checkBoxesMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_UNEDITABLE));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintUnedit"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintUnedit"));// NOI18N
             // EMAIL
             guiItem = new JRadioButton(constraints.getBitmaskItem(TextFieldCD.VALUE_EMAILADDR).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_EMAIL")); // NOI18N
@@ -219,14 +325,22 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             radioButtonsMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_EMAILADDR));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintEmail"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintEmail"));// NOI18N
+
             // SENSITIVE
             guiItem = new JCheckBox(constraints.getBitmaskItem(TextFieldCD.VALUE_SENSITIVE).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_SENSITIVE")); // NOI18N
             checkBoxesMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_SENSITIVE));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintSensetive"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintSensetive"));// NOI18N
+
             // PHONE NUMBER
             guiItem = new JRadioButton(constraints.getBitmaskItem(TextFieldCD.VALUE_PHONENUMBER).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_PHONE")); // NOI18N
@@ -234,14 +348,22 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             radioButtonsMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_PHONENUMBER));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintPhone"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintPhone"));// NOI18N
+
             // NON_PREDICTIVE
             guiItem = new JCheckBox(constraints.getBitmaskItem(TextFieldCD.VALUE_NON_PREDICTIVE).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_NONPREDICTIVE")); // NOI18N
             checkBoxesMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_NON_PREDICTIVE));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintNonPredictive"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintNonPredictive"));// NOI18N
+
             // URL
             guiItem = new JRadioButton(constraints.getBitmaskItem(TextFieldCD.VALUE_URL).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_URL")); // NOI18N
@@ -249,14 +371,22 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             radioButtonsMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_URL));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintUrl"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintUrl"));// NOI18N
+
             // INITIAL_CAPS_WORD
             guiItem = new JCheckBox(constraints.getBitmaskItem(TextFieldCD.VALUE_INITIAL_CAPS_WORD).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_CAPS_WORD")); // NOI18N
             checkBoxesMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_INITIAL_CAPS_WORD));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintInitial_CAPS_WORD"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintInitial_CAPS_WORD"));// NOI18N
+
             // DECIMAL
             guiItem = new JRadioButton(constraints.getBitmaskItem(TextFieldCD.VALUE_DECIMAL).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_DECIMAL")); // NOI18N
@@ -264,21 +394,27 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             radioButtonsMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_DECIMAL));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintDec"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintDec"));// NOI18N
+
             // INITIAL_CAPS_SENTENCE
             guiItem = new JCheckBox(constraints.getBitmaskItem(TextFieldCD.VALUE_INITIAL_CAPS_SENTENCE).getDisplayName());
             guiItem.setMnemonic(Bundle.getChar("MNM_TEXTFIELDPE_CAPS_SENTENCE")); // NOI18N
             checkBoxesMap.put(guiItem, constraints.getBitmaskItem(TextFieldCD.VALUE_INITIAL_CAPS_SENTENCE));
             guiItems.add(guiItem);
             this.add(guiItem);
-            
+            guiItem.getAccessibleContext().setAccessibleName(
+                    Bundle.getMessage("ACSN_ContraintInitial_CAPS_SENTENCE"));// NOI18N
+            guiItem.getAccessibleContext().setAccessibleDescription(
+                    Bundle.getMessage("ACSD_ContraintInitial_CAPS_SENTENCE"));// NOI18N
             setGui();
-            
             for (JToggleButton button : guiItems) {
                 button.addItemListener(this);
             }
         }
-        
+
         public void setBitmask(int bitmask) {
             for (JToggleButton button : guiItems) {
                 button.removeItemListener(this);
@@ -288,9 +424,8 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             for (JToggleButton button : guiItems) {
                 button.addItemListener(this);
             }
-            this.bitMask = bitmask;
         }
-        
+
         public void itemStateChanged(ItemEvent e) {
             constraints.setBitmask(0);
             for (JToggleButton button : radioButtonsMap.keySet()) {
@@ -305,12 +440,12 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
             }
             bitMask = constraints.getBitmask();
         }
-        
+
         private void setGui() {
             int radioButtonBitmask = 0;
-            
+
             for (JToggleButton button : radioButtonsMap.keySet()) {
-                if (constraints.isSet(radioButtonsMap.get(button)) && (radioButtonBitmask <= radioButtonsMap.get(button).getAffectedBits())){
+                if (constraints.isSet(radioButtonsMap.get(button)) && (radioButtonBitmask <= radioButtonsMap.get(button).getAffectedBits())) {
                     radioButtonBitmask = radioButtonsMap.get(button).getAffectedBits();
                     button.setSelected(true);
                 }
@@ -320,30 +455,6 @@ public class PropertyEditorConstraints extends PropertyEditorUserCode implements
                     button.setSelected(true);
                 }
             }
-        }
-        
-        public int getBitMask() {
-            return bitMask;
-        }
-        
-        public String getBitmaskAsText() {
-            int radioButtonBitmask = 0;
-            StringBuffer bitmaskAsText = null;
-            
-            for (JToggleButton button : radioButtonsMap.keySet()) {
-                if (constraints.isSet(radioButtonsMap.get(button)) && (radioButtonBitmask <= radioButtonsMap.get(button).getAffectedBits())){
-                    radioButtonBitmask = radioButtonsMap.get(button).getAffectedBits();
-                    bitmaskAsText = new StringBuffer(radioButtonsMap.get(button).getName());
-                }
-            }
-            for (JToggleButton button : checkBoxesMap.keySet()) {
-                if (constraints.isSet(checkBoxesMap.get(button))) {
-                    bitmaskAsText.append(" | "); // NOI18N
-                    bitmaskAsText.append(checkBoxesMap.get(button).getName());
-                }
-            }
-            
-            return bitmaskAsText.toString();
         }
     }
 }
