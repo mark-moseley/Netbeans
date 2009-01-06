@@ -57,7 +57,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Set;
 import java.util.regex.Matcher;
 import javax.swing.AbstractAction;
@@ -65,6 +64,7 @@ import javax.swing.Action;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPopupMenu;
 import javax.swing.JSeparator;
@@ -75,6 +75,8 @@ import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.text.BadLocationException;
 import org.netbeans.core.output2.ui.AbstractOutputTab;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.actions.FindAction;
 import org.openide.util.Exceptions;
 import org.openide.util.Mutex;
@@ -216,10 +218,6 @@ public class Controller { //XXX public only for debug access to logging code
             result.getActionMap ().put (javax.swing.text.DefaultEditorKit.copyAction, this.copyAction);
         }
 
-        if (result != null) {
-            win.setSelectedTab(result);
-        }
-
         return result;
     }
 
@@ -244,7 +242,6 @@ public class Controller { //XXX public only for debug access to logging code
         
         if (LOG) log ("Adding and selecting new tab " + result);
         win.add (result);
-        win.setSelectedTab(result);
         //Make sure names are boldfaced for all open streams - if the tabbed
         //pane was just added in, it will just have used the name of the 
         //component, which won't contain html
@@ -638,7 +635,15 @@ public class Controller { //XXX public only for debug access to logging code
                     out.getLines().saveAs(f.getPath());
                 }
             } catch (IOException ioe) {
-                Exceptions.printStackTrace(ioe);
+                NotifyDescriptor notifyDesc = new NotifyDescriptor(
+                        NbBundle.getMessage(Controller.class, "MSG_SaveAsFailed", f.getPath()),
+                        NbBundle.getMessage(Controller.class, "LBL_SaveAsFailedTitle"),
+                        NotifyDescriptor.DEFAULT_OPTION,
+                        NotifyDescriptor.ERROR_MESSAGE,
+                        new Object[] {NotifyDescriptor.OK_OPTION},
+                        NotifyDescriptor.OK_OPTION);
+
+                DialogDisplayer.getDefault().notify(notifyDesc);
             }
         }
     }
@@ -732,7 +737,6 @@ public class Controller { //XXX public only for debug access to logging code
         }
     }
 
-    private boolean firstF12 = true;
     /**
      * Sends the caret in a tab to the nearest error line to its current position, selecting
      * that line.
@@ -751,7 +755,11 @@ public class Controller { //XXX public only for debug access to logging code
         }
         OutWriter out = tab.getIO().out();
         if (out != null) {
-            int line = firstF12 ? 0 : Math.max(0, tab.getOutputPane().getCaretLine());
+            int line = tab.getOutputPane().getCaretLine();
+            if (!tab.getOutputPane().isLineSelected(line)) {
+                line += backward ? 1 : -1;
+            }
+
             if (line >= tab.getOutputPane().getLineCount()-1) {
                 line = 0;
             }
@@ -782,7 +790,6 @@ public class Controller { //XXX public only for debug access to logging code
                     l.outputLineAction(ce);
                 }
             }
-            firstF12 = false;
         }
     }
 
@@ -897,7 +904,10 @@ public class Controller { //XXX public only for debug access to logging code
                 popup.add ((JSeparator) popupItems[i]);
             } else {
                 if (popupItems[i] != wrapAction) {
-                    popup.add ((Action) popupItems[i]);
+                    JMenuItem item = popup.add((Action) popupItems[i]);
+                    if (popupItems[i] == findAction) {
+                        item.setMnemonic(KeyEvent.VK_F);
+                    }
                 } else {
                     JCheckBoxMenuItem item = 
                         new JCheckBoxMenuItem((Action) popupItems[i]);
@@ -1087,11 +1097,10 @@ public class Controller { //XXX public only for debug access to logging code
                 if (!win.isOpened()) {
                     win.open();
                 }
-                //#60960 creating component doesn't make the tabs visible, do it in select (also #58738)
-                if (!io.isFocusTaken()) {
-                    win.requestVisibleForNewTab();
+                if (io.isFocusTaken()) {
+                    win.requestActive();
                 } else {
-                    win.requestActiveForNewTab();
+                    win.requestVisible();
                 }
                 if (win.getSelectedTab() != tab) {
                     if (tab.getParent() == null) {
@@ -1149,7 +1158,6 @@ public class Controller { //XXX public only for debug access to logging code
                 }
                 break;
             case IOEvent.CMD_RESET :
-                firstF12 = true;
                 if (tab == null) {
                     if (LOG) log ("Got a reset on an io with no tab.  Creating a tab.");
                     performCommand (win, null, io, IOEvent.CMD_CREATE, value, data);
@@ -1211,7 +1219,7 @@ public class Controller { //XXX public only for debug access to logging code
     }
 
     void hasOutputListenersChanged(OutputWindow win, OutputTab tab, boolean hasOutputListeners) {
-        if (hasOutputListeners && win.getSelectedTab() == tab && tab.isShowing()) {
+        if (hasOutputListeners && tab.getOutputPane().isScrollLocked()) {
             navigateToFirstErrorLine(tab);
         }
     }
