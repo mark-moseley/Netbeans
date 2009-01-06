@@ -89,7 +89,7 @@ import org.xml.sax.helpers.DefaultHandler;
  * Mandatory attributes:
  *         -for filesystem    version=... (e.g. "1.0")
  *         -for file,folder,attr name=....  (e.g.: &lt;folder name="Config"&gt;)
- *         -for attr is mandatory one of bytevalue,shortvalue,intvalue,longvalue,floatvalue,doublevalue,boolvalue,charvalue,stringvalue,methodvalue,serialvalue,urlvalue
+ *         -for attr is mandatory one of bytevalue,shortvalue,intvalue,longvalue,floatvalue,doublevalue,boolvalue,charvalue,stringvalue,methodvalue,serialvalue,urlvalue,bundlevalue
  *
  * Allowed atributes:
  *         -for file:        url=.... (e.g.: &lt;file name="sample.xml" url="file:/c:/sample.xml"&gt;)
@@ -109,7 +109,8 @@ import org.xml.sax.helpers.DefaultHandler;
  *
  * This class implements virtual FileSystem. It is special case of FileSystem in XML format.
  *
- * Description of this format best ilustrate DTD file that is showed in next lines:
+ * Description of this format best ilustrate <a href="http://www.netbeans.org/dtds/filesystem-1_2.dtd">DTD file</a>
+ * that is showed in the following few lines:
  * &lt; !ELEMENT filesystem (file | folder)*&gt;
  * &lt; !ATTLIST filesystem version CDATA #REQUIRED&gt; //version not checkked yet
  * &lt; !ELEMENT folder (file |folder | attr)*&gt;
@@ -131,6 +132,7 @@ import org.xml.sax.helpers.DefaultHandler;
  * &lt; !ATTLIST attr methodvalue CDATA #IMPLIED&gt;
  * &lt; !ATTLIST attr serialvalue CDATA #IMPLIED&gt;
  * &lt; !ATTLIST attr urlvalue CDATA #IMPLIED&gt;
+ * &lt; !ATTLIST attr bundlevalue CDATA #IMPLIED&gt; &lt;!-- since version 7.10 --&gt;
  * </PRE>
  *
  * <p>
@@ -148,7 +150,16 @@ import org.xml.sax.helpers.DefaultHandler;
  * </pre>
  * where <code>Value</code> can be any java type.
  *
- *
+ * <p>
+ * If you are interested just in the Class of an attribute, but
+ * without creating its instance, use <code>fileObject.getAttribute("class:attrName")</code>.
+ * This instructs the XMLFileSystem to scan its XML files for definition of <code>attrName</code>
+ * attribute and <i>guess</i> its class. The <i>guessing</i> is usually easy,
+ * just for <code>methodvalue</code> types, the system needs to use
+ * some kind of heuristic: it locates the appropriate factory method and returns
+ * its return type. This may not be the actual type of the returned object at the end,
+ * but it seems as the best guess without instantiating it.
+
  * @author Radek Matous
  */
 public final class XMLFileSystem extends AbstractFileSystem {
@@ -162,6 +173,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
     static {
         DTD_MAP.put("-//NetBeans//DTD Filesystem 1.0//EN", "org/openide/filesystems/filesystem.dtd"); //NOI18N
         DTD_MAP.put("-//NetBeans//DTD Filesystem 1.1//EN", "org/openide/filesystems/filesystem1_1.dtd"); //NOI18N        
+        DTD_MAP.put("-//NetBeans//DTD Filesystem 1.2//EN", "org/openide/filesystems/filesystem1_2.dtd"); //NOI18N        
     }
 
     /**  Url location of XML document    */
@@ -305,7 +317,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
         String oldDisplayName = getDisplayName();
 
         if (urls.length == 0) {
-            urlsToXml = new URL[] {  };
+            urlsToXml = urls;
             refreshChildrenInAtomicAction((AbstractFolder) getRoot(), rootElem = new ResourceElem(true, urls, null)); // NOI18N
             rootElem = null;
 
@@ -314,13 +326,9 @@ public final class XMLFileSystem extends AbstractFileSystem {
 
         Handler handler = new Handler(DTD_MAP, rootElem = new ResourceElem(true, urls, null), validate); // NOI18N        
 
-        URL[] origUrls = urlsToXml;
-        urlsToXml = new URL[urls.length];
-
         try {
             _setSystemName("XML_" + urls[0].toExternalForm().replace('/','-')); // NOI18N
         } catch (PropertyVetoException pvx) {
-            urlsToXml = origUrls;
             rootElem = null;
             throw pvx;
         }
@@ -335,17 +343,15 @@ public final class XMLFileSystem extends AbstractFileSystem {
 
             for (int index = 0; index < urls.length; index++) {
                 act = urls[index];
-                urlsToXml[index] = act;
                 handler.urlContext = act;
 
                 String systemId = act.toExternalForm();
 
                 xp.parse(systemId);
             }
-
+            urlsToXml = urls.clone();
             refreshChildrenInAtomicAction((AbstractFolder) getRoot(), rootElem);
         } catch (IOException iox) {
-            urlsToXml = origUrls;
             Exceptions.attachMessage(iox, Arrays.toString(urls));
             throw iox;
         } catch (Exception e) {
@@ -464,14 +470,13 @@ public final class XMLFileSystem extends AbstractFileSystem {
         if (urls == null) {
             urls = new URL[1];
             urls[0] = (URL) fields.get("uriId", null); // NOI18N
+            if (urls[0] == null) {
+                throw new IOException("missing uriId"); // NOI18N
+            }
         }
 
         try {
-            if (urlsToXml.length != 1) {
-                setXmlUrls(urlsToXml);
-            } else {
-                setXmlUrl(urlsToXml[0]);
-            }
+            setXmlUrls(urls);
         } catch (PropertyVetoException ex) {
             IOException x = new IOException(ex.getMessage());
             ExternalUtil.copyAnnotation(x, ex);
@@ -616,6 +621,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
             if (!isFolder) {
                 throw new IllegalArgumentException("not a folder"); // NOI18N
             }
+            assert name != null && name.indexOf("/") == -1:(child.isFolder ? "<folder name=":"<file name=")+name+" ...";//NOI18N
 
             ResourceElem retVal = child;
             int idx = names.indexOf(name);
