@@ -43,12 +43,18 @@ package org.netbeans.test.j2ee.addmethod;
 
 import java.io.File;
 import java.io.IOException;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import org.netbeans.jellytools.*;
 import org.netbeans.jellytools.actions.ActionNoBlock;
 import org.netbeans.jellytools.actions.OpenAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.test.j2ee.*;
 import org.netbeans.test.j2ee.lib.Utils;
+import org.netbeans.jellytools.modules.java.editor.GenerateCodeOperator;
+import org.netbeans.jemmy.operators.JLabelOperator;
+import org.netbeans.jemmy.operators.JTextAreaOperator;
+import org.netbeans.jemmy.operators.JTextFieldOperator;
 
 /**
  *
@@ -78,8 +84,7 @@ public class CallEJBTest extends AddMethodBase {
     
     public void testCallEJB1InSB()  throws IOException{
         beanName = "TestingSession";
-        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_EnterpriseActionGroup")
-                               +"|"+Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction");
+        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction");
         calledBean = EJBValidation.EJB_PROJECT_NAME + "|TestingEntity";
         toSearchInEditor = "TestingEntityLocalHome lookupTestingEntityBean()";
         isDDModified = true;
@@ -89,8 +94,7 @@ public class CallEJBTest extends AddMethodBase {
 
     public void testCallEJB2InSB()  throws IOException{
         beanName = "TestingSession";
-        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_EnterpriseActionGroup")
-                               +"|"+Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction");
+        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction");
         calledBean = EJBValidation.EJB_PROJECT_NAME + "|TestingEntity";
         toSearchInEditor = "TestingEntityRemoteHome lookupMyTestingEntityBean()";
         referencedLocal = false;
@@ -102,8 +106,7 @@ public class CallEJBTest extends AddMethodBase {
     }
     
     public void testCallEJBInServlet()  throws IOException{
-        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_EnterpriseActionGroup")
-                               +"|"+Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction");
+        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction");
         calledBean = EJBValidation.EJB_PROJECT_NAME + "|TestingSession";
         toSearchInEditor = "TestingSessionRemote lookupTestingSessionBean()";
         referencedLocal = false;
@@ -114,12 +117,12 @@ public class CallEJBTest extends AddMethodBase {
                                  Bundle.getStringTrimmed("org.netbeans.modules.web.project.ui.Bundle", "LBL_Node_Sources")
                                  +"|test|TestingServlet.java");
         new OpenAction().performAPI(openFile);
-        EditorOperator editor = new EditorWindowOperator().getEditor("TestingServlet.java");
+        EditorOperator editor = EditorWindowOperator.getEditor("TestingServlet.java");
         new org.netbeans.jemmy.EventTool().waitNoEvent(3000);
         editor.select(30);
 
         // invoke Add Business Method dialog
-        new ActionNoBlock(null,editorPopup).perform(editor);
+        GenerateCodeOperator.openDialog(editorPopup, editor);
         CallEnterpriseBeanDialog dialog = new CallEnterpriseBeanDialog();
 
         new Node(dialog.tree(),calledBean).select();
@@ -152,8 +155,7 @@ public class CallEJBTest extends AddMethodBase {
     }
 
     public void testCallEJBInWS()  throws IOException{
-        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_EnterpriseActionGroup")
-                               +"|"+Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction");
+        editorPopup = Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction");
         calledBean = EJBValidation.EJB_PROJECT_NAME + "|SampleSession";
         toSearchInEditor = "sample.SampleSessionRemote lookupSampleSessionBean()";
         referencedLocal = false;
@@ -163,12 +165,12 @@ public class CallEJBTest extends AddMethodBase {
         Node openFile = new Node(new ProjectsTabOperator().getProjectRootNode(EJBValidation.WEB_PROJECT_NAME),
                                  "Web Services|SampleWebService");
         new OpenAction().performAPI(openFile);
-        EditorOperator editor = new EditorWindowOperator().getEditor("SampleWebServiceImpl.java");
+        EditorOperator editor = EditorWindowOperator.getEditor("SampleWebServiceImpl.java");
         new org.netbeans.jemmy.EventTool().waitNoEvent(3000);
         editor.select(11);
 
         // invoke Add Business Method dialog
-        new ActionNoBlock(null,editorPopup).perform(editor);
+        GenerateCodeOperator.openDialog(editorPopup, editor);
         CallEnterpriseBeanDialog dialog = new CallEnterpriseBeanDialog();
 
         new Node(dialog.tree(),calledBean).select();
@@ -203,11 +205,11 @@ public class CallEJBTest extends AddMethodBase {
     }
         
     protected void addMethod() throws IOException {
-        EditorOperator editor = new EditorWindowOperator().getEditor(beanName+"Bean.java");
-        editor.select(11);
+        EditorOperator editor = EditorWindowOperator.getEditor(beanName+"Bean.java");
+        editor.select(20);
 
         // invoke Add Business Method dialog
-        new ActionNoBlock(null,editorPopup).perform(editor);
+        GenerateCodeOperator.openDialog(editorPopup, editor);
         CallEnterpriseBeanDialog dialog = new CallEnterpriseBeanDialog();
 
         new Node(dialog.tree(),calledBean).select();
@@ -220,7 +222,7 @@ public class CallEJBTest extends AddMethodBase {
             dialog.clearReferenceName();
             dialog.typeReferenceName(referenceName);
         }
-        
+
         dialog.ok();
         
         if (saveFile) 

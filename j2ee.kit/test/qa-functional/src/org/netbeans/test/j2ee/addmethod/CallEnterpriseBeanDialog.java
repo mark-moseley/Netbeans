@@ -41,6 +41,7 @@
 
 package org.netbeans.test.j2ee.addmethod;
 
+import javax.swing.JTextField;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jemmy.operators.*;
 import org.netbeans.jemmy.util.NameComponentChooser;
@@ -56,7 +57,7 @@ public class CallEnterpriseBeanDialog extends JDialogOperator {
      * Creates new CallEnterpriseBeanDialog that can handle it.
      */
     public CallEnterpriseBeanDialog() {
-        super(Bundle.getStringTrimmed("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbAction"));
+        super(Bundle.getString("org.netbeans.modules.j2ee.ejbcore.ui.logicalview.entres.Bundle", "LBL_CallEjbActionTitle"));
     }
 
     private JCheckBoxOperator _cbConvertCheckedExceptionsToRuntimeException;
@@ -130,7 +131,9 @@ public class CallEnterpriseBeanDialog extends JDialogOperator {
      */
     public JTextFieldOperator txtReferenceName() {
         if (_txtReferenceName==null) {
-            _txtReferenceName = new JTextFieldOperator(this, 2);
+            JLabelOperator lblOper = new JLabelOperator(this, "Reference Name:");
+            _txtReferenceName = new JTextFieldOperator((JTextField)lblOper.getLabelFor());
+            //_txtReferenceName = new JTextFieldOperator(this, 2);
         }
         return _txtReferenceName;
     }
