@@ -49,7 +49,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URI;
 import java.net.URL;
 import java.util.Collection;
 import java.util.HashMap;
@@ -175,7 +174,7 @@ public final class GeneratedFilesHelper {
      * @see #getBuildScriptState
      */
     public static final int FLAG_OLD_STYLESHEET = 2 << 3;
-    
+
     /**
      * The build script exists, but nothing else is known about it.
      * This flag is mutually exclusive with {@link #FLAG_MISSING} but
@@ -279,6 +278,9 @@ public final class GeneratedFilesHelper {
                     dir.getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
                         public void run() throws IOException {
                             FileObject projectXml = dir.getFileObject(AntProjectHelper.PROJECT_XML_PATH);
+                            if (projectXml == null) {
+                                throw new IOException("project.xml file doesn't exist"); // NOI18N
+                            }
                             final FileObject buildScriptXml = FileUtil.createData(dir, path);
                             byte[] projectXmlData;
                             InputStream is = projectXml.getInputStream();
@@ -673,12 +675,8 @@ public final class GeneratedFilesHelper {
 
     /** Find the time the file this URL represents was last modified xor its size, if possible. */
     private static long checkFootprint(URL u) {
-        URL nested = FileUtil.getArchiveFile(u);
-        if (nested != null) {
-            u = nested;
-        }
-        if (u.getProtocol().equals("file")) { // NOI18N
-            File f = new File(URI.create(u.toExternalForm()));
+        File f = FileUtil.archiveOrDirForURL(u);
+        if (f != null) {
             return f.lastModified() ^ f.length();
         } else {
             return 0L;
@@ -820,6 +818,7 @@ public final class GeneratedFilesHelper {
             super(os, 4096);
         }
         
+        @Override
         public void write(byte[] b, int off, int len) throws IOException {
             if (isActive) {
                 for (int i = off; i < off + len; i++) {
@@ -831,6 +830,7 @@ public final class GeneratedFilesHelper {
             }
         }
 
+        @Override
         public void write(int b) throws IOException {
             if (isActive) {
                 if (b == '\n' && last != '\r') {
