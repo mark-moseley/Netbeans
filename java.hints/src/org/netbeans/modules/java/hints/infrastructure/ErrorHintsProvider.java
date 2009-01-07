@@ -57,12 +57,13 @@ import javax.lang.model.type.TypeKind;
 import javax.swing.text.Document;
 import javax.swing.text.StyledDocument;
 import javax.tools.Diagnostic;
-import org.netbeans.api.java.source.CancellableTask;
+import org.netbeans.modules.parsing.spi.Parser.Result;
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.netbeans.modules.parsing.spi.SchedulerEvent;
 import org.netbeans.spi.editor.hints.Fix;
 import org.netbeans.spi.editor.hints.LazyFixList;
 import org.netbeans.spi.editor.hints.Severity;
 import org.openide.ErrorManager;
-import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.text.Line;
 import com.sun.source.util.TreePath;
@@ -79,6 +80,8 @@ import javax.swing.text.Position;
 import javax.swing.text.Position.Bias;
 import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.source.CompilationInfo;
+import org.netbeans.api.java.source.JavaParserResultTask;
+import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
@@ -97,16 +100,13 @@ import org.openide.text.NbDocument;
  * @author Jan Lahoda
  * @author leon chiver
  */
-public final class ErrorHintsProvider implements CancellableTask<CompilationInfo> {
+public final class ErrorHintsProvider extends JavaParserResultTask {
     
     public static ErrorManager ERR = ErrorManager.getDefault().getInstance("org.netbeans.modules.java.hints"); // NOI18N
     public static Logger LOG = Logger.getLogger("org.netbeans.modules.java.hints"); // NOI18N
     
-    private FileObject file;
-    
-    /** Creates a new instance of JavaHintsProvider */
-    ErrorHintsProvider(FileObject file) {
-        this.file = file;
+    ErrorHintsProvider() {
+        super(Phase.RESOLVED);
     }
     
     private static final Map<Diagnostic.Kind, Severity> errorKind2Severity;
@@ -168,14 +168,14 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
             
             if (range[0] == null || range[1] == null)
                 continue;
-            
+
             descs.add(ErrorDescriptionFactory.createErrorDescription(errorKind2Severity.get(d.getKind()), desc, ehm, doc, range[0], range[1]));
         }
         
         if (isCanceled())
             return null;
         
-        LazyHintComputationFactory.getAndClearToCompute(file);
+        LazyHintComputationFactory.getAndClearToCompute(info.getFileObject());
         
         return descs;
     }
@@ -269,7 +269,7 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
         int pos = (int) getPrefferedPosition(info, d);
         TreePath tp = info.getTreeUtilities().pathFor(pos + 1);
         
-        if (tp != null && tp.getParentPath().getLeaf() != null && (tp.getParentPath().getLeaf().getKind() == Kind.METHOD_INVOCATION || tp.getParentPath().getLeaf().getKind() == Kind.NEW_CLASS)) {
+        if (tp != null && tp.getParentPath() != null && tp.getParentPath().getLeaf() != null && (tp.getParentPath().getLeaf().getKind() == Kind.METHOD_INVOCATION || tp.getParentPath().getLeaf().getKind() == Kind.NEW_CLASS)) {
             int[] index = new int[1];
             
             tp = tp.getParentPath();
@@ -286,11 +286,11 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
                     
                     a = mit.getArguments().get(index[0]);
                 }
+
+                int start = (int) info.getTrees().getSourcePositions().getStartPosition(info.getCompilationUnit(), a);
+                int end = (int) info.getTrees().getSourcePositions().getEndPosition(info.getCompilationUnit(), a);
             
-                return new int[] {
-                    (int) info.getTrees().getSourcePositions().getStartPosition(info.getCompilationUnit(), a),
-                    (int) info.getTrees().getSourcePositions().getEndPosition(info.getCompilationUnit(), a)
-                };
+                return new int[] {start, end};
             }
         }
         
@@ -300,6 +300,8 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
     private Position[] getLine(CompilationInfo info, Diagnostic d, final Document doc, int startOffset, int endOffset) throws IOException {
         StyledDocument sdoc = (StyledDocument) doc;
         DataObject dObj = (DataObject)doc.getProperty(doc.StreamDescriptionProperty );
+        if (dObj == null)
+            return new Position[] {null, null};
         LineCookie lc = dObj.getCookie(LineCookie.class);
         int lineNumber = NbDocument.findLineNumber(sdoc, info.getPositionConverter().getOriginalPosition(startOffset));
         int lineOffset = NbDocument.findLineOffset(sdoc, lineNumber);
@@ -308,7 +310,7 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
         boolean rangePrepared = false;
         
         if (INVALID_METHOD_INVOCATION.contains(d.getCode())) {
-            int[] span = handlePossibleMethodInvocation(info, d, doc, startOffset, endOffset);
+            int[] span = translatePositions(info, handlePossibleMethodInvocation(info, d, doc, startOffset, endOffset));
             
             if (span != null) {
                 startOffset = span[0];
@@ -371,14 +373,18 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
             
             int column = 0;
             int length = text.length();
-            
+
             while (column < text.length() && Character.isWhitespace(text.charAt(column)))
                 column++;
-            
+
             while (length > 0 && Character.isWhitespace(text.charAt(length - 1)))
                 length--;
-            
-            startOffset = lineOffset + column;
+
+            if(length == 0) //whitespace only
+                startOffset = lineOffset;
+            else
+                startOffset = lineOffset + column;
+
             endOffset = lineOffset + length;
         }
         
@@ -436,10 +442,17 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
         cancel = false;
     }
     
-    public void run(CompilationInfo info) throws IOException {
+    @Override
+    public void run(Result result, SchedulerEvent event) {
         resume();
-        
-        Document doc = info.getDocument();
+
+        CompilationInfo info = CompilationInfo.get(result);
+
+        if (info == null) {
+            return ;
+        }
+
+        Document doc = result.getSnapshot().getSource().getDocument(false);
         
         if (doc == null) {
             Logger.getLogger(ErrorHintsProvider.class.getName()).log(Level.FINE, "SemanticHighlighter: Cannot get document!");
@@ -447,20 +460,34 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
         }
         
         long start = System.currentTimeMillis();
-        
-        List<ErrorDescription> errors = computeErrors(info, doc);
-        
-        if (errors == null) //meaning: cancelled
-            return ;
-        
-        HintsController.setErrors(doc, "java-hints", errors);
-        
-        long end = System.currentTimeMillis();
-        
-        Logger.getLogger("TIMER").log(Level.FINE, "Java Hints",
-                new Object[] {info.getFileObject(), end - start});
+
+        try {
+            List<ErrorDescription> errors = computeErrors(info, doc);
+
+            if (errors == null) //meaning: cancelled
+                return ;
+
+            HintsController.setErrors(doc, "java-hints", errors);
+            
+            long end = System.currentTimeMillis();
+
+            Logger.getLogger("TIMER").log(Level.FINE, "Java Hints",
+                    new Object[]{info.getFileObject(), end - start});
+        } catch (IOException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
     
+    @Override
+    public int getPriority() {
+        return 200;
+    }
+
+    @Override
+    public Class<? extends Scheduler> getSchedulerClass() {
+        return Scheduler.EDITOR_SENSITIVE_TASK_SCHEDULER;
+    }
+
     private int[] translatePositions(CompilationInfo info, int[] span) {
         if (span == null || span[0] == (-1) || span[1] == (-1))
             return null;
@@ -510,6 +537,6 @@ public final class ErrorHintsProvider implements CancellableTask<CompilationInfo
         
         return d.getPosition();
     }
-    
+
 }
 
