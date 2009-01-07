@@ -37,54 +37,67 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.parsing.spi.indexing;
+package org.netbeans.modules.parsing.impl.indexing;
 
+import java.io.IOException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
-
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import org.netbeans.modules.parsing.spi.indexing.Indexable;
 
 /**
- * Factory class to create indexers
- * Instances of this class are registered in the META-INF/services
+ *
  * @author Tomas Zezula
  */
-public abstract class CustomIndexerFactory {
+public abstract class Crawler {
 
-    /**
-     * Creates  new {@link Indexer}.
-     * @return an indexer
-     */
-    public abstract CustomIndexer createIndexer ();
+    private String digest;
 
-    /**
-     * Called by indexing infrastructure to allow indexer to clean indexes for deleted files.
-     * @param deleted the collection of deleted {@link Indexable}s
-     * @param context an indexing context
-     */
-    public abstract void filesDeleted (Collection<? extends Indexable> deleted, Context context);
+    private Map<String, Collection<Indexable>> cache;
+    private Collection<Indexable> deleted;
+    protected final TimeStamps timeStamps;
+    protected final URL root;
 
-    
-    /**
-     * Return the name of this indexer. This name should be unique because GSF
-     * will use this name to produce a separate data directory for each indexer
-     * where it has its own storage.
-     *
-     * @return The indexer name. This does not need to be localized since it is
-     * never shown to the user, but should contain filesystem safe characters.
-     */
-    public abstract String getIndexerName ();
+    protected Crawler (final URL root) throws IOException {
+        this.root = root;
+        this.timeStamps = TimeStamps.forRoot(root);
+    }
 
+    public synchronized final String getDigest () throws IOException {
+        init ();
+        return this.digest;
+    }
 
-    public abstract boolean supportsEmbeddedIndexers ();
+    public final synchronized Map<String, Collection<Indexable>> getResources() throws IOException {
+        init ();
+        return cache;
+    }
 
-    /**
-     * Return the version stamp of the schema that is currently being stored
-     * by this indexer. Along with the index name this string will be used to
-     * create a unique data directory for the database.
-     *
-     * Whenever you incompatibly change what is stored by the indexer,
-     * update the version stamp.
-     *
-     * @return The version stamp of the current index.
-     */
-    public abstract int getIndexVersion ();
+    public final Collection<Indexable> getDeletedResources () throws IOException {
+        init ();
+        return Collections.unmodifiableCollection(deleted);
+    }
+
+    private void init () throws IOException {
+        if (this.cache == null) {
+            this.cache = collectResources(new HashSet<String>(Arrays.asList(PathRecognizerRegistry.getDefault().getMimeTypes())));
+            final Set<String> unseen = timeStamps.store();
+            deleted = new ArrayList<Indexable>(unseen.size());
+            for (String u : unseen) {
+                deleted.add(SPIAccessor.getInstance().create(new DeletedIndexable(root, u)));
+            }
+        }
+    }
+
+    protected final void addToDigest () {
+        
+    }
+
+    protected abstract Map<String, Collection<Indexable>> collectResources(final Set<? extends String> supportedMimeTypes);
+
 }
