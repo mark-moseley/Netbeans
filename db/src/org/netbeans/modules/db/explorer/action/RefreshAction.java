@@ -37,91 +37,68 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.node;
+package org.netbeans.modules.db.explorer.action;
 
 import org.netbeans.api.db.explorer.node.BaseNode;
-import org.netbeans.api.db.explorer.node.ChildNodeFactory;
-import org.netbeans.api.db.explorer.node.NodeProvider;
 import org.netbeans.modules.db.explorer.DatabaseConnection;
 import org.netbeans.modules.db.metadata.model.api.Action;
 import org.netbeans.modules.db.metadata.model.api.Metadata;
-import org.netbeans.modules.db.metadata.model.api.ForeignKey;
-import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
 import org.netbeans.modules.db.metadata.model.api.MetadataModel;
 import org.netbeans.modules.db.metadata.model.api.MetadataModelException;
+import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.RequestProcessor;
 
 /**
  *
- * @author Rob Englander
+ * @author Rob
  */
-public class ForeignKeyNode extends BaseNode {
-    private static final String ICONBASE = "org/netbeans/modules/db/resources/foreignKey.gif";
-    private static final String FOLDER = "ForeignKey"; //NOI18N
-
-    /**
-     * Create an instance of ForeignKeyNode.
-     *
-     * @param dataLookup the lookup to use when creating node providers
-     * @return the ForeignKeyNode instance
-     */
-    public static ForeignKeyNode create(NodeDataLookup dataLookup, NodeProvider provider) {
-        ForeignKeyNode node = new ForeignKeyNode(dataLookup, provider);
-        node.setup();
-        return node;
-    }
-
-    private String name = ""; // NOI18N
-    private MetadataElementHandle<ForeignKey> fkHandle;
-    private final DatabaseConnection connection;
-
-    private ForeignKeyNode(NodeDataLookup lookup, NodeProvider provider) {
-        super(new ChildNodeFactory(lookup), lookup, FOLDER, provider);
-        connection = getLookup().lookup(DatabaseConnection.class);
-        fkHandle = getLookup().lookup(MetadataElementHandle.class);
-    }
-
-    protected void initialize() {
-        boolean connected = !connection.getConnector().isDisconnected();
-        MetadataModel metaDataModel = connection.getMetadataModel();
-        if (connected && metaDataModel != null) {
-            try {
-                metaDataModel.runReadAction(
-                    new Action<Metadata>() {
-                        public void run(Metadata metaData) {
-                            ForeignKey fk = fkHandle.resolve(metaData);
-                            name = fk.getName();
-                        }
-                    }
-                );
-            } catch (MetadataModelException e) {
-                // TODO report exception
-            }
-        }
-    }
-
+public class RefreshAction extends BaseAction {
     @Override
     public String getName() {
-        return name;
-    }
-
-    @Override
-    public String getDisplayName() {
-        return getName();
-    }
-
-    @Override
-    public String getIconBase() {
-        return ICONBASE;
-    }
-
-    @Override
-    public String getShortDescription() {
-        return bundle().getString("ND_ForeignKey"); //NOI18N
+        return bundle().getString("Refresh"); // NOI18N
     }
 
     @Override
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(ForeignKeyNode.class);
+        return new HelpCtx(RefreshAction.class);
     }
+
+    protected boolean enable(Node[] activatedNodes) {
+        boolean enabled = false;
+
+        if (activatedNodes.length == 1) {
+            enabled = null != activatedNodes[0].getLookup().lookup(BaseNode.class);
+        }
+
+        return enabled;
+    }
+
+    @Override
+    public void performAction(Node[] activatedNodes) {
+        final BaseNode baseNode = activatedNodes[0].getLookup().lookup(BaseNode.class);
+        RequestProcessor.getDefault().post(
+            new Runnable() {
+                public void run() {
+                    MetadataModel model = baseNode.getLookup().lookup(DatabaseConnection.class).getMetadataModel();
+                    if (model != null) {
+                        try {
+                            model.runReadAction(
+                                new Action<Metadata>() {
+                                    public void run(Metadata metaData) {
+                                        metaData.refresh();
+                                    }
+                                }
+                            );
+                        } catch (MetadataModelException e) {
+                            // TODO report exception
+                        }
+                    }
+
+                    baseNode.refresh();
+                }
+            }
+        );
+    }
+
 }

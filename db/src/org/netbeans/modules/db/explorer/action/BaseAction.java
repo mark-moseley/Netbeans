@@ -37,62 +37,61 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.node;
+package org.netbeans.modules.db.explorer.action;
 
-import org.netbeans.api.db.explorer.node.BaseNode;
-import org.netbeans.api.db.explorer.node.ChildNodeFactory;
-import org.netbeans.api.db.explorer.node.NodeProvider;
-import org.openide.util.HelpCtx;
+import java.util.ResourceBundle;
+import org.netbeans.modules.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.metadata.model.api.Action;
+import org.netbeans.modules.db.metadata.model.api.Catalog;
+import org.netbeans.modules.db.metadata.model.api.Metadata;
+import org.netbeans.modules.db.metadata.model.api.MetadataElementHandle;
+import org.netbeans.modules.db.metadata.model.api.MetadataModel;
+import org.netbeans.modules.db.metadata.model.api.MetadataModelException;
+import org.netbeans.modules.db.metadata.model.api.Schema;
+import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
+import org.openide.util.actions.NodeAction;
 
 /**
  *
  * @author Rob Englander
  */
-public class ProcedureListNode extends BaseNode {
-    private static final String NAME = "Procedures"; // NOI18N
-    private static final String DISPLAYNAME = "Procedures"; // NOI18N
-    private static final String ICONBASE = "org/netbeans/modules/db/resources/folder.gif";
-    private static final String FOLDER = "ProcedureList"; //NOI18N
+public abstract class BaseAction extends NodeAction {
 
-    /** 
-     * Create an instance of ProcedureListNode.
-     * 
-     * @param dataLookup the lookup to use when creating node providers
-     * @return the ProcedureListNode instance
-     */
-    public static ProcedureListNode create(NodeDataLookup dataLookup, NodeProvider provider) {
-        ProcedureListNode node = new ProcedureListNode(dataLookup, provider);
-        node.setup();
-        return node;
-    }
-
-    private ProcedureListNode(NodeDataLookup lookup, NodeProvider provider) {
-        super(new ChildNodeFactory(lookup), lookup, FOLDER, provider);
+    protected static ResourceBundle bundle() {
+        return NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle"); // NOI18N
     }
     
-    protected void initialize() {
+    @Override
+    public boolean asynchronous() {
+        return false;
     }
     
-    public String getName() {
-        return NAME;
-    }
+    protected static String findSchemaWorkingName(Lookup lookup) {
+        DatabaseConnection conn = lookup.lookup(DatabaseConnection.class);
+        MetadataModel model = conn.getMetadataModel();
+        final MetadataElementHandle handle = lookup.lookup(MetadataElementHandle.class);
 
-    @Override
-    public String getDisplayName() {
-        return DISPLAYNAME;
-    }
+        final String[] array = { null };
 
-    public String getIconBase() {
-        return ICONBASE;
-    }
+        try {
+            model.runReadAction(
+                new Action<Metadata>() {
+                    public void run(Metadata metaData) {
+                        Schema schema = (Schema)handle.resolve(metaData);
+                        Catalog catalog = schema.getParent();
+                        String schemaName = schema.getName();
+                        if (schemaName == null) {
+                            schemaName = catalog.getName();
+                        }
+                        array[0] = schemaName;
+                    }
+                }
+            );
+        } catch (MetadataModelException e) {
+            // TODO report exception
+        }
 
-    @Override
-    public String getShortDescription() {
-        return bundle().getString("ND_ProcedureList"); //NOI18N
-    }
-
-    @Override
-    public HelpCtx getHelpCtx() {
-        return new HelpCtx(ProcedureListNode.class);
+        return array[0];
     }
 }

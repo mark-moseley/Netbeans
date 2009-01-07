@@ -37,86 +37,32 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.node;
+package org.netbeans.modules.db.explorer.action;
 
-import org.netbeans.api.db.explorer.node.BaseNode;
-import org.netbeans.api.db.explorer.node.ChildNodeFactory;
-import org.netbeans.modules.db.explorer.ConnectionList;
-import org.netbeans.modules.db.explorer.DatabaseOption;
+import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 
 /**
- * This is the root node for the database explorer.  This is a singleton
- * instance since the database explorer only uses 1 root node.
- * 
+ *
  * @author Rob Englander
- */ 
-public class RootNode extends BaseNode {
-    private static final String NAME = "Databases"; //NOI18N
-    private static final String DISPLAYNAME = "Databases"; //NOI18N
-    private static final String ICONBASE = "org/netbeans/modules/db/resources/database.gif"; //NOI18N
-    private static final String FOLDER = "Root"; //NOI18N
-
-    /** the singleton instance */
-    private static RootNode instance = null;
-    
-    private static DatabaseOption option = null;
-
-    /**
-     * Gets the singleton instance.
-     * 
-     * @return the singleton instance
-     */
-    public static RootNode instance() {
-        if (instance == null) { 
-            NodeDataLookup lookup = new NodeDataLookup();
-            lookup.add(ConnectionList.getDefault());
-            instance = new RootNode(lookup);
-            instance.setup();
-        }
-        
-        return instance;
-    }
-
-    public static boolean isCreated() {
-        return instance != null;
-    }
-
-    /**
-     * Constructor.  This is private to prevent multiple instances from
-     * being created.
-     * 
-     * @param lookup the associated lookup
-     */
-    private RootNode(NodeDataLookup lookup) {
-        super(new ChildNodeFactory(lookup), lookup, FOLDER, null);
-    }
-    
-    protected void initialize() {
-    }
-    
+ */
+public class EnableDebugAction extends BaseAction {
     @Override
     public String getName() {
-        return NAME;
-    }
-
-    @Override
-    public String getDisplayName() {
-        return DISPLAYNAME;
-    }
-
-    @Override
-    public String getIconBase() {
-        return ICONBASE;
-    }
-
-    @Override
-    public String getShortDescription() {
-        return bundle().getString("ND_Root"); //NOI18N
+        return bundle().getString("EnableDebug"); // NOI18N
     }
 
     @Override
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(RootNode.class);
+        return new HelpCtx(EnableDebugAction.class);
     }
+
+    protected boolean enable(Node[] activatedNodes) {
+        return false;
+    }
+
+    @Override
+    protected void performAction(Node[] activatedNodes) {
+    }
+
 }

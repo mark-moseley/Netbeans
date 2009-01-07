@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,92 +31,69 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+ *
  * Contributor(s):
- * 
+ *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.node;
+package org.netbeans.modules.db.explorer.action;
 
-import org.netbeans.api.db.explorer.node.BaseNode;
-import org.netbeans.api.db.explorer.node.ChildNodeFactory;
-import org.netbeans.modules.db.explorer.ConnectionList;
-import org.netbeans.modules.db.explorer.DatabaseOption;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.netbeans.modules.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.explorer.DbUtilities;
+import org.netbeans.modules.db.explorer.dlg.AddTableColumnDialog;
+import org.netbeans.modules.db.explorer.node.TableNode;
+import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.RequestProcessor;
+import org.openide.util.actions.SystemAction;
 
 /**
- * This is the root node for the database explorer.  This is a singleton
- * instance since the database explorer only uses 1 root node.
- * 
+ *
  * @author Rob Englander
- */ 
-public class RootNode extends BaseNode {
-    private static final String NAME = "Databases"; //NOI18N
-    private static final String DISPLAYNAME = "Databases"; //NOI18N
-    private static final String ICONBASE = "org/netbeans/modules/db/resources/database.gif"; //NOI18N
-    private static final String FOLDER = "Root"; //NOI18N
+ */
+public class AddColumnAction extends BaseAction {
 
-    /** the singleton instance */
-    private static RootNode instance = null;
-    
-    private static DatabaseOption option = null;
-
-    /**
-     * Gets the singleton instance.
-     * 
-     * @return the singleton instance
-     */
-    public static RootNode instance() {
-        if (instance == null) { 
-            NodeDataLookup lookup = new NodeDataLookup();
-            lookup.add(ConnectionList.getDefault());
-            instance = new RootNode(lookup);
-            instance.setup();
-        }
-        
-        return instance;
-    }
-
-    public static boolean isCreated() {
-        return instance != null;
-    }
-
-    /**
-     * Constructor.  This is private to prevent multiple instances from
-     * being created.
-     * 
-     * @param lookup the associated lookup
-     */
-    private RootNode(NodeDataLookup lookup) {
-        super(new ChildNodeFactory(lookup), lookup, FOLDER, null);
-    }
-    
-    protected void initialize() {
-    }
-    
     @Override
     public String getName() {
-        return NAME;
+        return bundle().getString("AddColumn"); // NOI18N
     }
 
     @Override
-    public String getDisplayName() {
-        return DISPLAYNAME;
+    protected boolean enable(Node[] activatedNodes) {
+        boolean result = activatedNodes.length == 1 &&
+                activatedNodes[0].getLookup().lookup(TableNode.class) != null;
+
+        return result;
     }
 
     @Override
-    public String getIconBase() {
-        return ICONBASE;
-    }
+    protected void performAction(final Node[] activatedNodes) {
+        RequestProcessor.getDefault().post(
+            new Runnable() {
+                public void run() {
+                    final TableNode node = activatedNodes[0].getLookup().lookup(TableNode.class);
+                    final DatabaseConnection connection = node.getLookup().lookup(DatabaseConnection.class);
 
-    @Override
-    public String getShortDescription() {
-        return bundle().getString("ND_Root"); //NOI18N
+                    try {
+                        final AddTableColumnDialog dlg = new AddTableColumnDialog(connection.getConnector().getDatabaseSpecification(), node);
+                        if (dlg.run()) {
+                            SystemAction.get(RefreshAction.class).performAction(new Node[] { node });
+                        }
+                    } catch(Exception exc) {
+                        Logger.getLogger("global").log(Level.INFO, null, exc);
+                        DbUtilities.reportError(bundle().getString("ERR_UnableToAddColumn"), exc.getMessage()); // NOI18N
+                    }
+                }
+            }
+        );
     }
 
     @Override
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(RootNode.class);
+        return new HelpCtx(AddColumnAction.class);
     }
+
 }

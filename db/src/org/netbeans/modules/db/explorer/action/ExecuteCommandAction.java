@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,68 +31,63 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+ *
  * Contributor(s):
- * 
+ *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer.node;
+package org.netbeans.modules.db.explorer.action;
 
-import org.netbeans.api.db.explorer.node.BaseNode;
-import org.netbeans.api.db.explorer.node.ChildNodeFactory;
-import org.netbeans.api.db.explorer.node.NodeProvider;
+import java.sql.Connection;
+import java.sql.SQLException;
+import org.netbeans.modules.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.explorer.sql.editor.SQLEditorSupport;
+import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 
 /**
  *
  * @author Rob Englander
  */
-public class ProcedureListNode extends BaseNode {
-    private static final String NAME = "Procedures"; // NOI18N
-    private static final String DISPLAYNAME = "Procedures"; // NOI18N
-    private static final String ICONBASE = "org/netbeans/modules/db/resources/folder.gif";
-    private static final String FOLDER = "ProcedureList"; //NOI18N
+public class ExecuteCommandAction extends BaseAction {
 
-    /** 
-     * Create an instance of ProcedureListNode.
-     * 
-     * @param dataLookup the lookup to use when creating node providers
-     * @return the ProcedureListNode instance
-     */
-    public static ProcedureListNode create(NodeDataLookup dataLookup, NodeProvider provider) {
-        ProcedureListNode node = new ProcedureListNode(dataLookup, provider);
-        node.setup();
-        return node;
+    protected boolean enable(Node[] activatedNodes) {
+        if (activatedNodes == null || activatedNodes.length != 1) {
+            return false;
+        }
+
+        boolean enabled = false;
+        DatabaseConnection dbconn = activatedNodes[0].getLookup().lookup(DatabaseConnection.class);
+
+        if (dbconn != null) {
+            Connection conn = dbconn.getConnection();
+            try {
+                if (conn != null) {
+                    enabled = !conn.isClosed();
+                }
+            } catch (SQLException e) {
+
+            }
+        }
+
+        return enabled;
     }
 
-    private ProcedureListNode(NodeDataLookup lookup, NodeProvider provider) {
-        super(new ChildNodeFactory(lookup), lookup, FOLDER, provider);
+    public void performAction (Node[] activatedNodes) {
+        if (activatedNodes != null && activatedNodes.length == 1) {
+            DatabaseConnection dbconn = activatedNodes[0].getLookup().lookup(DatabaseConnection.class);
+            SQLEditorSupport.openSQLEditor(dbconn.getDatabaseConnection(), "", false); // NOI18N
+        }
     }
-    
-    protected void initialize() {
-    }
-    
+
+    @Override
     public String getName() {
-        return NAME;
-    }
-
-    @Override
-    public String getDisplayName() {
-        return DISPLAYNAME;
-    }
-
-    public String getIconBase() {
-        return ICONBASE;
-    }
-
-    @Override
-    public String getShortDescription() {
-        return bundle().getString("ND_ProcedureList"); //NOI18N
+        return bundle().getString("ExecuteCommand"); // NOI18N
     }
 
     @Override
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(ProcedureListNode.class);
+        return new HelpCtx(ExecuteCommandAction.class);
     }
 }
