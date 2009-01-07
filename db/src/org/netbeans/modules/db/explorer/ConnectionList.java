@@ -42,16 +42,17 @@
 package org.netbeans.modules.db.explorer;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
+import java.util.ResourceBundle;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.netbeans.api.db.explorer.ConnectionListener;
 import org.netbeans.api.db.explorer.DatabaseException;
-import org.netbeans.modules.db.explorer.nodes.RootNode;
+import org.netbeans.modules.db.explorer.node.RootNode;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
+import org.openide.util.NbBundle;
 import org.openide.util.lookup.Lookups;
 
 
@@ -61,19 +62,19 @@ import org.openide.util.lookup.Lookups;
  * and removed through ConnectionListener.
  *
  * This class only maintains a list of DBConnection objects. It has no links
- * to the UI (nodes representing these objects), therefore adding a DBConnection 
+ * to the UI (nodes representing these objects), therefore adding a DBConnection
  * doesn't create a node for it.
- * 
+ *
  * @author Andrei Badea
  */
 public class ConnectionList {
-    
+
     private static ConnectionList DEFAULT;
-    
+
+    private final List<ConnectionListener> listeners = new CopyOnWriteArrayList<ConnectionListener>();
+
     private Lookup.Result result = getLookupResult();
-    
-    private List/*<ConnectionListener>*/ listeners = new ArrayList(1);    
-    
+
     public static synchronized ConnectionList getDefault() {
         if (DEFAULT == null) {
             DatabaseConnectionConvertor.importOldConnections();
@@ -82,25 +83,25 @@ public class ConnectionList {
         }
         return DEFAULT;
     }
-    
+
     private ConnectionList() {
         // issue 75204: forces the DataObject's corresponding to the DatabaseConnection's
         // to be initialized and held strongly so the same DatabaseConnection is
         // returns as long as it is held strongly
         result.allInstances();
-        
+
         result.addLookupListener(new LookupListener() {
             public void resultChanged(LookupEvent e) {
                 fireListeners();
             }
         });
     }
-    
+
     public DatabaseConnection[] getConnections() {
-        Collection dbconns = result.allInstances();
-        return (DatabaseConnection[])dbconns.toArray(new DatabaseConnection[dbconns.size()]);
+        Collection<DatabaseConnection> dbconns = result.allInstances();
+        return dbconns.toArray(new DatabaseConnection[dbconns.size()]);
     }
-    
+
     public DatabaseConnection getConnection(DatabaseConnection impl) {
         if (impl == null) {
             throw new NullPointerException();
@@ -113,22 +114,29 @@ public class ConnectionList {
         }
         return null;
     }
-    
+
     public void add(DatabaseConnection dbconn) throws DatabaseException {
         if (dbconn == null) {
             throw new NullPointerException();
         }
+
+        if (contains(dbconn)) {
+            ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle"); // NOI18N
+
+            throw new DatabaseException(bundle.getString("EXC_ConnectionAlreadyExists")); // NOI18N
+        }
+
         try {
             DatabaseConnectionConvertor.create(dbconn);
         } catch (IOException e) {
             throw new DatabaseException(e);
         }
     }
-    
+
     public boolean contains(DatabaseConnection dbconn) {
         return getConnection(dbconn) != null;
     }
-    
+
     public void remove(DatabaseConnection dbconn) throws DatabaseException {
         if (dbconn == null) {
             throw new NullPointerException();
@@ -139,33 +147,22 @@ public class ConnectionList {
             throw new DatabaseException(e);
         }
     }
-    
+
     public void addConnectionListener(ConnectionListener listener) {
-        synchronized (listeners) {
-            listeners.add(listener);
-        }
+        listeners.add(listener);
     }
-    
+
     public void removeConnectionListener(ConnectionListener listener) {
-        synchronized (listeners) {
-            listeners.remove(listener);
-        }
+        listeners.remove(listener);
     }
-    
+
     private void fireListeners() {
-        List listenersCopy;
-        
-        synchronized (listeners) {
-            listenersCopy = new ArrayList(listeners);
-        }
-        
-        for (Iterator i = listenersCopy.iterator(); i.hasNext();) {
-            ConnectionListener l = (ConnectionListener)i.next();
-            l.connectionsChanged();
+        for (ConnectionListener listener : listeners) {
+            listener.connectionsChanged();
         }
     }
-    
-    private synchronized Lookup.Result getLookupResult() {
+
+    private synchronized Lookup.Result<DatabaseConnection> getLookupResult() {
         return Lookups.forPath(DatabaseConnectionConvertor.CONNECTIONS_PATH).lookupResult(DatabaseConnection.class);
     }
 }
