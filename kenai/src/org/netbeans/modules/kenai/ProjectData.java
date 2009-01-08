@@ -37,37 +37,24 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.kenai.util;
-
-import java.util.logging.Level;
-import java.util.logging.Logger;
+package org.netbeans.modules.kenai;
 
 /**
- * Utility static methods.
  *
  * @author Maros Sandor
  */
-public class Utils {
-
-    private Utils() {}
-    
-    /**
-     * Convenience method for awkward Logger invocation.
-     *
-     * @param caller caller object for logger name determination
-     * @param e exception that defines the error
-     */
-    public static void logError(Object caller, Throwable e) {
-        Logger.getLogger(caller.getClass().getName()).log(Level.SEVERE, e.getMessage(), e);
-    }
-
-    /**
-     * Convenience method for awkward Logger invocation.
-     *
-     * @param caller caller object for logger name determination
-     * @param e exception that defines the error
-     */
-    public static void logWarn(Object caller, Throwable e) {
-        Logger.getLogger(caller.getClass().getName()).log(Level.WARNING, e.getMessage(), e);
-    }
+@org.codeviation.pojson.Pojson.IgnoreNonExisting
+public class ProjectData {
+    public String href;
+    public String name;
+    public String display_name;
+    public String image;
+    public String owner;
+    public String description;
+    public String created_at;
+    public String updated_at;
+    public int    member_count;
+    public LicenceData [] licenses;
+    public FeatureData [] features;
+//    public String [] tags;
 }

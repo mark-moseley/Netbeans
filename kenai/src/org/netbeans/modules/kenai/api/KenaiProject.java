@@ -39,8 +39,10 @@
 
 package org.netbeans.modules.kenai.api;
 
+import java.net.MalformedURLException;
 import java.net.URL;
-import org.netbeans.modules.kenai.spi.KenaiProjectImpl;
+import org.netbeans.modules.kenai.ProjectData;
+import org.netbeans.modules.kenai.util.Utils;
 
 /**
  * IDE-side representation of a Kenai project.
@@ -49,19 +51,31 @@ import org.netbeans.modules.kenai.spi.KenaiProjectImpl;
  */
 public final class KenaiProject {
 
-    private final String name;
+    private final String    name;
 
-    private URL         location;
-    private String      displayName;
+    private final URL       href;
 
-    KenaiProject(KenaiProjectImpl p) {
-        this.name = (String) p.get(KenaiProjectImpl.NAME);
-        this.location = (URL) p.get(KenaiProjectImpl.LOCATION);
-        this.displayName = (String) p.get(KenaiProjectImpl.DISPLAY_NAME);
-    }
+    private ProjectData     data;
 
-    public String getDescription() {
-        return "";
+    /**
+     * When detailed properties of this project has been fetched.
+     */
+    private long        detailsTimestamp;
+
+    /**
+     * I assume that this constructor does NOT provide full project information. If it does then
+     * call fillInfo() just after the object is created.
+     *
+     * @param p
+     */
+    KenaiProject(ProjectData p) {
+        this.name = p.name;
+        try {
+            this.href = new URL(p.href);
+        } catch (MalformedURLException ex) {
+            throw new IllegalArgumentException(ex);
+        }
+        this.data = p;
     }
 
     public String getName() {
@@ -69,14 +83,38 @@ public final class KenaiProject {
     }
 
     public URL getWebLocation() {
-        return location;
+        return href;
+    }
+
+    public String getDisplayName() {
+        return data.display_name;
+    }
+
+    public String getDescription() {
+        fetchDetailsIfNotAvailable();
+        return data.description;
     }
 
     public String[] getTags() {
         return new String[0];
     }
 
-    public String getDisplayName() {
-        return displayName;
+    void fillInfo(ProjectData prj) {
+        detailsTimestamp = System.currentTimeMillis();
+    }
+
+    ProjectData getData() {
+        return data;
+    }
+
+    private void fetchDetailsIfNotAvailable() {
+        if (detailsTimestamp > 0) return;
+
+//        try {
+//            ProjectData prj = kenai.getDetails(name);
+//            fillInfo(prj);
+//        } catch (KenaiException kenaiException) {
+//            Utils.logError(this, kenaiException);
+//        }
     }
 }

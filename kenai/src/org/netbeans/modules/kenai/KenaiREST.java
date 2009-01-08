@@ -40,16 +40,12 @@
 package org.netbeans.modules.kenai;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import org.netbeans.modules.kenai.api.KenaiException;
-import org.netbeans.modules.kenai.spi.KenaiImpl;
 import org.codeviation.pojson.*;
-import org.netbeans.modules.kenai.spi.KenaiProjectImpl;
-import org.netbeans.modules.kenai.util.Utils;
 
 /**
  * Talks to remote Kenai server via Web services API.
@@ -83,17 +79,25 @@ public class KenaiREST extends KenaiImpl {
     }
 
     @Override
-    public KenaiProjectImpl getProject(String name, String username, char[] password) throws KenaiException {
-        Iterator<KenaiProjectImpl> allProjects = searchProjects(name, username, password);
-        for (; allProjects.hasNext(); ) {
-            KenaiProjectImpl prj = allProjects.next();
-            if (name.equals(prj.get(KenaiProjectImpl.NAME))) return prj;
+    public ProjectData getProject(String name, String username, char[] password) throws KenaiException {
+        RestConnection conn = new RestConnection(baseURL.toString() + "/api/projects/" + name + ".json");
+        RestResponse resp = null;
+        try {
+            resp = conn.get(null);
+        } catch (IOException iOException) {
+            throw new KenaiException(iOException);
         }
-        return null;
+
+        if (resp.getResponseCode() != 200) return null;
+
+        String sss = resp.getDataAsString();
+
+        PojsonLoad pload = PojsonLoad.create();
+        return pload.load(sss, ProjectData.class);
     }
 
     @Override
-    public Iterator<KenaiProjectImpl> searchProjects(String pattern, String username, char[] password) throws KenaiException {
+    public Iterator<ProjectData> searchProjects(String pattern, String username, char[] password) throws KenaiException {
         RestConnection conn = new RestConnection(baseURL.toString() + "/home/live_lookup?val=" + pattern);
         RestResponse resp = null;
         try {
@@ -106,24 +110,52 @@ public class KenaiREST extends KenaiImpl {
         PojsonLoad pload = PojsonLoad.create();
         JsonLiveLookup [] objs = pload.load(sss, JsonLiveLookup[].class);
 
-        Set<KenaiProjectImpl> projects = new HashSet<KenaiProjectImpl>();
+        Set<ProjectData> projects = new HashSet<ProjectData>();
         for (JsonLiveLookup obj : objs) {
             if ("project".equals(obj.t)) {
-                try {
-                    // TODO: FAKE name is the last part of the URL MAYBE!
-                    String name = obj.url;
-                    int idx = name.lastIndexOf('/');
-                    if (idx >= 0) {
-                        name = name.substring(idx + 1);
-                    }
-                    KenaiProjectImpl prj = new KenaiProjectImpl(name, new URL(baseURL, obj.url));
-                    prj.put(KenaiProjectImpl.DISPLAY_NAME, obj.name);
-                    projects.add(prj);
-                } catch (MalformedURLException malformedURLException) {
-                    Utils.logError(this, malformedURLException);
+                // TODO: FAKE name is the last part of the URL MAYBE!
+                String name = obj.url;
+                int idx = name.lastIndexOf('/');
+                if (idx >= 0) {
+                    name = name.substring(idx + 1);
                 }
+                ProjectData prj = new ProjectData();
+                prj.name = name;
+                prj.href = baseURL + obj.url;
+                prj.display_name = obj.name;
+                projects.add(prj);
             }
         }
         return projects.iterator();
     }
+
+    @Override
+    public ProjectData createProject(String name, String displayName, String username, char[] password) throws KenaiException {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public void register(String username, char[] password) throws KenaiException {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public void verify(String username, char[] password) throws KenaiException {
+        String [][] params = {
+            new String [] { "username", username },
+            new String [] { "password", new String(password) }
+        };
+        RestConnection conn = new RestConnection(baseURL.toString() + "/api/login/authenticate", params);
+        RestResponse resp = null;
+        try {
+            resp = conn.get(null);
+        } catch (IOException iOException) {
+            throw new KenaiException(iOException);
+        }
+        if (resp.getResponseCode() != 200) {
+            throw new KenaiException("Authentication failed");
+        }
+    }
+
+//        DateFormat df = new SimpleDateFormat("y-M-d'T'H:m:s'Z'");
 }

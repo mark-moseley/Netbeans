@@ -37,40 +37,17 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.kenai.spi;
-
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
+package org.netbeans.modules.kenai;
 
 /**
  *
  * @author Maros Sandor
  */
-public class KenaiProjectImpl {
-
-    public static final String NAME = "name";
-    public static final String LOCATION = "location";
-
-    public static final String DISPLAY_NAME = "display_name";
-
-    private Map<String, Object> props = new HashMap<String, Object>();
-
-    public KenaiProjectImpl(String name, URL location) {
-        props.put(NAME, name);
-        props.put(LOCATION, location);
-    }
-
-    public String getName() {
-        return (String) props.get(NAME);
-    }
-
-    public Object get(String property) {
-        return props.get(property);
-    }
-
-    public void put(String property, Object value) {
-        props.put(property, value);
-    }
-
+@org.codeviation.pojson.Pojson.IgnoreNonExisting
+public class LicenceData {
+    public String href;
+    public String name;
+    public String display_name;
+    public String license_uri;
+    public String preference_level;
 }
