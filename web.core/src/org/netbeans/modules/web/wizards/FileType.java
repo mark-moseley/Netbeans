@@ -41,7 +41,7 @@
 
 package org.netbeans.modules.web.wizards;
 
-class FileType {
+public class FileType {
     private String name, suffix;
 
     private FileType(String name, String suffix) {
@@ -49,9 +49,14 @@ class FileType {
 	this.suffix = suffix;
     }
 
-    public String toString() { return name; }
+    @Override
+    public String toString() {
+        return name;
+    }
 
-    public String getSuffix() { return suffix; }
+    public String getSuffix() {
+        return suffix;
+    }
 
     public static final FileType SERVLET =
 	new FileType("servlet", "java");
