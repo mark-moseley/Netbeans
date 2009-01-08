@@ -41,15 +41,20 @@
 
 package org.netbeans.modules.uihandler;
 
+import java.awt.event.ActionEvent;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import javax.swing.JButton;
 import javax.xml.parsers.ParserConfigurationException;
-import junit.framework.*;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Handler;
+import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import org.netbeans.junit.NbTestCase;
@@ -71,6 +76,7 @@ public class InstallerTest extends NbTestCase {
         return true;
     }
 
+    @Override
     protected void setUp() throws Exception {
         System.setProperty("netbeans.user", getWorkDirPath());
         clearWorkDir();
@@ -82,6 +88,7 @@ public class InstallerTest extends NbTestCase {
         installer.restored();
     }
 
+    @Override
     protected void tearDown() throws Exception {
         Installer installer = Installer.findObject(Installer.class, true);
         assertNotNull(installer);
@@ -89,7 +96,7 @@ public class InstallerTest extends NbTestCase {
     }
     
     public void testEmptyLog() throws Exception {
-        List<LogRecord> list = Installer.getLogs();
+        List<LogRecord> list = ScreenSizeTest.removeScreenSizeLogs(Installer.getLogs());
         assertEquals("Empty", 0, list.size());
         list.add(null);
         assertEquals("One", 1, list.size());
@@ -105,20 +112,20 @@ public class InstallerTest extends NbTestCase {
         
         installer.restored();
         UIHandler.waitFlushed();
-        assertEquals("One log is available: " + Installer.getLogs(), 1, Installer.getLogsSize());
+        assertEquals("One log is available: " + Installer.getLogs(), 1, InstallerTest.getLogsSize());
         assertEquals("The right message is there", 
-            "Something happened", Installer.getLogs().get(0).getMessage()
+            "Something happened", Installer.getLogs().get(1).getMessage()
         );
         log.warning("Something happened");
         log.warning("Something happened");
         log.warning("Something happened");
-        assertEquals("Four logs available: " + Installer.getLogs(), 4, Installer.getLogsSize());
+        assertEquals("Four logs available: " + Installer.getLogs(), 4, InstallerTest.getLogsSize());
         
         // upload done
         Installer.clearLogs();
         
         log.warning("Something happened");
-        assertEquals("One log available: " + Installer.getLogs(), 1, Installer.getLogsSize());
+        assertEquals("One log available: " + Installer.getLogs(), 1, InstallerTest.getLogsSize());
         
     }
 
@@ -215,6 +222,26 @@ public class InstallerTest extends NbTestCase {
         assertEquals("There is the default", 1, buttons.length);
         assertEquals("3rd is default", def, buttons[0]);
         assertEquals("Ahoj", dd.getTitle());
+    }
+    public void testParseEmptyAction() throws Exception {
+        String page = "<html><head><title>Ahoj</title></head><body><form action='' method='POST'>" +
+                "\n" +
+                "</form></body></html>";
+        InputStream is = new ByteArrayInputStream(page.getBytes());
+        JButton def = new JButton("Default");
+        DialogDescriptor dd = new DialogDescriptor(null, "MyTit");
+        boolean ok = false;
+        try{
+            Installer.parseButtons(is, def, dd);
+            assertTrue(false);
+        }catch(IllegalStateException e){
+            ok = true;
+            assertTrue (e.getMessage().contains("Action"));
+            assertTrue (e.getMessage().contains("empty"));
+        }finally{
+            is.close();
+        }
+        assertTrue(ok);
     }
     public void testNoTitle() throws Exception {
         String page = "<html><head></head><body><form action='http://xyz.cz' method='POST'>" +
@@ -438,7 +465,7 @@ public class InstallerTest extends NbTestCase {
         }
     }
     
-    private static Object[] parseButtons(InputStream is, Object def) throws IOException, ParserConfigurationException, SAXException {
+    private static Object[] parseButtons(InputStream is, Object def) throws IOException, ParserConfigurationException, SAXException, InterruptedException, InvocationTargetException {
         DialogDescriptor dd = new DialogDescriptor(null, null);
         Installer.parseButtons(is, def, dd);
         return dd.getOptions();
@@ -456,4 +483,46 @@ public class InstallerTest extends NbTestCase {
         message = Installer.createMessage(new Error("PROBLEM"));
         assertEquals("Error: PROBLEM", message);
     }
+
+    public void testDontSubmitTwiceIssue128306(){
+        final AtomicBoolean submittingTwiceStopped = new AtomicBoolean(false);
+        final Installer.SubmitInteractive interactive = new Installer.SubmitInteractive("hallo", true);
+        final ActionEvent evt = new ActionEvent("submit", 1, "submit");
+        Installer.LOG.setLevel(Level.FINEST);
+        Installer.LOG.addHandler(new Handler() {
+
+            @Override
+            public void publish(LogRecord record) {
+                if ("posting upload UIGESTURES".equals(record.getMessage())){
+                    interactive.actionPerformed(evt);
+                }
+                if ("ALREADY SUBMITTING".equals(record.getMessage())){
+                    submittingTwiceStopped.set(true);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() throws SecurityException {
+            }
+        });
+        interactive.actionPerformed(evt);
+        Installer.RP_SUBMIT.post(new Runnable() {
+
+            public void run() {
+                // just wait for processing
+            }
+        }).waitFinished();
+        assertTrue(submittingTwiceStopped.get());
+    }
+
+    static int getLogsSize(){
+        List<LogRecord> logs = Installer.getLogs();
+        logs = ScreenSizeTest.removeScreenSizeLogs(logs);
+        return logs.size();
+    }
+
 }
