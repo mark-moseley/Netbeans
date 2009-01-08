@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,6 +21,12 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
+ * Contributor(s):
+ *
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,37 +37,51 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
- * Contributor(s):
- *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.php.project.ui.actions;
 
-import org.netbeans.modules.php.project.PhpProject;
-import org.netbeans.modules.php.project.ui.actions.support.ConfigAction;
+
 import org.netbeans.modules.php.project.ui.actions.support.Displayable;
+import java.net.MalformedURLException;
+import org.netbeans.modules.php.project.PhpProject;
 import org.netbeans.spi.project.ActionProvider;
+import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 
-public class TestProjectCommand extends Command implements Displayable {
-    public static final String ID = ActionProvider.COMMAND_TEST;
-    public static final String DISPLAY_NAME = NbBundle.getMessage(TestProjectCommand.class, "LBL_TestProject");
+/**
+ * @author Radek Matous
+ */
+public class RunProjectCommand extends Command implements Displayable {
+    public static final String ID = ActionProvider.COMMAND_RUN;
+    public static final String DISPLAY_NAME = NbBundle.getMessage(RunProjectCommand.class, "LBL_RunProject");
 
-    public TestProjectCommand(PhpProject project) {
+    /**
+     * @param project
+     */
+    public RunProjectCommand(PhpProject project) {
         super(project);
     }
 
     @Override
-    public String getCommandId() {
-        return ID;
-    }
-
-    @Override
     public void invokeAction(Lookup context) {
-        getConfigAction().runProject(getProject());
+        boolean scriptSelected = isScriptSelected();
+        if (!isRunConfigurationValid(scriptSelected)) {
+            // property not set yet
+            return;
+        }
+        if (scriptSelected) {
+            // XXX
+            getConfigAction().runProject(getProject());
+        } else {
+            eventuallyUploadFiles();
+            try {
+                showURLForProjectFile();
+            } catch (MalformedURLException ex) {
+                //TODO: improve error handling
+                Exceptions.printStackTrace(ex);
+            }
+        }
     }
 
     @Override
@@ -69,12 +89,12 @@ public class TestProjectCommand extends Command implements Displayable {
         return getConfigAction().isRunProjectEnabled(getProject());
     }
 
-    public String getDisplayName() {
-        return DISPLAY_NAME;
+    @Override
+    public String getCommandId() {
+        return ID;
     }
 
-    @Override
-    protected ConfigAction getConfigAction() {
-        return ConfigAction.get(ConfigAction.Type.TEST);
+    public String getDisplayName() {
+        return DISPLAY_NAME;
     }
 }

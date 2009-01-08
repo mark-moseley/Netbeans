@@ -40,41 +40,26 @@
 package org.netbeans.modules.php.project.ui.actions;
 
 import org.netbeans.modules.php.project.PhpProject;
-import org.netbeans.modules.php.project.ui.actions.support.ConfigAction;
-import org.netbeans.modules.php.project.ui.actions.support.Displayable;
-import org.netbeans.spi.project.ActionProvider;
 import org.openide.util.Lookup;
-import org.openide.util.NbBundle;
 
-public class TestProjectCommand extends Command implements Displayable {
-    public static final String ID = ActionProvider.COMMAND_TEST;
-    public static final String DISPLAY_NAME = NbBundle.getMessage(TestProjectCommand.class, "LBL_TestProject");
+/**
+ * @author Radek Matous
+ */
+public abstract class GlobalCommand extends Command {
 
-    public TestProjectCommand(PhpProject project) {
+    public GlobalCommand(PhpProject project) {
         super(project);
     }
 
     @Override
-    public String getCommandId() {
-        return ID;
+    public final void invokeAction(Lookup context) {
+        invokeAction();
     }
 
     @Override
-    public void invokeAction(Lookup context) {
-        getConfigAction().runProject(getProject());
+    public final boolean isActionEnabled(Lookup context) {
+        return true;
     }
 
-    @Override
-    public boolean isActionEnabled(Lookup context) {
-        return getConfigAction().isRunProjectEnabled(getProject());
-    }
-
-    public String getDisplayName() {
-        return DISPLAY_NAME;
-    }
-
-    @Override
-    protected ConfigAction getConfigAction() {
-        return ConfigAction.get(ConfigAction.Type.TEST);
-    }
+    protected abstract void invokeAction();
 }

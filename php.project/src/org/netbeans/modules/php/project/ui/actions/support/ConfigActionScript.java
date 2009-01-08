@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,47 +34,65 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.project.ui.actions;
+package org.netbeans.modules.php.project.ui.actions.support;
 
 import org.netbeans.modules.php.project.PhpProject;
-import org.netbeans.modules.php.project.ui.actions.support.ConfigAction;
-import org.netbeans.modules.php.project.ui.actions.support.Displayable;
-import org.netbeans.spi.project.ActionProvider;
+import org.netbeans.modules.php.project.ProjectPropertiesSupport;
+import org.openide.filesystems.FileObject;
 import org.openide.util.Lookup;
-import org.openide.util.NbBundle;
 
-public class TestProjectCommand extends Command implements Displayable {
-    public static final String ID = ActionProvider.COMMAND_TEST;
-    public static final String DISPLAY_NAME = NbBundle.getMessage(TestProjectCommand.class, "LBL_TestProject");
+/**
+ * Action implementation for SCRIPT configuration.
+ * It means running and debugging scripts.
+ * @author Tomas Mysik
+ */
+public class ConfigActionScript extends ConfigAction {
 
-    public TestProjectCommand(PhpProject project) {
-        super(project);
+    @Override
+    public void runProject(PhpProject project) {
+        new RunScript(project).invokeAction(null);
     }
 
     @Override
-    public String getCommandId() {
-        return ID;
+    public void debugProject(PhpProject project) {
+        new DebugScript(project).invokeAction(null);
     }
 
     @Override
-    public void invokeAction(Lookup context) {
-        getConfigAction().runProject(getProject());
+    public void runFile(PhpProject project, Lookup context) {
+        new RunScript(project).invokeAction(context);
     }
 
     @Override
-    public boolean isActionEnabled(Lookup context) {
-        return getConfigAction().isRunProjectEnabled(getProject());
-    }
-
-    public String getDisplayName() {
-        return DISPLAY_NAME;
+    public void debugFile(PhpProject project, Lookup context) {
+        new DebugScript(project).invokeAction(context);
     }
 
     @Override
-    protected ConfigAction getConfigAction() {
-        return ConfigAction.get(ConfigAction.Type.TEST);
+    public boolean isRunProjectEnabled(PhpProject project) {
+        return true;
+    }
+
+    @Override
+    public boolean isDebugProjectEnabled(PhpProject project) {
+        return XDebugStarterFactory.getInstance() != null;
+    }
+
+    @Override
+    public boolean isRunFileEnabled(PhpProject project, Lookup context) {
+        FileObject rootFolder = ProjectPropertiesSupport.getSourcesDirectory(project);
+        FileObject file = CommandUtils.getPhpFileForContextOrSelectedNodes(context, rootFolder);
+        return file != null && CommandUtils.isPhpFile(file);
+    }
+
+    @Override
+    public boolean isDebugFileEnabled(PhpProject project, Lookup context) {
+        if (XDebugStarterFactory.getInstance() == null) {
+            return false;
+        }
+        return isRunFileEnabled(project, context);
     }
 }
