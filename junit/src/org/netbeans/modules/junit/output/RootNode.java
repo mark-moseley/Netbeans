@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -77,6 +77,7 @@ final class RootNode extends AbstractNode {
     private volatile int totalTests = 0;
     private volatile int failures = 0;
     private volatile int errors = 0;
+    private volatile int interruptedTests = 0;
     private volatile int elapsedTimeMillis = 0;
     private volatile int detectedPassedTests = 0;
     private boolean sessionFinished;
@@ -134,12 +135,18 @@ final class RootNode extends AbstractNode {
     
     /**
      */
-    TestsuiteNode displayReport(final Report report) {
+    TestsuiteNode displayReport(final Report report, int[] statistics) {
         assert EventQueue.isDispatchThread();
-        
+        assert statistics.length == 6;
         /* Called from the EventDispatch thread */
-        
-        updateStatistics(report);
+
+        totalTests = statistics[0];
+        failures = statistics[1];
+        errors = statistics[2];
+        detectedPassedTests = statistics[3];
+        interruptedTests = statistics[4];
+        elapsedTimeMillis = statistics[5];
+
         updateDisplayName();
         return children.displayReport(report);
     }
@@ -150,24 +157,10 @@ final class RootNode extends AbstractNode {
         assert EventQueue.isDispatchThread();
         
         /* Called from the EventDispatch thread */
-        
-        for (Report report : reports) {
-            updateStatistics(report);
-        }
         updateDisplayName();
         children.displayReports(reports);
     }
-    
-    /**
-     */
-    private void updateStatistics(final Report report) {
-        totalTests += report.totalTests;
-        failures += report.failures;
-        errors += report.errors;
-        detectedPassedTests += report.detectedPassedTests;
-        elapsedTimeMillis += report.elapsedTimeMillis;
-    }
-    
+        
     /**
      */
     void setFiltered(final boolean filtered) {
@@ -201,41 +194,36 @@ final class RootNode extends AbstractNode {
             } else {
                 msg = null;
             }
-        } else if ((failures == 0) && (errors == 0)) {
+        } else if ((failures == 0) && (errors == 0) && (interruptedTests == 0)) {
             msg = NbBundle.getMessage(bundleRefClass,
                                       "MSG_TestsInfoAllOK",             //NOI18N
-                                      new Integer(totalTests));
+                                      totalTests);
         } else {
-            String passedTestsInfo = NbBundle.getMessage(
-                    bundleRefClass,
-                    "MSG_PassedTestsInfo",                              //NOI18N
-                    new Integer(totalTests - failures - errors));
-            String failedTestsInfo = (failures == 0)
-                                     ? null
-                                     : NbBundle.getMessage(
-                                            bundleRefClass,
-                                            "MSG_FailedTestsInfo",      //NOI18N
-                                            new Integer(failures));
-            String errorTestsInfo = (errors == 0)
-                                    ? null
-                                    : NbBundle.getMessage(
-                                            bundleRefClass,
-                                            "MSG_ErrorTestsInfo",       //NOI18N
-                                            new Integer(errors));
-            if ((failedTestsInfo == null) || (errorTestsInfo == null)) {
-                msg = NbBundle.getMessage(bundleRefClass,
-                                          "MSG_TestsOneIssueType",      //NOI18N
-                                          passedTestsInfo,
-                                          failedTestsInfo != null
-                                                ? failedTestsInfo
-                                                : errorTestsInfo);
-            } else {
-                msg = NbBundle.getMessage(bundleRefClass,
-                                          "MSG_TestsFailErrIssues",     //NOI18N
-                                          passedTestsInfo,
-                                          failedTestsInfo,
-                                          errorTestsInfo);
+            StringBuilder buf = new StringBuilder(40);
+            buf.append(NbBundle.getMessage(bundleRefClass,
+                                           "MSG_PassedTestsInfo",       //NOI18N
+                                           totalTests - failures - errors
+                                                      - interruptedTests));
+            if ((failures != 0) || (errors != 0)) {
+                buf.append(", ");                                       //NOI18N
+                buf.append(NbBundle.getMessage(bundleRefClass,
+                                               "MSG_FailedTestsInfo",   //NOI18N
+                                               failures));
             }
+            if (errors != 0) {
+                buf.append(", ");                                       //NOI18N
+                buf.append(NbBundle.getMessage(bundleRefClass,
+                                               "MSG_ErrorTestsInfo",    //NOI18N
+                                               errors));
+            }
+            if (interruptedTests != 0) {
+                buf.append(", ");                                       //NOI18N
+                buf.append(NbBundle.getMessage(bundleRefClass,
+                                               "MSG_InterruptedTestsInfo",//NOI18N
+                                               interruptedTests));
+            }
+            buf.append('.');
+            msg = buf.toString();
         }
 
         if (totalTests != 0) {
@@ -281,7 +269,7 @@ final class RootNode extends AbstractNode {
      *                           <code>ALL_PASSED_ABSENT</code>
      */
     int getSuccessDisplayedLevel() {
-        int reportedPassedTestsCount = totalTests - failures - errors;
+        int reportedPassedTestsCount = totalTests - failures - errors - interruptedTests;
         if (detectedPassedTests >= reportedPassedTestsCount) {
             return ALL_PASSED_DISPLAYED;
         } else if (detectedPassedTests == 0) {
