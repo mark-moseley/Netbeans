@@ -53,10 +53,8 @@ import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.DebuggerManagerAdapter;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
-import org.netbeans.modules.debugger.jpda.ui.Evaluator;
-import org.openide.util.HelpCtx;
+import org.netbeans.modules.debugger.jpda.ui.CodeEvaluator;
 import org.openide.util.NbBundle;
-import org.openide.util.actions.CallableSystemAction;
 
 /**
  * Invokes the expression evaluator GUI
@@ -65,26 +63,26 @@ import org.openide.util.actions.CallableSystemAction;
  */
 public class EvaluateAction extends AbstractAction implements PropertyChangeListener,
                                                               Runnable {
-    
+
     private EnableListener listener;
     private transient Reference lastDebuggerRef = new WeakReference(null);
 
     public EvaluateAction () {
-        listener = new EnableListener (this);
-        DebuggerManager.getDebuggerManager().addDebuggerListener(
-                DebuggerManager.PROP_CURRENT_ENGINE,
-                listener);
+//        listener = new EnableListener (this);
+//        DebuggerManager.getDebuggerManager().addDebuggerListener(
+//                DebuggerManager.PROP_CURRENT_ENGINE,
+//                listener);
         putValue (
-            Action.NAME, 
+            Action.NAME,
             NbBundle.getMessage(EvaluateAction.class, "CTL_Evaluate") // NOI18N
         );
-        checkEnabled();
+//        checkEnabled();
     }
-    
+
     private synchronized boolean canBeEnabled() {
         DebuggerEngine de = DebuggerManager.getDebuggerManager().getCurrentEngine();
         if (de == null) return false;
-        JPDADebugger debugger = (JPDADebugger) de.lookupFirst(null, JPDADebugger.class);
+        JPDADebugger debugger = de.lookupFirst(null, JPDADebugger.class);
         JPDADebugger lastDebugger = (JPDADebugger) lastDebuggerRef.get();
         if (lastDebugger != null && debugger != lastDebugger) {
             lastDebugger.removePropertyChangeListener(
@@ -102,23 +100,26 @@ public class EvaluateAction extends AbstractAction implements PropertyChangeList
             return false;
         }
     }
-    
+
     private void checkEnabled() {
         SwingUtilities.invokeLater(this);
     }
-    
+
     public void run() {
         setEnabled(canBeEnabled());
     }
-    
+
     public void actionPerformed (ActionEvent evt) {
-        DebuggerEngine de = DebuggerManager.getDebuggerManager().getCurrentEngine();
-        if (de == null) return ;
-        JPDADebugger debugger = (JPDADebugger) de.lookupFirst(null, JPDADebugger.class);
-        if (debugger == null) return ;
-        Evaluator.open(debugger);
+//        DebuggerEngine de = DebuggerManager.getDebuggerManager().getCurrentEngine();
+//        if (de == null) return;
+//        JPDADebugger debugger = de.lookupFirst(null, JPDADebugger.class);
+//        if (debugger == null) return;
+
+        CodeEvaluator.openEvaluator();
+
+        // Evaluator2.open(debugger);
     }
-    
+
     public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
@@ -131,29 +132,31 @@ public class EvaluateAction extends AbstractAction implements PropertyChangeList
             }
         });
     }
-    
+
+    @Override
     protected void finalize() throws Throwable {
-        DebuggerManager.getDebuggerManager().removeDebuggerListener(
-                DebuggerManager.PROP_CURRENT_ENGINE,
-                listener);
+//        DebuggerManager.getDebuggerManager().removeDebuggerListener(
+//                DebuggerManager.PROP_CURRENT_ENGINE,
+//                listener);
     }
 
-        
+
     private static class EnableListener extends DebuggerManagerAdapter {
-        
+
         private Reference actionRef;
-        
+
         public EnableListener(EvaluateAction action) {
             actionRef = new WeakReference(action);
         }
-        
+
+        @Override
         public void propertyChange(PropertyChangeEvent evt) {
             EvaluateAction action = (EvaluateAction) actionRef.get();
             if (action != null) {
                 action.checkEnabled();
             }
         }
-        
+
     }
 
 }
