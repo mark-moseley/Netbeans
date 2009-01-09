@@ -61,11 +61,11 @@ import java.util.WeakHashMap;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import java.util.prefs.Preferences;
+import org.netbeans.api.debugger.Session;
 import org.netbeans.api.debugger.jpda.CallStackFrame;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.JPDAThreadGroup;
-import org.netbeans.api.debugger.jpda.ThreadsCollector;
 import org.netbeans.modules.debugger.jpda.ui.models.SourcesModel.AbstractColumn;
 import org.netbeans.spi.debugger.ContextProvider;
 
@@ -112,10 +112,11 @@ public class DebuggingTreeModel extends CachedChildrenTreeModel {
     private Map<JPDAThread, ThreadStateListener> threadStateListeners = new WeakHashMap<JPDAThread, ThreadStateListener>();
     private Preferences preferences = NbPreferences.forModule(getClass()).node("debugging"); // NOI18N
 
-    private static RequestProcessor RP = new RequestProcessor("Debugging Threads Refresh", 1);
+    private RequestProcessor RP;
     
     public DebuggingTreeModel(ContextProvider lookupProvider) {
         debugger = lookupProvider.lookupFirst(null, JPDADebugger.class);
+        RP = lookupProvider.lookupFirst(null, RequestProcessor.class);
         debugger.addPropertyChangeListener(JPDADebugger.PROP_STATE, debuggerListener);
         if (debugger.getState() == JPDADebugger.STATE_DISCONNECTED) {
             debugger.removePropertyChangeListener(JPDADebugger.PROP_STATE, debuggerListener);
@@ -373,7 +374,15 @@ public class DebuggingTreeModel extends CachedChildrenTreeModel {
         }
         
         private RequestProcessor.Task createTask() {
-            RequestProcessor.Task task = RP.create(new RefreshTree());
+            RequestProcessor rp;
+            try {
+                Session s = (Session) debugger.getClass().getMethod("getSession").invoke(debugger);
+                rp = s.lookupFirst(null, RequestProcessor.class);
+            } catch (Exception e) {
+                Exceptions.printStackTrace(e);
+                rp = RequestProcessor.getDefault();
+            }
+            RequestProcessor.Task task = rp.create(new RefreshTree());
             return task;
         }
         
@@ -499,7 +508,7 @@ public class DebuggingTreeModel extends CachedChildrenTreeModel {
         }
     }
 
-    static boolean isMethodInvoking(JPDAThread t) {
+    public static boolean isMethodInvoking(JPDAThread t) {
         try {
             return (Boolean) t.getClass().getMethod("isMethodInvoking").invoke(t);
         } catch (IllegalAccessException ex) {
@@ -542,16 +551,12 @@ public class DebuggingTreeModel extends CachedChildrenTreeModel {
                 getString ("CTL_Debugging_Column_Name_Name");
         }
 
-        public Character getDisplayedMnemonic() {
-            return new Character(NbBundle.getBundle(DebuggingTreeModel.class).getString 
-                ("CTL_Debugging_Column_Name_Name_Mnc").charAt(0));
-        }
-
         /**
          * Returns tooltip for given column.
          *
          * @return  tooltip for given node
          */
+        @Override
         public String getShortDescription () {
             return NbBundle.getBundle (DebuggingTreeModel.class).getString
                 ("CTL_Debugging_Column_Name_Desc");
@@ -590,11 +595,6 @@ public class DebuggingTreeModel extends CachedChildrenTreeModel {
         public String getDisplayName () {
             return NbBundle.getBundle (DebuggingTreeModel.class).getString 
                 ("CTL_Debugging_Column_Suspend_Name");
-        }
-
-        public Character getDisplayedMnemonic() {
-            return new Character(NbBundle.getBundle(DebuggingTreeModel.class).getString 
-                ("CTL_Debugging_Column_Suspend_Name_Mnc").charAt(0));
         }
 
         /**

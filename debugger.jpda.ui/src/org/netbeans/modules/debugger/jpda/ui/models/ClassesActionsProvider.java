@@ -54,14 +54,11 @@ import org.netbeans.api.debugger.Properties;
 import org.netbeans.spi.debugger.ContextProvider;
 
 import org.netbeans.spi.viewmodel.NodeActionsProvider;
-import org.netbeans.spi.viewmodel.ModelListener;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
-import org.netbeans.spi.viewmodel.Models;
 import org.netbeans.spi.viewmodel.TreeModel;
 import org.openide.awt.Mnemonics;
 
 import org.openide.util.NbBundle;
-import org.openide.util.RequestProcessor;
 import org.openide.util.actions.Presenter;
 
 
@@ -79,7 +76,7 @@ public class ClassesActionsProvider implements NodeActionsProvider {
 
     public ClassesActionsProvider (ContextProvider lookupProvider) {
         //debugger = (JPDADebugger) lookupProvider.lookupFirst(null, JPDADebugger.class);
-        tree = (TreeModel) lookupProvider.lookupFirst ("ClassesView", TreeModel.class);
+        tree = lookupProvider.lookupFirst("ClassesView", TreeModel.class);
     }
     
     public Action[] getActions (Object node) throws UnknownTypeException {

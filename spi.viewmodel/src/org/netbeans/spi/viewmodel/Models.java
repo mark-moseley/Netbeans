@@ -44,7 +44,6 @@ package org.netbeans.spi.viewmodel;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
-import java.lang.StringBuffer;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -56,8 +55,6 @@ import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
-import java.util.Vector;
 import java.util.WeakHashMap;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -65,28 +62,16 @@ import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
 
 import org.netbeans.modules.viewmodel.DefaultTreeExpansionManager;
+import org.netbeans.modules.viewmodel.OutlineTable;
 import org.netbeans.modules.viewmodel.TreeModelRoot;
 import org.netbeans.modules.viewmodel.TreeTable;
 
-import org.netbeans.spi.viewmodel.ColumnModel;
-import org.netbeans.spi.viewmodel.NodeActionsProvider;
-import org.netbeans.spi.viewmodel.NodeActionsProviderFilter;
-import org.netbeans.spi.viewmodel.NodeModel;
-import org.netbeans.spi.viewmodel.ExtendedNodeModel;
-import org.netbeans.spi.viewmodel.ExtendedNodeModelFilter;
-import org.netbeans.spi.viewmodel.NodeModelFilter;
-import org.netbeans.spi.viewmodel.TableModel;
-import org.netbeans.spi.viewmodel.TableModelFilter;
-import org.netbeans.spi.viewmodel.TreeModel;
-import org.netbeans.spi.viewmodel.TreeModelFilter;
-import org.netbeans.spi.viewmodel.ModelListener;
-import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.openide.ErrorManager;
 
+import org.openide.awt.Actions;
 import org.openide.explorer.view.TreeView;
 import org.openide.nodes.Node;
-import org.openide.util.Exceptions;
-import org.openide.util.WeakSet;
+import org.openide.util.RequestProcessor;
 import org.openide.util.datatransfer.PasteType;
 import org.openide.windows.TopComponent;
 
@@ -126,9 +111,15 @@ public final class Models {
     public static JComponent createView (
         CompoundModel compoundModel
     ) {
-        TreeTable tt = new TreeTable ();
-        tt.setModel (compoundModel);
-        return tt;
+        if (Boolean.getBoolean("debugger.outline")) {
+            OutlineTable ot = new OutlineTable ();
+            ot.setModel (compoundModel);
+            return ot;
+        } else {
+            TreeTable tt = new TreeTable ();
+            tt.setModel (compoundModel);
+            return tt;
+        }
     }
     
     /**
@@ -158,14 +149,18 @@ public final class Models {
         final JComponent view,
         final CompoundModel compoundModel
     ) {
-        if (!(view instanceof TreeTable)) {
-            throw new IllegalArgumentException("Expecting an instance of "+TreeTable.class.getName()+", which can be obtained from Models.createView().");
+        if (!(view instanceof TreeTable || view instanceof OutlineTable)) {
+            throw new IllegalArgumentException("Expecting an instance of "+TreeTable.class.getName()+", or "+OutlineTable.class.getName()+", which can be obtained from Models.createView().");
         }
         if (verbose)
             System.out.println (compoundModel);
         SwingUtilities.invokeLater (new Runnable () {
             public void run () {
-                ((TreeTable) view).setModel (compoundModel);
+                if (view instanceof TreeTable) {
+                    ((TreeTable) view).setModel (compoundModel);
+                } else {
+                    ((OutlineTable) view).setModel (compoundModel);
+                }
             }
         });
     }
@@ -199,6 +194,8 @@ public final class Models {
      * @return {@link CompoundModel} encapsulating given list of models
      * @since 1.7
      */
+    // TODO: Add createCompoundModel(List models, String propertiesHelpID, RequestProcessor rp)
+    // Or instead of RP use some interface that could provide the desired thread to run in (current, AWT, RP thread,...)
     public static CompoundModel createCompoundModel (List models, String propertiesHelpID) {
         List<TreeModel>                 treeModels;
         List<TreeModelFilter>           treeModelFilters;
@@ -212,19 +209,31 @@ public final class Models {
         List<NodeActionsProviderFilter> nodeActionsProviderFilters;
         List<ColumnModel>               columnModels;
         List<? extends Model>           otherModels;
+        RequestProcessor                rp = null;
         
-        // Either the list contains 10 lists of individual models + one list of mixed models; or the models directly
+        // Either the list contains 10 lists of individual models + one list of mixed models
+        //  + optional TreeExpansionModelFilter(s) + optional RequestProcessor
+        // ; or the models directly
         boolean hasLists = false;
-        if (models.size() == 11 || models.size() == 12) {
+        if (models.size() == 11 || models.size() == 12 || models.size() == 13) {
             Iterator it = models.iterator ();
+            boolean failure = false;
             while (it.hasNext ()) {
-                if (!(it.next() instanceof List)) break;
+                Object model = it.next();
+                if (!(model instanceof List)) {
+                    if (model instanceof RequestProcessor && !it.hasNext()) {
+                        failure = false;
+                    } else {
+                        failure = true;
+                    }
+                    break;
+                }
             }
-            if (!it.hasNext()) { // All elements are lists
+            if (!it.hasNext() && !failure) { // All elements are lists
                 hasLists = true;
             }
         }
-        if (hasLists) { // We have 11 or 12 lists of individual models
+        if (hasLists) { // We have 11 or 12 lists of individual models + optional RP
             treeModels =            (List<TreeModel>)       models.get(0);
             treeModelFilters =      (List<TreeModelFilter>) models.get(1);
             revertOrder(treeModelFilters);
@@ -240,7 +249,20 @@ public final class Models {
             revertOrder(nodeActionsProviderFilters);
             columnModels =          (List<ColumnModel>) models.get(9);
             otherModels =           (List<? extends Model>) models.get(10);
-            treeExpansionModelFilters = (models.size() > 11) ? (List<TreeExpansionModelFilter>) models.get(11) : (List<TreeExpansionModelFilter>) Collections.EMPTY_LIST;
+            if (models.size() > 11) { // TreeExpansionModelFilter or RequestProcessor
+                if (models.get(11) instanceof List) {
+                    treeExpansionModelFilters = (List<TreeExpansionModelFilter>) models.get(11);
+                } else {
+                    rp = (RequestProcessor) models.get(11);
+                    treeExpansionModelFilters = Collections.emptyList();
+                }
+            } else {
+                treeExpansionModelFilters = Collections.emptyList();
+            }
+            //treeExpansionModelFilters = (models.size() > 11) ? (List<TreeExpansionModelFilter>) models.get(11) : (List<TreeExpansionModelFilter>) Collections.EMPTY_LIST;
+            if (models.size() > 12) {
+                rp = (RequestProcessor) models.get(12);
+            }
         } else { // We have the models, need to find out what they implement
             treeModels =           new LinkedList<TreeModel> ();
             treeModelFilters =     new LinkedList<TreeModelFilter> ();
@@ -348,7 +370,8 @@ public final class Models {
                 new DelegatingTableModel (tableModels),
                 tableModelFilters
             ),
-            propertiesHelpID
+            propertiesHelpID,
+            rp
         );
         if (defaultExpansionModel != null) {
             defaultExpansionModel.setCompoundModel(cm);
@@ -2854,7 +2877,11 @@ public final class Models {
         public boolean isExpanded (
             Object node
         ) {
-            return ((TreeTable) view).isExpanded (node);
+            if (view instanceof TreeTable) {
+                return ((TreeTable) view).isExpanded (node);
+            } else {
+                return ((OutlineTable) view).isExpanded (node);
+            }
         }
 
         /**
@@ -2865,7 +2892,11 @@ public final class Models {
         public void expandNode (
             Object node
         ) {
-            ((TreeTable) view).expandNode (node);
+            if (view instanceof TreeTable) {
+                ((TreeTable) view).expandNode (node);
+            } else {
+                ((OutlineTable) view).expandNode (node);
+            }
         }
 
         /**
@@ -2876,7 +2907,11 @@ public final class Models {
         public void collapseNode (
             Object node
         ) {
-            ((TreeTable) view).collapseNode (node);
+            if (view instanceof TreeTable) {
+                ((TreeTable) view).collapseNode (node);
+            } else {
+                ((OutlineTable) view).collapseNode (node);
+            }
         }
     }
 
@@ -2901,6 +2936,7 @@ public final class Models {
         // for property sheet help
         private String propertiesHelpID = null;
         // </RAVE>
+        private RequestProcessor rp;
         
         // init ....................................................................
 
@@ -2919,7 +2955,8 @@ public final class Models {
             NodeActionsProvider nodeActionsProvider,
             List<ColumnModel> columnModels,
             TableModel tableModel,
-            String propertiesHelpID
+            String propertiesHelpID,
+            RequestProcessor rp
         ) {
             if (treeModel == null) throw new NullPointerException ();
             if (treeModel == null) throw new NullPointerException ();
@@ -2936,6 +2973,7 @@ public final class Models {
                 new ColumnModel [columnModels.size ()]
             );
             this.propertiesHelpID = propertiesHelpID;
+            this.rp = rp;
         }
 
         // <RAVE>
@@ -3017,7 +3055,7 @@ public final class Models {
                         ColumnModel[] columns = getColumns();
                         for (ColumnModel cm : columns) {
                             if (cm.getType() == null) {
-                                return cm.getDisplayName();
+                                return Actions.cutAmpersand(cm.getDisplayName());
                             }
                         }
                     }

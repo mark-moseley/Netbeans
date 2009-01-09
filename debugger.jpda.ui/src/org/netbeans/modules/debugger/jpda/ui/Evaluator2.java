@@ -46,11 +46,15 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dialog;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.awt.FocusTraversalPolicy;
+import java.awt.GridBagConstraints;
 import java.awt.KeyboardFocusManager;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.beans.PropertyChangeEvent;
@@ -72,6 +76,8 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.DebuggerManagerAdapter;
@@ -113,7 +119,7 @@ import org.openide.util.datatransfer.PasteType;
  *
  * @author  Martin Entlicher
  */
-public class Evaluator extends javax.swing.JPanel {
+public class Evaluator2 extends javax.swing.JPanel {
     
     /** The maximum number of expressions that are kept in the combo box. */
     private static final int MAX_ITEMS_TO_KEEP = 20;
@@ -127,19 +133,20 @@ public class Evaluator extends javax.swing.JPanel {
     private PropertyChangeListener csfListener;
     private JButton watchButton;
     private JButton evaluateButton;
+    private CodeEditor codeEditor;
     
     /** Creates new form Evaluator */
-    public Evaluator(JPDADebugger debugger) {
+    public Evaluator2(JPDADebugger debugger) {
         setDebugger(debugger);
         initComponents();
-        initCombo();
+        initCodeEditor();
         initResult();
         //expressionLabel.setLabelFor(expressionComboBox);
         Mnemonics.setLocalizedText(expressionLabel,
-                NbBundle.getMessage(Evaluator.class, "Evaluator.Expression"));
+                NbBundle.getMessage(Evaluator2.class, "Evaluator.Expression"));
         //resultLabel.setLabelFor(resultPanel);
         Mnemonics.setLocalizedText(resultLabel,
-                NbBundle.getMessage(Evaluator.class, "Evaluator.Result"));
+                NbBundle.getMessage(Evaluator2.class, "Evaluator.Result"));
         sessionListener = new SessionListener();
         DebuggerManager.getDebuggerManager().addDebuggerListener(
                 DebuggerManager.PROP_CURRENT_SESSION, sessionListener);
@@ -156,7 +163,7 @@ public class Evaluator extends javax.swing.JPanel {
                     // Re-initialize the context of the combo
                     SwingUtilities.invokeLater(new Runnable() {
                         public void run() {
-                            initCombo();
+                            // initCodeEditor(); [TODO]
                         }
                     });
                 }
@@ -176,7 +183,7 @@ public class Evaluator extends javax.swing.JPanel {
     private void setButtons(JButton watchButton, JButton evaluateButton) {
         this.watchButton = watchButton;
         this.evaluateButton = evaluateButton;
-        boolean enabled = ((CompletionedEditor) expressionComboBox.getEditor()).getDocument().getLength() > 0;
+        boolean enabled = codeEditor.getEditorPane().getDocument().getLength() > 0;
         watchButton.setEnabled(enabled);
         evaluateButton.setEnabled(enabled);
     }
@@ -191,45 +198,26 @@ public class Evaluator extends javax.swing.JPanel {
         java.awt.GridBagConstraints gridBagConstraints;
 
         expressionLabel = new javax.swing.JLabel();
-        expressionComboBox = new javax.swing.JComboBox();
         resultLabel = new javax.swing.JLabel();
         resultPanel = new javax.swing.JPanel();
 
         setLayout(new java.awt.GridBagLayout());
 
-        expressionLabel.setLabelFor(expressionComboBox);
-        expressionLabel.setText(org.openide.util.NbBundle.getMessage(Evaluator.class, "Evaluator.Expression")); // NOI18N
+        expressionLabel.setText(org.openide.util.NbBundle.getMessage(Evaluator2.class, "Evaluator.Expression")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridy = 0;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(11, 11, 0, 12);
+        gridBagConstraints.insets = new java.awt.Insets(11, 11, 11, 12);
         add(expressionLabel, gridBagConstraints);
-        expressionLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(Evaluator.class, "Evaluator.ExpressionA11YDescr")); // NOI18N
+        expressionLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(Evaluator2.class, "Evaluator.ExpressionA11YDescr")); // NOI18N
 
-        expressionComboBox.setToolTipText(org.openide.util.NbBundle.getMessage(Evaluator.class, "Evaluator.ExpressionA11YDescr")); // NOI18N
-        expressionComboBox.addItemListener(new java.awt.event.ItemListener() {
-            public void itemStateChanged(java.awt.event.ItemEvent evt) {
-                expressionComboBoxItemStateChanged(evt);
-            }
-        });
-        expressionComboBox.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                expressionComboBoxActionPerformed(evt);
-            }
-        });
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridy = 1;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(11, 11, 12, 12);
-        add(expressionComboBox, gridBagConstraints);
-
-        resultLabel.setText(org.openide.util.NbBundle.getMessage(Evaluator.class, "Evaluator.Result")); // NOI18N
+        resultLabel.setText(org.openide.util.NbBundle.getMessage(Evaluator2.class, "Evaluator.Result")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridy = 2;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
         gridBagConstraints.insets = new java.awt.Insets(0, 11, 11, 12);
         add(resultLabel, gridBagConstraints);
-        resultLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(Evaluator.class, "Evaluator.ResultA11YDescr")); // NOI18N
+        resultLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(Evaluator2.class, "Evaluator.ResultA11YDescr")); // NOI18N
 
         resultPanel.setBorder(javax.swing.BorderFactory.createEtchedBorder());
         resultPanel.setLayout(new javax.swing.BoxLayout(resultPanel, javax.swing.BoxLayout.LINE_AXIS));
@@ -241,54 +229,21 @@ public class Evaluator extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(0, 11, 12, 12);
         add(resultPanel, gridBagConstraints);
 
-        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(Evaluator.class, "Evaluator.A11YName")); // NOI18N
-        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(Evaluator.class, "Evaluator.A11YDescr")); // NOI18N
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(Evaluator2.class, "Evaluator.A11YName")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(Evaluator2.class, "Evaluator.A11YDescr")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
-
-    private void expressionComboBoxItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_expressionComboBoxItemStateChanged
-        //System.err.println("itemStateChanged("+evt+")");
-        //Thread.dumpStack();
-        if (ignoreEvents) return ;
-        evaluate();
-    }//GEN-LAST:event_expressionComboBoxItemStateChanged
-
-    private void expressionComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_expressionComboBoxActionPerformed
-        //System.out.println("actionPerformed("+evt+")");
-        //evaluate();
-    }//GEN-LAST:event_expressionComboBoxActionPerformed
     
-    private void initCombo() {
-        String textInEditor = (String) expressionComboBox.getEditor().getItem();
-        final CompletionedEditor ce = new CompletionedEditor(expressionComboBox);
-        expressionComboBox.setEditor(ce);
-        expressionComboBox.setEditable(true);
-        ce.setupContext();
-        expressionComboBox.getEditor().setItem(textInEditor);
-        //expressionComboBox.revalidate();
-        expressionComboBox.repaint();
-        
-        class ExpressionDocumentListener implements DocumentListener, Runnable {
-            public void insertUpdate(DocumentEvent e) {
-                updateWatch();
-            }
-            public void removeUpdate(DocumentEvent e) {
-                updateWatch();
-            }
-            public void changedUpdate(DocumentEvent e) {
-                updateWatch();
-            }
-            private void updateWatch() {
-                // Update this LAZILY to prevent from deadlocks!
-                SwingUtilities.invokeLater(this);
-            }
-            public void run() {
-                boolean enabled = ce.getDocument().getLength() > 0;
-                watchButton.setEnabled(enabled);
-                evaluateButton.setEnabled(enabled);
-            }
-        }
-        
-        ce.getDocument().addDocumentListener(new ExpressionDocumentListener());
+    private void initCodeEditor() {
+        codeEditor = new CodeEditor();
+        GridBagConstraints gridBagConstraints = new GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 1;
+        //gridBagConstraints.anchor = GridBagConstraints.WEST;
+        gridBagConstraints.fill = GridBagConstraints.HORIZONTAL;
+        gridBagConstraints.weightx = 1;
+        gridBagConstraints.weighty = 0;
+        gridBagConstraints.insets = new java.awt.Insets(0, 11, 11, 12);
+        add(codeEditor, gridBagConstraints);
     }
     
     private void initResult() {
@@ -312,9 +267,9 @@ public class Evaluator extends javax.swing.JPanel {
         Dimension tps = tree.getPreferredSize();
         tps.height = tps.width/2;
         tree.setPreferredSize(tps);
-        tree.setName(NbBundle.getMessage(Evaluator.class, "Evaluator.ResultA11YName"));
+        tree.setName(NbBundle.getMessage(Evaluator2.class, "Evaluator.ResultA11YName"));
         tree.getAccessibleContext().setAccessibleDescription(
-                NbBundle.getMessage(Evaluator.class, "Evaluator.ResultA11YDescr"));
+                NbBundle.getMessage(Evaluator2.class, "Evaluator.ResultA11YDescr"));
         resultLabel.setLabelFor(tree);
         JTextField referenceTextField = new JTextField();
         Set<AWTKeyStroke> tfkeys = referenceTextField.getFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS);
@@ -328,7 +283,6 @@ public class Evaluator extends javax.swing.JPanel {
     }
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JComboBox expressionComboBox;
     private javax.swing.JLabel expressionLabel;
     private javax.swing.JLabel resultLabel;
     private javax.swing.JPanel resultPanel;
@@ -336,19 +290,19 @@ public class Evaluator extends javax.swing.JPanel {
     
     /** Get the current expression. */
     public String getExpression() {
-        String textInEditor =
-                (String) expressionComboBox.getEditor().getItem();
-        String exp = (String) expressionComboBox.getSelectedItem();
-        if (textInEditor != null && !textInEditor.equals(exp)) {
-            try {
-                ignoreEvents = true;
-                expressionComboBox.setSelectedItem(textInEditor);
-                exp = textInEditor;
-            } finally {
-                ignoreEvents = false;
-            }
-        }
-        return exp;
+        String textInEditor = (String) codeEditor.getText();
+//        String exp = (String) expressionComboBox.getSelectedItem();
+//        if (textInEditor != null && !textInEditor.equals(exp)) {
+//            try {
+//                ignoreEvents = true;
+//                expressionComboBox.setSelectedItem(textInEditor);
+//                exp = textInEditor;
+//            } finally {
+//                ignoreEvents = false;
+//            }
+//        }
+//        return exp;
+        return textInEditor; // [TODO]
     }
     
     /**
@@ -361,32 +315,32 @@ public class Evaluator extends javax.swing.JPanel {
     }
     
     private void addExpressionToHistory(String exp) {
-        try {
-            ignoreEvents = true;
-            int ic = expressionComboBox.getItemCount();
-            int i;
-            for (i = 0; i < ic; i++) {
-                String item = (String) expressionComboBox.getItemAt(i);
-                if (item.equals(exp)) {
-                    expressionComboBox.removeItemAt(i);
-                    break;
-                }
-            }
-            if (i >= MAX_ITEMS_TO_KEEP) {
-                expressionComboBox.removeItemAt(i-1);
-            }
-            if (ic > 0) {
-                expressionComboBox.insertItemAt(exp, 0);
-            } else {
-                expressionComboBox.addItem(exp);
-            }
-            // It's necessary to set back the selected item, because
-            // removeItemAt() unexpectedly sets the selected item to
-            // some different value.
-            expressionComboBox.setSelectedItem(exp);
-        } finally {
-            ignoreEvents = false;
-        }
+//        try {
+//            ignoreEvents = true;
+//            int ic = expressionComboBox.getItemCount();
+//            int i;
+//            for (i = 0; i < ic; i++) {
+//                String item = (String) expressionComboBox.getItemAt(i);
+//                if (item.equals(exp)) {
+//                    expressionComboBox.removeItemAt(i);
+//                    break;
+//                }
+//            }
+//            if (i >= MAX_ITEMS_TO_KEEP) {
+//                expressionComboBox.removeItemAt(i-1);
+//            }
+//            if (ic > 0) {
+//                expressionComboBox.insertItemAt(exp, 0);
+//            } else {
+//                expressionComboBox.addItem(exp);
+//            }
+//            // It's necessary to set back the selected item, because
+//            // removeItemAt() unexpectedly sets the selected item to
+//            // some different value.
+//            expressionComboBox.setSelectedItem(exp);
+//        } finally {
+//            ignoreEvents = false;
+//        }
     }
     
     private void displayResult(Variable var) {
@@ -397,7 +351,7 @@ public class Evaluator extends javax.swing.JPanel {
     
     private static Dialog evalDialog;
     
-    private static volatile Evaluator currentEvaluator;
+    private static volatile Evaluator2 currentEvaluator;
     
     public static void open(JPDADebugger debugger) {
         if (evalDialog != null) {
@@ -406,25 +360,25 @@ public class Evaluator extends javax.swing.JPanel {
             requestFocusForExpression();
             return ;
         }
-        final Evaluator evaluatorPanel = new Evaluator(debugger);
-        String evalStr = NbBundle.getMessage(Evaluator.class, "Evaluator.Evaluate");
-        String watchStr = NbBundle.getMessage(Evaluator.class, "Evaluator.Watch");
-        String closeStr = NbBundle.getMessage(Evaluator.class, "Evaluator.Close");
+        final Evaluator2 evaluatorPanel = new Evaluator2(debugger);
+        String evalStr = NbBundle.getMessage(Evaluator2.class, "Evaluator.Evaluate");
+        String watchStr = NbBundle.getMessage(Evaluator2.class, "Evaluator.Watch");
+        String closeStr = NbBundle.getMessage(Evaluator2.class, "Evaluator.Close");
         final JButton evalBtn = new JButton();
         Mnemonics.setLocalizedText(evalBtn, evalStr);
-        evalBtn.setToolTipText(NbBundle.getMessage(Evaluator.class, "Evaluator.Evaluate.TLT"));
+        evalBtn.setToolTipText(NbBundle.getMessage(Evaluator2.class, "Evaluator.Evaluate.TLT"));
         final JButton watchBtn = new JButton();
         Mnemonics.setLocalizedText(watchBtn, watchStr);
-        watchBtn.setToolTipText(NbBundle.getMessage(Evaluator.class, "Evaluator.Watch.TLT"));
+        watchBtn.setToolTipText(NbBundle.getMessage(Evaluator2.class, "Evaluator.Watch.TLT"));
         final JButton closeBtn = new JButton();
         Mnemonics.setLocalizedText(closeBtn, closeStr);
-        closeBtn.setToolTipText(NbBundle.getMessage(Evaluator.class, "Evaluator.Close.TLT"));
+        closeBtn.setToolTipText(NbBundle.getMessage(Evaluator2.class, "Evaluator.Close.TLT"));
         evaluatorPanel.setButtons(watchBtn, evalBtn);
         DialogDescriptor dd = new DialogDescriptor(evaluatorPanel,
-                NbBundle.getMessage(Evaluator.class, "Evaluator.Title"),
+                NbBundle.getMessage(Evaluator2.class, "Evaluator.Title"),
                 false, new Object[] { evalBtn, watchBtn, closeBtn },
                 evalStr, DialogDescriptor.DEFAULT_ALIGN,
-                new HelpCtx(Evaluator.class.getName()), new ActionListener() {
+                new HelpCtx(Evaluator2.class.getName()), new ActionListener() {
                     public void actionPerformed(ActionEvent e) {
                         Object option = e.getSource();
                         if (evalBtn.equals(option)) {
@@ -438,9 +392,9 @@ public class Evaluator extends javax.swing.JPanel {
                 });
         evalDialog = DialogDisplayer.getDefault().createDialog(dd);
         evalDialog.getAccessibleContext().setAccessibleDescription(
-                NbBundle.getMessage(Evaluator.class, "Evaluator.A11YDescr"));
+                NbBundle.getMessage(Evaluator2.class, "Evaluator.A11YDescr"));
         evalDialog.getAccessibleContext().setAccessibleName(
-                NbBundle.getMessage(Evaluator.class, "Evaluator.A11YName"));
+                NbBundle.getMessage(Evaluator2.class, "Evaluator.A11YName"));
         currentEvaluator = evaluatorPanel;
         //traverseComponents(evalDialog, evalDialog, evalDialog.getFocusTraversalPolicy());
         evalDialog.setVisible(true);
@@ -474,7 +428,7 @@ public class Evaluator extends javax.swing.JPanel {
     }
     
     private static void requestFocusForExpression() {
-        Component c = currentEvaluator.expressionComboBox.getEditor().getEditorComponent();
+        Component c = currentEvaluator.codeEditor.getEditorPane();
         if (c instanceof JScrollPane) {
             c = ((JScrollPane) c).getViewport().getView();
         }
@@ -487,7 +441,7 @@ public class Evaluator extends javax.swing.JPanel {
         try {
             currentEvaluator.ignoreEvents = true;
             // Clean the input line
-            currentEvaluator.expressionComboBox.setSelectedItem(""); // NOI18N
+            // currentEvaluator.codeEditor.setSelectedItem(""); // [TODO]
         } finally {
             currentEvaluator.ignoreEvents = false;
         }
@@ -505,6 +459,7 @@ public class Evaluator extends javax.swing.JPanel {
         
         private boolean autoClosed = false;
         
+        @Override
         public void propertyChange(PropertyChangeEvent evt) {
             Session currentSession = DebuggerManager.getDebuggerManager().getCurrentSession();
             if (currentSession != null && "Java".equals(currentSession.getCurrentLanguage())) {
@@ -555,124 +510,11 @@ public class Evaluator extends javax.swing.JPanel {
                 SwingUtilities.invokeLater(new Runnable() {
                     public void run() {
                         evalDialog.requestFocus();
-                        expressionComboBox.getEditor().getEditorComponent().requestFocusInWindow();
+                        codeEditor.getEditorPane().requestFocusInWindow();
                     }
                 });
             }
         }
-    }
-    
-    private static final class CompletionedEditor implements ComboBoxEditor {
-        
-        private JEditorPane editor;
-        private java.awt.Component component;
-        private Object oldValue;
-        private boolean isContextSetUp;
-        private boolean canTransferFocus = true;
-        
-        public CompletionedEditor(javax.swing.JComboBox comboBox) {
-            editor = new JEditorPane();
-            editor.setBorder(null);
-            editor.setKeymap(new FilteredKeymap(editor));
-            editor.setFocusCycleRoot(false);
-            editor.setFocusTraversalPolicy(null);
-            editor.setFocusTraversalPolicyProvider(false);
-            component = new JScrollPane(editor,
-                                        JScrollPane.VERTICAL_SCROLLBAR_NEVER,
-                                        JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-            ((JScrollPane)component).setBorder(null);
-            editor.addFocusListener(new FocusListener() {
-                public void focusGained(FocusEvent e) {
-                    setupContext();
-                }
-                public void focusLost(FocusEvent e) {
-                }
-            });
-            comboBox.addPopupMenuListener(new PopupMenuListener() {
-                public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-                    canTransferFocus = false;
-                }
-                public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
-                    canTransferFocus = true;
-                }
-                public void popupMenuCanceled(PopupMenuEvent e) {
-                }
-            });
-            component.addFocusListener(new FocusListener() {
-                public void focusGained(FocusEvent e) {
-                    if (canTransferFocus) {
-                        editor.requestFocusInWindow();
-                    }
-                }
-                public void focusLost(FocusEvent e) {
-                }
-            });
-            JTextField referenceTextField = new JTextField();
-            Set<AWTKeyStroke> tfkeys = referenceTextField.getFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS);
-            editor.setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, tfkeys);
-            tfkeys = referenceTextField.getFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS);
-            editor.setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS, tfkeys);
-        }
-        
-        public void setupContext() {
-            if (!isContextSetUp) {
-                WatchPanel.setupContext(editor, null);
-                HelpCtx.setHelpIDString(editor, Evaluator.class.getName());
-                isContextSetUp = true;
-            }
-        }
-        
-        public void addActionListener(java.awt.event.ActionListener actionListener) {
-        }
-
-        public void removeActionListener(java.awt.event.ActionListener actionListener) {
-        }
-
-        public java.awt.Component getEditorComponent() {
-            return component;
-        }
-        
-        javax.swing.text.Document getDocument() {
-            return editor.getDocument();
-        }
-
-        public Object getItem() {
-            Object newValue = editor.getText();
-            
-            if (oldValue != null && !(oldValue instanceof String))  {
-                // The original value is not a string. Should return the value in it's
-                // original type.
-                if (newValue.equals(oldValue.toString()))  {
-                    return oldValue;
-                } else {
-                    // Must take the value from the editor and get the value and cast it to the new type.
-                    Class cls = oldValue.getClass();
-                    try {
-                        Method method = cls.getMethod("valueOf", new Class[]{String.class});
-                        newValue = method.invoke(oldValue, new Object[] { editor.getText()});
-                    } catch (Exception ex) {
-                        // Fail silently and return the newValue (a String object)
-                    }
-                }
-            }
-            return newValue;
-        }
-
-        public void setItem(Object obj) {
-            if (obj != null)  {
-                editor.setText(obj.toString());
-                
-                oldValue = obj;
-            } else {
-                editor.setText("");
-            }
-        }
-        
-        public void selectAll() {
-            editor.selectAll();
-            editor.requestFocus();
-        }
-        
     }
     
     /**
@@ -706,8 +548,9 @@ public class Evaluator extends javax.swing.JPanel {
             );
         }
 
+        @Override
         public void propertyChange (PropertyChangeEvent e) {
-            Evaluator eval = currentEvaluator;
+            Evaluator2 eval = currentEvaluator;
             if (eval != null) {
                 eval.csfListener = null;
                 DebuggerEngine de = DebuggerManager.getDebuggerManager().getCurrentEngine();
@@ -815,7 +658,7 @@ public class Evaluator extends javax.swing.JPanel {
 
         public Object[] getChildren(Object parent, int from, int to) throws UnknownTypeException {
             if (TreeModel.ROOT.equals(parent)) {
-                Evaluator eval = currentEvaluator;
+                Evaluator2 eval = currentEvaluator;
                 if (eval == null || eval.result == null) {
                     return new Object[] {};
                 } else {
@@ -851,7 +694,7 @@ public class Evaluator extends javax.swing.JPanel {
         }
 
         public String getDisplayName(Object node) throws UnknownTypeException {
-            Evaluator eval = currentEvaluator;
+            Evaluator2 eval = currentEvaluator;
             if (eval != null && eval.result != null) {
                 if (node == eval.result) {
                     return eval.getExpression();
@@ -865,7 +708,7 @@ public class Evaluator extends javax.swing.JPanel {
         }
 
         public String getShortDescription(Object node) throws UnknownTypeException {
-            Evaluator eval = currentEvaluator;
+            Evaluator2 eval = currentEvaluator;
             if (eval != null && eval.result != null) {
                 if (node == eval.result) {
                     return eval.getExpression();
@@ -903,7 +746,7 @@ public class Evaluator extends javax.swing.JPanel {
         }
 
         public String getIconBaseWithExtension(Object node) throws UnknownTypeException {
-            Evaluator eval = currentEvaluator;
+            Evaluator2 eval = currentEvaluator;
             if (eval != null && eval.result != null) {
                 if (node == eval.result) {
                     return WatchesNodeModel.WATCH;
@@ -912,5 +755,125 @@ public class Evaluator extends javax.swing.JPanel {
             return nodeModel.getIconBaseWithExtension(node);
         }
     }
-        
+
+    class CodeEditor extends JScrollPane implements DocumentListener, Runnable {
+
+        private JEditorPane codePane;
+        private boolean ignoreUpdate;
+
+        public CodeEditor() {
+            codePane = new JEditorPane();
+            final Document[] documentPtr = new Document[] { null };
+            ActionListener contextUpdated = new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    if (codePane.getDocument() != documentPtr[0]) {
+                        codePane.getDocument().addDocumentListener(CodeEditor.this);
+                    }
+                }
+            };
+            WatchPanel.setupContext(codePane, contextUpdated);
+            setViewportView(codePane);
+            codePane.getDocument().addDocumentListener(this);
+            documentPtr[0] = codePane.getDocument();
+            // issue 103809
+            addComponentListener(new ComponentAdapter() {
+                @Override
+                public void componentShown(ComponentEvent ev) {
+                    revalidate();
+                    repaint();
+                }
+            });
+        }
+
+        // We want the editor pane's height to accommodate to the actual number
+        // of lines. For that we also need to include the horizontal scrollbar
+        // height into the preferred height. See also invokeUpdate method.
+        @Override
+        public Dimension getPreferredSize() {
+            return getMinimumSize();
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+            Dimension prefSize = super.getPreferredSize();
+            Dimension parentDim = ((Evaluator2)getParent()).getSize();
+            int prefHeight = Math.min((int)(0.5 * parentDim.height), prefSize.height);
+            Component hBar = getHorizontalScrollBar();
+            if (hBar != null && hBar.isVisible()) {
+                prefHeight += hBar.getPreferredSize().height;
+            }
+            return new Dimension(prefSize.width, prefHeight);
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            Dimension prefSize = super.getPreferredSize();
+            int prefHeight = prefSize.height;
+            Component hBar = getHorizontalScrollBar();
+            if (hBar != null && hBar.isVisible()) {
+                prefHeight += hBar.getPreferredSize().height;
+            }
+            return new Dimension(prefSize.width, prefHeight);
+        }
+
+        public JEditorPane getEditorPane() {
+            return codePane;
+        }
+
+        public String getText() {
+            Document doc = codePane.getDocument();
+            try {
+                return doc.getText(0, doc.getLength());
+            } catch (BadLocationException ex) {
+                return ""; // NOI18N
+            }
+        }
+
+        // DocumentListener
+        public void insertUpdate(DocumentEvent e) {
+            invokeUpdate();
+            updateWatch();
+        }
+
+        // DocumentListener
+        public void removeUpdate(DocumentEvent e) {
+            invokeUpdate();
+            updateWatch();
+        }
+
+        // DocumentListener
+        public void changedUpdate(DocumentEvent e) {
+            updateWatch();
+        }
+
+        private void invokeUpdate() {
+            if (!ignoreUpdate) {
+                ignoreUpdate = true;
+                EventQueue.invokeLater(this); // set the value
+
+                // also update the editor pane size according to the number of lines
+                // (can't just track line count changes because the preferred height
+                // also changes when the horizontal scrollbar appears/hides)
+                ((Evaluator2)getParent()).revalidate();
+                repaint();
+            }
+        }
+
+        private void updateWatch() {
+            // Update this LAZILY to prevent from deadlocks!
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    boolean enabled = codePane.getDocument().getLength() > 0;
+                    watchButton.setEnabled(enabled);
+                    evaluateButton.setEnabled(enabled);
+                }
+            });
+        }
+
+        // updates the value in the property editor
+        public void run() {
+            ignoreUpdate = false;
+        }
+    }
+
 }

@@ -66,6 +66,7 @@ import org.netbeans.spi.viewmodel.Models.TreeFeatures;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.openide.ErrorManager;
 
+import org.openide.awt.Actions;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
@@ -377,10 +378,16 @@ public class TreeModelNode extends AbstractNode {
     }
     
     private static RequestProcessor requestProcessor;
-    static RequestProcessor getRequestProcessor () {
-        if (requestProcessor == null)
-            requestProcessor = new RequestProcessor ("TreeModel", 1);
-        return requestProcessor;
+    private RequestProcessor getRequestProcessor () {
+        RequestProcessor rp = treeModelRoot.getRequestProcessor();
+        if (rp != null) {
+            return rp;
+        }
+        synchronized (TreeModelNode.class) {
+            if (requestProcessor == null)
+                requestProcessor = new RequestProcessor ("TreeModel", 1);
+            return requestProcessor;
+        }
     }
 
     private void setName (String name, boolean italics) {
@@ -827,9 +834,7 @@ public class TreeModelNode extends AbstractNode {
             WeakHashMap<Object, WeakReference<TreeModelNode>> newObjectToNode = new WeakHashMap<Object, WeakReference<TreeModelNode>>();
             for (i = 0; i < k; i++) {
                 if (ch [i] == null) {
-                    throw (NullPointerException) ErrorManager.getDefault().annotate(
-                            new NullPointerException(),
-                            "model: " + model + "\nparent: " + object);
+                    throw new NullPointerException("Null child at index "+i+", parent: "+object+", model: "+model);
                 }
                 WeakReference<TreeModelNode> wr = objectToNode.get(ch [i]);
                 if (wr == null) continue;
@@ -940,7 +945,7 @@ public class TreeModelNode extends AbstractNode {
             super (
                 columnModel.getID (),
                 (columnModel.getType() == null) ? String.class : columnModel.getType (),
-                columnModel.getDisplayName (),
+                Actions.cutAmpersand(columnModel.getDisplayName ()),
                 columnModel.getShortDescription (), 
                 true,
                 true
@@ -1084,12 +1089,17 @@ public class TreeModelNode extends AbstractNode {
             }
             try {
                 javax.swing.JToolTip tooltip = new javax.swing.JToolTip();
-                tooltip.putClientProperty("getShortDescription", object); // NOI18N
-                Object tooltipObj = model.getValueAt(tooltip, id);
-                if (tooltipObj == null) {
-                    return null;
-                } else {
-                    return adjustHTML(tooltipObj.toString());
+                try {
+                    tooltip.putClientProperty("getShortDescription", object); // NOI18N
+                    Object tooltipObj = model.getValueAt(tooltip, id);
+                    if (tooltipObj == null) {
+                        return null;
+                    } else {
+                        return adjustHTML(tooltipObj.toString());
+                    }
+                } finally {
+                    // We MUST clear the client property, Swing holds this in a static reference!
+                    tooltip.putClientProperty("getShortDescription", null); // NOI18N
                 }
             } catch (UnknownTypeException e) {
                 // Ignore models that do not define tooltips for values.
@@ -1126,14 +1136,17 @@ public class TreeModelNode extends AbstractNode {
     static class LazyEvaluator implements Runnable {
         
         /** Release the evaluator task after this time. */
-        private static final long EXPIRE_TIME = 60000L;
+        private static final long EXPIRE_TIME = 1000L;
 
-        private List<Object> objectsToEvaluate = new LinkedList<Object>();
+        private final List<Object> objectsToEvaluate = new LinkedList<Object>();
         private Evaluable currentlyEvaluating;
         private Task evalTask;
         
-        public LazyEvaluator() {
-            evalTask = new RequestProcessor("Debugger Values Evaluator", 1).post(this);
+        public LazyEvaluator(RequestProcessor prefferedRequestProcessor) {
+            if (prefferedRequestProcessor == null) {
+                prefferedRequestProcessor = new RequestProcessor("Debugger Values Evaluator", 1); // NOI18N
+            }
+            evalTask = prefferedRequestProcessor.create(this, true);
         }
         
         public void evaluate(Evaluable eval) {

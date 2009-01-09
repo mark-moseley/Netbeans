@@ -64,7 +64,7 @@ made subject to such option by the copyright holder.
                     </file>
 
                     <file name="SeparatorAfterFormat.instance">
-			<attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1600"/>
                     </file>
                     <file name="org-netbeans-modules-debugger-ui-actions-RunIntoMethodAction.shadow">
@@ -270,7 +270,7 @@ made subject to such option by the copyright holder.
         <file name="SO-9.shadow">
             <attr name="originalFile" stringvalue="Actions/Window/Debug/org-netbeans-modules-debugger-jpda-ui-actions-DebuggingViewAction.instance"/>
         </file>
-        <file name="D-8.shadow">
+        <file name="SO-T.shadow">
             <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-jpda-ui-debugging-ThreadsHistoryAction.instance"/>
         </file>
         <!-- <file name="D-9.shadow">  TODO: Redefine, conflicts with Actions/View/org.netbeans.modules.cnd.classview-ClassViewAction.instance, defined in org.netbeans.modules.cnd.classview/1
@@ -279,54 +279,6 @@ made subject to such option by the copyright holder.
         <file name="D-F9.shadow">
             <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-jpda-ui-actions-EvaluateAction.instance"/>
         </file>
-    </folder>
-
-    <folder name="Toolbars">
-        <!--<folder name="Build">
-            <attr name="org-netbeans-modules-debugger-ui-actions-DebugMainProjectAction.shadow/org-netbeans-modules-debugger-ui-actions-ConnectAction.shadow" boolvalue="true" />
-            <file name="org-netbeans-modules-debugger-ui-actions-ConnectAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-ConnectAction.instance"/>
-            </file>
-        </folder>-->
-        <folder name="Debug">
-            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.debugger.jpda.ui.Bundle"/>
-            <file name="org-netbeans-modules-debugger-ui-actions-KillAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-KillAction.instance"/>
-                <attr name="position" intvalue="100"/>
-            </file>
-            <file name="org-netbeans-modules-debugger-ui-actions-PauseAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-PauseAction.instance"/>
-                <attr name="position" intvalue="200"/>
-            </file>
-            <file name="org-netbeans-modules-debugger-ui-actions-ContinueAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-ContinueAction.instance"/>
-                <attr name="position" intvalue="300"/>
-            </file>
-            <file name="org-netbeans-modules-debugger-ui-actions-StepOverAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-StepOverAction.instance"/>
-                <attr name="position" intvalue="400"/>
-            </file>
-            <file name="org-netbeans-modules-debugger-ui-actions-StepIntoAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-StepIntoAction.instance"/>
-                <attr name="position" intvalue="600"/>
-            </file>
-            <file name="org-netbeans-modules-debugger-ui-actions-StepOutAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-StepOutAction.instance"/>
-                <attr name="position" intvalue="700"/>
-            </file>
-            <file name="org-netbeans-modules-debugger-ui-actions-StepOperationAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-StepOperationAction.instance"/>
-                <attr name="position" intvalue="500"/>
-            </file>
-            <file name="org-netbeans-modules-debugger-ui-actions-RunToCursorAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-RunToCursorAction.instance"/>
-                <attr name="position" intvalue="800"/>
-            </file>
-            <file name="org-netbeans-modules-debugger-ui-actions-FixAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Debug/org-netbeans-modules-debugger-ui-actions-FixAction.instance"/>
-                <attr name="position" intvalue="900"/>
-            </file>
-        </folder>
     </folder>
 
     <folder name="Windows2">
