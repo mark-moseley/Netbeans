@@ -48,17 +48,19 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Serializable;
 import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.prefs.Preferences;
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.core.api.multiview.MultiViewPerspective;
 import org.netbeans.core.multiview.MultiViewModel.ActionRequestObserverFactory;
 import org.netbeans.core.multiview.MultiViewModel.ElementSelectionListener;
@@ -70,7 +72,6 @@ import org.openide.awt.UndoRedo;
 import org.openide.text.CloneableEditorSupport.Pane;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
-import org.openide.util.SharedClassObject;
 import org.openide.windows.TopComponent;
 
 /** Special subclass of TopComponent which shows and handles set of
@@ -190,7 +191,7 @@ public final class MultiViewPeer  {
             model.markAsHidden(el);
             el.componentClosed();
         }
-
+        tabs.peerComponentClosed();
     }
     
     void peerComponentShowing() {
@@ -235,11 +236,18 @@ public final class MultiViewPeer  {
     }
     
     boolean requestFocusInWindow() {
+        // somehow this may be called when model is null
+        if (model == null) {
+            return false;
+        }
         return model.getActiveElement().getVisualRepresentation().requestFocusInWindow();
     }
     
     void requestFocus() {
-        model.getActiveElement().getVisualRepresentation().requestFocus();
+        // somehow this may be called when model is null
+        if (model != null) {
+            model.getActiveElement().getVisualRepresentation().requestFocus();
+        }
     }
     
     /**
@@ -306,19 +314,31 @@ public final class MultiViewPeer  {
      * merge action for the topcomponent and the enclosed MultiViewElement..
      * 
      */
-    Action[] peerGetActions(Action[] superActions) {
+    Action[] peerGetActions(Action[] superActs) {
         //TEMP don't delegate to element's actions..
         Action[] acts = model.getActiveElement().getActions();
+        
+        // copy super actions as we will possibly null it in cycle later
+        Action[] superActions = new Action[superActs.length];
+        System.arraycopy(superActs, 0, superActions, 0, superActs.length);
+        
         for (int i = 0; i < acts.length; i++) {
             Action act = acts[i];
             for (int j = 0 ; j < superActions.length; j++) {
                 Action superact = superActions[j];
+                if (act == null && superact == null){ // just to same some time.
+                    break;
+                }
                 if (superact != null && act != null && superact.getClass().equals(act.getClass())) {
                     // these are the default topcomponent actions.. we need to replace them
                     // in order to have the correct context.
                     acts[i] = superActions[j];
+                    // to keep superact.getClass().equals(act.getClass()) from filtering out
+                    // different instances of the same action, null out the superActions
+                    // array as you go.  
+                    superActions[j] = null;
                     break;
-                }
+                }                
             }
         }
         return acts;
@@ -628,38 +648,9 @@ public final class MultiViewPeer  {
         } else {
             return true;
         }
-        SharedClassObject option = null;
-        ClassLoader loader = (ClassLoader) Lookup.getDefault().lookup(ClassLoader.class);
-        if (loader == null) {
-            loader = MultiViewPeer.class.getClassLoader().getSystemClassLoader();
-        }
-        try {
-            Class editorBaseOption = Class.forName("org.netbeans.modules.editor.options.BaseOptions", true,
-                    loader);
-            option = SharedClassObject.findObject(editorBaseOption);
-        } catch (ClassNotFoundException ex) {
-            ex.printStackTrace();
-        }
-        if (option != null) {
-            try {
-                Method is = option.getClass().getMethod("isToolbarVisible", new Class[0]);
-                Object ret;
-                ret = is.invoke(option, new Object[0]);
-                if (ret instanceof Boolean) {
-                    return ((Boolean)ret).booleanValue();
-                }
-            } catch (IllegalArgumentException ex) {
-                ex.printStackTrace();
-            } catch (SecurityException ex) {
-                ex.printStackTrace();
-            } catch (InvocationTargetException ex) {
-                ex.printStackTrace();
-            } catch (NoSuchMethodException ex) {
-                ex.printStackTrace();
-            } catch (IllegalAccessException ex) {
-                ex.printStackTrace();
-            }
-        }
+        Preferences prefs = MimeLookup.getLookup(MimePath.EMPTY).lookup(Preferences.class);
+        if( null != prefs )
+            return prefs.getBoolean("toolbarVisible", true); //NOI18N
         return true;
     }
 
