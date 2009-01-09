@@ -48,7 +48,7 @@ import org.netbeans.modules.xml.xam.spi.Validation.ValidationType;
 /**
  * Common interface for validation services on models and components.
  * Typical implementation would implement a domain-specific subtype and publish
- * the implemenation through META-INF/services.
+ * the implementation using {@link org.openide.util.lookup.ServiceProvider}.
  * Typical client would lookup and select applicable services for the validation
  * target model.
  *
@@ -74,7 +74,7 @@ public interface Validator {
      */
     ValidationResult validate(Model model, Validation validation, ValidationType validationType);
     
-    enum ResultType {
+    public enum ResultType {
         ADVICE, WARNING, ERROR
     }
     
@@ -164,6 +164,10 @@ public interface Validator {
             return description;
         }
         
+        public void setDescription(String description) {
+            this.description = description;
+        }
+
         /**
          * Line position of advice/warning/error.
          * @return Line number on which this ResultItem was reported on.
