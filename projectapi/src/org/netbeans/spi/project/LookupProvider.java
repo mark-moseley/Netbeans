@@ -41,6 +41,10 @@
 
 package org.netbeans.spi.project;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import org.openide.util.Lookup;
 
 /**
@@ -64,4 +68,23 @@ public interface LookupProvider {
      * @return a {@link org.openide.util.Lookup} instance that is to be added to the project's lookup, never null.
      */ 
     Lookup createAdditionalLookup(Lookup baseContext);
+
+    /**
+     * annotation to register LookupProvider instances.
+     * @since org.netbeans.modules.projectapi 1.21
+     */
+    @Retention(RetentionPolicy.SOURCE)
+    @Target({ElementType.TYPE, ElementType.METHOD})
+    public @interface Registration {
+        /**
+         * token(s) denoting one or more project types, eg. org-netbeans-modules-maven or org-netbeans-modules-java-j2seproject
+         * @return
+         */
+        String[] projectType();
+        /**
+         * Optional ordering.
+         */
+        int position() default Integer.MAX_VALUE;
+    }
+
 }
