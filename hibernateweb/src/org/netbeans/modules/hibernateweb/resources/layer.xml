@@ -42,39 +42,13 @@ made subject to such option by the copyright holder.
 -->
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
 <filesystem>
-    <folder name="Templates">
-        <folder name="Project">
-            <folder name="Web">
-                <file name="webfreeform.xml">
-                    <attr name="position" intvalue="300"/>
-                    <attr name="template" boolvalue="true"/>
-                    <attr name="instantiatingIterator" newvalue="org.netbeans.modules.web.freeform.ui.NewWebFreeformProjectWizardIterator"/>
-                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.web.freeform.resources.Bundle"/>
-                    <!-- XXX: icon used from ant/freeform -->
-                    <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/ant/freeform/resources/freeform-project.png"/>
-                    <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/web/freeform/resources/freeform-project-web.html"/>
-                </file>
-            </folder>
-
-        </folder>
-    </folder>
-    <folder name="Projects">
-        <folder name="org-netbeans-modules-ant-freeform">
-            <folder name="Customizer">
-                <file name="org-netbeans-modules-web-freeform-ui-WebLocationsCategoryProvider.instance">
-                    <attr name="position" intvalue="300"/>
-                </file>
-                
-                <file name="org-netbeans-modules-web-freeform-ui-WebClasspathCategoryProvider.instance">
+    <folder name="j2ee">
+        <folder name="webtier">
+            <folder name="framework">
+                <file name="org-netbeans-modules-hibernateweb-framework-HibernateFrameworkProvider.instance">
                     <attr name="position" intvalue="500"/>
                 </file>
-                </folder>
-        </folder>
-    </folder>
-    <folder name="ProjectXMLCatalog">
-        <folder name="freeform-project-web">
-            <file name="1.xsd" url="freeform-project-web.xsd"/>
-            <file name="2.xsd" url="freeform-project-web-2.xsd"/>
+            </folder>
         </folder>
     </folder>
 </filesystem>
