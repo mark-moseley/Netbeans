@@ -43,12 +43,14 @@ package org.netbeans.modules.xml.text.bracematch;
 import java.util.Stack;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.api.xml.lexer.XMLTokenId;
 import org.netbeans.spi.editor.bracesmatching.BracesMatcher;
 import org.netbeans.spi.editor.bracesmatching.MatcherContext;
+import org.netbeans.spi.editor.bracesmatching.support.BracesMatcherSupport;
 
 /**
  * The brace matching algorithm is invokes by the brace matcher framework.
@@ -73,11 +75,13 @@ public class XMLBraceMatcher implements BracesMatcher {
     private static final String DECLARATION_START   = "<!DOCTYPE";  //NOI18N
     private static final String DECLARATION_END     = ">";          //NOI18N
     
-    int searchOffset;
-    javax.swing.text.Document document;
+    private int searchOffset;
+    private javax.swing.text.Document document;
+    private MatcherContext context;
     
     public XMLBraceMatcher(MatcherContext context) {
         this(context.getDocument(), context.getSearchOffset());
+        this.context = context;
     }
     
     //so that we could use it from unit test code
@@ -87,11 +91,17 @@ public class XMLBraceMatcher implements BracesMatcher {
     }
     
     public int[] findOrigin() throws InterruptedException, BadLocationException {
+        
         if (MatcherContext.isTaskCanceled()) {
             return null;
         }
         //so that we could use this from unit tests
-        return doFindOrigin();
+        int[] origin = doFindOrigin();
+        if(origin != null)
+            return origin;
+
+        BracesMatcher matcher = BracesMatcherSupport.defaultMatcher(context, -1, -1);
+        return matcher.findOrigin();
     }
 
     public int[] doFindOrigin() throws InterruptedException, BadLocationException {
@@ -100,7 +110,7 @@ public class XMLBraceMatcher implements BracesMatcher {
         try {
             TokenHierarchy th = TokenHierarchy.get(doc);
             TokenSequence ts = th.tokenSequence();
-            Token token = findTokenAtContext(ts);
+            Token token = findTokenAtContext(ts, searchOffset);
             int start = ts.offset();
             if(token == null)
                 return null;
@@ -146,11 +156,16 @@ public class XMLBraceMatcher implements BracesMatcher {
     }
             
     public int[] findMatches() throws InterruptedException, BadLocationException {
+       
         if (MatcherContext.isTaskCanceled()) {
             return null;
         }
-        //so that we could use this from unit tests
-        return doFindMatches();
+        int[] matches = doFindMatches();
+        if(matches != null)
+            return matches;
+
+        BracesMatcher matcher = BracesMatcherSupport.defaultMatcher(context, -1, -1);
+        return matcher.findMatches();
     }
     
     public int[] doFindMatches() throws InterruptedException, BadLocationException {
@@ -159,7 +174,7 @@ public class XMLBraceMatcher implements BracesMatcher {
         try {
             TokenHierarchy th = TokenHierarchy.get(doc);
             TokenSequence ts = th.tokenSequence();
-            Token token = findTokenAtContext(ts);
+            Token token = findTokenAtContext(ts, searchOffset);
             if(token == null) return null;
             XMLTokenId id = (XMLTokenId)token.id();
             switch(id) {
@@ -177,7 +192,7 @@ public class XMLBraceMatcher implements BracesMatcher {
                                 break;
                         }
                     }                    
-                    String tagName = token.text().toString();
+                    String tagName = ts.token().text().toString();
                     if(tagName.startsWith("</")) {
                         return findMatchingTagBackward(ts, tagName.substring(2));
                     }
@@ -201,8 +216,8 @@ public class XMLBraceMatcher implements BracesMatcher {
         return null;
     }
     
-    private Token findTokenAtContext(TokenSequence ts) {
-        ts.move(searchOffset);
+    private static Token findTokenAtContext(TokenSequence ts, int offset) {
+        ts.move(offset);
         Token token = ts.token();
         //there are cases when this could be null
         //in which case use the next one.
@@ -394,4 +409,47 @@ public class XMLBraceMatcher implements BracesMatcher {
         }
         return null;
     }    
+    
+    /**
+     * Checks to see if an end tag exists for a start tag at a given offset.
+     * @param document
+     * @param offset
+     * @return true if an end tag is found for the start, false otherwise.
+     */
+    public static boolean hasEndTag(Document document, int offset, String startTag) {
+        AbstractDocument doc = (AbstractDocument)document;
+        doc.readLock();
+        try {
+            TokenHierarchy th = TokenHierarchy.get(doc);
+            TokenSequence ts = th.tokenSequence();
+            Token token = findTokenAtContext(ts, offset);
+            Stack<String> stack = new Stack<String>();
+            while(ts.moveNext()) {
+                Token t = ts.token();
+                if(XMLTokenId.TAG != t.id())
+                    continue;
+                String tag = t.text().toString();
+                if(">".equals(tag))
+                    continue;
+                if(stack.empty()) {
+                    if(("</"+startTag).equals(tag)) {
+                        stack.empty();
+                        stack = null;
+                        return true;
+                    }
+                } else {                
+                    if(tag.equals("/>") || ("</"+stack.peek()).equals(tag)) {
+                        stack.pop();
+                        continue;
+                    }
+                }
+                stack.push(tag.substring(1));
+            }            
+        } finally {
+            doc.readUnlock();
+        }
+        
+        return false;
+    }
+    
 }
