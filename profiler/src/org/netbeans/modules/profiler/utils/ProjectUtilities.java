@@ -60,7 +60,6 @@ import org.netbeans.modules.profiler.ui.ProfilerDialogs;
 import org.netbeans.spi.java.classpath.PathResourceImplementation;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.project.ActionProvider;
-import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
@@ -74,6 +73,7 @@ import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
+import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.w3c.dom.Element;
@@ -102,13 +102,20 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.profiler.NetBeansProfiler;
+import org.netbeans.modules.profiler.projectsupport.utilities.SourceUtils;
+import org.openide.loaders.DataObject;
+import org.openide.util.lookup.Lookups;
+import org.openide.util.lookup.ProxyLookup;
 
 
 /**
  * Utilities for interaction with the NetBeans IDE, specifically related to Projects
  *
  * @author Ian Formanek
+ * @deprecated
  */
+@Deprecated
 public final class ProjectUtilities {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -249,7 +256,7 @@ public final class ProjectUtilities {
     // Returns true if the project contains any Java sources (does not check subprojects!)
     public static boolean isJavaProject(Project project) {
         if (project == null) return false;
-        
+
         Sources sources = ProjectUtils.getSources(project);
         SourceGroup[] sourceGroups = sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
 
@@ -301,7 +308,7 @@ public final class ProjectUtilities {
     }
 
     public static boolean isProfilerIntegrated(Project project) {
-        Element e = project.getLookup().lookup(AuxiliaryConfiguration.class)
+        Element e = ProjectUtils.getAuxiliaryConfiguration(project)
                            .getConfigurationFragment("data", ProjectUtilities.PROFILER_NAME_SPACE, false); // NOI18N
 
         return e != null;
@@ -347,7 +354,11 @@ public final class ProjectUtilities {
     }
 
     public static String getProjectBuildScript(final Project project) {
-        final FileObject buildFile = project.getProjectDirectory().getFileObject("build.xml"); //NOI18N
+        final FileObject buildFile = findBuildFile(project);
+        if (buildFile == null) {
+            return null;
+        }
+
         RandomAccessFile file = null;
         byte[] data = null;
 
@@ -381,6 +392,20 @@ public final class ProjectUtilities {
 
             return null;
         }
+    }
+
+    public static FileObject findBuildFile(final Project project) {
+        FileObject buildFile = null;
+
+        Properties props = org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities.getProjectProperties(project);
+        String buildFileName = props != null ? props.getProperty("buildfile") : null; // NOI18N
+        if (buildFileName != null) {
+            buildFile = project.getProjectDirectory().getFileObject(buildFileName);
+        }
+        if (buildFile == null) {
+            buildFile = project.getProjectDirectory().getFileObject("build.xml"); //NOI18N
+        }
+        return buildFile;
     }
 
     public static java.util.List<SimpleFilter> getProjectDefaultInstrFilters(Project project) {
@@ -601,10 +626,10 @@ public final class ProjectUtilities {
     }
 
     public static boolean backupBuildScript(final Project project) {
-        final FileObject buildFile = project.getProjectDirectory().getFileObject("build.xml"); //NOI18N
+        final FileObject buildFile = findBuildFile(project);
         final FileObject buildBackupFile = project.getProjectDirectory().getFileObject("build-before-profiler.xml"); //NOI18N
 
-        if (buildBackupFile != null) {
+        if (buildFile != null && buildBackupFile != null) {
             try {
                 buildBackupFile.delete();
             } catch (IOException e) {
@@ -833,7 +858,18 @@ public final class ProjectUtilities {
             return; // fail early
         }
 
-        ap.invokeAction(s, Lookup.getDefault());
+        Lookup lkp = null;
+        if (NetBeansProfiler.getDefaultNB().getProfiledSingleFile() != null) {
+            try {
+                lkp = new ProxyLookup(Lookup.getDefault(), Lookups.fixed(DataObject.find(NetBeansProfiler.getDefaultNB().getProfiledSingleFile())));
+            } catch (DataObjectNotFoundException ex) {
+                lkp = Lookup.getDefault();
+            }
+        } else {
+            lkp = Lookup.getDefault();
+        }
+
+        ap.invokeAction(s, lkp);
     }
 
     /**
@@ -964,10 +1000,10 @@ public final class ProjectUtilities {
         FileLock buildBackup2FileLock = null;
 
         try {
-            final FileObject buildFile = project.getProjectDirectory().getFileObject("build.xml"); //NOI18N
+            final FileObject buildFile = findBuildFile(project); //NOI18N
             final FileObject buildBackupFile = project.getProjectDirectory().getFileObject("build-before-profiler.xml"); //NOI18N
 
-            if ((buildBackupFile != null) && buildBackupFile.isValid()) {
+            if (buildFile != null && (buildBackupFile != null && buildBackupFile.isValid())) {
                 try {
                     buildBackupFileLock = buildBackupFile.lock();
 
@@ -1011,7 +1047,7 @@ public final class ProjectUtilities {
         }
 
         // Remove data element from private/private.xml
-        project.getLookup().lookup(AuxiliaryConfiguration.class).removeConfigurationFragment("data", PROFILER_NAME_SPACE, false); // NOI18N
+        ProjectUtils.getAuxiliaryConfiguration(project).removeConfigurationFragment("data", PROFILER_NAME_SPACE, false); // NOI18N
 
         try {
             ProjectManager.getDefault().saveProject(project);
