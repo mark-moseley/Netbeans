@@ -48,7 +48,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import javax.swing.SwingUtilities;
-import org.netbeans.modules.db.explorer.actions.AddDriverAction;
+import org.netbeans.modules.db.explorer.action.AddDriverAction;
 import org.netbeans.modules.db.explorer.driver.JDBCDriverConvertor;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
@@ -183,6 +183,26 @@ public final class JDBCDriverManager {
         } else {
             new AddDriverAction.AddDriverDialogDisplayer().showDialog();
         }
+    }
+
+    /**
+     * Shows the Add Driver dialog synchronously.  Must be run from the
+     * AWT event thread; an IllegalStateException will be thrown if this
+     * method is called from any other thread.
+     *
+     * @return the new driver that was added, or null if the driver was
+     *         not successfully created.
+     *
+     * @throws IllegalStateException if the calling thread is not the event
+     *         dispatching thread.
+     *
+     * @since 1.27
+     */
+    public JDBCDriver showAddDriverDialogFromEventThread() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            throw new IllegalStateException("The current thread is not the event dispatching thread."); // NOI18N
+        }
+        return new AddDriverAction.AddDriverDialogDisplayer().showDialog();        
     }
     
     /**
