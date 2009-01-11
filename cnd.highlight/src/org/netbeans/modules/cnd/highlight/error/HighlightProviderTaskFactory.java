@@ -39,8 +39,14 @@
 
 package org.netbeans.modules.cnd.highlight.error;
 
+import java.lang.ref.WeakReference;
+import java.util.Collection;
+import java.util.HashSet;
 import javax.swing.text.Document;
+import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceRepository.Interrupter;
+import org.netbeans.modules.cnd.highlight.semantic.ModelUtils;
 import org.netbeans.modules.cnd.model.tasks.CsmFileTaskFactory.PhaseRunner;
 import org.netbeans.modules.cnd.model.tasks.EditorAwareCsmFileTaskFactory;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
@@ -48,35 +54,116 @@ import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.util.Cancellable;
 
 /**
  *
  * @author Sergey Grinev
  */
-public class HighlightProviderTaskFactory extends EditorAwareCsmFileTaskFactory {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.model.tasks.CsmFileTaskFactory.class, position=30)
+public final class HighlightProviderTaskFactory extends EditorAwareCsmFileTaskFactory {
 
     @Override
     protected PhaseRunner createTask(FileObject fo) {
         PhaseRunner pr = null;
         try {
-            DataObject dobj = DataObject.find(fo);
+            final DataObject dobj = DataObject.find(fo);
             EditorCookie ec = dobj.getCookie(EditorCookie.class);
             final CsmFile file = CsmUtilities.getCsmFile(dobj, false);
             final Document doc = ec.getDocument();
             if (doc != null && file != null) {
-                pr = new PhaseRunner() {
-                    public void run(Phase phase) {
-                        if (phase == Phase.PARSED || phase == Phase.INIT) {
-                            HighlightProvider.getInstance().update(file, doc);
-                        } else if (phase == Phase.CLEANUP) {
-                            HighlightProvider.getInstance().clear(file, doc);
-                        }
-                    }
-                };
+                pr = new PhaseRunnerImpl(dobj, file, doc);
             }
         } catch (DataObjectNotFoundException ex)  {
             ex.printStackTrace();
         }
         return pr != null ? pr : lazyRunner();
     }
+
+    @Override
+    protected int taskDelay() {
+        return ModelUtils.HIGHLIGHT_DELAY;
+    }
+
+    @Override
+    protected int rescheduleDelay() {
+        return ModelUtils.RESCHEDULE_HIGHLIGHT_DELAY;
+    }
+
+    private static class PhaseRunnerImpl implements PhaseRunner {
+        private final Collection<Cancellable> listeners = new HashSet<Cancellable>();
+        private final DataObject dobj;
+        private final CsmFile file;
+        private final WeakReference<BaseDocument> weakDoc;
+        private PhaseRunnerImpl(DataObject dobj,CsmFile file, Document doc){
+            this.dobj = dobj;
+            this.file = file;
+            if (doc instanceof BaseDocument) {
+                weakDoc = new WeakReference<BaseDocument>((BaseDocument) doc);
+            } else {
+                weakDoc = null;
+            }
+        }
+
+        public void run(Phase phase) {
+            Document doc = getDocument();
+            if (doc != null) {
+                if (phase == Phase.PARSED || phase == Phase.INIT) {
+                    MyInterruptor interruptor = new MyInterruptor();
+                    addCancelListener(interruptor);
+                    try {
+                        HighlightProvider.getInstance().update(file, doc, dobj, interruptor);
+                    } finally {
+                        removeCancelListener(interruptor);
+                    }
+                } else if (phase == Phase.CLEANUP) {
+                    HighlightProvider.getInstance().clear(doc);
+                }
+            }
+        }
+        
+        protected BaseDocument getDocument() {
+            return weakDoc != null ? weakDoc.get() : null;
+        }
+
+        public boolean isValid() {
+            return true;
+        }
+        
+        protected void addCancelListener(Cancellable interruptor){
+            synchronized(listeners) {
+                listeners.add(interruptor);
+            }
+        }
+
+        protected void removeCancelListener(Cancellable interruptor){
+            synchronized(listeners) {
+                listeners.remove(interruptor);
+            }
+        }
+
+        public void cancel() {
+            synchronized(listeners) {
+                for(Cancellable interruptor : listeners) {
+                    interruptor.cancel();
+                }
+            }
+        }
+
+        public boolean isHighPriority() {
+            return false;
+        }
+
+        protected static class MyInterruptor implements Interrupter, Cancellable {
+            private boolean canceled = false;
+            public boolean cancelled() {
+                return canceled;
+            }
+            public boolean cancel() {
+                canceled = true;
+                return true;
+            }
+        }
+    }
+
 }
