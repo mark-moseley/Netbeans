@@ -55,7 +55,6 @@ import org.netbeans.modules.uml.core.metamodel.core.foundation.IConfigManager;
 import org.netbeans.modules.uml.core.support.umlsupport.ProductRetriever;
 import org.netbeans.modules.uml.core.support.umlsupport.XMLManip;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -65,11 +64,9 @@ import org.dom4j.Branch;
 import org.dom4j.Document;
 import org.dom4j.Element;
 import org.dom4j.Node;
-import org.dom4j.ProcessingInstruction;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 
 /**
@@ -374,15 +371,7 @@ public class RequirementsManager /*extends AddInManagerImpl*/ implements IRequir
                }
             }
          }
-
-         try
-         {
-            XMLManip.save(m_ReqProxyDoc,m_ReqProxyFile);
-         }
-         catch(IOException ex)
-         {
-            ex.printStackTrace();
-         }
+         XMLManip.save(m_ReqProxyDoc,m_ReqProxyFile);
       }
    }
 
@@ -454,14 +443,7 @@ public class RequirementsManager /*extends AddInManagerImpl*/ implements IRequir
                         satisfierNode.detach();
 
                         // Save the Proxy XML file.   
-                        try
-                        {
-                           XMLManip.save(m_ReqProxyDoc,m_ReqProxyFile);
-                        }
-                        catch(IOException ex)
-                        {
-                           ex.printStackTrace();
-                        }
+                        XMLManip.save(m_ReqProxyDoc,m_ReqProxyFile);
                      }
                   }
                }
@@ -838,14 +820,7 @@ public class RequirementsManager /*extends AddInManagerImpl*/ implements IRequir
          String strReqFile = getReqSourcesFile();
          if (strReqFile.length() > 0)
          {
-            try
-            {
-               XMLManip.save(m_ReqSourcesDoc,strReqFile);
-            }
-            catch(IOException ex)
-            {
-               ex.printStackTrace();
-            }
+            XMLManip.save(m_ReqSourcesDoc,strReqFile);
          }
       }
    }
@@ -926,43 +901,39 @@ public class RequirementsManager /*extends AddInManagerImpl*/ implements IRequir
 	protected IRequirementsProvider[] getAddinsFromRegistry(String path)
 	{
 		ArrayList < IRequirementsProvider > addins = new ArrayList < IRequirementsProvider >();
-		FileSystem system = Repository.getDefault().getDefaultFileSystem();
 		try
 		{
-			if(system != null)
-			{
-				org.openide.filesystems.FileObject lookupDir = system.findResource(path);
-				if(lookupDir != null)
-				{
-					org.openide.filesystems.FileObject[] children = lookupDir.getChildren();
-					
-					for(FileObject curObj : children)
-					{
-						try
-						{                     
-							DataObject dObj = DataObject.find(curObj);
-							if(dObj != null)
-							{
-								InstanceCookie cookie = (InstanceCookie)dObj.getCookie(InstanceCookie.class);
-								if(cookie != null)
-								{
-									Object obj = cookie.instanceCreate();
-									if(obj instanceof IRequirementsProvider)
-									{
-                              //String id = (String)curObj.getAttribute("id");
-										addins.add((IRequirementsProvider)obj);
-									}
-								}
-							}
-						}
-						catch(ClassNotFoundException e)
-						{
-							// Unable to create the instance for some reason.  So the
-							// do not worry about adding the instance to the list.
-						}
-					}
-				}
-			}
+                        org.openide.filesystems.FileObject lookupDir = FileUtil.getConfigFile(path);
+                        if(lookupDir != null)
+                        {
+                                org.openide.filesystems.FileObject[] children = lookupDir.getChildren();
+
+                                for(FileObject curObj : children)
+                                {
+                                        try
+                                        {
+                                                DataObject dObj = DataObject.find(curObj);
+                                                if(dObj != null)
+                                                {
+                                                        InstanceCookie cookie = (InstanceCookie)dObj.getCookie(InstanceCookie.class);
+                                                        if(cookie != null)
+                                                        {
+                                                                Object obj = cookie.instanceCreate();
+                                                                if(obj instanceof IRequirementsProvider)
+                                                                {
+                      //String id = (String)curObj.getAttribute("id");
+                                                                        addins.add((IRequirementsProvider)obj);
+                                                                }
+                                                        }
+                                                }
+                                        }
+                                        catch(ClassNotFoundException e)
+                                        {
+                                                // Unable to create the instance for some reason.  So the
+                                                // do not worry about adding the instance to the list.
+                                        }
+                                }
+                        }
 		}
 		catch(org.openide.loaders.DataObjectNotFoundException e)
 		{

@@ -59,10 +59,10 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.queries.CollocationQuery;
 import org.netbeans.modules.mobility.end2end.E2EDataObject;
 import org.netbeans.modules.mobility.end2end.client.config.Configuration;
+import org.openide.WizardDescriptor;
 import org.openide.WizardDescriptor.Panel;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.TemplateWizard;
@@ -159,7 +159,7 @@ public class GenericServiceIterator implements TemplateWizard.Iterator, ChangeLi
             targetFolder = FileUtil.createFolder(targetFolder, packageName);
         }
         
-        final FileObject tempFO = Repository.getDefault().getDefaultFileSystem().findResource("Templates/MIDP/E2EWebApplication.wsclient"); // NOI18N
+        final FileObject tempFO = FileUtil.getConfigFile("Templates/MIDP/E2EWebApplication.wsclient"); // NOI18N
         final DataObject template = DataObject.find(tempFO);
         final E2EDataObject e2eDO = (E2EDataObject) template.createFromTemplate(
                 (DataFolder)DataObject.find(targetFolder),
@@ -229,8 +229,8 @@ public class GenericServiceIterator implements TemplateWizard.Iterator, ChangeLi
             throw new IllegalStateException();
         
         
-        jc.putClientProperty( "WizardPanel_contentData", getSteps() ); // NOI18N
-        jc.putClientProperty( "WizardPanel_contentSelectedIndex", new Integer( currentStep )); // NOI18N
+        jc.putClientProperty( WizardDescriptor.PROP_CONTENT_DATA, getSteps() );
+        jc.putClientProperty( WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer( currentStep ));
         return component;
     }
     

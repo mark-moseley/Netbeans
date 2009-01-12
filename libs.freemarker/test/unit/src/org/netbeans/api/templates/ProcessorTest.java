@@ -41,17 +41,18 @@ import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import junit.framework.Test;
 import junit.framework.TestCase;
+import org.netbeans.junit.Log;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.spi.queries.FileEncodingQueryImplementation;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
 /**
  *
@@ -69,13 +70,15 @@ public class ProcessorTest extends TestCase {
         //return new ProcessorTest("testCanImportSubpkgOfParentPkg");
     }
 
+    @Override
     protected void setUp() throws Exception {
-        root = Repository.getDefault().getDefaultFileSystem().getRoot();
+        root = FileUtil.getConfigRoot();
         for (FileObject f : root.getChildren()) {
             f.delete();
         }
     }
 
+    @Override
     protected void tearDown() throws Exception {
     }
 
@@ -93,6 +96,31 @@ public class ProcessorTest extends TestCase {
         
         String exp = "<html><h1>Nazdar</h1></html>";
         assertEquals(exp, w.toString());
+    }
+
+    public void testFailTwice() throws Exception {
+        CharSequence severe = Log.enable("freemarker", Level.SEVERE);
+        CharSequence info = Log.enable("org.netbeans.libs.freemarker", Level.INFO);
+
+        FileObject template = FileUtil.createData(root, "some.txt");
+        OutputStream os = template.getOutputStream();
+        String txt = "<html><h1>${unknown}</h1></html>";
+        os.write(txt.getBytes());
+        os.close();
+
+        StringWriter w1 = new StringWriter();
+        apply(template, w1);
+
+        StringWriter w2 = new StringWriter();
+        apply(template, w2);
+
+        String exp = "<html><h1>Expression unknown is undefined on line 1, column 13 in some.txt.</h1></html>";
+        assertEquals(exp, w1.toString());
+
+        assertEquals("No severe exceptions reported:\n" + severe, 0, severe.length());
+        if (info.toString().indexOf("unknown is undefined") == -1) {
+            fail("unknown shall be reported:\n" + info);
+        }
     }
 
     public void testCanHandleComplexData() throws Exception {

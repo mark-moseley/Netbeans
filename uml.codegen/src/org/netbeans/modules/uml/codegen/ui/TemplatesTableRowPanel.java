@@ -46,8 +46,7 @@ import java.util.Enumeration;
 import javax.swing.DefaultComboBoxModel;
 import org.netbeans.modules.uml.codegen.dataaccess.DomainTemplatesRetriever;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
 /**
@@ -80,8 +79,7 @@ public class TemplatesTableRowPanel extends javax.swing.JPanel
     
     private void populateTemplateFilesComboBox()
     {
-        FileSystem fs = Repository.getDefault().getDefaultFileSystem ();
-	FileObject root = fs.getRoot().getFileObject(
+	FileObject root = FileUtil.getConfigFile(
             DomainTemplatesRetriever.TEMPLATES_BASE_FOLDER); // NOI18N
         
         // FileObject[] templateFiles = root.getChildren();
@@ -90,7 +88,7 @@ public class TemplatesTableRowPanel extends javax.swing.JPanel
             ((DefaultComboBoxModel)templateFileCombo.getModel());
         
         selectionModel.addElement(NbBundle.getMessage(
-            TemplatesTableRowPanel.class, "VAL_ElementType_NodeSelected")); // NOI18N
+            TemplatesTableRowPanel.class, "VAL_ElementType_NoneSelected")); // NOI18N
         
         Enumeration templateFiles = root.getChildren(true);
         

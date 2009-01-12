@@ -57,6 +57,7 @@ import org.openide.filesystems.AbstractFileSystem;
 import org.openide.filesystems.DefaultAttributes;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.JarFileSystem;
 import org.openide.filesystems.LocalFileSystem;
 import org.openide.filesystems.MultiFileSystem;
@@ -168,6 +169,7 @@ public class EditorTestLookup extends ProxyLookup {
         setLookup(fs.toArray(new FileSystem [fs.size()]), instances, cl, exclude);
     }
     
+    @SuppressWarnings("deprecation")
     private static void setLookup(FileSystem [] fs, Object[] instances, ClassLoader cl, Class [] exclude)
     throws IOException, PropertyVetoException {
 
@@ -177,7 +179,7 @@ public class EditorTestLookup extends ProxyLookup {
         if (repository == null) {
             repository = new Repository(new SystemFileSystem(fs));
         } else {
-            ((SystemFileSystem) repository.getDefaultFileSystem()).setOrig(fs);
+            ((SystemFileSystem) FileUtil.getConfigRoot().getFileSystem()).setOrig(fs);
         }
         
         Object[] lookupContent = new Object[instances.length + 1];
@@ -185,12 +187,12 @@ public class EditorTestLookup extends ProxyLookup {
         System.arraycopy(instances, 0, lookupContent, 1, instances.length);
 
         // Create the Services folder (if needed}
-        FileObject services = repository.getDefaultFileSystem().findResource("Services");
+        FileObject services = FileUtil.getConfigFile("Services");
         if (services == null) {
-            services = repository.getDefaultFileSystem().getRoot().createFolder("Services");
+            services = FileUtil.getConfigRoot().createFolder("Services");
         }
         
-        DEFAULT_LOOKUP.setLookup(lookupContent, cl, services, exclude);
+        EditorTestLookup.setLookup(lookupContent, cl, services, exclude);
     }
 
     private static FileSystem createLocalFileSystem(File mountPoint, String[] resources) throws IOException {
@@ -234,7 +236,7 @@ public class EditorTestLookup extends ProxyLookup {
             setDelegates(orig);
         }
 
-        public FileSystem.Status getStatus() {
+        public @Override FileSystem.Status getStatus() {
             return this;
         }
         
@@ -244,12 +246,34 @@ public class EditorTestLookup extends ProxyLookup {
                 String bundleName = (String)fo.getAttribute ("SystemFileSystem.localizingBundle"); // NOI18N
                 if (bundleName != null) {
                     bundleName = org.openide.util.Utilities.translate(bundleName);
-                    ResourceBundle b = NbBundle.getBundle(bundleName);
+//                    System.out.println("~~~ looking up annotateName for '" + fo.getPath() + "', localizingBundle='" + bundleName + "'");
+                    
                     try {
+                        ResourceBundle b = NbBundle.getBundle(bundleName);
                         return b.getString (fo.getPath());
                     } catch (MissingResourceException ex) {
                         // ignore--normal
-                        ex.printStackTrace();
+
+//                        System.out.println("~~~ No annotateName for '" + fo.getPath() + "', localizingBundle='" + bundleName + "'");
+//                        ex.printStackTrace();
+//
+//                        ClassLoader c = Lookup.getDefault().lookup(ClassLoader.class);
+//                        if (c == null) {
+//                            c = ClassLoader.getSystemClassLoader();
+//                        }
+//                        try {
+//                            String s = bundleName.replace('.', '/') + ".properties";
+//                            URL r = c.getResource(s);
+//                            System.out.println("~~~ '" + s + "' -> " + r);
+//
+//                            Enumeration<URL> e = c.getResources(s);
+//                            while (e.hasMoreElements()) {
+//                                URL url = e.nextElement();
+//                                System.out.println("  -> " + url);
+//                            }
+//                        } catch (IOException ioe) {
+//                            ioe.printStackTrace();
+//                        }
                     }
                 }
             }

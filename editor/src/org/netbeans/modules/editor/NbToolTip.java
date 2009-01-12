@@ -60,8 +60,6 @@ import org.openide.loaders.DataObjectNotFoundException;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.editor.AnnotationDesc;
-import org.netbeans.editor.ext.ExtEditorUI;
-import org.netbeans.editor.ext.ExtUtilities;
 import java.beans.PropertyChangeListener;
 import org.openide.cookies.EditorCookie;
 import org.openide.loaders.DataObject;
@@ -79,7 +77,7 @@ import org.netbeans.modules.editor.lib2.highlighting.HighlightingManager;
 import org.netbeans.spi.editor.highlighting.HighlightAttributeValue;
 import org.netbeans.spi.editor.highlighting.HighlightsContainer;
 import org.netbeans.spi.editor.highlighting.HighlightsSequence;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.RequestProcessor;
 
 /**
@@ -145,8 +143,7 @@ public class NbToolTip extends FileChangeAdapter {
             }
 
             // XXX: should use Class2LayerFolder and InstanceProvider
-            FileObject annoFolder = Repository.getDefault().getDefaultFileSystem().
-            findResource("Editors/" + mimeType + "/ToolTips"); //NOI18N
+            FileObject annoFolder = FileUtil.getConfigFile("Editors/" + mimeType + "/ToolTips"); //NOI18N
         
             if (LOG.isLoggable(Level.FINE)) {
                 LOG.fine("tooltip annotation folder = '" + annoFolder + "'"); //NOI18N
@@ -203,6 +200,10 @@ public class NbToolTip extends FileChangeAdapter {
                 }
                 
                 annoFolder.addFileChangeListener(this);
+            } else {
+                synchronized (NbToolTip.class) {
+                    tipAnnotations = new Annotation[0];
+                }
             }
         }
         
@@ -210,8 +211,8 @@ public class NbToolTip extends FileChangeAdapter {
     }
      
     private void buildTip(JTextComponent target) {
-        ExtEditorUI eeui = ExtUtilities.getExtEditorUI(target);
-        ToolTipSupport tts = eeui == null ? null : eeui.getToolTipSupport();
+        EditorUI eui = Utilities.getEditorUI(target);
+        ToolTipSupport tts = eui == null ? null : eui.getToolTipSupport();
 
         if (tts == null) {
             return; // no tooltip support, no tooltips
@@ -226,49 +227,42 @@ public class NbToolTip extends FileChangeAdapter {
         }
         
         Annotation[] annos = getTipAnnotations();
-        if (annos != null) {
-            BaseDocument doc = Utilities.getDocument(target);
-            if (doc != null) {
-                DataObject dob = NbEditorUtilities.getDataObject(doc);
-                if (dob != null && dob.isValid()) {
-                    EditorCookie ec = dob.getCookie(EditorCookie.class);
-                    if (ec != null) {
-                        StyledDocument openedDoc;
-                        try {
-                            openedDoc = ec.openDocument();
-                        } catch (IOException e) {
-                            LOG.log(Level.FINE, null, e);
-                            openedDoc = null; // should return in next if stmt
-                        }
+        BaseDocument doc = Utilities.getDocument(target);
+        if (doc != null) {
+            DataObject dob = NbEditorUtilities.getDataObject(doc);
+            if (dob != null && dob.isValid()) {
+                EditorCookie ec = dob.getCookie(EditorCookie.class);
+                if (ec != null) {
+                    StyledDocument openedDoc = ec.getDocument();
+                    if (openedDoc != doc) { // doc has changed in meantime
+                        return;
+                    }
 
-                        if (openedDoc != doc) { // doc has changed in meantime
-                            return;
-                        }
+                    // partial fix of #33165 - read-locking of the document added
+                    doc.readLock();
+                    try {
+                        Point p = tts.getLastMouseEvent().getPoint();
+                        int offset = getOffsetForPoint(p, target, doc);
+                        if (offset >= 0) {
+                            EditorKit kit = org.netbeans.editor.Utilities.getKit(target);
+                            if (kit instanceof NbEditorKit) {
+                                Object tooltipAttributeValue = null;
+                                Line.Part lp = null;
+                                Annotation [] tooltipAnnotations = null;
+                                AnnotationDesc annoDesc = null;
 
-                        // partial fix of #33165 - read-locking of the document added
-                        doc.readLock();
-                        try {
-                            Point p = tts.getLastMouseEvent().getPoint();
-                            int offset = getOffsetForPoint(p, target, doc);
-                            if (offset >= 0) {
-                                EditorKit kit = org.netbeans.editor.Utilities.getKit(target);
-                                if (kit instanceof NbEditorKit) {
-                                    Object tooltipAttributeValue = null;
-                                    Line.Part lp = null;
-                                    Annotation [] tooltipAnnotations = null;
-                                    AnnotationDesc annoDesc = null;
-                                    
-                                    // Get the highlighting layers stuff
-                                    HighlightsContainer highlights = (HighlightsContainer) target.getClientProperty("TooltipHighlightsContainer");
-                                    if (highlights == null) {
-                                        highlights = HighlightingManager.getInstance().getHighlights(target, null);
-                                        target.putClientProperty("TooltipHighlightsContainer", highlights);
-                                    }
-                                    HighlightsSequence seq = highlights.getHighlights(offset, offset + 1);
-                                    if (seq.moveNext()) {
-                                        tooltipAttributeValue = seq.getAttributes().getAttribute(EditorStyleConstants.Tooltip);
-                                    }
-                                    
+                                // Get the highlighting layers stuff
+                                HighlightsContainer highlights = (HighlightsContainer) target.getClientProperty("TooltipHighlightsContainer");
+                                if (highlights == null) {
+                                    highlights = HighlightingManager.getInstance().getHighlights(target, null);
+                                    target.putClientProperty("TooltipHighlightsContainer", highlights);
+                                }
+                                HighlightsSequence seq = highlights.getHighlights(offset, offset + 1);
+                                if (seq.moveNext()) {
+                                    tooltipAttributeValue = seq.getAttributes().getAttribute(EditorStyleConstants.Tooltip);
+                                }
+
+                                if (annos != null) {
                                     // Get the annotations stuff
                                     int line = Utilities.getLineOffset(doc, offset);
                                     int col = offset - Utilities.getRowStart(target, offset);
@@ -286,21 +280,21 @@ public class NbToolTip extends FileChangeAdapter {
                                             }
                                         }
                                     }
-                                    
-                                    if ((lp != null && tooltipAnnotations != null) || tooltipAttributeValue != null) {
-                                        int requestId = newRequestId();
-                                        toolTipRP.post(new Request(
-                                            annoDesc, tooltipAnnotations, lp, // annotations stuff
-                                            offset, tooltipAttributeValue, // highlighting layers stuff
-                                            tts, target, doc, (NbEditorKit) kit, requestId)); // request & tooltip support
-                                    }
+                                }
+
+                                if ((lp != null && tooltipAnnotations != null) || tooltipAttributeValue != null) {
+                                    int requestId = newRequestId();
+                                    toolTipRP.post(new Request(
+                                        annoDesc, tooltipAnnotations, lp, // annotations stuff
+                                        offset, tooltipAttributeValue, // highlighting layers stuff
+                                        tts, target, doc, (NbEditorKit) kit, requestId)); // request & tooltip support
                                 }
                             }
-                        } catch (BadLocationException ble) {
-                            LOG.log(Level.FINE, null, ble);
-                        } finally {
-                            doc.readUnlock();
                         }
+                    } catch (BadLocationException ble) {
+                        LOG.log(Level.FINE, null, ble);
+                    } finally {
+                        doc.readUnlock();
                     }
                 }
             }

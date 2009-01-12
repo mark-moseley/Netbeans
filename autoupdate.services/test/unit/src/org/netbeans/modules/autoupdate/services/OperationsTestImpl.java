@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -50,17 +50,16 @@ import org.netbeans.api.autoupdate.DefaultTestCase;
 import org.netbeans.api.autoupdate.InstallSupport;
 import org.netbeans.api.autoupdate.OperationContainer;
 import org.netbeans.api.autoupdate.OperationContainer.OperationInfo;
+import org.netbeans.api.autoupdate.OperationException;
 import org.netbeans.api.autoupdate.OperationSupport;
 import org.netbeans.api.autoupdate.UpdateElement;
 import org.netbeans.api.autoupdate.UpdateManager;
 import org.netbeans.api.autoupdate.UpdateUnit;
-import org.netbeans.api.autoupdate.UpdateUnitProviderFactory;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.modules.ModuleInfo;
 
 /**
@@ -84,8 +83,8 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
     protected void setUp () throws Exception {
         super.setUp ();
         getModuleInfos ();
-        Repository.getDefault ().getDefaultFileSystem ().refresh (false);
-        modulesRoot = Repository.getDefault ().getDefaultFileSystem ().findResource ("Modules"); // NOI18N
+        FileUtil.getConfigRoot().getFileSystem().refresh (false);
+        modulesRoot = FileUtil.getConfigFile("Modules"); // NOI18N
         fca = new FileChangeAdapter (){
             @Override
             public void fileDataCreated (FileEvent fe) {
@@ -166,7 +165,7 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
         int configModulesSize = (configModules.listFiles () != null) ? configModules.listFiles ().length : 0;
         int modulesSize = (modules.listFiles () != null) ? modules.listFiles ().length : 0;
         assertFalse (fileChanges[0]);
-        FileObject foConfigModules = Repository.getDefault ().getDefaultFileSystem ().findResource ("Modules");
+        FileObject foConfigModules = FileUtil.getConfigFile("Modules");
         assertNotNull (foConfigModules);
         int foConfigModulesSize = foConfigModules.getChildren ().length;
         assertNull (getModuleInfos ().get (toInstall.getCodeName ()));
@@ -201,10 +200,28 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
             assertFalse (support.isTrusted (i, installElement));
             assertFalse (support.isSigned (i, installElement));
             if (hiddenUpdate) {
-                r = support.doInstall (i, null);
+                try {
+                    r = support.doInstall (i, null);
+                } catch (OperationException ex) {
+                    if (OperationException.ERROR_TYPE.INSTALL == ex.getErrorType ()) {
+                        // can ingore
+                        // module system cannot load the module either
+                    } else {
+                        fail (ex.toString ());
+                    }
+                }
                 assertNotNull ("If there is hiddenUpdate then returns Restarer.", r);
             } else {
-                assertNull ("No Restarer when no hidden update.", support.doInstall (i, null));
+                try {
+                    assertNull ("No Restarer when no hidden update.", support.doInstall (i, null));
+                } catch (OperationException ex) {
+                    if (OperationException.ERROR_TYPE.INSTALL == ex.getErrorType ()) {
+                        // can ingore
+                        // module system cannot load the module either
+                    } else {
+                        fail (ex.toString ());
+                    }
+                }
             }
         } else {
             OperationContainer<OperationSupport> container = OperationContainer.createForDirectInstall ();
@@ -241,6 +258,7 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
         
         fileChangeThreads[0]=null;
         //if (! customInstaller) Thread.sleep(3000);
+        @SuppressWarnings("unchecked")
         List<OperationContainer.OperationInfo> all = container2.listAll ();
         for (OperationContainer.OperationInfo oi : all) {
             UpdateUnit toInstallUnit = oi.getUpdateUnit ();
@@ -258,9 +276,13 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
         return installElement;
     }
     
-    private void assertInstalledModule (UpdateUnit toInstallUnit) {
+    private void assertInstalledModule (UpdateUnit toInstallUnit) throws InterruptedException {
         ModuleInfo info = getModuleInfos ().get (toInstallUnit.getCodeName ());
         assertNotNull (info);
+        int timeout = 250;
+        while (! info.isEnabled () && timeout-- > 0) {
+            Thread.sleep (10);
+        }
         assertTrue (info.getCodeNameBase (), info.isEnabled ());
         assertNotNull (Utilities.toModule (toInstallUnit.getCodeName (), null));
         assertTrue (Utilities.toModule (toInstallUnit.getCodeName (), null).isEnabled ());
@@ -278,7 +300,7 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
         File configModules = new File (getWorkDir (), "config/Modules");
         File modules = new File (getWorkDir (), "modules");
         assertFalse (fileChanges[0]);
-        FileObject foConfigModules = Repository.getDefault ().getDefaultFileSystem ().findResource ("Modules");
+        FileObject foConfigModules = FileUtil.getConfigFile("Modules");
         assertNotNull (foConfigModules);
         assertTrue (configModules.listFiles () != null && configModules.listFiles ().length != 0);
         assertTrue (modules.listFiles () != null && modules.listFiles ().length != 0);
@@ -307,7 +329,17 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
             //assertNotNull(support.getCertificate(i, upEl));
             assertFalse (support.isTrusted (i, upEl));
             assertFalse (support.isSigned (i, upEl));
-            OperationSupport.Restarter r = support.doInstall (i, null);
+            OperationSupport.Restarter r = null;
+            try {
+                r = support.doInstall (i, null);
+            } catch (OperationException ex) {
+                if (OperationException.ERROR_TYPE.INSTALL == ex.getErrorType ()) {
+                    // can ingore
+                    // module system cannot load the module either
+                } else {
+                    fail (ex.toString ());
+                }
+            }
             if (r != null) {
                 support.doRestartLater (r);
             }
@@ -334,6 +366,7 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
         }
         
         
+        @SuppressWarnings("unchecked")
         List<OperationContainer.OperationInfo> all = container2.listAll ();
         for (OperationContainer.OperationInfo oi : all) {
             UpdateUnit toUpdateUnit = oi.getUpdateUnit ();
@@ -349,7 +382,7 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
     }
     
     void disableModule (UpdateUnit toDisable) throws Exception {
-        FileObject fo = Repository.getDefault ().getDefaultFileSystem ().findResource ("Modules");
+        FileObject fo = FileUtil.getConfigFile("Modules");
         File f = new File (getWorkDir (), "config/Modules");
         File f2 = new File (getWorkDir (), "modules");
         assertTrue (f.listFiles () != null && f.listFiles ().length != 0);
@@ -382,7 +415,7 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
     }
     
     void enableModule (UpdateUnit toEnable) throws Exception {
-        FileObject fo = Repository.getDefault ().getDefaultFileSystem ().findResource ("Modules");
+        FileObject fo = FileUtil.getConfigFile("Modules");
         File f = new File (getWorkDir (), "config/Modules");
         File f2 = new File (getWorkDir (), "modules");
         assertTrue (f.listFiles () != null && f.listFiles ().length != 0);
@@ -421,12 +454,12 @@ public abstract class OperationsTestImpl extends DefaultTestCase {
         File modules = new File (getWorkDir (), "modules");
         int configModulesSize = (configModules.listFiles () != null) ? configModules.listFiles ().length : 0;
         int modulesSize = (modules.listFiles () != null) ? modules.listFiles ().length : 0;
-        FileObject foConfigModules = Repository.getDefault ().getDefaultFileSystem ().findResource ("Modules");
+        FileObject foConfigModules = FileUtil.getConfigFile("Modules");
         assertNotNull (foConfigModules);
         int foConfigModulesSize = foConfigModules.getChildren ().length;
         
         assertFalse (fileChanges[1]);
-        FileObject fo = Repository.getDefault ().getDefaultFileSystem ().findResource ("Modules");
+        FileObject fo = FileUtil.getConfigFile("Modules");
         assertNotNull (fo);
         assertTrue (fo.getChildren ().length > 0);
         assertNotNull (getModuleInfos ().get (toUnInstall.getCodeName ()));

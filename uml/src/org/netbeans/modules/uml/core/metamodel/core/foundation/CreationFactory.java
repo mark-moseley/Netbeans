@@ -45,16 +45,15 @@ package org.netbeans.modules.uml.core.metamodel.core.foundation;
 import java.util.Hashtable;
 
 import org.dom4j.Document;
-import org.dom4j.DocumentFactory;
-import org.dom4j.Element;
 import org.dom4j.dom.DOMDocumentFactory;
 
 import org.netbeans.modules.uml.core.coreapplication.ICoreProduct;
 import org.netbeans.modules.uml.core.eventframework.EventDispatchRetriever;
 import org.netbeans.modules.uml.core.eventframework.EventDispatchNameKeeper;
-import org.netbeans.modules.uml.core.eventframework.IEventPayload;
 import org.netbeans.modules.uml.core.support.umlsupport.ProductRetriever;
 import org.netbeans.modules.uml.core.support.umlsupport.XMLManip;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 
 /**
@@ -65,7 +64,6 @@ public class CreationFactory implements ICreationFactory {
 	private ICreationFactory m_CreationFactory = null;
 	private long m_RevokeNumber = 0;
 	private boolean m_CreateState = false;
-	private boolean m_OwnsConfigMan = false;
 	private Document m_FragDocument = null;
 	private IConfigManager m_ConfigMan = null;
 	
@@ -168,7 +166,6 @@ public class CreationFactory implements ICreationFactory {
 					{
 						vEle.prepareNode(m_FragDocument.getRootElement());
 					}
-					//m_FragDocument.setRootElement(frag);
 				}
 			} catch (Exception e)
 			{
@@ -198,9 +195,7 @@ public class CreationFactory implements ICreationFactory {
 	 * Creates the COM wrapper to house the actual XML element.  The XML element
 	 * has not been initialized as a result of this call.
 	 * 
-	 * @param subKey[in] 	The registry sub-key where the typeName is found (i.e.,
-	 *					ReverseEngineering would equate to "Software\\Embarcadero\\
-						Describe\\ReverseEngineering\\
+	 * @param subKey[in] 	The registry sub-key where the typeName is found
 	 * @param typeName[in] The type to retrieve.  For example "Class" will retrieve
 	 *					the IUnknown of an implementation supporting the IClass interface
 	 * @param outer[in]	The controlling outer unknown.  Used when aggregating.  Can be 0.
@@ -250,8 +245,6 @@ public class CreationFactory implements ICreationFactory {
 			if (prod != null)
 			{
 				m_ConfigMan = prod.getConfigManager();
-				//m_ConfigMan = (IConfigManager)(new IConfigManagerProxy((Dispatch)m_ConfigMan));
-				m_OwnsConfigMan = true;
 			}
 		}
 	}
@@ -260,106 +253,141 @@ public class CreationFactory implements ICreationFactory {
 		m_ConfigMan = value;
 	}
 
-	public class CreationData {
+    public class CreationData
+    {
 
-		private Class m_Class = null;
-		private Class m_TransitionClass = null;
+        private final static String ATTR_INSTANCE = "instance"; // NOI18N
 
-		/**
-		 * Creates the specified object given the CLSID.  Caches the class factory
-		 * for the object for later use.
-		 * 
-		 * @param typeName[in] The simple type we are looking for, e.g., "Class"
-		 * @param clsid[in] The CLSID of the object implementing the interface needed
-		 * @param outer[in] The controlling IUnknown
-		 * @param result[out] The interface requested
-		 *
-		 * @return HRESULT
-		 */
-		public Object createType(boolean createState,
-								 String subKey,
-								 String typeName,
-								 IConfigManager conMan,
-								 Object outer)
-		{
-			Object retObj = null;
-			establishFactory(createState, subKey, typeName, conMan);
-			Class fact = retrieveFactory(createState);
-			if (fact != null)
-			{
-				//Sumitabh find a way to create an inner class using outer.
-                // TODO:
-				try {
-					retObj = fact.newInstance();
-				} catch (InstantiationException e) {
-				} catch (IllegalAccessException e) {
-				}//createInstance(outer);
-			}
-			return retObj;
-		}
-		
-		/**
-		 *
-		 * Establishes the appropriate factory on this object.
-		 *
-		 * @param createState[in] true if the factory is in a create state, else false
-		 * @param clsid[out] The CLSID of the type to create
-		 *
-		 * @return HRESULT
-		 *
-		 */
-		private void establishFactory(boolean createState, String subKey, String typeName, IConfigManager conMan) {
-			if (m_Class == null)
-			{
-				establishData(createState, subKey, conMan, typeName);
-			}
-		}
+        private Class m_Class = null;
+        private Class m_TransitionClass = null;
+        private FileObject definingFileObject = null;
 
-		/**
-		 *
-		 * Retrieves the correct ProgID for the element to create, based
-		 * on the creational status of this factory.
-		 *
-		 * @param valueResult[out] The progid, else empty string on error
-		 *
-		 * @return ERROR_SUCCESS, else -2000 if the type was not found.
-		 *
-		 */
-		public void establishData(boolean create, String subKey, IConfigManager configMan, String typeName) {
+        /**
+         * Creates the specified object given the CLSID.  Caches the class factory
+         * for the object for later use.
+         *
+         * @param typeName[in] The simple type we are looking for, e.g., "Class"
+         * @param clsid[in] The CLSID of the object implementing the interface needed
+         * @param outer[in] The controlling IUnknown
+         * @param result[out] The interface requested
+         *
+         * @return HRESULT
+         */
+        public Object createType(boolean createState, String subKey, String typeName, IConfigManager conMan, Object outer)
+        {
+            Object retObj = null;
+            establishFactory(createState, subKey, typeName, conMan);
+            Class fact = retrieveFactory(createState);
+            if (fact != null)
+            {
+                //Sumitabh find a way to create an inner class using outer.
+                try
+                {
+                    retObj = fact.newInstance();
+                }
+                catch (InstantiationException e)
+                {
+                }
+                catch (IllegalAccessException e)
+                {
+                }
+            }
+            else if (definingFileObject != null)
+            {
+                retObj = definingFileObject.getAttribute(ATTR_INSTANCE);
+            }
+            return retObj;
+        }
 
-         m_Class = null;
-         
-			if (configMan != null)
-			{
-				StringBuffer createID = new StringBuffer();
-				String id = configMan.getIDs(subKey, typeName, createID);				
-				if (id != null && id.length() > 0)
-				{
-					try {
-						m_Class = Class.forName(id);
-					} catch (ClassNotFoundException e) {
+        /**
+         *
+         * Establishes the appropriate factory on this object.
+         *
+         * @param createState[in] true if the factory is in a create state, else false
+         * @param clsid[out] The CLSID of the type to create
+         *
+         * @return HRESULT
+         *
+         */
+        private void establishFactory(boolean createState, String subKey, String typeName, IConfigManager conMan)
+        {
+            if (m_Class == null)
+            {
+                establishData(createState, subKey, conMan, typeName);
+            }
+        }
+
+        /**
+         *
+         * Retrieves the correct ProgID for the element to create, based
+         * on the creational status of this factory.
+         *
+         * @param valueResult[out] The progid, else empty string on error
+         *
+         * @return ERROR_SUCCESS, else -2000 if the type was not found.
+         *
+         */
+        public void establishData(boolean create, String subKey, IConfigManager configMan, String typeName)
+        {
+
+            m_Class = null;
+
+            if (configMan != null)
+            {
+                StringBuffer createID = new StringBuffer();
+                String id = configMan.getIDs(subKey, typeName, createID);
+                if (id != null && id.length() > 0)
+                {
+                    try
+                    {
+                        m_Class = Class.forName(id);
+                    }
+                    catch (ClassNotFoundException e)
+                    {
                         e.printStackTrace();
-					}
-				}
-				if (createID.length() > 0)
-				{
-					try
-					{
-						m_TransitionClass = Class.forName(createID.toString());
-					}
-					catch (ClassNotFoundException e)
-					{
-					}
-				}
-			}
-		}
+                    }
+                }
 
-		public Class retrieveFactory(boolean createState)
-		{
-			return createState && m_TransitionClass != null ? m_TransitionClass : m_Class;
-		}
-	}
+                if (m_Class == null)
+                {
+                    // Trey - If we are not able to find the type in the
+                    //        EssentialConfig.etc file (old way), look
+                    //        In the layer file system (new way).
+//                            try
+//                            {
+                        definingFileObject = FileUtil.getConfigFile("MetaData/" + subKey + "/" + typeName);
+//                                DataObject dObj = fo != null ? DataObject.find(fo) : null;
+//                                if (dObj != null)
+//                                {
+//                                    Object obj = fo.getAttribute("instance");
+//                                    InstanceCookie ic = dObj.getCookie(org.openide.cookies.InstanceCookie.class);
+//
+//                                    Class cl = ic.instanceClass();
+//                                }
+//                            }
+//                            catch (Exception e)
+//                            {
+//                                Exceptions.printStackTrace(e);
+//                            }
+                }
 
+                if (createID.length() > 0)
+                {
+                    try
+                    {
+                        m_TransitionClass = Class.forName(createID.toString());
+                    }
+                    catch (ClassNotFoundException e)
+                    {
+                    }
+                }
+            }
+        }
 
+        public Class retrieveFactory(boolean createState)
+        {
+            return createState && m_TransitionClass != null ? m_TransitionClass : m_Class;
+        }
+    }
 }
 

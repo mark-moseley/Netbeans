@@ -49,8 +49,7 @@ import java.util.logging.Logger;
 import org.netbeans.modules.php.rt.spi.providers.Host;
 import org.netbeans.modules.php.rt.spi.providers.WebServerProvider;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
-import org.openide.util.Lookup;
+import org.openide.filesystems.FileUtil;
 
 
 /**
@@ -89,10 +88,15 @@ public abstract class AbstractProvider<T extends Host> implements WebServerProvi
      * @see org.netbeans.modules.php.rt.spi.providers.WebServerProvider#findHost(org.netbeans.modules.php.rt.spi.providers.UniqueID)
      */
     public Host findHost(String id) {
+        List<Host> list = getHosts();        
+        //hotfix code - will be deleted probably with the whole php.rt module later
+        boolean isDefaultLocalHost = (id == null && list.size() == 1 && "defaultHost".equals(list.get(0).getId())); //NOI18N
+        if (isDefaultLocalHost) {
+            return list.get(0);
+        }
         if (id == null) {
             return null;
         }
-        List<Host> list = getHosts();
         for (Host host : list) {
             if (id.equals(host.getId())) {
                 return host;
@@ -171,8 +175,7 @@ public abstract class AbstractProvider<T extends Host> implements WebServerProvi
     }
 
     protected FileObject getHostsDir() {
-        Repository repository = (Repository) Lookup.getDefault().lookup(Repository.class);
-        return repository.getDefaultFileSystem().findResource(DIR_INSTALLED_HOSTS);
+        return FileUtil.getConfigFile(DIR_INSTALLED_HOSTS);
     }
 
 

@@ -51,13 +51,14 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import org.netbeans.modules.welcome.content.BundleSupport;
 import org.netbeans.modules.welcome.content.ActionButton;
+import org.netbeans.modules.welcome.content.BackgroundPanel;
 import org.netbeans.modules.welcome.content.Constants;
 import org.netbeans.modules.welcome.content.Utils;
 import org.netbeans.modules.welcome.content.WebLink;
 import org.openide.cookies.InstanceCookie;
 import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 
@@ -65,17 +66,16 @@ import org.openide.loaders.DataObject;
  *
  * @author S. Aubrecht
  */
-class LearnMore extends JPanel implements Constants {
+class LearnMore extends BackgroundPanel implements Constants {
 
     /** Creates a new instance of RecentProjects */
     public LearnMore() {
         super( new GridBagLayout() );
-        setOpaque( false );
         buildContent();
     }
     
     private void buildContent() {
-        FileObject root = Repository.getDefault().getDefaultFileSystem().findResource( "WelcomePage/LearnMoreLinks" ); // NOI18N
+        FileObject root = FileUtil.getConfigFile( "WelcomePage/LearnMoreLinks" ); // NOI18N
         DataFolder folder = DataFolder.findFolder( root );
         DataObject[] children = folder.getChildren();
         JPanel panel = new JPanel( new GridLayout(0, 2, 15, 5) );
@@ -102,8 +102,7 @@ class LearnMore extends JPanel implements Constants {
             lb.getAccessibleContext().setAccessibleName( lb.getText() );
             lb.getAccessibleContext().setAccessibleDescription( 
                     BundleSupport.getAccessibilityDescription( "LearnMore", lb.getText() ) ); //NOI18N
-            JPanel inner = new JPanel( new GridBagLayout() );
-            inner.setOpaque(false);
+            JPanel inner = new BackgroundPanel( new GridBagLayout() );
             inner.add( lb, new GridBagConstraints(0, 0, 1, 1, 0.0, 0.0,
                 GridBagConstraints.WEST, GridBagConstraints.NONE, new Insets(0,0,0,0), 0, 0 ) );
             inner.add( new JLabel(), new GridBagConstraints(1, 0, 1, 1, 1.0, 0.0,

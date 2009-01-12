@@ -54,8 +54,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.xml.XMLUtil;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
@@ -138,8 +137,7 @@ public class WLPluginProperties {
     private  FileObject propertiesFile = null;
     
     private FileObject getPropertiesFile() throws java.io.IOException {
-        FileSystem fs = Repository.getDefault().getDefaultFileSystem();
-        FileObject dir = fs.findResource("J2EE");
+        FileObject dir = FileUtil.getConfigFile("J2EE");
         FileObject retVal = null;
         if (null != dir) {
             retVal = dir.getFileObject("weblogic","properties"); // NOI18N
@@ -230,8 +228,11 @@ public class WLPluginProperties {
                     new FileInputStream(weblogicJar)));
             try {
                 Manifest manifest = jarInputStream.getManifest();
-                String implementationVersion = manifest.getMainAttributes()
-                        .getValue("Implementation-Version"); // NOI18N
+                String implementationVersion = null;
+                if (manifest != null) {
+                    implementationVersion = manifest.getMainAttributes()
+                            .getValue("Implementation-Version"); // NOI18N
+                }
                 if (implementationVersion != null) { // NOI18N
                     implementationVersion = implementationVersion.trim();
                     return implementationVersion.startsWith("9.") || implementationVersion.startsWith("10."); // NOI18N

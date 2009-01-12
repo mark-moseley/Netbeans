@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.autoupdate.services;
 
+import java.io.BufferedInputStream;
 import org.netbeans.modules.autoupdate.updateprovider.InstalledModuleProvider;
 import java.util.logging.Logger;
 import org.openide.filesystems.FileUtil;
@@ -59,7 +60,6 @@ import org.netbeans.updater.ModuleDeactivator;
 import org.netbeans.updater.UpdateTracking;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
 import org.openide.modules.ModuleInfo;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -252,22 +252,15 @@ public final class ModuleDeleterImpl  {
         if (updateTracking != null && updateTracking.exists ()) {
             //err.log ("Find UPDATE_TRACKING: " + updateTracking + " found.");
             // check the write permission
-            File installCluster = null;
-            File updateTrackingDir = updateTracking.getParentFile ();
-            for (File cluster : UpdateTracking.clusters (true)) {       
-                if (cluster.equals (updateTrackingDir.getParentFile ())) {
-                    installCluster = cluster;
-                    break;
-                }
-            }
-            if (installCluster == null || ! installCluster.canWrite ()) {
+            if (! Utilities.canWrite (updateTracking)) {
                 err.log(Level.FINE,
                         "Cannot delete module " + moduleInfo.getCodeName() +
                         " because is forbidden to write in directory " +
                         updateTracking.getParentFile ().getParent ());
                 return false;
+            } else {
+                return true;
             }
-            return true;
         } else {
             err.log(Level.FINE,
                     "Cannot delete module " + moduleInfo.getCodeName() +
@@ -362,7 +355,7 @@ public final class ModuleDeleterImpl  {
         Document document = null;
         InputStream is;
         try {
-            is = new FileInputStream (moduleUpdateTracking);
+            is = new BufferedInputStream (new FileInputStream (moduleUpdateTracking));
             InputSource xmlInputSource = new InputSource (is);
             document = XMLUtil.parse (xmlInputSource, false, false, null, org.openide.xml.EntityCatalog.getDefault ());
             if (is != null) {
@@ -419,7 +412,7 @@ public final class ModuleDeleterImpl  {
 
     private void refreshModuleList () {
         // XXX: the modules list should be delete automatically when config/Modules/module.xml is removed
-        FileObject modulesRoot = Repository.getDefault ().getDefaultFileSystem ().findResource (ModuleDeactivator.MODULES); // NOI18N
+        FileObject modulesRoot = FileUtil.getConfigFile(ModuleDeactivator.MODULES); // NOI18N
         err.log (Level.FINE, "Call refresh on " + modulesRoot + " file object.");
         if (modulesRoot != null) {
             modulesRoot.refresh ();

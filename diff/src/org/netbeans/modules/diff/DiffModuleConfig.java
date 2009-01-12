@@ -42,7 +42,6 @@ package org.netbeans.modules.diff;
 
 import org.openide.util.NbPreferences;
 import org.openide.util.Lookup;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
@@ -54,6 +53,7 @@ import org.netbeans.modules.diff.cmdline.CmdlineDiffProvider;
 import java.util.prefs.Preferences;
 import java.util.*;
 import java.awt.Color;
+import org.openide.filesystems.FileUtil;
 
 /**
  * Module settings for Diff module.
@@ -64,17 +64,25 @@ public class DiffModuleConfig {
                                                                                              
     public static final String PREF_EXTERNAL_DIFF_COMMAND = "externalDiffCommand"; // NOI18N
 
-    private static final String PREF_IGNORE_WHITESPACE = "ignoreWhitespace"; // NOI18N
+    private static final String PREF_IGNORE_LEADINGTRAILING_WHITESPACE = "ignoreWhitespace"; // NOI18N
+    private static final String PREF_IGNORE_INNER_WHITESPACE = "ignoreInnerWhitespace"; // NOI18N
+    private static final String PREF_IGNORE_CASE = "ignoreCase"; // NOI18N
     private static final String PREF_USE_INTERNAL_DIFF = "useInternalDiff"; // NOI18N
     private static final String PREF_ADDED_COLOR = "addedColor"; // NOI18N
     private static final String PREF_CHANGED_COLOR = "changedColor"; // NOI18N
     private static final String PREF_DELETED_COLOR = "deletedColor"; // NOI18N
+    private static final String PREF_MERGE_UNRESOLVED_COLOR = "merge.unresolvedColor"; // NOI18N
+    private static final String PREF_MERGE_APPLIED_COLOR = "merge.appliedColor"; // NOI18N
+    private static final String PREF_MERGE_NOTAPPLIED_COLOR = "merge.notappliedColor"; // NOI18N
     
     private static final DiffModuleConfig INSTANCE = new DiffModuleConfig();
     
     private final Color defaultAddedColor = new Color(180, 255, 180);
     private final Color defaultChangedColor = new Color(160, 200, 255);
     private final Color defaultDeletedColor = new Color(255, 160, 180);
+    private final Color defaultAppliedColor = new Color(180, 255, 180);
+    private final Color defaultNotAppliedColor = new Color(160, 200, 255);
+    private final Color defaultUnresolvedColor = new Color(255, 160, 180);
 
     public static DiffModuleConfig getDefault() {
         return INSTANCE;
@@ -94,6 +102,18 @@ public class DiffModuleConfig {
     public Color getDeletedColor() {
         return getColor(PREF_DELETED_COLOR, defaultDeletedColor);
     }
+
+    public Color getAppliedColor() {
+        return getColor(PREF_MERGE_APPLIED_COLOR, defaultAppliedColor);
+    }
+
+    public Color getNotAppliedColor() {
+        return getColor(PREF_MERGE_NOTAPPLIED_COLOR, defaultNotAppliedColor);
+    }
+
+    public Color getUnresolvedColor() {
+        return getColor(PREF_MERGE_UNRESOLVED_COLOR, defaultUnresolvedColor);
+    }
     
     public void setChangedColor(Color changedColor) {
         putColor(PREF_CHANGED_COLOR, changedColor);
@@ -107,6 +127,18 @@ public class DiffModuleConfig {
         putColor(PREF_DELETED_COLOR, deletedColor);
     }
 
+    public void setNotAppliedColor(Color notAppliedColor) {
+        putColor(PREF_MERGE_NOTAPPLIED_COLOR, notAppliedColor);
+    }
+    
+    public void setAppliedColor(Color appliedColor) {
+        putColor(PREF_MERGE_APPLIED_COLOR, appliedColor);
+    }
+    
+    public void setUnresolvedColor(Color unresolvedColor) {
+        putColor(PREF_MERGE_UNRESOLVED_COLOR, unresolvedColor);
+    }
+    
     private void putColor(String key, Color color) {
         getPreferences().putInt(key, color.getRGB());
     }
@@ -117,61 +149,27 @@ public class DiffModuleConfig {
     }
   
     public DiffProvider getDefaultDiffProvider() {
-        DiffProvider provider = Lookup.getDefault().lookup(DiffProvider.class);
-        if (provider instanceof BuiltInDiffProvider) {
-            ((BuiltInDiffProvider) provider).setTrimLines(isIgnoreWhitespace());
-        } else if (provider instanceof CmdlineDiffProvider) {
-            ((CmdlineDiffProvider) provider).setDiffCommand(getDiffCommand());
-        }
-        return provider;
-    }
-
-    private String getDiffCommand() {
-        return getPreferences().get(PREF_EXTERNAL_DIFF_COMMAND, "diff {0} {1}");
-    }
-
-    public void setIgnoreWhitespace(boolean ignoreWhitespace) {
-        getPreferences().putBoolean(PREF_IGNORE_WHITESPACE, ignoreWhitespace);
-        getBuiltinProvider().setTrimLines(ignoreWhitespace);
-    }
-
-    private BuiltInDiffProvider getBuiltinProvider() {
-        Collection<? extends DiffProvider> diffs = Lookup.getDefault().lookupAll(DiffProvider.class);
-        for (DiffProvider diff : diffs) {
-            if (diff instanceof BuiltInDiffProvider) {
-                return (BuiltInDiffProvider) diff;
-            }
-        }
-        throw new IllegalStateException("No builtin diff provider");
-    }
-    
-    public boolean isIgnoreWhitespace() {
-        return getPreferences().getBoolean(PREF_IGNORE_WHITESPACE, true);
-    }
-    
-    public void setUseInteralDiff(boolean useInternal) {
-        getPreferences().putBoolean(PREF_USE_INTERNAL_DIFF, useInternal);
-        Collection<? extends DiffProvider> diffs = Lookup.getDefault().lookupAll(DiffProvider.class);
-        if (useInternal) {
-            setDefaultProvider(getBuiltinProvider());
-        } else {
-            for (DiffProvider diff : diffs) {
-                if (diff instanceof CmdlineDiffProvider) {
-                    setDefaultProvider(diff);
-                    break;
+        Collection<? extends DiffProvider> providers = Lookup.getDefault().lookup(new Lookup.Template<DiffProvider>(DiffProvider.class)).allInstances();
+        for (DiffProvider p : providers) {
+            if (isUseInteralDiff()) {
+                if (p instanceof BuiltInDiffProvider) {
+                    ((BuiltInDiffProvider) p).setOptions(getOptions());
+                    return p;
+                }
+            } else {
+                if (p instanceof CmdlineDiffProvider) {
+                    ((CmdlineDiffProvider) p).setDiffCommand(getDiffCommand());
+                    return p;
                 }
             }
         }
+        return null;
     }
-
-    public boolean isUseInteralDiff() {
-        return getPreferences().getBoolean(PREF_USE_INTERNAL_DIFF, true);
-    }
-
-    private void setDefaultProvider(DiffProvider ds) {
-        // TODO: for compatibility with legacy diff component, think of better way
-        FileSystem dfs = org.openide.filesystems.Repository.getDefault().getDefaultFileSystem();
-        FileObject services = dfs.findResource("Services/DiffProviders");
+    
+     private void setDefaultProvider(DiffProvider ds) {
+        // TODO: Diff providers are registered in the layer so that we can change the order in which they
+        // TODO: appear in the lookup programmatically during runtime
+        FileObject services = FileUtil.getConfigFile("Services/DiffProviders");
         DataFolder df = DataFolder.findFolder(services);
         DataObject[] children = df.getChildren();
         for (int i = 0; i < children.length; i++) {
@@ -188,8 +186,56 @@ public class DiffModuleConfig {
                 }
             }
         }
+    } 
+
+    private String getDiffCommand() {
+        return getPreferences().get(PREF_EXTERNAL_DIFF_COMMAND, "diff {0} {1}");
+    }
+
+    public void setOptions(BuiltInDiffProvider.Options options) {
+        getPreferences().putBoolean(PREF_IGNORE_LEADINGTRAILING_WHITESPACE, options.ignoreLeadingAndtrailingWhitespace);
+        getPreferences().putBoolean(PREF_IGNORE_INNER_WHITESPACE, options.ignoreInnerWhitespace);
+        getPreferences().putBoolean(PREF_IGNORE_CASE, options.ignoreCase);
+        getBuiltinProvider().setOptions(options);
+    }
+
+    public BuiltInDiffProvider.Options getOptions() {
+        BuiltInDiffProvider.Options options = new BuiltInDiffProvider.Options();
+        options.ignoreLeadingAndtrailingWhitespace = getPreferences().getBoolean(PREF_IGNORE_LEADINGTRAILING_WHITESPACE, true);
+        options.ignoreInnerWhitespace = getPreferences().getBoolean(PREF_IGNORE_INNER_WHITESPACE, false);
+        options.ignoreCase = getPreferences().getBoolean(PREF_IGNORE_CASE, false);
+        return options;
+    }
+        
+    private BuiltInDiffProvider getBuiltinProvider() {
+        Collection<? extends DiffProvider> diffs = Lookup.getDefault().lookupAll(DiffProvider.class);
+        for (DiffProvider diff : diffs) {
+            if (diff instanceof BuiltInDiffProvider) {
+                return (BuiltInDiffProvider) diff;
+            }
+        }
+        throw new IllegalStateException("No builtin diff provider");
     }
     
+    public void setUseInteralDiff(boolean useInternal) {
+        getPreferences().putBoolean(PREF_USE_INTERNAL_DIFF, useInternal);
+        Collection<? extends DiffProvider> diffs = Lookup.getDefault().lookupAll(DiffProvider.class);
+        if (useInternal) {
+            setDefaultProvider(getBuiltinProvider());
+        } else {
+            for (DiffProvider diff : diffs) {
+                if (diff instanceof CmdlineDiffProvider) {
+                    setDefaultProvider(diff);
+                    break;
+                }
+            }
+        }         
+    }
+
+    public boolean isUseInteralDiff() {
+        return getPreferences().getBoolean(PREF_USE_INTERNAL_DIFF, true);
+    }
+
     // properties ~~~~~~~~~~~~~~~~~~~~~~~~~
 
     public Preferences getPreferences() {

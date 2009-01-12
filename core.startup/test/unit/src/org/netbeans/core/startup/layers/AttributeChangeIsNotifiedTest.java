@@ -44,31 +44,28 @@ package org.netbeans.core.startup.layers;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.core.startup.layers.ModuleLayeredFileSystem;
-import org.netbeans.core.startup.layers.SystemFileSystem;
 import org.netbeans.junit.NbTestCase;
 import org.openide.filesystems.FileAttributeEvent;
-import org.openide.filesystems.FileChangeAdapter;
+import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
 /**
  *
  * @author Jaroslav Tulach
  */
 public class AttributeChangeIsNotifiedTest extends NbTestCase {
-    SystemFileSystem sfs;
     
     public AttributeChangeIsNotifiedTest(String testName) {
         super(testName);
     }
 
-    protected void setUp() throws Exception {
+    protected @Override void setUp() throws Exception {
         clearWorkDir();
         
         File u = new File(getWorkDir(), "userdir");
@@ -79,24 +76,18 @@ public class AttributeChangeIsNotifiedTest extends NbTestCase {
         new File(h, "config").mkdirs();
         System.setProperty("netbeans.home", h.toString());
         
-        
-        sfs = (SystemFileSystem)Repository.getDefault().getDefaultFileSystem();
-        
-        File f = FileUtil.toFile(sfs.getRoot());
+        File f = FileUtil.toFile(FileUtil.getConfigRoot());
         
         assertEquals("Root is really on disk", uc, f);
         
     }
 
-    protected void tearDown() throws Exception {
-    }
-    
     protected ModuleLayeredFileSystem getTheLayer(SystemFileSystem sfs) {
         return sfs.getUserLayer();
     }
 
     public void testChangeOfAnAttributeInLayerIsFired() throws Exception {
-        doChangeOfAnAttributeInLayerIsFired(getTheLayer(sfs));
+        doChangeOfAnAttributeInLayerIsFired(getTheLayer((SystemFileSystem)FileUtil.getConfigRoot().getFileSystem()));
     }
     
     private void doChangeOfAnAttributeInLayerIsFired(ModuleLayeredFileSystem fs) throws Exception {
@@ -105,19 +96,19 @@ public class AttributeChangeIsNotifiedTest extends NbTestCase {
         File f3 = changeOfAnAttributeInLayerIsFiredgenerateLayer("NoChange", "nochange");
 
         {
-            ArrayList list = new ArrayList();
-            list.add(f1.toURL());
-            list.add(f3.toURL());
+            List<URL> list = new ArrayList<URL>();
+            list.add(f1.toURI().toURL());
+            list.add(f3.toURI().toURL());
             fs.setURLs (list);
         }
         
-        FileObject file = sfs.findResource("Folder/empty.xml");
+        FileObject file = FileUtil.getConfigFile("Folder/empty.xml");
         assertNotNull("File found in layer", file);
         
         FSListener l = new FSListener();
         file.addFileChangeListener(l);
         
-        FileObject nochange = sfs.findResource("NoChange/empty.xml");
+        FileObject nochange = FileUtil.getConfigFile("NoChange/empty.xml");
         assertNotNull("File found in layer", nochange);
         FSListener no = new FSListener();
         nochange.addFileChangeListener(no);
@@ -126,9 +117,9 @@ public class AttributeChangeIsNotifiedTest extends NbTestCase {
         assertAttr("Imutable value is nochange", nochange, "value", "nochange");
         
         {
-            ArrayList list = new ArrayList();
-            list.add(f2.toURL());
-            list.add(f3.toURL());
+            List<URL> list = new ArrayList<URL>();
+            list.add(f2.toURI().toURL());
+            list.add(f3.toURI().toURL());
             fs.setURLs (list);
         }
         String v2 = (String) file.getAttribute("value");
@@ -166,9 +157,9 @@ public class AttributeChangeIsNotifiedTest extends NbTestCase {
         return f;
     }
     
-    private static class FSListener extends FileChangeAdapter {
-        public List events = new ArrayList();
-        public List change = new ArrayList();
+    private static class FSListener implements FileChangeListener {
+        public List<FileEvent> events = new ArrayList<FileEvent>();
+        public List<FileEvent> change = new ArrayList<FileEvent>();
         
         
         public void fileRenamed(FileRenameEvent fe) {

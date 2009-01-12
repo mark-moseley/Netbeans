@@ -41,13 +41,12 @@
 
 package org.netbeans.modules.form.palette;
 
+import java.awt.EventQueue;
 import java.awt.Image;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.ref.WeakReference;
 import java.util.*;
-import java.text.MessageFormat;
-import java.io.File;
 import java.io.IOException;
 
 import org.netbeans.spi.palette.*;
@@ -60,8 +59,6 @@ import org.openide.util.*;
 import org.openide.util.lookup.*;
 
 import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.project.libraries.Library;
-import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.FileOwnerQuery;
 
@@ -118,11 +115,9 @@ public final class PaletteUtils {
             return paletteFolder;
         
         try {
-            paletteFolder = Repository.getDefault().getDefaultFileSystem()
-                    .findResource("FormDesignerPalette"); // NOI18N
+            paletteFolder = FileUtil.getConfigFile("FormDesignerPalette"); // NOI18N
             if (paletteFolder == null) // not found, create new folder
-                paletteFolder = Repository.getDefault().getDefaultFileSystem()
-                        .getRoot().createFolder("FormDesignerPalette"); // NOI18N
+                paletteFolder = FileUtil.getConfigRoot().createFolder("FormDesignerPalette"); // NOI18N
         }
         catch (java.io.IOException ex) {
             throw new IllegalStateException("Palette folder not found and cannot be created."); // NOI18N
@@ -345,7 +340,9 @@ public final class PaletteUtils {
                     if( null == uniqueItems ) {
                         uniqueItems = new HashSet<PaletteItem>();
                     }
-                    uniqueItems.add( formItem );
+                    if (!PaletteItem.TYPE_CHOOSE_BEAN.equals(formItem.getExplicitComponentType())) {
+                        uniqueItems.add(formItem);
+                    }
                 }
             }
         }
@@ -584,11 +581,16 @@ public final class PaletteUtils {
 
         public void propertyChange(PropertyChangeEvent evt) {
             if (ClassPath.PROP_ROOTS.equals(evt.getPropertyName())) {
-                Project p = projRef.get();
-                if (p != null)
-                    PaletteUtils.bootClassPathChanged(p, classPath);
-                else
+                final Project p = projRef.get();
+                if (p != null) {
+                    EventQueue.invokeLater(new Runnable() { // Issue 141326
+                        public void run() {
+                            PaletteUtils.bootClassPathChanged(p, classPath);
+                        }
+                    });
+                } else {
                     classPath.removePropertyChangeListener(this);
+                }
             }
         }
     }

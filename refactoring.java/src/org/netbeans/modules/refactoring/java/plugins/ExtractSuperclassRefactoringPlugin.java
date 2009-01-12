@@ -94,7 +94,7 @@ import org.netbeans.modules.refactoring.java.api.MemberInfo;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.netbeans.modules.refactoring.spi.SimpleRefactoringElementImplementation;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
@@ -328,6 +328,16 @@ public final class ExtractSuperclassRefactoringPlugin extends JavaRefactoringPlu
                     VariableElement param = paramIter.next();
                     RetoucheUtils.findUsedGenericTypes(typeUtils, typeArgs, result, param.asType());
                 }
+            } else if (members[i].getGroup() == MemberInfo.Group.FIELD) {
+                if (members[i].getModifiers().contains(Modifier.STATIC)) {
+                    // do not check since static fields cannot use type parameter of the enclosing class
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                ElementHandle<VariableElement> handle = (ElementHandle<VariableElement>) members[i].getElementHandle();
+                VariableElement elm = handle.resolve(javac);
+                TypeMirror asType = elm.asType();
+                RetoucheUtils.findUsedGenericTypes(typeUtils, typeArgs, result, asType);
             } else if (members[i].getGroup() == MemberInfo.Group.IMPLEMENTS) {
                 // check implements
                 TypeMirrorHandle handle = (TypeMirrorHandle) members[i].getElementHandle();
@@ -367,7 +377,7 @@ public final class ExtractSuperclassRefactoringPlugin extends JavaRefactoringPlu
                 // create new file
                 
                 // XXX not nice; user might modify the template to something entirely different from the standard template.
-                FileObject tempFO = Repository.getDefault().getDefaultFileSystem().findResource("Templates/Classes/Class.java"); // NOI18N
+                FileObject tempFO = FileUtil.getConfigFile("Templates/Classes/Class.java"); // NOI18N
                 
                 DataFolder folder = (DataFolder) DataObject.find(folderFO);
                 DataObject template = DataObject.find(tempFO);
@@ -446,7 +456,11 @@ public final class ExtractSuperclassRefactoringPlugin extends JavaRefactoringPlu
                     if (wc.getTypes().isSameType(origParam, newParam)) {
                         Tree t = wc.getTrees().getTree(typeParam);
                         if (t.getKind() == Tree.Kind.TYPE_PARAMETER) {
-                            newTypeParams.add((TypeParameterTree) t);
+                            TypeParameterTree typeParamTree = (TypeParameterTree) t;
+                            if (!typeParamTree.getBounds().isEmpty()) {
+                                typeParamTree = (TypeParameterTree) genUtils.importFQNs(t);
+                            }
+                            newTypeParams.add(typeParamTree);
                         }
                     }
                 }
@@ -578,7 +592,7 @@ public final class ExtractSuperclassRefactoringPlugin extends JavaRefactoringPlu
                             TreePath expath = javac.getTrees().getPath(path.getCompilationUnit(), expr);
                             Element el = javac.getTrees().getElement(expath);
                             if (el != null && el.getKind() == ElementKind.CONSTRUCTOR && added.add(el)) {
-                                MethodTree template = (MethodTree) javac.getTrees().getTree(el);
+                                ExecutableElement superclassConstr = (ExecutableElement) el;
                                 MethodInvocationTree invk = (MethodInvocationTree) expr;
                                 // create constructor block with super call
                                 BlockTree block = isSyntheticSuper
@@ -588,15 +602,10 @@ public final class ExtractSuperclassRefactoringPlugin extends JavaRefactoringPlu
                                                 make.MethodInvocation(
                                                     Collections.<ExpressionTree>emptyList(),
                                                     invk.getMethodSelect(),
-                                                    params2Arguments(make, template.getParameters())
+                                                    params2Arguments(make, superclassConstr.getParameters())
                                                 ))), false);
                                 // create constructor
-                                MethodTree newConstr = make.Constructor(
-                                        template.getModifiers(),
-                                        template.getTypeParameters(),
-                                        template.getParameters(),
-                                        template.getThrows(),
-                                        block);
+                                MethodTree newConstr = make.Method(superclassConstr, block);
                                 newConstr = genUtils.importFQNs(newConstr);
                                 members.add(newConstr);
                             }
@@ -609,13 +618,13 @@ public final class ExtractSuperclassRefactoringPlugin extends JavaRefactoringPlu
             }
         }
         
-        private static List<? extends ExpressionTree> params2Arguments(TreeMaker make, List<? extends VariableTree> params) {
+        private static List<? extends ExpressionTree> params2Arguments(TreeMaker make, List<? extends VariableElement> params) {
             if (params.isEmpty()) {
                 return Collections.<ExpressionTree>emptyList();
             }
             List<ExpressionTree> args = new ArrayList<ExpressionTree>(params.size());
-            for (VariableTree param : params) {
-                args.add(make.Identifier(param.getName()));
+            for (VariableElement param : params) {
+                args.add(make.Identifier(param.getSimpleName()));
             }
             return args;
         }

@@ -51,7 +51,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import org.netbeans.CLIHandler;
 import org.netbeans.Module;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 
@@ -59,6 +59,7 @@ import org.openide.util.Lookup;
  * Handler for core.jar options.
  * @author Jaroslav Tulach
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.CLIHandler.class)
 public class CLICoreBridge extends CLIHandler {
     /**
      * Create a default handler.
@@ -94,7 +95,7 @@ public class CLICoreBridge extends CLIHandler {
         
         ModuleSystem moduleSystem;
         try {
-            moduleSystem = new ModuleSystem(Repository.getDefault().getDefaultFileSystem());
+            moduleSystem = new ModuleSystem(FileUtil.getConfigRoot().getFileSystem());
         } catch (IOException ioe) {
             // System will be screwed up.
             throw (IllegalStateException) new IllegalStateException("Module system cannot be created").initCause(ioe); // NOI18N

@@ -67,7 +67,6 @@ import org.openide.actions.ToolsAction;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.Repository;
 import org.openide.filesystems.URLMapper;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
@@ -76,6 +75,7 @@ import org.openide.nodes.Node.PropertySet;
 import org.openide.nodes.PropertySupport;
 import org.openide.nodes.Sheet;
 import org.openide.util.HelpCtx;
+import org.openide.util.Lookup;
 import org.openide.util.actions.SystemAction;
 
 /** For representing data shadows with broken link to original file.
@@ -106,6 +106,11 @@ final class BrokenDataShadow extends MultiDataObject {
             }
         }
         enqueueBrokenDataShadow(this);
+    }
+
+    @Override
+    public Lookup getLookup() {
+        return getCookieSet().getLookup();
     }
         
     /** Map of <String(nameoffileobject), DataShadow> */
@@ -184,8 +189,7 @@ final class BrokenDataShadow extends MultiDataObject {
         
         // #43315 hotfix: disable validity checking for non-SFS filesystem
         try {
-            if (!file.getFileSystem().equals(
-                    Repository.getDefault().getDefaultFileSystem())) {
+            if (!file.getFileSystem().isDefault()) {
                 return;
             }
         } catch (FileStateInvalidException e) {

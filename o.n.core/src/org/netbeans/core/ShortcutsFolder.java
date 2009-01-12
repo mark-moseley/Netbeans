@@ -51,12 +51,13 @@ import javax.swing.Action;
 import javax.swing.KeyStroke;
 import javax.swing.text.Keymap;
 import org.netbeans.core.NbKeymap.KeymapAction;
+import org.netbeans.core.startup.StartLog;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.util.Exceptions;
@@ -85,14 +86,18 @@ class ShortcutsFolder {
     
     
     static void initShortcuts () {
-        if (shortcutsFolder != null) return;
-        shortcutsFolder = new ShortcutsFolder ();
+        StartLog.logStart("initShortcuts");
+        try {
+            if (shortcutsFolder != null) return;
+            shortcutsFolder = new ShortcutsFolder ();
+        } finally {
+            StartLog.logEnd("initShortcuts");
+        }
     }
     
     private ShortcutsFolder () {
         try {
-            FileObject root = Repository.getDefault ().
-                getDefaultFileSystem ().getRoot ();
+            FileObject root = FileUtil.getConfigRoot ();
             profilesFileObject = root.getFileObject (PROFILES_FOLDER);
             if (profilesFileObject == null)
                 profilesFileObject = root.createFolder (PROFILES_FOLDER);
@@ -129,8 +134,7 @@ class ShortcutsFolder {
             keymapName = "NetBeans"; // NOI18N
         if (currentFolder != null) 
             currentFolder.removeFileChangeListener (listener);
-        currentFolder = Repository.getDefault ().getDefaultFileSystem ().
-            getRoot ().getFileObject (PROFILES_FOLDER + '/' + keymapName);
+        currentFolder = FileUtil.getConfigFile (PROFILES_FOLDER + '/' + keymapName);
         if (currentFolder == null) {
             try {
                 currentFolder = profilesFileObject.createFolder(keymapName);
@@ -149,9 +153,9 @@ class ShortcutsFolder {
     private void readShortcuts (NbKeymap keymap, FileObject fileObject) {
         debug.fine("\nreadShortcuts " + fileObject);
         DataFolder folder = DataFolder.findFolder (fileObject);
-        Enumeration en = folder.children (false);
+        Enumeration<DataObject> en = folder.children(false);
         while (en.hasMoreElements ()) {
-            DataObject dataObject = (DataObject) en.nextElement ();
+            DataObject dataObject = en.nextElement();
             if (dataObject instanceof DataFolder) continue;
             InstanceCookie ic = dataObject.getCookie(InstanceCookie.class);
             if (ic == null) continue;

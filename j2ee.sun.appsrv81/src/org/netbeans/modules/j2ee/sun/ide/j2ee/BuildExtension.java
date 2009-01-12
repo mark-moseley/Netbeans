@@ -49,12 +49,8 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntBuildExtender;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
-import org.openide.util.Exceptions;
 import org.openide.xml.XMLUtil;
-import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
@@ -72,8 +68,7 @@ public class BuildExtension {
         FileObject projDir = proj.getProjectDirectory();
         FileObject jnlpBuildFile = projDir.getFileObject("nbproject/extendArchiveGF.xml"); // NOI18N
         if (jnlpBuildFile == null) {
-            FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
-            FileObject templateFO = sfs.findResource("Templates/SunResources/extendArchiveGF.xml"); // NOI18N
+            FileObject templateFO = FileUtil.getConfigFile("Templates/SunResources/extendArchiveGF.xml"); // NOI18N
             if (templateFO != null) {
                 FileUtil.copyFile(templateFO, projDir.getFileObject("nbproject"), "extendArchiveGF"); // NOI18N
             }
@@ -99,7 +94,11 @@ public class BuildExtension {
         try {
             XMLUtil.parse(new InputSource(buildXmlFile.toURI().toString()), false, true, null, null);
         } catch (SAXException ex) {
-            Exceptions.printStackTrace(ex);
+            Logger.getLogger(BuildExtension.class.getName()).log(Level.FINER,
+                    null,ex);
+            // the build xml file is broken... we probably don't want to try to
+            // edit it programatically.
+            return;
         }
         FileObject jnlpBuildFile = projDir.getFileObject("nbproject/extendArchiveGF.xml"); // NOI18N
         AntBuildExtender extender = proj.getLookup().lookup(AntBuildExtender.class);
@@ -126,7 +125,11 @@ public class BuildExtension {
         try {
             XMLUtil.parse(new InputSource(buildXmlFile.toURI().toString()), false, true, null, null);
         } catch (SAXException ex) {
-            Exceptions.printStackTrace(ex);
+            Logger.getLogger(BuildExtension.class.getName()).log(Level.FINER,
+                    null,ex);
+            // the build xml file is broken... we probably don't want to try to
+            // edit it programatically.
+            return;
         }
         AntBuildExtender extender = proj.getLookup().lookup(AntBuildExtender.class);
         if (extender != null) {

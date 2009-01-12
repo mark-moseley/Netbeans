@@ -41,31 +41,17 @@
 
 package org.netbeans.modules.settings.convertors;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.jar.Manifest;
-import java.util.logging.Level;
-import junit.framework.TestCase;
-import junit.framework.*;
-import org.netbeans.*;
-import org.netbeans.core.startup.ModuleSystem;
-import org.netbeans.junit.Log;
 import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.RandomlyFails;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
 import org.openide.filesystems.XMLFileSystem;
-import org.openide.modules.ModuleInfo;
 import org.openide.util.Lookup;
 import org.openide.xml.EntityCatalog;
 import org.openide.xml.XMLUtil;
@@ -73,7 +59,6 @@ import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 
 /**
- *
  * @author radim
  */
 public class LayersTest extends NbTestCase {
@@ -82,17 +67,11 @@ public class LayersTest extends NbTestCase {
         super(testName);
     }
 
-    public static Test suite() {
-        TestSuite suite = new NbTestSuite(LayersTest.class);
-        
-        return suite;
-    }
-    
+    /* XXX this does not make sense as a unit test; could be in a functional test using NbModuleSuite:
     public void testFastParsingOfXMLFiles() throws Exception {
         CharSequence chars = Log.enable(XMLSettingsSupport.class.getName(), Level.FINE);
         int len = 0;
-        FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
-        FileObject dir = sfs.getRoot();
+        FileObject dir = FileUtil.getConfigRoot();
         Enumeration<? extends FileObject> en = dir.getChildren(true);
         while (en.hasMoreElements()) {
             FileObject fo = en.nextElement();
@@ -124,13 +103,17 @@ public class LayersTest extends NbTestCase {
             fail("fast parsing of .settings files fails :"+chars.toString());
         }
     }
+     */
     
+    // This is supposed to be run in ide mode.
+    // It is meaningless if run in code mode,
+    // and it will furthermore fail if the internet connection is down.
+    @RandomlyFails
     public void testCorrectContentOfSettingsFiles() throws Exception {
         ClassLoader l = Lookup.getDefault().lookup(ClassLoader.class);
         assertNotNull ("In the IDE mode, there always should be a classloader", l);
         
         List<Module> urls = new ArrayList<Module>();
-        boolean atLeastOne = false;
         Enumeration<URL> en = l.getResources("META-INF/MANIFEST.MF");
         while (en.hasMoreElements ()) {
             URL u = en.nextElement();
@@ -146,7 +129,6 @@ public class LayersTest extends NbTestCase {
             String layer = mf.getMainAttributes ().getValue ("OpenIDE-Module-Layer");
             if (layer == null) continue;
             
-            atLeastOne = true;
             URL layerURL = new URL(u, "../" + layer);
             Module m = new Module();
             m.module = module;
@@ -156,7 +138,6 @@ public class LayersTest extends NbTestCase {
 
 //        CharSequence chars = Log.enable(XMLSettingsSupport.class.getName(), Level.FINE);
         StringBuilder sb = new StringBuilder();
-        int len = 0;
         for (Module m: urls) {
             if ("org.netbeans.modules.settings.xtest/1".equals(m.module)) {
                 continue;

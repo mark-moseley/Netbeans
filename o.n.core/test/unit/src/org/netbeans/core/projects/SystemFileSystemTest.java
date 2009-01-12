@@ -49,7 +49,6 @@ import org.netbeans.core.startup.ModuleHistory;
 import org.openide.util.Mutex;
 import org.openide.util.MutexException;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
 import org.openide.nodes.Node;
 import org.openide.loaders.DataObject;
 import java.io.File;
@@ -61,6 +60,7 @@ import java.beans.BeanInfo;
 import java.awt.image.PixelGrabber;
 import java.awt.image.ImageObserver;
 import org.netbeans.core.startup.MainLookup;
+import org.netbeans.core.startup.SetupHid;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 
@@ -77,13 +77,15 @@ public class SystemFileSystemTest extends NbTestCase {
     private ModuleManager mgr;
     private File satJar;
     private Module satModule;
-    protected void setUp() throws Exception {
+    protected @Override void setUp() throws Exception {
         mgr = org.netbeans.core.startup.Main.getModuleSystem().getManager();
         org.netbeans.core.startup.Main.initializeURLFactory ();
         try {
-            mgr.mutex().readAccess(new Mutex.ExceptionAction() {
-                public Object run() throws Exception {
-                    satJar = new File(SystemFileSystemTest.class.getResource("data/sfs-attr-test.jar").getFile());
+            mgr.mutex().readAccess(new Mutex.ExceptionAction<Void>() {
+                public Void run() throws Exception {
+                    File data = new File(getDataDir(), "projects");
+                    File jars = getWorkDir();
+                    satJar = SetupHid.createTestJAR(data, jars, "sfs-attr-test", null);
                     satModule = mgr.create(satJar, new ModuleHistory(satJar.getAbsolutePath()), false, false, false);
                     assertEquals("no problems installing sfs-attr-test.jar", Collections.EMPTY_SET, satModule.getProblems());
                     mgr.enable(satModule);
@@ -94,10 +96,10 @@ public class SystemFileSystemTest extends NbTestCase {
             throw me.getException();
         }
     }
-    protected void tearDown() throws Exception {
+    protected @Override void tearDown() throws Exception {
         try {
-            mgr.mutex().readAccess(new Mutex.ExceptionAction() {
-                public Object run() throws Exception {
+            mgr.mutex().readAccess(new Mutex.ExceptionAction<Void>() {
+                public Void run() throws Exception {
                     mgr.disable(satModule);
                     mgr.delete(satModule);
                     return null;
@@ -112,7 +114,7 @@ public class SystemFileSystemTest extends NbTestCase {
     }
     
     public void testLocalizingBundle() throws Exception {
-        FileObject bar = Repository.getDefault().getDefaultFileSystem().findResource("foo/bar.txt");
+        FileObject bar = FileUtil.getConfigFile("foo/bar.txt");
         Node n = DataObject.find(bar).getNodeDelegate();
         assertEquals("correct localized data object name", "Localized Name", n.getDisplayName());
     }
@@ -122,18 +124,18 @@ public class SystemFileSystemTest extends NbTestCase {
         String dir = "/yarda/own/file";
         org.openide.filesystems.FileUtil.createFolder (mem.getRoot (), dir);
         
-        assertNull ("File is not there yet", Repository.getDefault ().getDefaultFileSystem ().findResource (dir));
+        assertNull ("File is not there yet", FileUtil.getConfigFile (dir));
         MainLookup.register (mem);
         try {
-            assertNotNull ("The file is there now", Repository.getDefault ().getDefaultFileSystem ().findResource (dir));
+            assertNotNull ("The file is there now", FileUtil.getConfigFile (dir));
         } finally {
             MainLookup.unregister (mem);
         }
-        assertNull ("File is no longer there", Repository.getDefault ().getDefaultFileSystem ().findResource (dir));
+        assertNull ("File is no longer there", FileUtil.getConfigFile (dir));
     }
     
     public void testIconFromURL() throws Exception {
-        FileObject bar = Repository.getDefault().getDefaultFileSystem().findResource("foo/bar.txt");
+        FileObject bar = FileUtil.getConfigFile("foo/bar.txt");
         Node n = DataObject.find(bar).getNodeDelegate();
         Image reference = Toolkit.getDefaultToolkit().createImage(new URL("jar:" + satJar.toURL() + "!/sfs_attr_test/main.gif"));
         Image tested = n.getIcon(BeanInfo.ICON_COLOR_16x16);
@@ -144,7 +146,7 @@ public class SystemFileSystemTest extends NbTestCase {
     
     /** @see "#18832" */
     public void testIconFromImageMethod() throws Exception {
-        FileObject baz = Repository.getDefault().getDefaultFileSystem().findResource("foo/baz.txt");
+        FileObject baz = FileUtil.getConfigFile("foo/baz.txt");
         Node n = DataObject.find(baz).getNodeDelegate();
         Image reference = Toolkit.getDefaultToolkit().createImage(new URL("jar:" + satJar.toURL() + "!/sfs_attr_test/main-plus-badge.gif"));
         Image tested = n.getIcon(BeanInfo.ICON_COLOR_16x16);

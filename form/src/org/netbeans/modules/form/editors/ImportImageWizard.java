@@ -65,7 +65,6 @@ import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
@@ -108,14 +107,14 @@ class ImportImageWizard extends WizardDescriptor {
         super(iterator);
         wizardIterator = iterator;
 
-        putProperty("WizardPanel_autoWizardStyle", Boolean.TRUE); // NOI18N
-        putProperty("WizardPanel_contentDisplayed", Boolean.TRUE); // NOI18N
-        putProperty("WizardPanel_contentNumbered", Boolean.TRUE); // NOI18N
+        putProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE); // NOI18N
+        putProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE); // NOI18N
+        putProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE); // NOI18N
 
         setTitle(NbBundle.getMessage(ImportImageWizard.class, "ImportImageWizard.Title")); // NOI18N
         setTitleFormat(new java.text.MessageFormat("{0}")); // NOI18N
 
-        putProperty("WizardPanel_contentData",  // NOI18N
+        putProperty(WizardDescriptor.PROP_CONTENT_DATA,  // NOI18N
                     new String[] { NbBundle.getMessage(ImportImageWizard.class, "ImportImageWizard.Step1"), // NOI18N
                                    NbBundle.getMessage(ImportImageWizard.class, "ImportImageWizard.Step2") }); // NOI18N
     }
@@ -149,7 +148,7 @@ class ImportImageWizard extends WizardDescriptor {
 
         final FileObject[] copied = new FileObject[selectedFiles.length];
         try {
-            Repository.getDefault().getDefaultFileSystem().runAtomicAction(
+            FileUtil.runAtomicAction(
             new FileSystem.AtomicAction() {
                 public void run() throws IOException {
                     for (int i=0; i < selectedFiles.length; i++) {
@@ -242,7 +241,7 @@ class ImportImageWizard extends WizardDescriptor {
                 });
 
                 fileChooser.setName(NbBundle.getMessage(ImportImageWizard.class, "ImportImageWizard.Step1")); // NOI18N
-                fileChooser.putClientProperty("WizardPanel_contentSelectedIndex", 0); // NOI18N
+                fileChooser.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, 0); // NOI18N
             }
             if (setSelectedFiles) {
                 fileChooser.setSelectedFiles(wizard.selectedFiles);
@@ -338,7 +337,7 @@ class ImportImageWizard extends WizardDescriptor {
                 cpfChooser.setPreferredSize(new Dimension(200, 200)); // TreeView wants to be too big
 
                 cpfChooser.setName(NbBundle.getMessage(ImportImageWizard.class, "ImportImageWizard.Step2")); // NOI18N
-                cpfChooser.putClientProperty("WizardPanel_contentSelectedIndex", 1); // NOI18N
+                cpfChooser.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, 1); // NOI18N
             }
             if (setTargetFolder) {
                 cpfChooser.setSelectedFile(wizard.targetFolder);

@@ -44,9 +44,8 @@ package org.netbeans.core.startup.layers;
 import java.beans.PropertyVetoException;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
+import java.io.InputStream;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -54,20 +53,23 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.Stamps;
 import org.netbeans.core.startup.StartLog;
+import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileSystem.AtomicAction;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.MultiFileSystem;
-import org.openide.filesystems.Repository;
 import org.openide.filesystems.XMLFileSystem;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
+import org.openide.util.NbCollections;
 
 /** Layered file system serving itself as either the user or installation layer.
  * Holds one layer of a writable system directory, and some number
@@ -114,7 +116,7 @@ implements LookupListener {
     }
     
     private ModuleLayeredFileSystem(FileSystem writableLayer, boolean addLookup, FileSystem[] otherLayers, LayerCacheManager mgr, FileSystem cacheLayer) throws IOException {
-        super(appendLayers(writableLayer, addLookup, otherLayers, cacheLayer));
+        super(appendLayers(writableLayer, addLookup, otherLayers, cacheLayer, addLookup));
         this.manager = mgr;
         this.writableLayer = writableLayer;
         this.otherLayers = otherLayers;
@@ -145,17 +147,23 @@ implements LookupListener {
 
             ByteBuffer bb = Stamps.getModulesJARs().asMappedByteBuffer(location);
             if (bb != null) {
-                StartLog.logStart("Loading layers"); // NOI18N
-                fs = mgr.load(mgr.createEmptyFileSystem(), bb);
-                setStatusText(
-                    NbBundle.getMessage(ModuleLayeredFileSystem.class, "MSG_end_load_cache"));
-                StartLog.logEnd("Loading layers"); // NOI18N
+                try {
+                    StartLog.logStart("Loading layers"); // NOI18N
+                    fs = mgr.load(mgr.createEmptyFileSystem(), bb);
+                    setStatusText(NbBundle.getMessage(ModuleLayeredFileSystem.class, "MSG_end_load_cache"));
+                    StartLog.logEnd("Loading layers"); // NOI18N
+                } catch (IOException ex) {
+                    LayerCacheManager.err.log(Level.WARNING, "Ignoring cache of layers");
+                    if (LayerCacheManager.err.isLoggable(Level.FINE)) {
+                        LayerCacheManager.err.log(Level.WARNING, "Ignoring cache of layers", ex);
+                    }
+                }
             }
         }
         return fs != null ? fs : mgr.createEmptyFileSystem();
     }
     
-    private static FileSystem[] appendLayers(FileSystem fs1, boolean addLookup, FileSystem[] fs2s, FileSystem fs3) {
+    private static FileSystem[] appendLayers(FileSystem fs1, boolean addLookup, FileSystem[] fs2s, FileSystem fs3, boolean addClasspathLayers) {
         List<FileSystem> l = new ArrayList<FileSystem>(fs2s.length + 2);
         l.add(fs1);
         if (addLookup) {
@@ -164,6 +172,39 @@ implements LookupListener {
         }
         l.addAll(Arrays.asList(fs2s));
         l.add(fs3);
+        if (addClasspathLayers) { // #129583
+            List<URL> layerUrls = new ArrayList<URL>();
+            // Basic impl copied from ExternalUtil.MainFS:
+            ClassLoader loader = Thread.currentThread().getContextClassLoader();
+            try {
+                for (URL manifest : NbCollections.iterable(loader.getResources("META-INF/MANIFEST.MF"))) { // NOI18N
+                    InputStream is = manifest.openStream();
+                    try {
+                        Manifest mani = new Manifest(is);
+                        String layerLoc = mani.getMainAttributes().getValue("OpenIDE-Module-Layer"); // NOI18N
+                        if (layerLoc != null) {
+                            URL layer = loader.getResource(layerLoc);
+                            if (layer != null) {
+                                layerUrls.add(layer);
+                            } else {
+                                err.warning("No such layer: " + layerLoc);
+                            }
+                        }
+                    } finally {
+                        is.close();
+                    }
+                }
+                for (URL generatedLayer : NbCollections.iterable(loader.getResources("META-INF/generated-layer.xml"))) { // NOI18N
+                    layerUrls.add(generatedLayer);
+                }
+                XMLFileSystem xmlfs = new XMLFileSystem();
+                xmlfs.setXmlUrls(layerUrls.toArray(new URL[layerUrls.size()]));
+                l.add(xmlfs);
+                err.log(Level.FINE, "Loading classpath layers: {0}", layerUrls);
+            } catch (Exception x) {
+                err.log(Level.WARNING, "Setting layer URLs: " + layerUrls, x);
+            }
+        }
         return l.toArray(new FileSystem[l.size()]);
     }
 
@@ -186,8 +227,12 @@ implements LookupListener {
      * if working within the core.
      */
     public static ModuleLayeredFileSystem getInstallationModuleLayer () {
-        FileSystem fs = Repository.getDefault ().getDefaultFileSystem();
-        SystemFileSystem sfs = (SystemFileSystem)fs;            
+        SystemFileSystem sfs = null;
+        try {
+            sfs = (SystemFileSystem) FileUtil.getConfigRoot().getFileSystem();
+        } catch (FileStateInvalidException ex) {
+            Exceptions.printStackTrace(ex);
+        }
         ModuleLayeredFileSystem home = sfs.getInstallationLayer ();
         if (home != null)
             return home;
@@ -200,8 +245,12 @@ implements LookupListener {
      * if working within the core.
      */
     public static ModuleLayeredFileSystem getUserModuleLayer () {
-        SystemFileSystem sfs = (SystemFileSystem)
-            Repository.getDefault().getDefaultFileSystem();
+        SystemFileSystem sfs = null;
+        try {
+            sfs = (SystemFileSystem) FileUtil.getConfigRoot().getFileSystem();
+        } catch (FileStateInvalidException ex) {
+            Exceptions.printStackTrace(ex);
+        }
         return sfs.getUserLayer ();
     }
 
@@ -224,23 +273,32 @@ implements LookupListener {
             private byte[] data;
             
             public void flushCaches(DataOutputStream os) throws IOException {
+                err.log(Level.FINEST, "flushing layers");
                 os.write(data);
+                err.log(Level.FINEST, "layers flushed");
             }
             public void cacheReady() {
+                /*
                 try {
+                    err.log(Level.FINEST, "cache is ready");
                     cacheLayer = loadCache(manager);
+                    err.log(Level.FINEST, "update delegates for userdir:" + addLookup + " manager: " + manager);
                     setDelegates(appendLayers(writableLayer, addLookup, otherLayers, cacheLayer));
+                    err.log(Level.FINEST, "delegates updated");
                 } catch (IOException ex) {
                     err.log(Level.INFO, "Cannot re-read cache", ex); // NOI18N
                 }
+                 */
             }
             public void run() throws IOException {
                 ByteArrayOutputStream os = new ByteArrayOutputStream();
                 synchronized (ModuleLayeredFileSystem.this) {
                     try {
+                        err.log(Level.FINEST, "storing to memory {0}", urls);
                         manager.store(cacheLayer, urls, os);
                         data = os.toByteArray();
                         ByteBuffer bb = ByteBuffer.wrap(data);
+                        err.log(Level.FINEST, "reading from memory, size {0}", bb.limit());
                         cacheLayer = manager.load(cacheLayer, bb.order(ByteOrder.LITTLE_ENDIAN));
                     } catch (IOException ioe) {
                         err.log(Level.WARNING, null, ioe);
@@ -253,7 +311,10 @@ implements LookupListener {
                         cacheLayer = fallback;
                     }
                 }
-                setDelegates(appendLayers(writableLayer, addLookup, otherLayers, cacheLayer));
+                err.log(Level.FINEST, "changing delegates");
+                setDelegates(appendLayers(writableLayer, addLookup, otherLayers, cacheLayer, false));
+                err.log(Level.FINEST, "delegates changed");
+                err.log(Level.FINEST, "scheduling save");
                 Stamps.getModulesJARs().scheduleSave(this, manager.cacheLocation(), false);
             }
 
@@ -265,14 +326,6 @@ implements LookupListener {
         firePropertyChange ("layers", null, null); // NOI18N
         
         StartLog.logEnd("setURLs"); // NOI18N
-    }
-    
-    /** Layers are OK when its cache is OK.
-     * 
-     * @return true if layers are already OK
-     */
-    public boolean isLayersOK() {
-        return Stamps.getModulesJARs().exists(manager.cacheLocation());
     }
     
     /** Adds few URLs.
@@ -297,7 +350,7 @@ implements LookupListener {
     
     /** Refresh layers */
     public void resultChanged(LookupEvent ev) {
-        setDelegates(appendLayers(writableLayer, addLookup, otherLayers, cacheLayer));
+        setDelegates(appendLayers(writableLayer, addLookup, otherLayers, cacheLayer, false));
     }
     
     private static void setStatusText (String msg) {

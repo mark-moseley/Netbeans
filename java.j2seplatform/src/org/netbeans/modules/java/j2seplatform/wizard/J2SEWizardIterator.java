@@ -43,10 +43,8 @@ package org.netbeans.modules.java.j2seplatform.wizard;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import javax.swing.event.ChangeListener;
@@ -56,9 +54,10 @@ import org.netbeans.modules.java.j2seplatform.platformdefinition.Util;
 import org.openide.ErrorManager;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
+import org.openide.util.ChangeSupport;
 import org.openide.util.NbBundle;
 
 /**
@@ -68,13 +67,13 @@ import org.openide.util.NbBundle;
  *
  * @author Svata Dedic, Tomas Zezula
  */
-public class J2SEWizardIterator implements WizardDescriptor.InstantiatingIterator {
+public class J2SEWizardIterator implements WizardDescriptor.InstantiatingIterator<WizardDescriptor> {
     
     private static final String[] SOLARIS_64_FOLDERS = {"sparcv9","amd64"};     //NOI18N
 
     DataFolder                  installFolder;
     DetectPanel.WizardPanel     detectPanel;
-    Collection                  listeners;
+    final ChangeSupport  listeners = new ChangeSupport(this);
     NewJ2SEPlatform             platform;
     NewJ2SEPlatform             secondaryPlatform;
     WizardDescriptor            wizard;
@@ -101,10 +100,10 @@ public class J2SEWizardIterator implements WizardDescriptor.InstantiatingIterato
     }
 
     public void addChangeListener(ChangeListener l) {
-        listeners.add(l);
+        listeners.addChangeListener(l);
     }
 
-    public WizardDescriptor.Panel current() {
+    public WizardDescriptor.Panel<WizardDescriptor> current() {
         switch (this.currentIndex) {
             case 0:
                 return this.detectPanel;
@@ -135,12 +134,11 @@ public class J2SEWizardIterator implements WizardDescriptor.InstantiatingIterato
     public java.util.Set instantiate() throws IOException {
         //Workaround #44444
         this.detectPanel.storeSettings (this.wizard);
-        Set result = new HashSet ();
-        for (Iterator it = getPlatforms().iterator(); it.hasNext();) {        
-            NewJ2SEPlatform platform = (NewJ2SEPlatform) it.next();
+        Set<JavaPlatform> result = new HashSet<JavaPlatform> ();
+        for (NewJ2SEPlatform platform : getPlatforms()) {
             if (platform.isValid()) {
                 final String systemName = platform.getAntName();
-                FileObject platformsFolder = Repository.getDefault().getDefaultFileSystem().findResource(
+                FileObject platformsFolder = FileUtil.getConfigFile(
                         "Services/Platforms/org-netbeans-api-java-Platform"); //NOI18N
                 if (platformsFolder.getFileObject(systemName,"xml")!=null) {   //NOI18N
                     String msg = NbBundle.getMessage(J2SEWizardIterator.class,"ERROR_InvalidName");
@@ -148,7 +146,7 @@ public class J2SEWizardIterator implements WizardDescriptor.InstantiatingIterato
                         new IllegalStateException(msg), ErrorManager.USER, null, msg,null, null);
                 }                       
                 DataObject dobj = PlatformConvertor.create(platform, DataFolder.findFolder(platformsFolder),systemName);
-                result.add((JavaPlatform) dobj.getNodeDelegate().getLookup().lookup(JavaPlatform.class));
+                result.add(dobj.getNodeDelegate().getLookup().lookup(JavaPlatform.class));
             }
         }        
         return Collections.unmodifiableSet(result);
@@ -168,7 +166,7 @@ public class J2SEWizardIterator implements WizardDescriptor.InstantiatingIterato
     }
 
     public void removeChangeListener(ChangeListener l) {
-        listeners.add(l);
+        listeners.removeChangeListener(l);
     }
 
     public void uninitialize(WizardDescriptor wiz) {
@@ -184,8 +182,8 @@ public class J2SEWizardIterator implements WizardDescriptor.InstantiatingIterato
         return this.secondaryPlatform;
     }
     
-    private List getPlatforms () {
-        List result = new ArrayList ();
+    private List<NewJ2SEPlatform> getPlatforms () {
+        List<NewJ2SEPlatform> result = new ArrayList<NewJ2SEPlatform> ();
         result.add(this.platform);
         if (this.secondaryPlatform != null) {
             result.add(this.secondaryPlatform);

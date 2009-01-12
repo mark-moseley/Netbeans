@@ -66,10 +66,9 @@ import org.netbeans.modules.editor.errorstripe.privatespi.Mark;
 import org.netbeans.modules.editor.errorstripe.privatespi.Status;
 import org.netbeans.spi.editor.errorstripe.UpToDateStatus;
 import org.netbeans.modules.editor.options.AnnotationTypeProcessor;
-import org.netbeans.modules.editor.options.BaseOptions;
 import org.netbeans.modules.editor.plain.PlainKit;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
@@ -81,13 +80,11 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         super(testName);
     }
 
-    protected void setUp() throws Exception {
+    protected @Override void setUp() throws Exception {
         UnitUtilities.prepareTest(new String[] {"/org/netbeans/modules/editor/resources/annotations-test-layer.xml",
                                                 "/org/netbeans/modules/editor/plain/resources/layer.xml",
                                                 "/org/netbeans/modules/editor/errorstripe/test-layer.xml"},
                                   new Object[0]);
-        BaseKit.getKit(PlainKit.class);
-        BaseOptions.findObject(BaseOptions.class, true);
                 
         AnnotationTypes.getTypes().registerLoader(new AnnotationsLoader());
         CaretMarkProviderCreator.switchOff = true;
@@ -418,7 +415,7 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         assertEquals(test2, ((AnnotationMark) data.getMainMarkForBlock(2, 2)).getAnnotationDesc());
     }
     
-    protected boolean runInEQ() {
+    protected @Override boolean runInEQ() {
         return true;
     }
     
@@ -466,7 +463,7 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         public void loadTypes() {
             try {
                 Map typesInstances = new HashMap();
-                FileObject typesFolder = Repository.getDefault().getDefaultFileSystem().findResource("Editors/AnnotationTypes");
+                FileObject typesFolder = FileUtil.getConfigFile("Editors/AnnotationTypes");
                 FileObject[] types = typesFolder.getChildren();
                 
                 for (int cntr = 0; cntr < types.length; cntr++) {

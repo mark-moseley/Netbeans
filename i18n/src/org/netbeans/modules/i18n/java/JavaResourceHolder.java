@@ -47,8 +47,7 @@ import org.netbeans.modules.properties.BundleStructure;
 import org.netbeans.modules.properties.Element;
 import org.netbeans.modules.properties.PropertiesDataObject;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 
@@ -186,9 +185,12 @@ public class JavaResourceHolder extends ResourceHolder {
      * Removes property of given key from all locale files of the bundle.
      */
     public void removeProperty(Object key) {
-        BundleStructure bundleStructure = ((PropertiesDataObject)resource).getBundleStructure();
-        if (bundleStructure != null)
-            bundleStructure.removeItem(key.toString());
+        if (resource != null) {
+            BundleStructure bundleStructure = ((PropertiesDataObject)resource).getBundleStructure();
+            if (bundleStructure != null) {
+                bundleStructure.removeItem(key.toString());
+            }
+        }
     }
 
     /** Implements superclass abstract method. Creates template of type clazz 
@@ -201,9 +203,7 @@ public class JavaResourceHolder extends ResourceHolder {
      * Returns template data object for properties file.
      */
     public static DataObject getTemplate() throws IOException {
-        FileSystem defaultFS = Repository.getDefault().getDefaultFileSystem();
-
-        FileObject fileObject = defaultFS.findResource("Templates/Other/properties.properties"); // NOI18N
+        FileObject fileObject = FileUtil.getConfigFile("Templates/Other/properties.properties"); // NOI18N
 
         if(fileObject == null)
             throw new IOException(Util.getString("EXC_TemplateNotFound"));

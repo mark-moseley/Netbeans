@@ -56,7 +56,7 @@ import javax.swing.JTextField;
 import javax.swing.event.DocumentListener;
 import org.openide.DialogDescriptor;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.HelpCtx;
 import org.openide.util.Utilities;
 
@@ -116,8 +116,11 @@ public class AddAPIPanel extends javax.swing.JPanel implements ActionListener, D
         "javax.wireless.messaging.mms.receive", //NOI18N
         "javax.wireless.messaging.mms.send", //NOI18N
         "javax.wireless.messaging.sms.receive", //NOI18N
-        "javax.wireless.messaging.sms.send" //NOI18N
-
+        "javax.wireless.messaging.sms.send", //NOI18N
+        // Fix for IZ#145774 - Add JSR 256 Permissions to the list of API Permisions
+        "javax.microedition.sensor.PrivateSensor", // NOI18N
+        "javax.microedition.sensor.ProtectedSensor",  // NOI18N
+        "javax.microedition.io.Connector.sensor", // NOI18N
     };
     
     private DialogDescriptor dd;
@@ -151,7 +154,7 @@ public class AddAPIPanel extends javax.swing.JPanel implements ActionListener, D
     }
     
     private static String[] loadPermissions() {
-        final FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource("j2me/permissions.txt"); // NOI18N
+        final FileObject fo = FileUtil.getConfigFile("j2me/permissions.txt"); // NOI18N
         if (fo != null) {
             InputStream is = null;
             try {

@@ -49,12 +49,13 @@ import java.util.List;
 import org.netbeans.modules.vmd.api.model.Debug;
 import org.netbeans.modules.vmd.midp.components.MidpDocumentSupport;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
  * @author Anton Chechel
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.vmd.api.palette.PaletteProvider.class)
 public class MidpNbPaletteProvider implements PaletteProvider {
 
     public static final String CATEGORY_SVG = "svg"; // NOI18N
@@ -69,9 +70,9 @@ public class MidpNbPaletteProvider implements PaletteProvider {
         }
 
         try {
-            FileObject paletteFolder = Repository.getDefault().getDefaultFileSystem().findResource(projectType + "/palette"); // NOI18N
+            FileObject paletteFolder = FileUtil.getConfigFile(projectType + "/palette"); // NOI18N
             if (paletteFolder == null) {
-                FileObject root = Repository.getDefault().getDefaultFileSystem().getRoot();
+                FileObject root = FileUtil.getConfigRoot();
                 assert root != null;
                 FileObject projectFolder = root.getFileObject(projectType);
                 if (projectFolder == null) {

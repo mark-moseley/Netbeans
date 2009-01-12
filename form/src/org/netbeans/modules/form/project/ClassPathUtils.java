@@ -105,6 +105,10 @@ public class ClassPathUtils {
         return classPath.findResource(fileName) != null;
     }
 
+    public static void resetFormClassLoader(Project p) {
+        loaders.remove(p);
+    }
+
     private static FormClassLoader getFormClassLoader(FileObject fileInProject) {
         Project p = FileOwnerQuery.getOwner(fileInProject);
         FormClassLoader fcl = loaders.get(p);
@@ -370,8 +374,7 @@ public class ClassPathUtils {
         FileObject folder = null;
         if (folderName != null) {
             try {
-                folder = Repository.getDefault().getDefaultFileSystem()
-                             .findResource(CL_LAYER_BASE + folderName);
+                folder = FileUtil.getConfigFile(CL_LAYER_BASE + folderName);
             }
             catch (Exception ex) {
                 ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);

@@ -48,6 +48,8 @@ import org.openide.cookies.InstanceCookie;
 
 import org.openide.filesystems.*;
 import org.openide.loaders.*;
+import org.openide.modules.ModuleInfo;
+import org.openide.util.Lookup;
 
 /** Checks the consistence of Menu folder.
  *
@@ -60,19 +62,13 @@ public class ValidateLayerMenuTest extends NbTestCase {
         super (name);
     }
 
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(suite());
-    }
-    
     public static Test suite() {
-        TestSuite suite = new NbTestSuite(ValidateLayerMenuTest.class);
-        
-        return suite;
+        return NbModuleSuite.create(
+            NbModuleSuite.createConfiguration(ValidateLayerMenuTest.class)
+                .clusters(".*").enableModules(".*").gui(false)
+        );
     }
-    
+
     //
     // override in subclasses
     //
@@ -111,9 +107,13 @@ public class ValidateLayerMenuTest extends NbTestCase {
     // 
     
     public void testContentCorrect () throws Exception {
+        // This magic call will load modules and fill content of default file system
+        // where xml layers live - uaah sometimes I think I just live in another world
+        Lookup.getDefault().lookup(ModuleInfo.class);
+        
         java.util.ArrayList errors = new java.util.ArrayList ();
         
-        DataFolder df = DataFolder.findFolder (Repository.getDefault().getDefaultFileSystem().findResource (rootName ()));
+        DataFolder df = DataFolder.findFolder (FileUtil.getConfigFile(rootName ()));
         verifyMenu (df, errors);
         
         if (!errors.isEmpty()) {

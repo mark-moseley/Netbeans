@@ -44,6 +44,8 @@ import com.sun.source.tree.AnnotationTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MethodTree;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import javax.lang.model.element.AnnotationMirror;
 import org.netbeans.api.java.source.JavaSource;
@@ -53,15 +55,15 @@ import org.netbeans.modules.websvc.rest.spi.RestSupport;
 import org.netbeans.modules.websvc.rest.support.JavaSourceHelper;
 import org.openide.filesystems.FileObject;
 import javax.xml.xpath.*;
+import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
 import org.netbeans.modules.websvc.rest.codegen.Constants;
 import org.netbeans.modules.websvc.rest.codegen.model.ClientStubModel;
 import org.netbeans.modules.websvc.rest.model.api.RestConstants;
 import org.netbeans.modules.websvc.rest.model.api.RestServicesModel;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.netbeans.modules.websvc.rest.projects.WebProjectRestSupport;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
-import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
@@ -72,6 +74,13 @@ import org.w3c.dom.NodeList;
  */
 public class RestUtils {
    
+    public static void upgrade(Project project) {
+         RestSupport restSupport = project.getLookup().lookup(RestSupport.class);
+        if (restSupport != null) {
+            restSupport.upgrade();
+        }
+    }
+    
     /**
      *  Makes sure project is ready for REST development.
      *  @param source source file or directory as part of REST application project.
@@ -154,6 +163,66 @@ public class RestUtils {
          wsModel.enablePropertyChangeListener();
     }
 
+    public static boolean hasJTASupport(Project project) {
+        RestSupport support = getRestSupport(project);
+        
+        if (support != null) {
+            return support.hasJTASupport();
+        }
+        
+        return false;
+    }
+    
+    public static boolean hasSpringSupport(Project project) {
+        RestSupport support = getRestSupport(project);
+        
+        if (support != null) {
+            return support.hasSpringSupport();
+        }
+        
+        return false;
+    }
+
+    public static boolean isServerTomcat(Project project) {
+        RestSupport support = getRestSupport(project);
+
+        if (support != null) {
+            return support.isServerTomcat();
+        }
+
+        return false;
+    }
+
+    public static boolean isServerGFV3(Project project) {
+        RestSupport support = getRestSupport(project);
+
+        if (support != null) {
+            return support.isServerGFV3();
+        }
+
+        return false;
+    }
+
+    public static boolean isServerGFV2(Project project) {
+        RestSupport support = getRestSupport(project);
+
+        if (support != null) {
+            return support.isServerGFV2();
+        }
+
+        return false;
+    }
+
+    public static Datasource getDatasource(Project project, String jndiName) {
+        RestSupport support = getRestSupport(project);
+        
+        if (support != null) {
+            return ((WebProjectRestSupport) support).getDatasource(jndiName);
+        }
+        
+        return null;
+    }
+    
     //
     // TODO: The following methods don't belong here. Some of them should go into
     // JavaSourceHelper and the XML/DOM related methods should go into
@@ -195,8 +264,7 @@ public class RestUtils {
         assert targetFolder != null;
         assert targetName != null && targetName.trim().length() > 0;
 
-        FileSystem defaultFS = Repository.getDefault().getDefaultFileSystem();
-        FileObject templateFO = defaultFS.findResource(template);
+        FileObject templateFO = FileUtil.getConfigFile(template);
         DataObject templateDO = DataObject.find(templateFO);
         DataFolder dataFolder = DataFolder.findFolder(targetFolder);
 
@@ -205,11 +273,11 @@ public class RestUtils {
 
     public static String findStubNameFromClass(String className) {
         String name = className;
-        int index = name.lastIndexOf("Resource");
+        int index = name.lastIndexOf(Constants.RESOURCE_SUFFIX);
         if (index != -1) {
             name = name.substring(0, index);
         } else {
-            index = name.lastIndexOf("Converter");
+            index = name.lastIndexOf(Constants.CONVERTER_SUFFIX);
             if (index != -1)
                 name = name.substring(0, index);
         }
@@ -250,8 +318,6 @@ public class RestUtils {
                 String classAnonType = annotation.getAnnotationType().toString();
                 if (Constants.XML_ROOT_ELEMENT.equals(classAnonType)) {
                     return true;
-                } else {
-                    return false;
                 }
             }
         }
@@ -276,7 +342,7 @@ public class RestUtils {
         return false;
     }
     
-    public static String findElementName(MethodTree tree, ClientStubModel.Resource r) {
+    public static String findElementName(MethodTree tree) {
         String eName = "";
         List<? extends AnnotationTree> mAnons = tree.getModifiers().getAnnotations();
         if (mAnons != null && mAnons.size() > 0) {
@@ -296,8 +362,6 @@ public class RestUtils {
         MethodTree method = null;
         List<MethodTree> rTrees = JavaSourceHelper.getAllMethods(rSrc);
         for (MethodTree tree : rTrees) {
-            String mName = tree.getName().toString();
-            ClientStubModel.Method m = null;
             boolean isHttpGetMethod = false;
             boolean isXmlMime = false;
             List<? extends AnnotationTree> mAnons = tree.getModifiers().getAnnotations();
@@ -306,8 +370,13 @@ public class RestUtils {
                     String mAnonType = mAnon.getAnnotationType().toString();
                     if (RestConstants.GET_ANNOTATION.equals(mAnonType) || RestConstants.GET.equals(mAnonType)) {
                         isHttpGetMethod = true;
-                    } else if (RestConstants.PRODUCE_MIME_ANNOTATION.equals(mAnonType) || RestConstants.PRODUCE_MIME.equals(mAnonType)) {
-                        isXmlMime = true;
+                    } else if (RestConstants.PRODUCE_MIME_ANNOTATION.equals(mAnonType) || 
+                            RestConstants.PRODUCE_MIME.equals(mAnonType)) {
+                        List<String> mimes = getMimeAnnotationValue(mAnon);
+                         if (mimes.contains(Constants.MimeType.JSON.value()) ||
+                            mimes.contains(Constants.MimeType.XML.value())) {
+                            isXmlMime = true;
+                        }
                     }
                 }
                 if (isHttpGetMethod && isXmlMime) {
@@ -325,15 +394,15 @@ public class RestUtils {
         attrName = attrName.substring(0, 1).toLowerCase() + attrName.substring(1);
         return attrName;
     }
-
+  
     public static String getValueFromAnnotation(AnnotationMirror annotation) {
         return getValueFromAnnotation(annotation.getElementValues().values().toString());
     }
-
+     
     public static String getValueFromAnnotation(AnnotationTree mAnon) {
         return getValueFromAnnotation(mAnon.toString());
     }
-
+    
     public static String getValueFromAnnotation(ExpressionTree eAnon) {
         return getValueFromAnnotation(eAnon.toString());
     }
@@ -342,6 +411,16 @@ public class RestUtils {
         if (value.indexOf("\"") != -1)
             value = value.substring(value.indexOf("\"") + 1, value.lastIndexOf("\""));
         return value;
+    }
+    
+    public static List<String> getMimeAnnotationValue(AnnotationTree ant) {
+        List<? extends ExpressionTree> ets = ant.getArguments();
+        if (ets.size() > 0) {
+            String value = getValueFromAnnotation(ets.get(0));
+            value = value.replace("\"", "");
+            return Arrays.asList(value.split(","));
+        }
+        return Collections.emptyList();
     }     
 
     public static String createGetterMethodName(ClientStubModel.RepresentationNode n) {

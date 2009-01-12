@@ -38,8 +38,6 @@ import java.util.logging.Logger;
 import org.netbeans.modules.openide.util.NamedServicesProvider;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
@@ -52,6 +50,7 @@ import org.openide.util.lookup.ProxyLookup;
  *
  * @author Jaroslav Tulach
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.openide.util.NamedServicesProvider.class, position=200, supersedes="org.netbeans.modules.openide.filesystems.RecognizeInstanceFiles")
 public final class RecognizeInstanceObjects extends NamedServicesProvider {
     private static final Logger LOG = Logger.getLogger(RecognizeInstanceObjects.class.getName());
     
@@ -85,7 +84,7 @@ public final class RecognizeInstanceObjects extends NamedServicesProvider {
                 }
             }
             try {
-                FileObject fo = FileUtil.createFolder(Repository.getDefault().getDefaultFileSystem().getRoot(), path);
+                FileObject fo = FileUtil.createFolder(FileUtil.getConfigRoot(), path);
                 
                 String s;
                 if (path.endsWith("/")) { // NOI18N

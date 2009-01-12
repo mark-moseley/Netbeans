@@ -48,7 +48,8 @@ import java.util.HashSet;
 import java.util.Set;
 import org.netbeans.Module;
 import org.netbeans.ModuleManager;
-import org.openide.filesystems.Repository;
+import org.netbeans.Stamps;
+import org.openide.filesystems.FileUtil;
 
 /** Test the NetBeans module installer implementation.
  * Broken into pieces to ensure each runs in its own VM.
@@ -67,7 +68,7 @@ public class NbInstallerTest4 extends SetupHid {
     public NbInstallerTest4(String name) {
         super(name);
     }
-    
+
     /** Test #21173/#23609: overriding layers by module dependencies.
      * Version 1: all modules loaded together.
      */
@@ -85,12 +86,16 @@ public class NbInstallerTest4 extends SetupHid {
             assertEquals(null, slurp("foo/file1.txt"));
             assertEquals(null, slurp("foo/file3.txt"));
             assertEquals(null, slurp("foo/file4.txt"));
-            Set m1m2 = new HashSet(Arrays.asList(new Module[] {m1, m2}));
+            Set<Module> m1m2 = new HashSet<Module>(Arrays.asList(m1, m2));
             mgr.enable(m1m2);
+            
+            Stamps.getModulesJARs().flush(0);
+            Stamps.getModulesJARs().shutdown();
+            
             assertEquals("base contents", slurp("foo/file1.txt"));
             assertEquals("customized contents", slurp("foo/file3.txt"));
             assertEquals(null, slurp("foo/file4.txt"));
-            assertEquals("someotherval", Repository.getDefault().getDefaultFileSystem().findResource("foo/file5.txt").getAttribute("myattr"));
+            assertEquals("someotherval", FileUtil.getConfigFile("foo/file5.txt").getAttribute("myattr"));
             mgr.disable(m1m2);
             assertEquals(null, slurp("foo/file1.txt"));
             mgr.delete(m2);

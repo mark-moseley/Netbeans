@@ -52,7 +52,6 @@ import java.io.OutputStream;
 import java.util.HashSet;
 import java.util.List;
 
-import org.netbeans.api.languages.LanguageDefinitionNotFoundException;
 import org.netbeans.api.languages.ParseException;
 import org.netbeans.modules.languages.features.ActionCreator;
 import org.netbeans.api.languages.LanguageDefinitionNotFoundException;
@@ -63,10 +62,8 @@ import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.RequestProcessor;
 
 
@@ -85,16 +82,14 @@ public class LanguagesManager extends org.netbeans.api.languages.LanguagesManage
     }
 
     public boolean isSupported (String mimeType) {
-        FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-        return fs.findResource ("Editors/" + mimeType + "/language.nbs") != null;
+        return FileUtil.getConfigFile ("Editors/" + mimeType + "/language.nbs") != null;
     }
 
     public boolean createDataObjectFor (String mimeType) {
         if(!isSupported(mimeType)) {
             return false;
         }
-        FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-        FileObject fo = fs.findResource ("Editors/" + mimeType);
+        FileObject fo = FileUtil.getConfigFile ("Editors/" + mimeType);
         if (fo == null) return false;
         Boolean b = (Boolean) fo.getAttribute ("createDataObject");
         if (b == null) return true;
@@ -120,8 +115,7 @@ public class LanguagesManager extends org.netbeans.api.languages.LanguagesManage
         mimeType = normalizeMimeType(mimeType);
         if (!mimeTypeToLanguage.containsKey (mimeType)) {
             mimeTypeToLanguage.put (mimeType, parsingLanguage);
-            FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-            FileObject fo = fs.findResource ("Editors/" + mimeType + "/language.nbs");
+            FileObject fo = FileUtil.getConfigFile ("Editors/" + mimeType + "/language.nbs");
             if (fo == null) {
                 mimeTypeToLanguage.remove (mimeType);
                 throw new LanguageDefinitionNotFoundException 
@@ -171,8 +165,7 @@ public class LanguagesManager extends org.netbeans.api.languages.LanguagesManage
         Language language = mimeTypeToLanguage.get (mimeType);
         if (language != null && language instanceof LanguageImpl) {
             try {
-                FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-                FileObject fo = fs.findResource ("Editors/" + mimeType + "/language.nbs");
+                FileObject fo = FileUtil.getConfigFile ("Editors/" + mimeType + "/language.nbs");
                 if (fo == null) {
                     mimeTypeToLanguage.remove (mimeType);
                     throw new LanguageDefinitionNotFoundException 
@@ -188,7 +181,7 @@ public class LanguagesManager extends org.netbeans.api.languages.LanguagesManage
         }
         
         // HACK
-        ParserManagerImpl.refreshHack ();
+        //!ParserManagerImpl.refreshHack ();
     }
 
     private Set<FileObject> listeningOn = new HashSet<FileObject> ();
@@ -205,27 +198,10 @@ public class LanguagesManager extends org.netbeans.api.languages.LanguagesManage
     
     private static void initLanguage (final Language l) {
         try {
-            final FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-            final FileObject root = fs.findResource ("Editors/" + l.getMimeType ());
-            fs.runAtomicAction (new AtomicAction () {
+            final FileObject root = FileUtil.getConfigFile ("Editors/" + l.getMimeType ());
+            FileUtil.runAtomicAction (new AtomicAction () {
                 public void run () {
                     try {
-                        // init old options
-                        if (root.getFileObject ("Settings.settings") == null) {
-                            InputStream is = getClass().getClassLoader().getResourceAsStream("org/netbeans/modules/languages/resources/LanguagesOptions.settings");
-                            try {
-                                FileObject fo = root.createData("Settings.settings");
-                                OutputStream os = fo.getOutputStream();
-                                try {
-                                    FileUtil.copy(is, os);
-                                } finally {
-                                    os.close();
-                                }
-                            } finally {
-                                is.close();
-                            }
-                        }
-
                         // init code folding bar
                         if (root.getFileObject ("SideBar/org-netbeans-modules-languages-features-CodeFoldingSideBarFactory.instance") == null &&
                             l.getFeatureList ().getFeatures ("FOLD").size () > 0
@@ -249,8 +225,8 @@ public class LanguagesManager extends org.netbeans.api.languages.LanguagesManage
                         if (l.getFeatureList ().getFeatures ("NAVIGATOR").size () > 0) {
                             String foldFileName = "Navigator/Panels/" + l.getMimeType () + 
                                 "/org-netbeans-modules-languages-features-LanguagesNavigator.instance";
-                            if (fs.findResource (foldFileName) == null)
-                                FileUtil.createData (fs.getRoot (), foldFileName);
+                            if (FileUtil.getConfigFile (foldFileName) == null)
+                                FileUtil.createData (FileUtil.getConfigRoot (), foldFileName);
                         }
 
                         // init tooltips
@@ -354,7 +330,7 @@ public class LanguagesManager extends org.netbeans.api.languages.LanguagesManage
     }
     
     private static int findPositionOfDefaultPopupAction(String name, int fallback) {
-        FileObject f = Repository.getDefault().getDefaultFileSystem().findResource("Editors/Popup/" + name);
+        FileObject f = FileUtil.getConfigFile("Editors/Popup/" + name);
         if (f != null) {
             Object pos = f.getAttribute("position");
             if (pos instanceof Integer) {

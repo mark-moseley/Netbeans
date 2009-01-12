@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.uml.diagrams.engines;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Insets;
@@ -54,7 +55,10 @@ import java.util.Set;
 import javax.swing.JButton;
 import javax.swing.JToolBar;
 import org.netbeans.api.visual.action.ActionFactory;
+import org.netbeans.api.visual.action.AlignWithMoveDecorator;
 import org.netbeans.api.visual.action.ConnectorState;
+import org.netbeans.api.visual.action.MoveProvider;
+import org.netbeans.api.visual.action.MoveStrategy;
 import org.netbeans.api.visual.action.PopupMenuProvider;
 import org.netbeans.api.visual.action.ReconnectDecorator;
 import org.netbeans.api.visual.action.ReconnectProvider;
@@ -97,6 +101,7 @@ import org.netbeans.modules.uml.core.support.umlutils.ETList;
 import org.netbeans.modules.uml.core.support.umlutils.ElementLocator;
 import org.netbeans.modules.uml.core.support.umlutils.IElementLocator;
 import org.netbeans.modules.uml.diagrams.UMLRelationshipDiscovery;
+import org.netbeans.modules.uml.diagrams.actions.NodeLabelIteratorAction;
 import org.netbeans.modules.uml.diagrams.actions.sqd.AddCarFprPresentationElementAction;
 import org.netbeans.modules.uml.diagrams.actions.sqd.AlignWithMoveStrategyProvider;
 import org.netbeans.modules.uml.diagrams.actions.sqd.ArrangeMoveWithBumping;
@@ -107,8 +112,6 @@ import org.netbeans.modules.uml.diagrams.actions.sqd.LifelineMoveStrategy;
 import org.netbeans.modules.uml.diagrams.actions.sqd.MessageMoveProvider;
 import org.netbeans.modules.uml.diagrams.actions.sqd.MessageMoveStrategy;
 import org.netbeans.modules.uml.diagrams.actions.sqd.MessagesConnectProvider;
-import org.netbeans.modules.uml.diagrams.actions.sqd.SQDRelationshipDisovery;
-import org.netbeans.modules.uml.diagrams.actions.sqd.ToolbarTestMessageCreateAction;
 import org.netbeans.modules.uml.diagrams.anchors.TargetMessageAnchor;
 import org.netbeans.modules.uml.diagrams.edges.factories.MessageFactory;
 import org.netbeans.modules.uml.diagrams.edges.sqd.MessageLabelManager;
@@ -127,7 +130,9 @@ import org.netbeans.modules.uml.drawingarea.actions.ActionProvider;
 import org.netbeans.modules.uml.drawingarea.actions.AfterValidationExecutor;
 import org.netbeans.modules.uml.drawingarea.actions.DiagramPopupMenuProvider;
 import org.netbeans.modules.uml.drawingarea.actions.DiscoverRelationshipAction;
+import org.netbeans.modules.uml.drawingarea.actions.EdgeLabelIteratorAction;
 import org.netbeans.modules.uml.drawingarea.actions.HierarchicalLayoutAction;
+import org.netbeans.modules.uml.drawingarea.actions.MoveNodeKeyAction;
 import org.netbeans.modules.uml.drawingarea.actions.NavigateLinkAction;
 import org.netbeans.modules.uml.drawingarea.actions.OrthogonalLayoutAction;
 import org.netbeans.modules.uml.drawingarea.actions.SQDMessageConnectProvider;
@@ -143,8 +148,7 @@ import org.netbeans.modules.uml.drawingarea.view.GraphSceneNodeAlignCollector;
 import org.netbeans.modules.uml.drawingarea.view.UMLNodeWidget;
 import org.netbeans.modules.uml.drawingarea.widgets.MessagePin.PINKIND;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 
@@ -155,41 +159,67 @@ import org.openide.util.Lookup;
 public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEngineExtension {
 
     
+    protected MoveStrategy DEFAULT_MOVE_STRATEGY = null;
+    protected MoveProvider DEFAULT_MOVE_PROVIDER = null;
     //private Layout defaultlayout=new SQDLayout();
     private InteractionBoundaryWidget sqdBoundary;
     private PopupMenuProvider menuProvider = new DiagramPopupMenuProvider();
     private IInteraction interaction;
     private RelationshipDiscovery relDiscovery = null;
+    private boolean trackbarusage=true;
     
     public SequenceDiagramEngine(DesignerScene scene) {
         super(scene);
          //need to check if there interaction, it's specific to diagram so is handed in engine
          IDiagram dgr=getScene().getDiagram();
          INamespace ns=dgr.getNamespace();
-         String type=ns.getExpandedElementType();
-         if(! type.equalsIgnoreCase("interaction"))
+         if(ns!=null)//there may be some problem with project
          {
-             //create interaction
-             Object value = FactoryRetriever.instance().createType("Interaction",
-             ns);
-
-             INamedElement inter = null;
-             if(value instanceof INamedElement)
+             String type=ns.getExpandedElementType();
+             if(! type.equalsIgnoreCase("interaction"))
              {
-                 inter = (INamedElement)value;
+                 //create interaction
+                 Object value = FactoryRetriever.instance().createType("Interaction",
+                 ns);
+
+                 INamedElement inter = null;
+                 if(value instanceof INamedElement)
+                 {
+                     inter = (INamedElement)value;
+                 }
+                 //
+                 interaction=(IInteraction) inter;
+                 //
+                 inter.setName(dgr.getName());//by default the same as diagram
+                 //inter.setNamespace(ns);
+                 ns.addOwnedElement(inter);
+                 dgr.setNamespace((Namespace) inter);
              }
-             //
-             interaction=(IInteraction) inter;
-             //
-             inter.setName(dgr.getName());//by default the same as diagram
-             //inter.setNamespace(ns);
-             ns.addOwnedElement(inter);
-             dgr.setNamespace((Namespace) inter);
+             else
+             {
+                 interaction=(IInteraction) ns;
+             }
          }
-         else
-         {
-             interaction=(IInteraction) ns;
-         }
+        if(DEFAULT_MOVE_STRATEGY == null)
+        {
+            AlignWithMoveDecorator decorator = new AlignWithMoveDecorator()
+            {
+                public ConnectionWidget createLineWidget(Scene scene)
+                {
+                    ConnectionWidget widget = new ConnectionWidget(scene);
+                    widget.setStroke(ALIGN_STROKE);
+                    widget.setForeground(Color.BLUE);
+                    return widget;
+                }
+            };
+            DEFAULT_MOVE_STRATEGY = 
+                    new org.netbeans.modules.uml.drawingarea.view.AlignWithMoveStrategyProvider(new GraphSceneNodeAlignCollector (scene),
+                                                      scene.getInterractionLayer(),
+                                                      scene.getMainLayer(),
+                                                      decorator,
+                                                      false);
+            DEFAULT_MOVE_PROVIDER = (MoveProvider) DEFAULT_MOVE_STRATEGY;
+        }
         //fill settings, where to get default? some should be from preferences
         setSettingValue(SHOW_MESSAGE_NUMBERS, Boolean.FALSE);
         setSettingValue(SHOW_RETURN_MESSAGES, Boolean.TRUE);
@@ -271,7 +301,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             newWidget.setPreferredLocation(newWidget.convertLocalToScene(location));
         
             //
-            if(element instanceof ILifeline)
+            if(element instanceof ILifeline && trackbarusage)
             {
                 //set properties if actor
                 ILifeline ll=(ILifeline) element;
@@ -281,6 +311,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
                     new AfterValidationExecutor(new AddCarFprPresentationElementAction((SQDDiagramTopComponent) tc,(LifelineWidget) newWidget, presentation), getScene());
                 }
             }
+            trackbarusage=true;
         }
         //
         if(element instanceof ICombinedFragment || element instanceof IInteraction)
@@ -346,7 +377,11 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
     }
 
     public INamedElement processDrop(INamedElement elementToDrop) {
-        //
+        
+        if ( elementToDrop == null)
+        {
+            return null;
+        }
         String type0=elementToDrop.getExpandedElementType();
         if(type0==null)type0=elementToDrop.getElementType();
         INamedElement ret=elementToDrop;
@@ -434,13 +469,15 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         //
         WidgetAction.Chain selectTool = widget.createActions(DesignerTools.SELECT);
         
+        selectTool.addAction(DiagramEngine.lockSelectionAction);
         selectTool.addAction(mouseHoverAction);
         selectTool.addAction(sceneSelectAction);
         selectTool.addAction(ActionFactory.createPopupMenuAction(menuProvider));
         IElement  element=node.getFirstSubject();
         if(node.getFirstSubject().getExpandedElementType().equals("Lifeline"))//works for both Lifeline and ActorLifeline
         {
-            WidgetAction lifelineMoveAction=new LifelineMoveAction(new LifelineMoveStrategy(), new LifelineMoveProvider(provider));        
+            WidgetAction lifelineMoveAction=new LifelineMoveAction(new LifelineMoveStrategy(), new LifelineMoveProvider(provider));
+            selectTool.addAction(new MoveNodeKeyAction(new LifelineMoveStrategy(), new LifelineMoveProvider(provider)));
             selectTool.addAction(lifelineMoveAction);
         }
         else if(widget instanceof CombinedFragmentWidget)//covers combinedfragments, references, interaction boundary
@@ -452,8 +489,11 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             }
             else 
             {
-                selectTool.addAction(ActionFactory.createMoveAction(provider, new CombinedFragmentMoveProvider(provider)));
-            }
+                CombinedFragmentMoveProvider cfMoveProvider = new CombinedFragmentMoveProvider(provider);
+                selectTool.addAction(ActionFactory.createMoveAction(provider, cfMoveProvider));
+                selectTool.addAction(new MoveNodeKeyAction(provider, cfMoveProvider));
+                selectTool.addAction(new NodeLabelIteratorAction());
+            }            
         }
         else
         {
@@ -470,10 +510,12 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         readOnly.addAction(sceneSelectAction);
         readOnly.addAction(ActionFactory.createPopupMenuAction(menuProvider));
         readOnly.addAction(mouseHoverAction);
+        readOnly.addAction(new NodeLabelIteratorAction());
     }
 
     public void setActions(ConnectionWidget widget,IPresentationElement edge) {
         WidgetAction.Chain selectTool = widget.createActions(DesignerTools.SELECT);
+        selectTool.addAction(new MoveNodeKeyAction(DEFAULT_MOVE_STRATEGY, DEFAULT_MOVE_PROVIDER));
         IElement el=edge.getFirstSubject();
         String edgeKind=null;
         if(el instanceof IMessage)
@@ -482,6 +524,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             edgeKind=getMessageKindAsString(msg.getKind());
         }
                 
+        selectTool.addAction(DiagramEngine.lockSelectionAction);
         selectTool.addAction(sceneSelectAction);
         selectTool.addAction(ActionFactory.createPopupMenuAction(menuProvider));
         if("Synchronous".equals(edgeKind) || "Asynchronous".equals(edgeKind))selectTool.addAction(ActionFactory.createReconnectAction(new MessageReconnectDecorator(widget),new MessagesReconnectProvider()));//only these messages was possible to reconnect in 6.0
@@ -506,7 +549,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             }));
             selectTool.addAction(ActionFactory.createMoveAction(new MessageMoveStrategy(),new MessageMoveProvider()));
         }
-        
+        selectTool.addAction(new EdgeLabelIteratorAction());
         
         WidgetAction.Chain navigateLinkTool = widget.createActions(DesignerTools.NAVIGATE_LINK);
         navigateLinkTool.addAction(new NavigateLinkAction());
@@ -516,6 +559,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         WidgetAction.Chain readOnly = widget.createActions(DesignerTools.READ_ONLY);      
         readOnly.addAction(sceneSelectAction);
         readOnly.addAction(ActionFactory.createPopupMenuAction(menuProvider));
+        readOnly.addAction(new EdgeLabelIteratorAction());
     }
     
     /**
@@ -771,16 +815,11 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         {
             RelationshipFactory retVal = null;
 
-            FileSystem system = Repository.getDefault().getDefaultFileSystem();
-
-            if (system != null)
+            String path = "modeling/relationships/" + type + ".context_palette_item";
+            FileObject fo = FileUtil.getConfigFile(path);
+            if(fo != null)
             {
-                String path = "modeling/relationships/" + type + ".context_palette_item";
-                FileObject fo = system.findResource(path);
-                if(fo != null)
-                {
-                    retVal = (RelationshipFactory)fo.getAttribute("factory");
-                }
+                retVal = (RelationshipFactory)fo.getAttribute("factory");
             }
 
             return retVal;
@@ -965,16 +1004,11 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             
             RelationshipFactory retVal = null;
 
-            FileSystem system = Repository.getDefault().getDefaultFileSystem();
-
-            if (system != null)
+            String path = "modeling/relationships/" + type + ".context_palette_item";
+            FileObject fo = FileUtil.getConfigFile(path);
+            if(fo != null)
             {
-                String path = "modeling/relationships/" + type + ".context_palette_item";
-                FileObject fo = system.findResource(path);
-                if(fo != null)
-                {
-                    retVal = (RelationshipFactory)fo.getAttribute("factory");
-                }
+                retVal = (RelationshipFactory)fo.getAttribute("factory");
             }
 
             return retVal;
@@ -1183,7 +1217,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
                             }
                             else if(labelManager.isVisible(MessageLabelManager.OPERATION))
                             {
-                                if(mesg.getKind()!=BaseElement.MK_RESULT && mesg.getKind()!=BaseElement.MK_CREATE)
+                                if(mesg.getKind()!=BaseElement.MK_RESULT)
                                 {
                                      labelManager.hideLabel(MessageLabelManager.OPERATION);
                                      labelManager.showLabel(MessageLabelManager.OPERATION);
@@ -1217,7 +1251,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
                                      labelManager.showLabel(MessageLabelManager.NAME);
                                 }
                             }
-                            else if(labelManager.isVisible(MessageLabelManager.OPERATION))if(mesg.getKind()!=BaseElement.MK_RESULT && mesg.getKind()!=BaseElement.MK_CREATE)
+                            else if(labelManager.isVisible(MessageLabelManager.OPERATION))if(mesg.getKind()!=BaseElement.MK_RESULT)
                             {
                                      labelManager.hideLabel(MessageLabelManager.OPERATION);
                                      labelManager.showLabel(MessageLabelManager.OPERATION);
@@ -1394,7 +1428,7 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
     }
 
     @Override
-    public void layout() {
+    public void layout(boolean save) {
         revalidateSceneWithWait();
         ArrayList<LifelineWidget> lifelines=new ArrayList<LifelineWidget>();
         Collection<IPresentationElement> pesTmp=getScene().getNodes();
@@ -1718,8 +1752,11 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
             }
             else
             {
-                Rectangle tmp=llW.getLine().convertLocalToScene(llW.getLine().getBounds());
-                tmpBot=tmp.y+100;
+                if(llW.getLine().getBounds()!=null)
+                {
+                    Rectangle tmp=llW.getLine().convertLocalToScene(llW.getLine().getBounds());
+                    tmpBot=tmp.y+100;
+                }
             }
             if(tmpBot>maxY)maxY=tmpBot;
         }
@@ -1753,5 +1790,9 @@ public class SequenceDiagramEngine extends DiagramEngine implements SQDDiagramEn
         public void focusChanged(ObjectSceneEvent event, Object previousFocusedObject, Object newFocusedObject) {
         }
         
+    }
+
+    public void doNotUseTrackbar() {
+        this.trackbarusage=false;
     }
 }

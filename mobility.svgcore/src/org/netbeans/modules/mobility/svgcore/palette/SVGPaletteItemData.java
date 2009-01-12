@@ -48,6 +48,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.MissingResourceException;
 import java.util.Properties;
 import java.util.logging.Level;
 import javax.imageio.ImageIO;
@@ -60,8 +61,8 @@ import org.netbeans.modules.mobility.svgcore.export.AnimationRasterizer;
 import org.netbeans.modules.mobility.svgcore.util.Util;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataObject;
+import org.openide.util.Exceptions;
 
 /**
  *
@@ -139,7 +140,7 @@ public final class SVGPaletteItemData {
             SceneManager.log(Level.INFO, "Obtaining icon for " + getFilePath()); //NOI18N
             try {
                 String folderName = getFolderName();
-                FileObject thumbsFolder = Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject( SVGPaletteFactory.SVG_PALETTE_THUMBNAIL_FOLDER);                
+                FileObject thumbsFolder = FileUtil.getConfigFile( SVGPaletteFactory.SVG_PALETTE_THUMBNAIL_FOLDER);
                 FileObject thumbFO;
                 FileObject fo;    
                 
@@ -179,83 +180,92 @@ public final class SVGPaletteItemData {
     }
     
     private static FileObject createThumb( final SVGDataObject dObj, FileObject parent) throws IOException {
-        FileObject thumbFO = AnimationRasterizer.export(dObj, new AnimationRasterizer.Params() {
-            public SVGImage getSVGImage() throws IOException, BadLocationException {
-                return Util.createSVGImage(dObj.getPrimaryFile(), false);
-            }
+        FileObject thumbFO = null;
+        try {
+            thumbFO = AnimationRasterizer.export(dObj, new AnimationRasterizer.Params() {
 
-            public int getImageWidth() {
-                return 32;
-            }
+                public SVGImage getSVGImage() throws IOException, BadLocationException {
+                    return Util.createSVGImage(dObj.getPrimaryFile(), false);
+                }
 
-            public int getImageHeight() {
-                return 32;
-            }
+                public int getImageWidth() {
+                    return 32;
+                }
 
-            public float getStartTime() {
-                return 0;
-            }
+                public int getImageHeight() {
+                    return 32;
+                }
 
-            public float getEndTime() {
-                return 0;
-            }
+                public float getStartTime() {
+                    return 0;
+                }
 
-            public float getFramesPerSecond() {
-                return 0;
-            }
+                public float getEndTime() {
+                    return 0;
+                }
 
-            public boolean isForAllConfigurations() {
-                return false;
-            }
+                public float getFramesPerSecond() {
+                    return 0;
+                }
 
-            public double getRatio() {
-                return 1;
-            }
+                public boolean isForAllConfigurations() {
+                    return false;
+                }
 
-            public float getCompressionQuality() {
-                return 100;
-            }
+                public double getRatio() {
+                    return 1;
+                }
 
-            public boolean isProgressive() {
-                return false;
-            }
+                public float getCompressionQuality() {
+                    return 100;
+                }
 
-            public boolean isInSingleImage() {
-                return true;
-            }
+                public boolean isProgressive() {
+                    return false;
+                }
 
-            public boolean isTransparent() {
-                return true;
-            }
+                public boolean isInSingleImage() {
+                    return true;
+                }
 
-            public AnimationRasterizer.ImageType getImageType() {
-                return AnimationRasterizer.ImageType.PNG24;
-            }
+                public boolean isTransparent() {
+                    return true;
+                }
 
-            public void setImageWidth(int w) {
-            }
+                public AnimationRasterizer.ImageType getImageType() {
+                    return AnimationRasterizer.ImageType.PNG24;
+                }
 
-            public void setImageHeight(int h) {
-            }
+                public void setImageWidth(int w) {
+                }
 
-            public int getNumberFrames() {
-                return 1;
-            }
+                public void setImageHeight(int h) {
+                }
 
-            public J2MEProject getProject() {
-                return null;
-            }
+                public int getNumberFrames() {
+                    return 1;
+                }
 
-            public String getElementId() {
-                return null;
-            }
+                public J2MEProject getProject() {
+                    return null;
+                }
 
-            public AnimationRasterizer.ColorReductionMethod getColorReductionMethod() {
-                return null;
-            }
-        }, parent);
-        
-        assert thumbFO != null : "Null thumbnail image file"; //NOI18N
+                public String getElementId() {
+                    return null;
+                }
+
+                public AnimationRasterizer.ColorReductionMethod getColorReductionMethod() {
+                    return null;
+                }
+            }, parent);
+
+            assert thumbFO != null : "Null thumbnail image file"; //NOI18N
+            
+        } catch (MissingResourceException ex) {
+            Exceptions.printStackTrace(ex);
+        } catch (BadLocationException ex) {
+            Exceptions.printStackTrace(ex);
+        }
         return thumbFO;
     }
 }

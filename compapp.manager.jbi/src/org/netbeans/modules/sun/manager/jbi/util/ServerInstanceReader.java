@@ -52,14 +52,16 @@ import org.xml.sax.SAXException;
 import org.xml.sax.EntityResolver;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /**
  * Reader for NetBeans server config file.
@@ -95,7 +97,9 @@ public class ServerInstanceReader {
     }
     
     /**
-     * Gets a list of server instances in the server config file.
+     * Gets a list of server instances in the server config file that meet our 
+     * assumption: no null data for host and location... see 
+     * AppserverJBIMgmtController.isCurrentInstance.
      */
     public List<ServerInstance> getServerInstances() {
         if (instances == null) {
@@ -110,7 +114,7 @@ public class ServerInstanceReader {
                     public InputSource resolveEntity(String publicID, String systemID)
                     throws SAXException, IOException {
                         if (NB_DEFAULT_ATTRS_PUBLIC_ID.equals(publicID)) {
-                            FileObject file = Repository.getDefault().getDefaultFileSystem().findResource(NB_DEFAULT_ATTRS_DTD);
+                            FileObject file = FileUtil.getConfigFile(NB_DEFAULT_ATTRS_DTD);
                             if (file != null) {
                                 return new InputSource(file.getInputStream());
                             } else { // command line support for offline ATS
@@ -166,7 +170,9 @@ public class ServerInstanceReader {
                         }
                     }
                     
-                    instances.add(instance);                    
+                    if (instance.getHostName() != null && instance.getLocation() != null) {
+                        instances.add(instance);              
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace(System.err);

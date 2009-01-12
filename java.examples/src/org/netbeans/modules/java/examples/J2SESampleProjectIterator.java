@@ -47,7 +47,6 @@ import javax.swing.JComponent;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.TemplateWizard;
 import org.openide.util.NbBundle;
@@ -125,7 +124,7 @@ public class J2SESampleProjectIterator implements TemplateWizard.Iterator {
         }
         // also open a documentation file registered for this project
         // and copy the .url file for it to the project (#71985)
-        FileObject docToOpen = Repository.getDefault().getDefaultFileSystem().findResource(
+        FileObject docToOpen = FileUtil.getConfigFile(
             "org-netbeans-modules-java-examples/OpenAfterCreated/" + templateFO.getName() + ".url"); // NOI18N
         if (docToOpen != null) {
             docToOpen = FileUtil.copyFile(docToOpen, prjLoc, "readme"); // NOI18N
@@ -156,8 +155,8 @@ public class J2SESampleProjectIterator implements TemplateWizard.Iterator {
         list = new String[] {
             NbBundle.getMessage(PanelConfigureProject.class, "LBL_NWP1_ProjectTitleName"), // NOI18N
         };
-        component.putClientProperty ("WizardPanel_contentData", list); // NOI18N
-        component.putClientProperty ("WizardPanel_contentSelectedIndex", new Integer (currentIndex)); // NOI18N
+        component.putClientProperty (WizardDescriptor.PROP_CONTENT_DATA, list); // NOI18N
+        component.putClientProperty (WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer (currentIndex)); // NOI18N
     }
     
 }

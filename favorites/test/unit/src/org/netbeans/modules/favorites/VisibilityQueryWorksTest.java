@@ -47,7 +47,6 @@ import java.util.Arrays;
 import java.util.Date;
 import javax.swing.event.ChangeListener;
 import junit.framework.AssertionFailedError;
-import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.spi.queries.VisibilityQueryImplementation;
 import org.openide.ErrorManager;
@@ -60,6 +59,7 @@ import org.openide.loaders.DataShadow;
 import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Lookup;
+import org.openide.util.test.MockLookup;
 
 public class VisibilityQueryWorksTest extends NbTestCase {
     private FileObject hiddenFO;
@@ -85,6 +85,7 @@ public class VisibilityQueryWorksTest extends NbTestCase {
     /** If execution fails we wrap the exception with 
      * new log message.
      */
+    @Override
     protected void runTest () throws Throwable {
         try {
             super.runTest ();
@@ -96,11 +97,13 @@ public class VisibilityQueryWorksTest extends NbTestCase {
     }
 
     
+    @Override
     protected void setUp () throws Exception {
         clearWorkDir();
 
-        MockServices.setServices(new Class[] {ErrManager.class, VQI.class});
-        ((VQI) Lookup.getDefault().lookup(VQI.class)).init();
+        VQI vqi = new VQI();
+        vqi.init();
+        MockLookup.setInstances(vqi, new ErrManager(), new Repository(FileUtil.createMemoryFileSystem()));
 
         ErrManager.log = getLog();
         err = ErrorManager.getDefault().getInstance("TEST-" + getName() + "");
@@ -131,9 +134,9 @@ public class VisibilityQueryWorksTest extends NbTestCase {
             
             err.log("target created");
 
-            this.favoritesFO = FileUtil.createFolder (Repository.getDefault().getDefaultFileSystem().getRoot(), "Favorites");
+            this.favoritesFO = FileUtil.createFolder (FileUtil.getConfigRoot(), "Favorites");
             assertNotNull("Created favorites folder", this.favoritesFO);
-            assertEquals("One child", 1, Repository.getDefault().getDefaultFileSystem().getRoot().getChildren().length);
+            assertEquals("One child", 1, FileUtil.getConfigRoot().getChildren().length);
             
             err.log("Favorites created");
 
@@ -192,7 +195,10 @@ public class VisibilityQueryWorksTest extends NbTestCase {
         VQI vqi = (VQI) Lookup.getDefault().lookup(VQI.class);
         vqi.showAll = true;
         vqi.fire();
-        
+
+        // initialize the children
+        Node some = f.getChildren().findChild(null);
+        assertNotNull("Some node needs to be found", some);
         arr = f.getChildren().getNodes(true);
         assertNodeForDataObject("hidden object is now there", hiddenDO, true, arr);
         assertEquals("One child at all", 1, arr.length);
@@ -253,7 +259,7 @@ public class VisibilityQueryWorksTest extends NbTestCase {
         return null;
     }
     
-    public static final class VQI implements VisibilityQueryImplementation {
+    private static final class VQI implements VisibilityQueryImplementation {
         
         public void init() {
             showAll = false;
@@ -286,7 +292,7 @@ public class VisibilityQueryWorksTest extends NbTestCase {
     //
     // Logging support
     //
-    public static final class ErrManager extends ErrorManager {
+    private static final class ErrManager extends ErrorManager {
         public static final StringBuffer messages = new StringBuffer ();
         
         private String prefix;

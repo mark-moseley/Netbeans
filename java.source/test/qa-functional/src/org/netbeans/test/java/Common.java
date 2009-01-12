@@ -67,6 +67,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
@@ -78,7 +79,6 @@ import org.netbeans.api.java.source.TreeMaker;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.openide.filesystems.*;
 import org.openide.loaders.DataObject;
-import org.openide.filesystems.Repository;
 //import org.openide.src.MethodParameter;
 //import org.openide.src.Type;
 
@@ -108,12 +108,12 @@ public class Common extends Object {
     public static Map<String,String> PARS3;
     
     static {
-        PARS1 = new HashMap<String, String>();
+        PARS1 = new TreeMap<String, String>();
         PARS1.put("param1","int");
-        PARS2 = new HashMap<String, String>();
+        PARS2 = new TreeMap<String, String>();
         PARS2.put("param1","int");
         PARS2.put("param2","int");
-        PARS3 = new HashMap<String, String>();
+        PARS3 = new TreeMap<String, String>();
         PARS3.put("param1","float");
         PARS3.put("param2","int");
         PARS3.put("param3","String");
@@ -426,7 +426,7 @@ public class Common extends Object {
     
     /** Get a data object by name. */
     public static DataObject getSystemDO(String pkg, String name, String ext) throws Exception {
-        return DataObject.find(Repository.getDefault().getDefaultFileSystem().findResource(pkg+"/"+name+"."+ext));
+        return DataObject.find(FileUtil.getConfigFile(pkg+"/"+name+"."+ext));
     }
        
     /** Compares two Arrays

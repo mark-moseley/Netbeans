@@ -61,9 +61,14 @@ import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataObject;
+import org.openide.loaders.DataShadow;
+import org.openide.loaders.Environment;
+import org.openide.loaders.InstanceSupport;
+import org.openide.loaders.XMLDataObject;
 import org.openide.util.Lookup;
+import org.openide.util.lookup.Lookups;
+import org.w3c.dom.Document;
 
 public class ShortcutsFolderTest extends NbTestCase {
     private ErrorManager err;
@@ -76,10 +81,12 @@ public class ShortcutsFolderTest extends NbTestCase {
         super(s);
     }
     
+    @Override
     protected Level logLevel() {
         return Level.ALL;
     }
     
+    @Override
     protected void setUp() throws Exception {
         MockServices.setServices(ENV.class);
 
@@ -93,9 +100,8 @@ public class ShortcutsFolderTest extends NbTestCase {
     }
     
     public void testApplyChangeToFactoryActionIssue49597 () throws Exception {
-        final FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-        final FileObject shortcuts = fs.getRoot ().getFileObject ("Shortcuts");
-        FileObject inst = FileUtil.createData (fs.getRoot (), "/Actions/Tools/TestAction.instance");
+        final FileObject shortcuts = FileUtil.getConfigFile ("Shortcuts");
+        FileObject inst = FileUtil.createData (FileUtil.getConfigRoot (), "Actions/Tools/TestAction.instance");
         TestAction action = new TestAction ();
         inst.setAttribute ("instanceCreate", action);
         
@@ -113,12 +119,12 @@ public class ShortcutsFolderTest extends NbTestCase {
             FileObject inst2;
             
             public void run() throws IOException {
-                inst2 = FileUtil.createData (fs.getRoot (), "/Shortcuts/CA-F9.shadow");
+                inst2 = FileUtil.createData (FileUtil.getConfigRoot (), "/Shortcuts/CA-F9.shadow");
                 inst2.setAttribute ("originalFile", "/Actions/Tools/TestAction.instance");
             }
         }
         R run = new R();
-        fs.runAtomicAction(run);
+        FileUtil.runAtomicAction(run);
 
         ShortcutsFolder.waitFinished ();
         err.log("ShortcutsFolder.waitFinished");
@@ -127,20 +133,19 @@ public class ShortcutsFolderTest extends NbTestCase {
         err.log("children are here");
         
         assertEquals ("One element is there", 1, arr.length);
-        org.openide.loaders.DataObject obj = org.openide.loaders.DataObject.find (arr[0]);
+        DataObject obj = DataObject.find (arr[0]);
         err.log("Object is here" + obj);
         
-        assertEquals ("It is DataShadow", org.openide.loaders.DataShadow.class, obj.getClass ());
+        assertEquals("It is DataShadow", DataShadow.class, obj.getClass());
 
         Object a = keymap.getAction (stroke);
         assertNotNull ("There is an action", a);
         assertEquals ("It is test action", TestAction.class, a.getClass ());
     }
-    
+
+    @RandomlyFails
     public void testShortcutsForDifferentFilesThanInstanceOrShadows () throws Exception {
-        FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-        FileObject shortcuts = fs.getRoot ().getFileObject ("Shortcuts");
-        FileObject inst = FileUtil.createData (fs.getRoot (), "/Shortcuts/C-F11.xml");
+        FileObject inst = FileUtil.createData (FileUtil.getConfigRoot (), "Shortcuts/C-F11.xml");
 
         FileLock lock = inst.lock ();
         java.io.PrintStream ps = new java.io.PrintStream (inst.getOutputStream (lock));
@@ -154,7 +159,7 @@ public class ShortcutsFolderTest extends NbTestCase {
         lock.releaseLock ();
         
         DataObject obj = DataObject.find (inst);
-        assertEquals ("XML Data object", org.openide.loaders.XMLDataObject.class, obj.getClass());
+        assertEquals ("XML Data object", XMLDataObject.class, obj.getClass());
         InstanceCookie ic = obj.getCookie(InstanceCookie.class);
         assertNotNull ("Has cookie", ic);
 
@@ -177,14 +182,14 @@ public class ShortcutsFolderTest extends NbTestCase {
         public void actionPerformed (ActionEvent ae) {}
     }
     
-    public static class ENV extends Object implements org.openide.loaders.Environment.Provider {
+    public static class ENV extends Object implements Environment.Provider {
         public Lookup getEnvironment(DataObject obj) {
-            if (obj instanceof org.openide.loaders.XMLDataObject) {
+            if (obj instanceof XMLDataObject) {
                 try {
-                    org.w3c.dom.Document doc = ((org.openide.loaders.XMLDataObject)obj).getDocument();
+                    Document doc = ((XMLDataObject) obj).getDocument();
                     if (doc.getDocumentElement().getNodeName().equals ("project")) {
-                        return org.openide.util.lookup.Lookups.singleton (
-                            new org.openide.loaders.InstanceSupport.Instance (
+                        return Lookups.singleton(
+                            new InstanceSupport.Instance(
                                 new TestAction ()
                             )
                         );
@@ -194,7 +199,7 @@ public class ShortcutsFolderTest extends NbTestCase {
                     fail ("No exception: " + ex.getMessage());
                 }
             }
-            return org.openide.util.Lookup.EMPTY;
+            return Lookup.EMPTY;
         }
     }
     

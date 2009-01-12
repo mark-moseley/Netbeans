@@ -44,7 +44,7 @@ package org.netbeans.modules.compapp.projects.jbi.api;
 import java.util.ArrayList;
 
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileStateInvalidException;
 
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
@@ -55,7 +55,13 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
+import java.util.MissingResourceException;
+import java.util.ResourceBundle;
+import java.util.logging.Level;
 import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
+import org.openide.util.NbBundle;
 
 
 /**
@@ -88,6 +94,11 @@ public class JbiInstalledExtensionInfo {
     /**
      * DOCUMENT ME!
      */
+    public static final String EXT_PROVIDER = "extensionClassProvider"; // NOI18N
+
+    /**
+     * DOCUMENT ME!
+     */
     public static final String EXT_NAMESPACE = "namespace"; // NOI18N
     /**
      * DOCUMENT ME!
@@ -100,6 +111,10 @@ public class JbiInstalledExtensionInfo {
     /**
      * DOCUMENT ME!
      */
+    public static final String ITEM_CODEGEN = "codegen"; // NOI18N
+    /**
+     * DOCUMENT ME!
+     */
     public static final String ITEM_DESC = "description"; // NOI18N
 
     /**
@@ -108,6 +123,7 @@ public class JbiInstalledExtensionInfo {
     public static final String JBI_EXTENSIONS = "JbiExtensions"; // NOI18N
     
     private static final String CHOICE = "choice";
+    private static final String DEFAULT_CHOICE = "default-choice";
     
     private static JbiInstalledExtensionInfo singleton = null;
 
@@ -127,7 +143,12 @@ public class JbiInstalledExtensionInfo {
      */
     public static JbiInstalledExtensionInfo getInstalledExtensionInfo() {
         if (singleton == null) {
-            FileSystem fileSystem = Repository.getDefault().getDefaultFileSystem();
+            FileSystem fileSystem = null;
+            try {
+                fileSystem = FileUtil.getConfigRoot().getFileSystem();
+            } catch (FileStateInvalidException ex) {
+                Exceptions.printStackTrace(ex);
+            }
             return getInstalledExtensionInfo(fileSystem);
         }
 
@@ -158,11 +179,13 @@ public class JbiInstalledExtensionInfo {
             for (DataObject extsDO : df.getChildren()) {
                 if (extsDO instanceof DataFolder) {
                     String name = extsDO.getName();
+                    String displayName = extsDO.getNodeDelegate().getDisplayName();
+                    String desc = getLocalizedFileObjectAttribute(extsDO.getPrimaryFile(), ITEM_DESC);
                     String file = ""; // NOI18N
                     String type = ""; // NOI18N
                     String target = ""; // NOI18N
                     String ns = ""; // NOI18N
-                    String desc = ""; // NOI18N
+                    String provider = ""; // NOI18N
                     URL icon = null;
 
                     FileObject compFO = extsDO.getPrimaryFile();
@@ -180,14 +203,16 @@ public class JbiInstalledExtensionInfo {
                             ns = (String) attrObj;
                         } else if (attrName.equals(EXT_ICON)) {
                             icon = (URL) attrObj;
+                        } else if (attrName.equals(EXT_PROVIDER)) {
+                            provider = (String) attrObj;
                         }
                     }
                    
                     List[] children = processElement((DataFolder)extsDO);
 
                     @SuppressWarnings("unchecked")
-                    JbiExtensionInfo extInfo = new JbiExtensionInfo(name, type, 
-                            target, file, ns, desc, icon, children[0]);
+                    JbiExtensionInfo extInfo = new JbiExtensionInfo(name, displayName, type, 
+                            target, file, ns, desc, icon, provider, children[0]);
                     singleton.extensionList.add(extInfo);
                     singleton.extensionMap.put(name, extInfo);
                 }
@@ -207,6 +232,8 @@ public class JbiInstalledExtensionInfo {
         for (DataObject child : ext.getChildren()) {
             FileObject childFO = child.getPrimaryFile();
             String childName = child.getName();
+            String childDisplayName = child.getNodeDelegate().getDisplayName();
+            String childDescription = getLocalizedFileObjectAttribute(childFO, ITEM_DESC); 
             if (childFO.isFolder()) {
                 JbiExtensionElement element;
                 String choice = (String) childFO.getAttribute(CHOICE); 
@@ -214,18 +241,26 @@ public class JbiInstalledExtensionInfo {
                 List<JbiExtensionElement> subElements = grandChildren[0];
                 List<JbiExtensionAttribute> attributes = grandChildren[1];
                 if (choice != null && choice.equalsIgnoreCase("true")) { // NOI18N
+                    String defaultChoice = (String) childFO.getAttribute(DEFAULT_CHOICE); 
                     element = new JbiChoiceExtensionElement(
-                            childName, subElements, attributes);
+                            childName, childDisplayName,
+                            subElements, attributes, childDescription, 
+                            defaultChoice);
                 } else {
                     element = new JbiExtensionElement(
-                            childName, subElements, attributes);
+                            childName, childDisplayName,
+                            subElements, attributes, childDescription);
                 }
                 elements.add(element);                
             } else {
-                String extType = (String) childFO.getAttribute(ITEM_TYPE);
-                String extDesc = (String) childFO.getAttribute(ITEM_DESC);
+                String childType = (String) childFO.getAttribute(ITEM_TYPE);
+                String codeGen = (String) childFO.getAttribute(ITEM_CODEGEN);
                 JbiExtensionAttribute attr = new JbiExtensionAttribute(
-                        childName, extType, extDesc);
+                        childName, 
+                        childDisplayName,
+                        childType, 
+                        childDescription,
+                        !("false".equalsIgnoreCase(codeGen))); // NOI18N
                 attrs.add(attr);
             }
         }
@@ -235,7 +270,7 @@ public class JbiInstalledExtensionInfo {
         
         return ret;
     }
-
+    
     /**
      * Getter for the installed extension info list
      *
@@ -253,5 +288,52 @@ public class JbiInstalledExtensionInfo {
      */
     public JbiExtensionInfo getExtensionInfo(String id) {
         return extensionMap.get(id);
+    }
+        
+
+    /** name of file attribute with localizing bundle */
+    private static final String ATTR_BUNDLE = "SystemFileSystem.localizingBundle"; // NOI18N
+    
+    /** 
+     * Gets the localized value of a file object attribute. 
+     * 
+     * The key for the file object attribute in the localized bundle is in
+     * the format of ${fileOjectPath}@${attrName}. For example, 
+     * JbiExtensions/RedeliveryExtension/redelivery/maxAttempts@description
+     * 
+     * @param fo    a file object
+     * @param attrName  attribute name
+     * @return the localized value of the file object attribute, or the 
+     *          non-localized value if the localization doesn't exist.
+     */
+    private static String getLocalizedFileObjectAttribute(FileObject fo, 
+            String attrName) {
+        
+        String ret = null;
+                
+        String bundleName = (String)fo.getAttribute(ATTR_BUNDLE); 
+        
+        // try the resource bundle first
+        if (bundleName != null) {
+            bundleName = org.openide.util.Utilities.translate(bundleName);
+            ResourceBundle bundle = NbBundle.getBundle(bundleName);
+            String key = fo.getPath() + "@" + attrName; // NOI18N
+            try {
+                ret = bundle.getString(key);
+            } catch (MissingResourceException ex) {
+                System.err.println("WARNING: Missing resource for " + key); // NOI18N
+            }
+        }      
+        
+        // fall back on the non-localized value
+        if (ret == null) {
+            ret = (String) fo.getAttribute(attrName);
+            
+            if (ret == null) {
+                ret = ""; // NOI18N
+            }
+        }        
+        
+        return ret;
     }
 }

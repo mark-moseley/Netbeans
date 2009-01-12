@@ -90,10 +90,10 @@ import javax.xml.parsers.ParserConfigurationException;
 import org.openide.ErrorManager;
 import org.openide.awt.Mnemonics;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
 import org.openide.util.WeakListeners;
+import org.openide.windows.WindowManager;
 import org.openide.xml.XMLUtil;
 import org.w3c.dom.Node;
 import org.xml.sax.Attributes;
@@ -103,7 +103,7 @@ import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 
-public class RSSFeed extends JPanel implements Constants, PropertyChangeListener {
+public class RSSFeed extends BackgroundPanel implements Constants, PropertyChangeListener {
     
     private String url;
     
@@ -134,7 +134,7 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
         if (userDir != null) {
             cacheStore = new File(new File(new File (userDir, "var"), "cache"), "welcome"); // NOI18N
         } else {
-            File cachedir = FileUtil.toFile(Repository.getDefault().getDefaultFileSystem().getRoot());
+            File cachedir = FileUtil.toFile(FileUtil.getConfigRoot());
             cacheStore = new File(cachedir, "welcome"); // NOI18N
         }
         cacheStore = new File(cacheStore, path);
@@ -148,7 +148,6 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
         this.url = url;
         this.showProxyButton = showProxyButton;
         setBorder(null);
-        setOpaque(false);
 
         add( buildContentLoadingLabel(), BorderLayout.CENTER );
         
@@ -195,7 +194,7 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
     }
 
 
-    private String url2path( URL u ) {
+    protected final String url2path( URL u ) {
         StringBuilder pathSB = new StringBuilder(u.getHost());
         if (u.getPort() != -1) {
             pathSB.append(u.getPort());
@@ -208,6 +207,7 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
      */
     protected InputSource findInputSource( URL u ) throws IOException {
         HttpURLConnection httpCon = (HttpURLConnection) u.openConnection();
+        httpCon.setUseCaches( true );
         httpCon.setRequestProperty( "Accept-Encoding", "gzip, deflate" );     // NOI18N
 
         Preferences prefs = NbPreferences.forModule( RSSFeed.class );
@@ -342,13 +342,10 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
                 });
             } catch( Exception e ) {
                 if( isContentCached()) {
-                    try {
-                        NbPreferences.forModule( RSSFeed.class ).remove( url2path( new URL(url))) ;
-                        run();
-                        return;
-                    } catch( MalformedURLException mE ) {
-                        //ignore
-                    }
+                    isCached = false;
+                    clearCache();
+                    reload();
+                    return;
                 }
                 SwingUtilities.invokeLater( new Runnable() {
                     public void run() {
@@ -357,6 +354,14 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
                 });
                 ErrorManager.getDefault().notify( ErrorManager.INFORMATIONAL, e );
             }
+        }
+    }
+
+    protected void clearCache() {
+        try {
+            NbPreferences.forModule( RSSFeed.class ).remove( url2path( new URL(url))) ;
+        } catch( MalformedURLException mE ) {
+            //ignore
         }
     }
     
@@ -373,7 +378,7 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
                     new Insets(0,TEXT_INSETS_LEFT+5,2,TEXT_INSETS_RIGHT),0,0 ) );
         }
 
-        WebLink linkButton = new WebLink( item.title, item.link, true );
+        WebLink linkButton = new WebLink( stripHtml(item.title), item.link, true );
         linkButton.getAccessibleContext().setAccessibleName( 
                 BundleSupport.getAccessibilityName( "WebLink", item.title ) ); //NOI18N
         linkButton.getAccessibleContext().setAccessibleDescription( 
@@ -434,7 +439,11 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
     public void addNotify() {
         super.addNotify();
         getMaxDecsriptionLength();
-        startReloading();
+        WindowManager.getDefault().invokeWhenUIReady( new Runnable() {
+            public void run() {
+                startReloading();
+            }
+        });
     }
 
     private boolean firstReload = true;
@@ -458,14 +467,18 @@ public class RSSFeed extends JPanel implements Constants, PropertyChangeListener
     }
     
     private String trimHtml( String htmlSnippet ) {
-        String res = htmlSnippet.replaceAll( "<[^>]*>", "" ); // NOI18N // NOI18N
-        res = res.replaceAll( "&nbsp;", " " ); // NOI18N // NOI18N
-        res = res.trim();
+        String res = stripHtml(htmlSnippet);
         int maxLen = getMaxDecsriptionLength();
         if( maxLen > 0 && res.length() > maxLen ) {
             res = res.substring( 0, maxLen ) + "..."; // NOI18N
         }
         return res;
+    }
+    
+    private String stripHtml( String htmlSnippet ) {
+        String res = htmlSnippet.replaceAll( "<[^>]*>", "" ); // NOI18N // NOI18N
+        res = res.replaceAll( "&nbsp;", " " ); // NOI18N // NOI18N
+        return res.trim();
     }
     
     protected int getMaxDecsriptionLength() {

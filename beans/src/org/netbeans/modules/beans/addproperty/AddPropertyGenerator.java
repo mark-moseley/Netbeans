@@ -48,7 +48,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 
 /**
@@ -88,6 +88,7 @@ public class AddPropertyGenerator {
                 scriptContext.setAttribute(ScriptEngine.FILENAME, template.getNameExt(), ScriptContext.ENGINE_SCOPE);
                 scriptContext.setAttribute("access", access, ScriptContext.ENGINE_SCOPE); // NOI18N
                 scriptContext.setAttribute("type", type, ScriptContext.ENGINE_SCOPE); // NOI18N
+                scriptContext.setAttribute("className", addPropertyConfig.getClassName(), ScriptContext.ENGINE_SCOPE); // NOI18N
                 scriptContext.setAttribute("name", name, ScriptContext.ENGINE_SCOPE); // NOI18N
                 scriptContext.setAttribute("initializer", initializer, ScriptContext.ENGINE_SCOPE); // NOI18N
                 scriptContext.setAttribute("capitalizedName", capitalize(name), ScriptContext.ENGINE_SCOPE); // NOI18N
@@ -143,7 +144,7 @@ public class AddPropertyGenerator {
     }
     
     private static FileObject getTemplateFileObject(String templatePath) {        
-        return Repository.getDefault().getDefaultFileSystem().getRoot().getFileObject(templatePath);
+        return FileUtil.getConfigFile(templatePath);
     }
 
     private static ScriptEngine getScriptEngine() {

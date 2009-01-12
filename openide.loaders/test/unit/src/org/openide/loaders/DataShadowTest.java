@@ -47,8 +47,8 @@ import java.net.URI;
 import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import junit.framework.AssertionFailedError;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
@@ -87,7 +87,7 @@ implements java.net.URLStreamHandlerFactory {
     
     protected void setUp() throws Exception {
         
-        lfs = Repository.getDefault ().getDefaultFileSystem ();
+        lfs = FileUtil.getConfigRoot().getFileSystem();
         
         FileObject[] delete = lfs.getRoot().getChildren();
         for (int i = 0; i < delete.length; i++) {
@@ -155,7 +155,7 @@ implements java.net.URLStreamHandlerFactory {
         
         DataFolder what  = DataFolder.findFolder(lfs.getRoot());
         assertNotNull(what);
-        FileObject whereFo = Repository.getDefault().getDefaultFileSystem().getRoot();
+        FileObject whereFo = FileUtil.getConfigRoot();
         assertNotNull(whereFo);
         
         DataFolder where = DataFolder.findFolder(whereFo);
@@ -171,8 +171,7 @@ implements java.net.URLStreamHandlerFactory {
     }
     
     public void testBrokenShadow55115 () throws Exception {
-        FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
-        FileObject brokenShadow = FileUtil.createData(sfs.getRoot(),"brokenshadows/brokon.shadow");
+        FileObject brokenShadow = FileUtil.createData(FileUtil.getConfigRoot(),"brokenshadows/brokon.shadow");
         assertNotNull (brokenShadow);
         // intentionally not set attribute "originalFile" to let that shadow be broken 
         //brokenShadow.setAttribute("originalFile", null);
@@ -204,7 +203,8 @@ implements java.net.URLStreamHandlerFactory {
         URL u = DataShadow.readURL(shade.getPrimaryFile());
         assertEquals("DataShadow's URL must point to the Original", original.getPrimaryFile().getURL(), u);
     }
-    
+
+    @RandomlyFails // NB-Core-Build #1428
     public void testDeleteInvalidatesCreateCreates () throws Exception {
         doDeleteInvalidatesCreateCreates (true);
     }
@@ -213,6 +213,7 @@ implements java.net.URLStreamHandlerFactory {
      * and there is a link to a file in its layer - this link could possibly
      * not be updated (until creation of another data object)
      */
+    @RandomlyFails // NB-Core-Build #1441
     public void testDeleteInvalidatesCreateCreatesJustOnFileSystemLevel () throws Exception {
         doDeleteInvalidatesCreateCreates (false);
     }

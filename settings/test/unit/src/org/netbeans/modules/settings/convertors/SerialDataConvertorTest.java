@@ -41,20 +41,17 @@
 
 package org.netbeans.modules.settings.convertors;
 
-import org.netbeans.core.startup.layers.SystemFileSystem;
 import org.openide.filesystems.*;
 import org.openide.filesystems.FileSystem; // override java.io.FileSystem
 import org.openide.loaders.*;
 import org.openide.cookies.*;
+import java.util.logging.Level;
 import org.openide.modules.ModuleInfo;
 import org.openide.util.*;
 import java.io.*;
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
 import java.util.*;
 
 import org.netbeans.junit.*;
-import org.openide.nodes.Node;
 
 /**
  * @author Jan Pokorsky
@@ -63,21 +60,25 @@ public class SerialDataConvertorTest extends NbTestCase {
     /** folder to create instances in */
     private DataFolder folder;
     /** filesystem containing created instances */
-    private FileSystem lfs;
+    //private FileSystem lfs;
     
     /** Creates new DataFolderTest */
     public SerialDataConvertorTest(String name) {
         super (name);
+    }
+
+    @Override
+    protected Level logLevel() {
+        return Level.FINE;
     }
     
     /** Setups variables.
      */
     protected void setUp () throws Exception {
         Lookup.getDefault().lookup(ModuleInfo.class);
-        lfs = Repository.getDefault().getDefaultFileSystem();
-        org.openide.filesystems.FileUtil.createFolder(lfs.getRoot(), "BB/AAA");
-        org.openide.filesystems.FileUtil.createFolder(lfs.getRoot(), "system/Services/lookupTest");
-        org.openide.filesystems.FileUtil.createFolder(lfs.getRoot(), "testCreateInstance");
+        org.openide.filesystems.FileUtil.createFolder(FileUtil.getConfigRoot(), "BB/AAA");
+        org.openide.filesystems.FileUtil.createFolder(FileUtil.getConfigRoot(), "system/Services/lookupTest");
+        org.openide.filesystems.FileUtil.createFolder(FileUtil.getConfigRoot(), "testCreateInstance");
         
         
         String fsstruct [] = new String [] {
@@ -86,8 +87,8 @@ public class SerialDataConvertorTest extends NbTestCase {
             "testCreateInstance/",
         };
         
-        FileObject bb = lfs.findResource("/BB");
-        FileObject bb_aaa = lfs.findResource("/BB/AAA");
+        FileObject bb = FileUtil.getConfigFile("/BB");
+        FileObject bb_aaa = FileUtil.getConfigFile("/BB/AAA");
         
         DataObject dest = DataObject.find(bb_aaa);
         
@@ -128,7 +129,7 @@ public class SerialDataConvertorTest extends NbTestCase {
      }
     
     public void test50177ProblemSimulation () throws Exception {
-        FileObject testFolder = FileUtil.createFolder(Repository.getDefault().getDefaultFileSystem().getRoot (), "Services");
+        FileObject testFolder = FileUtil.createFolder(FileUtil.getConfigRoot (), "Services");
         assertNotNull(testFolder);
         
         InstanceDataObject ido = InstanceDataObject.create(DataFolder.findFolder(testFolder), "test50177ProblemSimulation", new Ex50177(),null);
@@ -148,7 +149,7 @@ public class SerialDataConvertorTest extends NbTestCase {
     }
 
     public void test50177Cause () throws Exception {
-        FileObject testFolder = FileUtil.createFolder(Repository.getDefault().getDefaultFileSystem().getRoot (), "Services");
+        FileObject testFolder = FileUtil.createFolder(FileUtil.getConfigRoot (), "Services");
         assertNotNull(testFolder);
         
         InstanceDataObject ido = InstanceDataObject.create(DataFolder.findFolder(testFolder), "test50177Cause", new Ex50177(),null);
@@ -174,7 +175,7 @@ public class SerialDataConvertorTest extends NbTestCase {
     }
     
     public void test50177SideEffectsAfterRename () throws Exception {
-        FileObject testFolder = FileUtil.createFolder(Repository.getDefault().getDefaultFileSystem().getRoot (), "Services");
+        FileObject testFolder = FileUtil.createFolder(FileUtil.getConfigRoot (), "Services");
         assertNotNull(testFolder);
         
         InstanceDataObject ido = InstanceDataObject.create(DataFolder.findFolder(testFolder), "test50177SideEffectsAfterRename", new Ex50177(),null);
@@ -359,8 +360,8 @@ public class SerialDataConvertorTest extends NbTestCase {
 //        Object ser = new java.awt.Button ();
         Object ser = new java.beans.beancontext.BeanContextChildSupport();
 
-        FileObject lookupFO = lfs.findResource("/system/Services/lookupTest");
-        FileObject systemFO = lfs.findResource("/system");
+        FileObject lookupFO = FileUtil.getConfigFile("/system/Services/lookupTest");
+        FileObject systemFO = FileUtil.getConfigFile("/system");
         
         FolderLookup lookup = new FolderLookup(DataFolder.findFolder(systemFO));
         Lookup l = lookup.getLookup();
@@ -385,7 +386,7 @@ public class SerialDataConvertorTest extends NbTestCase {
         
         // external file change forcing IDO to create new InstanceCookie
         final FileObject fo = ido.getPrimaryFile();
-        lfs.runAtomicAction(new FileSystem.AtomicAction() {
+        FileUtil.runAtomicAction(new FileSystem.AtomicAction() {
             public void run() throws IOException {
                 FileLock lock = null;
                 try {
@@ -495,7 +496,7 @@ public class SerialDataConvertorTest extends NbTestCase {
      * <code>create</code>
      */
     public void testCreateSettings() throws Exception {
-        FileObject fo = lfs.findResource("/testCreateInstance");
+        FileObject fo = FileUtil.getConfigFile("/testCreateInstance");
         assertNotNull("missing folder /testCreateInstance", fo);
         DataFolder folder = DataFolder.findFolder(fo);
         assertNotNull("cannot find DataFolder /testCreateInstance", folder);
@@ -538,7 +539,7 @@ public class SerialDataConvertorTest extends NbTestCase {
     }
     
     public void testDeleteSettings() throws Exception {
-        FileObject root = lfs.getRoot();
+        FileObject root = FileUtil.getConfigRoot();
         DataFolder folder = DataFolder.findFolder(root);
         
         String filename = "testDeleteSettings";
@@ -568,26 +569,46 @@ public class SerialDataConvertorTest extends NbTestCase {
     }
 
     public void testDisabledOrUnknownModule() throws Exception {    
-        final FileObject valid = lfs.findResource("/Settings/org-netbeans-modules-settings-convertors-FooSettingDisabledOrUnknownModule.settings");
+        final FileObject valid = FileUtil.getConfigFile("/Settings/org-netbeans-modules-settings-convertors-FooSettingDisabledOrUnknownModule.settings");
         assertNotNull(valid);
         DataObject ido = DataObject.find(valid);
         InstanceCookie ic = (InstanceCookie) ido.getCookie(InstanceCookie.class);
         assertNull("There shouldn't be provided InstanceCookie for disabled module", ic);        
     }
 
+    /** If class name is mapped to an empty string in META-INF.netbeans/translate.names,
+     * InstanceCookie should not be created and instanceOf should return false. */
+    public void testRemovedClass137240() throws DataObjectNotFoundException {
+        FileObject RemovedClassFO = FileUtil.getConfigFile("/Settings/org-netbeans-modules-settings-convertors-FooSettingRemovedClass.settings");
+        assertNotNull(RemovedClassFO);
+        DataObject ido = DataObject.find(RemovedClassFO);
+        InstanceCookie ic = ido.getCookie(InstanceCookie.class);
+        assertNull("InstanceCookie issued for removed class.", ic);
+        FileObject unknownSerialFO = FileUtil.getConfigFile("/Settings/org-netbeans-modules-settings-convertors-FooSettingRemovedClassSerial.settings");
+        assertNotNull(unknownSerialFO);
+        ido = DataObject.find(unknownSerialFO);
+        InstanceCookie icSerial = ido.getCookie(InstanceCookie.class);
+        assertNull("InstanceCookie issued for removed class.", icSerial);
+        FileObject unknownInstanceOfFO = FileUtil.getConfigFile("/Settings/org-netbeans-modules-settings-convertors-FooSettingRemovedClassInstanceOf.settings");
+        assertNotNull(unknownInstanceOfFO);
+        ido = DataObject.find(unknownInstanceOfFO);
+        InstanceCookie.Of icOf = ido.getCookie(InstanceCookie.Of.class);
+        assertFalse("instanceOf should not return true for removed class.", icOf.instanceOf(RemovedClass.class));
+    }
+
     public void testDeleteOfUnrecognizedSettingsFile () throws Exception {
-        final FileObject corrupted = lfs.findResource("/Settings/org-netbeans-modules-settings-convertors-FooSettingUnrecognizedSettingsFile.settings");
+        final FileObject corrupted = FileUtil.getConfigFile("/Settings/org-netbeans-modules-settings-convertors-FooSettingUnrecognizedSettingsFile.settings");
         assertNotNull(corrupted);
         
         DataObject ido = DataObject.find(corrupted);
         org.openide.nodes.Node node = ido.getNodeDelegate();
         node.destroy();        
-        FileObject corrupted2 = lfs.findResource("/Settings/org-netbeans-modules-settings-convertors-FooSettingUnrecognizedSettingsFile.settings");        
+        FileObject corrupted2 = FileUtil.getConfigFile("/Settings/org-netbeans-modules-settings-convertors-FooSettingUnrecognizedSettingsFile.settings");
         assertNull(corrupted2);
     }
     
     public void testCorruptedSettingsFile() throws Exception {
-        final FileObject corrupted = lfs.findResource("/Settings/org-netbeans-modules-settings-convertors-FooSettingSerialDataCorruptedTest.settings");
+        final FileObject corrupted = FileUtil.getConfigFile("/Settings/org-netbeans-modules-settings-convertors-FooSettingSerialDataCorruptedTest.settings");
         assertNotNull(corrupted);
         
         DataObject ido = DataObject.find(corrupted);
@@ -601,7 +622,7 @@ public class SerialDataConvertorTest extends NbTestCase {
         }
         assertNull("corrupted .settings file cannot provide an object", obj);
         
-        final FileObject valid = lfs.findResource("/Settings/org-netbeans-modules-settings-convertors-FooSettingSerialDataCorruptedTest2.settings");
+        final FileObject valid = FileUtil.getConfigFile("/Settings/org-netbeans-modules-settings-convertors-FooSettingSerialDataCorruptedTest2.settings");
         assertNotNull(valid);
         
         // simulate revert to default of a corrupted setting object

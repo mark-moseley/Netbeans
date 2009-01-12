@@ -52,6 +52,7 @@ import javax.swing.border.EtchedBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.TreeSelectionModel;
+import org.openide.WizardDescriptor;
 import org.openide.awt.HtmlBrowser;
 import org.openide.awt.Mnemonics;
 import org.openide.explorer.ExplorerManager;
@@ -59,7 +60,7 @@ import org.openide.explorer.view.BeanTreeView;
 import org.openide.explorer.view.NodeTreeModel;
 import org.openide.explorer.view.Visualizer;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.nodes.Children;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
@@ -76,10 +77,10 @@ final class TemplateWizard1 extends javax.swing.JPanel implements DataFilter,
     ExplorerManager.Provider, java.beans.PropertyChangeListener, AsyncGUIJob {
     /** See org.openide.WizardDescriptor.PROP_CONTENT_SELECTED_INDEX
      */
-    private static final String PROP_CONTENT_SELECTED_INDEX = "WizardPanel_contentSelectedIndex"; // NOI18N
+    private static final String PROP_CONTENT_SELECTED_INDEX = WizardDescriptor.PROP_CONTENT_SELECTED_INDEX; // NOI18N
     /** See org.openide.WizardDescriptor.PROP_CONTENT_DATA
      */
-    private static final String PROP_CONTENT_DATA = "WizardPanel_contentData"; // NOI18N
+    private static final String PROP_CONTENT_DATA = WizardDescriptor.PROP_CONTENT_DATA; // NOI18N
     /** listener to changes in the wizard */
     private ChangeListener listener;
     /** selected template */
@@ -191,7 +192,7 @@ final class TemplateWizard1 extends javax.swing.JPanel implements DataFilter,
      */
     private void updateRootNode (DataFolder root) {
         if (root == null) {
-            FileObject fo = Repository.getDefault ().getDefaultFileSystem ().findResource ("/Templates"); // NOI18N
+            FileObject fo = FileUtil.getConfigFile("Templates"); // NOI18N
             if (fo != null && fo.isFolder ())
                 root = DataFolder.findFolder (fo);
         }

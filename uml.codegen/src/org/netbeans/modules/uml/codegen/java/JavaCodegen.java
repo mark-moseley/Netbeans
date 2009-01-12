@@ -42,7 +42,6 @@
 package org.netbeans.modules.uml.codegen.java;
 
 
-import java.awt.event.*;
 import java.io.*;
 import java.util.*;
 
@@ -51,9 +50,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.NbBundle;
 
 import org.netbeans.modules.uml.core.coreapplication.ICodeGenerator;
@@ -71,6 +68,7 @@ import org.netbeans.modules.uml.codegen.java.merging.Merger;
 import org.netbeans.modules.uml.codegen.java.merging.Merger.ParsedInfo;
 import org.netbeans.modules.uml.core.metamodel.core.foundation.INamedElement;
 import org.netbeans.modules.uml.util.StringTokenizer2;
+import org.openide.util.Exceptions;
 
 public class JavaCodegen implements ICodeGenerator 
 {
@@ -213,9 +211,7 @@ public class JavaCodegen implements ICodeGenerator
 
                 // 2 possible places to get templates from - 
                 // registry and teplates subdir of the project 
-                FileSystem fs = Repository.getDefault().getDefaultFileSystem();
-
-                FileObject root = fs.getRoot().getFileObject(
+                FileObject root = FileUtil.getConfigFile(
                     DomainTemplatesRetriever.TEMPLATES_BASE_FOLDER); // NOI18N
 
                 String projTemplPath = clinfo.getOwningProject().getBaseDirectory() 
@@ -257,9 +253,6 @@ public class JavaCodegen implements ICodeGenerator
                                     domainTemplate.getTemplateFilename());
                         }
                         
-                        templteFileObject.setAttribute(
-                            "javax.script.ScriptEngine", "freemarker"); // NOI18N
-
                         FileMapping fmap = new FileMapping();
                         fmap.templateFileObject = templteFileObject;
                         fmap.domainTemplate = domainTemplate;
@@ -381,18 +374,27 @@ public class JavaCodegen implements ICodeGenerator
                             if (!(src instanceof ISourceFileArtifact))
                                 continue;
                             
-                            File ascFile = new File(((ISourceFileArtifact)src)
-                                .getSourceFile());
+                            ParsedInfo ascInfo = null;
+                            
+                            String fileName = ((ISourceFileArtifact)src).getSourceFile();
+                            File ascFile = new File(fileName);
                             
                             if (targetFiles.contains(ascFile))
                                 continue;
                             
-                            if (!inSubdir(new File(targetFolderName), ascFile))
-                                continue;
+                            try {
+                                if (!inSubdir(new File(targetFolderName), ascFile))
+                                    continue;
 
-                            ParsedInfo ascInfo = 
-                                merger.parse(ascFile.getCanonicalPath(),
-                                             REIntegrationUtil.getEncoding(ascFile.getCanonicalPath()));
+                                ascInfo = merger.parse(ascFile.getCanonicalPath(),
+                                                       REIntegrationUtil.getEncoding(ascFile.getCanonicalPath()));
+                            } 
+                            catch (IOException iox)   
+                            {          
+                                task.log(task.SUMMARY, LOG_INDENT 
+                                         + getBundleMessage("MSG_ErrorAccessingExistingSource", 
+                                                            fileName)); // NOI18N
+                            }
 
                             if (ascInfo == null)
                                 continue;
@@ -464,7 +466,25 @@ public class JavaCodegen implements ICodeGenerator
                             ScriptEngine engine = engines.get(templFO);
                             if (engine == null) 
                             {
-                                engine = mgr.getEngineByName("freemarker");
+                                String engineID = null;
+                                Object value = templFO.getAttribute("javax.script.ScriptEngine");
+                        
+                                if (value instanceof String) 
+                                {
+                                    engineID = (String) value;
+                                }
+                                if (engineID == null || engineID.length() == 0) 
+                                {
+                                    engineID = "freemarker";
+                                }
+                                engine = mgr.getEngineByName(engineID);
+                                if (engine == null) 
+                                {
+                                    task.log(task.TERSE, getBundleMessage(
+                                        "MSG_ErrorNonExistingScriptingEngine", engineID)); // NOI18N
+                                    errorsCount++;
+                                    continue;
+                                }
                                 engines.put(templFO, engine);
                             }
 
@@ -541,6 +561,7 @@ public class JavaCodegen implements ICodeGenerator
                         e.printStackTrace();
                         continue;
                     }
+
 
                     try
                     {
@@ -636,22 +657,15 @@ public class JavaCodegen implements ICodeGenerator
                     }
                 }
 
+                boolean theSameSet = true;
+                int i = 0;
                 List<IElement> sourceFiles = classifier.getSourceFiles();
-                
-                if (sourceFiles != null)
+
+                if (sourceFiles == null || fmappings.size() != sourceFiles.size()) 
                 {
-                    for (IElement src : sourceFiles)
-                    {
-                        if (src instanceof ISourceFileArtifact)
-                        {
-                            classifier.removeSourceFile((
-                                (ISourceFileArtifact) src).getSourceFile());
-                        }
-                    }
+                    theSameSet = false;
                 }
-
-
-                for (FileMapping fmap : fmappings)
+                for (FileMapping fmap : fmappings)                    
                 {
                     if (genToTmp)
                     {
@@ -665,9 +679,14 @@ public class JavaCodegen implements ICodeGenerator
                     if (fmap.existingSourcePath != null)
                     {
                         File exf = new File(fmap.existingSourcePath);
+                        FileObject fo = null;
                         if (!exf.equals(new File(fmap.targetFilePath)))
                         {
-                            exf.delete();
+                            fo = FileUtil.toFileObject(exf);
+                            if (fo != null)
+                            {
+                                fo.delete();
+                            }
                         }
                         else
                         {
@@ -675,13 +694,68 @@ public class JavaCodegen implements ICodeGenerator
                             if ((!backup) && (fmap.merge) && 
                                 (fmap.existingSourceBackupPath != null))
                             {
-                                new File(fmap.existingSourceBackupPath).delete();
+                                fo = FileUtil.toFileObject(new File(fmap.existingSourceBackupPath));
+                                if (fo != null)
+                                {
+                                    fo.delete();
+                                }
                             }
                         }
                     }
-                    classifier.addSourceFileNotDuplicate(fmap.targetFilePath);
+                    
+                    if (theSameSet) 
+                    {                        
+                        IElement src = sourceFiles.get(i);
+                        if (src instanceof ISourceFileArtifact)
+                        {
+                            String srcPath = ((ISourceFileArtifact) src).getFileName();
+                            String canonicalSrcPath = null;
+                            try 
+                            {
+                                canonicalSrcPath = new File(srcPath).getCanonicalPath();
+                            }
+                            catch (IOException iox)   
+                            {                                
+                                task.log(task.SUMMARY, LOG_INDENT 
+                                         + getBundleMessage("MSG_ErrorAccessingExistingSource", 
+                                                            srcPath)); // NOI18N
+                            }                            
+                            if (! (new File(fmap.targetFilePath).getCanonicalPath()
+                                   .equals(canonicalSrcPath))) 
+                            {
+                                theSameSet = false;
+                            }
+                        }
+                        else 
+                        {
+                            theSameSet = false;
+                        }
+                    }
+                    i++;
                 }
                     
+                if (! theSameSet) 
+                {
+                    sourceFiles = classifier.getSourceFiles();
+                
+                    if (sourceFiles != null)
+                    {
+                        for (IElement src : sourceFiles)
+                        {
+                            if (src instanceof ISourceFileArtifact)
+                            {
+                                classifier.removeSourceFile((
+                                    (ISourceFileArtifact) src).getSourceFile());
+                            }
+                        }
+                    }
+
+                    for (FileMapping fmap : fmappings)
+                    {                                     
+                        classifier.addSourceFileNotDuplicate(fmap.targetFilePath);
+                    }
+                }
+
                 if (genToTmp) 
                 {
                     for (FileMapping fmap : fmappings)
@@ -782,13 +856,17 @@ public class JavaCodegen implements ICodeGenerator
 	    +((int)(Math.random() * 100000));
 	
 	File newTargetFolder = new File(trg);
-	newTargetFolder.mkdirs();
+	FileUtil.createFolder(newTargetFolder);
 	return newTargetFolder.getCanonicalPath();
     }
 
     private void deleteDirs(String topParent, String path) 
     {               
         File topDir = new File(topParent);
+        if (path == null) 
+        {
+            return;
+        }
         File cur = new File(path);
         if (! inSubdir(topDir, cur)) 
         {
@@ -800,14 +878,20 @@ public class JavaCodegen implements ICodeGenerator
             return;
         }
         boolean last = false;
+        FileObject fo = null;
         while(true) 
         {
             if (cur.exists()) 
             {
-                File[] children = cur.listFiles();
+                fo = FileUtil.toFileObject(cur);
+                FileObject[] children = fo.getChildren();
                 if (children == null || children.length == 0) 
                 {
-                    cur.delete();
+                    try {
+                        fo.delete();
+                    } catch (IOException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
                 } 
                 else 
                 {

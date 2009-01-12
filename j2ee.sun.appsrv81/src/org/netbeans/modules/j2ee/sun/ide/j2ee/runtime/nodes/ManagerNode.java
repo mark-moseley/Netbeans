@@ -52,17 +52,17 @@ import org.netbeans.modules.j2ee.sun.api.ServerLocationManager;
 import org.netbeans.modules.j2ee.sun.api.SunDeploymentManagerInterface;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.DeploymentManagerProperties;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.runtime.actions.ShowAdminToolAction;
+import org.netbeans.modules.j2ee.sun.ide.j2ee.runtime.actions.ShowUpdateCenterAction;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.runtime.actions.ViewLogAction;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.ui.Customizer;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
-import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.SystemAction;
 
@@ -109,19 +109,21 @@ public class ManagerNode extends AbstractNode implements Node.Cookie{
     }
     
     public javax.swing.Action[] getActions(boolean context) {
-        Repository rep = (Repository) Lookup.getDefault().lookup(Repository.class);
-        FileObject dir = rep.getDefaultFileSystem().findResource(DIR_ACTION_EXTENSION);
+        FileObject dir = FileUtil.getConfigFile(DIR_ACTION_EXTENSION);
         int nbextraoptions=0;
         FileObject[] ch =null;
         if(dir!=null){
             ch = dir.getChildren();
             nbextraoptions = ch.length; 
         }
-        javax.swing.Action[]  newActions = new javax.swing.Action[4 + nbextraoptions] ;// 5 hardcoded number of actionns!!
+        javax.swing.Action[]  newActions = new javax.swing.Action[5 + nbextraoptions] ;// 5 hardcoded number of actionns!!
         int a=0;
         newActions[a++]=(null);        
         newActions[a++]= (SystemAction.get(ShowAdminToolAction.class));
         newActions[a++]=(SystemAction.get(ViewLogAction.class));
+        if(ServerLocationManager.hasUpdateCenter(sdm.getPlatformRoot())) {
+            newActions[a++]=(SystemAction.get(ShowUpdateCenterAction.class));
+        }
         boolean isGlassFish = ServerLocationManager.isGlassFish(sdm.getPlatformRoot());
         for(int i = 0; i < nbextraoptions; i++) {
             try{

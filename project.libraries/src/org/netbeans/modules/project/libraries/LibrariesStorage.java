@@ -70,18 +70,24 @@ import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.NbBundle;
+import org.openide.util.Task;
+import org.openide.util.TaskListener;
 import org.openide.xml.XMLUtil;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
-public class LibrariesStorage extends FileChangeAdapter implements WritableLibraryProvider<LibraryImplementation> {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.project.libraries.LibraryProvider.class)
+public class LibrariesStorage extends FileChangeAdapter
+implements WritableLibraryProvider<LibraryImplementation>, TaskListener {
 
     private static final String NB_HOME_PROPERTY = "netbeans.home";  //NOI18N
     private static final String LIBRARIES_REPOSITORY = "org-netbeans-api-project-libraries/Libraries";  //NOI18N
     private static final String TIME_STAMPS_FILE = "libraries-timestamps.properties"; //NOI18B
     private static final String XML_EXT = "xml";    //NOI18N
+    
+    //Lock to prevent FileAlreadyLocked exception.
+    private static final Object TIMESTAMPS_LOCK = new Object ();
 
     // persistent storage, it may be null for before first library is store into storage
     private FileObject storage = null;
@@ -125,9 +131,8 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
      * @return new storage or null on I/O error.
      */
     private static final FileObject createStorage () {
-        FileSystem storageFS = Repository.getDefault().getDefaultFileSystem();        
         try {
-            return FileUtil.createFolder(storageFS.getRoot(), LIBRARIES_REPOSITORY);
+            return FileUtil.createFolder(FileUtil.getConfigRoot(), LIBRARIES_REPOSITORY);
         } catch (IOException e) {
             return null;
         }
@@ -202,6 +207,7 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
             }            
             this.loadFromStorage();            
             this.storage.addFileChangeListener (this);
+            LibraryTypeRegistry.getDefault().addTaskListener(this);
             initialized = true;
         }
     }
@@ -480,26 +486,28 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
     
     private void saveTimeStamps () throws IOException {        
         if (this.storage != null) {
-            Properties timeStamps = getTimeStamps();
-            if (timeStamps.get(NB_HOME_PROPERTY) == null) {
-                String currNbLoc = getNBRoots();
-                timeStamps.put(NB_HOME_PROPERTY,currNbLoc);
-            }
-            FileObject parent = storage.getParent();
-            FileObject timeStampFile = parent.getFileObject(TIME_STAMPS_FILE);
-            if (timeStampFile == null) {
-                timeStampFile = parent.createData(TIME_STAMPS_FILE);
-            }
-            FileLock lock = timeStampFile.lock();
-            try {
-                OutputStream out = timeStampFile.getOutputStream(lock);
-                try {
-                    timeStamps.store (out, null);    
-                } finally {
-                    out.close();
+            synchronized (TIMESTAMPS_LOCK) {
+                Properties timeStamps = getTimeStamps();
+                if (timeStamps.get(NB_HOME_PROPERTY) == null) {
+                    String currNbLoc = getNBRoots();
+                    timeStamps.put(NB_HOME_PROPERTY,currNbLoc);
                 }
-            } finally {
-                lock.releaseLock();
+                FileObject parent = storage.getParent();
+                FileObject timeStampFile = parent.getFileObject(TIME_STAMPS_FILE);
+                if (timeStampFile == null) {
+                    timeStampFile = parent.createData(TIME_STAMPS_FILE);
+                }
+                FileLock lock = timeStampFile.lock();
+                try {
+                    OutputStream out = timeStampFile.getOutputStream(lock);
+                    try {
+                        timeStamps.store (out, null);    
+                    } finally {
+                        out.close();
+                    }
+                } finally {
+                    lock.releaseLock();
+                }
             }
         }
     }        
@@ -556,6 +564,17 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
             }
         }
         return sb.toString();
+    }
+
+    public void taskFinished(Task task) {
+        if (initialized) {
+            HashMap<String, LibraryImplementation> clone;
+            clone = new HashMap<String,LibraryImplementation>(libraries);
+            loadFromStorage();
+            if (!clone.equals(libraries)) {
+                fireLibrariesChanged();
+            }
+        }
     }
 
 }

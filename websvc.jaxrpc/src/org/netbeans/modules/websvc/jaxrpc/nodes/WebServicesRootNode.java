@@ -43,14 +43,14 @@ package org.netbeans.modules.websvc.jaxrpc.nodes;
 import java.beans.BeanInfo;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
-import org.openide.filesystems.Repository;
 import org.openide.nodes.AbstractNode;
 import java.awt.Image;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import javax.swing.Action;
-import org.openide.util.Utilities;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
@@ -58,7 +58,7 @@ import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 
 public class WebServicesRootNode extends AbstractNode {
-    private static final String SERVICES_BADGE = "org/netbeans/modules/websvc/core/webservices/ui/resources/webservicegroup.png"; // NOI18N
+    private static final String SERVICES_BADGE = "org/netbeans/modules/websvc/jaxrpc/nodes/resources/webservicegroup.png"; // NOI18N
     private Image cachedServicesBadge;
     private Icon folderIconCache;
     private Icon openedFolderIconCache;
@@ -78,7 +78,7 @@ public class WebServicesRootNode extends AbstractNode {
     
     private java.awt.Image getServicesBadge() {
         if (cachedServicesBadge == null) {
-            cachedServicesBadge = Utilities.loadImage(SERVICES_BADGE);
+            cachedServicesBadge = ImageUtilities.loadImage(SERVICES_BADGE);
         }            
         return cachedServicesBadge;        
     }
@@ -90,7 +90,7 @@ public class WebServicesRootNode extends AbstractNode {
      */
     private Icon getFolderIcon(boolean opened) {
         if (openedFolderIconCache == null) {
-            Node n = DataFolder.findFolder(Repository.getDefault().getDefaultFileSystem().getRoot()).getNodeDelegate();
+            Node n = DataFolder.findFolder(FileUtil.getConfigRoot()).getNodeDelegate();
             openedFolderIconCache = new ImageIcon(n.getOpenedIcon(BeanInfo.ICON_COLOR_16x16));
             folderIconCache = new ImageIcon(n.getIcon(BeanInfo.ICON_COLOR_16x16));
         }
@@ -104,7 +104,7 @@ public class WebServicesRootNode extends AbstractNode {
     private Image computeIcon(boolean opened) {
         Icon icon = getFolderIcon(opened);
         Image image = ((ImageIcon)icon).getImage();
-        image = Utilities.mergeImages(image, getServicesBadge(), 7, 7 );
+        image = ImageUtilities.mergeImages(image, getServicesBadge(), 7, 7 );
         return image;
     }
     

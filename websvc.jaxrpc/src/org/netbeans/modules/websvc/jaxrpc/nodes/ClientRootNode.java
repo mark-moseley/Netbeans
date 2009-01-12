@@ -46,21 +46,18 @@ import java.beans.BeanInfo;
 import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
-import org.openide.filesystems.Repository;
 
-import org.openide.nodes.CookieSet;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.nodes.AbstractNode;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.util.lookup.Lookups;
-import org.openide.util.actions.SystemAction;
-import org.openide.util.actions.NodeAction;
 
 /** This is the root node for the graph of web services for which this module
  *  has been client-enabled (e.g. services this module is using.)
@@ -69,7 +66,7 @@ import org.openide.util.actions.NodeAction;
  */
 public final class ClientRootNode extends AbstractNode {
 
-    private static final Image WEB_SERVICES_BADGE = Utilities.loadImage( "org/netbeans/modules/websvc/core/client/resources/webServiceBadge.gif" ); // NOI18N
+    private static final Image WEB_SERVICES_BADGE = ImageUtilities.loadImage( "org/netbeans/modules/websvc/jaxrpc/nodes/resources/webserviceclientgroup.png" ); // NOI18N
     private static Icon folderIconCache;
     private static Icon openedFolderIconCache;	
     private FileObject wsdlFolder;
@@ -98,7 +95,6 @@ public final class ClientRootNode extends AbstractNode {
 		return new Action[] {
 			org.netbeans.spi.project.ui.support.CommonProjectActions.newFileAction(),
 			null,
-//			org.openide.util.actions.SystemAction.get( org.netbeans.modules.websvc.jaxrpc.actions.RefreshClientsAction.class ),
 			org.openide.util.actions.SystemAction.get( org.openide.actions.FindAction.class ),
 			null,
 			org.openide.util.actions.SystemAction.get( org.openide.actions.PasteAction.class ),
@@ -114,7 +110,7 @@ public final class ClientRootNode extends AbstractNode {
      */
     static synchronized Icon getFolderIcon (boolean opened) {
         if (openedFolderIconCache == null) {
-            Node n = DataFolder.findFolder(Repository.getDefault().getDefaultFileSystem().getRoot()).getNodeDelegate();
+            Node n = DataFolder.findFolder(FileUtil.getConfigRoot()).getNodeDelegate();
             openedFolderIconCache = new ImageIcon(n.getOpenedIcon(BeanInfo.ICON_COLOR_16x16));
             folderIconCache = new ImageIcon(n.getIcon(BeanInfo.ICON_COLOR_16x16));
         }
@@ -129,7 +125,7 @@ public final class ClientRootNode extends AbstractNode {
     private Image computeIcon( boolean opened, int type ) {        
         Icon icon = getFolderIcon(opened);
         Image image = ((ImageIcon)icon).getImage();
-        image = Utilities.mergeImages(image, WEB_SERVICES_BADGE, 7, 7 );
+        image = ImageUtilities.mergeImages(image, WEB_SERVICES_BADGE, 7, 7 );
         return image;        
     }
 

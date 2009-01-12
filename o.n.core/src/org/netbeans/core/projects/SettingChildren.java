@@ -49,9 +49,8 @@ import org.openide.loaders.DataShadow;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.Repository;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.netbeans.beaninfo.editors.ListImageEditor;
 import java.awt.Image;
 import java.beans.PropertyEditor;
@@ -100,7 +99,7 @@ public final class SettingChildren extends FilterNode.Children {
             }
             DataFolder folder = (DataFolder) node.getCookie (DataFolder.class);
             FileSystem fs = d == null || folder != null ? null : d.getPrimaryFile ().getFileSystem ();
-            filter = fs == null ? false : fs.equals (Repository.getDefault ().getDefaultFileSystem ());
+            filter = fs == null ? false : fs.isDefault();
         } catch (FileStateInvalidException e) {
             // ignore
         }
@@ -171,10 +170,10 @@ public final class SettingChildren extends FilterNode.Children {
             });
 
             setValue (ListImageEditor.PROP_IMAGES, new Image [] {
-                Utilities.loadImage ("org/netbeans/core/resources/setting-defined.gif"), // NOI18N
-                Utilities.loadImage ("org/netbeans/core/resources/setting-ignored.gif"), // NOI18N
-                Utilities.loadImage ("org/netbeans/core/resources/setting-inherited.gif"), // NOI18N
-                Utilities.loadImage ("org/openide/resources/actions/empty.gif") // NOI18N
+                ImageUtilities.loadImage ("org/netbeans/core/resources/setting-defined.gif"), // NOI18N
+                ImageUtilities.loadImage ("org/netbeans/core/resources/setting-ignored.gif"), // NOI18N
+                ImageUtilities.loadImage ("org/netbeans/core/resources/setting-inherited.gif"), // NOI18N
+                ImageUtilities.loadImage ("org/openide/resources/actions/empty.gif") // NOI18N
             });
         }
 

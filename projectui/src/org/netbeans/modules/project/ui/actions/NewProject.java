@@ -61,17 +61,17 @@ import org.netbeans.modules.project.ui.ProjectUtilities;
 import org.netbeans.spi.project.ui.support.CommonProjectActions;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
 
 public class NewProject extends BasicAction {
         
-    private static final Icon ICON = new ImageIcon( Utilities.loadImage( "org/netbeans/modules/project/ui/resources/newProject.png" ) ); //NOI18N    
+    private static final Icon ICON = new ImageIcon( ImageUtilities.loadImage( "org/netbeans/modules/project/ui/resources/newProject.png" ) ); //NOI18N
     private static final String NAME = NbBundle.getMessage( NewProject.class, "LBL_NewProjectAction_Name" ); // NOI18N
     private static final String _SHORT_DESCRIPTION = NbBundle.getMessage( NewProject.class, "LBL_NewProjectAction_Tooltip" ); // NOI18N
     
@@ -127,7 +127,7 @@ public class NewProject extends BasicAction {
     
     private void doPerform () {
         
-        FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource( "Templates/Project" ); //NOI18N
+        FileObject fo = FileUtil.getConfigFile( "Templates/Project" ); //NOI18N
         final NewProjectWizard wizard = prepareWizardDescriptor(fo);
         
         
@@ -206,11 +206,12 @@ public class NewProject extends BasicAction {
                         
                         Project lastProject = projectsToOpen.size() > 0 ? (Project) projectsToOpen.get(0) : null;
                         
-                        OpenProjectList.getDefault().open( projectsToOpen.toArray(new Project[0]), false, true);
-                        
+                        Project mainProject = null;
                         if (setFirstMainFinal && lastProject != null) {
-                            OpenProjectList.getDefault().setMainProject(lastProject);
+                            mainProject = lastProject;
                         }
+                        
+                        OpenProjectList.getDefault().open(projectsToOpen.toArray(new Project[0]), false, true, mainProject);
                         
                         // Show the project tab to show the user we did something
                         if (! Boolean.getBoolean("project.tab.no.selection")) { //NOI18N

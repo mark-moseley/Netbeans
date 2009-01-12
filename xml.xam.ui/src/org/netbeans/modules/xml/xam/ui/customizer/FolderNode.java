@@ -43,12 +43,13 @@ package org.netbeans.modules.xml.xam.ui.customizer;
 
 import java.awt.Image;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 
 /**
@@ -63,7 +64,7 @@ public class FolderNode extends AbstractNode {
     private static Node iconSource;
 
     static {
-        FileObject fobj = Repository.getDefault().getDefaultFileSystem().getRoot();
+        FileObject fobj = FileUtil.getConfigRoot();
         try {
             DataObject dobj = DataObject.find(fobj);
             iconSource = dobj.getNodeDelegate();
@@ -83,7 +84,7 @@ public class FolderNode extends AbstractNode {
         } else {
             String url = NbBundle.getMessage(FolderNode.class,
                     "IMG_FolderNode_Closed");
-            return org.openide.util.Utilities.loadImage(url);
+            return ImageUtilities.loadImage(url);
         }
     }
 
@@ -93,7 +94,7 @@ public class FolderNode extends AbstractNode {
         } else {
             String url = NbBundle.getMessage(FolderNode.class,
                     "IMG_FolderNode_Opened");
-            return org.openide.util.Utilities.loadImage(url);
+            return ImageUtilities.loadImage(url);
         }
     }
 }

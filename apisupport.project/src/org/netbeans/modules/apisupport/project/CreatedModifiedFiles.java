@@ -54,7 +54,8 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.apisupport.project.layers.LayerUtils;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.lookup.ServiceProvider;
 import org.openide.modules.SpecificationVersion;
 
 /**
@@ -225,7 +226,7 @@ public final class CreatedModifiedFiles {
      * @return that file from the <code>Templates/NetBeansModuleDevelopment-files</code> layer folder
      */
     public static FileObject getTemplate(String name) {
-        FileObject f = Repository.getDefault().getDefaultFileSystem().findResource("Templates/NetBeansModuleDevelopment-files/" + name);
+        FileObject f = FileUtil.getConfigFile("Templates/NetBeansModuleDevelopment-files/" + name);
         assert f != null : name;
         return f;
     }
@@ -304,6 +305,8 @@ public final class CreatedModifiedFiles {
      * exists in <em>META-INF/services</em> directory
      * <code>implClass</code> will be appended to the end of the list of
      * implementations. If it doesn't exist a new file will be created.
+     * <p><strong>Note:</strong> this style of registration should not be used
+     * for any new APIs. Use {@link ServiceProvider} instead.
      *
      * @param interfaceClass e.g. org.example.spi.somemodule.ProvideMe
      * @param implClass e.g. org.example.module1.ProvideMeImpl
@@ -406,7 +409,7 @@ public final class CreatedModifiedFiles {
      *        project's layer. It <strong>must</strong> exist.
      * @param attrName value of the name attribute of the <em>&lt;attr&gt;</em>
      *        element.
-     * @param attrValue value of the attribute (may specially be a string prefixed with "newvalue:" or "methodvalue:")
+     * @param attrValue value of the attribute (may specially be a string prefixed with "newvalue:", "bundlevalue:" or "methodvalue:")
      * @return see {@link Operation}
      */
     public CreatedModifiedFiles.Operation createLayerAttribute(final String parentPath,

@@ -48,15 +48,12 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.api.db.explorer.ConnectionManager;
-import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.api.db.explorer.DatabaseException;
 import org.netbeans.api.db.explorer.JDBCDriver;
 import org.netbeans.api.db.explorer.JDBCDriverManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.filesystems.URLMapper;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.nodes.BeanNode;
@@ -248,12 +245,6 @@ public class DerbyOptions {
     }
 
     private static void stopDerbyServer() {
-        DatabaseConnection[] dbconn = ConnectionManager.getDefault().getConnections();
-        for (int i = 0; i < dbconn.length; i++) {
-            if (RegisterDerby.getDefault().acceptsDatabaseURL(dbconn[i].getDatabaseURL())) {
-                ConnectionManager.getDefault().disconnect(dbconn[i]);
-            }
-        }
         RegisterDerby.getDefault().stop();
     }
 
@@ -261,7 +252,7 @@ public class DerbyOptions {
         try {
             // registering the drivers in an atomic action so the Drivers node
             // is refreshed only once
-            Repository.getDefault().getDefaultFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
+            FileUtil.runAtomicAction(new FileSystem.AtomicAction() {
                 public void run() {
                     registerDriver(DRIVER_NAME_NET, DRIVER_DISP_NAME_NET, DRIVER_CLASS_NET, DRIVER_PATH_NET, newLocation);
                     registerDriver(DRIVER_NAME_EMBEDDED, DRIVER_DISP_NAME_EMBEDDED, DRIVER_CLASS_EMBEDDED, DRIVER_PATH_EMBEDDED, newLocation);

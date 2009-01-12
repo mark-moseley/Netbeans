@@ -54,7 +54,6 @@ import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
 /**
  *
@@ -90,15 +89,15 @@ public final class EjbJarXmlWizardIterator implements WizardDescriptor.Instantia
                 if (component instanceof JComponent) { // assume Swing components
                     JComponent jComponent = (JComponent) component;
                     // Sets step number of a component
-                    jComponent.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i));
+                    jComponent.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i));
                     // Sets steps names for a panel
-                    jComponent.putClientProperty("WizardPanel_contentData", steps);
+                    jComponent.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);
                     // Turn on subtitle creation on each step
-                    jComponent.putClientProperty("WizardPanel_autoWizardStyle", Boolean.TRUE);
+                    jComponent.putClientProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE);
                     // Show steps on the left side with the image on the background
-                    jComponent.putClientProperty("WizardPanel_contentDisplayed", Boolean.TRUE);
+                    jComponent.putClientProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE);
                     // Turn on numbering of all steps
-                    jComponent.putClientProperty("WizardPanel_contentNumbered", Boolean.TRUE);
+                    jComponent.putClientProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE);
                 }
             }
         }
@@ -112,7 +111,7 @@ public final class EjbJarXmlWizardIterator implements WizardDescriptor.Instantia
         J2eeModule j2eeModule = j2eeModuleProvider.getJ2eeModule();
         if (confRoot != null) {
             String resource = "org-netbeans-modules-j2ee-ejbjarproject/ejb-jar-" + j2eeModule.getModuleVersion() + ".xml";
-            FileObject ddFile = FileUtil.copyFile(Repository.getDefault().getDefaultFileSystem().findResource(resource), confRoot, "ejb-jar"); //NOI18N
+            FileObject ddFile = FileUtil.copyFile(FileUtil.getConfigFile(resource), confRoot, "ejb-jar"); //NOI18N
             return Collections.singleton(ddFile);
         }
         return Collections.EMPTY_SET;
@@ -193,7 +192,7 @@ public final class EjbJarXmlWizardIterator implements WizardDescriptor.Instantia
     // client code.
     private String[] createSteps() {
         String[] beforeSteps = null;
-        Object prop = wizard.getProperty("WizardPanel_contentData");
+        Object prop = wizard.getProperty(WizardDescriptor.PROP_CONTENT_DATA);
         if (prop != null && prop instanceof String[]) {
             beforeSteps = (String[]) prop;
         }

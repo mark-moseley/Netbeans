@@ -40,22 +40,32 @@
 package org.netbeans.modules.editor.settings.storage;
 
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.modules.editor.settings.storage.spi.StorageDescription;
+import org.netbeans.modules.editor.settings.storage.spi.StorageFilter;
 import org.netbeans.modules.editor.settings.storage.spi.StorageReader;
 import org.netbeans.modules.editor.settings.storage.spi.StorageWriter;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
+import org.openide.util.Lookup;
+import org.openide.util.LookupEvent;
+import org.openide.util.LookupListener;
+import org.openide.util.WeakListeners;
 
 /**
  *
@@ -66,10 +76,11 @@ public final class StorageImpl <K extends Object, V extends Object> {
     // -J-Dorg.netbeans.modules.editor.settings.storage.StorageImpl.level=FINE
     private static final Logger LOG = Logger.getLogger(StorageImpl.class.getName());
 
-    public StorageImpl(StorageDescription<K, V> sd) {
+    public StorageImpl(StorageDescription<K, V> sd, Callable<Void> callback) {
         this.storageDescription = sd;
-        this.sfs = Repository.getDefault().getDefaultFileSystem();
-        this.baseFolder = sfs.findResource("Editors"); //NOI18N
+        this.dataChangedCallback = callback;
+        this.baseFolder = FileUtil.getConfigFile("Editors"); //NOI18N
+        Filters.registerCallback(this);
     }
 
     public Map<K, V> load(MimePath mimePath, String profile, boolean defaults) throws IOException {
@@ -79,7 +90,7 @@ public final class StorageImpl <K extends Object, V extends Object> {
         } else {
             assert profile == null : "The '" + storageDescription.getId() + "' settings type does not use profiles."; //NOI18N
         }
-        
+
         synchronized (lock) {
             Map<K, V> data;
             Map<CacheKey, Map<K, V>> profilesData = profilesCache.get(mimePath);
@@ -95,6 +106,8 @@ public final class StorageImpl <K extends Object, V extends Object> {
 
             if (data == null) {
                 data = _load(mimePath, profile, defaults);
+                filterAfterLoad(data, mimePath, profile, defaults);
+                data = Collections.unmodifiableMap(data);
                 profilesData.put(cacheKey, data);
             }
             
@@ -109,19 +122,34 @@ public final class StorageImpl <K extends Object, V extends Object> {
         } else {
             assert profile == null : "The '" + storageDescription.getId() + "' settings type does not use profiles."; //NOI18N
         }
-        
+
         synchronized (lock) {
+            CacheKey cacheKey = null;
             Map<CacheKey, Map<K, V>> profilesData = profilesCache.get(mimePath);
             if (profilesData == null) {
                 profilesData = new HashMap<CacheKey, Map<K, V>>();
                 profilesCache.put(mimePath, profilesData);
+            } else {
+                cacheKey = cacheKey(profile, defaults);
+                Map<K, V> cacheData = profilesData.get(cacheKey);
+                if (cacheData != null && !Utils.quickDiff(cacheData, data)) {
+                    // no differences, no need to save or update the cache
+                    return;
+                }
             }
 
-            boolean resetCache = _save(mimePath, profile, defaults, data);
+            Map<K, V> dataForSave = new HashMap<K, V>(data);
+            filterBeforeSave(dataForSave, mimePath, profile, defaults);
+            boolean resetCache = _save(mimePath, profile, defaults, dataForSave);
+            
+            if (cacheKey == null) {
+                cacheKey = cacheKey(profile, defaults);
+            }
+            
             if (!resetCache) {
-                profilesData.put(cacheKey(profile, defaults), data);
+                profilesData.put(cacheKey, Collections.unmodifiableMap(new HashMap<K, V>(data)));
             } else {
-                profilesData.remove(cacheKey(profile, defaults));
+                profilesData.remove(cacheKey);
             }
         }
     }
@@ -143,6 +171,21 @@ public final class StorageImpl <K extends Object, V extends Object> {
         }
     }
 
+    public void refresh() {
+        synchronized (lock) {
+            profilesCache.clear();
+        }
+        
+        // notify about possible changes in the cached data
+        if (dataChangedCallback != null) {
+            try {
+                dataChangedCallback.call();
+            } catch (Exception e) {
+                // ignore, the callback is not supposed to throw anything
+            }
+        }
+    }
+    
     public static interface Operations<K extends Object, V extends Object> {
         public Map<K, V> load(MimePath mimePath, String profile, boolean defaults) throws IOException;
         public boolean save(MimePath mimePath, String profile, boolean defaults, Map<K, V> data, Map<K, V> defaultData) throws IOException;
@@ -154,7 +197,7 @@ public final class StorageImpl <K extends Object, V extends Object> {
     // ------------------------------------------
     
     private final StorageDescription<K, V> storageDescription;
-    private final FileSystem sfs;
+    private final Callable<Void> dataChangedCallback;
     private final FileObject baseFolder;
     
     private final Object lock = new String("StorageImpl.lock"); //NOI18N
@@ -163,7 +206,7 @@ public final class StorageImpl <K extends Object, V extends Object> {
     private List<Object []> scan(MimePath mimePath, String profile, boolean scanModules, boolean scanUsers) {
         Map<String, List<Object []>> files = new HashMap<String, List<Object []>>();
 
-        SettingsType.getLocator(storageDescription).scan(baseFolder, mimePath.getPath(), profile, true, scanModules, scanUsers, files);
+        SettingsType.getLocator(storageDescription).scan(baseFolder, mimePath.getPath(), profile, true, scanModules, scanUsers, mimePath.size() > 1, files);
         assert files.size() <= 1 : "Too many results in the scan"; //NOI18N
         
         return files.get(profile);
@@ -184,44 +227,72 @@ public final class StorageImpl <K extends Object, V extends Object> {
 
             if (profileInfos != null) {
                 for(Object [] info : profileInfos) {
+                    assert info.length == 5;
                     FileObject profileHome = (FileObject) info[0];
                     FileObject settingFile = (FileObject) info[1];
                     boolean modulesFile = ((Boolean) info[2]).booleanValue();
+                    FileObject linkTarget = (FileObject) info[3];
+                    boolean legacyFile = ((Boolean) info[4]).booleanValue();
+                    
+                    if (linkTarget != null) {
+                        // link to another mimetype
+                        MimePath linkedMimePath = MimePath.parse(linkTarget.getPath().substring(baseFolder.getPath().length() + 1));
+                        assert linkedMimePath != mimePath : "linkedMimePath should not be the same as the original one"; //NOI18N
+                        
+                        if (linkedMimePath.size() == 1) {
+                            Map<K, V> linkedMap = load(linkedMimePath, profile, defaults);
+                            map.putAll(linkedMap);
+                            LOG.fine("Adding linked '" + storageDescription.getId() + "' from: '" + linkedMimePath.getPath() + "'"); //NOI18N
+                        } else {
+                            if (LOG.isLoggable(Level.WARNING)) {
+                                LOG.warning("Linking to other than top level mime types is prohibited. " //NOI18N
+                                    + "Ignoring editor settings link from '" + mimePath.getPath() //NOI18N
+                                    + "' to '" + linkedMimePath.getPath() + "'"); //NOI18N
+                            }
+                        }
+                    } else {
+                        // real settings file
+                        StorageReader<? extends K, ? extends V> reader = storageDescription.createReader(settingFile, mimePath.getPath());
 
-                    StorageReader<? extends K, ? extends V> reader = storageDescription.createReader(settingFile);
+                        // Load data from the settingFile
+                        Utils.load(settingFile, reader, !legacyFile);
+                        Map<? extends K, ? extends V> added = reader.getAdded();
+                        Set<? extends K> removed = reader.getRemoved();
 
-                    // Load data from the settingFile
-                    Utils.load(settingFile, reader);
-                    Map<? extends K, ? extends V> added = reader.getAdded();
-                    Set<? extends K> removed = reader.getRemoved();
+                        if (LOG.isLoggable(Level.FINE)) {
+                            LOG.fine("Loading '" + storageDescription.getId() + "' from: '" + settingFile.getPath() + "'"); //NOI18N
+                        }
 
-                    if (LOG.isLoggable(Level.FINE)) {
-                        LOG.fine("Loading '" + storageDescription.getId() + "' from: '" + settingFile.getPath() + "'"); //NOI18N
-                    }
+                        if (LOG.isLoggable(Level.FINEST)) {
+                            LOG.finest("--- Removing '" + storageDescription.getId() + "': " + removed); //NOI18N
+                        }
 
-                    if (LOG.isLoggable(Level.FINEST)) {
-                        LOG.finest("--- Removing '" + storageDescription.getId() + "': " + removed); //NOI18N
-                    }
+                        // First remove all entries marked as removed
+                        for(K key : removed) {
+                            map.remove(key);
+                        }
 
-                    // First remove all code templates marked as removed
-                    for(K key : removed) {
-                        map.remove(key);
-                    }
+                        if (LOG.isLoggable(Level.FINEST)) {
+                            LOG.finest("--- Adding '" + storageDescription.getId() + "': " + added); //NOI18N
+                        }
 
-                    if (LOG.isLoggable(Level.FINEST)) {
-                        LOG.finest("--- Adding '" + storageDescription.getId() + "': " + added); //NOI18N
-                    }
+                        // Then add all new entries
+                        for (K key : added.keySet()) {
+                            V value = added.get(key);
+                            V origValue = map.put(key, value);
+                            if (LOG.isLoggable(Level.FINEST) && origValue != null && !origValue.equals(value)) {
+                                LOG.finest("--- Replacing old entry for '" + key + "', orig value = '" + origValue + "', new value = '" + value + "'"); //NOI18N
+                            }
+                        }
 
-                    // Then add all new bindings
-                    map.putAll(added);
-
-                    if (LOG.isLoggable(Level.FINEST)) {
-                        LOG.finest("-------------------------------------"); //NOI18N
+                        if (LOG.isLoggable(Level.FINEST)) {
+                            LOG.finest("-------------------------------------"); //NOI18N
+                        }
                     }
                 }
             }
 
-            return Collections.unmodifiableMap(map);
+            return map;
         }
     }
     
@@ -241,14 +312,15 @@ public final class StorageImpl <K extends Object, V extends Object> {
             Utils.diff(defaultData, data, added, removed);
 
             // Perform the operation
+            final String mimePathString = mimePath.getPath();
             final String settingFileName = SettingsType.getLocator(storageDescription).getWritableFileName(
-                mimePath.getPath(), profile, null, defaults);
+                mimePathString, profile, null, defaults);
             
-            sfs.runAtomicAction(new FileSystem.AtomicAction() {
+            FileUtil.runAtomicAction(new FileSystem.AtomicAction() {
                 public void run() throws IOException {
                     if (added.size() > 0 || removed.size() > 0) {
                         FileObject f = FileUtil.createData(baseFolder, settingFileName);
-                        StorageWriter<K, V> writer = storageDescription.createWriter(f);
+                        StorageWriter<K, V> writer = storageDescription.createWriter(f, mimePathString);
                         writer.setAdded(added);
                         writer.setRemoved(removed.keySet());
                         Utils.save(f, writer);
@@ -267,7 +339,7 @@ public final class StorageImpl <K extends Object, V extends Object> {
                     }
                 }
             });
-            
+    
             return false;
         }
     }
@@ -284,13 +356,17 @@ public final class StorageImpl <K extends Object, V extends Object> {
             // Perform the operation
             final List<Object []> profileInfos = scan(mimePath, profile, defaults, !defaults);
             if (profileInfos != null) {
-                sfs.runAtomicAction(new FileSystem.AtomicAction() {
+                FileUtil.runAtomicAction(new FileSystem.AtomicAction() {
                     public void run() throws IOException {
                         for(Object [] info : profileInfos) {
+                            assert info.length == 5;
                             FileObject profileHome = (FileObject) info[0];
                             FileObject settingFile = (FileObject) info[1];
                             boolean modulesFile = ((Boolean) info[2]).booleanValue();
+                            
+                            // will delete either a real settings file or a link file (.shadow)
                             settingFile.delete();
+                            
                             if (LOG.isLoggable(Level.FINE)) {
                                 LOG.fine("Deleting '" + storageDescription.getId() + "' file: '" + settingFile.getPath() + "'"); //NOI18N
                             }
@@ -301,6 +377,22 @@ public final class StorageImpl <K extends Object, V extends Object> {
         }
     }
 
+    private void filterAfterLoad(Map<K, V> data, MimePath mimePath, String profile, boolean defaults) throws IOException {
+        List<StorageFilter> filters = Filters.getFilters(storageDescription.getId());
+        for(int i = 0; i < filters.size(); i++) {
+            @SuppressWarnings("unchecked") StorageFilter<K, V> filter = filters.get(i);
+            filter.afterLoad(data, mimePath, profile, defaults);
+        }
+    }
+    
+    private void filterBeforeSave(Map<K, V> data, MimePath mimePath, String profile, boolean defaults) throws IOException {
+        List<StorageFilter> filters = Filters.getFilters(storageDescription.getId());
+        for(int i = filters.size() - 1; i >= 0; i--) {
+            @SuppressWarnings("unchecked") StorageFilter<K, V> filter = filters.get(i);
+            filter.beforeSave(data, mimePath, profile, defaults);
+        }
+    }
+    
     private static CacheKey cacheKey(String profile, boolean defaults) {
         return new CacheKey(profile, defaults);
     }
@@ -335,8 +427,92 @@ public final class StorageImpl <K extends Object, V extends Object> {
         }
 
         public @Override int hashCode() {
-            return this.profile != null ? this.profile.hashCode() : 7;
+            int hash = this.profile != null ? this.profile.hashCode() : 7;
+            hash = 37 * hash + Boolean.valueOf(this.defaults).hashCode();
+            return hash;
         }
         
     } // End of CacheKey class
+    
+    private static final class Filters implements Callable<Void> {
+        
+        public static List<StorageFilter> getFilters(String storageDescriptionId) {
+            synchronized (filters) {
+                if (allFilters == null) {
+                    allFilters = Lookup.getDefault().lookupResult(StorageFilter.class);
+                    allFilters.addLookupListener(WeakListeners.create(LookupListener.class, allFiltersTracker, allFilters));
+                    rebuild();
+                }
+                
+                Filters filtersForId = filters.get(storageDescriptionId);
+                return filtersForId == null ? Collections.<StorageFilter>emptyList() : filtersForId.filtersForId;
+            }
+        }
+
+        public static void registerCallback(StorageImpl storageImpl) {
+            callbacks.put(storageImpl.storageDescription.getId(), new WeakReference<StorageImpl>(storageImpl));
+        }
+        
+        public Void call() {
+            resetCaches(Collections.singleton(storageDescriptionId));
+            return null;
+        }
+        
+        // ------------------------------------------
+        // private implementation
+        // ------------------------------------------
+
+        private static final Map<String, Filters> filters = new HashMap<String, Filters>();
+        private static Lookup.Result<StorageFilter> allFilters = null;
+        private static final LookupListener allFiltersTracker = new LookupListener() {
+            public void resultChanged(LookupEvent ev) {
+                Set<String> changedIds;
+                
+                synchronized (filters) {
+                    changedIds = rebuild();
+                }
+                
+                resetCaches(changedIds);
+            }
+        };
+        private static final Map<String, Reference<StorageImpl>> callbacks = new HashMap<String, Reference<StorageImpl>>();
+        
+        private final String storageDescriptionId;
+        private final List<StorageFilter> filtersForId = new ArrayList<StorageFilter>();
+        
+        private static Set<String> rebuild() {
+            filters.clear();
+
+            Collection<? extends StorageFilter> all = allFilters.allInstances();
+            for(StorageFilter f : all) {
+                String id = SpiPackageAccessor.get().storageFilterGetStorageDescriptionId(f);
+                Filters filterForId = filters.get(id);
+                if (filterForId == null) {
+                    filterForId = new Filters(id);
+                    filters.put(id, filterForId);
+                }
+
+                SpiPackageAccessor.get().storageFilterInitialize(f, filterForId);
+                filterForId.filtersForId.add(f);
+            }
+            
+            Set<String> changedIds = new HashSet<String>(filters.keySet());
+            return changedIds;
+        }
+        
+        private static void resetCaches(Set<String> storageDescriptionIds) {
+            for(String id : storageDescriptionIds) {
+                Reference<StorageImpl> ref = callbacks.get(id);
+                StorageImpl storageImpl = ref == null ? null : ref.get();
+                if (storageImpl != null) {
+                    storageImpl.refresh();
+                }
+            }
+        }
+        
+        private Filters(String storageDescriptionId) {
+            this.storageDescriptionId = storageDescriptionId;
+        }
+
+    } // End of Filters class
 }

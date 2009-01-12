@@ -68,10 +68,10 @@ import org.netbeans.modules.xml.schema.ui.nodes.RefreshableChildren;
 import org.netbeans.modules.xml.schema.ui.nodes.SchemaUIContext;
 import org.netbeans.modules.xml.schema.ui.nodes.StructuralSchemaNodeFactory;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.util.Utilities;
+import org.openide.util.ImageUtilities;
 
 /**
  *
@@ -370,8 +370,7 @@ public class CategorizedChildren<C extends SchemaComponent>
 
 
         private static Node getFolderNode() {
-	    FileObject fo =
-		Repository.getDefault().getDefaultFileSystem().getRoot();
+	    FileObject fo = FileUtil.getConfigRoot();
 	    Node n = null;
 	    try {
 		DataObject dobj = DataObject.find(fo);
@@ -411,8 +410,8 @@ public class CategorizedChildren<C extends SchemaComponent>
         private static Image badgeImage(Image main, String badge) {
 	    Image rv = main;
 	    if (badge != null) {
-		Image badgeImage = Utilities.loadImage(badge);
-		rv = Utilities.mergeImages(main, badgeImage, 8, 8);
+		Image badgeImage = ImageUtilities.loadImage(badge);
+		rv = ImageUtilities.mergeImages(main, badgeImage, 8, 8);
 	    }
 	    return rv;
 	}

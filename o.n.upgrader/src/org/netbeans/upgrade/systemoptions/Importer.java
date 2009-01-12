@@ -43,6 +43,8 @@ package org.netbeans.upgrade.systemoptions;
 
 import java.io.*;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.openide.filesystems.*;
 
 /**
@@ -52,10 +54,6 @@ import org.openide.filesystems.*;
 public class Importer {
     private static final String DEFINITION_OF_FILES =  "systemoptionsimport";//NOI18N
             
-    private static FileObject getRootOfSystemFileSystem() {
-        return Repository.getDefault().getDefaultFileSystem().getRoot();
-    }
-    
     public static void doImport() throws IOException  {
         Set<FileObject> files = getImportFiles(loadImportFilesDefinition());
         for (Iterator<DefaultResult> it = parse(files).iterator(); it.hasNext();) {
@@ -93,9 +91,12 @@ public class Importer {
         for (FileObject f: files) {
             try {
                 retval.add(SystemOptionsParser.parse(f, false));
-            } catch (ClassNotFoundException ex) {
-                continue;
-            } catch (IOException ex) {
+            } catch (Exception ex) {
+                boolean assertOn = false;
+                assert assertOn = true;
+                if (assertOn) {
+                    Logger.getLogger("org.netbeans.upgrade.systemoptions.parse").log(Level.INFO, "importing: " + f.getPath(), ex); // NOI18N
+                }
                 continue;
             }
         }
@@ -118,7 +119,7 @@ public class Importer {
         Set<FileObject> fileobjects = new HashSet<FileObject>();        
         for (Iterator it = props.keySet().iterator(); it.hasNext();) {
             String path = (String) it.next();
-            FileObject f = getRootOfSystemFileSystem().getFileObject(path);
+            FileObject f = FileUtil.getConfigFile(path);
             if (f != null) {
                 fileobjects.add(f);
             }

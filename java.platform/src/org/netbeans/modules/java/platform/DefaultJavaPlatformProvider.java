@@ -53,6 +53,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeSupport;
 import org.openide.util.Lookup;
 
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.java.platform.JavaPlatformProvider.class)
 public class DefaultJavaPlatformProvider implements JavaPlatformProvider, FileChangeListener {
 
     private static final String PLATFORM_STORAGE = "Services/Platforms/org-netbeans-api-java-Platform";  //NOI18N
@@ -62,7 +63,7 @@ public class DefaultJavaPlatformProvider implements JavaPlatformProvider, FileCh
     private JavaPlatform defaultPlatform;
 
     public DefaultJavaPlatformProvider () {
-        storage = Repository.getDefault().getDefaultFileSystem().findResource(PLATFORM_STORAGE);
+        storage = FileUtil.getConfigFile(PLATFORM_STORAGE);
         if (storage == null) {
             // Turn this off since it can confuse unit tests running w/o layer merging.
             //assert false : "Cannot find platforms storage";

@@ -51,7 +51,7 @@ import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.ProjectGenerator;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
+import org.openide.util.NbBundle;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import java.nio.charset.Charset;
@@ -86,7 +86,7 @@ public class SQLproProjectGenerator {
         dir.mkdirs();
         // XXX clumsy way to refresh, but otherwise it doesn't work for new folders
         File rootF = dir;
-        while (rootF.getParentFile() != null) {
+        while (rootF.getParentFile() != null /*UNC*/&& rootF.getParentFile().exists()) {
             rootF = rootF.getParentFile();
         }
         FileObject fo = FileUtil.toFileObject (rootF);
@@ -103,7 +103,7 @@ public class SQLproProjectGenerator {
         AntProjectHelper h = setupProject (fo, name, j2eeLevel);
         FileObject srcRoot = fo.createFolder(DEFAULT_SRC_FOLDER); // NOI18N
         FileObject bpelasaRoot = srcRoot;
-        FileObject sqlmapFile = FileUtil.copyFile(Repository.getDefault().getDefaultFileSystem().findResource("org-netbeans-modules-sql-project/connectivityInfo.xml"), bpelasaRoot, "connectivityInfo"); //NOI18N
+        FileObject sqlmapFile = FileUtil.copyFile(FileUtil.getConfigFile("org-netbeans-modules-sql-project/connectivityInfo.xml"), bpelasaRoot, "connectivityInfo"); //NOI18N
 
         FileObject nbProjectRoot = FileUtil.toFileObject(new File(dir, DEFAULT_NBPROJECT_DIR)); // NOI18N
         
@@ -167,7 +167,7 @@ public class SQLproProjectGenerator {
         ep.setProperty(IcanproProjectProperties.ASSEMBLY_UNIT_ALIAS, "This Assembly Unit"); // NOI18N
         ep.setProperty(IcanproProjectProperties.ASSEMBLY_UNIT_DESCRIPTION, "Represents this Assembly Unit"); // NOI18N
         ep.setProperty(IcanproProjectProperties.APPLICATION_SUB_ASSEMBLY_ALIAS, "This Application Sub-Assembly"); // NOI18N
-        ep.setProperty(IcanproProjectProperties.APPLICATION_SUB_ASSEMBLY_DESCRIPTION, "This represents the Application Sub-Assembly"); // NOI18N
+        ep.setProperty(IcanproProjectProperties.APPLICATION_SUB_ASSEMBLY_DESCRIPTION, NbBundle.getMessage (SQLproProjectGenerator.class, "APP_SUB_ASSEMBLY")); // NOI18N
         ep.setProperty(IcanproProjectProperties.JBI_COMPONENT_CONF_ROOT, "nbproject/private"); // NOI18N
         ep.setProperty(IcanproProjectProperties.JBI_DEPLOYMENT_CONF_ROOT, "nbproject/deployment"); // NOI18N
 

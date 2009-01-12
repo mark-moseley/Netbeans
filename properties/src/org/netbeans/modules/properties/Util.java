@@ -52,7 +52,6 @@ import org.openide.cookies.SaveCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.FileEntry;
@@ -385,8 +384,7 @@ public final class Util extends Object {
             folder = FileUtil.createFolder(folder, folderPath);
             fileName = fileName.substring(idx + 1);
         }
-        FileSystem defaultFS = Repository.getDefault().getDefaultFileSystem();
-        FileObject templateFO = defaultFS.findResource("Templates/Other/properties.properties"); // NOI18N
+        FileObject templateFO = FileUtil.getConfigFile("Templates/Other/properties.properties"); // NOI18N
         DataObject template = DataObject.find(templateFO);
         return (PropertiesDataObject)
                template.createFromTemplate(DataFolder.findFolder(folder), fileName);
@@ -432,10 +430,10 @@ public final class Util extends Object {
                         });
                     }
                 } else {
-                    FileObject templateFO = Repository.getDefault().getDefaultFileSystem()
-                            .findResource("Templates/Other/properties.properties"); // NOI18N
-                    DataObject template = DataObject.find(templateFO);
-                    template.createFromTemplate(DataFolder.findFolder(folder), newName);
+                    // Create an empty file - creating from template via DataObject
+                    // API would create a separate DataObject for the locale file.
+                    // After creation force the DataObject to refresh its entries.
+                    DataObject.find(folder.createData(newName, PropertiesDataLoader.PROPERTIES_EXTENSION));
                 }
             }
         } catch(IOException ioe) {

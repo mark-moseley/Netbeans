@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -48,6 +48,7 @@ import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
@@ -59,7 +60,6 @@ import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.modules.SpecificationVersion;
@@ -123,7 +123,8 @@ public class J2SEProjectGenerator {
 
     public static AntProjectHelper createProject(final File dir, final String name,
                                                   final File[] sourceFolders, final File[] testFolders, 
-                                                  final String manifestFile, final String librariesDefinition) throws IOException {
+                                                  final String manifestFile, final String librariesDefinition,
+                                                  final String buildXmlName) throws IOException {
         assert sourceFolders != null && testFolders != null: "Package roots can't be null";   //NOI18N
         final FileObject dirFO = FileUtil.createFolder(dir);
         final AntProjectHelper[] h = new AntProjectHelper[1];
@@ -197,8 +198,14 @@ public class J2SEProjectGenerator {
                             h[0].putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, props);
                         }
                         h[0].putPrimaryConfigurationData(data,true);
+                        if (buildXmlName != null) {
+                            final EditableProperties props = h[0].getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
+                            props.put(J2SEProjectProperties.BUILD_SCRIPT, buildXmlName);
+                            h[0].putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, props);
+                        }
                         ProjectManager.getDefault().saveProject (p);
                         copyRequiredLibraries(h[0], refHelper);
+                        ProjectUtils.getSources(p).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
                         return null;
                     }
                 });
@@ -252,7 +259,11 @@ public class J2SEProjectGenerator {
         });
         ep.setProperty("debug.classpath", new String[] { // NOI18N
             "${run.classpath}", // NOI18N
-        });        
+        });
+        ep.setComment("debug.classpath", new String[] { // NOI18N
+            "# " + NbBundle.getMessage(J2SEProjectGenerator.class, "COMMENT_debug.transport"),
+            "#debug.transport=dt_socket"
+        }, false);
         ep.setProperty("jar.compress", "false"); // NOI18N
         if (!isLibrary) {
             ep.setProperty("main.class", mainClass == null ? "" : mainClass); // NOI18N
@@ -315,7 +326,10 @@ public class J2SEProjectGenerator {
         if (manifestFile != null) {
             ep.setProperty("manifest.file", manifestFile); // NOI18N
         }
-        h.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);        
+        h.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
+        ep = h.getProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH);
+        ep.setProperty(J2SEProjectProperties.COMPILE_ON_SAVE, "true"); // NOI18N
+        h.putProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH, ep);
         return h;
     }
 
@@ -323,13 +337,16 @@ public class J2SEProjectGenerator {
         if (!h.isSharableProject()) {
             return; 
         }
-        if (rh.getProjectLibraryManager().getLibrary("junit") == null) {
+        if (rh.getProjectLibraryManager().getLibrary("junit") == null 
+                && LibraryManager.getDefault().getLibrary("junit") != null) {
             rh.copyLibrary(LibraryManager.getDefault().getLibrary("junit")); // NOI18N
         }
-        if (rh.getProjectLibraryManager().getLibrary("junit_4") == null) {
+        if (rh.getProjectLibraryManager().getLibrary("junit_4") == null
+                && LibraryManager.getDefault().getLibrary("junit_4") != null) {
             rh.copyLibrary(LibraryManager.getDefault().getLibrary("junit_4")); // NOI18N
         }
-        if (rh.getProjectLibraryManager().getLibrary("CopyLibs") == null) {
+        if (rh.getProjectLibraryManager().getLibrary("CopyLibs") == null
+                && LibraryManager.getDefault().getLibrary("CopyLibs") != null) {
             rh.copyLibrary(LibraryManager.getDefault().getLibrary("CopyLibs")); // NOI18N
         }
     }
@@ -351,7 +368,7 @@ public class J2SEProjectGenerator {
             return;
         }
         
-        FileObject mainTemplate = Repository.getDefault().getDefaultFileSystem().findResource( "Templates/Classes/Main.java" ); // NOI18N
+        FileObject mainTemplate = FileUtil.getConfigFile( "Templates/Classes/Main.java" ); // NOI18N
 
         if ( mainTemplate == null ) {
             return; // Don't know the template
@@ -380,7 +397,7 @@ public class J2SEProjectGenerator {
             JavaPlatform defaultPlatform = JavaPlatformManager.getDefault().getDefaultPlatform();
             SpecificationVersion v = defaultPlatform.getSpecification().getVersion();
             if (v.equals(new SpecificationVersion("1.6")) || v.equals(new SpecificationVersion("1.7"))) {
-                // #89131: these levels are not actually distinct from 1.5.
+                // #89131: these levels are not actually distinct from 1.5. - xxx not true, but may be acceptable to have 1.5 as default
                 return new SpecificationVersion("1.5");
             } else {
                 return v;

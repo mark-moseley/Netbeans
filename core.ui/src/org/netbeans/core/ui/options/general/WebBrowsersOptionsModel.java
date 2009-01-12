@@ -40,7 +40,7 @@ import javax.swing.DefaultListModel;
 import org.openide.cookies.InstanceCookie;
 import org.openide.explorer.propertysheet.PropertyPanel;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.util.Exceptions;
@@ -68,7 +68,7 @@ public class WebBrowsersOptionsModel extends DefaultListModel {
     
     public WebBrowsersOptionsModel() {
         
-        FileObject servicesBrowsers = Repository.getDefault().getDefaultFileSystem().findResource(BROWSERS_FOLDER);
+        FileObject servicesBrowsers = FileUtil.getConfigFile(BROWSERS_FOLDER);
             
         if (servicesBrowsers != null) {
             
@@ -244,7 +244,7 @@ public class WebBrowsersOptionsModel extends DefaultListModel {
                     }
                     
                     if (pd.isPreferred() && !pd.isExpert() && !pd.isHidden()) {
-                        propertyPanel = new WebBrowsersPropertyPanel(cookie.instanceCreate(), 
+                        propertyPanel = new PropertyPanel(cookie.instanceCreate(), 
                                 pd.getName(), PropertyPanel.PREF_CUSTOM_EDITOR);
                         propertyPanelID = "PROPERTY_PANEL_" + propertyPanelIDCounter++;
                         break;
@@ -253,7 +253,7 @@ public class WebBrowsersOptionsModel extends DefaultListModel {
                 }
                 
                 if (propertyPanel == null) {
-                    propertyPanel = new WebBrowsersPropertyPanel(cookie.instanceCreate(), 
+                    propertyPanel = new PropertyPanel(cookie.instanceCreate(), 
                             fallbackProp.getName(), PropertyPanel.PREF_CUSTOM_EDITOR);
                     propertyPanelID = "PROPERTY_PANEL_" + propertyPanelIDCounter++;
                 }
@@ -345,8 +345,8 @@ public class WebBrowsersOptionsModel extends DefaultListModel {
             
             try {
                 
-                FileObject extWebBrowserTemplate = Repository.getDefault().getDefaultFileSystem().findResource(BROWSER_TEMPLATE);
-                FileObject browsersFolderFO = Repository.getDefault().getDefaultFileSystem().findResource(BROWSERS_FOLDER);
+                FileObject extWebBrowserTemplate = FileUtil.getConfigFile(BROWSER_TEMPLATE);
+                FileObject browsersFolderFO = FileUtil.getConfigFile(BROWSERS_FOLDER);
                 
                 if (extWebBrowserTemplate == null) {
                     return null;
@@ -364,18 +364,4 @@ public class WebBrowsersOptionsModel extends DefaultListModel {
         }
         
     }
-    
-    private static class WebBrowsersPropertyPanel extends PropertyPanel {
-
-        private WebBrowsersPropertyPanel(Object obj, String nm, int pref) {
-            super(obj, nm, pref);
-        }
-        
-        @Override
-        public void removeNotify() {
-            // disabled super.removeNotify() to be able to call updateValue to save changed value
-        }
-        
-    }
-    
 }

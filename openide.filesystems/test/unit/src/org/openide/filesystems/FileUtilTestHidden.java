@@ -47,7 +47,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.List;
 import java.util.ArrayList;
-import org.openide.util.Exceptions;
 import org.openide.util.Utilities;
 
 public class FileUtilTestHidden extends TestBaseHid {
@@ -90,7 +89,7 @@ public class FileUtilTestHidden extends TestBaseHid {
         final LocalFileSystem lfs = new LocalFileSystem();
         lfs.setRootDirectory(getWorkDir());
         
-        final FileSystem defSystem = Repository.getDefault().getDefaultFileSystem();
+        final FileSystem defSystem = FileUtil.getConfigRoot().getFileSystem();
         final TestListener l = new TestListener();
         try {
             defSystem.addFileChangeListener(l);
@@ -134,6 +133,11 @@ public class FileUtilTestHidden extends TestBaseHid {
        file2 = new File (file, "test/..");
        file2 = FileUtil.normalizeFile(file); 
        assertEquals(file2, file);
+
+       if (Utilities.isUnix()) {
+           assertEquals(new File("/"), FileUtil.normalizeFile(new File("/..")));
+           assertEquals(new File("/"), FileUtil.normalizeFile(new File("/../.")));
+       }
     }
     
     public void testNormalizeFile2 () throws Exception {
@@ -258,17 +262,21 @@ public class FileUtilTestHidden extends TestBaseHid {
         assertTrue(FileUtil.isParentOf(root, fileObjects[0]));        
         assertTrue(FileUtil.isParentOf(fileObjects[0], fileObjects[1]));
         assertTrue(FileUtil.isParentOf(fileObjects[1], fileObjects[2]));        
-                
-        testedFS.addFileChangeListener(new FileChangeAdapter() {
+        final FileChangeListener fcl = new FileChangeAdapter() {
             public void fileDeleted(FileEvent fe) {
                 FileObject file = fe.getFile();
                 assertNotNull(file.getPath(),file.getParent());
                 assertTrue(file.getPath(), FileUtil.isParentOf(root, file));
                 events.add(fe);
             }
-        });
-        fileObjects[1].delete();      
-        assertTrue (events.size() > 0);        
+        };
+        try {
+            testedFS.addFileChangeListener(fcl);
+            fileObjects[1].delete();                                
+            assertTrue(events.size() > 0);
+        } finally {
+            testedFS.removeFileChangeListener(fcl);
+        }        
     }
     
     public void testGetFileDisplayName ()  throws Exception {        

@@ -47,14 +47,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Properties;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
+import org.openide.util.Exceptions;
 
 /**
  * No synchronization - must be called just from NbPreferences which
@@ -64,8 +64,7 @@ import org.openide.filesystems.Repository;
 class PropertiesStorage implements NbPreferences.FileStorage {
     private static final String USERROOT_PREFIX = "/Preferences";//NOI18N
     private static final String SYSTEMROOT_PREFIX = "/SystemPreferences";//NOI18N
-    private final static FileObject SFS_ROOT =
-            Repository.getDefault().getDefaultFileSystem().getRoot();
+    private final static FileObject SFS_ROOT = FileUtil.getConfigRoot();
     
     private final String folderPath;
     private String filePath;
@@ -246,7 +245,15 @@ class PropertiesStorage implements NbPreferences.FileStorage {
     private OutputStream outputStream() throws IOException {
         FileObject fo = toPropertiesFile(true);
         final FileLock lock = fo.lock();
-        final OutputStream os = fo.getOutputStream(lock);
+        OutputStream os = null;
+        try {
+            os = fo.getOutputStream(lock);
+        } finally {
+            if(os == null && lock != null) {
+                // release lock if getOutputStream failed
+                lock.releaseLock();
+            }
+        }
         return new FilterOutputStream(os) {
             public void close() throws IOException {
                 super.close();
@@ -300,5 +307,17 @@ class PropertiesStorage implements NbPreferences.FileStorage {
         }
         assert (retval == null && !create) || (retval != null && retval.isData());
         return retval;
+    }
+
+    public void runAtomic(final Runnable run) {
+        try {
+            SFS_ROOT.getFileSystem().runAtomicAction(new AtomicAction() {
+                public void run() throws IOException {
+                    run.run();
+                }
+            });
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
     }
 }

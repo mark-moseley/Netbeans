@@ -46,7 +46,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.concurrent.Callable;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -57,14 +56,12 @@ import org.netbeans.junit.NbTestCase;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
 /**
  *
  * @author Stanislav Aubrecht
  */
 public class RemoveWritablesTest extends NbTestCase {
-    SystemFileSystem sfs;
     Module myModule;
     File configDir;
     
@@ -72,15 +69,13 @@ public class RemoveWritablesTest extends NbTestCase {
                 + "OpenIDE-Module: org.netbeans.modules.foo\n"
                 + "OpenIDE-Module-Specification-Version: 1.0\n"
                 + "OpenIDE-Module-Implementation-Version: today\n"
-                + "OpenIDE-Module-Layer: mf-layer.xml\n";
+                + "OpenIDE-Module-Layer: foo/mf-layer.xml\n";
 
-
-    
     public RemoveWritablesTest(String testName) {
         super(testName);
     }
 
-    protected void setUp() throws Exception {
+    protected @Override void setUp() throws Exception {
         clearWorkDir();
         
         File u = new File(getWorkDir(), "userdir");
@@ -96,15 +91,13 @@ public class RemoveWritablesTest extends NbTestCase {
         myModule = Main.getModuleSystem().getManager().create( moduleJar, null, true, false, false );
         Main.getModuleSystem().getManager().enable( myModule );
         
-        sfs = (SystemFileSystem)Repository.getDefault().getDefaultFileSystem();
+        assertNotNull("Module layer is installed", FileUtil.getConfigFile( "foo" ) );
         
-        assertNotNull("Module layer is installed", sfs.findResource( "foo" ) );
-        
-        configDir = FileUtil.toFile( sfs.getRoot() );//new File( getWorkDir(), "userdir/config" );
+        configDir = FileUtil.toFile( FileUtil.getConfigRoot() );//new File( getWorkDir(), "userdir/config" );
         
     }
 
-    protected void tearDown() throws Exception {
+    protected @Override void tearDown() throws Exception {
         if( null != myModule ) {
             Main.getModuleSystem().getManager().disable( myModule );
             Main.getModuleSystem().getManager().delete( myModule );
@@ -112,7 +105,7 @@ public class RemoveWritablesTest extends NbTestCase {
     }
     
     public void testAddedFile() throws Exception {
-        FileObject folder = sfs.findResource( "foo" );
+        FileObject folder = FileUtil.getConfigFile( "foo" );
         FileObject newFile = folder.createData( "newFile", "ext" );
         
         File writableFile = new File( new File( configDir, "foo"), "newFile.ext" );
@@ -126,12 +119,11 @@ public class RemoveWritablesTest extends NbTestCase {
         ((Callable)writablesRemover).call();
         
         assertFalse( "local file removed", writableFile.exists() );
-        assertNull( "FileObject does not exist", sfs.findResource( "foo/newFile.ext" ) );
+        assertNull( "FileObject does not exist", FileUtil.getConfigFile( "foo/newFile.ext" ) );
     }
     
     public void testRemovedFile() throws Exception {
-        FileObject folder = sfs.findResource( "foo" );
-        FileObject existingFile = sfs.findResource( "foo/test1" );
+        FileObject existingFile = FileUtil.getConfigFile( "foo/test1" );
         
         assertNotNull( existingFile );
         
@@ -140,7 +132,7 @@ public class RemoveWritablesTest extends NbTestCase {
         File maskFile = new File( new File( configDir, "foo"), "test1_hidden" );
         assertTrue( maskFile.exists() );
         
-        Object writablesRemover = sfs.findResource( "foo" ).getAttribute( "removeWritables" );
+        Object writablesRemover = FileUtil.getConfigFile( "foo" ).getAttribute( "removeWritables" );
         
         assertNotNull( writablesRemover );
         assertTrue( writablesRemover instanceof Callable );
@@ -148,12 +140,11 @@ public class RemoveWritablesTest extends NbTestCase {
         ((Callable)writablesRemover).call();
         
         assertFalse( "local file removed", maskFile.exists() );
-        assertNotNull( "FileObject exists again", sfs.findResource( "foo/test1" ) );
+        assertNotNull( "FileObject exists again", FileUtil.getConfigFile( "foo/test1" ) );
     }
     
     public void testRenamedFile() throws Exception {
-        FileObject folder = sfs.findResource( "foo" );
-        FileObject existingFile = sfs.findResource( "foo/test1" );
+        FileObject existingFile = FileUtil.getConfigFile( "foo/test1" );
         
         assertNotNull( existingFile );
         
@@ -161,12 +152,12 @@ public class RemoveWritablesTest extends NbTestCase {
         existingFile.rename( lock, "newName", "newExt" );
         lock.releaseLock();
         
-        assertNotNull( sfs.findResource( "foo/newName.newExt" ) );
+        assertNotNull( FileUtil.getConfigFile( "foo/newName.newExt" ) );
         
         File maskFile = new File( new File( configDir, "foo"), "test1_hidden" );
         assertTrue( maskFile.exists() );
         
-        Object writablesRemover = sfs.findResource( "foo" ).getAttribute( "removeWritables" );
+        Object writablesRemover = FileUtil.getConfigFile( "foo" ).getAttribute( "removeWritables" );
         
         assertNotNull( writablesRemover );
         assertTrue( writablesRemover instanceof Callable );
@@ -174,29 +165,29 @@ public class RemoveWritablesTest extends NbTestCase {
         ((Callable)writablesRemover).call();
         
         assertFalse( "local file removed", maskFile.exists() );
-        assertNotNull( "FileObject exists again", sfs.findResource( "foo/test1" ) );
-        assertNull( "renamed file is gone", sfs.findResource( "foo/newName.newExt" ) );
+        assertNotNull( "FileObject exists again", FileUtil.getConfigFile( "foo/test1" ) );
+        assertNull( "renamed file is gone", FileUtil.getConfigFile( "foo/newName.newExt" ) );
     }
 
     public void testModifiedAttributesFile() throws Exception {
-        FileObject folder = sfs.findResource( "foo" );
-        FileObject existingFile = sfs.findResource( "foo/test1" );
+        FileObject existingFile = FileUtil.getConfigFile( "foo/test1" );
         
         assertNotNull( existingFile );
         
         existingFile.setAttribute( "myAttribute", "myAttributeValue" );
         
-        assertNull( "removeWritables does not work for file attributes", sfs.findResource( "foo" ).getAttribute( "removeWritables" ) );
+        assertNull( "removeWritables does not work for file attributes", FileUtil.getConfigFile( "foo" ).getAttribute( "removeWritables" ) );
     }
 
 
     private File createModuleJar(String manifest) throws IOException {
+        // XXX use TestFileUtils.writeZipFile
         File jarFile = new File( getWorkDir(), "mymodule.jar" );
         
         JarOutputStream os = new JarOutputStream(new FileOutputStream(jarFile), new Manifest(
             new ByteArrayInputStream(manifest.getBytes())
         ));
-        JarEntry entry = new JarEntry("mf-layer.xml");
+        JarEntry entry = new JarEntry("foo/mf-layer.xml");
         os.putNextEntry( entry );
         InputStream is = RemoveWritablesTest.class.getResourceAsStream( "data/layer3.xml" );
         FileUtil.copy( is, os );

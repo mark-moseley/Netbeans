@@ -51,8 +51,6 @@ import java.net.URLStreamHandler;
 import java.util.Enumeration;
 import junit.framework.TestCase;
 import org.openide.util.Enumerations;
-import org.openide.util.lookup.AbstractLookup;
-import org.openide.util.lookup.InstanceContent;
 import org.openide.util.test.MockLookup;
 
 /**
@@ -78,14 +76,14 @@ public class RepositoryTest extends TestCase {
         
         // XXX fails to test that Repo contents are right from *initial* lookup
         // (try commenting out 'resultChanged(null);' in ExternalUtil.MainFS - still passes)
-        assertNull ("File is not there yet", Repository.getDefault ().getDefaultFileSystem ().findResource (dir));
+        assertNull ("File is not there yet", FileUtil.getConfigFile(dir));
         MockLookup.setInstances(mem);
         try {
-            assertNotNull ("The file is there now", Repository.getDefault ().getDefaultFileSystem ().findResource (dir));
+            assertNotNull ("The file is there now", FileUtil.getConfigFile(dir));
         } finally {
             MockLookup.setInstances();
         }
-        assertNull ("File is no longer there", Repository.getDefault ().getDefaultFileSystem ().findResource (dir));
+        assertNull ("File is no longer there", FileUtil.getConfigFile(dir));
     }
 
     public void testRepositoryIncludesAllLayers() throws Exception {
@@ -107,8 +105,8 @@ public class RepositoryTest extends TestCase {
                 }
             }
         });
-        FileObject r = Repository.getDefault().getDefaultFileSystem().getRoot();
-        assertEquals(2, r.getChildren().length);
+        FileObject r = FileUtil.getConfigRoot();
+        assertEquals(3, r.getChildren().length);  // org.openide.filesystems.resources.layer.xml, test-layer-1.xml, test-layer-2.xml
         assertNotNull(r.getFileObject("foo"));
         assertNotNull(r.getFileObject("bar"));
     }

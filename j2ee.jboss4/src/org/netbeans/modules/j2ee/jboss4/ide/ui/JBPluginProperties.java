@@ -46,8 +46,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /**
  * Plugin Properties Singleton class
@@ -62,7 +61,7 @@ public class JBPluginProperties {
     public static final String PROPERTY_ROOT_DIR = "root-dir";//NOI18N
     public static final String PROPERTY_HOST = "host";//NOI18N
     public static final String PROPERTY_PORT = "port";//NOI18N
-    
+    public static final String PROPERTY_JAVA_OPTS = "java_opts"; // NOI18N
     
     private static JBPluginProperties pluginProperties = null;
     private String installLocation;
@@ -122,8 +121,7 @@ public class JBPluginProperties {
     private  FileObject propertiesFile = null;
     
     private FileObject getPropertiesFile() throws java.io.IOException {
-        FileSystem fs = Repository.getDefault().getDefaultFileSystem();
-        FileObject dir = fs.findResource("J2EE");
+        FileObject dir = FileUtil.getConfigFile("J2EE");
         FileObject retVal = null;
         if (null != dir) {
             retVal = dir.getFileObject("jb","properties"); // NOI18N

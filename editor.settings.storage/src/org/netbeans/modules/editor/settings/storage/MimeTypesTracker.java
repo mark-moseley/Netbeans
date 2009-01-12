@@ -58,8 +58,11 @@ import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
+import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
+import org.openide.util.RequestProcessor;
 import org.openide.util.WeakListeners;
 
 /**
@@ -131,7 +134,12 @@ public final class MimeTypesTracker {
         
         // Start listening
         this.listener = new Listener();
-        FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
+        FileSystem sfs = null;
+        try {
+            sfs = FileUtil.getConfigRoot().getFileSystem();
+        } catch (FileStateInvalidException ex) {
+            Exceptions.printStackTrace(ex);
+        }
         sfs.addFileChangeListener(WeakListeners.create(FileChangeListener.class,listener, sfs));
     }
     
@@ -206,6 +214,11 @@ public final class MimeTypesTracker {
 
     private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
     private final FileChangeListener listener;
+    private final RequestProcessor.Task task = RequestProcessor.getDefault().create(new Runnable() {
+        public void run() {
+            rebuild();
+        }
+    });
     
     private void rebuild() {
         PropertyChangeEvent event = null;
@@ -225,10 +238,12 @@ public final class MimeTypesTracker {
                 LOG.finest("isBaseFolder = '" + isBaseFolder + "'"); //NOI18N
             }
 
+            Map<String, String> newMimeTypes;
+            
             if (isBaseFolder) {
                 // Clear the cache
-                Map<String, String> newMimeTypes = new HashMap<String, String>();
-
+                newMimeTypes = new HashMap<String, String>();
+                
                 // Go through mime type types
                 FileObject [] types = folder.getChildren();
                 for(int i = 0; i < types.length; i++) {
@@ -248,7 +263,7 @@ public final class MimeTypesTracker {
                         boolean add;
                         if (locator != null) {
                             Map<String, List<Object []>> scan = new HashMap<String, List<Object []>>();
-                            locator.scan(folder, mimeType, null, false, true, true, scan);
+                            locator.scan(folder, mimeType, null, false, true, true, false, scan);
                             add = !scan.isEmpty();
                         } else {
                             add = true;
@@ -268,10 +283,13 @@ public final class MimeTypesTracker {
                 }
 
                 newMimeTypes = Collections.unmodifiableMap(newMimeTypes);
-                if (!mimeTypes.equals(newMimeTypes)) {
-                    event = new PropertyChangeEvent(this, PROP_MIME_TYPES, mimeTypes, newMimeTypes);
-                    mimeTypes = newMimeTypes;
-                }
+            } else {
+                newMimeTypes = Collections.<String, String>emptyMap();
+            }
+            
+            if (!mimeTypes.equals(newMimeTypes)) {
+                event = new PropertyChangeEvent(this, PROP_MIME_TYPES, mimeTypes, newMimeTypes);
+                mimeTypes = newMimeTypes;
             }
         }
         
@@ -299,7 +317,7 @@ public final class MimeTypesTracker {
     }        
     
     private static Object [] findTarget(String [] path) {
-        FileObject target = Repository.getDefault().getDefaultFileSystem().getRoot();
+        FileObject target = FileUtil.getConfigRoot();
         boolean isTarget = 0 == path.length;
         
         for (int i = 0; i < path.length; i++) {
@@ -339,7 +357,7 @@ public final class MimeTypesTracker {
         private void notifyRebuild(FileObject f) {
             String path = f.getPath();
             if (path.startsWith(basePath)) {
-                rebuild();
+                task.schedule(100);
             }
         }
     } // End of Listener class

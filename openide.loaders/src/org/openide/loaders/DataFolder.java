@@ -1222,16 +1222,14 @@ public class DataFolder extends MultiDataObject implements DataObject.Container 
             return img;
         }
 
-        @SuppressWarnings("unchecked")
-        public Node.Cookie getCookie (Class clazz) {
+        public <T extends Node.Cookie> T getCookie(Class<T> clazz) {
             if (clazz == org.openide.nodes.Index.class || clazz == Index.class) {
                 //#33130 - enable IndexCookie only on SystemFileSystem
                 // (also on apisupport layers...)
                 try {
-                    if (DataFolder.this.getPrimaryFile().getFileSystem() ==
-                                Repository.getDefault().getDefaultFileSystem() ||
+                    if (DataFolder.this.getPrimaryFile().getFileSystem().isDefault() ||
                             Boolean.TRUE.equals(DataFolder.this.getPrimaryFile().getAttribute("DataFolder.Index.reorderable"))) { // NOI18N
-                        return new Index (DataFolder.this, this);
+                        return clazz.cast(new Index (DataFolder.this, this));
                     }
                 } catch (FileStateInvalidException ex) {
                     Logger.getLogger(DataFolder.class.getName()).log(Level.WARNING, null, ex);
@@ -1661,8 +1659,7 @@ public class DataFolder extends MultiDataObject implements DataObject.Container 
                         protected boolean handleCanPaste (DataObject obj) {
                             // #42888 - disable "Create as Link" action on non-SystemFileSystem
                             try {
-                                if (!DataFolder.this.getPrimaryFile().getFileSystem().equals(
-                                        Repository.getDefault().getDefaultFileSystem())) {
+                                if (!DataFolder.this.getPrimaryFile().getFileSystem().isDefault()) {
                                     return false;
                                 }
                             } catch (FileStateInvalidException ex) {

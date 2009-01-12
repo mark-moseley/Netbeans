@@ -49,17 +49,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import org.netbeans.modules.mobility.project.ui.customizer.J2MEProjectProperties;
-import org.netbeans.modules.mobility.project.ui.customizer.J2MEProjectProperties;
 import org.netbeans.spi.mobility.cfgfactory.ProjectConfigurationFactory;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
 /**
  *
  * @author Adam Sotona
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.mobility.cfgfactory.ProjectConfigurationFactory.class, position=90)
 public class UserConfigurationTemplatesProvider implements ProjectConfigurationFactory, ProjectConfigurationFactory.CategoryDescriptor {
         
     public static final String PRIVATE_PREFIX = "private."; //NOI18N
@@ -82,7 +82,7 @@ public class UserConfigurationTemplatesProvider implements ProjectConfigurationF
 
     public List<Descriptor> getChildren() {
         ArrayList<Descriptor> a = new ArrayList();
-        FileObject root = Repository.getDefault().getDefaultFileSystem().findResource(CFG_TEMPLATES_PATH);
+        FileObject root = FileUtil.getConfigFile(CFG_TEMPLATES_PATH);
         if (root != null) {
             for (final FileObject fo : root.getChildren()) {
                 if (CFG_EXT.equals(fo.getExt())) {

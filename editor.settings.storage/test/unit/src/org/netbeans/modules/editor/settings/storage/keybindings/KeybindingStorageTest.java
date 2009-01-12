@@ -57,7 +57,7 @@ import org.netbeans.modules.editor.settings.storage.EditorTestLookup;
 import org.netbeans.modules.editor.settings.storage.StorageImpl;
 import org.netbeans.modules.editor.settings.storage.api.EditorSettingsStorage;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
 import org.openide.util.Utilities;
 
@@ -74,6 +74,7 @@ public class KeybindingStorageTest extends NbTestCase {
     
     protected @Override void setUp() throws Exception {
         super.setUp();
+        clearWorkDir();
     
         EditorTestLookup.setLookup(
             new URL[] {
@@ -135,12 +136,12 @@ public class KeybindingStorageTest extends NbTestCase {
         EditorSettingsStorage<Collection<KeyStroke>, MultiKeyBinding> ess = EditorSettingsStorage.<Collection<KeyStroke>, MultiKeyBinding>get(KeyMapsStorage.ID);
         ess.save(MimePath.EMPTY, "MyProfileXyz", false, newKeybindings);
         
-        FileObject settingFile = Repository.getDefault().getDefaultFileSystem().findResource("Editors/Keybindings/MyProfileXyz/org-netbeans-modules-editor-settings-CustomKeybindings.xml");
+        FileObject settingFile = FileUtil.getConfigFile("Editors/Keybindings/MyProfileXyz/org-netbeans-modules-editor-settings-CustomKeybindings.xml");
         assertNotNull("Can't find custom settingFile", settingFile);
         assertEquals("Wrong mime type", KeyMapsStorage.MIME_TYPE, settingFile.getMIMEType());
         
         // Force loading from the files
-        StorageImpl<Collection<KeyStroke>, MultiKeyBinding> storage = new StorageImpl<Collection<KeyStroke>, MultiKeyBinding>(new KeyMapsStorage());
+        StorageImpl<Collection<KeyStroke>, MultiKeyBinding> storage = new StorageImpl<Collection<KeyStroke>, MultiKeyBinding>(new KeyMapsStorage(), null);
         Map<Collection<KeyStroke>, MultiKeyBinding> keybindings = storage.load(MimePath.EMPTY, "MyProfileXyz", false); //NOI18N
         assertNotNull("Keybindings map should not be null", keybindings);
         assertEquals("Wrong number of keybindings", 1, keybindings.size());

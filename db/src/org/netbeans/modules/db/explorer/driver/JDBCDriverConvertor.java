@@ -53,6 +53,9 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.cookies.InstanceCookie;
@@ -70,7 +73,6 @@ import org.openide.util.lookup.AbstractLookup;
 import org.openide.util.lookup.InstanceContent;
 import org.openide.xml.EntityCatalog;
 import org.openide.xml.XMLUtil;
-import org.openide.filesystems.Repository;
 import org.netbeans.api.db.explorer.JDBCDriver;
 import org.openide.util.Exceptions;
 import org.xml.sax.Attributes;
@@ -105,9 +107,15 @@ public class JDBCDriverConvertor implements Environment.Provider, InstanceCookie
      * The delay by which the write of the changes is postponed.
      */
     private static final int DELAY = 2000;
-    
-    private static FileObject newlyCreated;
-    private static JDBCDriver newlyCreatedInstance;
+
+    // Ensures DO's created for newly registered drivers cannot be garbage-collected
+    // before they are recognized by FolderLookup. This makes sure the FolderLookup
+    // will return the originally registered driver instance.
+    private static final WeakHashMap<JDBCDriver, DataObject> newDriver2DO = new WeakHashMap<JDBCDriver, DataObject>();
+
+    // Helps ensure that when recognizing a new DO for a newly registered driver,
+    // the DO will hold the originally registered driver instance instead of creating a new one.
+    private static final Map<FileObject, JDBCDriver> newFile2Driver = new ConcurrentHashMap<FileObject, JDBCDriver>();
     
     private final Reference holder;
 
@@ -152,8 +160,9 @@ public class JDBCDriverConvertor implements Environment.Provider, InstanceCookie
     // Environment.Provider methods
     
     public Lookup getEnvironment(DataObject obj) {
-        if (obj.getPrimaryFile() == newlyCreated) {
-            return new JDBCDriverConvertor((XMLDataObject)obj, newlyCreatedInstance).getLookup();
+        JDBCDriver existingInstance = newFile2Driver.remove(obj.getPrimaryFile());
+        if (existingInstance != null) {
+            return new JDBCDriverConvertor((XMLDataObject)obj, existingInstance).getLookup();
         } else {
             return new JDBCDriverConvertor((XMLDataObject)obj).getLookup();
         }
@@ -240,12 +249,13 @@ public class JDBCDriverConvertor implements Environment.Provider, InstanceCookie
      * Creates the XML file describing the specified JDBC driver.
      */
     public static DataObject create(JDBCDriver drv) throws IOException {
-        FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource(DRIVERS_PATH);
+        FileObject fo = FileUtil.getConfigFile(DRIVERS_PATH);
         DataFolder df = DataFolder.findFolder(fo);
 
         String fileName = drv.getClassName().replace('.', '_'); //NOI18N
         AtomicWriter writer = new AtomicWriter(drv, df, fileName);
         df.getPrimaryFile().getFileSystem().runAtomicAction(writer);
+
         return writer.holder;
     }
     
@@ -254,12 +264,11 @@ public class JDBCDriverConvertor implements Environment.Provider, InstanceCookie
      * used in 4.1 and previous to the new one.
      */
     public static void importOldDrivers() {
-        FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
-        FileObject oldRoot = sfs.findResource(JDBCDriverConvertor.OLD_DRIVERS_PATH);
+        FileObject oldRoot = FileUtil.getConfigFile(JDBCDriverConvertor.OLD_DRIVERS_PATH);
         if (oldRoot == null) {
             return;
         }
-        FileObject newRoot = sfs.findResource(JDBCDriverConvertor.DRIVERS_PATH);
+        FileObject newRoot = FileUtil.getConfigFile(JDBCDriverConvertor.DRIVERS_PATH);
         FileObject[] children = oldRoot.getChildren();
         for (int i = 0; i < children.length; i++) {
             try {
@@ -303,7 +312,7 @@ public class JDBCDriverConvertor implements Environment.Provider, InstanceCookie
      */
     public static void remove(JDBCDriver drv) throws IOException {
         String name = drv.getName();
-        FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource(DRIVERS_PATH); //NOI18N
+        FileObject fo = FileUtil.getConfigFile(DRIVERS_PATH); //NOI18N
         DataFolder folder = DataFolder.findFolder(fo);
         DataObject[] objects = folder.getChildren();
         
@@ -382,15 +391,12 @@ public class JDBCDriverConvertor implements Environment.Provider, InstanceCookie
             } finally {
                 lck.releaseLock();
             }
-
             if (holder == null) {
-                newlyCreated = data;
-                newlyCreatedInstance = instance;
+                newFile2Driver.put(data, instance);
                 holder = (MultiDataObject)DataObject.find(data);
                 // ensure the Environment.Provider.getEnvironment() is called for the new DataObject
-                holder.getCookie(InstanceCookie.class); 
-                newlyCreated = null;
-                newlyCreatedInstance = null;
+                holder.getCookie(InstanceCookie.class);
+                newDriver2DO.put(instance, holder);
             }
         }
 

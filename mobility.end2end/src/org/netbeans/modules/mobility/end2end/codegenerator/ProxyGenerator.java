@@ -52,18 +52,16 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.lang.reflect.Modifier;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import javax.script.Bindings;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 
+import javax.script.ScriptException;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.java.source.ClasspathInfo;
@@ -79,25 +77,19 @@ import org.netbeans.modules.mobility.end2end.classdata.PortData;
 import org.netbeans.modules.mobility.end2end.classdata.WSDLService;
 import org.netbeans.modules.mobility.end2end.client.config.Configuration;
 import org.netbeans.modules.mobility.end2end.client.config.ServerConfiguration;
+import org.netbeans.modules.mobility.end2end.output.OutputLogger;
+import org.netbeans.modules.mobility.end2end.output.OutputLogger.LogLevel;
 import org.netbeans.modules.mobility.end2end.util.Util;
 import org.netbeans.modules.mobility.javon.JavonMapping;
 import org.netbeans.modules.mobility.javon.OutputFileFormatter;
-import org.netbeans.modules.websvc.api.client.ClientStubDescriptor;
-import org.netbeans.modules.websvc.api.client.WebServicesClientSupport;
-import org.netbeans.modules.websvc.api.client.WsCompileClientEditorSupport;
 import org.netbeans.modules.websvc.api.jaxws.client.JAXWSClientView;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlService;
-import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
-import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
-import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.Node;
 import org.openide.util.NbBundle;
 
@@ -134,7 +126,17 @@ public class ProxyGenerator {
             
             FileObject targetFolder = fo.getFileObject( targetFolderName );
             if( targetFolder == null ){
+                OutputLogger.getInstance().log(
+                        MessageFormat.format(
+                        NbBundle.getMessage(ProxyGenerator.class ,"TXT_CreatingFolder") , // NOI18N
+                        targetFolderName));
                 targetFolder = FileUtil.createFolder( fo, targetFolderName );
+            }
+            if ( targetFolder == null ){
+                OutputLogger.getInstance().log( LogLevel.ERROR,
+                        MessageFormat.format(
+                        NbBundle.getMessage(ProxyGenerator.class ,"TXT_FailedFolderCreation") , // NOI18N
+                        targetFolderName));
             }
             
             final PortData pd = (PortData)wsdlService.getData().get( 0 );
@@ -146,7 +148,17 @@ public class ProxyGenerator {
                 
             FileObject outputFile = targetFolder.getFileObject( proxyClassName, "java" ); // NOI18N
             if( outputFile == null ) {
+                OutputLogger.getInstance().log(
+                        MessageFormat.format(
+                        NbBundle.getMessage(ProxyGenerator.class ,"TXT_CreatingProxyClass") , // NOI18N
+                        proxyClassName ));
                 outputFile = targetFolder.createData( proxyClassName, "java" ); // NOI18N
+            }
+            if ( outputFile == null ){
+                OutputLogger.getInstance().log( LogLevel.ERROR,
+                        MessageFormat.format(
+                        NbBundle.getMessage(ProxyGenerator.class ,"TXT_FailedProxyClassCreation") , // NOI18N
+                        proxyClassName));
             }
             
             // Get Nodes from the J2EE
@@ -206,13 +218,14 @@ public class ProxyGenerator {
             ScriptEngine eng = mgr.getEngineByName( "freemarker" ); // NOI18N
             Bindings bind = eng.getContext().getBindings( ScriptContext.ENGINE_SCOPE );
 
-            FileObject template = Repository.getDefault().getDefaultFileSystem().
-                    getRoot().getFileObject( "Templates/Server/Proxy.java" ); // NOI18N
+            FileObject template = FileUtil.getConfigFile( "Templates/Server/Proxy.java" ); // NOI18N
             
             // Set code generation for server part
             JavonMapping mapping = dataObject.getMapping();
             mapping.setProperty( "target", "server" );  // NOI18N
             
+            OutputLogger.getInstance().log( NbBundle.getMessage(ProxyGenerator.class,
+                    "TXT_ConfigureBindings"));// NOI18N
             bind.put( "mapping", mapping ); // NOI18N
             bind.put( "proxyClassPackage", sc.getClassDescriptor().getPackageName()); // NOI18N
             bind.put( "proxyClassName", proxyClassName ); // NOI18N
@@ -225,6 +238,8 @@ public class ProxyGenerator {
             
             Writer w = null;
             Reader is = null;
+            OutputLogger.getInstance().log( NbBundle.getMessage(ProxyGenerator.class,
+                "TXT_GenerateProxyClass"));
             try {
                 w = new StringWriter();
                 is = new InputStreamReader( template.getInputStream());
@@ -234,9 +249,12 @@ public class ProxyGenerator {
                 eng.getContext().setAttribute( ScriptEngine.FILENAME, template.getNameExt(), ScriptContext.ENGINE_SCOPE );
 
                 eng.eval( is );
-            } catch( Exception e ) {
-                e.printStackTrace();
-            } finally {
+            }
+            catch( ScriptException e ){
+                OutputLogger.getInstance().log( e );
+                ErrorManager.getDefault().notify( e );
+            }
+            finally {
                 if( w != null ) {
                     off.write( w.toString());
                     w.close();
@@ -244,8 +262,12 @@ public class ProxyGenerator {
                 if( is != null ) is.close();
                 off.close();
             }                  
-        } catch( Exception e ) {                
+        }
+        catch(IOException e ){
+            OutputLogger.getInstance().log( e );
             ErrorManager.getDefault().notify( e );
+            OutputLogger.getInstance().log( NbBundle.getMessage(ProxyGenerator.class,
+                "TXT_FailProxyGeneration"));
             return null;
         }
         return generatedProxyName;

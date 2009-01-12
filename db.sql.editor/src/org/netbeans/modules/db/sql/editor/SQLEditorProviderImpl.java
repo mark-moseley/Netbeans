@@ -53,7 +53,6 @@ import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Exceptions;
@@ -63,6 +62,7 @@ import org.openide.util.NbBundle;
  *
  * @author Andrei Badea
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.db.spi.sql.editor.SQLEditorProvider.class)
 public class SQLEditorProviderImpl implements SQLEditorProvider {
     
     // TODO: should ensure that the number of the generated temporary file
@@ -71,11 +71,10 @@ public class SQLEditorProviderImpl implements SQLEditorProvider {
     private static final String CMD_FOLDER = "Databases/SQLCommands"; // NOI18N
     
     public void openSQLEditor(DatabaseConnection dbconn, String sql, boolean execute) {
-        FileObject root = Repository.getDefault().getDefaultFileSystem().getRoot();
-        FileObject tmpFo = root.getFileObject(CMD_FOLDER);
+        FileObject tmpFo = FileUtil.getConfigFile(CMD_FOLDER);
         if (tmpFo == null) {
             try {
-                tmpFo = FileUtil.createFolder(root, CMD_FOLDER );
+                tmpFo = FileUtil.createFolder(FileUtil.getConfigRoot(), CMD_FOLDER );
             } catch (IOException e) {
                 Exceptions.printStackTrace(e);
             }

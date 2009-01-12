@@ -41,19 +41,18 @@
 
 package org.netbeans.core.ui;
 
-import java.awt.Color;
 import java.awt.Cursor;
-import java.awt.Font;
 import java.awt.Window;
-import java.io.File;
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.text.MessageFormat;
-import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.Locale;
-import java.util.Set;
-import java.util.StringTokenizer;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JPanel;
@@ -62,11 +61,9 @@ import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 import org.netbeans.core.actions.HTMLViewAction;
 import org.openide.awt.HtmlBrowser;
+import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.Enumerations;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 public class ProductInformationPanel extends JPanel implements HyperlinkListener {
 
@@ -80,6 +77,7 @@ public class ProductInformationPanel extends JPanel implements HyperlinkListener
         description.setText(org.openide.util.NbBundle.getMessage(ProductInformationPanel.class, 
                 "LBL_Description", new Object[] {getProductVersionValue(), getJavaValue(), getVMValue(), 
                 getOperatingSystemValue(), getEncodingValue(), getSystemLocaleValue(), getUserDirValue()}));
+        description.setCaretPosition(0); // so that text is not scrolled down
         description.addHyperlinkListener(this);
         copyright.addHyperlinkListener(this);
         copyright.setBackground(getBackground());
@@ -125,7 +123,8 @@ public class ProductInformationPanel extends JPanel implements HyperlinkListener
         copyright.setBorder(null);
         copyright.setContentType("text/html");
         copyright.setEditable(false);
-        copyright.setText(org.openide.util.NbBundle.getBundle(ProductInformationPanel.class).getString("LBL_Copyright")); // NOI18N
+        copyright.setText(getCopyrightText());
+        copyright.setCaretPosition(0); // so that text is not scrolled down
         copyright.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 copyrightMouseClicked(evt);
@@ -157,7 +156,7 @@ public class ProductInformationPanel extends JPanel implements HyperlinkListener
                 .addContainerGap()
                 .add(jLabel1)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
-                .add(jScrollPane3, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 98, Short.MAX_VALUE)
+                .add(jScrollPane3, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 120, Short.MAX_VALUE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
                 .add(jScrollPane2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 98, Short.MAX_VALUE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
@@ -208,43 +207,6 @@ private void jLabel1MouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:eve
         }
     }
     
-    private void updateLabelFont (javax.swing.JComponent label, Color color) {
-        updateLabelFont(label, 0, 0, color);
-    }
-
-    private void updateLabelFont (javax.swing.JComponent label, int style, Color color) {
-        updateLabelFont(label, style, 0, color);
-    }
-
-    private void updateLabelFont (javax.swing.JComponent label, int style, int plusSize, Color color) {
-        Font font = label.getFont();
-        if(style != 0) {
-            // don't use deriveFont() - see #49973 for details
-            if (Utilities.isMac()) {
-                font = new Font(label.getFont().getName(), Font.BOLD, label.getFont().getSize());
-            } else {
-                font = label.getFont().deriveFont(Font.BOLD);
-            }
-            label.setFont(font);
-        }
-        if(plusSize != 0f) {
-            // don't use deriveFont() - see #49973 for details
-            font = new Font(font.getName(), font.getStyle(), font.getSize() + plusSize);
-            label.setFont(font);
-        }
-        if(color != null) {
-            label.setForeground(color);
-        }
-    }
-
-    private ImageIcon getIcon () {
-        return new ImageIcon(Utilities.loadImage("org/netbeans/core/startup/frame48.gif", true));
-    }
-
-    private String getProductInformationTitle () {
-        return NbBundle.getMessage(ProductInformationPanel.class, "LBL_ProductInformation");
-    }
-
     public static String getProductVersionValue () {
         return MessageFormat.format(
             NbBundle.getBundle("org.netbeans.core.startup.Bundle").getString("currentVersion"),
@@ -266,58 +228,9 @@ private void jLabel1MouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:eve
         return System.getProperty("java.vm.name", "unknown") + " " + System.getProperty("java.vm.version", "");
     }
 
-    private String getVendorValue () {
-        return System.getProperty("java.vendor", "unknown");
-    }
-
-    private String getJavaHomeValue () {
-        return System.getProperty("java.home", "unknown");
-    }
-
     public static String getSystemLocaleValue () {
         String branding;
         return Locale.getDefault().toString() + ((branding = NbBundle.getBranding()) == null ? "" : (" (" + branding + ")")); // NOI18N
-    }
-
-    private String getHomeDirValue () {
-        return System.getProperty("user.home", "unknown");
-    }
-
-    private String getCurrentDirValue () {
-        return System.getProperty("user.dir", "unknown");
-    }
-
-    private String getIDEInstallValue () {
-        String nbhome = System.getProperty("netbeans.home");
-        String nbdirs = System.getProperty("netbeans.dirs");
-        
-        Enumeration<Object> more;
-        if (nbdirs != null) {
-            more = new StringTokenizer(nbdirs, File.pathSeparator);
-        } else {
-            more = Enumerations.empty();
-        }
-            
-        Enumeration<Object> all = Enumerations.concat(Enumerations.singleton(nbhome), more);
-        
-        Set<File> files = new HashSet<File>();
-        StringBuilder sb = new StringBuilder ();
-        String prefix = "";
-        while (all.hasMoreElements ()) {
-            String s = (String)all.nextElement ();
-            if (s == null) {
-                continue;
-            }
-            File f = FileUtil.normalizeFile(new File(s));
-            if (files.add (f)) {
-                // new file
-                sb.append (prefix);
-                sb.append(f.getAbsolutePath());
-                prefix = "\n";
-            }
-        }
-        
-        return sb.toString ();
     }
 
     private String getUserDirValue () {
@@ -336,4 +249,64 @@ private void jLabel1MouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:eve
         }
     }
      
+    private static String getCopyrightText () {
+        
+        String copyrighttext = org.openide.util.NbBundle.getBundle(ProductInformationPanel.class).getString("LBL_Copyright"); // NOI18N
+        
+        FileObject licenseFolder = FileUtil.getConfigFile("About/Licenses");   // NOI18N
+        if (licenseFolder != null) {
+            FileObject[] foArray = licenseFolder.getChildren();
+            if (foArray.length > 0) {
+                String curLicense;
+                boolean isSomeLicense = false;
+                StringWriter sw = new StringWriter();
+                for (int i = 0; i < foArray.length; i++) {
+                    curLicense = loadLicenseText(foArray[i]);
+                    if (curLicense != null) {
+                        sw.write("<br>" + MessageFormat.format( // NOI18N
+                            NbBundle.getBundle(ProductInformationPanel.class).getString("LBL_AddOnCopyright"), // NOI18N
+                            new Object[] { curLicense }));
+                        isSomeLicense = true;
+                    }
+                }
+                if (isSomeLicense) {
+                    copyrighttext += sw.toString();
+                }
+            }
+        }
+        
+        return copyrighttext;
+    }
+    
+    /** Tries to load text stored in given file object.
+     *
+     * @param fo File object to retrieve text from
+     * @return String containing text from the file, or null if file can't be found
+     * or some kind of I/O error appeared.
+     */
+    private static String loadLicenseText (FileObject fo) {
+        
+        InputStream is = null;
+        try {
+            is = fo.getInputStream();
+        } catch (FileNotFoundException ex) {
+            // license file not found
+            return null;
+        }
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(is));
+        StringWriter result = new StringWriter();
+        int curChar;
+        try {
+            // reading content of license file
+            while ((curChar = in.read()) != -1) {
+                result.write(curChar);
+            }
+        } catch (IOException ex) {
+            // don't return anything if any problem during read
+            return null;
+        }
+
+        return result.toString();
+    }
 }

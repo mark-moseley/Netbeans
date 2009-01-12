@@ -46,7 +46,6 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import javax.swing.text.AttributeSet;
-import javax.swing.text.AttributeSet;
 import javax.swing.text.StyleConstants;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.settings.AttributesUtilities;
@@ -56,7 +55,7 @@ import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.editor.settings.storage.EditorTestLookup;
 import org.netbeans.modules.editor.settings.storage.api.EditorSettingsStorage;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
@@ -71,6 +70,7 @@ public class ColoringStorageTest extends NbTestCase {
     
     protected @Override void setUp() throws Exception {
         super.setUp();
+        clearWorkDir();
     
         EditorTestLookup.setLookup(
             new URL[] {
@@ -170,7 +170,7 @@ public class ColoringStorageTest extends NbTestCase {
         MimePath mimePath = MimePath.parse("text/x-type-A");
         ess.delete(mimePath, "MyProfileXyz", true);
         
-        FileObject profileHome = Repository.getDefault().getDefaultFileSystem().findResource("Editors/text/x-type-A/FontsColors/MyProfileXyz/Defaults");
+        FileObject profileHome = FileUtil.getConfigFile("Editors/text/x-type-A/FontsColors/MyProfileXyz/Defaults");
         assertNotNull("Can't find profileHome", profileHome);
         
         FileObject [] files = profileHome.getChildren();
@@ -195,7 +195,7 @@ public class ColoringStorageTest extends NbTestCase {
         EditorSettingsStorage<String, AttributeSet> ess = EditorSettingsStorage.<String, AttributeSet>get(ColoringStorage.ID);
         ess.save(mimePath, "MyProfileXyz", false, newColorings);
         
-        FileObject settingFile = Repository.getDefault().getDefaultFileSystem().findResource("Editors/text/x-type-A/FontsColors/MyProfileXyz/org-netbeans-modules-editor-settings-CustomFontsColors-tokenColorings.xml");
+        FileObject settingFile = FileUtil.getConfigFile("Editors/text/x-type-A/FontsColors/MyProfileXyz/org-netbeans-modules-editor-settings-CustomFontsColors-tokenColorings.xml");
         assertNotNull("Can't find custom settingFile", settingFile);
         assertEquals("Wrong mime type", ColoringStorage.MIME_TYPE, settingFile.getMIMEType());
         
@@ -214,4 +214,20 @@ public class ColoringStorageTest extends NbTestCase {
         assertEquals("Wrong DisplayName", name2, c2.getAttribute(EditorStyleConstants.DisplayName));
     }
     
+    public void testLegacyFilesWithNoDTD_Issue113137() {
+        ColoringStorage cs = new ColoringStorage(true);
+        Map<String, AttributeSet> colorings = cs.load(MimePath.parse("text/x-legacy"), "NetBeans", false); //NOI18N
+        assertNotNull("Colorings map should not be null", colorings);
+        assertEquals("Wrong number of colorings", 2, colorings.size());
+        {
+        AttributeSet c = colorings.get("pp-active-block");
+        assertNotNull("Should have pp-active-block coloring", c);
+        assertEquals("Wrong bgColor", new Color(0xfffae1f0), c.getAttribute(StyleConstants.Background));
+        }
+        {
+        AttributeSet c = colorings.get("pp-inactive-block");
+        assertNotNull("Should have pp-inactive-block coloring", c);
+        assertEquals("Wrong bgColor", new Color(0xffebe1fa), c.getAttribute(StyleConstants.Background));
+        }
+    }
 }

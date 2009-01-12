@@ -46,12 +46,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.actions.FileSystemAction;
 import org.openide.filesystems.FileChangeAdapter;
-import org.openide.filesystems.Repository;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 import javax.swing.Action;
 import javax.swing.event.ChangeEvent;
@@ -87,7 +86,7 @@ public class ServerResourceNode extends FilterNode {
     private static final Logger LOGGER = Logger.getLogger(ServerResourceNode.class.getName());
     private static final boolean LOG = LOGGER.isLoggable(Level.FINE);
     
-    private static final Image RESOURCE_FILE_BADGE = Utilities.loadImage( "org/netbeans/modules/j2ee/ejbjar/project/ui/resourcesBadge.gif", true ); // NOI18N
+    private static final Image RESOURCE_FILE_BADGE = ImageUtilities.loadImage( "org/netbeans/modules/j2ee/ejbjar/project/ui/resourcesBadge.gif", true ); // NOI18N
     private static final String SETUP_DIR = "setup"; // NOI18N
     private static final DataFilter VISIBILITY_QUERY_FILTER = new VisibilityQueryDataFilter();
     
@@ -95,12 +94,12 @@ public class ServerResourceNode extends FilterNode {
     private FileChangeListener projectDirectoryListener;
     
     /** Creates a new instance of ServerResourceNode */
-    public ServerResourceNode(Project project) {
+    public ServerResourceNode(Project project) throws DataObjectNotFoundException {
         this(getSetupDataFolder(project), project);
     }
     
-    private ServerResourceNode(DataFolder folderDo, Project project) {
-        super(getDataFolderNode(folderDo, project), getDataFolderNodeChildren(folderDo));
+    private ServerResourceNode(DataFolder folderDo, Project project) throws DataObjectNotFoundException {
+        super(getDataFolderNode(folderDo, project), getDataFolderNodeChildren(folderDo), Lookups.singleton(DataFolder.find(project.getProjectDirectory())));
         projectDirectoryListener = new ProjectDirectoryListener();
         if (LOG) {
             LOGGER.log(Level.FINE, "Adding file listener to " + project.getProjectDirectory()); // NOI18N
@@ -118,7 +117,7 @@ public class ServerResourceNode extends FilterNode {
     }
     
     private static Image badgeIcon(Image icon) {
-        return Utilities.mergeImages(icon, RESOURCE_FILE_BADGE, 7, 7);
+        return ImageUtilities.mergeImages(icon, RESOURCE_FILE_BADGE, 7, 7);
     }
     
     public String getDisplayName() {
@@ -303,7 +302,7 @@ public class ServerResourceNode extends FilterNode {
         }
         
         private static Node getImageDelegate() {
-            FileObject imageFo = Repository.getDefault().getDefaultFileSystem().getRoot();
+            FileObject imageFo = FileUtil.getConfigRoot();
             if (imageFo != null) {
                 try {
                     DataObject imageDo = DataObject.find(imageFo);

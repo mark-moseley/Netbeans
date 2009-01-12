@@ -67,7 +67,6 @@ import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -97,14 +96,14 @@ public class PlatformCatalogAutoInstaller implements Runnable, FileChangeListene
      * Creates a new instance of PlatformCatalogAutoInstaller
      */
     public PlatformCatalogAutoInstaller() {
-        fo = Repository.getDefault().getDefaultFileSystem().findResource("platform_installers"); //NOI18N
+        fo = FileUtil.getConfigFile("platform_installers"); //NOI18N
         assert fo != null;
         fo.addFileChangeListener(this);
         res = Lookup.getDefault().lookup(new Lookup.Template<ModuleInfo>(ModuleInfo.class));
         res.allInstances();
         res.addLookupListener(this);
         res.allInstances();
-        Repository.getDefault().getDefaultFileSystem().findResource("Modules").addFileChangeListener(this); //NOI18N
+        FileUtil.getConfigFile("Modules").addFileChangeListener(this); //NOI18N
     }
     
     public void run() {
@@ -131,7 +130,20 @@ public class PlatformCatalogAutoInstaller implements Runnable, FileChangeListene
             success = ExecutionEngine.getDefault().execute(inst.getName(), new Runnable() {
                 public void run() {
                     try {
-                        final Process p = Runtime.getRuntime().exec(new String[] {inst.getAbsolutePath()});
+                        /*
+                         *Fix for #131598 - java.io.IOException: Cannot run program
+                         * "C:\Users\tester\.netbeans\dev\config\platform_installers\
+                         * Sun-Java-Wireless-Toolkit252-for-CLDC-for-Windows_200710311754.exe":
+                         * CreateProcess error=740, The requ
+                         */
+                        String[] args ;
+                        if ( Utilities.getOperatingSystem() == Utilities.OS_WINVISTA ){
+                            args = new String[] { "cmd.exe" ,"/c" , inst.getAbsolutePath()}; // NOI18N
+                        }
+                        else {
+                            args = new String[] {inst.getAbsolutePath()};
+                        }
+                        final Process p = Runtime.getRuntime().exec(  args);
                         RequestProcessor.getDefault().post(new StreamPumper(io.getIn(), new OutputStreamWriter(p.getOutputStream())));
                         RequestProcessor.getDefault().post(new StreamPumper(new InputStreamReader(p.getInputStream()), io.getOut()));
                         RequestProcessor.getDefault().post(new StreamPumper(new InputStreamReader(p.getErrorStream()), io.getErr()));
@@ -162,15 +174,13 @@ public class PlatformCatalogAutoInstaller implements Runnable, FileChangeListene
     private void launchAddPlatformWizard() {
         try {
             final WizardDescriptor wiz = new WizardDescriptor(InstallerIterator.getDefault());
-            final DataObject template = DataObject.find(
-                    Repository.getDefault().getDefaultFileSystem().findResource(TEMPLATE));
+            final DataObject template = DataObject.find(FileUtil.getConfigFile(TEMPLATE));
             wiz.putProperty("targetTemplate", template);    //NOI18N
-            final DataFolder folder = DataFolder.findFolder(
-                    Repository.getDefault().getDefaultFileSystem().findResource(STORAGE));
+            final DataFolder folder = DataFolder.findFolder(FileUtil.getConfigFile(STORAGE));
             wiz.putProperty("targetFolder",folder); //NOI18N
-            wiz.putProperty("WizardPanel_autoWizardStyle", Boolean.TRUE); // NOI18N
-            wiz.putProperty("WizardPanel_contentDisplayed", Boolean.TRUE); // NOI18N
-            wiz.putProperty("WizardPanel_contentNumbered", Boolean.TRUE); // NOI18N
+            wiz.putProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE); // NOI18N
+            wiz.putProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE); // NOI18N
+            wiz.putProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE); // NOI18N
             wiz.setTitle(NbBundle.getMessage(PlatformCatalogAutoInstaller.class, "CTL_AddPlatformTitle")); //NOI18N
             wiz.setTitleFormat(new java.text.MessageFormat("{0}")); // NOI18N
             final Dialog dlg = DialogDisplayer.getDefault().createDialog(wiz);

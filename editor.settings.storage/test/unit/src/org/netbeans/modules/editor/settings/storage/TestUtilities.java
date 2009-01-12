@@ -45,7 +45,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
@@ -56,31 +56,41 @@ public final class TestUtilities {
     /** Creates a new instance of TestUtilities */
     private TestUtilities() {
     }
+
+    // no delay
     
     public static FileObject createFile(String path) throws IOException {
-        return createFO(path, false, null);
+        return createFO(path, false, null, 0);
     }
     
     public static FileObject createFile(String path, String contents) throws IOException {
-        return createFO(path, false, contents);
+        return createFO(path, false, contents, 0);
     }
     
     public static FileObject createFolder(String path) throws IOException {
-        return createFO(path, true, null);
+        return createFO(path, true, null, 0);
+    }
+
+    // delay
+    
+    public static FileObject createFile(String path, long delay) throws IOException {
+        return createFO(path, false, null, delay);
     }
     
-    private static FileObject createFO(final String path, final boolean folder, final String contents) throws IOException {
-        Repository rp = Repository.getDefault();
-        final FileSystem sfs = rp == null ? null : rp.getDefaultFileSystem();
-        
-        if (sfs == null) {
-            throw new IOException("No system FS.");
-        }
-
+    public static FileObject createFile(String path, String contents, long delay) throws IOException {
+        return createFO(path, false, contents, delay);
+    }
+    
+    public static FileObject createFolder(String path, long delay) throws IOException {
+        return createFO(path, true, null, delay);
+    }
+    
+    
+    private static FileObject createFO(final String path, final boolean folder, final String contents, long delay) throws IOException {
         final FileObject [] createdFo = new FileObject[1];
-        sfs.runAtomicAction(new FileSystem.AtomicAction() {
+        FileUtil.runAtomicAction(new FileSystem.AtomicAction() {
             public void run() throws IOException {
-                FileObject fo = sfs.getRoot();
+                FileObject fo = FileUtil.getConfigRoot();
                 String [] pathElements = path.split("/", -1);
                 for (int i = 0; i < pathElements.length; i++ ) {
                     String elementName = pathElements[i];
@@ -113,20 +123,33 @@ public final class TestUtilities {
             }
         });
         
+        if (delay > 0) {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException ie) {
+                // ignore
+            }
+        }
+        
         return createdFo[0];
     }
 
     public static void delete(String path) throws IOException {
-        Repository rp = Repository.getDefault();
-        FileSystem sfs = rp == null ? null : rp.getDefaultFileSystem();
-        
-        if (sfs == null) {
-            throw new IOException("No system FS.");
-        }
-
-        FileObject fo = sfs.findResource(path);
+        delete(path, 0);
+    }
+    
+    public static void delete(String path, long delay) throws IOException {
+        FileObject fo = FileUtil.getConfigFile(path);
         if (fo != null) {
             fo.delete();
+        }
+        
+        if (delay > 0) {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException ie) {
+                // ignore
+            }
         }
     }
     
