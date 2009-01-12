@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -899,17 +900,18 @@ public final class ParseProjectXml extends Task {
         if (module == null) {
             throw new BuildException("No dependent module " + cnb, getLocation());
         }
-        String cluster = module.getClusterName();
-        if (cluster != null) { // #68716
-            if ((includedClusters != null && !includedClusters.isEmpty() && ! ModuleSelector.clusterMatch(includedClusters, cluster)) ||
-                    ((includedClusters == null || includedClusters.isEmpty()) && excludedClusters != null && excludedClusters.contains(cluster))) {
-                throw new BuildException("The module " + cnb + " cannot be compiled against because it is part of the cluster " + cluster +
-                                         " which has been excluded from the target platform in your suite configuration", getLocation());
-            }
-            if (excludedModules != null && excludedModules.contains(cnb)) { // again #68716
-                throw new BuildException("Module " + cnb + " excluded from the target platform", getLocation());
-            }
-        }
+//  XXX - no more included/excluded clusters
+//        String cluster = module.getClusterName();   // TODO - abs. path in clusterName, get rid of netbeans.dest.dir altogether
+//        if (cluster != null) { // #68716
+//            if ((includedClusters != null && !includedClusters.isEmpty() && ! ModuleSelector.clusterMatch(includedClusters, cluster)) ||
+//                    ((includedClusters == null || includedClusters.isEmpty()) && excludedClusters != null && excludedClusters.contains(cluster))) {
+//                throw new BuildException("The module " + cnb + " cannot be compiled against because it is part of the cluster " + cluster +
+//                                         " which has been excluded from the target platform in your suite configuration", getLocation());
+//            }
+//            if (excludedModules != null && excludedModules.contains(cnb)) { // again #68716
+//                throw new BuildException("Module " + cnb + " excluded from the target platform", getLocation());
+//            }
+//        }
         return module.getJar();
     }
  
@@ -966,6 +968,7 @@ public final class ParseProjectXml extends Task {
                 // no cluster name is specified for standalone or module in module suite
                 cluster = "cluster";
             }
+            // TODO - path probably composed wrongly with respect to cluster.path
             return ParseProjectXml.cachedTestDistLocation + sep + testtype + sep + cluster + sep + cnb.replace('.','-');
         }
 
@@ -1176,6 +1179,7 @@ public final class ParseProjectXml extends Task {
         if (cluster == null) {
             cluster = "cluster";
         }
+        // TODO - path probably composed wrongly with respect to cluster.path
         return ParseProjectXml.cachedTestDistLocation + sep + testType + sep + cluster + sep + entry.getCnb().replace('.', '-') + sep + "tests.jar";
     }
 
@@ -1253,17 +1257,19 @@ public final class ParseProjectXml extends Task {
                         if (!addedPaths.add(path)) {
                             continue;
                         }
-                        if (!p.matcher(path).matches()) {
-                            continue;
-                        }
-                        foundAtLeastOneEntry = true;
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        long size = inEntry.getSize();
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream(size == -1 ? 4096 : (int) size);
                         byte[] buf = new byte[4096];
                         int read;
                         while ((read = zis.read(buf)) != -1) {
                             baos.write(buf, 0, read);
                         }
                         byte[] data = baos.toByteArray();
+                        boolean isEnum = isEnum(path, data);
+                        if (!isEnum && !p.matcher(path).matches()) {
+                            continue;
+                        }
+                        foundAtLeastOneEntry = true;
                         ZipEntry outEntry = new ZipEntry(path);
                         outEntry.setSize(data.length);
                         CRC32 crc = new CRC32();
@@ -1286,6 +1292,21 @@ public final class ParseProjectXml extends Task {
                     pubpkgs + " and so cannot be compiled against", getLocation());
         }
         return ppjar;
+    }
+    private boolean isEnum(String path, byte[] data) throws UnsupportedEncodingException { // #152562: workaround for javac bug
+        if (!path.endsWith(".class")) {
+            return false;
+        }
+        String jvmName = path.substring(0, path.length() - ".class".length());
+        String bytecode = new String(data, "ISO-8859-1");
+        if (!bytecode.contains("$VALUES")) {
+            return false;
+        }
+        if (!bytecode.contains("java/lang/Enum<L" + new String(jvmName.getBytes("UTF-8"), "ISO-8859-1") + ";>;")) {
+            return false;
+        }
+        // XXX crude heuristic but unlikely to result in false positives
+        return true;
     }
 
     private TestDeps[] getTestDeps(Document pDoc,ModuleListParser modules,String testCnb) {
