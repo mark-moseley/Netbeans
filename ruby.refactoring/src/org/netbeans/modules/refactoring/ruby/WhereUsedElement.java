@@ -40,28 +40,27 @@
  */
 package org.netbeans.modules.refactoring.ruby;
 
-
 import java.util.Collections;
 import java.util.Set;
 import javax.swing.Icon;
 import javax.swing.text.Position.Bias;
-import org.netbeans.api.gsf.Modifier;
-
-import org.netbeans.api.gsf.OffsetRange;
-import org.netbeans.napi.gsfret.source.CompilationInfo;
-import org.netbeans.napi.gsfret.source.UiUtils;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
+import org.netbeans.modules.csl.api.Modifier;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.core.UiUtils;
+import org.netbeans.modules.csl.spi.GsfUtilities;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.refactoring.ruby.ui.tree.ElementGripFactory;
 import org.netbeans.modules.refactoring.spi.SimpleRefactoringElementImplementation;
 import org.netbeans.modules.ruby.AstUtilities;
+import org.netbeans.modules.ruby.RubyUtils;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.filesystems.FileObject;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.text.PositionBounds;
 import org.openide.text.PositionRef;
 import org.openide.util.Exceptions;
-import org.openide.util.Lookup;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 
@@ -72,6 +71,7 @@ import org.openide.util.lookup.Lookups;
  */
 
 public class WhereUsedElement extends SimpleRefactoringElementImplementation {
+    
     private PositionBounds bounds;
     private String displayText;
     private FileObject parentFile;
@@ -115,12 +115,12 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
     }
 
     public static WhereUsedElement create(RubyElementCtx tree) {
-        CompilationInfo info = tree.getInfo();
+        ParserResult info = tree.getInfo();
         OffsetRange range = AstUtilities.getNameRange(tree.getNode());
         assert range != OffsetRange.NONE;
 
         range = LexUtilities.getLexerOffsets(info, range);
-        assert range != OffsetRange.NONE;
+        assert range != OffsetRange.NONE : tree;
         
         Set<Modifier> modifiers = Collections.emptySet();
         if (tree.getElement() != null) {
@@ -130,8 +130,8 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         return create(info, tree.getName(), range, icon);
     }
     
-    public static WhereUsedElement create(CompilationInfo info, String name, OffsetRange range, Icon icon) {
-        FileObject fo = info.getFileObject();
+    public static WhereUsedElement create(ParserResult parserResult, String name, OffsetRange range, Icon icon) {
+        FileObject fo = RubyUtils.getFileObject(parserResult);
         int start = range.getStart();
         int end = range.getEnd();
         
@@ -139,8 +139,9 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         int en = start; // ! Same line as start
         String content = null;
         
+        BaseDocument bdoc = GsfUtilities.getDocument(RubyUtils.getFileObject(parserResult), true);
         try {
-            BaseDocument bdoc = RetoucheUtils.getDocument(info, info.getFileObject());
+            bdoc.readLock();
             // I should be able to just call tree.getInfo().getText() to get cached
             // copy - but since I'm playing fast and loose with compilationinfos
             // for for example find subclasses (using a singly dummy FileInfo) I need
@@ -173,16 +174,27 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
             }
         } catch (Exception ex) {
             Exceptions.printStackTrace(ex);
+        } finally {
+            bdoc.readUnlock();
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append(RetoucheUtils.getHtml(content.subSequence(sta, start).toString()));
+        if (start < sta) {
+            System.out.println("Problem!");
+            start = sta;
+        }
+        if (en < end) {
+            System.out.println("Problem!");
+            en = end;
+        }
+        final CharSequence subSequence = content.subSequence(sta, start);
+        sb.append(RetoucheUtils.getHtml(subSequence.toString()));
         sb.append("<b>"); // NOI18N
         sb.append(content.subSequence(start, end));
         sb.append("</b>"); // NOI18N
         sb.append(RetoucheUtils.getHtml(content.subSequence(end, en).toString()));
 
-        CloneableEditorSupport ces = RetoucheUtils.findCloneableEditorSupport(info);
+        CloneableEditorSupport ces = RetoucheUtils.findCloneableEditorSupport(parserResult);
         PositionRef ref1 = ces.createPositionRef(start, Bias.Forward);
         PositionRef ref2 = ces.createPositionRef(end, Bias.Forward);
         PositionBounds bounds = new PositionBounds(ref1, ref2);
@@ -192,12 +204,12 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
     }
 
 
-    public static WhereUsedElement create(CompilationInfo info, String name, String html, OffsetRange range, Icon icon) {
-        FileObject fo = info.getFileObject();
+    public static WhereUsedElement create(ParserResult parserResult, String name, String html, OffsetRange range, Icon icon) {
+        FileObject fo = RubyUtils.getFileObject(parserResult);
         int start = range.getStart();
         int end = range.getEnd();
 
-        CloneableEditorSupport ces = RetoucheUtils.findCloneableEditorSupport(info);
+        CloneableEditorSupport ces = RetoucheUtils.findCloneableEditorSupport(parserResult);
         PositionRef ref1 = ces.createPositionRef(start, Bias.Forward);
         PositionRef ref2 = ces.createPositionRef(end, Bias.Forward);
         PositionBounds bounds = new PositionBounds(ref1, ref2);

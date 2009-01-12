@@ -41,19 +41,17 @@ package org.netbeans.modules.ruby.hints.introduce;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import org.jruby.ast.BignumNode;
-import org.jruby.ast.DRegexpNode;
-import org.jruby.ast.DStrNode;
-import org.jruby.ast.FixnumNode;
-import org.jruby.ast.FloatNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.StrNode;
-import org.jruby.ast.SymbolNode;
-import org.jruby.ast.XStrNode;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.nb.ast.BignumNode;
+import org.jruby.nb.ast.FixnumNode;
+import org.jruby.nb.ast.FloatNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.jruby.nb.ast.StrNode;
+import org.jruby.nb.ast.SymbolNode;
+import org.jruby.nb.ast.XStrNode;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.ruby.AstUtilities;
 
 /**
@@ -63,7 +61,7 @@ import org.netbeans.modules.ruby.AstUtilities;
  */
 public class DuplicateDetector {
 
-    private CompilationInfo info;
+    private ParserResult info;
     private BaseDocument doc;
     private List<Node> nodes;
     private Node startNode;
@@ -73,7 +71,7 @@ public class DuplicateDetector {
     private int currentEnd;
     private List<OffsetRange> duplicates = new ArrayList<OffsetRange>();
 
-    public DuplicateDetector(CompilationInfo info, BaseDocument doc,
+    public DuplicateDetector(ParserResult info, BaseDocument doc,
             Node root, List<Node> nodes, Node startNode, Node endNode) {
         this.info = info;
         this.doc = doc;
@@ -83,7 +81,7 @@ public class DuplicateDetector {
         this.endNode = endNode;
     }
 
-    public static List<OffsetRange> findDuplicates(CompilationInfo info, BaseDocument doc,
+    public static List<OffsetRange> findDuplicates(ParserResult info, BaseDocument doc,
             Node root, List<Node> nodes,
             Node startNode, Node endNode) {
         // I only support trivial duplicates now (single node constants like strings, numbers etc.
@@ -91,9 +89,9 @@ public class DuplicateDetector {
             return Collections.emptyList();
         }
 
-        if (startNode.nodeId == NodeTypes.ARRAYNODE) {
+        if (startNode.nodeId == NodeType.ARRAYNODE) {
             if (startNode.childNodes().size() == 1) {
-                startNode = (Node) startNode.childNodes().get(0);
+                startNode = startNode.childNodes().get(0);
             } else {
                 return Collections.emptyList();
             }
@@ -117,35 +115,35 @@ public class DuplicateDetector {
             boolean equal = false;
             switch (node.nodeId) {
             // TODO - compare HashNodes
-            case NodeTypes.FLOATNODE: {
+            case FLOATNODE: {
                 equal = (((FloatNode) node).getValue() == ((FloatNode) target).getValue());
                 break;
             }
-            case NodeTypes.BIGNUMNODE: {
+            case BIGNUMNODE: {
                 equal = (((BignumNode) node).getValue() == ((BignumNode) target).getValue());
                 break;
             }
-            case NodeTypes.FIXNUMNODE: {
+            case FIXNUMNODE: {
                 equal = (((FixnumNode) node).getValue() == ((FixnumNode) target).getValue());
                 break;
             }
-            case NodeTypes.SYMBOLNODE: {
+            case SYMBOLNODE: {
                 equal = ((SymbolNode) node).getName().equals(((SymbolNode) target).getName());
                 break;
             }
-            case NodeTypes.STRNODE: {
+            case STRNODE: {
                 equal = ((StrNode) node).getValue().equals(((StrNode) target).getValue());
                 break;
             }
-            case NodeTypes.XSTRNODE: {
+            case XSTRNODE: {
                 equal = ((XStrNode) node).getValue().equals(((XStrNode) target).getValue());
                 break;
             }
-            //case NodeTypes.DSTRNODE: {
+            //case DSTRNODE: {
             //    equal = ((DStrNode)node).getValue().equals(((DStrNode)target).getValue());
             //    break;
             //}
-            //case NodeTypes.DREGEXPNODE: {
+            //case DREGEXPNODE: {
             //    equal = ((DRegexpNode)node).getValue().equals(((DRegexpNode)target).getValue());
             //    break;
             //}
@@ -156,10 +154,12 @@ public class DuplicateDetector {
             }
         //}
         }
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
-        for ( Node child : list) {
+        for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             visit(child, target);
         }
     }

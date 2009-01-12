@@ -27,28 +27,31 @@
  */
 package org.netbeans.modules.ruby.hints;
 
-
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.prefs.Preferences;
 import javax.swing.JComponent;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.jruby.nb.ast.types.INameNode;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.csl.api.Hint;
+import org.netbeans.modules.csl.api.HintFix;
+import org.netbeans.modules.csl.api.HintSeverity;
+import org.netbeans.modules.csl.api.Modifier;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.api.RuleContext;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.ruby.Arity;
 import org.netbeans.modules.ruby.AstUtilities;
+import org.netbeans.modules.ruby.RubyParseResult;
 import org.netbeans.modules.ruby.RubyUtils;
-import org.netbeans.modules.ruby.hints.spi.AstRule;
-import org.netbeans.modules.ruby.hints.spi.Description;
-import org.netbeans.modules.ruby.hints.spi.Fix;
-import org.netbeans.modules.ruby.hints.spi.HintSeverity;
-import org.netbeans.modules.ruby.hints.spi.RuleContext;
+import org.netbeans.modules.ruby.elements.AstElement;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyRuleContext;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
@@ -59,24 +62,25 @@ import org.openide.util.actions.SystemAction;
  * 
  * @author Tor Norbye
  */
-public class RailsViews implements AstRule {
+public class RailsViews extends RubyAstRule {
     public RailsViews() {
     }
 
-    public boolean appliesTo(CompilationInfo info) {
-        return info.getFileObject().getName().endsWith("_controller"); // NOI18N
+    public boolean appliesTo(RuleContext context) {
+        ParserResult info = context.parserResult;
+        return RubyUtils.getFileObject(info).getName().endsWith("_controller"); // NOI18N
     }
 
-    public Set<Integer> getKinds() {
-        return Collections.singleton(NodeTypes.DEFNNODE);
+    public Set<NodeType> getKinds() {
+        return Collections.singleton(NodeType.DEFNNODE);
     }
     
-    public void run(RuleContext context, List<Description> result) {
+    public void run(RubyRuleContext context, List<Hint> result) {
         Node node = context.node;
-        CompilationInfo info = context.compilationInfo;
+        ParserResult info = context.parserResult;
         
         // See if this ia an action method and see if it has a view
-        FileObject file = info.getFileObject();
+        FileObject file = RubyUtils.getFileObject(info);
         assert file.getName().endsWith("_controller"); // NOI18N
 
         // Methods with arguments aren't actions
@@ -89,21 +93,34 @@ public class RailsViews implements AstRule {
 
         FileObject view = RubyUtils.getRailsViewFor(file, name, false, true);
 
-        if (view == null && shouldHaveView(info, node)) {
+        if (view == null && shouldHaveView(info, node) && isPublic(context.parserResult, node)) {
             String displayName = NbBundle.getMessage(RailsViews.class, "MissingView");
             OffsetRange range = AstUtilities.getNameRange(node);
-            List<Fix> fixList = Collections.<Fix>singletonList(new CreateViewFix(file, name));
-            Description desc = new Description(this, displayName, file, range, fixList, 400);
+            List<HintFix> fixList = Collections.<HintFix>singletonList(new CreateViewFix(file, name));
+            Hint desc = new Hint(this, displayName, file, range, fixList, 400);
             result.add(desc);
         }
+    }
+
+    private boolean isPublic(ParserResult result, Node node) {
+        RubyParseResult rpr = (RubyParseResult)result;
+        AstElement element = rpr.getStructure().getElementFor(node);
+        if (element != null) {
+            Set<Modifier> modifiers = element.getModifiers();
+            if (modifiers != null) {
+                return !(modifiers.contains(Modifier.PRIVATE) || modifiers.contains(Modifier.PROTECTED));
+            }
+        }
+
+        return true;
     }
     
     /**
      * Determine whether an action method should have an associated view file.
      * For example, methods that contain a redirect method probably don't need one.
      */
-    private boolean shouldHaveView(CompilationInfo info, Node node) {
-        if (node.nodeId == NodeTypes.FCALLNODE) {
+    private boolean shouldHaveView(ParserResult info, Node node) {
+        if (node.nodeId == NodeType.FCALLNODE) {
             String method = ((INameNode)node).getName();
             
             if (method.startsWith("redirect_")) { // NOI18N
@@ -111,10 +128,12 @@ public class RailsViews implements AstRule {
             }
         }
         
-        @SuppressWarnings("unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             boolean result = shouldHaveView(info, child);
             
             if (!result) {
@@ -153,7 +172,7 @@ public class RailsViews implements AstRule {
         return null;
     }
     
-    private static class CreateViewFix implements Fix {
+    private static class CreateViewFix implements HintFix {
 
         private FileObject controller;
         private String action;

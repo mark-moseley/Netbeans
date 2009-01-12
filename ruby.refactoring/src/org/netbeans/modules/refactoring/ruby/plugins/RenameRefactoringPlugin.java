@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,95 +41,71 @@
 package org.netbeans.modules.refactoring.ruby.plugins;
 
 import java.io.IOException;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import org.jruby.ast.ClassVarAsgnNode;
-import org.jruby.ast.ClassVarDeclNode;
-import org.jruby.ast.ClassVarNode;
-import org.jruby.ast.Colon2Node;
-import org.jruby.ast.ConstDeclNode;
-import org.jruby.ast.ConstNode;
-import org.jruby.ast.GlobalAsgnNode;
-import org.jruby.ast.GlobalVarNode;
-import org.jruby.ast.InstAsgnNode;
-import org.jruby.ast.InstVarNode;
-import org.jruby.ast.MethodDefNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.SymbolNode;
-import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Error;
-import org.netbeans.api.gsf.Severity;
-import org.netbeans.napi.gsfret.source.ClasspathInfo;
-import org.netbeans.napi.gsfret.source.CompilationController;
-import org.netbeans.napi.gsfret.source.ModificationResult.Difference;
-import org.netbeans.napi.gsfret.source.Source;
-import org.netbeans.editor.Utilities;
-import org.netbeans.modules.refactoring.ruby.RetoucheUtils;
-import org.netbeans.modules.refactoring.api.Problem;
-import org.netbeans.modules.refactoring.api.ProgressEvent;
-import org.netbeans.modules.refactoring.ruby.RubyElementCtx;
-import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
-import org.netbeans.modules.ruby.AstPath;
-import org.netbeans.modules.ruby.AstPath;
-import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.RubyIndex;
-import org.netbeans.modules.ruby.StructureAnalyzer.AnalysisResult;
-import org.netbeans.modules.ruby.elements.AstElement;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataObject;
-import org.openide.text.CloneableEditorSupport;
-import org.openide.util.Exceptions;
-import org.openide.util.Exceptions;
-import org.openide.util.NbBundle;
-import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.Position.Bias;
-import org.jruby.ast.ArgumentNode;
-import org.jruby.ast.ClassNode;
-import org.jruby.ast.DAsgnNode;
-import org.jruby.ast.DVarNode;
-import org.jruby.ast.LocalAsgnNode;
-import org.jruby.ast.LocalVarNode;
-import org.jruby.ast.ModuleNode;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.SClassNode;
-import org.netbeans.api.gsf.CancellableTask;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.nb.ast.ArgumentNode;
+import org.jruby.nb.ast.ClassNode;
+import org.jruby.nb.ast.ClassVarAsgnNode;
+import org.jruby.nb.ast.ClassVarDeclNode;
+import org.jruby.nb.ast.ClassVarNode;
+import org.jruby.nb.ast.Colon2Node;
+import org.jruby.nb.ast.DAsgnNode;
+import org.jruby.nb.ast.DVarNode;
+import org.jruby.nb.ast.GlobalAsgnNode;
+import org.jruby.nb.ast.GlobalVarNode;
+import org.jruby.nb.ast.InstAsgnNode;
+import org.jruby.nb.ast.InstVarNode;
+import org.jruby.nb.ast.LocalAsgnNode;
+import org.jruby.nb.ast.LocalVarNode;
+import org.jruby.nb.ast.MethodDefNode;
+import org.jruby.nb.ast.ModuleNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.SClassNode;
+import org.jruby.nb.ast.SymbolNode;
+import org.jruby.nb.ast.types.INameNode;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
-import org.netbeans.napi.gsfret.source.ClasspathInfo;
-import org.netbeans.napi.gsfret.source.CompilationController;
-import org.netbeans.napi.gsfret.source.ModificationResult;
-import org.netbeans.napi.gsfret.source.ModificationResult.Difference;
-import org.netbeans.napi.gsfret.source.Source;
-import org.netbeans.napi.gsfret.source.WorkingCopy;
+import org.netbeans.api.lexer.TokenUtilities;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.refactoring.ruby.plugins.RetoucheCommit;
-import org.netbeans.modules.refactoring.ruby.DiffElement;
+import org.netbeans.editor.Utilities;
+import org.netbeans.modules.csl.api.ElementKind;
+import org.netbeans.modules.csl.api.Error;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.api.Severity;
+import org.netbeans.modules.csl.spi.ParserResult;
+import org.netbeans.modules.csl.spi.support.ModificationResult;
+import org.netbeans.modules.csl.spi.support.ModificationResult.Difference;
+import org.netbeans.modules.parsing.api.ParserManager;
+import org.netbeans.modules.parsing.api.ResultIterator;
+import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.api.UserTask;
+import org.netbeans.modules.parsing.spi.ParseException;
 import org.netbeans.modules.refactoring.api.*;
+import org.netbeans.modules.refactoring.ruby.DiffElement;
 import org.netbeans.modules.refactoring.ruby.RetoucheUtils;
 import org.netbeans.modules.refactoring.ruby.RubyElementCtx;
-import org.netbeans.modules.refactoring.ruby.plugins.RubyRefactoringPlugin;
-import org.netbeans.modules.ruby.RubyUtils;
-import org.openide.filesystems.FileObject;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
+import org.netbeans.modules.ruby.AstPath;
+import org.netbeans.modules.ruby.AstUtilities;
+import org.netbeans.modules.ruby.RubyIndex;
 import org.netbeans.modules.ruby.RubyParseResult;
-import org.netbeans.modules.ruby.StructureAnalyzer;
+import org.netbeans.modules.ruby.RubyStructureAnalyzer.AnalysisResult;
+import org.netbeans.modules.ruby.RubyUtils;
+import org.netbeans.modules.ruby.elements.AstElement;
+import org.netbeans.modules.ruby.elements.Element;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
-import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.text.CloneableEditorSupport;
 import org.openide.text.PositionRef;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 /**
@@ -158,7 +134,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
     private RubyElementCtx treePathHandle = null;
     private Collection overriddenByMethods = null; // methods that override the method to be renamed
     private Collection overridesMethods = null; // methods that are overridden by the method to be renamed
-    private boolean doCheckName = true;
+//    private boolean doCheckName = true;
     
     private RenameRefactoring refactoring;
     
@@ -166,67 +142,67 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
     public RenameRefactoringPlugin(RenameRefactoring rename) {
         this.refactoring = rename;
         RubyElementCtx tph = rename.getRefactoringSource().lookup(RubyElementCtx.class);
-        if (tph!=null) {
+        if (tph != null) {
             treePathHandle = tph;
         } else {
-            Source source = RetoucheUtils.getSource(rename.getRefactoringSource().lookup(FileObject.class));
+            Source source = Source.create(rename.getRefactoringSource().lookup(FileObject.class));
             try {
-                source.runUserActionTask(new CancellableTask<CompilationController>() {
-                    public void cancel() {
-                    }
-                    
-                    public void run(CompilationController co) throws Exception {
-                        co.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
-                        org.jruby.ast.Node root = AstUtilities.getRoot(co);
-                        if (root != null) {
-                            RubyParseResult rpr = (RubyParseResult)co.getParserResult();
-                            if (rpr != null) {
-                                AnalysisResult ar = rpr.getStructure();
+                ParserManager.parse(Collections.singleton(source), new UserTask() {
+
+                    public
+                    @Override
+                    void run(ResultIterator co) throws Exception {
+                        if (co.getSnapshot().getMimeType().equals(RubyUtils.RUBY_MIME_TYPE)) {
+                            RubyParseResult parserResult = AstUtilities.getParseResult(co.getParserResult());
+                            org.jruby.nb.ast.Node root = parserResult.getRootNode();
+                            if (root != null) {
+                                AnalysisResult ar = parserResult.getStructure();
                                 List<? extends AstElement> els = ar.getElements();
                                 if (els.size() > 0) {
                                     // TODO - try to find the outermost or most "relevant" module/class in the file?
                                     // In Java, we look for a class with the name corresponding to the file.
                                     // It's not as simple in Ruby.
                                     AstElement element = els.get(0);
-                                    org.jruby.ast.Node node = element.getNode();
-                                    treePathHandle = new RubyElementCtx(root, node, element, co.getFileObject(), co);
+                                    org.jruby.nb.ast.Node node = element.getNode();
+                                    treePathHandle = new RubyElementCtx(root, node,
+                                            element, RubyUtils.getFileObject(parserResult), parserResult);
                                     refactoring.getContext().add(co);
                                 }
                             }
                         }
                     }
-                }, false);
-            } catch (IllegalArgumentException ex) {
-                ex.printStackTrace();
-            } catch (IOException ex) {
-                ex.printStackTrace();
+                });
+            } catch (ParseException e) {
+                Logger.getLogger(RenameRefactoringPlugin.class.getName()).log(Level.WARNING, null, e);
             }
         }
     }
-    
-    protected Source getRubySource(Phase p) {
-        if (treePathHandle == null) {
-            return null;
-        }
-        switch (p) {
-            case PRECHECK:
-            case CHECKPARAMETERS:    
-                if (treePathHandle==null) {
-                    return null;
-                }
-                ClasspathInfo cpInfo = getClasspathInfo(refactoring);
-                return RetoucheUtils.createSource(cpInfo, treePathHandle.getFileObject());
-            case FASTCHECKPARAMETERS:
-                return RetoucheUtils.getSource(treePathHandle.getFileObject());
 
-        }
-        throw new IllegalStateException();
-    }
+    // XXX Parsing API
+//    protected Source getRubySource(Phase p) {
+//        if (treePathHandle == null) {
+//            return null;
+//        }
+//        switch (p) {
+//            case PRECHECK:
+//            case CHECKPARAMETERS:
+//                if (treePathHandle==null) {
+//                    return null;
+//                }
+//                ClasspathInfo cpInfo = getClasspathInfo(refactoring);
+//                return RetoucheUtils.createSource(cpInfo, treePathHandle.getFileObject());
+//            case FASTCHECKPARAMETERS:
+//                return RetoucheUtils.getSource(treePathHandle.getFileObject());
+//
+//        }
+//        throw new IllegalStateException();
+//    }
     
-    protected Problem preCheck(CompilationController info) throws IOException {
-        Problem preCheckProblem = null;
-        fireProgressListenerStart(refactoring.PRE_CHECK, 4);
-        info.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
+    // XXX Parsing API
+//    protected Problem preCheck(CompilationController info) throws IOException {
+//        Problem preCheckProblem = null;
+//        fireProgressListenerStart(RenameRefactoring.PRE_CHECK, 4);
+//        info.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
 //        Element el = treePathHandle.resolveElement(info);
 //        preCheckProblem = isElementAvail(treePathHandle, info);
 //        if (preCheckProblem != null) {
@@ -299,22 +275,22 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //            //                if (!((jmiObject instanceof Resource) && ((Resource)jmiObject).getClassifiers().isEmpty()))
 //            //                    result = createProblem(result, true, NbBundle.getMessage(RenameRefactoring.class, "ERR_RenameWrongType"));
 //        }
-        fireProgressListenerStop();
-        return preCheckProblem;
-    }
+//        fireProgressListenerStop();
+//        return preCheckProblem;
+//    }
     
-    private static final String getCannotRename(FileObject r) {
-        return new MessageFormat(NbBundle.getMessage(RenameRefactoringPlugin.class, "ERR_CannotRenameFile")).format(new Object[] {r.getNameExt()});
-    }
+//    private static final String getCannotRename(FileObject r) {
+//        return new MessageFormat(NbBundle.getMessage(RenameRefactoringPlugin.class, "ERR_CannotRenameFile")).format(new Object[] {r.getNameExt()});
+//    }
     
-    protected Problem fastCheckParameters(CompilationController info) throws IOException {
+    public Problem fastCheckParameters() {
         Problem fastCheckProblem = null;
-        info.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
         ElementKind kind = treePathHandle.getKind();
-//        
         String newName = refactoring.getNewName();
-//        String oldName = element.getSimpleName().toString();
         String oldName = treePathHandle.getSimpleName();
+        if (oldName == null) {
+            return new Problem(true, "Cannot determine target name. Please file a bug with detailed information on how to reproduce (preferably including the current source file and the cursor position)");
+        }
         
         if (oldName.equals(newName)) {
             boolean nameNotChanged = true;
@@ -332,7 +308,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         
         // TODO - get a better ruby name picker - and check for invalid Ruby symbol names etc.
         // TODO - call RubyUtils.isValidLocalVariableName if we're renaming a local symbol!
-        if (kind == ElementKind.CLASS && !RubyUtils.isValidRubyClassName(newName)) {
+        if (kind == ElementKind.CLASS && !RubyUtils.isValidConstantName(newName)) {
             String s = getString("ERR_InvalidClassName"); //NOI18N
             String msg = new MessageFormat(s).format(
                     new Object[] {newName}
@@ -416,7 +392,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         return fastCheckProblem;
     }
     
-    protected Problem checkParameters(CompilationController info) throws IOException {
+    public Problem checkParameters() {
         
         Problem checkProblem = null;
         int steps = 0;
@@ -427,14 +403,13 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             steps += overridesMethods.size();
         }
         
-        fireProgressListenerStart(refactoring.PARAMETERS_CHECK, 8 + 3*steps);
+        fireProgressListenerStart(RenameRefactoring.PARAMETERS_CHECK, 8 + 3*steps);
         
-        info.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
 //        Element element = treePathHandle.resolveElement(info);
         
         fireProgressListenerStep();
         fireProgressListenerStep();
-        String msg;
+//        String msg;
         
         // TODO - check more parameters
         //System.out.println("TODO - need to check parameters for hiding etc.");
@@ -462,7 +437,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         return checkProblem;
     }
     
-//        private Problem checkMethodForOverriding(ExecutableElement m, String newName, Problem problem, CompilationInfo info) {
+//        private Problem checkMethodForOverriding(ExecutableElement m, String newName, Problem problem, ParserResult info) {
 //            ElementUtilities ut = info.getElementUtilities();
 //            //problem = willBeOverridden(m, newName, argTypes, problem);
 //            fireProgressListenerStep();
@@ -475,7 +450,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
     
     @Override
     public Problem preCheck() {
-        if (!treePathHandle.getFileObject().isValid()) {
+        if (treePathHandle == null || treePathHandle.getFileObject() == null || !treePathHandle.getFileObject().isValid()) {
             return new Problem(true, NbBundle.getMessage(RenameRefactoringPlugin.class, "DSC_ElNotAvail")); // NOI18N
         }
         
@@ -483,26 +458,12 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
     }
 
     private Set<FileObject> getRelevantFiles() {
-        ClasspathInfo cpInfo = getClasspathInfo(refactoring);
-        final Set<FileObject> set = new HashSet<FileObject>();
-        Source source = RetoucheUtils.createSource(cpInfo, treePathHandle.getFileObject());
-
-        try {
-            source.runUserActionTask(new CancellableTask<CompilationController>() {
-                
-                public void cancel() {
-                    throw new UnsupportedOperationException("Not supported yet.");
-                }
-                
-                public void run(CompilationController info) throws Exception {
-                    // TODO if getSearchInComments I -should- search all files
-//                    System.out.println("TODO - compute a full set of files to be checked... for now just lamely using the project files");
-                    if (treePathHandle.getKind() == ElementKind.VARIABLE || treePathHandle.getKind() == ElementKind.PARAMETER) {
-                        // For local variables, only look in the current file!
-                        set.add(info.getFileObject());
-                    }  else {
-                        set.addAll(RetoucheUtils.getRubyFilesInProject(info.getFileObject()));
-                    }
+        if (treePathHandle.getKind() == ElementKind.VARIABLE || treePathHandle.getKind() == ElementKind.PARAMETER) {
+            // For local variables, only look in the current file!
+            return Collections.singleton(treePathHandle.getFileObject());
+        } else {
+            return RetoucheUtils.getRubyFilesInProject(treePathHandle.getFileObject());
+        }
 //                    final ClassIndex idx = info.getClasspathInfo().getClassIndex();
 //                    info.toPhase(org.netbeans.napi.gsfret.source.Phase.RESOLVED);
 //                    Element el = treePathHandle.resolveElement(info);
@@ -534,15 +495,10 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //                        }
 //                        set.addAll(idx.getResources(enclosingType, EnumSet.of(ClassIndex.SearchKind.METHOD_REFERENCES),EnumSet.of(ClassIndex.SearchScope.SOURCE))); //?????
 //                    }
-                }
-            }, true);
-        } catch (IOException ioe) {
-            throw (RuntimeException) new RuntimeException().initCause(ioe);
-        }
-        return set;
+//        }
     }
-    
-//    private void addMethods(ExecutableElement e, Set set, CompilationInfo info, ClassIndex idx) {
+
+//    private void addMethods(ExecutableElement e, Set set, ParserResult info, ClassIndex idx) {
 //        set.add(SourceUtils.getFile(e, info.getClasspathInfo()));
 //        ElementHandle<TypeElement> encl = ElementHandle.create(SourceUtils.getEnclosingTypeElement(e));
 //        set.addAll(idx.getResources(encl, EnumSet.of(ClassIndex.SearchKind.METHOD_REFERENCES),EnumSet.of(ClassIndex.SearchScope.SOURCE)));
@@ -555,11 +511,22 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         if (treePathHandle == null) {
             return null;
         }
-        Set<FileObject> a = getRelevantFiles();
-        fireProgressListenerStart(ProgressEvent.START, a.size());
-        if (!a.isEmpty()) {
-            TransformTask transform = new TransformTask(new RenameTransformer(refactoring.getNewName(), allMethods), treePathHandle);
-            final Collection<ModificationResult> results = processFiles(a, transform);
+        Set<FileObject> files = getRelevantFiles();
+        fireProgressListenerStart(ProgressEvent.START, files.size());
+        if (!files.isEmpty()) {
+            TransformTask transform = new TransformTask() {
+                @Override
+                protected Collection<ModificationResult> process(ParserResult parserResult) {
+                    RenameTransformer rt = new RenameTransformer(refactoring.getNewName(), allMethods);
+                    rt.setWorkingCopy(parserResult);
+                    rt.scan();
+                    ModificationResult mr = new ModificationResult();
+                    mr.addDifferences(parserResult.getSnapshot().getSource().getFileObject(), rt.diffs);
+                    return Collections.singleton(mr);
+                }
+            };
+
+            final Collection<ModificationResult> results = processFiles(files, transform);
             elements.registerTransaction(new RetoucheCommit(results));
             for (ModificationResult result:results) {
                 for (FileObject jfo : result.getModifiedFileObjects()) {
@@ -574,7 +541,15 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                 }
             }
         }
+        // see #126733. need to set a correct new name for the file rename plugin
+        // that gets invoked after this plugin when the refactoring is invoked on a file.
+        if (refactoring.getRefactoringSource().lookup(FileObject.class) != null) {
+            String newName = RubyUtils.camelToUnderlinedName(refactoring.getNewName());
+            refactoring.setNewName(newName);
+        }
+
         fireProgressListenerStop();
+                
         return null;
     }
 
@@ -591,7 +566,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //        }
 //    }
 //    
-//    private Problem willOverride(ExecutableElement method, String name, Problem problem, CompilationInfo info) {
+//    private Problem willOverride(ExecutableElement method, String name, Problem problem, ParserResult info) {
 //        boolean isStatic = method.getModifiers().contains(Modifier.STATIC);
 //        TypeElement jc = (TypeElement) method.getEnclosingElement();
 //        LinkedList supertypes = new LinkedList();
@@ -648,7 +623,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //            return problem;
 //        }
 //    }
-//    private Element hides(Element field, String name, CompilationInfo info) {
+//    private Element hides(Element field, String name, ParserResult info) {
 //        TypeElement jc = SourceUtils.getEnclosingTypeElement(field);
 //        Elements elements = info.getElements();
 //        ElementUtilities utils = info.getElementUtilities();
@@ -668,7 +643,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //        return null;
 //    }
 //    
-//    private String variableClashes(String newName, TreePath tp, CompilationInfo info) {
+//    private String variableClashes(String newName, TreePath tp, ParserResult info) {
 //        LocalVarScanner lookup = new LocalVarScanner(info, newName);
 //        TreePath scopeBlok = tp;
 //        EnumSet set = EnumSet.of(Tree.Kind.BLOCK, Tree.Kind.FOR_LOOP, Tree.Kind.METHOD);
@@ -698,7 +673,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //        return null;
 //    }
 //    
-//    private String clashes(Element feature, String newName, CompilationInfo info) {
+//    private String clashes(Element feature, String newName, ParserResult info) {
 //        ElementUtilities utils = info.getElementUtilities();
 //        Element dc = feature.getEnclosingElement();
 //        ElementKind kind = feature.getKind();
@@ -739,17 +714,17 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
      */
     public class RenameTransformer extends SearchVisitor {
 
-        private Set<RubyElementCtx> allMethods;
-        private String newName;
-        private String oldName;
+        private final Set<RubyElementCtx> allMethods;
+        private final String newName;
+        private final String oldName;
         private CloneableEditorSupport ces;
         private List<Difference> diffs;
 
         @Override
-        public void setWorkingCopy(WorkingCopy workingCopy) {
+        public void setWorkingCopy(ParserResult workingCopy) {
             // Cached per working copy
             this.ces = null;
-            assert diffs == null; // Should have been committed already
+            this.diffs = null;
             super.setWorkingCopy(workingCopy);
         }
         
@@ -768,11 +743,12 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             RubyElementCtx searchCtx = treePathHandle;
             Error error = null;
             Node root = AstUtilities.getRoot(workingCopy);
+            FileObject workingCopyFileObject = RubyUtils.getFileObject(workingCopy);
             if (root != null) {
                 
-                Element element = AstElement.create(root);
+                Element element = AstElement.create(workingCopy, root);
                 Node node = searchCtx.getNode();
-                RubyElementCtx fileCtx = new RubyElementCtx(root, node, element, workingCopy.getFileObject(), workingCopy);
+                RubyElementCtx fileCtx = new RubyElementCtx(root, node, element, workingCopyFileObject, workingCopy);
                 Node method = null;
                 if (node instanceof ArgumentNode) {
                     AstPath path = searchCtx.getPath();
@@ -801,7 +777,9 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             } else {
                 //System.out.println("Skipping file " + workingCopy.getFileObject());
                 // See if the document contains references to this symbol and if so, put a warning in
-                if (workingCopy.getText().indexOf(oldName) != -1) {
+                String workingCopyText = workingCopy.getSnapshot().getText().toString();
+
+                if (workingCopyText.indexOf(oldName) != -1) {
                     // TODO - icon??
                     if (ces == null) {
                         ces = RetoucheUtils.findCloneableEditorSupport(workingCopy);
@@ -809,7 +787,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                     int start = 0;
                     int end = 0;
                     String desc = NbBundle.getMessage(RenameRefactoringPlugin.class, "ParseErrorFile", oldName);
-                    List<Error> errors = workingCopy.getDiagnostics();
+                    List<? extends Error> errors = workingCopy.getDiagnostics();
                     if (errors.size() > 0) {
                         for (Error e : errors) {
                             if (e.getSeverity() == Severity.ERROR) {
@@ -828,7 +806,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                         }
 
                         desc = desc + "; " + errorMsg;
-                        start = error.getStartPosition().getOffset();
+                        start = error.getStartPosition();
                         start = LexUtilities.getLexerOffset(workingCopy, start);
                         if (start == -1) {
                             start = 0;
@@ -843,7 +821,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             }
 
             if (error == null && refactoring.isSearchInComments()) {
-                Document doc = RetoucheUtils.getDocument(workingCopy, workingCopy.getFileObject());
+                Document doc = RetoucheUtils.getDocument(workingCopy, RubyUtils.getFileObject(workingCopy));
                 if (doc != null) {
                     //force open
                     TokenHierarchy<Document> th = TokenHierarchy.get(doc);
@@ -855,20 +833,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                 }
             }
 
-            // Sort the diffs, if applicable
-            if (diffs.size() > 0) {
-                Collections.sort(diffs, new Comparator<Difference>() {
-                    public int compare(Difference d1, Difference d2) {
-                        return d1.getStartPosition().getOffset() - d2.getStartPosition().getOffset();
-                    }
-                });
-                for (Difference diff : diffs) {
-                    workingCopy.addDiff(diff);
-                }
-            }
-            diffs = null;
             ces = null;
-            
         }
         
         private void searchTokenSequence(TokenSequence<?> ts) {
@@ -880,9 +845,13 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                     String primaryCategory = id.primaryCategory();
                     if ("comment".equals(primaryCategory) || "block-comment".equals(primaryCategory)) { // NOI18N
                         // search this comment
-                        String text = token.text().toString();
-                        int index = text.indexOf(oldName);
+                        CharSequence tokenText = token.text();
+                        if (tokenText == null || oldName == null) {
+                            continue;
+                        }
+                        int index = TokenUtilities.indexOf(tokenText, oldName);
                         if (index != -1) {
+                            String text = tokenText.toString();
                             // TODO make sure it's its own word. Technically I could
                             // look at identifier chars like "_" here but since they are
                             // used for other purposes in comments, consider letters
@@ -956,8 +925,10 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             int start = pos;
             int end = pos+oldCode.length();
             // TODO if a SymbolNode, +=1 since the symbolnode includes the ":"
+            BaseDocument doc = null;
             try {
-                BaseDocument doc = (BaseDocument)ces.openDocument();
+                doc = (BaseDocument)ces.openDocument();
+                doc.readLock();
 
                 if (start > doc.getLength()) {
                     start = end = doc.getLength();
@@ -975,7 +946,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                     int lineStart = Utilities.getRowFirstNonWhite(doc, start);
                     int lineEnd = Utilities.getRowLastNonWhite(doc, start)+1; // +1: after last char
                     if (lineStart == -1 || lineEnd == -1) { // We're really on the wrong line!
-                        System.out.println("Empty line entry in " + FileUtil.getFileDisplayName(workingCopy.getFileObject()) +
+                        System.out.println("Empty line entry in " + FileUtil.getFileDisplayName(RubyUtils.getFileObject(workingCopy)) +
                                 "; no match for " + oldCode + " in line " + start + " referenced by node " + 
                                 node + " of type " + node.getClass().getName());
                         return;
@@ -987,7 +958,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 
                     String line = doc.getText(lineStart, lineEnd-lineStart);
                     if (line.indexOf(oldCode) == -1) {
-                        System.out.println("Skipping entry in " + FileUtil.getFileDisplayName(workingCopy.getFileObject()) +
+                        System.out.println("Skipping entry in " + FileUtil.getFileDisplayName(RubyUtils.getFileObject(workingCopy)) +
                                 "; no match for " + oldCode + " in line " + line + " referenced by node " + 
                                 node + " of type " + node.getClass().getName());
                     } else {
@@ -1018,6 +989,10 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                 Exceptions.printStackTrace(ie);
             } catch (BadLocationException ble) {
                 Exceptions.printStackTrace(ble);
+            } finally {
+                if (doc != null) {
+                    doc.readUnlock();
+                }
             }
             
             if (newCode == null) {
@@ -1034,13 +1009,12 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
         /** Search for local variables in local scope */
         private void findLocal(RubyElementCtx searchCtx, RubyElementCtx fileCtx, Node node, String name) {
             switch (node.nodeId) {
-            case NodeTypes.ARGUMENTNODE:
+            case ARGUMENTNODE:
                 // TODO - check parent and make sure it's not a method of the same name?
                 // e.g. if I have "def foo(foo)" and I'm searching for "foo" (the parameter),
                 // I don't want to pick up the ArgumentNode under def foo that corresponds to the
                 // "foo" method name!
                 if (((ArgumentNode)node).getName().equals(name)) {
-                    RubyElementCtx matchCtx = new RubyElementCtx(fileCtx, node);
                     rename(node, name, null, getString("RenameParam"));
                 }
                 break;
@@ -1048,40 +1022,38 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
 //            } else if (node instanceof AliasNode) { 
 //                AliasNode an = (AliasNode)node;
 //                if (an.getNewName().equals(name) || an.getOldName().equals(name)) {
-//                    RubyElementCtx matchCtx = new RubyElementCtx(fileCtx, node);
 //                    elements.add(refactoring, WhereUsedElement.create(matchCtx));
 //                }
 //                break;
-            case NodeTypes.LOCALVARNODE:
-            case NodeTypes.LOCALASGNNODE:
+            case LOCALVARNODE:
+            case LOCALASGNNODE:
                 if (((INameNode)node).getName().equals(name)) {
-                    RubyElementCtx matchCtx = new RubyElementCtx(fileCtx, node);
                     rename(node, name, null, getString("UpdateLocalvar"));
                 }
                 break;
-            case NodeTypes.DVARNODE:
-            case NodeTypes.DASGNNODE:
+            case DVARNODE:
+            case DASGNNODE:
                  if (((INameNode)node).getName().equals(name)) {
                     // Found a method call match
                     // TODO - make a node on the same line
                     // TODO - check arity - see OccurrencesFinder
-                    RubyElementCtx matchCtx = new RubyElementCtx(fileCtx, node);
                     rename(node, name, null, getString("UpdateDynvar"));
                  }                 
                  break;
-            case NodeTypes.SYMBOLNODE:
+            case SYMBOLNODE:
                 // XXX Can I have symbols to local variables? Try it!!!
                 if (((SymbolNode)node).getName().equals(name)) {
-                    RubyElementCtx matchCtx = new RubyElementCtx(fileCtx, node);
                     rename(node, name, null, getString("UpdateSymbol"));
                 }
                 break;
             }
 
-            @SuppressWarnings("unchecked")
             List<Node> list = node.childNodes();
 
             for (Node child : list) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 findLocal(searchCtx, fileCtx, child, name);
             }
         }
@@ -1092,6 +1064,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
          *  (but I also have to search for methods that are OVERRIDING the class... so I've gotta work a little harder!)
          * @todo Arity matching on the methods to preclude methods that aren't overriding or aliasing!
          */
+        @SuppressWarnings("fallthrough")
         private void find(AstPath path, RubyElementCtx searchCtx, RubyElementCtx fileCtx, Node node, String name, boolean upperCase) {
             /* TODO look for both old and new and attempt to fix
              if (node instanceof AliasNode) {
@@ -1106,8 +1079,8 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                 // Methods, attributes, etc.
                 // TODO - be more discriminating on the filetype
                 switch (node.nodeId) {
-                case NodeTypes.DEFNNODE:
-                case NodeTypes.DEFSNODE: {
+                case DEFNNODE:
+                case DEFSNODE: {
                     if (((MethodDefNode)node).getName().equals(name)) {
                                                 
                         boolean skip = false;
@@ -1150,7 +1123,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                     }
                     break;
                 }
-                case NodeTypes.FCALLNODE:
+                case FCALLNODE:
                     if (AstUtilities.isAttr(node)) {
                         SymbolNode[] symbols = AstUtilities.getAttrSymbols(node);
                         for (SymbolNode symbol : symbols) {
@@ -1161,8 +1134,8 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                         }
                     }
                     // Fall through for other call checking
-                case NodeTypes.VCALLNODE:
-                case NodeTypes.CALLNODE:
+                case VCALLNODE:
+                case CALLNODE:
                      if (((INameNode)node).getName().equals(name)) {
                          // TODO - if it's a call without a lhs (e.g. Call.LOCAL),
                          // make sure that we're referring to the same method call
@@ -1172,19 +1145,19 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                         rename(node, name, null, null);
                      }
                      break;
-                case NodeTypes.SYMBOLNODE:
+                case SYMBOLNODE:
                     if (((SymbolNode)node).getName().equals(name)) {
                         // TODO do something about the colon?
                         rename(node, name, null, null);
                     }
                     break;
-                case NodeTypes.GLOBALVARNODE:
-                case NodeTypes.GLOBALASGNNODE:
-                case NodeTypes.INSTVARNODE:
-                case NodeTypes.INSTASGNNODE:
-                case NodeTypes.CLASSVARNODE:
-                case NodeTypes.CLASSVARASGNNODE:
-                case NodeTypes.CLASSVARDECLNODE:
+                case GLOBALVARNODE:
+                case GLOBALASGNNODE:
+                case INSTVARNODE:
+                case INSTASGNNODE:
+                case CLASSVARNODE:
+                case CLASSVARASGNNODE:
+                case CLASSVARDECLNODE:
                     if (((INameNode)node).getName().equals(name)) {
                         rename(node, name, null, null);
                     }
@@ -1193,7 +1166,7 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
             } else {
                 // Classes, modules, constants, etc.
                 switch (node.nodeId) {
-                case NodeTypes.COLON2NODE: {
+                case COLON2NODE: {
                     Colon2Node c2n = (Colon2Node)node;
                     if (c2n.getName().equals(name)) {
                         rename(node, name, null, null);
@@ -1201,8 +1174,8 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                     
                     break;
                 }
-                case NodeTypes.CONSTNODE:
-                case NodeTypes.CONSTDECLNODE:
+                case CONSTNODE:
+                case CONSTDECLNODE:
                     if (((INameNode)node).getName().equals(name)) {
                         rename(node, name, null, null);
                     }
@@ -1210,10 +1183,12 @@ public class RenameRefactoringPlugin extends RubyRefactoringPlugin {
                 }
             }
             
-            @SuppressWarnings("unchecked")
             List<Node> list = node.childNodes();
 
             for (Node child : list) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 path.descend(child);
                 find(path, searchCtx, fileCtx, child, name, upperCase);
                 path.ascend();

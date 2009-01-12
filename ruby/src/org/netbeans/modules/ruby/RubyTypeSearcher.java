@@ -42,30 +42,29 @@
 package org.netbeans.modules.ruby;
 
 import java.io.File;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
-import org.jruby.ast.Node;
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.Index;
-import org.netbeans.api.gsf.Index.SearchScope;
-import org.netbeans.api.gsf.NameKind;
-import org.netbeans.api.gsf.TypeSearcher;
-import org.netbeans.api.gsf.TypeSearcher.GsfTypeDescriptor;
+import org.jruby.nb.ast.Node;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.modules.csl.api.ElementHandle;
+import org.netbeans.modules.csl.api.IndexSearcher;
+import org.netbeans.modules.csl.api.IndexSearcher.Descriptor;
+import org.netbeans.modules.csl.api.IndexSearcher.Helper;
+import org.netbeans.modules.csl.spi.GsfUtilities;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport.Kind;
 import org.netbeans.modules.ruby.elements.IndexedClass;
 import org.netbeans.modules.ruby.elements.IndexedElement;
-import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -79,7 +78,8 @@ import org.openide.util.NbBundle;
  * 
  * @author Tor Norbye
  */
-public class RubyTypeSearcher implements TypeSearcher {
+public class RubyTypeSearcher implements IndexSearcher {
+    
     public RubyTypeSearcher() {
     }
     
@@ -100,16 +100,16 @@ public class RubyTypeSearcher implements TypeSearcher {
          return camelCasePattern.matcher(text).matches();
     }
     
-    private NameKind cachedKind;
+    private QuerySupport.Kind cachedKind;
     private String cachedString = "/";
     
-    private NameKind adjustKind(NameKind kind, String text) {
+    private QuerySupport.Kind adjustKind(QuerySupport.Kind kind, String text) {
         if (text.equals(cachedString)) {
             return cachedKind;
         }
-        if (kind == NameKind.CASE_INSENSITIVE_PREFIX) {
+        if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX) {
             if ((isAllUpper(text) && text.length() > 1) || isCamelCase(text)) {
-                kind = NameKind.CAMEL_CASE;            
+                kind = QuerySupport.Kind.CAMEL_CASE;            
             }
         }
 
@@ -117,33 +117,30 @@ public class RubyTypeSearcher implements TypeSearcher {
         cachedKind = kind;
         return kind;
     }
-    
-    public Set<? extends GsfTypeDescriptor> getDeclaredTypes(Index gsfIndex,
-                                                        String textForQuery,
-                                                        NameKind kind,
-                                                        EnumSet<SearchScope> scope, Helper helper) {
+
+    public Set<? extends Descriptor> getTypes(Collection<FileObject> roots, String textForQuery, Kind kind, Helper helper) {
         // In addition to just computing the declared types here, we perform some additional
         // "second guessing" of the query. In particular, we want to allow double colons
         // to be part of the query names (to specify full module names), but since colon is
         // treated by the Open Type dialog as a regexp char, it will turn it into a regexp query
         // for example. Thus, I look at the query string and I might turn it into a different kind
         // of query. (We also allow #method suffixes which are handled here.)
-        
-        
+
+
         if (textForQuery.endsWith("::")) {
-            textForQuery = textForQuery.substring(0, textForQuery.length()-2);
+            textForQuery = textForQuery.substring(0, textForQuery.length() - 2);
         } else if (textForQuery.endsWith(":")) {
             textForQuery = textForQuery.substring(0, textForQuery.length()-1);
         }
         
-        RubyIndex index = RubyIndex.get(gsfIndex);
+        RubyIndex index = RubyIndex.get(roots);
         if (index == null) {
             return Collections.emptySet();
         }
 
         kind = adjustKind(kind, textForQuery);
         
-        if (kind == NameKind.CASE_INSENSITIVE_PREFIX /*|| kind == NameKind.CASE_INSENSITIVE_REGEXP*/) {
+        if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX /*|| kind == QuerySupport.Kind.CASE_INSENSITIVE_REGEXP*/) {
             textForQuery = textForQuery.toLowerCase();
         }
         
@@ -156,14 +153,14 @@ public class RubyTypeSearcher implements TypeSearcher {
         
         Set<IndexedClass> classes = null;
         if (method == null || textForQuery.length() > 0) {
-            classes = index.getClasses(textForQuery, kind, true, false, false, scope, null);
+            classes = index.getClasses(textForQuery, kind, true, false, false, null);
         }
         
         Set<RubyTypeDescriptor> result = new HashSet<RubyTypeDescriptor>();
         
         if (method != null) {
             // Query methods
-            Set<IndexedMethod> methods = index.getMethods(method, null, kind, scope);
+            Set<IndexedMethod> methods = index.getMethods(method, (String) null, kind);
             for (IndexedMethod m : methods) {
                 if (textForQuery.length() > 0 && m.getClz() != null) {
                     String in = m.getClz();
@@ -201,7 +198,7 @@ public class RubyTypeSearcher implements TypeSearcher {
                             continue;
                         }
                         break;
-                    case EXACT_NAME:
+                    case EXACT:
                         if (!in.equalsIgnoreCase(textForQuery)) {
                             continue;
                         }
@@ -217,8 +214,43 @@ public class RubyTypeSearcher implements TypeSearcher {
         
         return result;
     }
+
+
+    public Set<? extends Descriptor> getSymbols(Collection<FileObject> roots, String textForQuery, Kind kind, Helper helper) {
+        if (textForQuery.indexOf("::") != -1 || textForQuery.indexOf("#") != -1) {
+            return getTypes(roots, textForQuery, kind, helper);
+        }
+
+        RubyIndex index = RubyIndex.get(roots);
+        if (index == null) {
+            return Collections.emptySet();
+        }
+
+        kind = adjustKind(kind, textForQuery);
+
+        if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX /*|| kind == QuerySupport.Kind.CASE_INSENSITIVE_REGEXP*/) {
+            textForQuery = textForQuery.toLowerCase();
+        }
+
+        if (textForQuery.length() > 0) {
+            Set<RubyTypeDescriptor> result = new HashSet<RubyTypeDescriptor>();
+            Set<IndexedClass> classes = index.getClasses(textForQuery, kind, true, false, false, null);
+
+            Set<IndexedMethod> methods = index.getMethods(textForQuery, (String) null, kind);
+            for (IndexedClass cls : classes) {
+                result.add(new RubyTypeDescriptor(cls, helper));
+            }
+            for (IndexedMethod mtd : methods) {
+                result.add(new RubyTypeDescriptor(mtd, helper));
+            }
+            
+            return result;
+        }
+
+        return null;
+    }
     
-    private class RubyTypeDescriptor extends GsfTypeDescriptor {
+    private class RubyTypeDescriptor extends Descriptor {
         private final IndexedElement element;
         private String projectName;
         private Icon projectIcon;
@@ -236,8 +268,9 @@ public class RubyTypeSearcher implements TypeSearcher {
                 initProjectInfo();
             }
             //if (isLibrary) {
-            //    return new ImageIcon(org.openide.util.Utilities.loadImage(RUBY_KEYWORD));
+            //    return new ImageIcon(org.openide.util.ImageUtilities.loadImage(RUBY_KEYWORD));
             //}
+            //return helper.getIcon(element);
             return helper.getIcon(element);
         }
 
@@ -260,12 +293,14 @@ public class RubyTypeSearcher implements TypeSearcher {
                 if (p != null) {
                     RubyPlatform platform = RubyPlatform.platformFor(p);
                     if (platform != null) {
-                        String lib = platform.getLib();
+                        String lib = platform.getLibDir();
                         if (lib != null && f.getPath().startsWith(lib)) {
                             projectName = "Ruby Library";
                             isLibrary = true;
                         }
                     } else {
+                        // TODO - check to see if we're a library - and if so include the language icon
+                        
                         ProjectInformation pi = ProjectUtils.getInformation(p);
                         projectName = pi.getDisplayName();
                         projectIcon = pi.getIcon();
@@ -285,7 +320,7 @@ public class RubyTypeSearcher implements TypeSearcher {
                 initProjectInfo();
             }
             if (isLibrary) {
-                return new ImageIcon(org.openide.util.Utilities.loadImage(RUBY_KEYWORD));
+                return new ImageIcon(org.openide.util.ImageUtilities.loadImage(RUBY_KEYWORD));
             }
             return projectIcon;
         }
@@ -295,10 +330,10 @@ public class RubyTypeSearcher implements TypeSearcher {
         }
 
         public void open() {
-            Node node = AstUtilities.getForeignNode(element, null);
+            Node node = AstUtilities.getForeignNode(element);
             
             if (node != null) {
-                NbUtilities.open(element.getFileObject(), node.getPosition().getStartOffset(), element.getName());
+                GsfUtilities.open(element.getFileObject(), node.getPosition().getStartOffset(), element.getName());
                 return;
             }
             
@@ -327,7 +362,6 @@ public class RubyTypeSearcher implements TypeSearcher {
                 fqn = null;
             }
             if (fqn != null || require != null) {
-                sb.append(" (");
                 if (fqn != null) {
                     sb.append(fqn);
                 }
@@ -339,14 +373,13 @@ public class RubyTypeSearcher implements TypeSearcher {
                     sb.append(require);
                     sb.append(".rb");
                 }
-                sb.append(")");
                 return sb.toString();
             } else {
                 return null;
             }
         }
 
-        public Element getElement() {
+        public ElementHandle getElement() {
             return element;
         }
 
@@ -361,7 +394,5 @@ public class RubyTypeSearcher implements TypeSearcher {
         public String getOuterName() {
             return null;
         }
-
     }
-
 }

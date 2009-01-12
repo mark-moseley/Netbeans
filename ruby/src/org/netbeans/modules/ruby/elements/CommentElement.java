@@ -43,12 +43,10 @@ package org.netbeans.modules.ruby.elements;
 
 import java.util.Collections;
 import java.util.Set;
+import org.netbeans.modules.csl.api.ElementKind;
+import org.netbeans.modules.csl.api.Modifier;
 
-import org.netbeans.api.gsf.Element;
-import org.netbeans.api.gsf.ElementKind;
-import org.netbeans.api.gsf.Modifier;
-
-public class CommentElement implements Element {
+public class CommentElement extends RubyElement {
 
     private final String text;
 
@@ -65,10 +63,12 @@ public class CommentElement implements Element {
         return ElementKind.KEYWORD;
     }
 
+    @Override
     public Set<Modifier> getModifiers() {
         return Collections.emptySet();
     }
 
+    @Override
     public String getIn() {
         return null;
     }

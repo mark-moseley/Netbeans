@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,20 +40,20 @@
  */
 package org.netbeans.modules.ruby.elements;
 
-import java.io.IOException;
+import java.io.File;
+import java.net.MalformedURLException;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
-
 import javax.swing.text.Document;
-
-import org.netbeans.api.gsf.Modifier;
-import org.netbeans.api.gsf.ParserFile;
-import org.netbeans.modules.ruby.AstUtilities;
+import org.netbeans.modules.csl.api.Modifier;
+import org.netbeans.modules.csl.spi.GsfUtilities;
+import org.netbeans.modules.parsing.spi.indexing.support.IndexResult;
 import org.netbeans.modules.ruby.RubyIndex;
-import org.netbeans.spi.gsf.DefaultParserFile;
+import org.netbeans.modules.ruby.RubyType;
 import org.openide.filesystems.FileObject;
-
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
 
 /**
  * A program element coming from the persistent index.
@@ -61,6 +61,7 @@ import org.openide.filesystems.FileObject;
  * @author Tor Norbye
  */
 public abstract class IndexedElement extends RubyElement {
+    
     /** This method is documented */
     public static final int DOCUMENTED = 1 << 0;
     /** This method is protected */
@@ -74,35 +75,49 @@ public abstract class IndexedElement extends RubyElement {
     /** This element is deliberately not documented (rdoc :nodoc:) */
     public static final int NODOC = 1 << 5;
     
-    protected String fileUrl;
+    protected final FileObject file;
     protected final String clz;
     protected final String fqn;
-    protected final RubyIndex index;
     protected final String require;
     protected final String attributes;
-    protected Set<Modifier> modifiers;
-    protected int flags;
+    protected final int flags;
     protected int docLength = -1;
+
+    private Set<Modifier> modifiers;
+    private final RubyIndex index;
     private Document document;
     private FileObject fileObject;
+    private final FileObject context;
+    protected RubyType type;
 
-    protected IndexedElement(RubyIndex index, String fileUrl, String fqn,
-        String clz, String require, String attributes, int flags) {
+    protected IndexedElement(RubyIndex index, FileObject file, String fqn,
+            String clz, String require, String attributes,
+            int flags, FileObject context, RubyType type) {
         this.index = index;
-        this.fileUrl = fileUrl;
+        this.file = file;
         this.fqn = fqn;
         this.require = require;
         this.attributes = attributes;
         // XXX Why do methods need to know their clz (since they already have fqn)
         this.clz = clz;
         this.flags = flags;
+        this.context = context;
+        this.type = type;
+    }
+
+    protected IndexedElement(RubyIndex index, IndexResult result, String fqn,
+            String clz, String require, String attributes,
+            int flags, FileObject context, RubyType type) {
+        this(index, result.getFile(), fqn, clz, require, attributes, flags, context, type);
+    }
+
+    protected IndexedElement(RubyIndex index, IndexResult result, String fqn,
+            String clz, String require, String attributes,
+            int flags, FileObject context) {
+        this(index, result, fqn, clz, require, attributes, flags, context, null);
     }
 
     public abstract String getSignature();
-
-    public final String getFileUrl() {
-        return fileUrl;
-    }
 
     public final String getRequire() {
         return require;
@@ -112,9 +127,13 @@ public abstract class IndexedElement extends RubyElement {
         return fqn;
     }
 
+    public RubyType getType() {
+        return type;
+    }
+
     @Override
     public String toString() {
-        return getSignature() + ":" + getFileUrl();
+        return getSignature();
     }
 
     public final String getClz() {
@@ -125,15 +144,12 @@ public abstract class IndexedElement extends RubyElement {
         return index;
     }
 
+    @Override
     public String getIn() {
         return getClz();
     }
 
-    public String getFilenameUrl() {
-        return fileUrl;
-    }
-
-    public Document getDocument() throws IOException {
+    public Document getDocument() {
         if (document == null) {
             FileObject fo = getFileObject();
 
@@ -141,31 +157,34 @@ public abstract class IndexedElement extends RubyElement {
                 return null;
             }
 
-            document = AstUtilities.getBaseDocument(fileObject, true);
+            document = GsfUtilities.getDocument(fileObject, true);
         }
 
         return document;
     }
 
-    public ParserFile getFile() {
-        boolean platform = false; // XXX FIND OUT WHAT IT IS!
-
-        return new DefaultParserFile(getFileObject(), null, platform);
-    }
-
+//    public ParserFile getFile() {
+//        boolean platform = false; // XXX FIND OUT WHAT IT IS!
+//
+//        return new DefaultParserFile(getFileObject(), null, platform);
+//    }
+    
+    @Override
     public FileObject getFileObject() {
-        if ((fileObject == null) && (fileUrl != null)) {
-            fileObject = RubyIndex.getFileObject(fileUrl);
-
-            if (fileObject == null) {
-                // Don't try again
-                fileUrl = null;
-            }
-        }
-
-        return fileObject;
+        return file;
     }
 
+    public String getFileUrl() {
+        File f = FileUtil.toFile(file);
+        try {
+            return f == null ? null : f.toURI().toURL().toExternalForm();
+        } catch (MalformedURLException ex) {
+            Exceptions.printStackTrace(ex);
+            return null;
+        }
+    }
+
+    @Override
     public final Set<Modifier> getModifiers() {
         if (modifiers == null) {
             Modifier access = Modifier.PUBLIC;
@@ -272,6 +291,7 @@ public abstract class IndexedElement extends RubyElement {
         return (flags & NODOC) != 0;
     }
     
+    // For testsuite
     public static String decodeFlags(int flags) {
         StringBuilder sb = new StringBuilder();
         if ((flags & DOCUMENTED) != 0) {
@@ -294,6 +314,41 @@ public abstract class IndexedElement extends RubyElement {
         }
         
         return sb.toString();
+    }
+
+    // For testsuite
+    public static int stringToFlags(String string) {
+        int flags = 0;
+        if (string.indexOf("|DOCUMENTED") != -1) {
+            flags += DOCUMENTED;
+        }
+        if (string.indexOf("|PRIVATE") != -1) {
+            flags += PRIVATE;
+        }
+        if (string.indexOf("|PROTECTED") != -1) {
+            flags += PROTECTED;
+        }
+        if (string.indexOf("|TOPLEVEL") != -1) {
+            flags += TOPLEVEL;
+        }
+        if (string.indexOf("|STATIC") != -1) {
+            flags += STATIC;
+        }
+        if (string.indexOf("|NODOC") != -1) {
+            flags += NODOC;
+        }
+
+        return flags;
+    }
+
+    /**
+     * Returns whether this method pertains to the Module class, which is handle
+     * in a kind of special manner in Ruby.
+     *
+     * @return whether the element is declared in the Module
+     */
+    public boolean doesBelongToModule() {
+        return "Module".equals(getFqn()); // NOI18N
     }
 
 }

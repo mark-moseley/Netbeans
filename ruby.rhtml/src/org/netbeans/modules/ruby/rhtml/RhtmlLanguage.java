@@ -41,23 +41,123 @@
 package org.netbeans.modules.ruby.rhtml;
 
 
-import org.netbeans.api.gsf.GsfLanguage;
-import org.netbeans.api.lexer.Language;
-import org.netbeans.modules.ruby.RubyUtils;
+import java.util.Collection;
+import java.util.Collections;
+import org.netbeans.modules.ruby.RubyLanguage;
 import org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId;
-public class RhtmlLanguage implements GsfLanguage {
+import org.netbeans.api.lexer.Language;
+import org.netbeans.modules.csl.api.CodeCompletionHandler;
+import org.netbeans.modules.csl.api.DeclarationFinder;
+import org.netbeans.modules.csl.api.Formatter;
+import org.netbeans.modules.csl.api.IndexSearcher;
+import org.netbeans.modules.csl.api.InstantRenamer;
+import org.netbeans.modules.csl.api.KeystrokeHandler;
+import org.netbeans.modules.csl.api.OccurrencesFinder;
+import org.netbeans.modules.csl.api.SemanticAnalyzer;
+import org.netbeans.modules.csl.api.StructureScanner;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.ruby.RubyStructureAnalyzer;
+import org.openide.filesystems.FileObject;
+
+public class RhtmlLanguage extends RubyLanguage {
+    
     public RhtmlLanguage() {
     }
 
-    public String getLineCommentPrefix() {
-        return RubyUtils.getLineCommentPrefix();
-    }
-
-    public boolean isIdentifierChar(char c) {
-        return RubyUtils.isIdentifierChar(c);
-    }
-
+    @Override
     public Language getLexerLanguage() {
         return RhtmlTokenId.language();
+    }
+    
+    @Override
+    public String getDisplayName() {
+        return "RHTML";
+    }
+    
+    @Override
+    public String getPreferredExtension() {
+        return "erb"; // NOI18N
+    }
+    
+    @Override
+    public boolean isUsingCustomEditorKit() {
+        return true;
+    }
+
+    @Override
+    public CodeCompletionHandler getCompletionHandler() {
+        return null;
+    }
+
+    @Override
+    public DeclarationFinder getDeclarationFinder() {
+        return null;
+    }
+
+    @Override
+    public boolean hasFormatter() {
+        return false;
+    }
+
+    @Override
+    public Formatter getFormatter() {
+        return null;
+    }
+
+    @Override
+    public IndexSearcher getIndexSearcher() {
+        return null;
+    }
+
+    @Override
+    public InstantRenamer getInstantRenamer() {
+        return null;
+    }
+
+    @Override
+    public KeystrokeHandler getKeystrokeHandler() {
+        return null;
+    }
+
+    @Override
+    public boolean hasOccurrencesFinder() {
+        return false;
+    }
+
+    @Override
+    public OccurrencesFinder getOccurrencesFinder() {
+        return null;
+    }
+
+    @Override
+    public Parser getParser() {
+        return null;
+    }
+
+    @Override
+    public SemanticAnalyzer getSemanticAnalyzer() {
+        return null;
+    }
+
+    @Override
+    public boolean hasStructureScanner() {
+        return true;
+    }
+
+    @Override
+    public StructureScanner getStructureScanner() {
+        return new RhtmlScanner();
+    }
+
+    private class RhtmlScanner extends RubyStructureAnalyzer {
+        @Override
+        public Configuration getConfiguration() {
+            return new Configuration(false, false, 0);
+        }
+    }
+
+    @Override
+    public Collection<FileObject> getCoreLibraries() {
+        return Collections.emptyList();
     }
 }

@@ -36,28 +36,30 @@ import java.util.Map;
 import java.util.Set;
 import java.util.prefs.Preferences;
 import javax.swing.JComponent;
-import org.jruby.ast.MethodDefNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.EditRegions;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.nb.ast.MethodDefNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.jruby.nb.ast.types.INameNode;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.csl.api.EditList;
+import org.netbeans.modules.csl.api.EditRegions;
+import org.netbeans.modules.csl.api.Hint;
+import org.netbeans.modules.csl.api.HintFix;
+import org.netbeans.modules.csl.api.HintSeverity;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.api.PreviewableFix;
+import org.netbeans.modules.csl.api.RuleContext;
+import org.netbeans.modules.csl.spi.GsfUtilities;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.NbUtilities;
 import org.netbeans.modules.ruby.RubyParseResult;
-import org.netbeans.modules.ruby.StructureAnalyzer.AnalysisResult;
+import org.netbeans.modules.ruby.RubyStructureAnalyzer.AnalysisResult;
+import org.netbeans.modules.ruby.RubyUtils;
 import org.netbeans.modules.ruby.elements.AstAttributeElement;
 import org.netbeans.modules.ruby.elements.AstClassElement;
-import org.netbeans.modules.ruby.hints.spi.AstRule;
-import org.netbeans.modules.ruby.hints.spi.Description;
-import org.netbeans.modules.ruby.hints.spi.EditList;
-import org.netbeans.modules.ruby.hints.spi.Fix;
-import org.netbeans.modules.ruby.hints.spi.HintSeverity;
-import org.netbeans.modules.ruby.hints.spi.PreviewableFix;
-import org.netbeans.modules.ruby.hints.spi.RuleContext;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyRuleContext;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.filesystems.FileObject;
 import org.openide.util.NbBundle;
@@ -76,18 +78,19 @@ import org.openide.util.NbBundle;
  * </pre>
  * 
  * 
- * 
  * @author Tor Norbye
  */
-public class AttributeIsLocal implements AstRule {
+public class AttributeIsLocal extends RubyAstRule {
+    
     public AttributeIsLocal() {
     }
     
     private Map<AstClassElement,Set<AstAttributeElement>> attributes;
     private Set<String> attributeNames;
 
-    public boolean appliesTo(CompilationInfo info) {
-        RubyParseResult rpr = (RubyParseResult)info.getParserResult();
+    public boolean appliesTo(RuleContext context) {
+        ParserResult parserResult = context.parserResult;
+        RubyParseResult rpr = AstUtilities.getParseResult(parserResult);
         AnalysisResult ar = rpr.getStructure();
         this.attributes = ar.getAttributes();
 
@@ -108,14 +111,14 @@ public class AttributeIsLocal implements AstRule {
         return true;
     }
 
-    public Set<Integer> getKinds() {
-        return Collections.singleton(NodeTypes.LOCALASGNNODE);
+    public Set<NodeType> getKinds() {
+        return Collections.singleton(NodeType.LOCALASGNNODE);
     }
 
-    public void run(RuleContext context, List<Description> result) {
+    public void run(RubyRuleContext context, List<Hint> result) {
         Node node = context.node;
         AstPath path = context.path;
-        CompilationInfo info = context.compilationInfo;
+        ParserResult parserResult = context.parserResult;
         
         String name = ((INameNode)node).getName();
         AstAttributeElement element = null;
@@ -164,20 +167,20 @@ public class AttributeIsLocal implements AstRule {
             Iterator<Node> it = path.leafToRoot();
             while (it.hasNext()) {
                 Node n = it.next();
-                if (n.nodeId == NodeTypes.ARGSNODE) {
+                if (n.nodeId == NodeType.ARGSNODE) {
                     return;
                 }
             }
             
             assert element != null;
             OffsetRange range = AstUtilities.getNameRange(node);
-            List<Fix> fixList = new ArrayList<Fix>(1);
-            fixList.add(new ShowAttributeFix(info, element));
-            fixList.add(new AttributeConflictFix(info, node, true));
-            fixList.add(new AttributeConflictFix(info, node, false));
-            range = LexUtilities.getLexerOffsets(info, range);
+            List<HintFix> fixList = new ArrayList<HintFix>(1);
+            fixList.add(new ShowAttributeFix(parserResult, element));
+            fixList.add(new AttributeConflictFix(context, node, true));
+            fixList.add(new AttributeConflictFix(context, node, false));
+            range = LexUtilities.getLexerOffsets(parserResult, range);
             if (range != OffsetRange.NONE) {
-                Description desc = new Description(this, getDisplayName(), info.getFileObject(), range, fixList, 50);
+                Hint desc = new Hint(this, getDisplayName(), RubyUtils.getFileObject(parserResult), range, fixList, 50);
                 result.add(desc);
             }
         }
@@ -213,12 +216,12 @@ public class AttributeIsLocal implements AstRule {
     
     private static class AttributeConflictFix implements PreviewableFix {
 
-        private final CompilationInfo info;
+        private final RubyRuleContext context;
         private final boolean fixSelf;
         private final Node node;
 
-        AttributeConflictFix(CompilationInfo info, Node node, boolean fixSelf) {
-            this.info = info;
+        AttributeConflictFix(RubyRuleContext context, Node node, boolean fixSelf) {
+            this.context = context;
             this.node = node;
             this.fixSelf = fixSelf;
         }
@@ -242,20 +245,21 @@ public class AttributeIsLocal implements AstRule {
         }
 
         private EditList createEditList(boolean doit) throws Exception {
-            BaseDocument doc = (BaseDocument) info.getDocument();
+            BaseDocument doc = context.doc;
+            ParserResult parserResult = context.parserResult;
             EditList edits = new EditList(doc);
             
             if (fixSelf) {
                 OffsetRange range = AstUtilities.getRange(node);
                 int start = range.getStart();
-                start = LexUtilities.getLexerOffset(info, start);
+                start = LexUtilities.getLexerOffset(parserResult, start);
                 if (start != -1) {
                     edits.replace(start, 0, "self.", false, 0); // NOI18N
                 }
             } else {
                 // Initiate synchronous editing:
                 String name = ((INameNode)node).getName();
-                Node root = AstUtilities.getRoot(info);
+                Node root = AstUtilities.getRoot(parserResult);
                 AstPath path = new AstPath(root, node);
                 Node scope = AstUtilities.findLocalScope(path.leaf(), path);
                 Set<OffsetRange> ranges = new HashSet<OffsetRange>();
@@ -268,7 +272,7 @@ public class AttributeIsLocal implements AstRule {
                     }
                 }
                 if (doit) {
-                    EditRegions.getInstance().edit(info.getFileObject(), ranges, caretOffset);
+                    EditRegions.getInstance().edit(RubyUtils.getFileObject(parserResult), ranges, caretOffset);
                     return null;
                 } else {
                     String oldName = ((INameNode)path.leaf()).getName();
@@ -284,18 +288,20 @@ public class AttributeIsLocal implements AstRule {
         }
 
         private void addLocalRegions(Node node, String name, Set<OffsetRange> ranges) {
-            if ((node.nodeId == NodeTypes.LOCALASGNNODE || node.nodeId == NodeTypes.LOCALVARNODE) && name.equals(((INameNode)node).getName())) {
+            if ((node.nodeId == NodeType.LOCALASGNNODE || node.nodeId == NodeType.LOCALVARNODE) && name.equals(((INameNode)node).getName())) {
                 OffsetRange range = AstUtilities.getNameRange(node);
-                range = LexUtilities.getLexerOffsets(info, range);
+                range = LexUtilities.getLexerOffsets(context.parserResult, range);
                 if (range != OffsetRange.NONE) {
                     ranges.add(range);
                 }
             }
 
-            @SuppressWarnings(value = "unchecked")
             List<Node> list = node.childNodes();
 
             for (Node child : list) {
+                if (child.isInvisible()) {
+                    continue;
+                }
 
                 // Skip inline method defs
                 if (child instanceof MethodDefNode) {
@@ -318,13 +324,13 @@ public class AttributeIsLocal implements AstRule {
         }
     }
 
-    private static class ShowAttributeFix implements Fix {
+    private static class ShowAttributeFix implements HintFix {
 
-        private final CompilationInfo info;
+        private final ParserResult parserResult;
         private final AstAttributeElement element;
 
-        ShowAttributeFix(CompilationInfo info, AstAttributeElement element) {
-            this.info = info;
+        ShowAttributeFix(ParserResult parserResult, AstAttributeElement element) {
+            this.parserResult = parserResult;
             this.element = element;
         }
 
@@ -341,11 +347,11 @@ public class AttributeIsLocal implements AstRule {
         }
 
         public void implement() throws Exception {
-            FileObject fo = info.getFileObject();
+            FileObject fo = RubyUtils.getFileObject(parserResult);
             int astOffset = element.getNode().getPosition().getStartOffset();
-            int lexOffset = LexUtilities.getLexerOffset(info, astOffset);
+            int lexOffset = LexUtilities.getLexerOffset(parserResult, astOffset);
             if (lexOffset != -1) {
-                NbUtilities.open(fo, lexOffset, element.getName());
+                GsfUtilities.open(fo, lexOffset, element.getName());
             }
         }
 

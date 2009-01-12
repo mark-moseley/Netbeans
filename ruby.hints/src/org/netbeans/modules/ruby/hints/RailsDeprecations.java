@@ -35,24 +35,25 @@ import java.util.Map;
 import java.util.Set;
 import java.util.prefs.Preferences;
 import javax.swing.JComponent;
-import org.jruby.ast.CallNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.OffsetRange;
+import org.jruby.nb.ast.CallNode;
+import org.jruby.nb.ast.Node;
+import org.jruby.nb.ast.NodeType;
+import org.jruby.nb.ast.types.INameNode;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.csl.api.Hint;
+import org.netbeans.modules.csl.api.HintFix;
+import org.netbeans.modules.csl.api.HintSeverity;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.api.RuleContext;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.hints.spi.AstRule;
-import org.netbeans.modules.ruby.hints.spi.Description;
-import org.netbeans.modules.ruby.hints.spi.Fix;
-import org.netbeans.modules.ruby.hints.spi.HintSeverity;
-import org.netbeans.modules.ruby.hints.spi.RuleContext;
+import org.netbeans.modules.ruby.RubyUtils;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyAstRule;
+import org.netbeans.modules.ruby.hints.infrastructure.RubyRuleContext;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.util.NbBundle;
-
 
 /**
  * A hint which looks at Rails files and scans for usages of deprecated
@@ -79,7 +80,7 @@ import org.openide.util.NbBundle;
  *
  * @author Tor Norbye
  */
-public class RailsDeprecations implements AstRule {
+public class RailsDeprecations extends RubyAstRule {
     static Set<String> deprecatedFields = new HashSet<String>();
     static Map<String,String> deprecatedMethods = new HashMap<String,String>();
     static {
@@ -117,9 +118,10 @@ public class RailsDeprecations implements AstRule {
     public RailsDeprecations() {
     }
 
-    public boolean appliesTo(CompilationInfo info) {
+    public boolean appliesTo(RuleContext context) {
+        ParserResult info = context.parserResult;
         // Only perform these checks in Rails projects
-        Project project = FileOwnerQuery.getOwner(info.getFileObject());
+        Project project = FileOwnerQuery.getOwner(RubyUtils.getFileObject(info));
         // Ugly!!
         if (project == null || project.getClass().getName().indexOf("RailsProject") == -1) { // NOI18N
             return false;
@@ -128,13 +130,13 @@ public class RailsDeprecations implements AstRule {
         return true;
     }
 
-    public Set<Integer> getKinds() {
-        return Collections.singleton(NodeTypes.ROOTNODE);
+    public Set<NodeType> getKinds() {
+        return Collections.singleton(NodeType.ROOTNODE);
     }
 
-    public void run(RuleContext context, List<Description> result) {
+    public void run(RubyRuleContext context, List<Hint> result) {
         Node root = context.node;
-        CompilationInfo info = context.compilationInfo;
+        ParserResult info = context.parserResult;
         AstPath path = context.path;
 
         if (root == null) {
@@ -163,15 +165,15 @@ public class RailsDeprecations implements AstRule {
         return NbBundle.getMessage(RailsDeprecations.class, "RailsDeprecationDesc");
     }
 
-    private void scan(CompilationInfo info, Node node, List<Description> result) {
+    private void scan(ParserResult info, Node node, List<Hint> result) {
         // Look for use of deprecated fields
-        if (node.nodeId == NodeTypes.INSTVARNODE || node.nodeId == NodeTypes.INSTASGNNODE) {
+        if (node.nodeId == NodeType.INSTVARNODE || node.nodeId == NodeType.INSTASGNNODE) {
             String name = ((INameNode)node).getName();
 
             // Skip matches in _test files, since the standard code generator still
             // spits out code which violates the deprecations
             // (such as    @request    = ActionController::TestRequest.new )
-            if (deprecatedFields.contains(name) && !info.getFileObject().getName().endsWith("_test")) { // NOI18N
+            if (deprecatedFields.contains(name) && !RubyUtils.getFileObject(info).getName().endsWith("_test")) { // NOI18N
                 // Add a warning - you're using a deprecated field. Use the
                 // method/attribute instead!
                 String message = NbBundle.getMessage(RailsDeprecations.class, "DeprecatedRailsField", name, name.substring(1));
@@ -185,7 +187,7 @@ public class RailsDeprecations implements AstRule {
                 // it's also an RSpec method
                 if ("render_template".equals(name)) { // NOI18N
                     // Filter from RSpec modules
-                    if (info.getFileObject().getName().endsWith("_spec")) { // NOI18N
+                    if (RubyUtils.getFileObject(info).getName().endsWith("_spec")) { // NOI18N
                         return;
                     }
                 }
@@ -197,10 +199,10 @@ public class RailsDeprecations implements AstRule {
                 // make sure that the class on the left is actually a model,
                 // but that's costly and much less likely to be a problem
                 if (name.startsWith("find_")) { // NOI18N
-                    if (node.nodeId == NodeTypes.CALLNODE) {    
+                    if (node.nodeId == NodeType.CALLNODE) {    
                         Node receiver = ((CallNode)node).getReceiverNode();
-                        if (receiver.nodeId != NodeTypes.CONSTNODE && 
-                                receiver.nodeId != NodeTypes.COLON2NODE) {
+                        if (receiver.nodeId != NodeType.CONSTNODE && 
+                                receiver.nodeId != NodeType.COLON2NODE) {
                             return;
                         }
                     }
@@ -208,25 +210,27 @@ public class RailsDeprecations implements AstRule {
                 
                 // Add a warning - you're using a deprecated field. Use the
                 // method/attribute instead!
-                String message = NbBundle.getMessage(RailsDeprecations.class, "DeprecatedMethodUse", name, deprecatedMethods.get(name));
+                String message = NbBundle.getMessage(RailsDeprecations.class, "DeprecatedRailsMethodUse", name, deprecatedMethods.get(name));
                 addFix(info, node, result, message);
             }
         }
 
-        @SuppressWarnings(value = "unchecked")
         List<Node> list = node.childNodes();
 
         for (Node child : list) {
+            if (child.isInvisible()) {
+                continue;
+            }
             scan(info, child, result);
         }
     }
 
-    private void addFix(CompilationInfo info, Node node, List<Description> result, String displayName) {
+    private void addFix(ParserResult info, Node node, List<Hint> result, String displayName) {
         OffsetRange range = AstUtilities.getNameRange(node);
 
         range = LexUtilities.getLexerOffsets(info, range);
         if (range != OffsetRange.NONE) {
-            Description desc = new Description(this, displayName, info.getFileObject(), range, Collections.<Fix>emptyList(), 100);
+            Hint desc = new Hint(this, displayName, RubyUtils.getFileObject(info), range, Collections.<HintFix>emptyList(), 100);
             result.add(desc);
         }
     }
