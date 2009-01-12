@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.vmd.midpnb.propertyeditors.table;
 
 import java.awt.Color;
@@ -55,11 +54,11 @@ import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumnModel;
-import org.netbeans.modules.vmd.api.model.Debug;
 import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
+import org.netbeans.modules.vmd.midp.propertyeditors.CleanUp;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.resource.element.PropertyEditorResourceElement;
 import org.netbeans.modules.vmd.midpnb.components.resources.SimpleTableModelCD;
 
@@ -67,7 +66,7 @@ import org.netbeans.modules.vmd.midpnb.components.resources.SimpleTableModelCD;
  *
  * @author Anton Chechel
  */
-public class TableModelEditorElement extends PropertyEditorResourceElement implements TableModelListener {
+public class TableModelEditorElement extends PropertyEditorResourceElement implements TableModelListener, CleanUp {
 
     private boolean doNotFireEvent;
     private long componentID;
@@ -80,6 +79,26 @@ public class TableModelEditorElement extends PropertyEditorResourceElement imple
         initComponents();
         renderer = new HeaderCellRenderer();
         setTableCellRenderer();
+    }
+
+    public void clean(DesignComponent component) {
+        tableModel = null;
+        renderer = null;
+        addColButton = null;
+        addRowButton = null;
+        columnsLabel = null;
+        columnsTextField = null;
+        headerCheckBox = null;
+        jPanel1 = null;
+        jScrollPane1 = null;
+        jTextField1 = null;
+        removeColButton = null;
+        removeRowButton = null;
+        rowsLabel = null;
+        rowsTextField = null;
+        table = null;
+        tableLabel = null;
+        this.removeAll();
     }
 
     public JComponent getJComponent() {
@@ -319,6 +338,7 @@ public class TableModelEditorElement extends PropertyEditorResourceElement imple
 
         table.setModel(tableModel);
         table.setEnabled(false);
+        table.setGridColor(new java.awt.Color(0, 0, 0));
         table.setTableHeader(null);
         jScrollPane1.setViewportView(table);
 
@@ -327,12 +347,12 @@ public class TableModelEditorElement extends PropertyEditorResourceElement imple
         jPanel1Layout.setHorizontalGroup(
             jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(jPanel1Layout.createSequentialGroup()
-                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 400, Short.MAX_VALUE)
+                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 409, Short.MAX_VALUE)
                 .addContainerGap())
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 239, Short.MAX_VALUE)
+            .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 242, Short.MAX_VALUE)
         );
 
         org.openide.awt.Mnemonics.setLocalizedText(addColButton, org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.addColButton.text")); // NOI18N
@@ -368,7 +388,6 @@ public class TableModelEditorElement extends PropertyEditorResourceElement imple
         });
 
         org.openide.awt.Mnemonics.setLocalizedText(headerCheckBox, org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.headerCheckBox.text")); // NOI18N
-        headerCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         headerCheckBox.setEnabled(false);
         headerCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         headerCheckBox.addActionListener(new java.awt.event.ActionListener() {
@@ -377,12 +396,14 @@ public class TableModelEditorElement extends PropertyEditorResourceElement imple
             }
         });
 
+        rowsLabel.setLabelFor(rowsTextField);
         rowsLabel.setText(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.rowsLabel.text")); // NOI18N
         rowsLabel.setEnabled(false);
 
         rowsTextField.setEditable(false);
         rowsTextField.setEnabled(false);
 
+        columnsLabel.setLabelFor(columnsTextField);
         columnsLabel.setText(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.columnsLabel.text")); // NOI18N
         columnsLabel.setEnabled(false);
 
@@ -410,10 +431,10 @@ public class TableModelEditorElement extends PropertyEditorResourceElement imple
                         .add(rowsLabel)
                         .add(18, 18, 18)
                         .add(rowsTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 71, Short.MAX_VALUE))
-                    .add(removeColButton, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 119, Short.MAX_VALUE)
-                    .add(removeRowButton, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 119, Short.MAX_VALUE)
+                    .add(removeColButton, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 119, Short.MAX_VALUE)
+                    .add(removeRowButton, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 119, Short.MAX_VALUE)
                     .add(addRowButton, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 119, Short.MAX_VALUE)
-                    .add(addColButton, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 119, Short.MAX_VALUE)))
+                    .add(addColButton, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 119, Short.MAX_VALUE)))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -442,11 +463,28 @@ public class TableModelEditorElement extends PropertyEditorResourceElement imple
                         .addContainerGap())
                     .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
         );
+
+        tableLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.tableLabel.accessible.name")); // NOI18N
+        tableLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.tableLabel.accessible.description")); // NOI18N
+        addColButton.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.addColButton.accessible.name")); // NOI18N
+        addColButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.addColButton.accessible.description")); // NOI18N
+        removeColButton.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.removeColButton.accessible.name")); // NOI18N
+        removeColButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.removeColButton.accessible.descriptions")); // NOI18N
+        removeRowButton.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.removeRowButton.accessible.name")); // NOI18N
+        removeRowButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.removeRowButton.accessible.description")); // NOI18N
+        addRowButton.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.addRowButton.accessible.name")); // NOI18N
+        addRowButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.addRowButton.accessible.description")); // NOI18N
+        headerCheckBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.headerCheckBox.accessible.name")); // NOI18N
+        headerCheckBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.headerCheckBox.accessible.description")); // NOI18N
+        rowsLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.rowsLabel.accessible.name")); // NOI18N
+        rowsLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.rowsLabel.accessible.description")); // NOI18N
+        columnsLabel.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.columnsLabel.accessible.name")); // NOI18N
+        columnsLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(TableModelEditorElement.class, "TableModelEditorElement.columnsLabel.accessible.description")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
     private void addColButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addColButtonActionPerformed
         tableModel.addColumn("", false); // NOI18N//GEN-LAST:event_addColButtonActionPerformed
-    }                                            
+    }
 
     private void removeColButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_removeColButtonActionPerformed
         tableModel.removeLastColumn();
