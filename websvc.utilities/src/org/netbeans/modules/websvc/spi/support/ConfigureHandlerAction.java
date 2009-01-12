@@ -39,8 +39,9 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.websvc.core;
+package org.netbeans.modules.websvc.spi.support;
 
+import org.netbeans.modules.websvc.api.support.ConfigureHandlerCookie;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
