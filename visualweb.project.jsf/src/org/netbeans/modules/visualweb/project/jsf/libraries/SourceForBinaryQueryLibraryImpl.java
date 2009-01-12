@@ -63,12 +63,13 @@ import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.WeakListeners;
 // <RAVE>
-import org.netbeans.modules.visualweb.project.jsf.libraries.provider.ComponentLibraryTypeProvider;
+import org.netbeans.modules.visualweb.webui.jsf.defaulttheme.libraries.provider.ComponentLibraryTypeProvider;
 
 /**
  * Finds the locations of sources for various libraries.
  * @author Po-Ting Wu
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.java.queries.SourceForBinaryQueryImplementation.class)
 public class SourceForBinaryQueryLibraryImpl implements SourceForBinaryQueryImplementation {
 
     private final Map/*<URL,SourceForBinaryQuery.Result>*/ cache = new HashMap();
@@ -83,31 +84,32 @@ public class SourceForBinaryQueryLibraryImpl implements SourceForBinaryQueryImpl
             return res;
         }
         boolean isNormalizedURL = isNormalizedURL(binaryRoot);
-        LibraryManager lm = LibraryManager.getDefault ();
-        Library[] libs = lm.getLibraries();
-        for (int i=0; i< libs.length; i++) {
-            String type = libs[i].getType ();
-            if (ComponentLibraryTypeProvider.LIBRARY_TYPE.equalsIgnoreCase(type)) {
-                // <RAVE> Only search the one that has 'src' volume defined
-                List src = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_SRC);
-                if (src.size() == 0) {
-                    continue;
-                }
-                // </RAVE>
-                List classes = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_CLASSPATH);
-                for (Iterator it = classes.iterator(); it.hasNext();) {
-                    URL entry = (URL) it.next();
-                    URL normalizedEntry;
-                    if (isNormalizedURL) {
-                        normalizedEntry = getNormalizedURL(entry);
+        for (LibraryManager lm : LibraryManager.getOpenManagers()) {
+            Library[] libs = lm.getLibraries();
+            for (int i=0; i< libs.length; i++) {
+                String type = libs[i].getType ();
+                if (ComponentLibraryTypeProvider.LIBRARY_TYPE.equalsIgnoreCase(type)) {
+                    // <RAVE> Only search the one that has 'src' volume defined
+                    List src = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_SRC);
+                    if (src.size() == 0) {
+                        continue;
                     }
-                    else {
-                        normalizedEntry = entry;
-                    }
-                    if (normalizedEntry != null && normalizedEntry.equals(binaryRoot)) {
-                        res =  new Result(entry, libs[i]);
-                        cache.put (binaryRoot, res);
-                        return res;
+                    // </RAVE>
+                    List classes = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_CLASSPATH);
+                    for (Iterator it = classes.iterator(); it.hasNext();) {
+                        URL entry = (URL) it.next();
+                        URL normalizedEntry = entry;
+                        if (isNormalizedURL) {
+                            normalizedEntry = getNormalizedURL(entry);
+                        }
+                        else {
+                            normalizedEntry = entry;
+                        }
+                        if (normalizedEntry != null && normalizedEntry.equals(binaryRoot)) {
+                            res =  new Result(entry, libs[i]);
+                            cache.put (binaryRoot, res);
+                            return res;
+                        }
                     }
                 }
             }
@@ -168,11 +170,12 @@ public class SourceForBinaryQueryLibraryImpl implements SourceForBinaryQueryImpl
         
         public synchronized FileObject[] getRoots () {
             if (this.cache == null) {
+                // entry is not resolved so directly volume content can be searched for it:
                 if (this.lib.getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_CLASSPATH).contains(entry)) {
-                    List src = this.lib.getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_SRC);
+                    List<URL> src = this.lib.getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_SRC);
                     List result = new ArrayList ();
-                    for (Iterator sit = src.iterator(); sit.hasNext();) {
-                        FileObject sourceRootURL = URLMapper.findFileObject((URL) sit.next());
+                    for (URL u : src) {
+                        FileObject sourceRootURL = URLMapper.findFileObject(u);
                         if (sourceRootURL!=null) {
                             result.add (sourceRootURL);
                         }

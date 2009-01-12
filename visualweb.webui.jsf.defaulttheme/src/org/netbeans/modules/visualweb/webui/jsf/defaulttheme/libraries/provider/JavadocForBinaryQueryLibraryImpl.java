@@ -40,7 +40,7 @@
  */
 
 // <RAVE> Copy of org.netbeans.modules.java.j2seplatform.libraries.JavadocForBinaryQueryLibraryImpl
-package org.netbeans.modules.visualweb.project.jsf.libraries;
+package org.netbeans.modules.visualweb.webui.jsf.defaulttheme.libraries.provider;
 import java.beans.PropertyChangeEvent;
 
 import java.beans.PropertyChangeListener;
@@ -69,7 +69,6 @@ import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.spi.java.queries.JavadocForBinaryQueryImplementation;
 // <RAVE>
 // import org.netbeans.modules.java.j2seplatform.platformdefinition.Util;
-import org.netbeans.modules.visualweb.project.jsf.libraries.provider.ComponentLibraryTypeProvider;
 
 
 
@@ -77,6 +76,7 @@ import org.netbeans.modules.visualweb.project.jsf.libraries.provider.ComponentLi
  * Implementation of Javadoc query for the library.
  * @author Po-Ting Wu
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.java.queries.JavadocForBinaryQueryImplementation.class)
 public class JavadocForBinaryQueryLibraryImpl implements JavadocForBinaryQueryImplementation {
 
     private static int MAX_DEPTH = 3;
@@ -153,33 +153,34 @@ public class JavadocForBinaryQueryLibraryImpl implements JavadocForBinaryQueryIm
         }
 
         boolean isNormalizedURL = isNormalizedURL(b);
-        LibraryManager lm = LibraryManager.getDefault();
-        Library[] libs = lm.getLibraries();
-        for (int i=0; i<libs.length; i++) {
-            String type = libs[i].getType();
-            if (!ComponentLibraryTypeProvider.LIBRARY_TYPE.equalsIgnoreCase(type)) {
-                continue;
-            }
-            // <RAVE> Only search the one that has 'javadoc' volume defined
-            List javadoc = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_JAVADOC);
-            if (javadoc.size() == 0) {
-                continue;
-            }
-            // </RAVE>
-            List jars = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_CLASSPATH);    //NOI18N
-            Iterator it = jars.iterator();
-            while (it.hasNext()) {
-                URL entry = (URL)it.next();
-                URL normalizedEntry;
-                if (isNormalizedURL) {
-                    normalizedEntry = getNormalizedURL(entry);
+        for (LibraryManager lm : LibraryManager.getOpenManagers()) {
+            Library[] libs = lm.getLibraries();
+            for (int i=0; i<libs.length; i++) {
+                String type = libs[i].getType();
+                if (!ComponentLibraryTypeProvider.LIBRARY_TYPE.equalsIgnoreCase(type)) {
+                    continue;
                 }
-                else {
-                    normalizedEntry = entry;
+                // <RAVE> Only search the one that has 'javadoc' volume defined
+                List javadoc = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_JAVADOC);
+                if (javadoc.size() == 0) {
+                    continue;
                 }
-                if (normalizedEntry != null && normalizedEntry.equals(b)) {
-                    return new R(libs[i]);
-                }                
+                // </RAVE>
+                List jars = libs[i].getContent(ComponentLibraryTypeProvider.VOLUME_TYPE_CLASSPATH);    //NOI18N
+                Iterator it = jars.iterator();
+                while (it.hasNext()) {
+                    URL entry = (URL)it.next();
+                    URL normalizedEntry;
+                    if (isNormalizedURL) {
+                        normalizedEntry = getNormalizedURL(entry);
+                    }
+                    else {
+                        normalizedEntry = entry;
+                    }
+                    if (normalizedEntry != null && normalizedEntry.equals(b)) {
+                        return new R(libs[i]);
+                    }                
+                }
             }
         }
         return null;
@@ -230,7 +231,7 @@ public class JavadocForBinaryQueryLibraryImpl implements JavadocForBinaryQueryIm
      * @param rootURL the javadoc root
      * @return true if the root is a valid Javadoc root
      */
-    static boolean isValidLibraryJavadocRoot (final URL rootURL) {
+    public static boolean isValidLibraryJavadocRoot (final URL rootURL) {
         assert rootURL != null && rootURL.toExternalForm().endsWith("/");
         final FileObject root = URLMapper.findFileObject(rootURL);
         if (root == null) {
