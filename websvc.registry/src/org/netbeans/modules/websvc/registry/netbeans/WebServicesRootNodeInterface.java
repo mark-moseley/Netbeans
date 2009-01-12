@@ -41,12 +41,8 @@
 
 package org.netbeans.modules.websvc.registry.netbeans;
 
-import org.openide.actions.*;
 import org.openide.nodes.*;
 import org.openide.util.HelpCtx;
-import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
-import org.openide.util.actions.SystemAction;
 
 import java.awt.Image;
 import javax.swing.Action;
@@ -61,5 +57,5 @@ public interface WebServicesRootNodeInterface{
     public Action[] getActions(boolean context);
     public Action getPreferredAction() ;
     public HelpCtx getHelpCtx();
-    public  Node.Cookie getCookie (Class type);
+    public <T extends Node.Cookie> T getCookie(Class<T> type);
 }
