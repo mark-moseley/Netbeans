@@ -50,11 +50,10 @@ import java.net.URL;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.Action;
@@ -68,6 +67,7 @@ import org.openide.cookies.EditCookie;
 import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -76,6 +76,7 @@ import org.openide.util.ContextAwareAction;
 import org.openide.util.Exceptions;
 import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
+import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 import org.openide.xml.XMLUtil;
@@ -116,11 +117,11 @@ public class ProjectUtilities {
             return true;
         }
         
-        public Map<Project,SortedSet<String>> close(final Project[] projects,
+        public Map<Project,Set<String>> close(final Project[] projects,
                                                     final boolean notifyUI) {
             final Wrapper wr = new Wrapper();
 
-            wr.urls4project = new HashMap<Project,SortedSet<String>>();
+            wr.urls4project = new HashMap<Project,Set<String>>();
             if (SwingUtilities.isEventDispatchThread()) {
                 doClose(projects, notifyUI, wr);
             } else {
@@ -143,11 +144,15 @@ public class ProjectUtilities {
             Set<DataObject> openFiles = new HashSet<DataObject>();
             final Set<TopComponent> tc2close = new HashSet<TopComponent>();
             WindowManager wm = WindowManager.getDefault();
-            for (TopComponent tc : wm.getRegistry().getOpened()) {
+            for (Mode mode : wm.getModes()) {
                 //#84546 - this condituon should allow us to close just editor related TCs that are in any imaginable mode.
-                if (!wm.isOpenedEditorTopComponent(tc)) {
+                if (!wm.isEditorMode(mode)) {
                     continue;
                 }
+                for (TopComponent tc : mode.getTopComponents()) {
+                    if (!tc.isOpened()) {
+                        continue;
+                    }
                 DataObject dobj = tc.getLookup().lookup(DataObject.class);
 
                 if (dobj != null) {
@@ -164,7 +169,7 @@ public class ProjectUtilities {
                         }
                         if (!wr.urls4project.containsKey(owner)) {
                             // add project
-                            wr.urls4project.put(owner, new TreeSet<String>());
+                            wr.urls4project.put(owner, new LinkedHashSet<String>());
                         }
                         URL url = null;
 
@@ -178,6 +183,7 @@ public class ProjectUtilities {
                         }
                     }
                 }
+            }
             }
             if (notifyUI) {
                 for (DataObject dobj : DataObject.getRegistry().getModifiedSet()) {
@@ -206,7 +212,7 @@ public class ProjectUtilities {
     };
     
     private static class Wrapper {
-        Map<Project,SortedSet<String>> urls4project;
+        Map<Project,Set<String>> urls4project;
     }
     
     private static final Logger ERR = Logger.getLogger(ProjectUtilities.class.getName());
@@ -350,8 +356,13 @@ public class ProjectUtilities {
             return NbBundle.getMessage (ProjectUtilities.class, "MSG_fs_or_folder_does_not_exist"); // NOI18N
         }
         
-        // target filesystem should be writable
-        if (!targetFolder.canWrite ()) {
+        // target directory should be writable
+        File targetDir = folderName != null ? new File (FileUtil.toFile (targetFolder), folderName) : FileUtil.toFile (targetFolder);
+        if (targetDir != null) {
+            if (targetDir.exists () && ! targetDir.canWrite ()) {
+                return NbBundle.getMessage (ProjectUtilities.class, "MSG_fs_is_readonly"); // NOI18N
+            }
+        } else if (! targetFolder.canWrite ()) {
             return NbBundle.getMessage (ProjectUtilities.class, "MSG_fs_is_readonly"); // NOI18N
         }
 
@@ -365,12 +376,13 @@ public class ProjectUtilities {
             relFileName.append('/');
         }
         relFileName.append(newObjectName);
+        String ext = "";
         if (extension != null && extension.length() != 0) {
-            relFileName.append('.');
-            relFileName.append(extension);
+            ext = "." + extension;
+            relFileName.append(ext);
         }
         if (targetFolder.getFileObject(relFileName.toString()) != null) {
-            return NbBundle.getMessage (ProjectUtilities.class, "MSG_file_already_exist", newObjectName); // NOI18N
+            return NbBundle.getMessage (ProjectUtilities.class, "MSG_file_already_exist", newObjectName + ext); // NOI18N
         }
         
         // all ok
@@ -434,12 +446,12 @@ public class ProjectUtilities {
             return true;
         }
         
-        Map<Project,SortedSet<String>> urls4project = OPEN_CLOSE_PROJECT_DOCUMENT_IMPL.close(projects, notifyUI);
+        Map<Project,Set<String>> urls4project = OPEN_CLOSE_PROJECT_DOCUMENT_IMPL.close(projects, notifyUI);
 
         if (urls4project != null) {
             // store project's documents
             // loop all project being closed
-            for (Map.Entry<Project,SortedSet<String>> entry : urls4project.entrySet()) {
+            for (Map.Entry<Project,Set<String>> entry : urls4project.entrySet()) {
                 storeProjectOpenFiles(entry.getKey(), entry.getValue());
             }
         }
@@ -447,28 +459,23 @@ public class ProjectUtilities {
         return urls4project != null;
     }
     
-    static private void storeProjectOpenFiles (Project p, SortedSet<String> urls) {
-        AuxiliaryConfiguration aux = p.getLookup().lookup(AuxiliaryConfiguration.class);
-        if (aux != null) {
-            
-            aux.removeConfigurationFragment (OPEN_FILES_ELEMENT, OPEN_FILES_NS, false);
+    static private void storeProjectOpenFiles(Project p, Set<String> urls) {
+        AuxiliaryConfiguration aux = ProjectUtils.getAuxiliaryConfiguration(p);
+        aux.removeConfigurationFragment (OPEN_FILES_ELEMENT, OPEN_FILES_NS, false);
 
-            Document xml = XMLUtil.createDocument (OPEN_FILES_ELEMENT, OPEN_FILES_NS, null, null);
-            Element fileEl;
-            
-            Element openFiles = xml.createElementNS (OPEN_FILES_NS, OPEN_FILES_ELEMENT);
-            
-            // loop all open files of given project
-            for (String url : urls) {
-                fileEl = openFiles.getOwnerDocument ().createElement (FILE_ELEMENT);
-                fileEl.appendChild(fileEl.getOwnerDocument().createTextNode(url));
-                openFiles.appendChild (fileEl);
-            }
-            
-            aux.putConfigurationFragment (openFiles, false);
-        } else {
-            ERR.log(Level.WARNING, "No AuxiliaryConfiguration in {0}", p);
+        Document xml = XMLUtil.createDocument (OPEN_FILES_ELEMENT, OPEN_FILES_NS, null, null);
+        Element fileEl;
+
+        Element openFiles = xml.createElementNS (OPEN_FILES_NS, OPEN_FILES_ELEMENT);
+
+        // loop all open files of given project
+        for (String url : urls) {
+            fileEl = openFiles.getOwnerDocument ().createElementNS(OPEN_FILES_NS, FILE_ELEMENT);
+            fileEl.appendChild(fileEl.getOwnerDocument().createTextNode(url));
+            openFiles.appendChild (fileEl);
         }
+
+        aux.putConfigurationFragment (openFiles, false);
     }
     
     /** Opens the project's files read from the private <code>project.xml</code> file
@@ -478,19 +485,14 @@ public class ProjectUtilities {
     public static void openProjectFiles (Project p) {
         ERR.log(Level.FINE, "Trying to open files from {0}...", p);
         
-        AuxiliaryConfiguration aux = p.getLookup().lookup(AuxiliaryConfiguration.class);
-        
-        if (aux == null) {
-            ERR.log(Level.WARNING, "No AuxiliaryConfiguration in {0}", p);
-            return ;
-        }
+        AuxiliaryConfiguration aux = ProjectUtils.getAuxiliaryConfiguration(p);
         
         Element openFiles = aux.getConfigurationFragment (OPEN_FILES_ELEMENT, OPEN_FILES_NS, false);
         if (openFiles == null) {
             return;
         }
 
-        NodeList list = openFiles.getElementsByTagName (FILE_ELEMENT);
+        NodeList list = openFiles.getElementsByTagNameNS(OPEN_FILES_NS, FILE_ELEMENT);
         
         for (int i = 0; i < list.getLength (); i++) {
             String url = list.item (i).getChildNodes ().item (0).getNodeValue ();
@@ -529,7 +531,7 @@ public class ProjectUtilities {
         
         // closes documents of given projects and returns mapped document's urls by project
         // it's used as base for storing documents in project private.xml
-        Map<Project,SortedSet<String>> close(Project[] projects, boolean notifyUI);
+        Map<Project,Set<String>> close(Project[] projects, boolean notifyUI);
     }
     
 }
