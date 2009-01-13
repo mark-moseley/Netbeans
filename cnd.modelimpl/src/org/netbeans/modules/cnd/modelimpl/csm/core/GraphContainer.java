@@ -68,18 +68,37 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  */
 public class GraphContainer extends ProjectComponent implements Persistent, SelfPersistent {
     
+    // empty stub
+    private static final GraphContainer EMPTY = new GraphContainer() {
+
+        @Override
+        public void put() {
+        }
+
+        @Override
+        public void putFile(CsmFile master) {
+        }
+    };
+
     /** Creates a new instance of GraphContainer */
     public GraphContainer(ProjectBase project) {
-	super(new GraphContainerKey(project.getUniqueName().toString()));
-        graph = new HashMap<CsmUID<CsmFile>, NodeLink>();
+        super(new GraphContainerKey(project.getUniqueName().toString()));
         put();
     }
-    
-    public GraphContainer (final DataInput input) throws IOException {
-	super(input);
+
+    public GraphContainer(final DataInput input) throws IOException {
+        super(input);
         assert input != null;
-        graph = new HashMap<CsmUID<CsmFile>, NodeLink>();
         readUIDToNodeLinkMap(input, graph);
+    }
+
+    // only for EMPTY static field
+    private GraphContainer() {
+        super((org.netbeans.modules.cnd.repository.spi.Key) null);
+    }
+
+    /*package*/ static GraphContainer empty() {
+        return EMPTY;
     }
     
     /**
@@ -377,7 +396,7 @@ public class GraphContainer extends ProjectComponent implements Persistent, Self
         
     }
     
-    private Map<CsmUID<CsmFile>,NodeLink> graph;
+    private final Map<CsmUID<CsmFile>,NodeLink> graph = new HashMap<CsmUID<CsmFile>, NodeLink>();
     
     private static class NodeLink implements SelfPersistent, Persistent {
         
