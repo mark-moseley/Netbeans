@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.search;
 
+import java.nio.charset.Charset;
 import java.util.List;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
@@ -54,6 +55,7 @@ import org.openidex.search.SearchType;
  *
  * @author  Peter Zavadsky
  * @author  Marian Petras
+ * @author  kaktus
  */
 final class SearchTask implements Runnable, Cancellable {
 
@@ -75,7 +77,8 @@ final class SearchTask implements Runnable, Cancellable {
     private volatile boolean finished = false;
     /** */
     private final String replaceString;
-    
+
+    private ProgressHandle progressHandle;
     
     /**
      * Creates a new <code>SearchTask</code>.
@@ -108,15 +111,15 @@ final class SearchTask implements Runnable, Cancellable {
             LifecycleManager.getDefault().saveAll();
         }
         
-        ProgressHandle progressHandle = ProgressHandleFactory.createHandle(
-                NbBundle.getMessage(ResultView.class,"TEXT_SEARCHING___"), this);
-        progressHandle.start();
-        
         /* Start the actual search: */
         ensureResultModelExists();
         if (searchGroup == null) {
             return;
         }
+
+        progressHandle = ProgressHandleFactory.createHandle(
+                NbBundle.getMessage(ResultView.class,"TEXT_PREPARE_SEARCH___"), this); // NOI18N
+        progressHandle.start();
 
         searchGroup.setListeningSearchTask(this);
         try {
@@ -128,6 +131,7 @@ final class SearchTask implements Runnable, Cancellable {
             searchGroup.setListeningSearchTask(null);
             finished = true;
             progressHandle.finish();
+            progressHandle = null;
         }
     }
     
@@ -135,6 +139,12 @@ final class SearchTask implements Runnable, Cancellable {
         return new SearchTask(searchScope,
                               basicSearchCriteria,
                               customizedSearchTypes);
+    }
+
+    /**
+     */
+    BasicSearchCriteria getSearchCriteria() {
+        return basicSearchCriteria;
     }
 
     /**
@@ -162,14 +172,27 @@ final class SearchTask implements Runnable, Cancellable {
      * if number of the found objects reached the limit.
      *
      * @param  object  found matching object
+     * @param  charset  charset used for full-text search of the object,
+     *                  or {@code null} if the object was not full-text searched
      */
-    void matchingObjectFound(Object object) {
-        boolean canContinue = resultModel.objectFound(object);
+    void matchingObjectFound(Object object, Charset charset) {
+        boolean canContinue = resultModel.objectFound(object, charset);
         if (!canContinue) {
             searchGroup.stopSearch();
         }
     }
-    
+
+    void searchStarted(int searchUnitsCount) {
+        progressHandle.finish();
+        progressHandle = ProgressHandleFactory.createHandle(
+                NbBundle.getMessage(ResultView.class,"TEXT_SEARCHING___"), this); // NOI18N
+        progressHandle.start(searchUnitsCount);
+    }
+
+    void progress(int progress) {
+        progressHandle.progress(progress);
+    }
+
     /**
      * Stops this search task.
      * This method also sets a value of attribute
