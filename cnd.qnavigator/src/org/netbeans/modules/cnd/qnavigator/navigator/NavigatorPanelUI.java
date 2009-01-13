@@ -42,33 +42,51 @@
 package org.netbeans.modules.cnd.qnavigator.navigator;
 
 import java.awt.Cursor;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.beans.PropertyVetoException;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import org.openide.explorer.ExplorerManager;
 import org.openide.explorer.view.BeanTreeView;
 import org.openide.nodes.Node;
+import org.openide.util.Lookup;
+import org.openide.util.lookup.AbstractLookup;
+import org.openide.util.lookup.InstanceContent;
 
 /**
  *
  * @author Alexander Simon
  */
-public class NavigatorPanelUI extends JPanel implements ExplorerManager.Provider {
+public class NavigatorPanelUI extends JPanel implements ExplorerManager.Provider, PropertyChangeListener {
     private NavigatorContent content = new NavigatorContent();
     private BeanTreeView navigatorPane;
     private ExplorerManager explorerManager = new ExplorerManager();
+    private final InstanceContent selectedNodes = new InstanceContent();
+    private final Lookup lookup = new AbstractLookup(selectedNodes);
     private boolean isBusy = false;
     
     /** Creates new form NavigatorPanel */
     public NavigatorPanelUI() {
         initComponents();
+        explorerManager.addPropertyChangeListener(this);
+        
         navigatorPane = new BeanTreeView();
         navigatorPane.setRootVisible(false);
         navigatorPane.setDropTarget(false);
         navigatorPane.setDragSource(false);
         add(navigatorPane, java.awt.BorderLayout.CENTER);
         explorerManager.setRootContext(content.getRoot());
-        navigatorPane.expandAll();
+        expandAll();
+    }
+
+    private void expandAll() {
+        NavigatorModel model = content.getModel();
+        if (model != null) {
+            if (model.getFilter().isExpandAll()) {
+                navigatorPane.expandAll();
+            }
+        }
     }
     
     /** This method is called from within the constructor to
@@ -96,11 +114,11 @@ public class NavigatorPanelUI extends JPanel implements ExplorerManager.Provider
     void newContentReady(){
         explorerManager.setRootContext(content.getRoot());
         if (SwingUtilities.isEventDispatchThread()){
-            navigatorPane.expandAll();
+            expandAll();
         } else {
             SwingUtilities.invokeLater(new Runnable(){
                 public void run() {
-                    navigatorPane.expandAll();
+                    expandAll();
                 }
             });
         }
@@ -127,7 +145,7 @@ public class NavigatorPanelUI extends JPanel implements ExplorerManager.Provider
     public ExplorerManager getExplorerManager() {
         return explorerManager;
     }
-    
+
     /** Overriden to pass focus directly to main content, which in 
      * turn assures that some element is always selected
      */ 
@@ -136,5 +154,20 @@ public class NavigatorPanelUI extends JPanel implements ExplorerManager.Provider
         boolean result = super.requestFocusInWindow();
         navigatorPane.requestFocusInWindow();
         return result;
+    }
+
+    /*package*/final Lookup getLookup() {
+        return lookup;
+    }
+
+    public void propertyChange(PropertyChangeEvent evt) {
+        if (ExplorerManager.PROP_SELECTED_NODES.equals(evt.getPropertyName())) {
+            for (Node n : (Node[]) evt.getOldValue()) {
+                selectedNodes.remove(n);
+            }
+            for (Node n : (Node[]) evt.getNewValue()) {
+                selectedNodes.add(n);
+            }
+        }
     }
 }
