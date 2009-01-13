@@ -46,17 +46,22 @@ import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
 import java.awt.Toolkit;
+import java.awt.Window;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.HashMap;
+import java.util.prefs.Preferences;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JLabel;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.netbeans.spi.project.ui.support.ProjectCustomizer;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
+import org.openide.windows.WindowManager;
 
 /**
  *
@@ -81,6 +86,10 @@ public class CustomizerPane extends JPanel
     // maximum dimension of the customizer is 3/4 of screen size
     private static final int MAX_HEIGHT = Toolkit.getDefaultToolkit().getScreenSize().height * 3 / 4;
     private static final int MAX_WIDTH = Toolkit.getDefaultToolkit().getScreenSize().width * 3 / 4;
+
+    private static Dimension previousDimension = null;
+    private static final String CUSTOMIZER_DIALOG_WIDTH = "CustomizerPane.dialog.width";
+    private static final String CUSTOMIZER_DIALOG_HEIGHT = "CustomizerPane.dialog.height";
     
     //private DialogDescriptor dialogDescriptor;
     
@@ -113,7 +122,14 @@ public class CustomizerPane extends JPanel
         errMessConstraints.insets = new Insets(12, 0, 0, 0);
         errMessConstraints.fill = GridBagConstraints.HORIZONTAL;
         customizerPanel.add(errorMessageValue, errMessConstraints);
-        
+
+        Preferences prefs = NbPreferences.forModule(org.netbeans.modules.project.uiapi.CustomizerPane.class);
+        int paneWidth = prefs.getInt(CUSTOMIZER_DIALOG_WIDTH, 0);
+        int paneHeight = prefs.getInt(CUSTOMIZER_DIALOG_HEIGHT, 0);
+        if (paneWidth != 0 && paneHeight != 0) {
+            previousDimension = new Dimension(paneWidth, paneHeight);
+        }
+
         setCategory( categoryModel.getCurrentCategory() );
     }
     
@@ -180,8 +196,8 @@ public class CustomizerPane extends JPanel
             return super.getPreferredSize();
         }
         
-        int height = Math.max(450, currentCustomizer.getPreferredSize().height + 50);
-        int width = Math.max(750, currentCustomizer.getPreferredSize().width + 240);
+        int height = Math.max(500, currentCustomizer.getPreferredSize().height + 50);
+        int width = Math.max(800, currentCustomizer.getPreferredSize().width + 240);
         
         Dimension dim = super.getPreferredSize();
         if (dim == null) {
@@ -230,7 +246,7 @@ public class CustomizerPane extends JPanel
         if ( newCategory == null ) {
             return;
         }
-
+        
         if ( currentCustomizer != null ) {
             customizerPanel.remove( currentCustomizer );
         }
@@ -245,23 +261,55 @@ public class CustomizerPane extends JPanel
             Utilities.getCategoryChangeSupport(newCategory).addPropertyChangeListener(this);
             currentCustomizer = newCustomizer;            
             currentHelpCtx = HelpCtx.findHelp( currentCustomizer );
-            
-            /*
-            if ( currentCustomizer instanceof javax.swing.JComponent ) {
-                ((javax.swing.JComponent)currentCustomizer).setPreferredSize( new java.awt.Dimension( 600, 0 ) );
+            if (previousDimension == null) {
+                previousDimension = currentCustomizer.getSize();
             }
-            */
+            int newWidth = 0;
+            int newHeight = 0;
+            if (previousDimension != null) {
+                newWidth = previousDimension.width;
+                newHeight = previousDimension.height;
+                if (currentCustomizer.getPreferredSize().width > previousDimension.width) {
+                    newWidth = currentCustomizer.getPreferredSize().width;
+                    int maxWidth = WindowManager.getDefault().getMainWindow().getGraphicsConfiguration().getBounds().width * 3 / 4;
+                    if (newWidth > maxWidth) {
+                        newWidth = maxWidth;
+                    }
+                }
+                if (currentCustomizer.getPreferredSize().height > previousDimension.height) {
+                    newHeight = currentCustomizer.getPreferredSize().height;
+                    int maxHeght = WindowManager.getDefault().getMainWindow().getGraphicsConfiguration().getBounds().height * 3 / 4;
+                    if (newHeight > maxHeght) {
+                        newHeight = maxHeght;
+                    }
+                }
+            }
+
+            Dimension newDim = new Dimension(newWidth, newHeight);
+            currentCustomizer.setPreferredSize(newDim);
+            previousDimension = newDim;
+
+            Preferences prefs = NbPreferences.forModule(org.netbeans.modules.project.uiapi.CustomizerPane.class);
+            prefs.put(CUSTOMIZER_DIALOG_WIDTH, Integer.toString(newDim.width));
+            prefs.put(CUSTOMIZER_DIALOG_HEIGHT, Integer.toString(newDim.height));
+
             customizerPanel.add( currentCustomizer, fillConstraints );
             customizerPanel.validate();
             customizerPanel.repaint();
+
+            if (customizerPanel != null) {
+                Window window = SwingUtilities.getWindowAncestor(customizerPanel);
+                if (window != null) {
+                    window.pack();
+                    window.setBounds(org.openide.util.Utilities.findCenterBounds(window.getSize()));
+                }
+            }
             
             setErrorMessage(newCategory.getErrorMessage());
             firePropertyChange( HELP_CTX_PROPERTY, null, getHelpCtx() );
-        }
-        else {
+        } else {
             currentCustomizer = null;
         }
-
     }
 
     private void setErrorMessage(String errMessage) {
