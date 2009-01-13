@@ -143,6 +143,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
         refreshSetups();
         refreshComponents();
         refreshTask = org.netbeans.modules.versioning.util.Utils.createTask(new RefreshViewTask());
+        refreshStatuses();
     }
 
     /**
@@ -206,9 +207,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
         splitPane.setBottomComponent(new NoContentPanel(NbBundle.getMessage(MultiDiffPanel.class, "MSG_DiffPanel_NoContent")));
         commitButton.addActionListener(this);
         
-        commitButton.setToolTipText(NbBundle.getMessage(MultiDiffPanel.class, "MSG_CommitDiff_Tooltip", contextName));
-        updateButton.setToolTipText(NbBundle.getMessage(MultiDiffPanel.class, "MSG_UpdateDiff_Tooltip", contextName));
-        ButtonGroup grp = new ButtonGroup();
+        commitButton.setToolTipText(NbBundle.getMessage(MultiDiffPanel.class, "CTL_CommitDiff_Tooltip"));
         
         nextAction = new AbstractAction(null, new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/mercurial/resources/icons/diff-next.png"))) {  // NOI18N
             {
@@ -373,6 +372,10 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
     }
 
     private void onRefreshButton() {
+        refreshStatuses();
+    }
+
+    private void refreshStatuses() {
         if (context == null || context.getRootFiles().size() == 0) {
             return;
         }
@@ -400,7 +403,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
     }                    
 
     private void onUpdateButton() {
-        UpdateAction.update(context, null);
+        UpdateAction.update(context);
     }
     
     private void onCommitButton() {
@@ -661,7 +664,6 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
         prevButton = new javax.swing.JButton();
         jPanel2 = new javax.swing.JPanel();
         refreshButton = new javax.swing.JButton();
-        updateButton = new javax.swing.JButton();
         jPanel5 = new javax.swing.JPanel();
         commitButton = new javax.swing.JButton();
         splitPane = new javax.swing.JSplitPane();
@@ -696,7 +698,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
         jPanel4Layout.setVerticalGroup(
             jPanel4Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(org.jdesktop.layout.GroupLayout.TRAILING, jPanel4Layout.createSequentialGroup()
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap(20, Short.MAX_VALUE)
                 .add(jPanel3, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
         );
 
@@ -758,17 +760,6 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
         });
         controlsToolBar.add(refreshButton);
 
-        updateButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/mercurial/resources/icons/update.png"))); // NOI18N
-        updateButton.setFocusable(false);
-        updateButton.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
-        updateButton.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
-        updateButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                updateButtonActionPerformed(evt);
-            }
-        });
-        controlsToolBar.add(updateButton);
-
         jPanel5.setMaximumSize(new java.awt.Dimension(20, 32767));
 
         org.jdesktop.layout.GroupLayout jPanel5Layout = new org.jdesktop.layout.GroupLayout(jPanel5);
@@ -809,10 +800,6 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
         );
     }// </editor-fold>//GEN-END:initComponents
 
-    private void updateButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_updateButtonActionPerformed
-        onUpdateButton();
-    }//GEN-LAST:event_updateButtonActionPerformed
-
     private void refreshButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_refreshButtonActionPerformed
         onRefreshButton();
     }//GEN-LAST:event_refreshButtonActionPerformed
@@ -830,7 +817,6 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, DiffS
     private javax.swing.JButton prevButton;
     private javax.swing.JButton refreshButton;
     private javax.swing.JSplitPane splitPane;
-    private javax.swing.JButton updateButton;
     // End of variables declaration//GEN-END:variables
     
     /** Interprets property blob. */
