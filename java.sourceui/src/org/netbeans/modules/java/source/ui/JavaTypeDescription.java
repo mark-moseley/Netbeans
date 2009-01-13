@@ -87,29 +87,21 @@ public class JavaTypeDescription extends TypeDescriptor {
     }
     
     public void open() {        
-        final ClasspathInfo ci = ClasspathInfo.create(cacheItem.getRoot());
+        final FileObject root = cacheItem.getRoot();
+        if (root == null) {
+            final String message = NbBundle.getMessage(JavaTypeDescription.class, "LBL_JavaTypeDescription_nosource",handle.getQualifiedName());
+            StatusDisplayer.getDefault().setStatusText(message);
+            Toolkit.getDefaultToolkit().beep();
+            return;
+        }
+        final ClasspathInfo ci = ClasspathInfo.create(root);
         if ( cacheItem.isBinary() ) {            
-            final JavaSource js = JavaSource.create( ci );
             final ElementHandle<TypeElement> eh = handle;
-            final Element[] el = new Element[1];
-            try {
-                js.runUserActionTask(new Task<CompilationController>() {
-
-                    public void run(CompilationController info) {
-                        el[0] = eh.resolve (info);
-                        if (!ElementOpen.open(ci, el[0])) {
-                            final String message = NbBundle.getMessage(JavaTypeDescription.class, "LBL_JavaTypeDescription_nosource",eh.getQualifiedName());
-                            StatusDisplayer.getDefault().setStatusText(message);
-                            Toolkit.getDefaultToolkit().beep();
-                        }
-                    }
-
-                }, true);
+            if (!ElementOpen.open(ci, eh)) {
+                final String message = NbBundle.getMessage(JavaTypeDescription.class, "LBL_JavaTypeDescription_nosource",eh.getQualifiedName());
+                StatusDisplayer.getDefault().setStatusText(message);
+                Toolkit.getDefaultToolkit().beep();
             }
-            catch( IOException e ) {
-                Logger.getLogger(JavaTypeDescription.class.getName()).info("Source not found: " + eh.getBinaryName());
-                Exceptions.printStackTrace(e);
-            }                    
         }
         else {
             final FileObject file = SourceUtils.getFile(handle, ci);
