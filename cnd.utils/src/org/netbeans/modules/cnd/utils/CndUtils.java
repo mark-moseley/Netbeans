@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,42 +31,46 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.classview.model;
-
-import org.netbeans.modules.cnd.api.model.*;
-import org.netbeans.modules.cnd.classview.NameCache;
-import org.netbeans.modules.cnd.modelutil.CsmUtilities;
-import org.netbeans.modules.cnd.utils.CndUtils;
-import org.openide.nodes.*;
+package org.netbeans.modules.cnd.utils;
 
 /**
- * Misc static utilitiy functions
- * @author Vladimir Kvasihn
+ *
+ * @author Alexey Vladykin
  */
-public class CVUtil {
-    private static final boolean showParamNames = CndUtils.getBoolean("cnd.classview.show-param-names", true); // NOI18N
-    
-    public static CharSequence getSignature(CsmFunction fun) {
-	return NameCache.getManager().getString(CsmUtilities.getSignature(fun, showParamNames));
+public class CndUtils {
+
+    public static boolean isStandalone() {
+        return !CndUtils.class.getClassLoader().getClass().getName().startsWith("org.netbeans."); // NOI18N
     }
-        
-    public static CharSequence getNamespaceDisplayName(CsmNamespace ns){
-        String displayName = ns.getName().toString();
-        if (displayName.length() == 0) {
-            displayName = ns.getQualifiedName().toString();
-            int scope = displayName.lastIndexOf("::"); // NOI18N
-            if (scope != -1) {
-                displayName = displayName.substring(scope + 2);
-            }
-            displayName = displayName.replace('<', ' ').replace('>', ' '); // NOI18N
+    
+    public static boolean isReleaseMode() {
+        boolean releaseMode;
+        String text = System.getProperty("cnd.release.mode");
+        if (text == null) {
+            releaseMode = true;
+            assert ((releaseMode = false) == false);
+        } else {
+            releaseMode = Boolean.parseBoolean(text);
         }
-        return  NameCache.getManager().getString(displayName);
+        return releaseMode;
     }
 
-    public static Node createLoadingNode() {
-        BaseNode node = new LoadingNode();
-        return node;
-    }    
+    public static boolean isDebugMode() {
+        return ! isReleaseMode();
+    }
+
+    public static boolean getBoolean(String name, boolean result) {
+        String text = System.getProperty(name);
+        if (text != null) {
+            result = Boolean.parseBoolean(text);
+        }
+        return result;
+    }
+
 }
