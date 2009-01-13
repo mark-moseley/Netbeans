@@ -105,16 +105,18 @@ made subject to such option by the copyright holder.
         <property name="jnlp.master.dir" location="build/tmp/master-jnlp"/>
         <mkdir dir="${jnlp.master.dir}"/>
         
+        <property name="dist.dir" location="dist"/>
         <property name="disabled.modules" value=""/>
         <property name="enabled.clusters" value=""/>
         <property name="disabled.clusters" value=""/>
         
-        <fileset id="jnlp.included.modules" dir="${netbeans.dest.dir}">
+        <pathfileset id="jnlp.included.modules" >
+            <path refid="cluster.path.id"/>
             <and>
                 <or>
-                    <filename name="*/modules/**/*.jar"/>
-                    <filename name="*/lib/**/*.jar"/>
-                    <filename name="*/core/**/*.jar"/>
+                    <filename name="**/modules/**/*.jar"/>
+                    <filename name="**/lib/**/*.jar"/>
+                    <filename name="**/core/**/*.jar"/>
                 </or>
                 <not>
                     <filename name="**/update/**/*.jar"/>
@@ -125,7 +127,7 @@ made subject to such option by the copyright holder.
                     <param name="excludeClusters" value="${disabled.clusters}"/>
                 </custom>
             </and>
-        </fileset>
+        </pathfileset>
         <property name="jnlp.sign.jars" value="true"/>
         <property name="jnlp.signjar.keystore" location="build/default.keystore"/>
         <property name="jnlp.signjar.alias" value="jnlp"/>
@@ -166,11 +168,11 @@ made subject to such option by the copyright holder.
             dir="${jnlp.dest.dir}/netbeans/"
             codebase="${jnlp.platform.codebase.own}"
             verify="true"
-            verifyexcludes="lib/nbexec.cmd,lib/nbexec,lib/nbexec.exe,core/ide.ks,LICENSE.txt,DISTRIBUTION.txt,THIRDPARTYLICENSEREADME.txt,docs/swing-layout-1.0-doc.zip,docs/swing-layout-1.0.1-doc.zip,docs/html40.zip,core/org-netbeans-modules-utilities-cli.jar,docs/org/netbeans/modules/usersguide/ide.css,docs/swing-layout-1.0.2-doc.zip,docs/swing-layout-1.0.2-src.zip,docs/swing-layout-1.0.3-doc.zip,docs/swing-layout-1.0.3-src.zip"
+            verifyexcludes="lib/nbexec.cmd,lib/nbexec,lib/nbexec.exe,lib/nbexec.dll,core/ide.ks,LICENSE.txt,DISTRIBUTION.txt,THIRDPARTYLICENSEREADME.txt,docs/swing-layout-1.0-doc.zip,docs/swing-layout-1.0.1-doc.zip,docs/html40.zip,core/org-netbeans-modules-utilities-cli.jar,docs/org/netbeans/modules/usersguide/ide.css,docs/swing-layout-1.0.2-doc.zip,docs/swing-layout-1.0.2-src.zip,docs/swing-layout-1.0.3-doc.zip,docs/swing-layout-1.0.3-src.zip"
             permissions="${jnlp.permissions}"
             signjars="${jnlp.sign.jars}"
         >
-            <modules refid="jnlp.included.modules"/>
+            <resources refid="jnlp.included.modules"/>
         </makejnlp>
     </target>
 
@@ -192,7 +194,7 @@ made subject to such option by the copyright holder.
             dir="${jnlp.master.dir}"
             codebase="${jnlp.platform.codebase}"
         >
-            <modules refid="jnlp.included.modules"/>
+            <resources refid="jnlp.included.modules"/>
         </makemasterjnlp>
     </target>
     
@@ -221,14 +223,14 @@ made subject to such option by the copyright holder.
  </servlet-mapping>
 </web-app>         
 ]]></echo>
-        <mkdir dir="dist"/>
-        <war basedir="${jnlp.dest.dir}" destfile="dist/${app.name}.war" webxml="build/tmp/web.xml">
+        <mkdir dir="${dist.dir}"/>
+        <war basedir="${jnlp.dest.dir}" destfile="${dist.dir}/${app.name}.war" webxml="build/tmp/web.xml">
             <zipfileset dir="${jnlp.servlet.jar}/.." file="${jnlp.servlet.jar}" prefix="WEB-INF/lib"/>
         </war>
     </target>
 
     <target name="build-jnlp-local" depends="build-jnlp-nowar">
-        <property name="build.jnlp.local.dir" location="dist/jnlp/local"/>
+        <property name="build.jnlp.local.dir" location="${dist.dir}/jnlp/local"/>
         <mkdir dir="${build.jnlp.local.dir}"/>
         <mkdir dir="${build.jnlp.local.dir}/netbeans/"/>
         <mkdir dir="${build.jnlp.local.dir}/app/"/>
@@ -323,14 +325,22 @@ made subject to such option by the copyright holder.
             <istrue value="${jnlp.sign.jars}"/>
         </condition>
         
-        <copy file="${app.icon}" tofile="${jnlp.dest.dir}/master.png" failonerror="false"/>
+        <condition property="app.icon.safe" value="${app.icon}" else=".png">
+            <isset property="app.icon" />
+        </condition>
+        <pathconvert property="app.icon.ext">
+            <path path="${app.icon.safe}"/>
+            <mapper type="regexp" from="^(.*)\.(.*)$$" to="\2"/>
+        </pathconvert>
+        
+        <copy file="${app.icon}" tofile="${jnlp.dest.dir}/master.${app.icon.ext}" failonerror="false"/>
         <copy file="master.jnlp" tofile="${jnlp.dest.dir}/master.jnlp">
             <filterchain>
                 <replacestring from="&lt;!--$${jnlp.resources}--&gt;" to="${jnlp.resources}"/>
                 <replacestring from="$${jnlp.resources}" to="${jnlp.resources}"/>
                 <replacestring from="$${app.name}" to="${app.name}"/>
                 <replacestring from="$${app.title}" to="${app.title}"/>
-                <replacestring from="$${app.icon}" to="master.png"/>
+                <replacestring from="$${app.icon}" to="master.${app.icon.ext}"/>
                 <replacestring from="$${branding.token}" to="${branding.token}"/>
                 <replacestring from="$${netbeans.jnlp.fixPolicy}" to="${netbeans.jnlp.fixPolicy}"/>
             </filterchain>
@@ -344,7 +354,7 @@ made subject to such option by the copyright holder.
                 <replacestring from="$${jnlp.branding.jars}" to="${jnlp.branding.jars}"/>
                 <replacestring from="$${app.name}" to="${app.name}"/>
                 <replacestring from="$${app.title}" to="${app.title}"/>
-                <replacestring from="$${app.icon}" to="master.png"/>
+                <replacestring from="$${app.icon}" to="master.${app.icon.ext}"/>
                 <replacestring from="$${jnlp.permissions}" to="${jnlp.permissions}"/>
             </filterchain>
         </copy>
@@ -404,9 +414,10 @@ made subject to such option by the copyright holder.
         <fail unless="netbeans.home">This target only works when run from inside the NetBeans IDE.</fail>
         <nbjpdastart name="NetBeans" addressproperty="debug.port" transport="dt_socket">
             <classpath>
-                <fileset dir="${netbeans.dest.dir}">
-                    <include name="**/*.jar"/>
-                </fileset>
+                <pathfileset>
+                    <path refid="cluster.path.id"/>
+                    <filename name="**/*.jar"/>
+                </pathfileset>
                 <fileset dir="${cluster}">
                     <include name="**/*.jar"/>
                 </fileset>
@@ -416,6 +427,7 @@ made subject to such option by the copyright holder.
         <property name="debug.args" value="-Xdebug -Xnoagent -Xrunjdwp:transport=dt_socket,suspend=${debug.pause},server=n,address=${debug.port}"/>
         <antcall target="run">
             <param name="run.args" value="${debug.args}"/>
+            <reference refid="cluster.path.id"/>
         </antcall>
     </target>
 
