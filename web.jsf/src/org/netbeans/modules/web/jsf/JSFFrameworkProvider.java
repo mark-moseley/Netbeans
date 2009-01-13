@@ -79,7 +79,7 @@ import org.openide.util.NbBundle;
 
 /**
  *
- * @author Petr Pisl
+ * @author Petr Pisl, Po-Ting Wu
  */
 public class JSFFrameworkProvider extends WebFrameworkProvider {
     
@@ -88,6 +88,12 @@ public class JSFFrameworkProvider extends WebFrameworkProvider {
     private static String WELCOME_JSF = "welcomeJSF.jsp";   //NOI18N
     private static String FORWARD_JSF = "forwardToJSF.jsp"; //NOI18N
     private static String RESOURCE_FOLDER = "org/netbeans/modules/web/jsf/resources/"; //NOI18N
+
+    private boolean createWelcome = true;
+    
+    public void setCreateWelcome(boolean set) {
+        createWelcome = set;
+    }
     
     private JSFConfigurationPanel panel;
     /** Creates a new instance of JSFFrameworkProvider */
@@ -158,10 +164,17 @@ public class JSFFrameworkProvider extends WebFrameworkProvider {
             
             FileSystem fileSystem = webModule.getWebInf().getFileSystem();
             fileSystem.runAtomicAction(new CreateFacesConfig(webModule, isMyFaces));
-            result.add(webModule.getDocumentBase().getFileObject("welcomeJSF", "jsp")); //NOI18N
+
+            FileObject welcomeFile = webModule.getDocumentBase().getFileObject("welcomeJSF", "jsp"); //NOI18N
+            if (welcomeFile != null) {
+                result.add(welcomeFile);
+            }
         }  catch (IOException exception) {   
            LOGGER.log(Level.WARNING, "Exception during extending an web project", exception); //NOI18N
         }
+
+        createWelcome = true;
+
         return result;
     }
     
@@ -279,7 +292,16 @@ public class JSFFrameworkProvider extends WebFrameworkProvider {
                     Servlet[] servlets = ddRoot.getServlet();
                     for (int i = 0; i < servlets.length; i++) {
                         servlet = servlets[i];
-                        if (FACES_SERVLET_CLASS.equals(servlet.getServletClass().trim())) {
+                        if (servlet == null) {
+                            continue;
+                        }
+
+                        String servletClass = servlet.getServletClass();
+                        if (servletClass == null) {
+                            continue;
+                        }
+
+                        if (FACES_SERVLET_CLASS.equals(servletClass.trim())) {
                             servletDefined = true;
                             break;
                         }
@@ -399,7 +421,11 @@ public class JSFFrameworkProvider extends WebFrameworkProvider {
             }
             
             // copy faces-config.xml
-            if (canCreateNewFile(webModule.getWebInf(),"faces-config.xml")) { //NO18N
+            File fileConfig = new File(FileUtil.toFile(webModule.getWebInf()), "faces-config.xml"); // NOI18N
+            if (!fileConfig.exists()) {
+                // Fix Issue#105180, new project wizard lets me select both jsf and visual jsf.
+                // The new faces-config.xml template contains no elements;
+                // it's better the framework don't replace user's original one if exist.
                 String facesConfigTemplate = "faces-config.xml"; //NOI18N
                 if (ddRoot != null) {
                     if (WebApp.VERSION_2_5.equals(ddRoot.getVersion())) {
@@ -412,8 +438,7 @@ public class JSFFrameworkProvider extends WebFrameworkProvider {
             }
             
             //copy Welcome.jsp
-            
-            if (canCreateNewFile(webModule.getDocumentBase(), WELCOME_JSF)) {
+            if (createWelcome && canCreateNewFile(webModule.getDocumentBase(), WELCOME_JSF)) {
                 String content = readResource(Thread.currentThread().getContextClassLoader().getResourceAsStream(RESOURCE_FOLDER + WELCOME_JSF), "UTF-8"); //NOI18N
                 Charset encoding = FileEncodingQuery.getDefaultEncoding();
                 content = content.replaceAll("__ENCODING__", encoding.name());
