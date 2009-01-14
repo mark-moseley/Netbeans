@@ -51,15 +51,16 @@
 package org.netbeans.test.cvsmodule;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.table.TableModel;
-import junit.textui.TestRunner;
+import junit.framework.Test;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.OutputOperator;
-import org.netbeans.jellytools.OutputTabOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.modules.javacvs.CVSRootStepOperator;
 import org.netbeans.jellytools.modules.javacvs.CheckoutWizardOperator;
 import org.netbeans.jellytools.modules.javacvs.CommitOperator;
@@ -67,14 +68,12 @@ import org.netbeans.jellytools.modules.javacvs.ModuleToCheckoutStepOperator;
 import org.netbeans.jellytools.modules.javacvs.VersioningOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.jemmy.QueueTool;
-import org.netbeans.jemmy.TimeoutExpiredException;
+import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JProgressBarOperator;
 import org.netbeans.jemmy.operators.JTableOperator;
 import org.netbeans.jemmy.operators.Operator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.ide.ProjectSupport;
 /**
  *
@@ -82,7 +81,7 @@ import org.netbeans.junit.ide.ProjectSupport;
  */
 public class CommittingCvs11Test extends JellyTestCase {
 
-    String os_name;
+    static String os_name;
     static String sessionCVSroot;
     final String projectName = "ForImport";
     final String pathToMain = "forimport|Main.java";
@@ -90,39 +89,62 @@ public class CommittingCvs11Test extends JellyTestCase {
     String PROTOCOL_FOLDER = "protocol";
     Operator.DefaultStringComparator comOperator; 
     Operator.DefaultStringComparator oldOperator;
+    static Logger log;
 
     /**
      * Creates a new instance of CommittingCvs11Test
      */
     public CommittingCvs11Test(String name) {
         super(name);
+        if (os_name == null) {
+            os_name = System.getProperty("os.name");
+        }
+        try {
+            TestKit.extractProtocol(getDataDir());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    public static void main(String[] args) {
-        // TODO code application logic here
-        TestRunner.run(suite());
-    }
-    
+    @Override
     protected void setUp() throws Exception {        
-        os_name = System.getProperty("os.name");
         //System.out.println(os_name);
         System.out.println("### " + getName() + " ###");
+        if (log == null) {
+            log = Logger.getLogger("org.netbeans.modules.versioning.system.cvss.t9y");
+            log.setLevel(Level.ALL);
+            TestKit.removeHandlers(log);
+        } else {
+            TestKit.removeHandlers(log);
+        }
     }
-
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new CommittingCvs11Test("testCheckOutProject"));
-        suite.addTest(new CommittingCvs11Test("testCommitModified"));
-        suite.addTest(new CommittingCvs11Test("removeAllData"));
-        return suite;
-    }
+    
+    public static Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(CommittingCvs11Test.class).addTest(
+                     "testCheckOutProject",
+                     "testCommitModified",
+                     "removeAllData"
+                )
+                .enableModules(".*")
+                .clusters(".*")
+        );
+     }
 
     public void testCheckOutProject() throws Exception {
         PROTOCOL_FOLDER = "protocol";
         //JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 18000);
         //JemmyProperties.setCurrentTimeout("DialogWaiter.WaitDialogTimeout", 18000);
+        TestKit.TIME_OUT = 50;
+        MessageHandler mh = new MessageHandler("Checking out");
+        log.addHandler(mh);
+
         TestKit.closeProject(projectName);
-        new ProjectsTabOperator().tree().clearSelection();
+        TestKit.showStatusLabels();
+
+        if ((os_name !=null) && (os_name.indexOf("Mac") > -1))
+            NewProjectWizardOperator.invoke().close();
+
         comOperator = new Operator.DefaultStringComparator(true, true);
         oldOperator = (DefaultStringComparator) Operator.getDefaultStringComparator();
         Operator.setDefaultStringComparator(comOperator);
@@ -133,9 +155,9 @@ public class CommittingCvs11Test extends JellyTestCase {
         crso.setCVSRoot(":pserver:anoncvs@localhost:/cvs");
         //crso.setPassword("");
         //crso.setPassword("test");
-        
+
         //prepare stream for successful authentification and run PseudoCVSServer
-        InputStream in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "authorized.in");   
+        InputStream in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "authorized.in");
         PseudoCvsServer cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
         cvss.ignoreProbe();
@@ -145,10 +167,10 @@ public class CommittingCvs11Test extends JellyTestCase {
         crso.setCVSRoot(CVSroot);
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         crso.next();
-              
+
         //second step of checkoutwizard
         //2nd step of CheckOutWizard
-        
+
         File tmp = new File("/tmp"); // NOI18N
         File work = new File(tmp, "" + File.separator + System.currentTimeMillis());
         cacheFolder = new File(work, projectName + File.separator + "src" + File.separator + "forimport" + File.separator + "CVS" + File.separator + "RevisionCache");
@@ -158,36 +180,32 @@ public class CommittingCvs11Test extends JellyTestCase {
         ModuleToCheckoutStepOperator moduleCheck = new ModuleToCheckoutStepOperator();
         cvss.stop();
         in.close();
-        moduleCheck.setModule("ForImport");        
+        moduleCheck.setModule("ForImport");
         moduleCheck.setLocalFolder(work.getAbsolutePath()); // NOI18N
-        
+
         //Pseudo CVS server for finishing check out wizard
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "checkout_finish_2.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
         CVSroot = cvss.getCvsRoot();
         //cvss.ignoreProbe();
-        
+
         //crso.setCVSRoot(CVSroot);
         //combo.setSelectedItem(CVSroot);
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         cwo.finish();
-        
-        OutputOperator oo = OutputOperator.invoke();
-        //System.out.println(CVSroot);
-        
-        OutputTabOperator oto = oo.getOutputTab(sessionCVSroot);
-        oto.waitText("Checking out finished");
+
+        TestKit.waitText(mh);
         cvss.stop();
         in.close();
         NbDialogOperator nbdialog = new NbDialogOperator("Checkout Completed");
         JButtonOperator open = new JButtonOperator(nbdialog, "Open Project");
         open.push();
-        
+
         ProjectSupport.waitScanFinished();
-        TestKit.waitForQueueEmpty();
-        ProjectSupport.waitScanFinished();
-        
+//        TestKit.waitForQueueEmpty();
+//        ProjectSupport.waitScanFinished();
+
         //create new elements for testing
         TestKit.createNewElementsCommitCvs11(projectName);
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", "");
@@ -200,8 +218,6 @@ public class CommittingCvs11Test extends JellyTestCase {
         CommitOperator co;
         String CVSroot, color;
         JTableOperator table;
-        OutputOperator oo;
-        OutputTabOperator oto;
         VersioningOperator vo;
         String[] expected;
         String[] actual;
@@ -209,10 +225,12 @@ public class CommittingCvs11Test extends JellyTestCase {
         org.openide.nodes.Node nodeIDE;
         PROTOCOL_FOLDER = "protocol" + File.separator + "cvs_committing_cvs11";
         
+        MessageHandler mh = new MessageHandler("Committing");
+        log.addHandler(mh);
+        
         Node packNode = new Node(new SourcePackagesNode("ForImport"), "xx");
-
         co = CommitOperator.invoke(packNode);
-        Thread.sleep(1000);
+        new EventTool().waitNoEvent(1000);
         table = co.tabFiles();
         TableModel model = table.getModel();
         
@@ -225,10 +243,6 @@ public class CommittingCvs11Test extends JellyTestCase {
         assertEquals("Wrong records displayed in dialog", 4, result);
         co.setCommitMessage("Initial commit message");
         
-        oo = OutputOperator.invoke();
-        oto = oo.getOutputTab(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-        oto.clear();
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "commit_invoke.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
@@ -251,8 +265,7 @@ public class CommittingCvs11Test extends JellyTestCase {
         
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", allCVSRoots);
         co.commit();
-        oto.waitText("Committing");
-        oto.waitText("finished");
+        TestKit.waitText(mh);
                
         cvss.stop();
         cvss2.stop();
@@ -286,26 +299,26 @@ public class CommittingCvs11Test extends JellyTestCase {
         //commit changes
         
         //
-        oto = new OutputTabOperator(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
+        mh = new MessageHandler("Refreshing");
+        TestKit.removeHandlers(log);
+        log.addHandler(mh);
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "commit_invoke_commit_4_modified_show_changes.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();
         CVSroot = cvss.getCvsRoot();
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", CVSroot);
         packNode.performPopupAction("CVS|Show Changes");
-        Thread.sleep(1000);
-        oto.waitText("Refreshing");
-        oto.waitText("finished");
+        new EventTool().waitNoEvent(1000);
+        TestKit.waitText(mh);
+
         cvss.stop();
         
-        //oo = OutputOperator.invoke();
-        oto = new OutputTabOperator(sessionCVSroot);
-        oto.getTimeouts().setTimeout("ComponentOperator.WaitStateTimeout", 30000);
-        oto.clear();
+        mh = new MessageHandler("Committing");
+        TestKit.removeHandlers(log);
+        log.addHandler(mh);
         co = CommitOperator.invoke(packNode);
         //
-        Thread.sleep(1000);
+        new EventTool().waitNoEvent(1000);
         in = TestKit.getStream(getDataDir().getCanonicalFile().toString() + File.separator + PROTOCOL_FOLDER, "commit_invoke_commit_4_modified_wrong.in");
         cvss = new PseudoCvsServer(in);
         new Thread(cvss).start();       
@@ -313,8 +326,7 @@ public class CommittingCvs11Test extends JellyTestCase {
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", cvss.getCvsRoot());
         co.commit();
                
-        oto.waitText("Committing");
-        oto.waitText("finished");
+        TestKit.waitText(mh);
         cvss.stop();
         cvss2.stop();
 
@@ -345,5 +357,6 @@ public class CommittingCvs11Test extends JellyTestCase {
     public void removeAllData() throws Exception {
         TestKit.closeProject(projectName);
         System.setProperty("netbeans.t9y.cvs.connection.CVSROOT", "");
+        TestKit.TIME_OUT = 15;
     }
 }
