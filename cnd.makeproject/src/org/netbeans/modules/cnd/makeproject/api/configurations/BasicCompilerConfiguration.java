@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
@@ -51,50 +50,45 @@ import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
 import org.openide.nodes.Sheet;
 import org.openide.util.NbBundle;
 
-public class BasicCompilerConfiguration {
+public abstract class BasicCompilerConfiguration {
+
     private String baseDir;
     private BasicCompilerConfiguration master;
-
-    public static int DEVELOPMENT_MODE_FAST = 0;
-    public static int DEVELOPMENT_MODE_DEBUG = 1;
-    public static int DEVELOPMENT_MODE_DEBUG_PERF = 2;
-    public static int DEVELOPMENT_MODE_TEST = 3;
-    public static int DEVELOPMENT_MODE_RELEASE_DIAG = 4;
-    public static int DEVELOPMENT_MODE_RELEASE = 5;
-    public static int DEVELOPMENT_MODE_RELEASE_PERF = 6;
+    public static final int DEVELOPMENT_MODE_FAST = 0;
+    public static final int DEVELOPMENT_MODE_DEBUG = 1;
+    public static final int DEVELOPMENT_MODE_DEBUG_PERF = 2;
+    public static final int DEVELOPMENT_MODE_TEST = 3;
+    public static final int DEVELOPMENT_MODE_RELEASE_DIAG = 4;
+    public static final int DEVELOPMENT_MODE_RELEASE = 5;
+    public static final int DEVELOPMENT_MODE_RELEASE_PERF = 6;
     private static final String[] DEVELOPMENT_MODE_NAMES = {
-	getString("FastBuildTxt"),
-	getString("DebugTxt"),
-	getString("PerformanceDebugTxt"),
-	getString("TestCoverageTxt"),
-	getString("DiagnosableReleaseTxt"),
-	getString("ReleaseTxt"),
-	getString("PerformanceReleaseTxt"),
-    };
+        getString("FastBuildTxt"),
+        getString("DebugTxt"),
+        getString("PerformanceDebugTxt"),
+        getString("TestCoverageTxt"),
+        getString("DiagnosableReleaseTxt"),
+        getString("ReleaseTxt"),
+        getString("PerformanceReleaseTxt"),};
     private IntConfiguration developmentMode;
-
-    public static int WARNING_LEVEL_NO = 0;
-    public static int WARNING_LEVEL_DEFAULT = 1;
-    public static int WARNING_LEVEL_MORE = 2;
-    public static int WARNING_LEVEL_TAGS = 3;
-    public static int WARNING_LEVEL_CONVERT = 4;
-    public static int WARNING_LEVEL_32_64 = 5;
+    public static final int WARNING_LEVEL_NO = 0;
+    public static final int WARNING_LEVEL_DEFAULT = 1;
+    public static final int WARNING_LEVEL_MORE = 2;
+    public static final int WARNING_LEVEL_TAGS = 3;
+    public static final int WARNING_LEVEL_CONVERT = 4;
+    public static final int WARNING_LEVEL_32_64 = 5;
     private static final String[] WARNING_LEVEL_NAMES = {
-	getString("NoWarningsTxt"),
-	getString("SomeWarningsTxt"),
-	getString("MoreWarningsTxt"),
-	getString("ConvertWarningsTxt"),
-    };
+        getString("NoWarningsTxt"),
+        getString("SomeWarningsTxt"),
+        getString("MoreWarningsTxt"),
+        getString("ConvertWarningsTxt"),};
     private IntConfiguration warningLevel;
-
-    public static int BITS_DEFAULT = 0;
-    public static int BITS_32 = 1;
-    public static int BITS_64 = 2;
+    public static final int BITS_DEFAULT = 0;
+    public static final int BITS_32 = 1;
+    public static final int BITS_64 = 2;
     private static final String[] BITS_NAMES = {
-	getString("BITS_DEFAULT"),
-	getString("BITS_32"),
-	getString("BITS_64"),
-    };
+        getString("BITS_DEFAULT"),
+        getString("BITS_32"),
+        getString("BITS_64"),};
     private IntConfiguration sixtyfourBits;
     private BooleanConfiguration strip;
     private StringConfiguration additionalDependencies;
@@ -102,18 +96,18 @@ public class BasicCompilerConfiguration {
     private OptionsConfiguration commandLineConfiguration;
 
     // Constructors
-    public BasicCompilerConfiguration(String baseDir, BasicCompilerConfiguration master) {
-	this.baseDir = baseDir;
-	this.master = master;
-	developmentMode = new IntConfiguration(master != null ? master.getDevelopmentMode() : null, DEVELOPMENT_MODE_DEBUG, DEVELOPMENT_MODE_NAMES, null);
-	warningLevel = new IntConfiguration(master != null ? master.getWarningLevel() : null, WARNING_LEVEL_DEFAULT, WARNING_LEVEL_NAMES, null);
-	sixtyfourBits = new IntConfiguration(master != null ? master.getSixtyfourBits() : null, BITS_DEFAULT, BITS_NAMES, null);
-	strip = new BooleanConfiguration(master != null ? master.getStrip() : null, false, "", ""); // NOI18N
-	additionalDependencies = new StringConfiguration(master != null ? master.getAdditionalDependencies() : null, ""); // NOI18N
-	tool = new StringConfiguration(master != null ? master.getTool() : null, ""); // NOI18N
-	commandLineConfiguration = new OptionsConfiguration();
+    protected BasicCompilerConfiguration(String baseDir, BasicCompilerConfiguration master) {
+        this.baseDir = baseDir;
+        this.master = master;
+        developmentMode = new IntConfiguration(master != null ? master.getDevelopmentMode() : null, DEVELOPMENT_MODE_DEBUG, DEVELOPMENT_MODE_NAMES, null);
+        warningLevel = new IntConfiguration(master != null ? master.getWarningLevel() : null, WARNING_LEVEL_DEFAULT, WARNING_LEVEL_NAMES, null);
+        sixtyfourBits = new IntConfiguration(master != null ? master.getSixtyfourBits() : null, BITS_DEFAULT, BITS_NAMES, null);
+        strip = new BooleanConfiguration(master != null ? master.getStrip() : null, false, "", ""); // NOI18N
+        additionalDependencies = new StringConfiguration(master != null ? master.getAdditionalDependencies() : null, ""); // NOI18N
+        tool = new StringConfiguration(master != null ? master.getTool() : null, ""); // NOI18N
+        commandLineConfiguration = new OptionsConfiguration();
     }
-    
+
     public boolean getModified() {
         return developmentMode.getModified() ||
                 warningLevel.getModified() ||
@@ -126,166 +120,188 @@ public class BasicCompilerConfiguration {
 
     // baseDir
     public void setBaseDir(String baseDir) {
-	this.baseDir = baseDir;
+        this.baseDir = baseDir;
     }
+
     public String getBaseDir() {
-	return baseDir;
+        return baseDir;
     }
 
     // To be overridden
     public String getOptions(BasicCompiler compiler) {
-	return "OVERRIDE"; // NOI18N
+        return "OVERRIDE"; // NOI18N
     }
 
     // Master
     public void setMaster(BasicCompilerConfiguration master) {
-	this.master = master;
+        this.master = master;
     }
+
     public BasicCompilerConfiguration getMaster() {
-	return master;
+        return master;
     }
 
     // Development Mode
     public void setDevelopmentMode(IntConfiguration developmentMode) {
-	this.developmentMode = developmentMode;
+        this.developmentMode = developmentMode;
     }
 
     public IntConfiguration getDevelopmentMode() {
-	return developmentMode;
+        return developmentMode;
     }
 
     // Warning Level
     public void setWarningLevel(IntConfiguration warningLevel) {
-	this.warningLevel = warningLevel;
+        this.warningLevel = warningLevel;
     }
 
     public IntConfiguration getWarningLevel() {
-	return warningLevel;
+        return warningLevel;
     }
 
 
     // SixtyfourBits
     public void setSixtyfourBits(IntConfiguration sixtyfourBits) {
-	this.sixtyfourBits = sixtyfourBits;
+        this.sixtyfourBits = sixtyfourBits;
     }
+
     public IntConfiguration getSixtyfourBits() {
-	return sixtyfourBits;
+        return sixtyfourBits;
     }
 
     // Strip
     public void setStrip(BooleanConfiguration strip) {
-	this.strip = strip;
+        this.strip = strip;
     }
 
     public BooleanConfiguration getStrip() {
-	return strip;
+        return strip;
     }
 
     public void setAdditionalDependencies(StringConfiguration additionalDependencies) {
-	this.additionalDependencies = additionalDependencies;
+        this.additionalDependencies = additionalDependencies;
     }
 
     public StringConfiguration getAdditionalDependencies() {
-	return additionalDependencies;
+        return additionalDependencies;
     }
 
     // Tool
     public void setTool(StringConfiguration tool) {
-	this.tool = tool;
+        this.tool = tool;
     }
+
     public StringConfiguration getTool() {
-	return tool;
+        return tool;
     }
 
     // CommandLine
     public OptionsConfiguration getCommandLineConfiguration() {
-	return commandLineConfiguration;
+        return commandLineConfiguration;
     }
+
     public void setCommandLineConfiguration(OptionsConfiguration commandLineConfiguration) {
-	this.commandLineConfiguration = commandLineConfiguration;
+        this.commandLineConfiguration = commandLineConfiguration;
     }
 
-    public String getOutputFile(String filePath, MakeConfiguration conf, boolean expanded) {
-	String fileName = filePath;
-	int i = fileName.lastIndexOf("."); // NOI18N
-	if (i >= 0)
-	    fileName = fileName.substring(0, i) + ".o"; // NOI18N
-	else
-	    fileName = fileName + ".o"; // NOI18N
+    public String getOutputFile(Item item, MakeConfiguration conf, boolean expanded) {
+        String filePath = item.getPath(true);
+        String fileName = filePath;
+        String suffix = ".o"; // NOI18N
+        boolean append = false;
+        if (item.hasHeaderOrSourceExtension(false, false)) {
+            suffix = ".pch"; // NOI18N
+            ItemConfiguration itemConf = item.getItemConfiguration(conf);
+            if (conf.getCompilerSet().getCompilerSet() != null) {
+                BasicCompiler compiler = (BasicCompiler) conf.getCompilerSet().getCompilerSet().getTool(itemConf.getTool());
+                if (compiler != null) {
+                    suffix = compiler.getDescriptor().getPrecompiledHeaderSuffix();
+                    append = compiler.getDescriptor().getPrecompiledHeaderSuffixAppend();
+                }
+            }
+        }
+        int i = fileName.lastIndexOf('.'); // NOI18N
+        if (i >= 0 && !append) {
+            fileName = fileName.substring(0, i) + suffix;
+        } else {
+            fileName = fileName + suffix;
+        }
 
-	String dirName;
-        if (expanded)
+        String dirName;
+        if (expanded) {
             dirName = ConfigurationMakefileWriter.getObjectDir(conf);
-        else
+        } else {
             dirName = MakeConfiguration.OBJECTDIR_MACRO;
-        
-	if (IpeUtils.isPathAbsolute(fileName)) {
+        }
+
+        if (IpeUtils.isPathAbsolute(fileName)) {
             String absPath = fileName;
-            if (absPath.charAt(0) != '/')
+            if (absPath.charAt(0) != '/') {
                 absPath = '/' + absPath;
+            }
             absPath = dirName + '/' + MakeConfiguration.EXT_FOLDER + absPath; // UNIX path
             absPath = IpeUtils.replaceOddCharacters(absPath, '_');
             return absPath;
+        } else if (filePath.startsWith("..")) { // NOI18N
+//            String absPath = IpeUtils.toAbsolutePath(getBaseDir(), fileName);
+//            absPath = FilePathAdaptor.normalize(absPath);
+//            absPath = IpeUtils.replaceOddCharacters(absPath, '_');
+//            if (absPath.charAt(0) != '/') {
+//                absPath = '/' + absPath;
+//            }
+            String ofilePath = fileName.replace("..", "_DOTDOT"); // NOI18N
+            ofilePath = IpeUtils.replaceOddCharacters(ofilePath, '_');
+            return dirName + '/' + MakeConfiguration.EXT_FOLDER + '/' + ofilePath; // UNIX path
+        } else {
+            return dirName + '/' + fileName; // UNIX path
         }
-	else if (filePath.startsWith("..")) { // NOI18N
-            String absPath = IpeUtils.toAbsolutePath(getBaseDir(), fileName);
-            absPath = FilePathAdaptor.normalize(absPath);
-            absPath = IpeUtils.replaceOddCharacters(absPath, '_');
-            if (absPath.charAt(0) != '/')
-                absPath = '/' + absPath;
-	    return dirName + '/' + MakeConfiguration.EXT_FOLDER + absPath; // UNIX path
-        }
-	else
-	    return dirName + '/' + fileName; // UNIX path
     }
 
     // Assigning & Cloning
     public void assign(BasicCompilerConfiguration conf) {
-	setBaseDir(conf.getBaseDir());
-	getDevelopmentMode().assign(conf.getDevelopmentMode());
-	getWarningLevel().assign(conf.getWarningLevel());
-	getSixtyfourBits().assign(conf.getSixtyfourBits());
-	getStrip().assign(conf.getStrip());
-	getAdditionalDependencies().assign(conf.getAdditionalDependencies());
-	getTool().assign(conf.getTool());
-	getCommandLineConfiguration().assign(conf.getCommandLineConfiguration());
+        setBaseDir(conf.getBaseDir());
+        getDevelopmentMode().assign(conf.getDevelopmentMode());
+        getWarningLevel().assign(conf.getWarningLevel());
+        getSixtyfourBits().assign(conf.getSixtyfourBits());
+        getStrip().assign(conf.getStrip());
+        getAdditionalDependencies().assign(conf.getAdditionalDependencies());
+        getTool().assign(conf.getTool());
+        getCommandLineConfiguration().assign(conf.getCommandLineConfiguration());
     }
 
-    public Object clone() {
-	BasicCompilerConfiguration clone = new BasicCompilerConfiguration(getBaseDir(), getMaster());
-	clone.setDevelopmentMode((IntConfiguration)getDevelopmentMode().clone());
-	clone.setWarningLevel((IntConfiguration)getWarningLevel().clone());
-	clone.setSixtyfourBits((IntConfiguration)getSixtyfourBits().clone());
-	clone.setStrip((BooleanConfiguration)getStrip().clone());
-	clone.setAdditionalDependencies((StringConfiguration)getAdditionalDependencies().clone());
-	clone.setTool((StringConfiguration)getTool().clone());
-	clone.setCommandLineConfiguration((OptionsConfiguration)getCommandLineConfiguration().clone());
-	return clone;
-    }
-
-
+//    public Object clone() {
+//	BasicCompilerConfiguration clone = new BasicCompilerConfiguration(getBaseDir(), getMaster());
+//	clone.setDevelopmentMode((IntConfiguration)getDevelopmentMode().clone());
+//	clone.setWarningLevel((IntConfiguration)getWarningLevel().clone());
+//	clone.setSixtyfourBits((IntConfiguration)getSixtyfourBits().clone());
+//	clone.setStrip((BooleanConfiguration)getStrip().clone());
+//	clone.setAdditionalDependencies((StringConfiguration)getAdditionalDependencies().clone());
+//	clone.setTool((StringConfiguration)getTool().clone());
+//	clone.setCommandLineConfiguration((OptionsConfiguration)getCommandLineConfiguration().clone());
+//	return clone;
+//    }
     // Sheets
     public Sheet.Set getBasicSet() {
-	Sheet.Set set = new Sheet.Set();
-	set.setName("BasicOptions"); // NOI18N
-	set.setDisplayName(getString("BasicOptionsTxt"));
-	set.setShortDescription(getString("BasicOptionsHint"));
-	set.put(new IntNodeProp(getDevelopmentMode(), true, "DevelopmentMode", getString("DevelopmentModeTxt"), getString("DevelopmentModeHint"))); // NOI18N
-	set.put(new IntNodeProp(getWarningLevel(), true, "WarningLevel", getString("WarningLevelTxt"), getString("WarningLevelHint"))); // NOI18N
-	set.put(new IntNodeProp(getSixtyfourBits(), true, "64BitArchitecture", getString("64BitArchitectureTxt"), getString("64BitArchitectureHint"))); // NOI18N
-	set.put(new BooleanNodeProp(getStrip(), true, "StripSymbols", getString("StripSymbolsTxt"), getString("StripSymbolsHint"))); // NOI18N
-	return set;
+        Sheet.Set set = new Sheet.Set();
+        set.setName("BasicOptions"); // NOI18N
+        set.setDisplayName(getString("BasicOptionsTxt"));
+        set.setShortDescription(getString("BasicOptionsHint"));
+        set.put(new IntNodeProp(getDevelopmentMode(), true, "DevelopmentMode", getString("DevelopmentModeTxt"), getString("DevelopmentModeHint"))); // NOI18N
+        set.put(new IntNodeProp(getWarningLevel(), true, "WarningLevel", getString("WarningLevelTxt"), getString("WarningLevelHint"))); // NOI18N
+        set.put(new IntNodeProp(getSixtyfourBits(), true, "64BitArchitecture", getString("64BitArchitectureTxt"), getString("64BitArchitectureHint"))); // NOI18N
+        set.put(new BooleanNodeProp(getStrip(), true, "StripSymbols", getString("StripSymbolsTxt"), getString("StripSymbolsHint"))); // NOI18N
+        return set;
     }
 
     public Sheet.Set getInputSet() {
-	Sheet.Set set = new Sheet.Set();
-	set.setName("Input"); // NOI18N
-	set.setDisplayName(getString("InputTxt"));
-	set.setShortDescription(getString("InputHint"));
-	set.put(new StringNodeProp(getAdditionalDependencies(), "AdditionalDependencies", getString("AdditionalDependenciesTxt1"), getString("AdditionalDependenciesHint")));  // NOI18N
-	return set;
+        Sheet.Set set = new Sheet.Set();
+        set.setName("Input"); // NOI18N
+        set.setDisplayName(getString("InputTxt"));
+        set.setShortDescription(getString("InputHint"));
+        set.put(new StringNodeProp(getAdditionalDependencies(), "AdditionalDependencies", getString("AdditionalDependenciesTxt1"), getString("AdditionalDependenciesHint")));  // NOI18N
+        return set;
     }
-    
+
     /** Look up i18n strings here */
     private static String getString(String s) {
         return NbBundle.getMessage(BasicCompilerConfiguration.class, s);
