@@ -39,17 +39,22 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.jumpto.type;
+package org.netbeans.modules.jumpto.symbol;
 
+import java.awt.Insets;
+import java.util.regex.Pattern;
+import org.netbeans.modules.jumpto.type.Models;
+import org.netbeans.modules.jumpto.type.UiOptions;
+import org.netbeans.spi.jumpto.symbol.SymbolDescriptor;
+import org.netbeans.spi.jumpto.symbol.SymbolProvider;
 import org.netbeans.spi.jumpto.type.SearchType;
-import org.netbeans.spi.jumpto.type.TypeProvider;
-import org.netbeans.spi.jumpto.type.TypeDescriptor;
-import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dialog;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -63,7 +68,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import javax.swing.AbstractAction;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -79,7 +83,6 @@ import javax.swing.ListModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import org.netbeans.api.jumpto.type.TypeBrowser;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.jumpto.file.LazyListModel;
 import org.openide.DialogDescriptor;
@@ -98,52 +101,49 @@ import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
 
 /** 
- * XXX split into action and support class, left this just to minimize diff
- * XXX Icons
- * XXX Don't look for all projects (do it lazy in filter or renderer)
  * @author Petr Hrebejk
  */
-public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentProvider, LazyListModel.Filter {
+public class GoToSymbolAction extends AbstractAction implements GoToPanel.ContentProvider, LazyListModel.Filter {
     
-    static final Logger LOGGER = Logger.getLogger(GoToTypeAction.class.getName()); // Used from the panel as well
+    static final Logger LOGGER = Logger.getLogger(GoToSymbolAction.class.getName()); // Used from the panel as well
     
     private SearchType nameKind;
     private static ListModel EMPTY_LIST_MODEL = new DefaultListModel();
-    private static final RequestProcessor rp = new RequestProcessor ("GoToTypeAction-RequestProcessor",1);
+    private static final RequestProcessor rp = new RequestProcessor ("GoToSymbolAction-RequestProcessor",1);    //NOI18N
     private Worker running;
     private RequestProcessor.Task task;
     private GoToPanel panel;
     private Dialog dialog;
     private JButton okButton;
-    private Collection<? extends TypeProvider> typeProviders;
-    private final TypeBrowser.Filter typeFilter;
+    private Collection<? extends SymbolProvider> typeProviders;    
     private final String title;
 
     /** Creates a new instance of OpenTypeAction */
-    public GoToTypeAction() {
-        this(
-            NbBundle.getMessage( GoToTypeAction.class, "DLG_GoToType" ),
-            null
-        );
+    public GoToSymbolAction() {
+        this(NbBundle.getMessage( GoToSymbolAction.class, "DLG_GoToSymbol"));
     }
     
-    public GoToTypeAction(String title, TypeBrowser.Filter typeFilter, TypeProvider... typeProviders) {
-        super( NbBundle.getMessage( GoToTypeAction.class,"TXT_GoToType") );
-        putValue("PopupMenuText", NbBundle.getBundle(GoToTypeAction.class).getString("editor-popup-TXT_GoToType")); // NOI18N
+    public GoToSymbolAction(String title) {
+        super( NbBundle.getMessage( GoToSymbolAction.class,"TXT_GoToSymbol")  );
         this.title = title;
-        this.typeFilter = typeFilter;
-        this.typeProviders = typeProviders.length == 0 ? null : Arrays.asList(typeProviders);
+    }
+    
+    private Collection<? extends SymbolProvider> getTypeProviders() {
+        if (typeProviders==null) {
+            typeProviders = Arrays.asList(Lookup.getDefault().lookupAll(SymbolProvider.class).toArray(new SymbolProvider[0]));
+        }
+        return typeProviders;
     }
     
     public void actionPerformed( ActionEvent e ) {
-        TypeDescriptor typeDescriptor = getSelectedType();
+        SymbolDescriptor typeDescriptor = getSelectedSymbol();
         if (typeDescriptor != null) {
             typeDescriptor.open();
         }
     }
             
-    public TypeDescriptor getSelectedType() {
-        TypeDescriptor result = null;
+    public SymbolDescriptor getSelectedSymbol() {
+        SymbolDescriptor result = null;
         try {
             panel = new GoToPanel(this);
             dialog = createDialog(panel);
@@ -164,7 +164,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             }            
             
             dialog.setVisible(true);
-            result = panel.getSelectedType();
+            result = panel.getSelectedSymbol();
 
         } catch (IOException ex) {
             ErrorManager.getDefault().notify(ex);
@@ -178,7 +178,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
     }
     
     public boolean accept(Object obj) {
-        return typeFilter == null ? true : typeFilter.accept((TypeDescriptor) obj);
+        return true;
     }
     
     public void scheduleUpdate(Runnable run) {
@@ -207,29 +207,26 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             panel.setModel(EMPTY_LIST_MODEL);
             return;
         }
-        
-        boolean exact = text.endsWith(" "); // NOI18N
-        
-        text = text.trim();
-        
+        final boolean isCaseSensitive = panel.isCaseSensitive();
+        boolean exact = text.endsWith(" "); // NOI18N        
+        text = text.trim();        
         if ( text.length() == 0) {
             panel.setModel(EMPTY_LIST_MODEL);
             return;
-        }
-        
+        }        
         int wildcard = containsWildCard(text);
-                
+        
         if (exact) {
-            nameKind = panel.isCaseSensitive() ? SearchType.EXACT_NAME : SearchType.CASE_INSENSITIVE_EXACT_NAME;
+            nameKind = isCaseSensitive ? SearchType.EXACT_NAME : SearchType.CASE_INSENSITIVE_EXACT_NAME;
         }
         else if ((isAllUpper(text) && text.length() > 1) || isCamelCase(text)) {
             nameKind = SearchType.CAMEL_CASE;
         }
         else if (wildcard != -1) {
-            nameKind = panel.isCaseSensitive() ? SearchType.REGEXP : SearchType.CASE_INSENSITIVE_REGEXP;                
+            nameKind = isCaseSensitive ? SearchType.REGEXP : SearchType.CASE_INSENSITIVE_REGEXP;
         }
         else {            
-            nameKind = panel.isCaseSensitive() ? SearchType.PREFIX : SearchType.CASE_INSENSITIVE_PREFIX;
+            nameKind = isCaseSensitive ? SearchType.PREFIX : SearchType.CASE_INSENSITIVE_PREFIX;
         }
         
         // Compute in other thread
@@ -243,17 +240,6 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
         }
     }
     
-    public void closeDialog() {
-        dialog.setVisible( false );
-        cleanup();
-    }
-    
-    public boolean hasValidContent () {
-        return this.okButton != null && this.okButton.isEnabled();
-    }
-    
-    // Private methods ---------------------------------------------------------
-        
     private static boolean isAllUpper( String text ) {
         for( int i = 0; i < text.length(); i++ ) {
             if ( !Character.isUpperCase( text.charAt( i ) ) ) {
@@ -279,16 +265,26 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
          return camelCasePattern.matcher(text).matches();
     }
     
+    public void closeDialog() {
+        dialog.setVisible( false );
+        cleanup();
+    }
+    
+    public boolean hasValidContent () {
+        return this.okButton != null && this.okButton.isEnabled();
+    }
+    
+    // Private methods ---------------------------------------------------------            
+    
     
     /** Creates the dialog to show
      */
    private Dialog createDialog( final GoToPanel panel) {
        
-        okButton = new JButton (NbBundle.getMessage(GoToTypeAction.class, "CTL_OK"));
-        okButton.getAccessibleContext().setAccessibleDescription(okButton.getText());
+        okButton = new JButton (NbBundle.getMessage(GoToSymbolAction.class, "CTL_OK"));
         okButton.setEnabled (false);
-        panel.getAccessibleContext().setAccessibleName( NbBundle.getMessage( GoToTypeAction.class, "AN_GoToType") ); //NOI18N
-        panel.getAccessibleContext().setAccessibleDescription( NbBundle.getMessage( GoToTypeAction.class, "AD_GoToType") ); //NOI18N
+        panel.getAccessibleContext().setAccessibleName( NbBundle.getMessage( GoToSymbolAction.class, "AN_GoToSymbol")  ); //NOI18N
+        panel.getAccessibleContext().setAccessibleDescription( NbBundle.getMessage( GoToSymbolAction.class, "AD_GoToSymbol")  ); //NOI18N
                         
         DialogDescriptor dialogDescriptor = new DialogDescriptor(
             panel,                             // innerPane
@@ -302,16 +298,12 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
         
          dialogDescriptor.setClosingOptions(new Object[] {okButton, DialogDescriptor.CANCEL_OPTION});
             
-        // panel.addPropertyChangeListener( new HelpCtxChangeListener( dialogDescriptor, helpCtx ) );
-//        if ( panel instanceof HelpCtx.Provider ) {
-//            dialogDescriptor.setHelpCtx( ((HelpCtx.Provider)panel).getHelpCtx() );
-//        }
         
         Dialog d = DialogDisplayer.getDefault().createDialog( dialogDescriptor );
         
         // Set size when needed
-        final int width = UiOptions.GoToTypeDialog.getWidth();
-        final int height = UiOptions.GoToTypeDialog.getHeight();
+        final int width = UiOptions.GoToSymbolDialog.getWidth();
+        final int height = UiOptions.GoToSymbolDialog.getHeight();
         if (width != -1 && height != -1) {
             d.setPreferredSize(new Dimension(width,height));
         }
@@ -326,7 +318,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
         d.setBounds(Utilities.findCenterBounds(dim));
         initialDimension = dim;
         d.addWindowListener(new WindowAdapter() {
-            public @Override void windowClosed(WindowEvent e) {
+            public void windowClosed(WindowEvent e) {
                 cleanup();
             }
         });
@@ -341,24 +333,21 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
         //System.out.println("CLEANUP");                
         //Thread.dumpStack();
 
-        if ( GoToTypeAction.this.dialog != null ) { // Closing event for some reson sent twice
-        
+        if ( GoToSymbolAction.this.dialog != null ) { // Closing event for some reson sent twice
             // Save dialog size only when changed
             final int currentWidth = dialog.getWidth();
             final int currentHeight = dialog.getHeight();
             if (initialDimension != null && (initialDimension.width != currentWidth || initialDimension.height != currentHeight)) {
-                UiOptions.GoToTypeDialog.setHeight(currentHeight);
-                UiOptions.GoToTypeDialog.setWidth(currentWidth);
+                UiOptions.GoToSymbolDialog.setHeight(currentHeight);
+                UiOptions.GoToSymbolDialog.setWidth(currentWidth);
             }
             initialDimension = null;
             // Clean caches
-            GoToTypeAction.this.dialog.dispose();
-            GoToTypeAction.this.dialog = null;
+            GoToSymbolAction.this.dialog.dispose();
+            GoToSymbolAction.this.dialog = null;
             //GoToTypeAction.this.cache = null;
-            if (typeProviders != null) {
-                for (TypeProvider provider : typeProviders) {
-                    provider.cleanup();
-                }
+            for (SymbolProvider provider : getTypeProviders()) {
+                provider.cleanup();
             }
         }
     }
@@ -370,7 +359,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
     private class Worker implements Runnable {
         
         private volatile boolean isCanceled = false;
-        private volatile TypeProvider current;
+        private volatile SymbolProvider current;
         private final String text;
         
         private final long createTime;
@@ -385,16 +374,12 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             
             LOGGER.fine( "Worker for " + text + " - started " + ( System.currentTimeMillis() - createTime ) + " ms."  );                
             
-            final List<? extends TypeDescriptor> types = getTypeNames( text );
+            final List<? extends SymbolDescriptor> types = getSymbolNames( text );
             if ( isCanceled ) {
                 LOGGER.fine( "Worker for " + text + " exited after cancel " + ( System.currentTimeMillis() - createTime ) + " ms."  );                                
                 return;
             }
-            ListModel model = Models.fromList(types);
-            if (typeFilter != null) {
-                model = LazyListModel.create(model, GoToTypeAction.this, 0.1, "Not computed yet");
-            }
-            final ListModel fmodel = model;
+            final ListModel fmodel = Models.fromList(types);
             if ( isCanceled ) {            
                 LOGGER.fine( "Worker for " + text + " exited after cancel " + ( System.currentTimeMillis() - createTime ) + " ms."  );                                
                 return;
@@ -419,7 +404,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             if ( panel.time != -1 ) {
                 LOGGER.fine( "Worker for text " + text + " canceled after " + ( System.currentTimeMillis() - createTime ) + " ms."  );                
             }
-            TypeProvider _provider;
+            SymbolProvider _provider;
             synchronized (this) {
                 isCanceled = true;
                 _provider = current;
@@ -430,36 +415,26 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
         }
 
         @SuppressWarnings("unchecked")
-        private List<? extends TypeDescriptor> getTypeNames(String text) {
+        private List<? extends SymbolDescriptor> getSymbolNames(String text) {
             // TODO: Search twice, first for current project, then for all projects
-            List<TypeDescriptor> items;
+            List<SymbolDescriptor> items;
             // Multiple providers: merge results
-            items = new ArrayList<TypeDescriptor>(128);
+            items = new ArrayList<SymbolDescriptor>(128);
             String[] message = new String[1];
-            TypeProvider.Context context = TypeProviderAccessor.DEFAULT.createContext(null, text, nameKind);
-            TypeProvider.Result result = TypeProviderAccessor.DEFAULT.createResult(items, message);
-            if (typeProviders == null) {
-                typeProviders = Lookup.getDefault().lookupAll(TypeProvider.class);
-            }
-            for (TypeProvider provider : typeProviders) {
+            SymbolProvider.Context context = SymbolProviderAccessor.DEFAULT.createContext(null, text, nameKind);
+            SymbolProvider.Result result = SymbolProviderAccessor.DEFAULT.createResult(items, message);
+            for (SymbolProvider provider : getTypeProviders()) {
+                current = provider;
                 if (isCanceled) {
                     return null;
                 }
-                current = provider;
-                long start = System.currentTimeMillis();
-                try {
-                    LOGGER.fine("Calling TypeProvider: " + provider);
-                    provider.computeTypeNames(context, result);
-                } finally {
-                    current = null;
-                }
-                long delta = System.currentTimeMillis() - start;
-                LOGGER.fine("Provider '" + provider.getDisplayName() + "' took " + delta + " ms.");
-                
+                LOGGER.fine("Calling SymbolProvider: " + provider);
+                provider.computeSymbolNames(context, result);
+                current = null;
             }
             if ( !isCanceled ) {   
                 //time = System.currentTimeMillis();
-                Collections.sort(items, new TypeComparator());
+                Collections.sort(items, new SymbolComparator());
                 panel.setWarning(message[0]);
                 //sort += System.currentTimeMillis() - time;
                 //LOGGER.fine("PERF - " + " GSS:  " + gss + " GSB " + gsb + " CP: " + cp + " SFB: " + sfb + " GTN: " + gtn + "  ADD: " + add + "  SORT: " + sort );
@@ -473,9 +448,9 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
 
     private static class MyPanel extends JPanel {
 	
-	private TypeDescriptor td;
+	private SymbolDescriptor td;
 	
-	void setDescriptor(TypeDescriptor td) {
+	void setDescriptor(SymbolDescriptor td) {
 	    this.td = td;
 	    // since the same component is reused for dirrerent list itens, 
 	    // null the tool tip
@@ -504,7 +479,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
          
         private MyPanel rendererComponent;
         private JLabel jlName = new JLabel();
-        private JLabel jlPkg = new JLabel();
+        private JLabel jlOwner = new JLabel();
         private JLabel jlPrj = new JLabel();
         private int DARKER_COLOR_COMPONENT = 5;
         private int LIGHTER_COLOR_COMPONENT = 80;        
@@ -528,18 +503,44 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             }
             
             rendererComponent = new MyPanel();
-            rendererComponent.setLayout(new BorderLayout());
-            rendererComponent.add( jlName, BorderLayout.WEST );
-            rendererComponent.add( jlPkg, BorderLayout.CENTER);
-            rendererComponent.add( jlPrj, BorderLayout.EAST );
+            rendererComponent.setLayout(new GridBagLayout());
+            GridBagConstraints c = new GridBagConstraints();
+            c.gridx = 0;
+            c.gridy = 0;
+            c.gridwidth = 1;
+            c.gridheight = 1;
+            c.fill = GridBagConstraints.NONE;
+            c.weightx = 0;            
+            c.anchor = GridBagConstraints.WEST;
+            c.insets = new Insets (0,0,0,7);
+            rendererComponent.add( jlName, c);
+            
+            c = new GridBagConstraints();
+            c.gridx = 1;
+            c.gridy = 0;
+            c.gridwidth = 1;
+            c.gridheight = 1;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            c.weightx = 0.1;            
+            c.anchor = GridBagConstraints.WEST;
+            c.insets = new Insets (0,0,0,7);
+            rendererComponent.add( jlOwner, c);
+            
+            c = new GridBagConstraints();
+            c.gridx = 2;
+            c.gridy = 0;
+            c.gridwidth = 1;
+            c.gridheight = 1;
+            c.fill = GridBagConstraints.NONE;
+            c.weightx = 0;            
+            c.anchor = GridBagConstraints.EAST;
+            rendererComponent.add( jlPrj, c);
             
             
             jlName.setOpaque(false);
-            jlPkg.setOpaque(false);
             jlPrj.setOpaque(false);
             
             jlName.setFont(list.getFont());
-            jlPkg.setFont(list.getFont());
             jlPrj.setFont(list.getFont());
             
             
@@ -564,7 +565,7 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             fgSelectionColor = list.getSelectionForeground();        
         }
         
-        public @Override Component getListCellRendererComponent( JList list,
+        public Component getListCellRendererComponent( JList list,
                                                        Object value,
                                                        int index,
                                                        boolean isSelected,
@@ -581,34 +582,34 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
             
             Dimension size = new Dimension( width, height );
             rendererComponent.setMaximumSize(size);
-            rendererComponent.setPreferredSize(size);
-                        
+            rendererComponent.setPreferredSize(size);                        
+                                    
             if ( isSelected ) {
                 jlName.setForeground(fgSelectionColor);
-                jlPkg.setForeground(fgSelectionColor);
+                jlOwner.setForeground(fgSelectionColor);
                 jlPrj.setForeground(fgSelectionColor);
                 rendererComponent.setBackground(bgSelectionColor);
             }
             else {
                 jlName.setForeground(fgColor);
-                jlPkg.setForeground(fgColorLighter);
-                jlPrj.setForeground(fgColor);                
+                jlOwner.setForeground(fgColorLighter);
+                jlPrj.setForeground(fgColor);
                 rendererComponent.setBackground( index % 2 == 0 ? bgColor : bgColorDarker );
             }
             
-            if ( value instanceof TypeDescriptor ) {
+            if ( value instanceof SymbolDescriptor ) {
                 long time = System.currentTimeMillis();
-                TypeDescriptor td = (TypeDescriptor)value;                
-                jlName.setIcon(td.getIcon());
-                jlName.setText(td.getTypeName());
-                jlPkg.setText(td.getContextName());
+                SymbolDescriptor td = (SymbolDescriptor)value;                
+                jlName.setIcon(td.getIcon());                
+                jlName.setText(td.getSymbolName());
+                jlOwner.setText(NbBundle.getMessage(GoToSymbolAction.class, "MSG_DeclaredIn",td.getOwnerName()));
                 jlPrj.setText(td.getProjectName());
                 jlPrj.setIcon(td.getProjectIcon());
 		rendererComponent.setDescriptor(td);
-//                FileObject fo = td.getFileObject();
-//                if (fo != null) {
-//                    rendererComponent.setToolTipText( FileUtil.getFileDisplayName(fo));
-//                }
+                FileObject fo = td.getFileObject();
+                if (fo != null) {
+                    rendererComponent.setToolTipText( FileUtil.getFileDisplayName(fo));
+                }
                 LOGGER.fine("  Time in paint " + (System.currentTimeMillis() - time) + " ms.");
             }
             else {
@@ -642,23 +643,20 @@ public class GoToTypeAction extends AbstractAction implements GoToPanel.ContentP
         
         public void actionPerformed(ActionEvent e) {            
             if ( e.getSource() == okButton) {
-                panel.setSelectedType();
+                panel.setSelectedSymbol();
             }
         }
         
     }
 
-    private class TypeComparator implements Comparator<TypeDescriptor> {
-        public int compare(TypeDescriptor t1, TypeDescriptor t2) {
-           int cmpr = compareStrings( t1.getTypeName(), t2.getTypeName() );
+    private class SymbolComparator implements Comparator<SymbolDescriptor> {
+        public int compare(SymbolDescriptor t1, SymbolDescriptor t2) {
+           int cmpr = compareStrings( t1.getSymbolName(), t2.getSymbolName());
            if ( cmpr != 0 ) {
                return cmpr;
            }
-           cmpr = compareStrings( t1.getOuterName(), t2.getOuterName() );
-           if ( cmpr != 0 ) {
-               return cmpr;
-           }
-           return compareStrings( t1.getContextName(), t2.getContextName() );
+           //todo: more logic
+           return cmpr;
         }
         
     }
