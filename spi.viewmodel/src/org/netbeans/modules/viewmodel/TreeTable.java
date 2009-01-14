@@ -100,7 +100,7 @@ import org.openide.windows.TopComponent;
  * @author   Jan Jancura
  */
 public class TreeTable extends JPanel implements 
-ExplorerManager.Provider, PropertyChangeListener, TreeExpansionListener {
+ExplorerManager.Provider, PropertyChangeListener {
     
     private ExplorerManager     explorerManager;
     private MyTreeTable         treeTable;
@@ -108,7 +108,7 @@ ExplorerManager.Provider, PropertyChangeListener, TreeExpansionListener {
     private IndexedColumn[]     icolumns;
     private boolean             isDefaultColumnAdded;
     //private List                expandedPaths = new ArrayList ();
-    private TreeModelRoot       currentTreeModelRoot;
+    TreeModelRoot       currentTreeModelRoot; // Accessed from test
     private Models.CompoundModel model;
     
     
@@ -121,13 +121,13 @@ ExplorerManager.Provider, PropertyChangeListener, TreeExpansionListener {
             treeTable.setHorizontalScrollBarPolicy 
                 (JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         add (treeTable, "Center");  //NOI18N
-        treeTable.getTree ().addTreeExpansionListener (this);
         ActionMap map = getActionMap();
         ExplorerManager manager = getExplorerManager();
         map.put(DefaultEditorKit.copyAction, ExplorerUtils.actionCopy(manager));
         map.put(DefaultEditorKit.cutAction, ExplorerUtils.actionCut(manager));
         map.put(DefaultEditorKit.pasteAction, ExplorerUtils.actionPaste(manager));
         map.put("delete", ExplorerUtils.actionDelete(manager, false));
+        setFocusable(false);
     }
     
     public void setModel (Models.CompoundModel model) {
@@ -151,7 +151,7 @@ ExplorerManager.Provider, PropertyChangeListener, TreeExpansionListener {
         
         // 4) set columns for given model
         columns = createColumns (model);
-        currentTreeModelRoot = new TreeModelRoot (model, this);
+        currentTreeModelRoot = new TreeModelRoot (model, treeTable);
         TreeModelNode rootNode = currentTreeModelRoot.getRootNode ();
         getExplorerManager ().setRootContext (rootNode);
         // The root node must be ready when setting the columns
@@ -209,24 +209,6 @@ ExplorerManager.Provider, PropertyChangeListener, TreeExpansionListener {
         if (propertyName.equals (ExplorerManager.PROP_SELECTED_NODES)) {
             tc.setActivatedNodes ((Node[]) evt.getNewValue ());
         }
-    }
-    
-    /**
-      * Called whenever an item in the tree has been expanded.
-      */
-    public void treeExpanded (TreeExpansionEvent event) {
-        Object obj = Visualizer.findNode 
-            (event.getPath ().getLastPathComponent ()).getLookup().lookup(Object.class);
-        model.nodeExpanded (obj);
-    }
-
-    /**
-      * Called whenever an item in the tree has been collapsed.
-      */
-    public void treeCollapsed (TreeExpansionEvent event) {
-        Object obj = Visualizer.findNode 
-            (event.getPath ().getLastPathComponent ()).getLookup().lookup(Object.class);
-        model.nodeCollapsed (obj);
     }
     
     private boolean equalNodes () {
@@ -402,7 +384,6 @@ ExplorerManager.Provider, PropertyChangeListener, TreeExpansionListener {
     
     /** Requests focus for the tree component. Overrides superclass method. */
     public boolean requestFocusInWindow () {
-        super.requestFocusInWindow ();
         return treeTable.requestFocusInWindow ();
     }
     
