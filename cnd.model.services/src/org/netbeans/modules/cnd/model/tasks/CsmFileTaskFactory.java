@@ -43,75 +43,120 @@ package org.netbeans.modules.cnd.model.tasks;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
+import javax.swing.text.Document;
 import org.netbeans.modules.cnd.api.model.CsmChangeEvent;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
+import org.netbeans.modules.cnd.api.model.CsmListeners;
 import org.netbeans.modules.cnd.api.model.CsmModelListener;
 import org.netbeans.modules.cnd.api.model.CsmProgressAdapter;
 import org.netbeans.modules.cnd.api.model.CsmProject;
+import org.netbeans.modules.cnd.api.model.services.CsmStandaloneFileProvider;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.openide.filesystems.FileObject;
 import org.openide.util.RequestProcessor;
+import org.openide.util.RequestProcessor.Task;
 
 /**
  *  CsmFile analogue of CsmFileTaskFactory
  * 
- * This factory should be registered in the global lookup by listing its fully qualified
- * name in file <code>META-INF/services/org.netbeans.modules.cnd.modelimpl.csm.scheduling.CsmFileTaskFactory</code>.
+ * This factory should be registered in the global lookup using {@link org.openide.util.lookup.ServiceProvider}.
  * 
  * @author Sergey Grinev
  */
 public abstract class CsmFileTaskFactory {
-    private final Map<FileObject, CsmFile> fobj2csm = new HashMap<FileObject, CsmFile>();
-    private final Map<CsmFile, PhaseRunner> csm2task = new HashMap<CsmFile, PhaseRunner>();
+
+    private final Map<FileObject, TaskData> fobj2task = new HashMap<FileObject, TaskData>();
     private final ProgressListener progressListener = new ProgressListener();
     private final ModelListener modelListener = new ModelListener();
+   
+    public final static String USE_OWN_CARET_POSITION = "use-own-caret-position"; // NOI18N
 
     protected CsmFileTaskFactory() {
-        CsmModelAccessor.getModel().addProgressListener(progressListener);
-        CsmModelAccessor.getModel().addModelListener(modelListener);
+        CsmListeners.getDefault().addProgressListener(progressListener);
+        CsmListeners.getDefault().addModelListener(modelListener);
     }
 
     protected abstract PhaseRunner createTask(FileObject fo);
     
     protected abstract Collection<FileObject> getFileObjects();
 
-    protected final void fileObjectsChanged() {
-        final List<FileObject> currentFiles = new ArrayList<FileObject>(getFileObjects());
+    protected abstract int taskDelay();
 
-        WORKER.post(new Runnable() {
+    protected abstract int rescheduleDelay();
+    
+    protected final void fileObjectsChanged() {
+        final Set<FileObject> currentFiles = new HashSet<FileObject>(getFileObjects());
+        final long id = Math.round(100.0*Math.random());
+        final String name = this.getClass().getName();
+        if (OpenedEditors.SHOW_TIME) {System.err.println("CsmFileTaskFactory: POST worker " + id);}
+        DECISION_WORKER.post(new Runnable() {
 
             public void run() {
+                long start = System.currentTimeMillis();
+                if (OpenedEditors.SHOW_TIME) {System.err.println("CsmFileTaskFactory: RUN worker " + id + " [" + name + "]" );}
                 stateChangedImpl(currentFiles);
+                if (OpenedEditors.SHOW_TIME) {System.err.println("CsmFileTaskFactory: DONE worker " + id + " after " + (System.currentTimeMillis() - start) + "ms.");}
             }
         });
     }
 
-    private void stateChangedImpl(List<FileObject> currentFiles) {
-        //System.err.println("stateChangedImpl, newFiles: " + currentFiles.size() + ", file2Tasks: " + fobj2csm.size());
-        Map<CsmFile, PhaseRunner> toRemove = new HashMap<CsmFile, PhaseRunner>();
-        Map<CsmFile, PhaseRunner> toAdd = new HashMap<CsmFile, PhaseRunner>();
+    private boolean checkMimeType(FileObject fileObject) {
+        if (fileObject == null) {
+            return false;
+        } else {
+            String mimeType = fileObject.getMIMEType();
+            return MIMENames.isHeaderOrCppOrC(mimeType);
+        }
+    }
+
+    private void stateChangedImpl(Collection<FileObject> currentFiles) {
+        Map<FileObject, TaskData> toRemove = new HashMap<FileObject, TaskData>();
+        Map<FileObject, TaskData> toAdd = new HashMap<FileObject, TaskData>();
 
         synchronized (this) {
             List<FileObject> addedFiles = new ArrayList<FileObject>(currentFiles);
-            List<FileObject> removedFiles = new ArrayList<FileObject>(fobj2csm.keySet());
+            List<FileObject> removedFiles = new ArrayList<FileObject>(fobj2task.keySet());
 
-            addedFiles.removeAll(fobj2csm.keySet());
+            addedFiles.removeAll(fobj2task.keySet());
             removedFiles.removeAll(currentFiles);
 
             //remove old tasks:
             for (FileObject r : removedFiles) {
-                CsmFile csmFile = fobj2csm.remove(r);
+                toRemove.put(r, fobj2task.remove(r));
+            }
 
-                if (csmFile == null) {
-                    //TODO: log
+            List<FileObject> verifiedFiles = new ArrayList<FileObject>(fobj2task.keySet());
+            // Model events should be redesigned. It is still inconvenient for clients. Move to lookup of DataObject direction. Stop hacking!
+            // verify rest task
+            for (FileObject v : verifiedFiles) {
+                if (v == null) {
+                    continue;
+                }
+                if (!v.isValid()) {
+                    continue;
+                }
+                if (!checkMimeType(v)) {
                     continue;
                 }
 
-                toRemove.put(csmFile, csm2task.remove(csmFile));
+                CsmFile csmFile = getCsmFile(v);
+                if (csmFile != null) {
+                    TaskData oldTaskData = fobj2task.get(v);
+                    if (!csmFile.equals(oldTaskData.file)) {
+                        toRemove.put(v, fobj2task.remove(v));
+
+                        PhaseRunner task = createTask(v);
+                        TaskData data = new TaskData(task, csmFile);
+                        toAdd.put(v, data);
+                        fobj2task.put(v, data);
+                    }
+                }
             }
 
             //add new tasks:
@@ -122,59 +167,117 @@ public abstract class CsmFileTaskFactory {
                 if (!fileObject.isValid()) {
                     continue;
                 }
-                CsmFile csmFile = CsmUtilities.getCsmFile(fileObject, false);
+                if (!checkMimeType(fileObject)) {
+                    continue;
+                }
 
+                CsmFile csmFile = getCsmFile(fileObject);                
                 if (csmFile != null) {
                     PhaseRunner task = createTask(fileObject);
-
-                    toAdd.put(csmFile, task);
-
-                    fobj2csm.put(fileObject, csmFile);
-                    csm2task.put(csmFile, task);
+                    TaskData data = new TaskData(task, csmFile);
+                    toAdd.put(fileObject, data);
+                    fobj2task.put(fileObject, data);
                 }
             }
         }
 
-
-        for (Entry<CsmFile, PhaseRunner> e : toRemove.entrySet()) {
-            //System.err.println("CFTF: removing " + e.getKey().getAbsolutePath());
+        for (Entry<FileObject, TaskData> e : toRemove.entrySet()) {
+            CsmFile csmFile = CsmUtilities.getCsmFile(e.getKey(), false);
+            if (csmFile != null) {
+                if (OpenedEditors.SHOW_TIME) {System.err.println("CFTF: removing " + csmFile.getAbsolutePath());}
+            }
             if (e!=null && e.getValue()!=null ) {
+                PhaseRunner runner = e.getValue().runner;
+                Task task = e.getValue().task;
+                runner.cancel();
+                if (task != null) {
+                    task.cancel();
+                }
                 post(e.getValue(), e.getKey(), PhaseRunner.Phase.CLEANUP, IMMEDIATELY);
+            }
+            // it isn't necessary to check mime type here -
+            // we checked it when adding task
+            if (csmFile != null) {
+                CsmStandaloneFileProvider.getDefault().notifyClosed(csmFile);
             }
         }
 
-        for (Entry<CsmFile, PhaseRunner> e : toAdd.entrySet()) {
-            //System.err.println("CFTF: adding " + e.getKey().getAbsolutePath());
-            post(e.getValue(), e.getKey(), e.getKey().isParsed() ? PhaseRunner.Phase.PARSED : PhaseRunner.Phase.INIT, DELAY);
+        for (Entry<FileObject, TaskData> e : toAdd.entrySet()) {
+            CsmFile csmFile = CsmUtilities.getCsmFile(e.getKey(), false);
+            if (csmFile != null) {
+                if (OpenedEditors.SHOW_TIME) {System.err.println("CFTF: adding "+ //NOI18N
+                        (csmFile.isParsed() ? PhaseRunner.Phase.PARSED : PhaseRunner.Phase.INIT)+
+                        " "+e.getValue().runner.toString()+" " + csmFile.getAbsolutePath());} //NOI18N
+                post(e.getValue(), e.getKey(), csmFile.isParsed() ? PhaseRunner.Phase.PARSED : PhaseRunner.Phase.INIT, taskDelay());
+            }
         }
     }
 
-    private static final int DELAY = 500;
+    private static CsmFile getCsmFile(FileObject fo) {
+        CsmFile csmFile = null;
+        Document doc = CsmUtilities.getDocument(fo);
+        if (doc != null) {
+            csmFile = CsmUtilities.getCsmFile(doc, false);
+        }
+        if (csmFile == null) {
+            csmFile = CsmUtilities.getCsmFile(fo, false);
+        }
+        if (csmFile == null) {
+            csmFile = CsmStandaloneFileProvider.getDefault().getCsmFile(fo);
+        }        
+        return csmFile;
+    }
+
     private static final int IMMEDIATELY = 0;
     
     public final synchronized void reschedule(FileObject file) throws IllegalArgumentException {
-        CsmFile source = fobj2csm.get(file);
+        runTask(file, PhaseRunner.Phase.PARSED, rescheduleDelay());
+    }
+    
+    private final void runTask(FileObject fobj, PhaseRunner.Phase phase, int delay) {
+        TaskData pr = fobj2task.get(fobj);
+        if (pr != null) {
+            pr.runner.cancel();
+            if (pr.task != null) {
+                pr.task.cancel();
+            }
+            if (!pr.runner.isValid()) {
+                PhaseRunner runner = createTask(fobj);
+                assert runner.isValid();
+                pr = new TaskData(runner, CsmUtilities.getCsmFile(fobj, false));
+                fobj2task.put(fobj, pr);
+            }
 
-        if (source == null) {
-            return;
+            // Run the same task for related document if it exists
+            Document doc = CsmUtilities.getDocument(fobj);
+            if (doc != null) {
+                Document doc2 = (Document) doc.getProperty(Document.class);
+                if (doc2 != null) {
+                    PhaseRunner task = createTask(CsmUtilities.getFileObject(doc2));
+                    TaskData data = new TaskData(task, CsmUtilities.getCsmFile(fobj, false));
+                    doc2.putProperty(USE_OWN_CARET_POSITION, false);
+                    doc.putProperty(USE_OWN_CARET_POSITION, true);
+                    if (data != null) {
+                        post(data, CsmUtilities.getFileObject(doc2), phase, delay);
+                    }
+                }
+            }
+
+            post(pr, fobj, phase, delay);
         }
-        
-        runTask(source, PhaseRunner.Phase.PARSED, DELAY);
     }
     
-    private final void runTask(CsmFile file, PhaseRunner.Phase phase, int delay) {
-        PhaseRunner pr = csm2task.get(file);
-        
-        if (pr!=null) {
-            post(pr, file, phase, delay);
+    private final void post(TaskData pr, FileObject fo, PhaseRunner.Phase phase, int delay) {
+        if (pr.runner.isHighPriority()) {
+            pr.task = HIGH_PRIORITY_WORKER.post(new CsmSafeRunnable(getRunnable(pr.runner, phase), fo), delay, Thread.NORM_PRIORITY);
+        } else {
+            pr.task = WORKER.post(new CsmSafeRunnable(getRunnable(pr.runner, phase), fo), delay);
         }
-    }
-    
-    private final void post(PhaseRunner pr, CsmFile file, PhaseRunner.Phase phase, int delay) {
-        WORKER.post(new CsmSafeRunnable( getRunnable(pr,phase), file), delay );
     }
     
     private static RequestProcessor WORKER = new RequestProcessor("CsmFileTaskFactory", 1); //NOI18N
+    private static RequestProcessor HIGH_PRIORITY_WORKER = new RequestProcessor("CsmHighPriorityFileTaskFactory", 1); //NOI18N
+    private static RequestProcessor DECISION_WORKER = new RequestProcessor("CsmDecisionFileTaskFactory", 1); //NOI18N
 
     static {
         CsmFileTaskFactoryManager.ACCESSOR = new CsmFileTaskFactoryManager.Accessor() {
@@ -189,12 +292,12 @@ public abstract class CsmFileTaskFactory {
 
         @Override
         public void fileParsingFinished(CsmFile file) {
-            runTask(file, PhaseRunner.Phase.PARSED, IMMEDIATELY);
+            runTask(CsmUtilities.getFileObject(file), PhaseRunner.Phase.PARSED, IMMEDIATELY);
         }
 
         @Override
         public void fileParsingStarted(CsmFile file) {
-            runTask(file, PhaseRunner.Phase.PARSING_STARTED, IMMEDIATELY);
+            runTask(CsmUtilities.getFileObject(file), PhaseRunner.Phase.PARSING_STARTED, IMMEDIATELY);
         }
     }
     
@@ -210,10 +313,13 @@ public abstract class CsmFileTaskFactory {
 
         public void modelChanged(CsmChangeEvent e) {
             for (CsmFile f : e.getRemovedFiles()){
-                if (csm2task.get(f) != null) {
-                    synchronized (this) {
-                        runTask(f, PhaseRunner.Phase.CLEANUP, IMMEDIATELY);
-                        csm2task.put(f, lazyRunner());
+                FileObject fobj = CsmUtilities.getFileObject(f);
+                if (fobj != null) {
+                    if (fobj2task.get(fobj) != null) {
+                        synchronized (this) {
+                            runTask(fobj, PhaseRunner.Phase.CLEANUP, IMMEDIATELY);
+                            fobj2task.put(fobj, new TaskData(lazyRunner(), CsmUtilities.getCsmFile(fobj, false)));
+                        }
                     }
                 }
             }
@@ -230,10 +336,21 @@ public abstract class CsmFileTaskFactory {
             PARSING_STARTED, 
             PARSED, 
             CLEANUP
-        
         };
         public abstract void run(Phase phase);
-
+        public abstract boolean isValid();
+        public abstract void cancel();
+        public abstract boolean isHighPriority();
+    }
+    
+    private static final class TaskData {
+        private final PhaseRunner runner;
+        private final CsmFile file;
+        private Task task;        
+        private TaskData(PhaseRunner runner, CsmFile file) {
+            this.runner = runner;
+            this.file = file;
+        }
     }
     
     private static final Runnable getRunnable(final PhaseRunner pr, final PhaseRunner.Phase phase) {
@@ -249,19 +366,31 @@ public abstract class CsmFileTaskFactory {
             public void run(Phase phase) {
                 // do nothing for all phases
             }
+
+            public boolean isValid() {
+                return true;
+            }
+
+            public void cancel() {
+            }
+
+            public boolean isHighPriority() {
+                return false;
+            }
         };
     }
     
     private static final class CsmSafeRunnable implements Runnable {
-        private CsmFile file;
+        private FileObject fileObject;
         private Runnable run;
-        public CsmSafeRunnable(Runnable run, CsmFile file) {
+        public CsmSafeRunnable(Runnable run, FileObject fileObject) {
             this.run = run;
-            this.file = file;
+            this.fileObject = fileObject;
         }
 
         public void run() {
-            if (file.isValid() /*&& (file.isHeaderFile() || file.isSourceFile())*/) {
+            CsmFile file = CsmUtilities.getCsmFile(fileObject, false);
+            if (file !=  null && file.isValid() /*&& (file.isHeaderFile() || file.isSourceFile())*/) {
                 run.run();
             }
         }
