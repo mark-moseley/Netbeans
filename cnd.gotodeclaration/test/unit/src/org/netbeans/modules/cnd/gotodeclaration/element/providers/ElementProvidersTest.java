@@ -39,54 +39,23 @@
 
 package org.netbeans.modules.cnd.gotodeclaration.element.providers;
 
-import java.io.File;
-import org.netbeans.spi.jumpto.type.SearchType;
+import junit.framework.Test;
+import org.netbeans.modules.cnd.test.BaseTestSuite;
 
 /**
  *
  * @author Nick Krasilnikov
  */
-public class MacroElementProviderTestCase extends CppSymbolBaseTestCase {
+public class ElementProvidersTest  extends BaseTestSuite  {
 
-    public MacroElementProviderTestCase(String testName) {
-        super(testName);
-    }
-
-    @Override
-    protected File getTestCaseDataDir() {
-        return getQuoteDataDir();
+    public ElementProvidersTest() {
+        super("Model Services Impl");        
+        addTestSuite(FuncVarElementProviderTestCase.class);
     }
 
-     public void testMacroAllRegexp() throws Exception {
-        peformTest(".*", SearchType.REGEXP);
-    }
-
-    public void testMacroDotRegexp() throws Exception {
-        peformTest("CPU.H", SearchType.REGEXP);
-    }
-
-    public void testMacroCaseInsensitiveRegexp() throws Exception {
-        peformTest("_cUs.*r_h", SearchType.CASE_INSENSITIVE_REGEXP);
-    }
-    
-    public void testMacroCamelCase() throws Exception {
-        peformTest("DH", SearchType.CAMEL_CASE);
-    }
-
-    public void testMacroPrefix() throws Exception {
-        peformTest("M", SearchType.PREFIX);
-    }
-
-    public void testMacroCaseInsensitivePrefix() throws Exception {
-        peformTest("m", SearchType.CASE_INSENSITIVE_PREFIX);
-    }
-
-    public void testMacroExactName() throws Exception {
-        peformTest("DISK_H", SearchType.EXACT_NAME);
-    }
-
-    public void testMacroCaseInsensitiveExactName() throws Exception {
-        peformTest("disk_h", SearchType.CASE_INSENSITIVE_EXACT_NAME);
-    }
+    public static Test suite() {
+        ElementProvidersTest suite = new ElementProvidersTest();
+        return suite;
+    }    
     
 }
