@@ -44,6 +44,7 @@ package org.netbeans.modules.autoupdate.ui.wizards;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Cursor;
+import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -52,7 +53,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
@@ -60,6 +60,7 @@ import javax.swing.Timer;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.openide.util.NbBundle;
+import org.openide.util.RequestProcessor;
 
 /**
  *
@@ -71,6 +72,7 @@ public class PanelBodyContainer extends javax.swing.JPanel {
     private JScrollPane customPanel;
     private JPanel bodyPanel = null;
     private JComponent progressPanel = null;
+    private JComponent progress;
     private boolean isWaiting = false;
     
     /** Creates new form InstallPanelContainer */
@@ -96,17 +98,33 @@ public class PanelBodyContainer extends javax.swing.JPanel {
         }
     }
     
-    public void setBody (JPanel bodyPanel) {
-        this.bodyPanel = bodyPanel;
-        initBodyPanel ();
+    public void setBody (final JPanel newBodyPanel) {
+        if (SwingUtilities.isEventDispatchThread ()) {
+            this.bodyPanel = newBodyPanel;
+            initBodyPanel ();
+        } else {
+            SwingUtilities.invokeLater (new Runnable () {
+                public void run () {
+                    bodyPanel = newBodyPanel;
+                    initBodyPanel ();
+                }
+            });
+        }
     }
     
     public void setWaitingState (boolean isWaiting) {
+        setWaitingState (isWaiting, 0);
+    }
+    
+    public void setWaitingState (boolean isWaiting, final long estimatedTime) {
+        if (this.isWaiting == isWaiting) {
+            return ;
+        }
         this.isWaiting = isWaiting;
         if (isWaiting) {
             SwingUtilities.invokeLater (new Runnable () {
                 public void run () {
-                    addProgressLine ();
+                    addProgressLine (estimatedTime);
                 }
             });
         } else {
@@ -132,15 +150,16 @@ public class PanelBodyContainer extends javax.swing.JPanel {
 
     private Timer delay;
     private ProgressHandle handle;
-    private void addProgressLine () {
+    private void addProgressLine (final long estimatedTime) {
         handle = ProgressHandleFactory.createHandle ("PanelBodyContainer_ProgressLine"); // NOI18N
-        JLabel title = new JLabel (NbBundle.getMessage (PanelBodyContainer.class, "PanelBodyContainer_PleaseWait"));
-        JComponent progress = ProgressHandleFactory.createProgressComponent (handle);
+        JLabel title = new JLabel (NbBundle.getMessage (PanelBodyContainer.class, "PanelBodyContainer_PleaseWait")); // NOI18N
+        progress = ProgressHandleFactory.createProgressComponent (handle);        
         progressPanel = new JPanel (new GridBagLayout ());
         
         GridBagConstraints gridBagConstraints = new GridBagConstraints ();
         gridBagConstraints.anchor = GridBagConstraints.WEST;
         gridBagConstraints.insets = new Insets (7, 12, 0, 12);
+        gridBagConstraints.weighty = 1.0;
         progressPanel.add (progress, gridBagConstraints);
         
         gridBagConstraints = new GridBagConstraints ();
@@ -152,16 +171,57 @@ public class PanelBodyContainer extends javax.swing.JPanel {
         delay = new Timer(900, new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 delay.stop();
+                adjustProgressWidth();
                 progressPanel.setVisible(true);
                 initBodyPanel();
             }
         });        
         
-        handle.start();
         delay.setRepeats(false);
         delay.start();
+        final String progressDisplayName = NbBundle.getMessage (PanelBodyContainer.class, "PanelBodyContainer_ProgressLine"); // NOI18N
+        if (estimatedTime == 0) {
+            handle.start ();                    
+            handle.progress (progressDisplayName);
+        } else {
+            assert estimatedTime > 0 : "Estimated time " + estimatedTime;
+            final long friendlyEstimatedTime = estimatedTime + 2/*friendly constant*/;
+            handle.start ((int) friendlyEstimatedTime * 10, friendlyEstimatedTime); 
+            handle.progress (progressDisplayName, 0);
+
+            RequestProcessor.getDefault ().post (new Runnable () {
+                public void run () {
+                    int i = 0;
+                    while (isWaiting) {
+                        try {
+                            if (friendlyEstimatedTime * 10 > i++) {
+                                handle.progress (progressDisplayName, i);
+                            } else {
+                                handle.switchToIndeterminate ();
+                                handle.progress (progressDisplayName);
+                                return ;
+                            }
+                            Thread.sleep (100);
+                        } catch (InterruptedException ex) {
+                            // no worries
+                        }
+                    }
+                }
+            });
+        }
     }
-    
+
+    private void adjustProgressWidth() {
+        //Issue #155752
+        Dimension min = progress.getMinimumSize();
+        Dimension preferred = progress.getPreferredSize();
+        if (min != null && preferred != null && (min.width * 2) < preferred.width) {
+            int width = preferred.width / 2 ;
+            int height = min.height;
+            progress.setMinimumSize(new Dimension(width, height));
+        }        
+    }
+
     private void initBodyPanel () {
         pBodyPanel.removeAll ();
         customPanel = new JScrollPane ();
@@ -186,8 +246,16 @@ public class PanelBodyContainer extends javax.swing.JPanel {
         }
     }
     
-    public void setHeadAndContent (String heading, String content) {
-        writeToHeader (heading, content);
+    public void setHeadAndContent (final String heading, final String content) {
+        if (SwingUtilities.isEventDispatchThread ()) {
+            writeToHeader (heading, content);
+        } else {
+            SwingUtilities.invokeLater (new Runnable () {
+                public void run () {
+                    writeToHeader (heading, content);
+                }
+            });
+        }
     }
     
     private void writeToHeader (String heading, String msg) {
@@ -213,6 +281,7 @@ public class PanelBodyContainer extends javax.swing.JPanel {
         tpPanelHeader.setContentType("text/html"); // NOI18N
         tpPanelHeader.setEditable(false);
         spPanelHeader.setViewportView(tpPanelHeader);
+        tpPanelHeader.getAccessibleContext().setAccessibleName(head);
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -228,6 +297,9 @@ public class PanelBodyContainer extends javax.swing.JPanel {
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(pBodyPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
+
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(PanelBodyContainer.class, "PanelBodyContainer_ACN")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(PanelBodyContainer.class, "PanelBodyContainer_ACD")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     
     
