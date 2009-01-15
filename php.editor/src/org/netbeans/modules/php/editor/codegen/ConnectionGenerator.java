@@ -39,7 +39,6 @@
 
 package org.netbeans.modules.php.editor.codegen;
 
-import org.netbeans.modules.php.editor.codegen.ui.ConnectionGeneratorPanel;
 import java.util.Collections;
 import java.util.List;
 import javax.swing.text.JTextComponent;
@@ -47,6 +46,7 @@ import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.lib.editor.codetemplates.api.CodeTemplate;
 import org.netbeans.lib.editor.codetemplates.api.CodeTemplateManager;
 import org.netbeans.modules.php.editor.codegen.DatabaseURL.Server;
+import org.netbeans.modules.php.editor.sql.DatabaseConnectionSupport;
 import org.netbeans.spi.editor.codegen.CodeGenerator;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -58,7 +58,7 @@ import org.openide.util.NbBundle;
 public class ConnectionGenerator implements CodeGenerator {
 
     private static final String TEMPLATE_TEXT =
-            "$$${CONN newVarName default=\"conn\"} = mysqli_connect('${HOST_PORT}', '${USER}', '${PASSWORD}', '${DATABASE}');\n" + // NOI18N
+            "$$${CONN newVarName default=\"conn\"} = mysqli_connect(${PARAMETERS});\n" + // NOI18N
             "if (!$$${CONN}) {\n" + // NOI18N
             "    die('Could not connect to MySQL: ' . mysqli_connect_error());\n" +  // NOI18N
             "}\n" +  // NOI18N
@@ -77,7 +77,10 @@ public class ConnectionGenerator implements CodeGenerator {
     }
 
     public void invoke() {
-        DatabaseConnection dbconn = ConnectionGeneratorPanel.selectConnection();
+        DatabaseConnection dbconn = DatabaseConnectionSupport.selectDatabaseConnection(true, true);
+        if (dbconn.getPassword() == null) {
+            dbconn = null;
+        }
         if (dbconn == null) {
             return;
         }
@@ -86,21 +89,36 @@ public class ConnectionGenerator implements CodeGenerator {
         if (parsed == null || parsed.getServer() != Server.MYSQL) {
             return;
         }
-        String hostAndPort = parsed.getHostAndPort();
+        String host = parsed.getHost();
+        String port = parsed.getPort();
         String database = parsed.getDatabase();
         String user = dbconn.getUser();
         String password = dbconn.getPassword();
+        StringBuilder parameters = new StringBuilder();
+        appendParameter(parameters, host);
+        parameters.append(", "); // NOI18N
+        appendParameter(parameters, user);
+        parameters.append(", "); // NOI18N
+        appendParameter(parameters, password);
+        if (database != null) {
+            parameters.append(", "); // NOI18N
+            appendParameter(parameters, database);
+        }
+        if (port != null) {
+            parameters.append(", "); // NOI18N
+            appendParameter(parameters, port);
+        }
         // XXX there should be a way to to set default parameters value when
         // inserting a template. Something along the lines of
         // CodeTemplate.insert(JTextComponent c, Map<String, String> defValues).
-        String text = TEMPLATE_TEXT.
-                replace("${HOST_PORT}", hostAndPort != null ? hostAndPort : ""). // NOI18N
-                replace("${USER}", user != null ? user : ""). // NOI18N
-                replace("${PASSWORD}", password != null ? password : ""). // NOI18N
-                replace("${DATABASE}", database != null ? database : ""); // NOI18N
+        String text = TEMPLATE_TEXT.replace("${PARAMETERS}", parameters); // NOI18N
         CodeTemplateManager manager = CodeTemplateManager.get(component.getDocument());
         CodeTemplate template = manager.createTemporary(text);
         template.insert(component);
+    }
+
+    private static void appendParameter(StringBuilder builder, String value) {
+        builder.append('\'').append(value).append('\'');
     }
 
     public static final class Factory implements CodeGenerator.Factory {

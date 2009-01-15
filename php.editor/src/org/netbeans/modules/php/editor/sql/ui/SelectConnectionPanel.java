@@ -37,7 +37,7 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.codegen.ui;
+package org.netbeans.modules.php.editor.sql.ui;
 
 import java.awt.Dialog;
 import org.netbeans.api.db.explorer.ConnectionManager;
@@ -53,33 +53,46 @@ import org.openide.util.NbBundle;
  *
  * @author Andrei Badea
  */
-public class ConnectionGeneratorPanel extends javax.swing.JPanel {
+public class SelectConnectionPanel extends javax.swing.JPanel {
+
+    private final boolean mySQLOnly;
+    private final boolean passwordRequired;
 
     private DialogDescriptor descriptor;
     private DatabaseConnection dbconn;
 
-    public static DatabaseConnection selectConnection() {
-        ConnectionGeneratorPanel panel = new ConnectionGeneratorPanel();
-        DialogDescriptor desc = new DialogDescriptor(panel, NbBundle.getMessage(ConnectionGeneratorPanel.class, "MSG_SelectConnection"));
+    public static DatabaseConnection selectConnection(DatabaseConnection selectedDBConn, boolean mySQLOnly, boolean passwordRequired) {
+        SelectConnectionPanel panel = new SelectConnectionPanel(selectedDBConn, mySQLOnly, passwordRequired);
+        DialogDescriptor desc = new DialogDescriptor(panel, NbBundle.getMessage(SelectConnectionPanel.class, "MSG_SelectConnection"));
+        desc.createNotificationLineSupport();
         panel.initialize(desc);
         Dialog dialog = DialogDisplayer.getDefault().createDialog(desc);
+        dialog.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(SelectConnectionPanel.class, "ACSD_SelectConnection"));
         dialog.setVisible(true);
         dialog.dispose();
+
         if (desc.getValue() == DialogDescriptor.OK_OPTION) {
             return panel.dbconn;
         }
-        return null;
+
+        // If the user cancels, keep the selection they started with, rather than setting it to null
+        return selectedDBConn;
     }
 
-    private ConnectionGeneratorPanel() {
+    private SelectConnectionPanel(DatabaseConnection dbconn, boolean mySQLOnly, boolean passwordRequired) {
+        this.dbconn = dbconn;
+        this.mySQLOnly = mySQLOnly;
+        this.passwordRequired = passwordRequired;
         initComponents();
-        errorLabel.setForeground(UIUtils.getErrorForeground());
     }
 
     private void initialize(DialogDescriptor descriptor) {
         this.descriptor = descriptor;
         DatabaseExplorerUIs.connect(dbconnComboBox, ConnectionManager.getDefault());
-        setErrorMessage(NbBundle.getMessage(ConnectionGeneratorPanel.class, "ERR_SelectConnection"));
+        dbconnComboBox.setSelectedItem(dbconn);
+        if (dbconn == null) {
+            descriptor.getNotificationLineSupport().setWarningMessage(NbBundle.getMessage(SelectConnectionPanel.class, "ERR_SelectConnection"));
+        }
     }
 
     private void databaseConnectionChanged() {
@@ -89,27 +102,27 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
             return;
         }
         dbconn = (DatabaseConnection) selected;
+        
         DatabaseURL url = DatabaseURL.detect(dbconn.getDatabaseURL());
         String errorMessage = null;
-        if (url == null || url.getServer() != Server.MYSQL) {
-            errorMessage = NbBundle.getMessage(ConnectionGeneratorPanel.class, "ERR_UnknownServer");
+        if (mySQLOnly && (url == null || url.getServer() != Server.MYSQL)) {
+            errorMessage = NbBundle.getMessage(SelectConnectionPanel.class, "ERR_UnknownServer");
             dbconn = null;
         }
         if (dbconn != null) {
-            if (dbconn.getPassword() == null) {
-                ConnectionManager.getDefault().showConnectionDialog(dbconn);
-            }
-            if (dbconn.getPassword() == null) {
-                errorMessage = NbBundle.getMessage(ConnectionGeneratorPanel.class, "ERR_NoPassword");
-                dbconn = null;
+            if (passwordRequired && dbconn.getPassword() == null) {
+                errorMessage = NbBundle.getMessage(SelectConnectionPanel.class, "ERR_NoPassword");
             }
         }
         setErrorMessage(errorMessage);
     }
 
     private void setErrorMessage(String message) {
-        errorLabel.setText(message != null ? message : " "); // NOI18N
-        descriptor.setValid(message == null);
+        if (message == null) {
+            descriptor.getNotificationLineSupport().clearMessages();
+        } else {
+            descriptor.getNotificationLineSupport().setErrorMessage(message);
+        }
     }
 
     /** This method is called from within the constructor to
@@ -123,17 +136,14 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
 
         dbconnLabel = new javax.swing.JLabel();
         dbconnComboBox = new javax.swing.JComboBox();
-        errorLabel = new javax.swing.JLabel();
 
-        org.openide.awt.Mnemonics.setLocalizedText(dbconnLabel, org.openide.util.NbBundle.getMessage(ConnectionGeneratorPanel.class, "ConnectionGeneratorPanel.dbconnLabel.text")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(dbconnLabel, org.openide.util.NbBundle.getMessage(SelectConnectionPanel.class, "SelectConnectionPanel.dbconnLabel.text")); // NOI18N
 
         dbconnComboBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 dbconnComboBoxActionPerformed(evt);
             }
         });
-
-        org.openide.awt.Mnemonics.setLocalizedText(errorLabel, org.openide.util.NbBundle.getMessage(ConnectionGeneratorPanel.class, "ConnectionGeneratorPanel.errorLabel.text")); // NOI18N
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -142,15 +152,9 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(layout.createSequentialGroup()
-                        .add(dbconnLabel)
-                        .addContainerGap(177, Short.MAX_VALUE))
-                    .add(layout.createSequentialGroup()
-                        .add(dbconnComboBox, 0, 301, Short.MAX_VALUE)
-                        .addContainerGap())
-                    .add(layout.createSequentialGroup()
-                        .add(errorLabel)
-                        .addContainerGap(305, Short.MAX_VALUE))))
+                    .add(dbconnLabel)
+                    .add(dbconnComboBox, 0, 518, Short.MAX_VALUE))
+                .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
@@ -159,10 +163,11 @@ public class ConnectionGeneratorPanel extends javax.swing.JPanel {
                 .add(dbconnLabel)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(dbconnComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 17, Short.MAX_VALUE)
-                .add(errorLabel)
-                .addContainerGap())
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
+
+        dbconnComboBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SelectConnectionPanel.class, "ChooseConnectionPanel.dbconnComboBox.AccessibleContext.accessibleName")); // NOI18N
+        dbconnComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SelectConnectionPanel.class, "ChooseConnectionPanel.dbconnComboBox.AccessibleContext.accessibleDescription")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
 private void dbconnComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_dbconnComboBoxActionPerformed
@@ -173,7 +178,6 @@ private void dbconnComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GE
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JComboBox dbconnComboBox;
     private javax.swing.JLabel dbconnLabel;
-    private javax.swing.JLabel errorLabel;
     // End of variables declaration//GEN-END:variables
 
 }
