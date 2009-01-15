@@ -36,33 +36,43 @@
  * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.cnd.modelimpl.uid;
 
-import org.netbeans.modules.cnd.modelimpl.csm.*;
 import java.util.Collection;
 import java.util.Iterator;
 import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
+import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmUID;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
+import org.netbeans.modules.cnd.modelimpl.impl.services.UIDFilter;
 
 /**
- *
+ * The lazy implementation of the collection 
+ * backed by the collection of UIDs.
+ * 
+ * It uses two template parameters: Tuid and Tfact.
+ * The idea behind that is that often we use 
+ * interface type (e.g. CsmFile) UID, 
+ * while implementation knows that all the instances are 
+ * of implementation type (e.g. FileImpl).
+ * So Tuid is an interface (CsmFile) type, 
+ * while Tfact is implementation (FileImpl) type.
+ *  
  * @author Alexander Simon
  */
-public class LazyCsmCollection<T> implements Collection<T> {
-    private Collection<CsmUID<T>> uids;
+public class LazyCsmCollection<Tuid extends CsmIdentifiable<Tuid>, Tfact extends Tuid> implements Collection<Tfact> {
+
+    private Collection<CsmUID<Tuid>> uids;
     boolean allowNullsAndSkip;
-    public LazyCsmCollection(Collection<CsmUID<T>> uids, boolean allowNullsAndSkip){
+
+    public LazyCsmCollection(Collection<CsmUID<Tuid>> uids, boolean allowNullsAndSkip) {
         this.uids = uids;
         this.allowNullsAndSkip = allowNullsAndSkip;
     }
 
-    private T convertToObject(CsmUID uid){
-        return (T) UIDCsmConverter.UIDtoCsmObject(uid);
-    }
-
-    private CsmUID<T> convertToUID(T object){
-        return ((CsmIdentifiable)object).getUID();
+    private Tfact convertToObject(CsmUID<? extends Tfact> uid) {
+        return (Tfact) UIDCsmConverter.UIDtoCsmObject(uid);
     }
 
     public int size() {
@@ -74,92 +84,123 @@ public class LazyCsmCollection<T> implements Collection<T> {
     }
 
     public boolean contains(Object o) {
-        Iterator<T> it = iterator();
-        while(it.hasNext()){
-            T object = it.next();
-            if (o == object || 
-                o != null && o.equals(object)){
+        Iterator<Tfact> it = iterator();
+        while (it.hasNext()) {
+            Tfact object = it.next();
+            if (o == object ||
+                    o != null && o.equals(object)) {
                 return true;
             }
         }
         return false;
     }
 
-    public Iterator<T> iterator() {
-        return new MyIterator<T>();
+    public Iterator<Tfact> iterator() {
+        return allowNullsAndSkip ? new MySafeIterator() : new MyIterator();
+    }
+
+    public Iterator<Tfact> iterator(CsmFilter filter) {
+        return new MySafeIterator(filter);
     }
 
     public Object[] toArray() {
-	Object[] result = new Object[size()];
-	Iterator<T> e = iterator();
-	for (int i=0; e.hasNext(); i++)
-	    result[i] = e.next();
-	return result;
+        Object[] result = new Object[size()];
+        Iterator<Tfact> e = iterator();
+        int i = 0;
+        for (; e.hasNext(); i++) {
+            result[i] = e.next();
+        }
+        if (i < size()) {
+            Object[] a = new Object[i];
+            System.arraycopy(result, 0, a, 0, i);
+            result = a;
+        }
+        return result;
     }
 
+    @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
         int size = size();
-        if (a.length < size)
-            a = (T[])java.lang.reflect.Array
-		.newInstance(a.getClass().getComponentType(), size);
+        if (a.length < size) {
+            a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), size);
+        }
 
         Iterator<T> it = (Iterator<T>) iterator();
-	Object[] result = a;
-        for (int i=0; i<size; i++)
+        Object[] result = a;
+        int i = 0;
+        for (; it.hasNext(); i++) {
             result[i] = it.next();
-        if (a.length > size)
-	    a[size] = null;
+        }
+        if (i < size()) {
+            a = (T[]) java.lang.reflect.Array.newInstance(a.getClass().getComponentType(), i);
+            System.arraycopy(result, 0, a, 0, i);
+        }
         return a;
     }
 
-    public boolean add(T o) {
-        return uids.add(convertToUID(o));
+    public boolean add(Tfact o) {
+        return uids.add(o.getUID());
     }
 
     public boolean remove(Object o) {
-        return uids.remove(convertToUID((T)o));
+        if (CsmKindUtilities.isCsmObject(o) && CsmKindUtilities.isIdentifiable((CsmObject)o)) {
+            return uids.remove(((CsmIdentifiable)o).getUID());
+        } else {
+            return uids.remove(o);
+        }
     }
 
     public boolean containsAll(Collection<?> c) {
-	Iterator<?> e = c.iterator();
-	while (e.hasNext())
-	    if(!contains(e.next()))
-		return false;
-	return true;
+        Iterator<?> e = c.iterator();
+        while (e.hasNext()) {
+            if (!contains(e.next())) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    public boolean addAll(Collection<? extends T> c) {
-	boolean modified = false;
-	Iterator<? extends T> it = c.iterator();
-	while (it.hasNext()) {
-	    if (add(it.next()))
-		modified = true;
-	}
-	return modified;
+    public boolean addAll(Collection<? extends Tfact> c) {
+        boolean modified = false;
+        if (c instanceof LazyCsmCollection<?,?>) {
+            // input collection c is Tfact based
+            // Tfact is extension of Tuid => col.uids provides array of needed type
+            @SuppressWarnings("unchecked") // checked
+            final LazyCsmCollection<Tuid, ? extends Tfact> col = (LazyCsmCollection<Tuid, ? extends Tfact>) c;
+            return uids.addAll(col.uids);
+        } else {
+            Iterator<? extends Tfact> it = c.iterator();
+            while (it.hasNext()) {
+                if (add(it.next())) {
+                    modified = true;
+                }
+            }
+        }
+        return modified;
     }
 
     public boolean removeAll(Collection<?> c) {
-	boolean modified = false;
-	Iterator<?> it = iterator();
-	while (it.hasNext()) {
-	    if (c.contains(it.next())) {
-		it.remove();
-		modified = true;
-	    }
-	}
-	return modified;
+        boolean modified = false;
+        Iterator<?> it = iterator();
+        while (it.hasNext()) {
+            if (c.contains(it.next())) {
+                it.remove();
+                modified = true;
+            }
+        }
+        return modified;
     }
 
     public boolean retainAll(Collection<?> c) {
-	boolean modified = false;
-	Iterator<T> it = iterator();
-	while (it.hasNext()) {
-	    if (!c.contains(it.next())) {
-		it.remove();
-		modified = true;
-	    }
-	}
-	return modified;
+        boolean modified = false;
+        Iterator<Tfact> it = iterator();
+        while (it.hasNext()) {
+            if (!c.contains(it.next())) {
+                it.remove();
+                modified = true;
+            }
+        }
+        return modified;
     }
 
     public void clear() {
@@ -168,40 +209,91 @@ public class LazyCsmCollection<T> implements Collection<T> {
 
     @Override
     public String toString() {
-	StringBuffer buf = new StringBuffer();
-	buf.append("["); // NOI18N
+        StringBuffer buf = new StringBuffer();
+        buf.append("["); // NOI18N
 
-        Iterator<T> it = iterator();
+        Iterator<Tfact> it = iterator();
         boolean hasNext = it.hasNext();
         while (hasNext) {
-            T o = it.next();
+            Tfact o = it.next();
             buf.append(o == this ? "(this Collection)" : String.valueOf(o));  // NOI18N
             hasNext = it.hasNext();
-            if (hasNext)
+            if (hasNext) {
                 buf.append(", "); // NOI18N
+            }
         }
 
-	buf.append("]"); // NOI18N
-	return buf.toString();
+        buf.append("]"); // NOI18N
+        return buf.toString();
     }
 
-    private class MyIterator<T> implements Iterator<T>{
-        
-        private Iterator it;
-        private MyIterator(){
+    private class MyIterator implements Iterator<Tfact> {
+
+        private Iterator<CsmUID<Tuid>> it;
+
+        private MyIterator() {
             it = uids.iterator();
         }
+
         public boolean hasNext() {
             return it.hasNext();
         }
-        public T next() {
-            CsmUID uid = (CsmUID)it.next();
-            T decl = (T) convertToObject(uid);
-            if (!allowNullsAndSkip && decl == null) {
-                assert decl != null : "no object for UID " + uid;
-            }
+
+        public Tfact next() {
+            // we know that Tfact is the real type so cast is okay
+            @SuppressWarnings("unchecked") // checked
+            CsmUID<Tfact> uid = (CsmUID<Tfact>)it.next();
+            Tfact decl =  convertToObject(uid);
+            assert decl != null : "no object for UID " + uid;
             return decl;
         }
+
+        public void remove() {
+            it.remove();
+        }
+    }
+
+    private class MySafeIterator implements Iterator<Tfact> {
+
+        private Iterator<CsmUID<Tuid>> it;
+        private Tfact next;
+        private CsmFilter filter;
+
+        private MySafeIterator() {
+            this(null);
+        }
+
+        private MySafeIterator(CsmFilter filter) {
+            this.filter = filter;
+            it = uids.iterator();
+            next = getNextNonNull();
+        }
+
+        public boolean hasNext() {
+            return next != null;
+        }
+
+        private Tfact getNextNonNull() {
+            Tfact out = null;
+            while (out == null && it.hasNext()) {
+                // we know that Tfact is the real type so cast is okay
+                @SuppressWarnings("unchecked") // checked
+                CsmUID<Tfact> uid = (CsmUID<Tfact>)it.next();
+                if (uid == null ||
+                        (filter != null && !((UIDFilter) filter).accept(uid))) {
+                    continue;
+                }
+                out = convertToObject(uid);
+            }
+            return out;
+        }
+
+        public Tfact next() {
+            Tfact decl = next;
+            next = getNextNonNull();
+            return decl;
+        }
+
         public void remove() {
             it.remove();
         }
