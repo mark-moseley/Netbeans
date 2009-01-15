@@ -42,6 +42,7 @@ import org.netbeans.modules.cnd.api.model.CsmNamespaceDefinition;
 import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.openide.nodes.Children;
+import org.openide.nodes.Node;
 
 /**
  *
@@ -52,22 +53,22 @@ public class NavigatorChildren extends Children.SortedArray {
     private CsmOffsetableDeclaration element;
     private CsmCompoundClassifier container;
     private CsmFileModel model;
+    private List<IndexOffsetNode> lineNumberIndex;
 
-    public NavigatorChildren(CsmOffsetableDeclaration element, CsmFileModel model) {
-        this.element = element;
-        this.model = model;
-        this.getNodes();
+    public NavigatorChildren(CsmOffsetableDeclaration element, CsmFileModel model, List<IndexOffsetNode> lineNumberIndex) {
+        this(element, model, null, lineNumberIndex);
     }
 
-    public NavigatorChildren(CsmOffsetableDeclaration element, CsmFileModel model, CsmCompoundClassifier container) {
+    public NavigatorChildren(CsmOffsetableDeclaration element, CsmFileModel model, CsmCompoundClassifier container, List<IndexOffsetNode> lineNumberIndex) {
         this.element = element;
         this.container = container;
         this.model = model;
+        this.lineNumberIndex = lineNumberIndex;
         this.getNodes();
     }
 
     @Override
-    protected Collection initCollection() {
+    protected Collection<Node> initCollection() {
         List<CppDeclarationNode> retValue = new ArrayList<CppDeclarationNode>();
         if (container != null) {
             if (CsmKindUtilities.isClass(container)) {
@@ -82,25 +83,28 @@ public class NavigatorChildren extends Children.SortedArray {
         } else if (CsmKindUtilities.isNamespaceDefinition(element)) {
             CsmNamespaceDefinition ns = (CsmNamespaceDefinition) element;
             for (CsmDeclaration decl : ns.getDeclarations()) {
-                CppDeclarationNode node = CppDeclarationNode.nodeFactory(decl, model, false);
+                CppDeclarationNode node = CppDeclarationNode.nodeFactory(decl, model, false, lineNumberIndex);
                 if (node != null) {
                     retValue.add(node);
                 }
             }
         }
-        Collections.<CppDeclarationNode>sort(retValue);
-        return retValue;
+        Collections.sort(retValue);
+        // CppDeclarationNode is Node
+        @SuppressWarnings("unchecked")
+        List<Node> ret = ((List)retValue);
+        return ret;
     }
 
     private void initClassifier(CsmClass cls, List<CppDeclarationNode> retValue) {
         for (CsmMember member : cls.getMembers()) {
-            CppDeclarationNode node = CppDeclarationNode.nodeFactory(member, model, false);
+            CppDeclarationNode node = CppDeclarationNode.nodeFactory(member, model, false, lineNumberIndex);
             if (node != null) {
                 retValue.add(node);
             }
         }
         for (CsmFriend friend : cls.getFriends()) {
-            CppDeclarationNode node = CppDeclarationNode.nodeFactory(friend, model, true);
+            CppDeclarationNode node = CppDeclarationNode.nodeFactory(friend, model, true, lineNumberIndex);
             if (node != null) {
                 retValue.add(node);
             }
@@ -109,7 +113,7 @@ public class NavigatorChildren extends Children.SortedArray {
 
     private void initEnum(CsmEnum cls, List<CppDeclarationNode> retValue) {
         for (CsmEnumerator en : cls.getEnumerators()) {
-            CppDeclarationNode node = CppDeclarationNode.nodeFactory(en, model, false);
+            CppDeclarationNode node = CppDeclarationNode.nodeFactory(en, model, false, lineNumberIndex);
             if (node != null) {
                 retValue.add(node);
             }
