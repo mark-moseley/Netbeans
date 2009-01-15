@@ -46,6 +46,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.lang.ref.WeakReference;
+import java.net.MalformedURLException;
 import java.util.*;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
@@ -67,6 +68,9 @@ import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 
@@ -352,17 +356,6 @@ NodeActionsProvider {
                 "src_roots",
                 Collections.EMPTY_LIST)
         );
-        if (additionalSourceRoots.size() > 0) {
-            // Set the new source roots:
-            String[] sourceRoots = sourcePath.getSourceRoots();
-            int l = sourceRoots.length;
-            Object[] addSrc = additionalSourceRoots.toArray();
-            int n = addSrc.length;
-            String[] newSourceRoots = new String[l + n];
-            System.arraycopy(sourceRoots, 0, newSourceRoots, 0, l);
-            System.arraycopy(addSrc, 0, newSourceRoots, l, n);
-            sourcePath.setSourceRoots(newSourceRoots);
-        }
     }
 
     private synchronized void saveFilters () {
@@ -413,16 +406,12 @@ NodeActionsProvider {
                 getString ("CTL_SourcesModel_Column_Name_Name");
         }
 
-        public Character getDisplayedMnemonic() {
-            return new Character(NbBundle.getBundle(SourcesModel.class).getString
-                ("CTL_SourcesModel_Column_Name_Name_Mnc").charAt(0));
-        }
-
         /**
          * Returns tooltip for given column.
          *
          * @return  tooltip for given node
          */
+        @Override
         public String getShortDescription () {
             return NbBundle.getBundle (DefaultSourcesColumn.class).getString
                 ("CTL_SourcesModel_Column_Name_Desc");
@@ -463,11 +452,6 @@ NodeActionsProvider {
                 ("CTL_SourcesModel_Column_Debugging_Name");
         }
 
-        public Character getDisplayedMnemonic() {
-            return new Character(NbBundle.getBundle(SourcesModel.class).getString
-                ("CTL_SourcesModel_Column_Debugging_Name_Mnc").charAt(0));
-        }
-
         /**
          * Returns type of column items.
          *
@@ -483,6 +467,7 @@ NodeActionsProvider {
          *
          * @return  tooltip for given node or <code>null</code>
          */
+        @Override
         public String getShortDescription () {
             return NbBundle.getBundle (SourcesModel.class).getString
                 ("CTL_SourcesModel_Column_Debugging_Desc");
@@ -506,6 +491,7 @@ NodeActionsProvider {
         public void actionPerformed (ActionEvent e) {
             if (newSourceFileChooser == null) {
                 newSourceFileChooser = new JFileChooser();
+                newSourceFileChooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
                 newSourceFileChooser.setFileFilter(new FileFilter() {
 
                     public String getDescription() {
@@ -513,21 +499,28 @@ NodeActionsProvider {
                     }
 
                     public boolean accept(File file) {
-                        return file.isDirectory();
+                        if (file.isDirectory()) {
+                            return true;
+                        }
+                        try {
+                            return FileUtil.isArchiveFile(file.toURL());
+                        } catch (MalformedURLException ex) {
+                            Exceptions.printStackTrace(ex);
+                            return false;
+                        }
                     }
 
                 });
-                newSourceFileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             }
             int state = newSourceFileChooser.showDialog(org.openide.windows.WindowManager.getDefault().getMainWindow(),
                                       NbBundle.getMessage(SourcesModel.class, "CTL_SourcesModel_AddSrc_Btn"));
             if (state == JFileChooser.APPROVE_OPTION) {
-                File dir = newSourceFileChooser.getSelectedFile();
-                if (!dir.isDirectory()) {
-                    return ;
-                }
+                File zipOrDir = newSourceFileChooser.getSelectedFile();
                 try {
-                    String d = dir.getCanonicalPath();
+                    if (!zipOrDir.isDirectory() && !FileUtil.isArchiveFile(zipOrDir.toURL())) {
+                        return ;
+                    }
+                    String d = zipOrDir.getCanonicalPath();
                     synchronized (SourcesModel.this) {
                         additionalSourceRoots.add(d);
                         enabledSourceRoots.add(d);
@@ -673,6 +666,7 @@ NodeActionsProvider {
          *
          * @param visible set true if column is visible
          */
+        @Override
         public void setVisible (boolean visible) {
             properties.setBoolean (getID () + ".visible", visible);
         }
@@ -682,6 +676,7 @@ NodeActionsProvider {
          *
          * @param sorted set true if column should be sorted by default
          */
+        @Override
         public void setSorted (boolean sorted) {
             properties.setBoolean (getID () + ".sorted", sorted);
         }
@@ -692,6 +687,7 @@ NodeActionsProvider {
          * @param sortedDescending set true if column should be sorted by default
          *        in descending order
          */
+        @Override
         public void setSortedDescending (boolean sortedDescending) {
             properties.setBoolean (getID () + ".sortedDescending", sortedDescending);
         }
@@ -701,8 +697,13 @@ NodeActionsProvider {
          *
          * @return current order number of this column
          */
+        @Override
         public int getCurrentOrderNumber () {
-            return properties.getInt (getID () + ".currentOrderNumber", -1);
+            int cn = properties.getInt (getID () + ".currentOrderNumber", -1);
+            if (cn >= 0 && !properties.getBoolean("outlineOrdering", false)) {
+                cn++; // Shift the old TreeTable ordering, which did not count the first nodes column.
+            }
+            return cn;
         }
 
         /**
@@ -710,8 +711,10 @@ NodeActionsProvider {
          *
          * @param newOrderNumber new order number
          */
+        @Override
         public void setCurrentOrderNumber (int newOrderNumber) {
             properties.setInt (getID () + ".currentOrderNumber", newOrderNumber);
+            properties.setBoolean("outlineOrdering", true);
         }
 
         /**
@@ -719,6 +722,7 @@ NodeActionsProvider {
          *
          * @return column width of this column
          */
+        @Override
         public int getColumnWidth () {
             return properties.getInt (getID () + ".columnWidth", 150);
         }
@@ -728,6 +732,7 @@ NodeActionsProvider {
          *
          * @param newColumnWidth a new column width
          */
+        @Override
         public void setColumnWidth (int newColumnWidth) {
             properties.setInt (getID () + ".columnWidth", newColumnWidth);
         }
@@ -737,6 +742,7 @@ NodeActionsProvider {
          *
          * @return true if column should be visible by default
          */
+        @Override
         public boolean isVisible () {
             return properties.getBoolean (getID () + ".visible", true);
         }
@@ -746,6 +752,7 @@ NodeActionsProvider {
          *
          * @return true if column should be sorted by default
          */
+        @Override
         public boolean isSorted () {
             return properties.getBoolean (getID () + ".sorted", false);
         }
@@ -755,6 +762,7 @@ NodeActionsProvider {
          *
          * @return true if column should be sorted by default in descending order
          */
+        @Override
         public boolean isSortedDescending () {
             return properties.getBoolean (getID () + ".sortedDescending", false);
         }

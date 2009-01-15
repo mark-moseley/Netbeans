@@ -44,6 +44,8 @@ package org.netbeans.modules.viewmodel;
 import java.beans.PropertyEditor;
 import javax.swing.SwingUtilities;
 import org.netbeans.spi.viewmodel.ColumnModel;
+import org.openide.awt.Actions;
+import org.openide.awt.Mnemonics;
 import org.openide.nodes.PropertySupport;
 
 /**
@@ -52,24 +54,23 @@ import org.openide.nodes.PropertySupport;
  */
 public class Column extends PropertySupport.ReadWrite {
 
+    public static final String PROP_ORDER_NUMBER = "OrderNumberOutline"; // NOI18N
+
     private PropertyEditor propertyEditor;
     private ColumnModel columnModel;
-    private TreeTable treeTable;
 
     Column (
-        ColumnModel columnModel,
-        TreeTable treeTable
+        ColumnModel columnModel
     ) {
         super (
             columnModel.getID (),
             columnModel.getType () == null ? 
                 String.class : 
                 columnModel.getType (),
-            columnModel.getDisplayName (),
+            Actions.cutAmpersand(columnModel.getDisplayName ()),
             columnModel.getShortDescription ()
         );
         this.columnModel = columnModel;
-        this.treeTable = treeTable;
         setValue (
             "ComparableColumnTTV", 
             Boolean.valueOf (columnModel.isSortable ())
@@ -80,6 +81,9 @@ public class Column extends PropertySupport.ReadWrite {
                 "TreeColumnTTV", 
                 Boolean.TRUE
             );
+        if (Mnemonics.findMnemonicAmpersand(columnModel.getDisplayName()) >= 0) {
+            setValue("ColumnDisplayNameWithMnemonicTTV", columnModel.getDisplayName ()); // NOI18N
+        }
         Character mnemonic = columnModel.getDisplayedMnemonic();
         if (mnemonic != null) {
             setValue("ColumnMnemonicCharTTV", mnemonic); // NOI18N
@@ -108,7 +112,17 @@ public class Column extends PropertySupport.ReadWrite {
     boolean isDefault () {
         return columnModel.getType () == null;
     }
-    
+
+    @Override
+    public boolean isHidden() {
+        return !columnModel.isVisible();
+    }
+
+    @Override
+    public void setHidden(boolean hidden) {
+        columnModel.setVisible(!hidden);
+    }
+
     public Object getValue () {
         return null;
     }
@@ -117,18 +131,9 @@ public class Column extends PropertySupport.ReadWrite {
     }
 
     public Object getValue (String propertyName) {
-        if ("OrderNumberTTV".equals (propertyName)) {
-            if (!columnModel.isVisible()) return -1;
+        if (PROP_ORDER_NUMBER.equals (propertyName)) {
             int index = columnModel.getCurrentOrderNumber();
-            if (index != -1) {
-                index = treeTable.getColumnVisibleIndex(this, index);
-            }
-            //System.err.println("Get order of "+this.getDisplayName()+" => "+index);
-            if (index == -1) {
-                return null;
-            } else {
-                return new Integer(index);
-            }
+            return new Integer(index);
         }
         if ("InvisibleInTreeTableView".equals (propertyName)) 
             return Boolean.valueOf (!columnModel.isVisible ());
@@ -140,23 +145,9 @@ public class Column extends PropertySupport.ReadWrite {
     }
     
     public void setValue (String propertyName, Object newValue) {
-        if ("OrderNumberTTV".equals (propertyName)) {
+        if (PROP_ORDER_NUMBER.equals (propertyName)) {
             int index = ((Integer) newValue).intValue();
-            //System.err.println("Set order of "+this.getDisplayName()+" <= "+newValue);
-            if (index != -1) {
-                index = treeTable.getColumnGlobalIndex(this, index);
-                columnModel.setCurrentOrderNumber(index);
-            }
-        } else
-        if ("InvisibleInTreeTableView".equals (propertyName)) {
-            columnModel.setVisible (
-                !((Boolean) newValue).booleanValue ()
-            );
-            SwingUtilities.invokeLater(new Runnable() {
-                public void run() {
-                    treeTable.updateColumnWidths ();
-                }
-            });
+            columnModel.setCurrentOrderNumber(index);
         } else
         if ("SortingColumnTTV".equals (propertyName)) 
             columnModel.setSorted (

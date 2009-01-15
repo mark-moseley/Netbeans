@@ -43,6 +43,8 @@ package org.netbeans.modules.debugger.ui.models;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import org.netbeans.api.debugger.Properties;
 import org.netbeans.api.debugger.Session;
 import org.netbeans.spi.debugger.ui.Constants;
@@ -114,11 +116,7 @@ public class ColumnModels {
             return NbBundle.getBundle (ColumnModels.class).getString(displayName);
         }
 
-        public Character getDisplayedMnemonic() {
-            return new Character(NbBundle.getBundle(ColumnModels.class).
-                    getString(displayName+"_Mnc").charAt(0));   // NOI18N
-        }
-        
+        @Override
         public String getShortDescription() {
             return NbBundle.getBundle (ColumnModels.class).getString(shortDescription);
         }
@@ -132,6 +130,7 @@ public class ColumnModels {
          *
          * @param visible set true if column is visible
          */
+        @Override
         public void setVisible (boolean visible) {
             properties.setBoolean (getID () + ".visible", visible);
         }
@@ -141,6 +140,7 @@ public class ColumnModels {
          *
          * @param sorted set true if column should be sorted by default 
          */
+        @Override
         public void setSorted (boolean sorted) {
             if (sortable) {
                 properties.setBoolean (getID () + ".sorted", sorted);
@@ -153,6 +153,7 @@ public class ColumnModels {
          * @param sortedDescending set true if column should be 
          *        sorted by default in descending order
          */
+        @Override
         public void setSortedDescending (boolean sortedDescending) {
             if (sortable) {
                 properties.setBoolean (
@@ -167,8 +168,13 @@ public class ColumnModels {
          *
          * @return current order number of this column
          */
+        @Override
         public int getCurrentOrderNumber () {
-            return properties.getInt (getID () + ".currentOrderNumber", -1);
+            int cn = properties.getInt (getID () + ".currentOrderNumber", -1);
+            if (cn >= 0 && !properties.getBoolean("outlineOrdering", false)) {
+                cn++; // Shift the old TreeTable ordering, which did not count the first nodes column.
+            }
+            return cn;
         }
 
         /**
@@ -176,11 +182,13 @@ public class ColumnModels {
          *
          * @param newOrderNumber new order number
          */
+        @Override
         public void setCurrentOrderNumber (int newOrderNumber) {
             properties.setInt (
                 getID () + ".currentOrderNumber",
                 newOrderNumber
             );
+            properties.setBoolean("outlineOrdering", true);
         }
 
         /**
@@ -188,6 +196,7 @@ public class ColumnModels {
          *
          * @return column width of this column
          */
+        @Override
         public int getColumnWidth () {
             return properties.getInt (getID () + ".columnWidth", 150);
         }
@@ -197,6 +206,7 @@ public class ColumnModels {
          *
          * @param newColumnWidth a new column width
          */
+        @Override
         public void setColumnWidth (int newColumnWidth) {
             properties.setInt (getID () + ".columnWidth", newColumnWidth);
         }
@@ -206,10 +216,12 @@ public class ColumnModels {
          *
          * @return true if column should be visible by default
          */
+        @Override
         public boolean isVisible () {
             return properties.getBoolean (getID () + ".visible", defaultVisible);
         }
         
+        @Override
         public boolean isSortable() {
             return sortable;
         }
@@ -219,6 +231,7 @@ public class ColumnModels {
          *
          * @return true if column should be sorted by default
          */
+        @Override
         public boolean isSorted () {
             if (sortable) {
                 return properties.getBoolean (getID () + ".sorted", false);
@@ -233,6 +246,7 @@ public class ColumnModels {
          * @return true if column should be sorted by default in descending 
          * order
          */
+        @Override
         public boolean isSortedDescending () {
             if (sortable) {
                 return properties.getBoolean (
@@ -252,6 +266,7 @@ public class ColumnModels {
          * @return {@link java.beans.PropertyEditor} to be used for 
          *         this column
          */
+        @Override
         public PropertyEditor getPropertyEditor() {
             return propertyEditor;
         }
@@ -504,12 +519,18 @@ public class ColumnModels {
                 ErrorManager.getDefault().notify(
                         new IllegalArgumentException("Value "+value+" is not an instance of Session!"));
             }
-            super.setValue(value);
+            super.setValue(new WeakReference(value));
+        }
+
+        private Session getSession() {
+            Reference<Session> sRef = (Reference<Session>) getValue();
+            Session s = (sRef != null) ? sRef.get() : null;
+            return s;
         }
 
         @Override
         public String[] getTags () {
-            Session s = (Session) getValue ();
+            Session s = getSession();
             if (s == null) {
                 return new String [0];
             } else {
@@ -519,7 +540,7 @@ public class ColumnModels {
         
         @Override
         public String getAsText () {
-            Session s = (Session) getValue ();
+            Session s = getSession();
             if (s == null) {
                 return "null";
             } else {
@@ -529,7 +550,7 @@ public class ColumnModels {
         
         @Override
         public void setAsText (String text) {
-            Session s = (Session) getValue ();
+            Session s = getSession();
             if (s != null) {
                 s.setCurrentLanguage (text);
             }
