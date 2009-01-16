@@ -37,31 +37,27 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.model.impl;
+
 
 import org.netbeans.api.annotations.common.CheckForNull;
-import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.spi.ParserResult;
+import org.netbeans.modules.php.editor.model.ModelScope;
+import org.netbeans.modules.php.editor.model.PhpKind;
+import org.openide.filesystems.FileObject;
+import org.openide.util.Union2;
 
 /**
  *
  * @author Radek Matous
  */
-public final class OccurencesSupport {
-    private ModelVisitor modelVisitor;
-    private int offset;
-    OccurencesSupport(ModelVisitor modelVisitor, int offset) {
-        this.modelVisitor = modelVisitor;
-        this.offset = offset;
+abstract class ModelScopeImpl extends ScopeImpl implements ModelScope  {
+    ModelScopeImpl(ParserResult info, String name, PhpKind kind) {
+        super(null, name, Union2.<String, FileObject>createSecond(info != null ? info.getSnapshot().getSource().getFileObject() : null), new OffsetRange(0, 0), kind);//NOI18N
     }
 
     @CheckForNull
-    public Occurence getOccurence() {
-        return modelVisitor.getOccurence(offset);
-    }
-
-    @CheckForNull
-    public CodeMarker getCodeMarker() {
-        return modelVisitor.getCodeMarker(offset);
-    }
-
+    abstract CachedModelSupport getCachedModelSupport();
+    abstract IndexScopeImpl getIndexScope();
 }

@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,37 +31,37 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
+ * 
  * Contributor(s):
- *
+ * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.index;
 
 import org.netbeans.api.annotations.common.CheckForNull;
-import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
+import org.netbeans.modules.csl.api.ElementKind;
+
 
 /**
  *
- * @author Radek Matous
+ * @author tomslot
  */
-public final class OccurencesSupport {
-    private ModelVisitor modelVisitor;
-    private int offset;
-    OccurencesSupport(ModelVisitor modelVisitor, int offset) {
-        this.modelVisitor = modelVisitor;
-        this.offset = offset;
+public class IndexedClass extends IndexedElement {
+    private String superClass;
+
+    public IndexedClass(String name, String in, PHPIndex index, String fileUrl,
+            String superClass, int offset,  int flags){
+        super(name, in, index, fileUrl, offset, flags, ElementKind.CLASS);
+        // empty string causes a serious performance problem
+        if (superClass != null && superClass.length() == 0){
+            throw new IllegalArgumentException("superClass cannot be empty string!");
+        }
+        this.superClass = superClass;
     }
 
     @CheckForNull
-    public Occurence getOccurence() {
-        return modelVisitor.getOccurence(offset);
+    public String getSuperClass(){
+        return superClass;
     }
-
-    @CheckForNull
-    public CodeMarker getCodeMarker() {
-        return modelVisitor.getCodeMarker(offset);
-    }
-
 }

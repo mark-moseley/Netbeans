@@ -37,31 +37,44 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.index;
 
 import org.netbeans.api.annotations.common.CheckForNull;
-import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
+import org.netbeans.modules.csl.api.ElementKind;
 
 /**
  *
- * @author Radek Matous
+ * @author tomslot
  */
-public final class OccurencesSupport {
-    private ModelVisitor modelVisitor;
-    private int offset;
-    OccurencesSupport(ModelVisitor modelVisitor, int offset) {
-        this.modelVisitor = modelVisitor;
-        this.offset = offset;
+public class IndexedConstant extends IndexedElement {
+    private String typeName;
+
+    public IndexedConstant(String name, String in, PHPIndex index, String fileUrl,
+            int offset, int flags, String typeName){
+        this(name, in, index, fileUrl, offset, flags, typeName, ElementKind.CONSTANT);
+    }
+
+    protected IndexedConstant(String name, String in, PHPIndex index, String fileUrl,
+            int offset, int flags, String typeName, ElementKind kind){
+        super(name, in, index, fileUrl, offset, flags, kind);
+        this.typeName = typeName;
+        // empty string causes a serious performance problem
+        if (typeName != null && typeName.length() == 0){
+            throw new IllegalArgumentException("typeName cannot be empty string!");
+        }
     }
 
     @CheckForNull
-    public Occurence getOccurence() {
-        return modelVisitor.getOccurence(offset);
+    public String getTypeName() {
+        return typeName;
     }
 
-    @CheckForNull
-    public CodeMarker getCodeMarker() {
-        return modelVisitor.getCodeMarker(offset);
-    }
+    public void setTypeName(String typeName) {
+        // empty string causes a serious performance problem
+        if (typeName != null && typeName.length() == 0){
+            throw new IllegalArgumentException("typeName cannot be empty string!");
+        }
 
+        this.typeName = typeName;
+    }
 }

@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,72 +31,73 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
+ * 
  * Contributor(s):
- *
+ * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.model;
 
-import java.util.ArrayList;
-import java.util.List;
-import org.netbeans.api.annotations.common.CheckForNull;
+package org.netbeans.modules.php.editor.index;
+
 import org.netbeans.api.annotations.common.NonNull;
-import org.openide.filesystems.FileObject;
+
 
 /**
  *
- * @author Radek Matous
+ * @author Marek Fukala
  */
-public class ModelUtils {
+public class Signature {
+        //shared array for better performance, 
+        //access is supposed from one thread so perf
+        //shouldn't degrade due to synchronization
+        private static int[] SHARED;
+        static {
+            SHARED = new int[50]; //hopefully noone will use more items in the signature
+            SHARED[0] = 0;
+        }
+        private String signature;
+        private int[] positions;
 
-    private ModelUtils() {
-    }
+        static Signature get(String signature) {
+            return new Signature(signature);
+        }
+        
+        private Signature(String signature) {
+            this.signature = signature;
+            this.positions = parseSignature(signature);
+        }
 
-    @CheckForNull
-    public static <T extends ModelElement> T getFirst(List<? extends T> all) {
-        return all.size() > 0 ? all.get(0) : null;
-    }
+        @NonNull
+        public String string(int index) {
+            assert index >= 0 && index < positions.length;
 
-    @CheckForNull
-    public static <T extends Occurence> T getFirst(List<? extends T> all) {
-        return all.size() > 0 ? all.get(0) : null;
-    }
+            return signature.substring(positions[index], index == positions.length - 1 ? signature.length() : positions[index + 1] - 1);
+        }
+        
+        public int integer(int index) {
+            String item = string(index);
+            if(item != null) {
+                return Integer.parseInt(item);
+            } else {
+                return -1;
+            }
+                    
+        }
 
-    @CheckForNull
-    public static <T extends ModelElement> T getLast(List<? extends T> all) {
-        return all.size() > 0 ? all.get(all.size()-1) : null;
-    }
-
-    @NonNull
-    public static <T extends ModelElement> List<? extends T> forFileOnly(List<? extends T> all, FileObject fo) {
-        List<T> retval = new ArrayList<T>();
-        for (T element : all) {
-            if (element.getFileObject() == fo) {
-                retval.add(element);
+        private static int[] parseSignature(String signature) {
+            synchronized(SHARED) {
+                int count = 0;
+                for (int i = 0; i < signature.length(); i++) {
+                    if(signature.charAt(i) == ';') {
+                        SHARED[++count] = i + 1;
+                    }
+                }
+                count++; //include the first zero
+                int[] a = new int[count];
+                System.arraycopy(SHARED, 0, a, 0, count); 
+                return a;
             }
         }
-        return retval;
+        
     }
 
-    @SuppressWarnings("unchecked")
-    @NonNull
-    public static <T extends ModelElement> List<? extends T> merge(List<? extends T>... all) {
-        List<T> retval = new ArrayList<T>();
-        for (List<? extends T> list : all) {
-            retval.addAll(list);
-        }
-        return retval;
-    }
-
-    @NonNull
-    public static ModelScope getModelScope(ModelElement element) {
-        ModelScope tls = (element instanceof ModelScope) ? (ModelScope)element : null;
-        while (tls == null && element != null) {
-            element = element.getInScope();
-            tls = (ModelScope) ((element instanceof ModelScope) ? element : null);
-        }
-        assert tls != null;
-        return tls;
-    }
-}

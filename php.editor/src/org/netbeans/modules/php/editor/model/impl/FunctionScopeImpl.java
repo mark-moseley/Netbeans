@@ -40,13 +40,13 @@
 package org.netbeans.modules.php.editor.model.impl;
 
 import java.util.ArrayList;
-import org.netbeans.modules.gsf.api.NameKind;
 import org.netbeans.modules.php.editor.index.IndexedFunction;
 import org.netbeans.modules.php.editor.model.*;
 import java.util.Collections;
 import java.util.List;
 
-import org.netbeans.modules.gsf.api.annotations.NonNull;
+import org.netbeans.api.annotations.common.NonNull;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
 import org.netbeans.modules.php.editor.model.nodes.FunctionDeclarationInfo;
 import org.netbeans.modules.php.editor.model.nodes.MethodDeclarationInfo;
 import org.netbeans.modules.php.editor.parser.astnodes.Program;
@@ -114,13 +114,6 @@ class FunctionScopeImpl extends ScopeImpl implements FunctionScope, VariableCont
         return retval;
     }
     
-    /*FunctionScopeImpl(ScopeImpl inScope, String name, Union2<String,FileObject> file,
-            OffsetRange offsetRange, PhpKind kind, List<? extends String> paremeters, PhpModifiers modifiers, String returnType) {
-        super(inScope, name, file, offsetRange, kind, modifiers);
-        this.paremeters = paremeters;
-        this.returnType = returnType;
-        assert paremeters != null;
-    }*/
 
     public final List<? extends TypeScope> getReturnTypes() {
         return (returnType != null && returnType.length() > 0) ?
@@ -187,7 +180,7 @@ class FunctionScopeImpl extends ScopeImpl implements FunctionScope, VariableCont
         return getVariablesImpl(queryName);
     }
 
-    public List<? extends VariableName> getVariables(NameKind nameKind, String... queryName) {
+    public List<? extends VariableName> getVariables(QuerySupport.Kind nameKind, String... queryName) {
         return getVariables(nameKind, queryName);
     }
 
@@ -196,10 +189,10 @@ class FunctionScopeImpl extends ScopeImpl implements FunctionScope, VariableCont
     }
 
     public List<? extends VariableNameImpl> getVariablesImpl(String... queryName) {
-        return getVariablesImpl(NameKind.EXACT_NAME, queryName);
+        return getVariablesImpl(QuerySupport.Kind.EXACT, queryName);
     }
 
-    public List<? extends VariableNameImpl> getVariablesImpl(final NameKind nameKind, final String... queryName) {
+    public List<? extends VariableNameImpl> getVariablesImpl(final QuerySupport.Kind nameKind, final String... queryName) {
         return filter(getElements(), new ElementFilter() {
             public boolean isAccepted(ModelElementImpl element) {
                 return element.getPhpKind().equals(PhpKind.VARIABLE)  &&

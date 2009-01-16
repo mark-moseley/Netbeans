@@ -36,32 +36,23 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.php.editor.model;
 
-import org.netbeans.api.annotations.common.CheckForNull;
-import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
+import org.netbeans.api.annotations.common.NonNull;
+import org.netbeans.modules.csl.spi.ParserResult;
 
 /**
- *
  * @author Radek Matous
  */
-public final class OccurencesSupport {
-    private ModelVisitor modelVisitor;
-    private int offset;
-    OccurencesSupport(ModelVisitor modelVisitor, int offset) {
-        this.modelVisitor = modelVisitor;
-        this.offset = offset;
+public class ModelFactory {
+    private ModelFactory() {}
+
+    @NonNull
+    public static Model getModel(ParserResult info) {
+        return new Model(info);
     }
 
-    @CheckForNull
-    public Occurence getOccurence() {
-        return modelVisitor.getOccurence(offset);
-    }
-
-    @CheckForNull
-    public CodeMarker getCodeMarker() {
-        return modelVisitor.getCodeMarker(offset);
-    }
-
+    /*public static IndexScope getIndex(PHPIndex index) {
+        return ModelVisitor.getIndexScope(index);
+    }*/
 }

@@ -37,31 +37,50 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.model.impl;
 
 import org.netbeans.api.annotations.common.CheckForNull;
-import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
+import org.netbeans.modules.php.editor.model.nodes.ClassDeclarationInfo;
+import org.netbeans.modules.php.editor.model.nodes.IncludeInfo;
+import org.netbeans.modules.php.editor.model.nodes.InterfaceDeclarationInfo;
+import org.netbeans.modules.php.editor.model.nodes.MethodDeclarationInfo;
+import org.netbeans.modules.php.editor.model.nodes.SingleFieldDeclarationInfo;
+import org.openide.filesystems.FileObject;
 
 /**
  *
  * @author Radek Matous
  */
-public final class OccurencesSupport {
-    private ModelVisitor modelVisitor;
-    private int offset;
-    OccurencesSupport(ModelVisitor modelVisitor, int offset) {
-        this.modelVisitor = modelVisitor;
-        this.offset = offset;
-    }
+class ModelElementFactory {
+
+    private ModelElementFactory(){};
 
     @CheckForNull
-    public Occurence getOccurence() {
-        return modelVisitor.getOccurence(offset);
+    static IncludeElementImpl create(IncludeInfo info, ModelBuilder context) {
+        FileObject includeFile = info.getIncludeFile(context.getCurrentScope().getFileObject());
+        return includeFile != null ? new IncludeElementImpl(context.getCurrentScope(), includeFile, info) : null;
     }
 
-    @CheckForNull
-    public CodeMarker getCodeMarker() {
-        return modelVisitor.getCodeMarker(offset);
+    static ClassScopeImpl create(ClassDeclarationInfo nodeInfo, ModelBuilder context) {
+        ClassScopeImpl clz = new ClassScopeImpl(context.getCurrentScope(), nodeInfo);
+        return clz;
     }
 
+    static InterfaceScopeImpl create(InterfaceDeclarationInfo nodeInfo, ModelBuilder context) {
+        InterfaceScopeImpl iface = new InterfaceScopeImpl(context.getCurrentScope(), nodeInfo);
+        return iface;
+    }
+
+    static MethodScopeImpl create(MethodDeclarationInfo nodeInfo, ModelBuilder context) {
+        String returnType = VariousUtils.getReturnTypeFromPHPDoc(context.getProgram(), 
+                nodeInfo.getOriginalNode().getFunction());
+        MethodScopeImpl method = new MethodScopeImpl(context.getCurrentScope(), returnType, nodeInfo);        
+        return method;
+    }
+
+    static FieldElementImpl create(SingleFieldDeclarationInfo nodeInfo, ModelBuilder context) {
+        String returnType = VariousUtils.getFieldTypeFromPHPDoc(context.getProgram(),nodeInfo.getOriginalNode());
+        FieldElementImpl fei = new FieldElementImpl(context.getCurrentScope(), returnType, nodeInfo);
+        return fei;
+    }
 }
