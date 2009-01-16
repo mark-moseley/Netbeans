@@ -49,10 +49,12 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
+import javax.servlet.jsp.tagext.TagLibraryInfo;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Caret;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
+import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.modules.editor.indent.api.Indent;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
@@ -72,8 +74,12 @@ import org.openide.util.Exceptions;
  */
 public final class JSPPaletteUtilities {
 
-    public static String CARET = "&CARET&";// NOI18N
-
+    public static final String CARET = "&CARET&";// NOI18N
+    private static final String JSTL_PREFIX = "c";  //NOI18N
+    private static final String JSTL_URI = "http://java.sun.com/jsp/jstl/core";  //NOI18N
+    private static final String SQL_PREFIX = "sql";  //NOI18N
+    private static final String SQL_URI = "http://java.sun.com/jsp/jstl/sql";  //NOI18N
+    
     public static void insert(String s, JTextComponent target) throws BadLocationException {
         insert(s, target, true);
     }
@@ -91,7 +97,7 @@ public final class JSPPaletteUtilities {
 //        if (token != null && token.getTokenContextPath().contains(JavaTokenContext.contextPath)) // we are in a scriptlet
 //            return false;
         if (s == null) {
-            s = "";
+            s = "";  //NOI18N
         }
         BaseDocument doc = (BaseDocument) _doc;
         Indent indent = Indent.get(doc);
@@ -101,7 +107,7 @@ public final class JSPPaletteUtilities {
             try {
                 int cursor_offset = s.indexOf(CARET);
                 if (cursor_offset != -1) {
-                    s = s.replace(CARET, "");
+                    s = s.replace(CARET, "");  //NOI18N
                 }
                 int start = insert(s, target, _doc);
                 if (cursor_offset != -1) {
@@ -128,7 +134,6 @@ public final class JSPPaletteUtilities {
     }
 
     private static int insert(String s, JTextComponent target, Document doc) throws BadLocationException {
-
         int start = -1;
         try {
             //at first, find selected text range
@@ -149,16 +154,14 @@ public final class JSPPaletteUtilities {
     }
 
     public static PageInfo.BeanData[] getAllBeans(JTextComponent target) {
-        PageInfo.BeanData[] res = null;
         FileObject fobj = getFileObject(target);
         if (fobj != null) {
             JspParserAPI.ParseResult result = JspContextInfo.getContextInfo(fobj).getCachedParseResult(target.getDocument(), fobj, false, true);
-            if (result != null) {
-                res = result.getPageInfo().getBeans();
+            if (result != null && result.getPageInfo() != null) {
+                return result.getPageInfo().getBeans();
             }
         }
-
-        return res;
+        return null;
     }
 
     public static boolean idExists(String id, PageInfo.BeanData[] beanData) {
@@ -194,7 +197,9 @@ public final class JSPPaletteUtilities {
             return;
         }
         try {
-            JavaSource.forFileObject(fobj).runUserActionTask(aTask, false);
+            JavaSource src = JavaSource.create(ClasspathInfo.create(fobj));
+            if (src != null)
+                src.runUserActionTask(aTask, false);
         } catch (IOException e) {
             Exceptions.printStackTrace(e);
         }
@@ -214,7 +219,7 @@ public final class JSPPaletteUtilities {
                             String methodName = executableElement.getSimpleName().toString();
                             if (executableElement.getModifiers().contains(Modifier.PUBLIC) && match(methodName, prefix)) {
                                 String propName = extractPropName(methodName, prefix);
-                                if (!propName.equals("")) {
+                                if (propName != null) {
                                     result.add(propName);
                                 }
                             }
@@ -223,15 +228,18 @@ public final class JSPPaletteUtilities {
                 }
 
                 private String extractPropName(String methodName, String[] prefix) {
-                    String res = "";
                     for (int i = 0; i < prefix.length; i++) {
                         String string = prefix[i];
                         if (methodName.startsWith(string)) {
-                            res = methodName.substring(string.length()).toLowerCase();
-                            break;
+                            // only first character to lower case
+                            String res = methodName.substring(string.length());
+                            if (res.length() > 0) {
+                                return Character.toLowerCase(res.charAt(0)) +
+                                        res.substring(1);
+                            }
                         }
                     }
-                    return res;
+                    return null;
                 }
 
                 private boolean match(String methodName, String[] prefix) {
@@ -249,4 +257,70 @@ public final class JSPPaletteUtilities {
         }
         return result;
     }
+    
+    /**************************************************************************/
+    public static String getTagLibPrefix(JTextComponent target, String tagLibUri) {
+        FileObject fobj = getFileObject(target);
+        if (fobj != null) {
+            JspParserAPI.ParseResult result = JspContextInfo.getContextInfo(fobj).getCachedParseResult(target.getDocument(), fobj, false, true);
+            if (result != null && result.getPageInfo() != null) {
+                 for (TagLibraryInfo tli : result.getPageInfo().getTaglibs()) {
+                     if (tagLibUri.equals(tli.getURI()))
+                         return tli.getPrefixString();
+                 }
+            }
+        }
+        return null;
+    }
+    
+    /**************************************************************************/
+    public static String findJstlPrefix(JTextComponent target) {
+        String res = getTagLibPrefix(target, JSTL_URI);
+        if (res == null)
+            insertTagLibRef(target, JSTL_PREFIX, JSTL_URI);
+        return (res != null) ? res : JSTL_PREFIX;
+    }
+
+    /**************************************************************************/
+    public static String findSqlPrefix(JTextComponent target) {
+        String res = getTagLibPrefix(target, SQL_URI);
+        if (res == null)
+            insertTagLibRef(target, SQL_PREFIX, SQL_URI);
+        return (res != null) ? res : SQL_PREFIX;
+    }
+
+    /**************************************************************************/
+    private static void insertTagLibRef(JTextComponent target, String prefix, String uri) {
+        Document doc = target.getDocument();
+        if (doc != null && doc instanceof BaseDocument) {
+            BaseDocument baseDoc = (BaseDocument)doc;
+            baseDoc.atomicLock();
+            try {
+                int pos = 0;  // FIXME: compute better where to insert tag lib definition?
+                String definition = "<%@taglib prefix=\""+prefix+"\" uri=\""+uri+"\"%>\n";  //NOI18N
+                
+                //test for .jspx. FIXME: find better way to detect xml syntax?.
+                FileObject fobj = getFileObject(target);
+                if (fobj != null && "jspx".equals(fobj.getExt())) {
+                    int baseDocLength = baseDoc.getLength();
+                    String text = baseDoc.getText(0, baseDocLength);
+                    String jspRootBegin = "<jsp:root "; //NOI18N
+                    int jspRootIndex = text.indexOf(jspRootBegin);
+                    if (jspRootIndex != -1) {
+                        pos = jspRootIndex + jspRootBegin.length();
+                        definition = "xmlns:" + prefix + "=\"" + uri + "\" ";  //NOI18N
+                    }
+                }
+
+                doc.insertString(pos, definition, null);
+            }
+            catch (BadLocationException e) {
+                Exceptions.printStackTrace(e);
+            }
+            finally {
+                baseDoc.atomicUnlock();
+            }
+        }
+    }
+    
 }
