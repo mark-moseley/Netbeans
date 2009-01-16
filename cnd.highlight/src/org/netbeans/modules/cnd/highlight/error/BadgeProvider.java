@@ -50,6 +50,7 @@ import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmInclude;
 import org.netbeans.modules.cnd.api.model.CsmProject;
 import org.netbeans.modules.cnd.api.model.CsmUID;
+import org.netbeans.modules.cnd.api.model.util.UIDs;
 import org.netbeans.modules.cnd.api.project.NativeProject;
 import org.openide.util.NbBundle;
 
@@ -61,7 +62,7 @@ public class BadgeProvider {
     private static BadgeProvider myInstance = new BadgeProvider();
     
     private Storage storage = new Storage();
-    private Object listLock = new Object();
+    private final Object listLock = new Object();
     
     private BadgeProvider() {
     }
@@ -75,6 +76,13 @@ public class BadgeProvider {
         synchronized (listLock){
             boolean oldState = storage.contains(project);
             ProjectFiles: for( CsmFile file : project.getAllFiles() ) {
+                if (!file.getErrors().isEmpty()) {
+                    if (!storage.contains(file)) {
+                        storage.add(file);
+                        badgeStateChanged = true;
+                    }
+                    continue ProjectFiles;
+                }
                 for (CsmInclude incl : file.getIncludes()) {
                     if (incl.getIncludeFile() == null) {
                         if (!storage.contains(file)) {
@@ -106,14 +114,22 @@ public class BadgeProvider {
         synchronized (listLock){
             boolean oldState = storage.contains(project);
             boolean badFile = false;
-            for (CsmInclude incl : file.getIncludes()){
-                if (incl.getIncludeFile() == null) {
-                    if (!storage.contains(file)){
-                        storage.add(file);
-                        badgeStateChanged = true;
+            if (!file.getErrors().isEmpty()) {
+                badFile = true;
+                if (!storage.contains(file)) {
+                    storage.add(file);
+                    badgeStateChanged = true;
+                }
+            } else {
+                for (CsmInclude incl : file.getIncludes()){
+                    if (incl.getIncludeFile() == null) {
+                        if (!storage.contains(file)){
+                            storage.add(file);
+                            badgeStateChanged = true;
+                        }
+                        badFile = true;
+                        break;
                     }
-                    badFile = true;
-                    break;
                 }
             }
             if (!badFile && storage.contains(file)){
@@ -201,9 +217,21 @@ public class BadgeProvider {
         }
     }
     
+    public Set<CsmUID<CsmFile>> getFailedFiles(CsmProject csmProject) {
+        synchronized (listLock) {
+            return new HashSet<CsmUID<CsmFile>>(storage.getFiles(csmProject));
+        }
+    }
+
     public boolean hasFailedFiles(NativeProject nativeProject) {
         synchronized (listLock){
             return storage.contains(nativeProject);
+        }
+    }
+
+    public boolean hasFailedFiles(CsmProject csmProject) {
+        synchronized (listLock){
+            return storage.contains(csmProject);
         }
     }
     
@@ -244,7 +272,7 @@ public class BadgeProvider {
             if (project != null) {
                 Set<CsmUID<CsmFile>> set = getFiles(project);
                 if (set != null && set.size()>0){
-                    set.remove(file.getUID());
+                    set.remove(UIDs.get(file));
                 }
             }
         }
@@ -256,13 +284,13 @@ public class BadgeProvider {
                 if (set == null){
                     Object id = project.getPlatformProject();
                     if (id instanceof NativeProject) {
-                        set = new HashSet<CsmUID<CsmFile>>();
-                        wrongFiles.put(project,set);
                         nativeProjects.put(project, (NativeProject) id);
                     }
+                    set = new HashSet<CsmUID<CsmFile>>();
+                    wrongFiles.put(project,set);
                 }
                 if (set != null) {
-                    set.add(file.getUID());
+                    set.add(UIDs.get(file));
                 }
             }
         }
@@ -282,7 +310,7 @@ public class BadgeProvider {
             if (project != null) {
                 Set<CsmUID<CsmFile>> set = getFiles(project);
                 if (set != null){
-                    return set.contains(file.getUID());
+                    return set.contains(UIDs.get(file));
                 }
             }
             return false;

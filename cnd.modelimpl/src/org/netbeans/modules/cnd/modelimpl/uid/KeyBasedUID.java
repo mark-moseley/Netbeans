@@ -44,7 +44,6 @@ package org.netbeans.modules.cnd.modelimpl.uid;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.modelimpl.repository.KeyHolder;
 import org.netbeans.modules.cnd.modelimpl.repository.KeyObjectFactory;
@@ -56,7 +55,7 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  * help class for CsmUID based on repository Key
  * @author Vladimir Voskresensky
  */
-public abstract class KeyBasedUID<T extends CsmIdentifiable> implements CsmUID<T>, KeyHolder, SelfPersistent, Comparable {
+public abstract class KeyBasedUID<T> implements CsmUID<T>, KeyHolder, SelfPersistent, Comparable<CsmUID<T>> {
     private final Key key;
     
     protected KeyBasedUID(Key key) {
@@ -65,13 +64,14 @@ public abstract class KeyBasedUID<T extends CsmIdentifiable> implements CsmUID<T
     }
     
     public T getObject() {
-        return (T) RepositoryUtils.get(this);
+        return RepositoryUtils.get(this);
     }
 
     public Key getKey() {
         return key;
     }
     
+    @Override
     public String toString() {
         String retValue;
         
@@ -79,6 +79,7 @@ public abstract class KeyBasedUID<T extends CsmIdentifiable> implements CsmUID<T
         return "KeyBasedUID on " + retValue; // NOI18N
     }
 
+    @Override
     public int hashCode() {
         int retValue;
         
@@ -86,6 +87,7 @@ public abstract class KeyBasedUID<T extends CsmIdentifiable> implements CsmUID<T
         return retValue;
     }
 
+    @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
@@ -105,7 +107,7 @@ public abstract class KeyBasedUID<T extends CsmIdentifiable> implements CsmUID<T
         key = KeyObjectFactory.getDefaultFactory().readKey(aStream);
     }
 
-    public int compareTo(Object o) {
+    public int compareTo(CsmUID<T> o) {
         assert o != null;
         assert o instanceof KeyBasedUID;
         Comparable o1 = (Comparable)this.key;

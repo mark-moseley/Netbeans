@@ -47,19 +47,9 @@ import org.netbeans.modules.cnd.api.model.deep.CsmCompoundStatement;
  * Represents function definition
  * @author Vladimir Kvashin
  */
-public interface CsmFunctionDefinition<T> extends CsmFunction<T> {
-
-    /** Returns this function declaration */
-    CsmFunction getDeclaration();
+public interface CsmFunctionDefinition extends CsmFunction {
 
     /** Gets this function body */
     CsmCompoundStatement getBody();
 
-//
-//    /**
-//     * At first glance it seems duplicating;
-//     * but actually parameter names of function definition
-//     * may differ from declaration
-//     */
-//    List/*<CsmParameter>*/  getParameters();
 }

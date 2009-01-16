@@ -45,18 +45,5 @@ package org.netbeans.modules.cnd.api.model;
  * Common ancestor for both fundamental (built-in) and compound types
  * @author Vladimir Kvashin
  */
-public interface CsmClassifier<T> extends CsmDeclaration<T> {
-
-//    class Kind extends TypeSafeEnum {
-//
-//        private Kind(String id) {
-//            super(id);
-//        }
-//
-//        public static final Kind BUILT_IN = new Kind("Built-in");
-//        public static final Kind CLASS = new Kind("Class");
-//        public static final Kind ENUM = new Kind("Enum");
-//    }
-//    
-//    Kind getKind();
+public interface CsmClassifier extends CsmDeclaration {
 }

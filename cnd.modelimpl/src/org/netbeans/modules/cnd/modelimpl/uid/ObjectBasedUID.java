@@ -44,7 +44,6 @@ package org.netbeans.modules.cnd.modelimpl.uid;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.modelimpl.csm.core.CsmObjectFactory;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
@@ -54,7 +53,7 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  * help class for CsmUID based on CsmObject
  * @author Vladimir Voskresensky
  */
-public abstract class ObjectBasedUID<T extends CsmIdentifiable> implements CsmUID<T>, SelfPersistent {
+public abstract class ObjectBasedUID<T> implements CsmUID<T>, SelfPersistent {
     private final T ref;
     
     protected ObjectBasedUID(T ref) {
@@ -65,15 +64,18 @@ public abstract class ObjectBasedUID<T extends CsmIdentifiable> implements CsmUI
         return this.ref;
     }
     
+    @Override
     public String toString() {
         String retValue = "UID for " + ref.toString(); // NOI18N
         return retValue;
     }
     
+    @Override
     public int hashCode() {
         return ref.hashCode();
     }
     
+    @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;

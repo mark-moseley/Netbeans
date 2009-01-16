@@ -47,6 +47,7 @@ import org.netbeans.modules.cnd.api.model.*;
 import antlr.collections.AST;
 import java.io.DataInput;
 import java.io.IOException;
+import org.netbeans.modules.cnd.api.model.util.UIDs;
 import org.netbeans.modules.cnd.modelimpl.csm.core.Utils;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 import org.netbeans.modules.cnd.modelimpl.csm.core.OffsetableDeclarationBase;
@@ -60,7 +61,7 @@ import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
  */
 public class BuiltinTypes {
 
-    private static class BuiltinImpl implements CsmBuiltIn {
+    private static class BuiltinImpl implements CsmBuiltIn, CsmIdentifiable {
 
         private final CharSequence name;
         private final CsmUID<CsmBuiltIn> uid;
@@ -117,11 +118,13 @@ public class BuiltinTypes {
         public String toString() {
             return "" + getKind() + " " +  getQualifiedName(); // NOI18N
         }
-        
-        
+
+        public boolean isValid() {
+            return true;
+        }
     }
     
-    private static Map<CharSequence, CsmBuiltIn> types = new HashMap();
+    private static Map<CharSequence, CsmBuiltIn> types = new HashMap<CharSequence, CsmBuiltIn>();
     
     public static CsmBuiltIn getBuiltIn(AST ast) {
         assert ast.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN;
@@ -138,7 +141,7 @@ public class BuiltinTypes {
     
     public static CsmBuiltIn getBuiltIn(CharSequence text) {
         text = QualifiedNameCache.getManager().getString(text);
-        CsmBuiltIn builtIn = (CsmBuiltIn) types.get(text);
+        CsmBuiltIn builtIn = types.get(text);
         if( builtIn == null ) {
             builtIn = new BuiltinImpl(text);
             types.put(text, builtIn);
@@ -149,7 +152,7 @@ public class BuiltinTypes {
     public static ObjectBasedUID readUID(DataInput aStream) throws IOException {
         String name = aStream.readUTF(); // no need for text manager
         CsmBuiltIn builtIn = BuiltinTypes.getBuiltIn(name);
-        BuiltInUID anUID = (BuiltInUID) builtIn.getUID();
+        ObjectBasedUID anUID = (ObjectBasedUID) UIDs.get(builtIn);
         assert anUID != null;
         return anUID;
     }
