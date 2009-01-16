@@ -74,11 +74,11 @@ import org.netbeans.jemmy.operators.ComponentOperator;
  * @author michaelnazarov@netbeans.org
  */
 
-public class insert_0002 extends insert
+public class insert_0004 extends insert
 {
-  static final String TEST_PHP_NAME = "PhpProject_insert_0002";
+  static final String TEST_PHP_NAME = "PhpProject_insert_0004";
 
-  public insert_0002( String arg0 )
+  public insert_0004( String arg0 )
   {
     super( arg0 );
   }
@@ -86,9 +86,9 @@ public class insert_0002 extends insert
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( insert_0002.class ).addTest(
+      NbModuleSuite.createConfiguration( insert_0004.class ).addTest(
           "CreateApplication",
-          "InsertGetter"
+          "InsertGetterAndSetter"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -105,12 +105,9 @@ public class insert_0002 extends insert
     endTest( );
   }
 
-  public void InsertGetter( ) throws Exception
+  public void InsertGetterAndSetter( ) throws Exception
   {
     startTest( );
-
-    // Invoke Alt+Insert without any code
-    // List should contain two database related items
 
     // Get editor
     EditorOperator eoPHP = new EditorOperator( "index.php" );
@@ -125,11 +122,11 @@ public class insert_0002 extends insert
     JDialogOperator jdInsetter = new JDialogOperator( );
     JListOperator jlList = new JListOperator( jdInsetter );
 
-    ClickListItemNoBlock( jlList, 1, 1 );
+    ClickListItemNoBlock( jlList, 3, 1 );
 
-    JDialogOperator jdGenerator = new JDialogOperator( "Generate Getters" );
+    JDialogOperator jdGenerator = new JDialogOperator( "Generate Getters and Setters" );
 
-    // Select all but $c
+    // Sleect all but $c
     JTreeOperator jtTree = new JTreeOperator( jdGenerator, 0 );
     jtTree.clickOnPath( jtTree.findPath( "a" ) );
     jtTree.clickOnPath( jtTree.findPath( "b" ) );
@@ -147,17 +144,33 @@ public class insert_0002 extends insert
       "return $this->a;",
       "}",
       "",
+      "public function setA($a)",
+      "{",
+      "$this->a = $a;",
+      "}",
+      "",
       "public function getB()",
       "{",
       "return $this->b;",
       "}",
       "",
+      "public function setB($b)",
+      "{",
+      "$this->b = $b;",
+      "}",
+      "",
       "public function getD()",
       "{",
       "return $this->d;",
-      "}"
+      "}",
+      "",
+      "public function setD($d)",
+      "{",
+      "$this->d = $d;",
+      "}",
+      "",
     };
-    CheckResult( eoPHP, asResult, -15 );
+    CheckResult( eoPHP, asResult, -30 );
 
     endTest( );
   }

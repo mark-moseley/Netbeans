@@ -40,11 +40,15 @@
  */
 
 package org.netbeans.jellytools.modules.editor;
+import java.awt.Point;
+import java.awt.Rectangle;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 import javax.swing.JList;
+import javax.swing.JScrollPane;
 import javax.swing.ListModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
@@ -53,13 +57,19 @@ import org.netbeans.api.editor.completion.Completion;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Registry;
 import org.netbeans.jellytools.Bundle;
+import org.netbeans.jemmy.ComponentSearcher;
 import org.netbeans.jemmy.JemmyException;
+import org.netbeans.jemmy.QueueTool;
+import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.Timeouts;
 import org.netbeans.jemmy.Waitable;
 import org.netbeans.jemmy.Waiter;
 import org.netbeans.jemmy.operators.JListOperator;
+import org.netbeans.jemmy.operators.JScrollPaneOperator;
 import org.netbeans.modules.editor.completion.CompletionImpl;
 import org.netbeans.modules.editor.completion.CompletionJList;
+import org.netbeans.jemmy.operators.Operator;
+import org.netbeans.jemmy.util.EmptyVisualizer;
 
 
 /**
@@ -76,6 +86,7 @@ import org.netbeans.modules.editor.completion.CompletionJList;
  */
 public class CompletionJListOperator extends JListOperator {
     public static final String INSTANT_SUBSTITUTION = "InstantSubstitution";
+    private static final Logger LOG = Logger.getLogger(CompletionJListOperator.class.getName());
     
     /**
      * This constructor is intended to use just for your own risk.
@@ -93,18 +104,20 @@ public class CompletionJListOperator extends JListOperator {
     public List getCompletionItems() throws Exception {
         return getCompletionItems((JList) getSource());
     }
-    
+
     private static List getCompletionItems(JList compJList)
             throws Exception {
         ListModel model = (ListModel) compJList.getModel();
         // dump items to List
-        List<Object> data = new ArrayList<Object>(model.getSize());
-        for (int i=0; i < model.getSize(); i++) {
-            data.add(model.getElementAt(i));
+        CompletionJListOperator oper = new CompletionJListOperator(compJList);
+        int size = oper.getModelSize();
+        List<Object> data = new ArrayList<Object>(size);
+        for (int i=0; i < size; i++) {
+            data.add(oper.getModelElementAt(i));
         }
         return data;
     }
-    
+
     private static JList findCompletionJList() {
         final String PLEASE_WAIT = Bundle.getStringTrimmed(
                 "org.netbeans.modules.editor.completion.Bundle",
@@ -148,7 +161,7 @@ public class CompletionJListOperator extends JListOperator {
                         iarfMethod.setAccessible(true);
                         Boolean allResultsFinished = (Boolean) iarfMethod.invoke(comp, resultSets);
                         if (!allResultsFinished) {
-                            System.out.println(System.currentTimeMillis()+": all CC Results not finished yet.");
+                            LOG.fine(System.currentTimeMillis()+": all CC Results not finished yet.");
                             return null;
                         }
                     }
@@ -159,7 +172,7 @@ public class CompletionJListOperator extends JListOperator {
                     List list = getCompletionItems(compJList);
                     // check if it is no a 'Please Wait' item
                     if (list.size() > 0 && !(list.contains(PLEASE_WAIT))) {
-                        System.out.println(list);
+                        LOG.fine(list.toString());
                         return compJList;
                     } else {
                         return null;
@@ -332,5 +345,88 @@ public class CompletionJListOperator extends JListOperator {
             }
         }
         
+    }
+
+    private int getModelSize() {
+        return runMapping(new MapIntegerAction("getModel().getSize()") {
+
+            @Override
+            public int map() throws Exception {
+                return getModel().getSize();
+            }
+        });
+    }
+    private Object getModelElementAt(final int index) {
+        return runMapping(new MapAction("getModel().getElementAt()") {
+
+            @Override
+            public Object map() throws Exception {
+                return getModel().getElementAt(index);
+            }
+        });
+    }
+
+    @Override
+    public int findItemIndex(final ListItemChooser chooser, final int index) {
+        return runMapping(new MapIntegerAction("findItemIndex") {
+
+            @Override
+            public int map() throws Exception {
+                return CompletionJListOperator.super.findItemIndex(chooser, index);
+            }
+        });
+    }
+
+    @Override
+    public Object clickOnItem(final String item)
+    {
+        return runMapping( new MapAction("clickOnItem( String )") {
+
+            @Override
+            public Object map() throws Exception {
+                return CompletionJListOperator.super.clickOnItem( item );
+            }
+        });
+    }
+
+    @Override
+    /*
+     * Most of this code copied from JList.java because there are
+     * some problems with scrolling on big completion lists, ex. full
+     * PHP completion list contains about 6000 elements. Scrolling
+     * just removed from code.
+    */
+    public Object clickOnItem(final String item, final Operator.StringComparator comp)
+    {
+        return runMapping( new MapAction("clickOnItem( String, Comparator )")
+        {
+            @Override
+            public Object map() throws Exception
+            {
+              final int itemIndex = CompletionJListOperator.super.findItemIndex(item, comp, 0);
+
+              if( itemIndex < 0 || itemIndex >= getModel().getSize())
+                throw(new NoSuchItemException(itemIndex));
+
+              return( getQueueTool().invokeSmoothly( new QueueTool.QueueAction("Path selecting")
+                  {
+                    public Object launch()
+                    {
+	              if(((JList)getSource()).getAutoscrolls())
+	                ((JList)getSource()).ensureIndexIsVisible(itemIndex);
+                      Rectangle rect = getCellBounds(itemIndex, itemIndex);
+                      if(rect == null)
+                        return(null);
+                      Point point = new Point(
+                          (int)(rect.getX() + rect.getWidth() / 2),
+                          (int)(rect.getY() + rect.getHeight() / 2)
+                        );
+                      Object result = getModel().getElementAt(itemIndex);
+                      clickMouse(point.x, point.y, 1);
+                      return(result);
+                    }
+                 }));
+            }
+         });
     }
 }
