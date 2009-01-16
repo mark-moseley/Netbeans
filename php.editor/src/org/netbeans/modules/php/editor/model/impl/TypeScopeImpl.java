@@ -47,7 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
 import org.netbeans.modules.php.editor.index.IndexedClass;
 import org.netbeans.modules.php.editor.index.IndexedConstant;
 import org.netbeans.modules.php.editor.index.IndexedFunction;
@@ -65,7 +65,7 @@ import org.netbeans.modules.php.editor.parser.astnodes.Identifier;
  */
 abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
 
-    private Map<String, List<InterfaceScopeImpl>> ifaces = new HashMap<String, List<InterfaceScopeImpl>>();
+    private Map<String, List<? extends InterfaceScopeImpl>> ifaces = new HashMap<String, List<? extends InterfaceScopeImpl>>();
 
     ClzConstantElementImpl createElement(ClassConstantDeclarationInfo clsConst) {
         ClzConstantElementImpl retval = ClzConstantElementImpl.createClzConstantElementImpl(this, clsConst);
@@ -74,7 +74,7 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
     }
 
     TypeScopeImpl(ScopeImpl inScope, ClassDeclarationInfo nodeInfo) {
-        super(inScope, nodeInfo, new PhpModifiers(PhpModifiers.PUBLIC), nodeInfo.getOriginalNode().getBody());
+        super(inScope, nodeInfo, nodeInfo.getAccessModifiers(), nodeInfo.getOriginalNode().getBody());
         List<? extends Identifier> interfaces = nodeInfo.getInterfaces();
         for (Identifier identifier : interfaces) {
             ifaces.put(identifier.getName(), null);
@@ -122,15 +122,30 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
                 ModelScope top = (ModelScope) getInScope();
                 FileScope ps = (FileScope) top;
                 retval.addAll(iface = ps.getInterfaces(ifaceName));
-                for (InterfaceScopeImpl interfaceScope : iface) {
+                ifaces.put(ifaceName,iface);
+                /*for (InterfaceScopeImpl interfaceScope : iface) {
                     retval.addAll(interfaceScope.getInterfaces());
-                }
+                }*/
                 if (retval.isEmpty() && top instanceof FileScope) {
-                    //TODO: create it from idx
-                    throw new UnsupportedOperationException();
-                    /*assert iface != null;
-                    ifaces.put(key, iface);*/
+                    IndexScopeImpl indexScopeImpl = getTopIndexScopeImpl();
+                    if (indexScopeImpl == null) {
+                        indexScopeImpl = ps.getIndexScope();
+                    }
+                    if (indexScopeImpl != null) {
+                        List<? extends InterfaceScope> cIfaces =CachedModelSupport.getInterfaces(ifaceName, this);
+                        ifaces.put(ifaceName,(List<? extends InterfaceScopeImpl>)cIfaces);
+                        for (InterfaceScope interfaceScope : cIfaces) {
+                            retval.add((InterfaceScopeImpl)interfaceScope);                            
+                        }
+                    } else {
+                        //TODO: create it from idx
+                        throw new UnsupportedOperationException();
+                        /*assert iface != null;
+                        ifaces.put(key, iface);*/
+                    }
                 }
+            } else {
+                retval.addAll(iface);
             }
             assert iface != null;
         //duplicatesChecker.addAll(iface);
@@ -167,14 +182,14 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
 
             public boolean isAccepted(ModelElementImpl element) {
                 return element.getPhpKind().equals(PhpKind.METHOD) &&
-                        ModelElementImpl.nameKindMatch(element.getName(), NameKind.EXACT_NAME, queryName) &&
+                        ModelElementImpl.nameKindMatch(element.getName(), QuerySupport.Kind.EXACT, queryName) &&
                         (modifiers.length == 0 ||
                         (element.getPhpModifiers().toBitmask() & new PhpModifiers(modifiers).toBitmask()) != 0);
             }
         });
     }
 
-    public List<? extends MethodScopeImpl> getMethods(final NameKind nameKind, final String queryName,
+    public List<? extends MethodScopeImpl> getMethods(final QuerySupport.Kind nameKind, final String queryName,
             final int... modifiers) {
         IndexScopeImpl indexScopeImpl = getTopIndexScopeImpl();
         if (indexScopeImpl != null) {
@@ -182,8 +197,8 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
         }
 
         //TODO: example how to improve perf. for regexp lookup
-        if (nameKind.equals(NameKind.REGEXP) || nameKind.equals(NameKind.CASE_INSENSITIVE_REGEXP)) {
-            final Pattern p = Pattern.compile(nameKind.equals(NameKind.CASE_INSENSITIVE_REGEXP) ? queryName.toLowerCase() : queryName);
+        if (nameKind.equals(QuerySupport.Kind.REGEXP) || nameKind.equals(QuerySupport.Kind.CASE_INSENSITIVE_REGEXP)) {
+            final Pattern p = Pattern.compile(nameKind.equals(QuerySupport.Kind.CASE_INSENSITIVE_REGEXP) ? queryName.toLowerCase() : queryName);
             return filter(getElements(), new ElementFilter() {
 
                 public boolean isAccepted(ModelElementImpl element) {
@@ -211,10 +226,10 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
     }
 
     public List<? extends ClzConstantElementImpl> getConstants(String... queryName) {
-        return getConstants(NameKind.EXACT_NAME, queryName);
+        return getConstants(QuerySupport.Kind.EXACT, queryName);
     }
 
-    public List<? extends ClzConstantElementImpl> getConstants(final NameKind nameKind, final String... queryName) {
+    public List<? extends ClzConstantElementImpl> getConstants(final QuerySupport.Kind nameKind, final String... queryName) {
         IndexScopeImpl indexScopeImpl = getTopIndexScopeImpl();
         if (indexScopeImpl != null) {
             return indexScopeImpl.getConstants(this, queryName);
@@ -242,7 +257,7 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
                 while (type != null && allConstants.isEmpty()) {
                     type = ModelUtils.getFirst(clz.getSuperClasses());
                     if (type != null) {
-                        Collection<IndexedConstant> indexedConstants = index.getClassConstants(null, type.getName(), queryName, NameKind.PREFIX);
+                        Collection<IndexedConstant> indexedConstants = index.getClassConstants(null, type.getName(), queryName, QuerySupport.Kind.PREFIX);
                         for (IndexedConstant indexedConstant : indexedConstants) {
                             allConstants.add(new ClzConstantElementImpl((TypeScopeImpl) type, indexedConstant));
                         }
@@ -253,7 +268,7 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
                 List<? extends InterfaceScope> interfaceScopes = iface.getInterfaces();
                 for (int i = 0; allConstants.isEmpty() && i < interfaceScopes.size(); i++) {
                     InterfaceScope ifaceScope = interfaceScopes.get(i);
-                    Collection<IndexedConstant> indexedConstants = index.getClassConstants(null, ifaceScope.getName(), queryName, NameKind.PREFIX);
+                    Collection<IndexedConstant> indexedConstants = index.getClassConstants(null, ifaceScope.getName(), queryName, QuerySupport.Kind.PREFIX);
                     for (IndexedConstant indexedConstant : indexedConstants) {
                         allConstants.add(new ClzConstantElementImpl((TypeScopeImpl) ifaceScope, indexedConstant));
                     }
@@ -278,7 +293,7 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
                 while (clz != null && allMethods.isEmpty()) {
                     clz = ModelUtils.getFirst(clz.getSuperClasses());
                     if (clz != null) {
-                        Collection<IndexedFunction> indexedFunctions = index.getMethods(null, clz.getName(), queryName, NameKind.PREFIX, Modifier.PUBLIC | Modifier.PROTECTED);
+                        Collection<IndexedFunction> indexedFunctions = index.getMethods(null, clz.getName(), queryName, QuerySupport.Kind.PREFIX, Modifier.PUBLIC | Modifier.PROTECTED);
                         for (IndexedFunction indexedFunction : indexedFunctions) {
                             allMethods.add(new MethodScopeImpl((TypeScopeImpl) clz, indexedFunction, PhpKind.METHOD));
                         }
@@ -289,7 +304,7 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
                 List<? extends InterfaceScope> interfaceScopes = iface.getInterfaces();
                 for (int i = 0; allMethods.isEmpty() && i < interfaceScopes.size(); i++) {
                     InterfaceScope ifaceScope = interfaceScopes.get(i);
-                    Collection<IndexedFunction> indexedFunctions = index.getMethods(null, ifaceScope.getName(), queryName, NameKind.PREFIX, Modifier.PUBLIC | Modifier.PROTECTED);
+                    Collection<IndexedFunction> indexedFunctions = index.getMethods(null, ifaceScope.getName(), queryName, QuerySupport.Kind.PREFIX, Modifier.PUBLIC | Modifier.PROTECTED);
                     for (IndexedFunction indexedFunction : indexedFunctions) {
                         allMethods.add(new MethodScopeImpl((TypeScopeImpl) ifaceScope, indexedFunction, PhpKind.METHOD));
                     }
@@ -302,4 +317,13 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
         return allMethods;
     }
 
+    @Override
+    public String getNormalizedName() {
+        StringBuilder sb = new StringBuilder();
+        Set<String> ifaceNames = ifaces.keySet();
+        for (String ifName : ifaceNames) {
+            sb.append(ifName);
+        }
+        return sb.toString()+super.getNormalizedName();
+    }
 }

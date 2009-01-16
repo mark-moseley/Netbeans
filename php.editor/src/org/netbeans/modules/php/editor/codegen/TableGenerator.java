@@ -44,12 +44,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import javax.swing.text.JTextComponent;
+import org.netbeans.api.db.sql.support.SQLIdentifiers.Quoter;
 import org.netbeans.lib.editor.codetemplates.api.CodeTemplate;
 import org.netbeans.lib.editor.codetemplates.api.CodeTemplateManager;
-import org.netbeans.modules.gsf.api.CancellableTask;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.SourceModel;
-import org.netbeans.modules.gsf.api.SourceModelFactory;
+import org.netbeans.modules.csl.spi.ParserResult;
+import org.netbeans.modules.parsing.api.ParserManager;
+import org.netbeans.modules.parsing.api.ResultIterator;
+import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.api.UserTask;
+import org.netbeans.modules.parsing.spi.ParseException;
 import org.netbeans.modules.php.editor.codegen.ASTNodeUtilities.VariableAcceptor;
 import org.netbeans.modules.php.editor.codegen.ui.TableGeneratorPanel;
 import org.netbeans.modules.php.editor.codegen.ui.TableGeneratorPanel.TableAndColumns;
@@ -117,18 +120,16 @@ public class TableGenerator implements CodeGenerator {
     }
 
     private String findConnVariableInScope() {
-        FileObject file = NavUtils.getFile(component.getDocument());
-        if (file == null) {
-            return null;
-        }
-        SourceModel model = SourceModelFactory.getInstance().getModel(file);
         final List<String> connVariables = new ArrayList<String>();
+        
         try {
-            model.runUserActionTask(new CancellableTask<CompilationInfo>() {
-                public void cancel() {
-                }
-                public void run(CompilationInfo info) throws IOException {
+            ParserManager.parse(Collections.singleton(Source.create(component.getDocument())), new UserTask() {
+
+                @Override
+                public void run(ResultIterator resultIterator) throws Exception {
+                    ParserResult info = (ParserResult) resultIterator.getParserResult();
                     ASTNodeUtilities.getVariablesInScope(info, component.getCaretPosition(), new VariableAcceptor() {
+
                         public boolean acceptVariable(String variableName) {
                             if (variableName.contains("conn")) { // NOI18N
                                 connVariables.add(variableName);
@@ -137,11 +138,12 @@ public class TableGenerator implements CodeGenerator {
                         }
                     });
                 }
-            }, true);
-        } catch (IOException e) {
-            Exceptions.printStackTrace(e);
+            });
+        } catch (ParseException ex) {
+            Exceptions.printStackTrace(ex);
             return null;
         }
+
         if (connVariables.contains("conn")) { // NOI18N
             return "conn"; // NOI18N
         }
@@ -171,6 +173,7 @@ public class TableGenerator implements CodeGenerator {
     }
 
     private String generateSelect(TableAndColumns tableAndColumns) {
+        Quoter quoter = tableAndColumns.getIdentifierQuoter();
         StringBuilder builder = new StringBuilder("SELECT "); // NOI18N
         List<String> columns = tableAndColumns.getSelectedColumns();
         if (columns.isEmpty()) {
@@ -178,7 +181,7 @@ public class TableGenerator implements CodeGenerator {
         } else {
             int index = 0;
             for (String column : columns) {
-                builder.append(column);
+                builder.append(quoteIdentifier(quoter, column));
                 if (index < columns.size() - 1) {
                     builder.append(','); // NOI18N
                 }
@@ -187,8 +190,12 @@ public class TableGenerator implements CodeGenerator {
             }
         }
         builder.append("FROM "); // NOI18N
-        builder.append(tableAndColumns.getTable());
+        builder.append(quoteIdentifier(quoter, tableAndColumns.getTable()));
         return builder.toString();
+    }
+
+    private String quoteIdentifier(Quoter quoter, String identifier) {
+        return quoter.quoteIfNeeded(identifier).replace("'", "\\'"); // NOI18N
     }
 
     public static final class Factory implements CodeGenerator.Factory {

@@ -39,7 +39,7 @@
 
 package org.netbeans.modules.php.editor.model;
 
-import org.netbeans.modules.gsf.api.CompilationInfo;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
 import org.netbeans.modules.php.editor.parser.api.Utils;
 
@@ -48,10 +48,16 @@ import org.netbeans.modules.php.editor.parser.api.Utils;
  */
 public final class Model {
     private ModelVisitor modelVisitor;
-    private CompilationInfo info;
+    private ParserResult info;
+    private int offset;
 
-    Model(CompilationInfo info) {
+    Model(ParserResult info) {
         this.info = info;
+        this.offset = -1;
+    }
+
+    public ModelScope getModelScope() {
+        return getModelVisitor(-1).getModelScope();
     }
 
     public OccurencesSupport getOccurencesSupport(final int offset) {
@@ -59,19 +65,18 @@ public final class Model {
     }
 
     public ParameterInfoSupport getParameterInfoSupport(final int offset) {
-        return new ParameterInfoSupport(getModelVisitor(-1), info.getDocument(), offset);
+        return new ParameterInfoSupport(getModelVisitor(-1), info.getSnapshot().getSource().getDocument(false), offset);
     }
 
-
-    /*private ModelVisitor getModelVisitor() {
-        return getModelVisitor(-1);
-    }*/
+    public VariableScope getVariableScope(final int offset) {
+        return getModelVisitor(-1).getVariableScope(offset);
+    }
 
     /**
      * @return the modelVisitor
      */
     private ModelVisitor getModelVisitor(int offset) {
-        if (modelVisitor == null) {
+        if (modelVisitor == null || (offset >= 0 && this.offset != offset)) {
             if (offset < 0) {
                 modelVisitor = new ModelVisitor(info);
             } else {
