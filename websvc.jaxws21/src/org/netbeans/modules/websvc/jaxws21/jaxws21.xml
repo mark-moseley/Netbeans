@@ -49,18 +49,20 @@ made subject to such option by the copyright holder.
     <localizing-bundle>org/netbeans/modules/websvc/jaxws21/Bundle</localizing-bundle>
     <volume>
         <type>classpath</type>
-        <resource>jar:nbinst:///modules/ext/jaxws21/activation.jar!/</resource>
+        <resource>jar:nbinst:///modules/ext/jaxb/activation.jar!/</resource>
+        <resource>jar:nbinst:///modules/ext/jaxb/api/jaxb-api.jar!/</resource>
+        <resource>jar:nbinst:///modules/ext/jaxb/jaxb-impl.jar!/</resource>
+        <resource>jar:nbinst:///modules/ext/jaxb/jaxb-xjc.jar!/</resource>
+        <resource>jar:nbinst:///modules/ext/jaxb/api/jsr173_api.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/FastInfoset.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/http.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/api/jaxb-api.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/jaxb-impl.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/jaxb-xjc.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/api/jaxws-api.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/jaxws-rt.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/jaxws-tools.jar!/</resource>
-        <resource>jar:nbinst:///modules/ext/jaxws21/api/jsr173_api.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/api/jsr181-api.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/api/jsr250-api.jar!/</resource>
+        <resource>jar:nbinst:///modules/ext/jaxws21/mimepull.jar!/</resource>
+        <resource>jar:nbinst:///modules/ext/jaxws21/resolver.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/api/saaj-api.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/saaj-impl.jar!/</resource>
         <resource>jar:nbinst:///modules/ext/jaxws21/sjsxp.jar!/</resource>
@@ -70,5 +72,11 @@ made subject to such option by the copyright holder.
     <volume>
         <type>javadoc</type>
         <resource>jar:nbinst:///docs/jaxws-2_1-api-doc.zip!/</resource>
+    </volume>
+    <volume>
+        <type>maven-pom</type>
+        <resource>http://repo1.maven.org/maven2/com/sun/xml/ws/jaxws-rt/2.1.4/jaxws-rt-2.1.4.pom</resource>
+        <!-- mimepull seems to be in different java.net repository, define here to have the repository included.-->
+        <resource>http://download.java.net/maven/2/org/jvnet/mimepull/1.2/mimepull-1.2.pom</resource>
     </volume>
 </library>
