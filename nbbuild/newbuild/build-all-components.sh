@@ -64,11 +64,11 @@ if [ $ERROR_CODE != 0 ]; then
 fi
 
 for TEST_SUITE in soa.kit xml.schema mobility.project ide.kit php.editor; do
-    ant -f ${TEST_SUITE}/build.xml -Dtest.config=uicommit -Dbuild.test.qa-functional.results.dir=$NB_ALL/nbbuild/build/test/results -Dcontinue.after.failing.tests=true -Dtest-qa-functional-sys-prop.com.sun.aas.installRoot=/space/glassfish test
+    ant -f ${TEST_SUITE}/build.xml -Dtest.config=uicommit -Dbuild.test.qa-functional.results.dir=$NB_ALL/nbbuild/build/test/results -Dcontinue.after.failing.tests=true -Dtest-qa-functional-sys-prop.com.sun.aas.installRoot=/space/glassfish -Dtest-qa-functional-sys-prop.http.port=8090 -Dtest-qa-functional-sys-prop.wtk.dir=/space test
     ERROR_CODE=$?
     if [ $ERROR_CODE != 0 ]; then
         echo "ERROR: $ERROR_CODE - ${TEST_SUITE}  failed"
-        TEST_CODE=1;
+        #TEST_CODE=1;
     fi
 done
 # Init application server for tests
@@ -175,7 +175,7 @@ fi
 
 echo TESTS STARTED: $TESTS_STARTED
 echo TESTS FINISHED: `date`
-if [ $TEST_CODE = 1 ]; then
+if [ "${TEST_CODE}" = 1 ]; then
     echo "ERROR: At least one of validation tests failed"
     exit 1;
 fi
@@ -187,15 +187,6 @@ ERROR_CODE=$?
 if [ $ERROR_CODE != 0 ]; then
     echo "ERROR: $ERROR_CODE - Can't build UML modules"
     exit $ERROR_CODE;
-fi
-
-#Build Maven modules
-ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f nbbuild/build.xml rebuild-cluster -Drebuild.cluster.name=nb.cluster.maven -Dbuild.compiler.debuglevel=source,lines
-ERROR_CODE=$?
-
-if [ $ERROR_CODE != 0 ]; then
-    echo "ERROR: $ERROR_CODE - Can't build Maven modules"
-    #exit $ERROR_CODE;
 fi
 
 #Build the NB stableuc modules
@@ -300,56 +291,45 @@ fi
 
 #ML_BUILD
 if [ $ML_BUILD == 1 ]; then
-    cp -rp nbbuild/netbeans nbbuild/netbeans-ml
     cd $NB_ALL
     hg clone $ML_REPO $NB_ALL/l10n
     cd $NB_ALL/l10n
-    ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f build.xml -Dlocales=$LOCALES -Ddist.dir=$NB_ALL/nbbuild/netbeans-ml build
+    ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f build.xml -Dlocales=$LOCALES -Ddist.dir=$NB_ALL/nbbuild/netbeans-ml -Dnbms.dir=${DIST}/uc -Dnbms.dist.dir=${DIST}/ml/uc -Dkeystore=$KEYSTORE -Dstorepass=$STOREPASS build
     ERROR_CODE=$?
-
     if [ $ERROR_CODE != 0 ]; then
         echo "ERROR: $ERROR_CODE - Can't build ML IDE"
 #        exit $ERROR_CODE;
     fi
 
-    #Build all FU the NBMs
-    #ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f nbbuild/build.xml -Dlocales=$LOCALES -Dnetbeans.dest.dir=$NB_ALL/nbbuild/netbeans-ml build-nbms -Dmoduleconfig=all -Dbase.nbm.target.dir=${DIST}/ml/uc -Dkeystore=$KEYSTORE -Dstorepass=$STOREPASS -Dbuild.compiler.debuglevel=source,lines
-    #ERROR_CODE=$?
-
-#    if [ $ERROR_CODE != 0 ]; then
-#        echo "ERROR: $ERROR_CODE - Can't build ML NBMs"
+    ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f build.xml -Dlocales=$LOCALES -Ddist.dir=$NB_ALL/nbbuild/netbeans-ml -Dnbms.dir=${DIST}/uc2 -Dnbms.dist.dir=${DIST}/ml/uc2 -Dkeystore=$KEYSTORE -Dstorepass=$STOREPASS build
+    ERROR_CODE=$?
+    if [ $ERROR_CODE != 0 ]; then
+        echo "ERROR: $ERROR_CODE - Can't build ML Stable UC modules"
 #        exit $ERROR_CODE;
-#    fi
+    fi
 
-#    cd nbbuild
-    #Build catalog for FU NBMs
-#    ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f build.xml generate-uc-catalog -Dnbms.location=${DIST}/ml/uc -Dcatalog.file=${DIST}/ml/uc/catalog.xml -Dcatalog.base.url="."
-#    ERROR_CODE=$?
 
-#    if [ $ERROR_CODE != 0 ]; then
-#        echo "ERROR: $ERROR_CODE - Can't build catalog FU for ML NBMs"
+    cd $NB_ALL/nbbuild
+    #Build catalog for ML FU NBMs
+    ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f build.xml generate-uc-catalog -Dnbms.location=${DIST}/ml/uc -Dcatalog.file=${DIST}/ml/uc/catalog.xml -Dcatalog.base.url="."
+    ERROR_CODE=$?
+
+    if [ $ERROR_CODE != 0 ]; then
+        echo "ERROR: $ERROR_CODE - Can't build catalog FU for ML NBMs"
     #    exit $ERROR_CODE;
-#    fi
-#    cd ..
+    fi
 
-    #Build all NBMs for stable UC
-#    ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f nbbuild/build.xml -Dlocales=$LOCALES -Dnetbeans.dest.dir=$NB_ALL/nbbuild/netbeans-ml build-nbms -Dmoduleconfig=stableuc -Dbase.nbm.target.dir=${DIST}/ml/uc2 -Dkeystore=$KEYSTORE -Dstorepass=$STOREPASS -Dbuild.compiler.debuglevel=source,lines
-#    ERROR_CODE=$?
+    #Build catalog for ML stable UC NBMs
+    ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f build.xml generate-uc-catalog -Dnbms.location=${DIST}/uml/uc2 -Dcatalog.file=${DIST}/ml/uc2/catalog.xml -Dcatalog.base.url="."
+    ERROR_CODE=$?
 
-#    if [ $ERROR_CODE != 0 ]; then
-#        echo "ERROR: $ERROR_CODE - Can't build stable UC ML NBMs"
-#        exit $ERROR_CODE;
-#    fi
-
-#    cd nbbuild
-    #Build catalog for stable UC NBMs
-#    ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER -f build.xml generate-uc-catalog -Dnbms.location=${DIST}/uml/c2 -Dcatalog.file=${DIST}/ml/uc2/catalog.xml -Dcatalog.base.url="."
-#    ERROR_CODE=$?
-
-#    if [ $ERROR_CODE != 0 ]; then
-#        echo "ERROR: $ERROR_CODE - Can't build stable UC catalog for ML NBMs"
+    if [ $ERROR_CODE != 0 ]; then
+        echo "ERROR: $ERROR_CODE - Can't build stable UC catalog for ML NBMs"
     #    exit $ERROR_CODE;
-#    fi
+    fi
+
+    cp -r $NB_ALL/nbbuild/netbeans/* $NB_ALL/nbbuild/netbeans-ml/
+
     cd $NB_ALL/nbbuild
     #Remove the build helper files
     rm -f netbeans-ml/nb.cluster.*
