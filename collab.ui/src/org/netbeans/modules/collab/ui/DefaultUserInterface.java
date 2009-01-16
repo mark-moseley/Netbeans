@@ -323,10 +323,7 @@ public class DefaultUserInterface extends UserInterface {
                 account = settings.getAccount();
 
                 // If the account is new, try to register it
-                if (
-                    (account.getAccountType() == Account.NEW_ACCOUNT) ||
-                        (account.getAccountType() == Account.NEW_PUBLIC_SERVER_ACCOUNT)
-                ) {
+                if (account.getAccountType() == Account.NEW_ACCOUNT) {
                     RequestProcessor.postRequest(new AsyncAccountRegistration(account));
                 } else {
                     try {
@@ -362,13 +359,13 @@ public class DefaultUserInterface extends UserInterface {
          *
          */
     private void initWizard(WizardDescriptor wizardDesc) {
-        wizardDesc.putProperty("WizardPanel_autoWizardStyle", // NOI18N
+        wizardDesc.putProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, // NOI18N
             Boolean.TRUE
         );
-        wizardDesc.putProperty("WizardPanel_contentDisplayed", // NOI18N
+        wizardDesc.putProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, // NOI18N
             Boolean.TRUE
         );
-        wizardDesc.putProperty("WizardPanel_contentNumbered", // NOI18N
+        wizardDesc.putProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, // NOI18N
             Boolean.TRUE
         );
 
