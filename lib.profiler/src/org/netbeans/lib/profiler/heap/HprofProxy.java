@@ -57,15 +57,20 @@ class HprofProxy {
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
     static Properties getProperties(Instance propertiesInstance) {
-        Properties props = new Properties();
+        Instance defaultsObj = (Instance) propertiesInstance.getValueOfField("defaults"); // NOI18N
         ObjectArrayDump entriesObj = (ObjectArrayDump) propertiesInstance.getValueOfField("table"); // NOI18N
         Iterator enIt = entriesObj.getValues().iterator();
+        Properties props;
 
+        if (defaultsObj != null) {
+            props = new Properties(getProperties(defaultsObj));
+        } else {
+            props = new Properties();
+        }
         while (enIt.hasNext()) {
             Instance entry = (Instance) enIt.next();
 
             for (; entry != null; entry = (Instance) entry.getValueOfField("next")) { // NOI18N
-
                 Instance key = (Instance) entry.getValueOfField("key"); // NOI18N
                 Instance val = (Instance) entry.getValueOfField("value"); // NOI18N
 
