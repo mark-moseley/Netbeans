@@ -68,7 +68,7 @@ public class CsmFileTaskFactoryManager {
     private Lookup.Result<CsmFileTaskFactory> factories;
 
     private CsmFileTaskFactoryManager() {
-        final RequestProcessor.Task updateTask = new RequestProcessor("CsmFileTaskFactoryManager Worker", 1).create(new Runnable() {
+        final RequestProcessor.Task updateTask = new RequestProcessor("CsmFileTaskFactoryManager Worker", 1).create(new Runnable() { //NOI18N
             public void run() {
                 update();
             }
@@ -91,10 +91,10 @@ public class CsmFileTaskFactoryManager {
         }
     }
     
-    public static interface Accessor {
+    /*public*/ static interface Accessor {
         public abstract void fireChangeEvent(CsmFileTaskFactory f);
     }
     
-    public static Accessor ACCESSOR;
+    /*public*/ static Accessor ACCESSOR;
     
 }
