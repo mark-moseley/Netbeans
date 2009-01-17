@@ -81,34 +81,45 @@ public class CsmSortUtilities {
     }
     
     /// match names
-        
-    public static boolean matchName(CharSequence name, CharSequence strPrefix) {
-	return matchName(name, strPrefix, false);
-    }
-    
-    public static boolean matchName(CharSequence name, CharSequence strPrefix, boolean match) {
-	return matchName(name, strPrefix, match, false);
-    }
     
     public static boolean matchName(CharSequence name_, CharSequence strPrefix_, boolean match, boolean caseSensitive) {
-        // mached element is not empty name
-        if (name_.length() > 0) {
-            String name = name_.toString();
-            String strPrefix = strPrefix_.toString();
-            if (!caseSensitive) {
-                name = name.toLowerCase();
-                strPrefix = strPrefix.toLowerCase();
-            }
-            if (strPrefix.length() == 0 || name.startsWith(strPrefix)) {
-                return match ? (name.compareTo(strPrefix) == 0) : true;
+        int n1 = name_.length();
+        if (n1 == 0) {
+            return false;
+        }
+        int n2 = strPrefix_.length();
+        for (int i1=0, i2=0; i1<n1 && i2<n2; i1++, i2++) {
+            char c1 = name_.charAt(i1);
+            char c2 = strPrefix_.charAt(i2);
+            if (c1 != c2) {
+                if (!caseSensitive && !match) {
+                    c1 = Character.toUpperCase(c1);
+                    c2 = Character.toUpperCase(c2);
+                    if (c1 != c2) {
+                        c1 = Character.toLowerCase(c1);
+                        c2 = Character.toLowerCase(c2);
+                        if (c1 != c2) {
+                            return false;
+                        }
+                    }
+                } else {
+                    return false;
+                }
             }
         }
-	return false;
-    }   
+        if (match) {
+            return n1==n2;
+        }
+        return n1 >= n2;
+    }
+
     
     public static List<CsmNamedElement> filterList(Collection<? extends CsmDeclaration> list, CharSequence strPrefix, boolean match, boolean caseSensitive) {
+        return filterList(list.iterator(), strPrefix, match, caseSensitive);
+    }
+
+    public static List<CsmNamedElement> filterList(Iterator<? extends CsmDeclaration> it, CharSequence strPrefix, boolean match, boolean caseSensitive) {
 	List<CsmNamedElement> res = new ArrayList<CsmNamedElement>();
-	Iterator it = list.iterator();
 	while (it.hasNext()) {
 	    Object elem = it.next();
 	    if (CsmKindUtilities.isNamedElement(elem) && 
@@ -401,8 +412,8 @@ public class CsmSortUtilities {
     private static int compareFunctions(CsmFunction fun1, CsmFunction fun2, boolean sensitive) {
         int order = compareNames(fun1, fun2, sensitive);
         if (order == 0 ){
-            CsmParameter[] param1 = (CsmParameter[]) fun1.getParameters().toArray(new CsmParameter[0]);
-            CsmParameter[] param2 = (CsmParameter[]) fun2.getParameters().toArray(new CsmParameter[0]);
+            CsmParameter[] param1 = fun1.getParameters().toArray(new CsmParameter[0]);
+            CsmParameter[] param2 = fun2.getParameters().toArray(new CsmParameter[0]);
 
             int commonCnt = Math.min(param1.length, param2.length);
             for (int i = 0; i < commonCnt; i++) {
