@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!-- -*- sgml-indent-step: 1 -*- -->
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
@@ -215,8 +215,7 @@ made subject to such option by the copyright holder.
                 is activated or when the user finishes the work with the application.
                 In order to keep dependencies clean, it is strongly adviced 
                 to make modules that implement this API 
-                <a href="@org-openide-modules@/org/openide/modules/doc-files/classpath.html#special-modules">
-                eager</a>,
+                eager,
                 so they get enabled as soon as the UI logger module is enabled.
             </p>
         </usecase>
@@ -1263,6 +1262,17 @@ made subject to such option by the copyright holder.
                 version 1.30 of this module.
             </api>
         </p>
+        <api type="export" group="property"  name="nb.show.statistics.ui" category="private">
+            System property "nb.show.statistics.ui" controls if UI for Usage statistics is displayed in General panel.
+            If this property is non null (for IDE) UI is shown. This property contains key of preference used
+            to save status - true if usage statistics are collected and uploaded, false if not.
+            Key is "usageStatisticsEnabled" and is described below.
+        </api>
+        <api type="import" group="preferences"  name="org.netbeans.core.usageStatisticsEnabled" category="private">
+            Key "usageStatisticsEnabled" is read and controls if metrics logging is enabled or disabled.
+            Installer has also similar UI to set this and stores it into NetBeans install dir
+            <code>nb7.0/config/Preferences/org/netbeans/core.properties</code>
+        </api>
     </answer>
     
 </api-answers>
