@@ -42,6 +42,7 @@
 
 package org.netbeans.modules.asm.core.editor;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 
@@ -63,12 +64,14 @@ public class AsmLanguageHierarchy extends LanguageHierarchy<AsmTokenId> {
     }
     
     @Override
-    protected Collection createTokenIds() {
-        return EnumSet.allOf(AsmBaseTokenId.class);
+    protected Collection<AsmTokenId> createTokenIds() {
+        Collection<AsmTokenId> res = new ArrayList<AsmTokenId>();
+        res.addAll(EnumSet.allOf(AsmBaseTokenId.class));
+        return res;
     }
 
     @Override
-    protected Lexer<AsmTokenId> createLexer(LexerRestartInfo info) {      
+    protected Lexer<AsmTokenId> createLexer(LexerRestartInfo<AsmTokenId> info) {
         return new AsmLexer(info, synt);
     }
 
