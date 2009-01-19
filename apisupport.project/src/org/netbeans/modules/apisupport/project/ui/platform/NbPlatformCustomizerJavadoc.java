@@ -59,14 +59,14 @@ import org.openide.util.NbBundle;
  *
  * @author Martin Krauskopf
  */
-final class NbPlatformCustomizerJavadoc extends JPanel {
+public final class NbPlatformCustomizerJavadoc extends JPanel {
     
     private NbPlatform plaf;
     private PlatformComponentFactory.NbPlatformJavadocRootsModel model;
     private final ListListener listListener;
     
     /** Creates new form NbPlatformCustomizerModules */
-    NbPlatformCustomizerJavadoc() {
+    public NbPlatformCustomizerJavadoc() {
         initComponents();
         initAccessibility();
         this.listListener = new ListListener() {
@@ -254,7 +254,7 @@ final class NbPlatformCustomizerJavadoc extends JPanel {
         if (ret == JFileChooser.APPROVE_OPTION) {
             File javadocRoot = FileUtil.normalizeFile(chooser.getSelectedFile());
             ModuleUISettings.getDefault().setLastUsedNbPlatformLocation(javadocRoot.getParentFile().getAbsolutePath());
-            URL newUrl = Util.urlForDirOrJar(javadocRoot);
+            URL newUrl = FileUtil.urlForArchiveOrDir(javadocRoot);
             model.addJavadocRoot(newUrl);
             javadocList.setSelectedValue(newUrl, true);
         }
