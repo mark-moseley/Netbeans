@@ -107,8 +107,11 @@ public class PalettePanel extends JPanel implements Scrollable {
         addMouseListener( mouseListener() );
         
         dndSupport = new DnDSupport( this );
-        
-        setBackground( UIManager.getColor ("Panel.background") );
+
+        if( "Aqua".equals(UIManager.getLookAndFeel().getID()) )
+            setBackground( UIManager.getColor("NbExplorerView.background") ); //NOI18N
+        else
+            setBackground( UIManager.getColor ("Panel.background") );
     }
     
     public static synchronized PalettePanel getDefault() {
@@ -123,14 +126,17 @@ public class PalettePanel extends JPanel implements Scrollable {
             scrollPane = new JScrollPane( this );
             scrollPane.setBorder( BorderFactory.createEmptyBorder() );
             scrollPane.addMouseListener( mouseListener() );
-            scrollPane.getViewport().setBackground( UIManager.getColor ("Panel.background") );
+            if( "Aqua".equals(UIManager.getLookAndFeel().getID()) )
+                scrollPane.getViewport().setBackground( UIManager.getColor("NbExplorerView.background") ); //NOI18N
+            else
+                scrollPane.getViewport().setBackground( UIManager.getColor ("Panel.background") );
             // GTK L&F paints extra border around viewport, get rid of it
             scrollPane.setViewportBorder(null);
         }
         return scrollPane;
     }
-    
-    private CategoryDescriptor getCategoryDescriptor( Category category ) {
+
+    CategoryDescriptor getCategoryDescriptor( Category category ) {
         for( int i=0; i<descriptors.length; i++ ) {
             CategoryDescriptor descriptor = descriptors[i];
             if( descriptor.getCategory () == category )
@@ -345,6 +351,7 @@ public class PalettePanel extends JPanel implements Scrollable {
             model = newModel;
             settings = newSettings;
             controller = newController;
+            selectedCategory = null;
             if( model != null ) {
                 model.addModelListener( getModelListener() );
             }
