@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.csm;
 
 import antlr.collections.AST;
@@ -48,7 +47,7 @@ import java.io.IOException;
 import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
+import org.netbeans.modules.cnd.modelimpl.csm.core.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmScope;
@@ -72,29 +71,27 @@ import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
  * Implements CsmTypedef
  * @author vk155633
  */
-public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implements CsmTypedef, Disposable, CsmScopeElement {
-    
+public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef> implements CsmTypedef, Disposable, CsmScopeElement {
+
     private final CharSequence name;
     private final CsmType type;
     private boolean typeUnnamed = false;
-    
     // only one of containerRef/containerUID must be used (based on USE_REPOSITORY)
     private /*final*/ CsmObject containerRef;// can be set in onDispose or contstructor only
     private /*final*/ CsmUID<CsmIdentifiable> containerUID;
-            
-    
+
     public TypedefImpl(AST ast, CsmFile file, CsmObject container, CsmType type, String name) {
-	
+
         super(ast, file);
-	
-	if (container instanceof CsmIdentifiable) {
-	    this.containerUID = UIDCsmConverter.identifiableToUID((CsmIdentifiable) container);
-	    assert (containerUID != null || container == null);
-	    this.containerRef = null;
-	} else {
-	    // yes, that's possible if it's somewhere within body
-	    this.containerRef = container;
-	}
+
+        if (UIDCsmConverter.isIdentifiable(container)) {
+            this.containerUID = UIDCsmConverter.identifiableToUID((CsmIdentifiable) container);
+            assert (containerUID != null || container == null);
+            this.containerRef = null;
+        } else {
+            // yes, that's possible if it's somewhere within body
+            this.containerRef = container;
+        }
 
         if (type == null) {
             this.type = createType(ast);
@@ -104,11 +101,11 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
         this.name = QualifiedNameCache.getManager().getString(name);
     }
 
-    public boolean isTypeUnnamed(){
+    public boolean isTypeUnnamed() {
         return typeUnnamed;
     }
 
-    public void setTypeUnnamed(){
+    public void setTypeUnnamed() {
         typeUnnamed = true;
     }
 
@@ -116,18 +113,15 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
 //    public String getUniqueName() {
 //        return getQualifiedName();
 //    }
-    
     public CsmScope getScope() {
         // TODO: ???
         //return getContainingFile();
         CsmObject container = _getContainer();
-        if( container instanceof CsmNamespace ) {
+        if (container instanceof CsmNamespace) {
             return (CsmNamespace) container;
-        }
-        else if( container instanceof CsmClass ) {
-            return (CsmClass)container;
-        }
-        else {
+        } else if (container instanceof CsmClass) {
+            return (CsmClass) container;
+        } else {
             return getContainingFile();
         }
     }
@@ -137,52 +131,51 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
         super.dispose();
         onDispose();
         if (this.type != null && this.type instanceof Disposable) {
-            ((Disposable)this.type).dispose();
+            ((Disposable) this.type).dispose();
         }
         CsmScope scope = getScope();
-        if( scope instanceof MutableDeclarationsContainer ) {
+        if (scope instanceof MutableDeclarationsContainer) {
             ((MutableDeclarationsContainer) scope).removeDeclaration(this);
         }
         FileImpl file = (FileImpl) getContainingFile();
-        file.getProjectImpl().unregisterDeclaration(this);
+        file.getProjectImpl(true).unregisterDeclaration(this);
     }
-    
-    private void onDispose() {
+
+    private synchronized void onDispose() {
         if (TraceFlags.RESTORE_CONTAINER_FROM_UID) {
-            // restore container from it's UID
-            this.containerRef = UIDCsmConverter.UIDtoIdentifiable(this.containerUID);
+            // restore container from it's UID when needed
+            this.containerRef = this.containerRef != null ? this.containerRef : UIDCsmConverter.UIDtoIdentifiable(this.containerUID);
             assert (this.containerRef != null || this.containerUID == null) : "null object for UID " + this.containerUID;
         }
     }
 
     public CharSequence getQualifiedName() {
         CsmObject container = _getContainer();
-        if( CsmKindUtilities.isClass(container) ) {
-	    return CharSequenceKey.create(((CsmClass) container).getQualifiedName() + "::" + getQualifiedNamePostfix()); // NOI18N
-	}
-	else if( CsmKindUtilities.isNamespace(container) ) {
-	    CharSequence nsName = ((CsmNamespace) container).getQualifiedName();
-	    if( nsName != null && nsName.length() > 0 ) {
-		return CharSequenceKey.create(nsName.toString() + "::" + getQualifiedNamePostfix()); // NOI18N
-	    }
-	}
+        if (CsmKindUtilities.isClass(container)) {
+            return CharSequenceKey.create(((CsmClass) container).getQualifiedName() + "::" + getQualifiedNamePostfix()); // NOI18N
+        } else if (CsmKindUtilities.isNamespace(container)) {
+            CharSequence nsName = ((CsmNamespace) container).getQualifiedName();
+            if (nsName != null && nsName.length() > 0) {
+                return CharSequenceKey.create(nsName.toString() + "::" + getQualifiedNamePostfix()); // NOI18N
+            }
+        }
         return getName();
     }
 
     public CharSequence getName() {
         /*if( name == null ) {
-            AST tokId = null;
-            for( AST token = getAst().getFirstChild(); token != null; token = token.getNextSibling() ) {
-                if( token.getType() == CPPTokenTypes.CSM_QUALIFIED_ID ) {
-                    AST child = token.getFirstChild();
-                    if( child != null && child.getType() == CPPTokenTypes.ID ) {
-                        name = child.getText();
-                    }
-                }
-            }
+        AST tokId = null;
+        for( AST token = getAst().getFirstChild(); token != null; token = token.getNextSibling() ) {
+        if( token.getType() == CPPTokenTypes.CSM_QUALIFIED_ID ) {
+        AST child = token.getFirstChild();
+        if( child != null && child.getType() == CPPTokenTypes.ID ) {
+        name = child.getText();
+        }
+        }
+        }
         }
         if( name == null ) {
-            name = "";
+        name = "";
         }*/
         return name;
     }
@@ -190,50 +183,50 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
     public CsmDeclaration.Kind getKind() {
         return CsmDeclaration.Kind.TYPEDEF;
     }
-    
+
     private final CsmType createType(AST node) {
         //
         // TODO: replace this horrible code with correct one
         //
         //if( type == null ) {
-            AST ptrOperator = null;
-            int arrayDepth = 0;
-            AST classifier = null;
-            for( AST token = node.getFirstChild(); token != null; token = token.getNextSibling() ) {
+        AST ptrOperator = null;
+        int arrayDepth = 0;
+        AST classifier = null;
+        for (AST token = node.getFirstChild(); token != null; token = token.getNextSibling()) {
 //                if( token.getType() == CPPTokenTypes.CSM_TYPE_COMPOUND || 
 //                        token.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN ) {
 //                    classifier = token;
 //                    break;
 //                }
-                switch( token.getType() ) {
-                    case CPPTokenTypes.CSM_TYPE_COMPOUND:
-                    case CPPTokenTypes.CSM_TYPE_BUILTIN:
-                        classifier = token;
-                        break;
-                    case CPPTokenTypes.LITERAL_struct:
-                        AST next = token.getNextSibling();
-                        if( next != null && next.getType() == CPPTokenTypes.CSM_QUALIFIED_ID ) {
-                            classifier = next;
-                            break;
-                        }
-                        break;
-                }
-                if( classifier != null ) {
+            switch (token.getType()) {
+                case CPPTokenTypes.CSM_TYPE_COMPOUND:
+                case CPPTokenTypes.CSM_TYPE_BUILTIN:
+                    classifier = token;
                     break;
-                }
+                case CPPTokenTypes.LITERAL_struct:
+                    AST next = token.getNextSibling();
+                    if (next != null && next.getType() == CPPTokenTypes.CSM_QUALIFIED_ID) {
+                        classifier = next;
+                        break;
+                    }
+                    break;
             }
-            if( classifier != null ) {
-                return TypeFactory.createType(classifier, getContainingFile(), ptrOperator, arrayDepth);
+            if (classifier != null) {
+                break;
             }
+        }
+        if (classifier != null) {
+            return TypeFactory.createType(classifier, getContainingFile(), ptrOperator, arrayDepth);
+        }
         //}
-            return null;
+        return null;
     }
-    
+
     public CsmType getType() {
         return type;
     }
 
-    private CsmObject _getContainer() {
+    private synchronized CsmObject _getContainer() {
         CsmObject container = this.containerRef;
         if (container == null) {
             container = UIDCsmConverter.UIDtoIdentifiable(this.containerUID);
@@ -241,10 +234,9 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
         }
         return container;
     }
-    
+
     ////////////////////////////////////////////////////////////////////////////
     // impl of SelfPersistent
-    
     @Override
     public void write(DataOutput output) throws IOException {
         super.write(output);
@@ -255,10 +247,16 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
         PersistentUtils.writeType(this.type, output);
 
         // not null
-        assert this.containerUID != null;
-        UIDObjectFactory.getDefaultFactory().writeUID(this.containerUID, output);        
-    }  
-    
+        if (this.containerUID == null) {
+            System.err.println("trying to write non-writable typedef:" + this.getContainingFile() + toString()); // NOI18N
+            if (this.containerRef == null) {
+                System.err.println("typedef doesn't have container at all"); // NOI18N
+            }
+        } else {
+            UIDObjectFactory.getDefaultFactory().writeUID(this.containerUID, output);
+        }
+    }
+
     public TypedefImpl(DataInput input) throws IOException {
         super(input);
         this.name = QualifiedNameCache.getManager().getString(input.readUTF());
@@ -266,10 +264,12 @@ public class TypedefImpl extends OffsetableDeclarationBase<CsmTypedef>  implemen
         typeUnnamed = input.readBoolean();
         this.type = PersistentUtils.readType(input);
         assert this.type != null;
-        
+
         this.containerUID = UIDObjectFactory.getDefaultFactory().readUID(input);
-        // not null UID
-        assert this.containerUID != null;
+        // should not be null UID
+        if (this.containerUID == null) {
+            System.err.println("non-writable object was read:" + this.getContainingFile() + toString()); // NOI18N
+        }
         this.containerRef = null;
-    }       
+    }
 }
