@@ -65,7 +65,7 @@ import org.netbeans.modules.php.editor.parser.astnodes.Identifier;
  */
 abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
 
-    private Map<String, List<InterfaceScopeImpl>> ifaces = new HashMap<String, List<InterfaceScopeImpl>>();
+    private Map<String, List<? extends InterfaceScopeImpl>> ifaces = new HashMap<String, List<? extends InterfaceScopeImpl>>();
 
     ClzConstantElementImpl createElement(ClassConstantDeclarationInfo clsConst) {
         ClzConstantElementImpl retval = ClzConstantElementImpl.createClzConstantElementImpl(this, clsConst);
@@ -74,7 +74,7 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
     }
 
     TypeScopeImpl(ScopeImpl inScope, ClassDeclarationInfo nodeInfo) {
-        super(inScope, nodeInfo, new PhpModifiers(PhpModifiers.PUBLIC), nodeInfo.getOriginalNode().getBody());
+        super(inScope, nodeInfo, nodeInfo.getAccessModifiers(), nodeInfo.getOriginalNode().getBody());
         List<? extends Identifier> interfaces = nodeInfo.getInterfaces();
         for (Identifier identifier : interfaces) {
             ifaces.put(identifier.getName(), null);
@@ -122,15 +122,30 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
                 ModelScope top = (ModelScope) getInScope();
                 FileScope ps = (FileScope) top;
                 retval.addAll(iface = ps.getInterfaces(ifaceName));
-                for (InterfaceScopeImpl interfaceScope : iface) {
+                ifaces.put(ifaceName,iface);
+                /*for (InterfaceScopeImpl interfaceScope : iface) {
                     retval.addAll(interfaceScope.getInterfaces());
-                }
+                }*/
                 if (retval.isEmpty() && top instanceof FileScope) {
-                    //TODO: create it from idx
-                    throw new UnsupportedOperationException();
-                    /*assert iface != null;
-                    ifaces.put(key, iface);*/
+                    IndexScopeImpl indexScopeImpl = getTopIndexScopeImpl();
+                    if (indexScopeImpl == null) {
+                        indexScopeImpl = ps.getIndexScope();
+                    }
+                    if (indexScopeImpl != null) {
+                        List<? extends InterfaceScope> cIfaces =CachedModelSupport.getInterfaces(ifaceName, this);
+                        ifaces.put(ifaceName,(List<? extends InterfaceScopeImpl>)cIfaces);
+                        for (InterfaceScope interfaceScope : cIfaces) {
+                            retval.add((InterfaceScopeImpl)interfaceScope);                            
+                        }
+                    } else {
+                        //TODO: create it from idx
+                        throw new UnsupportedOperationException();
+                        /*assert iface != null;
+                        ifaces.put(key, iface);*/
+                    }
                 }
+            } else {
+                retval.addAll(iface);
             }
             assert iface != null;
         //duplicatesChecker.addAll(iface);
@@ -239,10 +254,10 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
             TypeScope type = this;
             if (type instanceof ClassScope) {
                 ClassScope clz = (ClassScope) type;
-                while (type != null && allConstants.isEmpty()) {
-                    type = ModelUtils.getFirst(clz.getSuperClasses());
-                    if (type != null) {
-                        Collection<IndexedConstant> indexedConstants = index.getClassConstants(null, type.getName(), queryName, NameKind.PREFIX);
+                while (clz != null && allConstants.isEmpty()) {
+                    clz = ModelUtils.getFirst(clz.getSuperClasses());
+                    if (clz != null) {
+                        Collection<IndexedConstant> indexedConstants = index.getClassConstants(null, clz.getName(), queryName, NameKind.PREFIX);
                         for (IndexedConstant indexedConstant : indexedConstants) {
                             allConstants.add(new ClzConstantElementImpl((TypeScopeImpl) type, indexedConstant));
                         }
@@ -302,4 +317,13 @@ abstract class TypeScopeImpl extends ScopeImpl implements TypeScope {
         return allMethods;
     }
 
+    @Override
+    public String getNormalizedName() {
+        StringBuilder sb = new StringBuilder();
+        Set<String> ifaceNames = ifaces.keySet();
+        for (String ifName : ifaceNames) {
+            sb.append(ifName);
+        }
+        return sb.toString()+super.getNormalizedName();
+    }
 }
