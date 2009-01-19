@@ -14,17 +14,16 @@ import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import javax.swing.Action;
 import javax.swing.JComponent;
-import javax.swing.KeyStroke;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyVetoException;
 import java.io.IOException;
-import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import javax.swing.BorderFactory;
 import javax.swing.SwingUtilities;
 import javax.swing.KeyStroke;
+import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.tree.TreePath;
 import org.netbeans.api.java.source.Task;
@@ -35,7 +34,6 @@ import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.ui.ElementJavadoc;
 import org.netbeans.modules.java.navigation.ClassMemberFilters;
 import org.netbeans.modules.java.navigation.ElementNode;
-import org.netbeans.modules.java.navigation.ElementNode.Description;
 import org.netbeans.modules.java.navigation.ElementNode.Description;
 import org.netbeans.modules.java.navigation.actions.FilterSubmenuAction;
 import org.netbeans.modules.java.navigation.actions.SortActionSupport.SortByNameAction;
@@ -97,6 +95,8 @@ public class ClassMemberPanelUI extends javax.swing.JPanel
         JComponent buttons = filters.getComponent();
         buttons.setBorder(BorderFactory.createEmptyBorder(0, 5, 5, 0));
         filtersPanel.add(buttons);
+        if( "Aqua".equals(UIManager.getLookAndFeel().getID()) ) //NOI18N
+            filtersPanel.setBackground(UIManager.getColor("NbExplorerView.background")); //NOI18N
         
         actions = new Action[] {            
             new SortByNameAction( filters ),
@@ -202,7 +202,13 @@ public class ClassMemberPanelUI extends javax.swing.JPanel
     }
     
     public FileObject getFileObject() {
-        return getRootNode().getDescritption().fileObject;
+        final ElementNode root = getRootNode();
+        if (root != null) {
+            return root.getDescritption().fileObject;
+        }
+        else {
+            return null;
+        }        
     }
     
     // FilterChangeListener ----------------------------------------------------
@@ -271,7 +277,10 @@ public class ClassMemberPanelUI extends javax.swing.JPanel
         
         ElementHandle<? extends Element> eh = node.getDescritption().elementHandle;
 
-        JavaSource js = JavaSource.forFileObject( root.getDescritption().fileObject );
+        final JavaSource js = JavaSource.forFileObject( root.getDescritption().fileObject );
+        if (js == null) {
+            return null;
+        }
         JavaDocCalculator calculator = new JavaDocCalculator( eh );
         final CompilationInfo[] ci = new CompilationInfo[1];
         
@@ -308,6 +317,7 @@ public class ClassMemberPanelUI extends javax.swing.JPanel
         
         public MyBeanTreeView() {
             new ToolTipManagerEx( this );
+            setUseSubstringInQuickSearch(true);
         }
         
         public boolean getScrollOnExpand() {
@@ -353,6 +363,10 @@ public class ClassMemberPanelUI extends javax.swing.JPanel
             Dimension compSize = getSize();
             Point res = new Point();
             Rectangle tooltipSrcRect = getToolTipSourceBounds( mouseLocation );
+            //May be null, prevent the NPE, nothing will be shown anyway.
+            if (tooltipSrcRect == null) {
+                tooltipSrcRect = new Rectangle();
+            }
 
             Point viewPosition = getViewport().getViewPosition();
             screenLocation.x -= viewPosition.x;
@@ -420,6 +434,40 @@ public class ClassMemberPanelUI extends javax.swing.JPanel
                 }
             });
         }
+
+        //#123940 start
+        private boolean inHierarchy;
+        private boolean doExpandAll;
+        
+        @Override
+        public void addNotify() {
+            super.addNotify();
+            
+            inHierarchy = true;
+            
+            if (doExpandAll) {
+                super.expandAll();
+                doExpandAll = false;
+            }
+        }
+
+        @Override
+        public void removeNotify() {
+            super.removeNotify();
+            
+            inHierarchy = false;
+        }
+
+        @Override
+        public void expandAll() {
+            super.expandAll();
+            
+            if (!inHierarchy) {
+                doExpandAll = true;
+            }
+        }
+        //#123940 end
+        
     }
 
     public void propertyChange(PropertyChangeEvent evt) {

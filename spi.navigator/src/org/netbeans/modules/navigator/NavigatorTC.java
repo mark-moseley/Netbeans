@@ -44,29 +44,21 @@ package org.netbeans.modules.navigator;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
-import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Logger;
-import javax.swing.AbstractAction;
-import javax.swing.Action;
-import javax.swing.FocusManager;
+import javax.swing.BorderFactory;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
 import org.netbeans.spi.navigator.NavigatorPanel;
 import org.openide.ErrorManager;
 import org.openide.awt.UndoRedo;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.util.lookup.ProxyLookup;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
@@ -98,7 +90,7 @@ public final class NavigatorTC extends TopComponent {
         initComponents();
         
         setName(NbBundle.getMessage(NavigatorTC.class, "LBL_Navigator")); //NOI18N
-        setIcon(Utilities.loadImage("org/netbeans/modules/navigator/resources/navigator.png")); //NOI18N        
+        setIcon(ImageUtilities.loadImage("org/netbeans/modules/navigator/resources/navigator.png")); //NOI18N
         // accept focus when empty to work correctly in nb winsys
         setFocusable(true);
         // special title for sliding mode
@@ -113,13 +105,25 @@ public final class NavigatorTC extends TopComponent {
         notAvailLbl.setBackground(usualWindowBkg != null ? usualWindowBkg : Color.white);
         // to ensure our background color will have effect
         notAvailLbl.setOpaque(true);
+
+        holderPanel.setOpaque(false);
         
         getController().installActions();
 
         // empty initially
         setToEmpty();
-            }
-        
+        if( "Aqua".equals(UIManager.getLookAndFeel().getID()) ) {
+            Color backColor = UIManager.getColor("NbExplorerView.background"); //NOI18N
+            setBackground(backColor);
+            notAvailLbl.setBackground(backColor);
+            setOpaque(true);
+            holderPanel.setOpaque(true);
+            holderPanel.setBackground(backColor);
+            holderPanel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, 
+                    UIManager.getColor("NbSplitPane.background")));//NOI18N
+        }
+    }
+
     /** Singleton accessor, finds instance in winsys structures */
     public static final NavigatorTC getInstance () {
         NavigatorTC navTC = (NavigatorTC)WindowManager.getDefault().
@@ -175,24 +179,27 @@ public final class NavigatorTC extends TopComponent {
         return panels;
     }
     
-    /** Sets content of navigator to given panels, selecting the first one
+    /** Sets content of navigator to given panels, selecting given one
+     * @param panels List of panels
+     * @param select Panel to be selected, shown
      */ 
-    public void setPanels (List<NavigatorPanel> panels) {
+    public void setPanels (List<NavigatorPanel> panels, NavigatorPanel select) {
         this.panels = panels;
         int panelsCount = panels == null ? -1 : panels.size();
+        selectedPanel = null;
         // no panel, so make UI look empty
         if (panelsCount <= 0) {
-            selectedPanel = null;
             setToEmpty();
         } else {
             // clear regular content 
             contentArea.removeAll();
             panelSelector.removeAllItems();
             // #63777: hide panel selector when only one panel available
-            panelSelector.setVisible(panelsCount != 1);
+            holderPanel.setVisible(panelsCount != 1);
             // fill with new content
             JComponent curComp = null;
             int i = 0;
+            boolean selectFound = false;
             for (NavigatorPanel curPanel : panels) {
                 panelSelector.addItem(curPanel.getDisplayName());
                 curComp = curPanel.getComponent();
@@ -206,10 +213,15 @@ public final class NavigatorTC extends TopComponent {
                 } else {
                     contentArea.add(curComp, String.valueOf(i));
                 }
-                if (i == 0) {
-                    selectedPanel = curPanel;
+                if (curPanel == select) {
+                    selectFound = true;
                 }
                 i++;
+            }
+            if (selectFound) {
+                setSelectedPanel(select);
+            } else {
+                selectedPanel = panels.get(0);
             }
             // show if was hidden
             resetFromEmpty();
@@ -227,16 +239,19 @@ public final class NavigatorTC extends TopComponent {
     
     // Window System related methods >>
 
+    @Override
     public String preferredID () {
         return "navigatorTC"; //NOI18N
     }
 
+    @Override
     public int getPersistenceType () {
         return PERSISTENCE_ALWAYS;
     }
 
     /** Overriden to pass focus directly into content panel */
     @SuppressWarnings("deprecation")
+    @Override
     public boolean requestFocusInWindow () {
         if (selectedPanel != null) {
             return selectedPanel.getComponent().requestFocusInWindow();
@@ -255,16 +270,19 @@ public final class NavigatorTC extends TopComponent {
     }
 
     /** Defines nagivator Help ID */
+    @Override
     public HelpCtx getHelpCtx () {
         return new HelpCtx("navigator.java");
     }
 
     /** Just delegates to controller */
+    @Override
     public void componentOpened () {
         getController().navigatorTCOpened();
     }
     
     /** Just delegates to controller */
+    @Override
     public void componentClosed () {
         getController().navigatorTCClosed();
     }
@@ -275,6 +293,7 @@ public final class NavigatorTC extends TopComponent {
     /** Combines default Lookup of TC with lookup from active navigator
      * panel.
      */
+    @Override
     public Lookup getLookup() {
         if (navTCLookup == null) {
             Lookup defaultLookup = super.getLookup();
@@ -308,7 +327,8 @@ public final class NavigatorTC extends TopComponent {
             // already empty
             return;
         }
-        remove(panelSelector);
+        remove(holderPanel);
+        holderPanel.setVisible(false);
         remove(contentArea);
         add(notAvailLbl, BorderLayout.CENTER);
         revalidate();
@@ -321,7 +341,7 @@ public final class NavigatorTC extends TopComponent {
             // content already shown
         }
         remove(notAvailLbl);
-        add(panelSelector, BorderLayout.NORTH);
+        add(holderPanel, BorderLayout.NORTH);
         add(contentArea, BorderLayout.CENTER);
         revalidate();
         repaint();
@@ -333,25 +353,28 @@ public final class NavigatorTC extends TopComponent {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
+
+        holderPanel = new javax.swing.JPanel();
         panelSelector = new javax.swing.JComboBox();
         contentArea = new javax.swing.JPanel();
 
         setLayout(new java.awt.BorderLayout());
 
-        add(panelSelector, java.awt.BorderLayout.NORTH);
+        holderPanel.setLayout(new java.awt.BorderLayout());
+        holderPanel.add(panelSelector, java.awt.BorderLayout.CENTER);
+
+        add(holderPanel, java.awt.BorderLayout.NORTH);
 
         contentArea.setLayout(new java.awt.CardLayout());
-
         add(contentArea, java.awt.BorderLayout.CENTER);
-
-    }
-    // </editor-fold>//GEN-END:initComponents
+    }// </editor-fold>//GEN-END:initComponents
     
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPanel contentArea;
+    private javax.swing.JPanel holderPanel;
     private javax.swing.JComboBox panelSelector;
     // End of variables declaration//GEN-END:variables
 
