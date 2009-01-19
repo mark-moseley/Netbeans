@@ -45,11 +45,11 @@ import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.Map;
 import java.util.WeakHashMap;
-import org.netbeans.api.gsfpath.classpath.ClassPath;
+import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.api.ruby.platform.RubyPlatformManager;
-import org.netbeans.spi.gsfpath.classpath.ClassPathProvider;
-import org.netbeans.spi.gsfpath.classpath.support.ClassPathSupport;
+import org.netbeans.spi.java.classpath.ClassPathProvider;
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.openide.filesystems.FileObject;
 
 /**
@@ -59,6 +59,7 @@ import org.openide.filesystems.FileObject;
  * 
  * @author Tor Norbye
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.java.classpath.ClassPathProvider.class, position=10005)
 public class BootClassPathProvider implements ClassPathProvider {
     
     private Map<FileObject, WeakReference<ClassPath>> sourceClassPathsCache =
@@ -73,6 +74,9 @@ public class BootClassPathProvider implements ClassPathProvider {
     public ClassPath findClassPath(FileObject file, String type) {
         // See if the file is under the Ruby libraries
         for (RubyPlatform platform : RubyPlatformManager.getPlatforms()) {
+            if (!platform.isValid()) {
+                continue;
+            }
             FileObject systemRoot = platform.getSystemRoot(file);
             if (systemRoot != null) {
                 return getRubyClassPaths(file, type, systemRoot);
