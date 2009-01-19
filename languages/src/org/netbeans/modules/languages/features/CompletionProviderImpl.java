@@ -43,6 +43,7 @@ package org.netbeans.modules.languages.features;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -54,9 +55,6 @@ import javax.swing.text.Document;
 import org.netbeans.api.languages.ASTItem;
 import org.netbeans.api.languages.CompletionItem.Type;
 import org.netbeans.api.languages.ASTPath;
-import org.netbeans.api.languages.ParserManager;
-import org.netbeans.api.languages.ParserManager.State;
-import org.netbeans.api.languages.ParserManagerListener;
 import org.netbeans.api.languages.ASTToken;
 import org.netbeans.api.languages.SyntaxContext;
 import org.netbeans.api.languages.ASTNode;
@@ -67,21 +65,25 @@ import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.api.languages.Context;
-import org.netbeans.api.project.FileOwnerQuery;
-import org.netbeans.api.project.Project;
+import org.netbeans.api.languages.ParserResult;
 import org.netbeans.modules.editor.NbEditorDocument;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.languages.Feature;
 import org.netbeans.modules.languages.Language;
 import org.netbeans.modules.languages.LanguagesManager;
-import org.netbeans.modules.languages.LanguagesManager;
-import org.netbeans.modules.languages.ParserManagerImpl;
+import org.netbeans.modules.parsing.api.ParserManager;
+import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.api.UserTask;
+import org.netbeans.modules.parsing.spi.ParseException;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.languages.Utils;
+import org.netbeans.modules.parsing.api.ResultIterator;
 import org.netbeans.spi.editor.completion.CompletionItem;
 import org.netbeans.spi.editor.completion.CompletionProvider;
 import org.netbeans.spi.editor.completion.CompletionResultSet;
 import org.netbeans.spi.editor.completion.CompletionTask;
-import org.netbeans.spi.project.ActionProvider;
 import org.openide.filesystems.FileObject;
+import org.openide.util.RequestProcessor;
 
 
 /**
@@ -211,7 +213,7 @@ public class CompletionProviderImpl implements CompletionProvider {
                     tokenHierarchy,
                     offset
                 );
-                Token token = tokenSequence.token ();
+                Token token = tokenSequence != null ? tokenSequence.token () : null;
                 if (token != null) {
                     String start = token.text ().toString ();
                     String completionType = getCompletionType (null, token.id ().name ());
@@ -256,7 +258,8 @@ public class CompletionProviderImpl implements CompletionProvider {
                     tokenHierarchy,
                     component.getCaret ().getDot ()
                 );
-                if (!tokenSequence.isEmpty() && tokenSequence.offset () > offset) {
+                if (tokenSequence == null || 
+                        (!tokenSequence.isEmpty() && tokenSequence.offset () > offset)) {
                     // border of embedded language
                     // [HACK] borders should be represented by some tokens!!!
                     return;
@@ -267,7 +270,7 @@ public class CompletionProviderImpl implements CompletionProvider {
                 if (!tokenSequence.isEmpty()) {
                     compute (tokenSequence, offset, resultSet, doc, language);
                 }
-                finishSet = addParserTags (resultSet, language);
+                finishSet = addParserTags (resultSet, language, offset);
             } catch (LanguageDefinitionNotFoundException ex) {
                 // do nothing
             } finally {
@@ -285,12 +288,15 @@ public class CompletionProviderImpl implements CompletionProvider {
                 String projectType = (String) feature.getValue("project_type");
                 if (projectType != null) {
                     if (fileObject == null) return null;
-                    Project p = FileOwnerQuery.getOwner (fileObject);
-                    if (p == null) return null;
-                    Object o = p.getLookup ().lookup (ActionProvider.class);
-                    if (o == null) return null;
-                    if (o.getClass ().getName ().indexOf (projectType) < 0)
+                    if (!Utils.isOfProjectType(fileObject, projectType)) {
                         return null;
+                    }
+//                    Project p = FileOwnerQuery.getOwner (fileObject);
+//                    if (p == null) return null;
+//                    Object o = p.getLookup ().lookup (ActionProvider.class);
+//                    if (o == null) return null;
+//                    if (o.getClass ().getName ().indexOf (projectType) < 0)
+//                        return null;
                 }
                 String completionType = (String) feature.getValue ("type");
                 if (completionType != null) return completionType;
@@ -343,33 +349,31 @@ public class CompletionProviderImpl implements CompletionProvider {
             }
         }
 
-        private boolean addParserTags (final Result resultSet, final Language language) {
-            final ParserManager parserManager = ParserManager.get (doc);
-            if (parserManager.getState () == State.PARSING) {
-                //S ystem.out.println("CodeCompletion: parsing...");
-                parserManager.addListener (new ParserManagerListener () {
-                    public void parsed (State state, ASTNode ast) {
-                        //S ystem.out.println("CodeCompletion: parsed " + state);
-                        parserManager.removeListener (this);
-                        if (resultSet.isFinished ()) return;
-                        addParserTags (ast, resultSet, language);
-                        resultSet.finish ();
+        private boolean addParserTags (final Result resultSet, final Language language, final int offset) {
+            final Source source = Source.create (doc);
+            RequestProcessor.getDefault ().post (new Runnable () {
+                public void run () {
+                    try {
+                        ParserManager.parse (Collections.<Source> singleton (source), new UserTask () {
+                            @Override
+                            public void run (ResultIterator resultIterator) throws ParseException {
+                                if (resultSet.isFinished ()) return;
+                                Parser.Result result = resultIterator.getParserResult (offset);
+                                addParserTags ((ParserResult) result, resultSet, language);
+                                resultSet.finish ();
+                            }
+                        });
+                    } catch (ParseException ex) {
+                        ex.printStackTrace ();
                     }
-                });
-                return false;
-            } else {
-                addParserTags (ParserManagerImpl.getImpl (doc).getAST (), resultSet, language);
-                return true;
-            }
+                }
+            });
+            return false;
         }
         
-        private void addParserTags (ASTNode node, Result resultSet, Language language) {
-            if (node == null) {
-                //S ystem.out.println("CodeCompletion: No AST");
-                return;
-            }
+        private void addParserTags (ParserResult parserResult, Result resultSet, Language language) {
             int offset = component.getCaret ().getDot ();
-            ASTPath path = node.findPath (offset - 1);
+            ASTPath path = parserResult.getRootNode ().findPath (offset - 1);
             if (path == null) return;
             ASTItem item = path.getLeaf ();
             if (item instanceof ASTNode) return;
@@ -401,7 +405,7 @@ public class CompletionProviderImpl implements CompletionProvider {
                 }
             }
             
-            DatabaseContext context = DatabaseManager.getRoot (node);
+            DatabaseContext context = parserResult.getSemanticStructure ();
             if (context == null) return;
             List<DatabaseDefinition> definitions = context.getAllVisibleDefinitions (offset);
             String completionType = getCompletionType (null, token.getTypeName ());
