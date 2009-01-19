@@ -44,14 +44,13 @@ package org.netbeans.modules.cnd.classview;
 import org.netbeans.modules.cnd.api.model.CsmClassifier;
 import org.netbeans.modules.cnd.api.model.CsmCompoundClassifier;
 import org.netbeans.modules.cnd.api.model.CsmEnumerator;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmProject;
 import org.netbeans.modules.cnd.api.model.CsmScope;
 import org.netbeans.modules.cnd.api.model.CsmTypedef;
 import org.netbeans.modules.cnd.api.model.CsmUID;
-import org.netbeans.modules.cnd.api.model.util.*;
+import org.netbeans.modules.cnd.api.model.util.UIDs;
 import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
 
 /**
@@ -59,25 +58,16 @@ import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
  * @author Alexander Simon
  */
 public final class PersistentKey {
-    private static final byte PROXY = 1;
-    private static final byte UID = 2;
-    private static final byte NAMESPACE = 4;
-    private static final byte DECLARATION = 8;
-    private static final byte PROJECT = 16;
-    private static final byte STATE = 32;
+    private static final byte UID = 1<<0;
+    private static final byte NAMESPACE = 1<<1;
+    private static final byte DECLARATION = 1<<2;
+    private static final byte PROJECT = 1<<3;
+    private static final byte STATE = 1<<4;
     
     private Object key;
     private CsmProject project;
     private byte kind;
-    
-    private PersistentKey(CsmIdentifiable id, boolean state) {
-        key = id;
-        kind = PROXY;
-        if (state) {
-            kind |= STATE;
-        }
-    }
-    
+
     private PersistentKey(CsmUID id, boolean state) {
         key = id;
         kind = UID;
@@ -99,7 +89,7 @@ public final class PersistentKey {
         return new PersistentKey(CharSequenceKey.empty(), project, NAMESPACE, false); // NOI18N
     }
     
-    public static PersistentKey createKey(CsmIdentifiable object){
+    public static PersistentKey createKey(Object object){
         if (object instanceof CsmNamespace){
             CsmNamespace ns = (CsmNamespace) object;
             CharSequence uniq = ns.getQualifiedName();
@@ -127,10 +117,10 @@ public final class PersistentKey {
         } else if (object instanceof CsmProject){
             return new PersistentKey(null, (CsmProject)object, PROJECT, false);
         }
-        return new PersistentKey(object.getUID(), getStateBit(object));
+        return new PersistentKey(UIDs.get(object), getStateBit(object));
     }
     
-    private static boolean getStateBit(CsmIdentifiable object){
+    private static boolean getStateBit(Object object){
         if (object instanceof CsmTypedef){
             CsmTypedef typedef = (CsmTypedef) object;
             if (((CsmTypedef)object).isTypeUnnamed()){
@@ -144,13 +134,11 @@ public final class PersistentKey {
         return false;
     }
     
-    public CsmIdentifiable getObject(){
+    public Object getObject(){
         int maskKind = kind & 31;
         switch(maskKind){
             case UID:
-                return (CsmIdentifiable) ((CsmUID)key).getObject();
-            case PROXY:
-                return (CsmIdentifiable) key;
+                return ((CsmUID)key).getObject();
             case NAMESPACE:
                 return project.findNamespace((CharSequence)key);
             case DECLARATION:
@@ -170,7 +158,6 @@ public final class PersistentKey {
             }
             int maskKind = kind & 31;
             switch(maskKind){
-                case PROXY:
                 case UID:
                     return key.equals(what.key);
                 case NAMESPACE:
@@ -194,7 +181,6 @@ public final class PersistentKey {
             res = 17;
         }
         switch(maskKind){
-            case PROXY:
             case UID:
                 return key.hashCode() + res;
             case NAMESPACE:
@@ -210,8 +196,6 @@ public final class PersistentKey {
     public String toString() {
         int maskKind = kind & 31;
         switch(maskKind){
-            case PROXY:
-                return "Proxy "+key.toString(); // NOI18N
             case UID:
                 return "UID "+key.toString(); // NOI18N
             case NAMESPACE:
