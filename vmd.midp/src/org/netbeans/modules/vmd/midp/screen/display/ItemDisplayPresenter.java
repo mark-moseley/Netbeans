@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.vmd.midp.screen.display;
 
+import java.beans.PropertyChangeEvent;
 import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.common.AcceptSuggestion;
 import org.netbeans.modules.vmd.api.model.presenters.actions.ActionsSupport;
@@ -57,9 +58,11 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
+import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
+import org.netbeans.modules.vmd.midp.components.databinding.MidpDatabindingSupport;
 
 /**
  * @author David Kaspar
@@ -67,7 +70,7 @@ import java.util.Collections;
 public class ItemDisplayPresenter extends ScreenDisplayPresenter {
     
     private JPanel panel;
-    private JLabel label;
+    private WrappedLabel label;
     private JComponent contentComponent;
     
     public ItemDisplayPresenter() {
@@ -80,7 +83,16 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
         panel.setLayout(new GridBagLayout());
         panel.setOpaque(false);
         
-        label = new JLabel();
+        // Fix for #79636 - Screen designer tab traversal
+        ScreenSupport.addKeyboardSupport(this);
+        
+        label = new WrappedLabel(){
+
+            @Override
+            protected int getLabelWidth() {
+                return (int)panel.getSize().getWidth();
+            }
+        };
         Font bold = label.getFont().deriveFont(Font.BOLD);
         label.setFont(bold);
         
@@ -136,8 +148,20 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
     }
     
     public void reload(ScreenDeviceInfo deviceInfo) {
-        String text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(ItemCD.PROP_LABEL));
+        String text = null;
+        if (MidpDatabindingSupport.getConnector(getComponent(), ItemCD.PROP_LABEL) != null) {
+            text = java.util.ResourceBundle.getBundle("org/netbeans/modules/vmd/midp/screen/display/Bundle").getString("LBL_Databinding"); //NOI18N 
+        } else {
+            text = text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(ItemCD.PROP_LABEL));
+        }
         label.setText(text);
+
+        int width = Integer.parseInt( getComponent().readProperty(
+                ItemCD.PROP_PREFERRED_WIDTH).getPrimitiveValue().toString());
+        label.setPreferedWidth(width);
+
+        label.repaint();
+        label.revalidate();
     }
     
     public Shape getSelectionShape() {
@@ -175,5 +199,5 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
         }
         return new ScreenMoveArrayAcceptSuggestion(horizontalPosition, verticalPosition);
     }
-    
+
 }

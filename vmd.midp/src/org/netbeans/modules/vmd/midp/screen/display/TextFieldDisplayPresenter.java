@@ -52,6 +52,7 @@ import javax.swing.border.Border;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.Collection;
+import org.netbeans.modules.vmd.midp.components.databinding.MidpDatabindingSupport;
 
 /**
  *
@@ -73,9 +74,23 @@ public class TextFieldDisplayPresenter extends ItemDisplayPresenter {
     @Override
     public void reload(ScreenDeviceInfo deviceInfo) {
         super.reload(deviceInfo);
-        
-        String text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(TextFieldCD.PROP_TEXT));
-        label.setText(text);
+
+        /*
+         * Fix for IZ#147913 - Values of screen elements bound to dataset are displayed inconsistently
+         */
+        String text = null;
+        if (MidpDatabindingSupport.getConnector(getComponent(), TextFieldCD.PROP_TEXT) != null) {
+            text = java.util.ResourceBundle.getBundle("org/netbeans/modules/vmd/midp/screen/display/Bundle").getString("LBL_Databinding"); //NOI18N
+        } else {
+            text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(TextFieldCD.PROP_TEXT));
+        }
+        // Fix for #155646 - TextField collapsed after erasing its content
+        if ( text == null || text.length() ==0 ){
+            label.setText(" ");             // NOI18N
+        }
+        else {
+            label.setText(text);
+        }
     }
 
     @Override
