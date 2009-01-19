@@ -59,6 +59,7 @@ import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.apt.support.ResolvedPath;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
+import org.netbeans.modules.cnd.utils.CndUtils;
 import org.openide.filesystems.FileUtil;
 
 /**
@@ -79,12 +80,12 @@ public final class LibraryManager {
     }
     
     private final Map<String, LibraryEntry> librariesEntries = new ConcurrentHashMap<String, LibraryEntry>();
-    private Object lock = new Object();
+    private final Object lock = new Object();
     
     /**
      * Returns collection of artificial libraries used in project
      */
-    public Collection<LibProjectImpl> getLiraries(ProjectImpl project){
+    public Collection<LibProjectImpl> getLibraries(ProjectImpl project){
         List<LibProjectImpl> res = new ArrayList<LibProjectImpl>();
         CsmUID<CsmProject> projectUid = project.getUID();
         for(LibraryEntry entry : librariesEntries.values()){
@@ -153,7 +154,13 @@ public final class LibraryManager {
                 //if (TraceFlags.TRACE_RESOLVED_LIBRARY) trace("Base Project as Default Search Path", curFile, resolvedPath, res, baseProject); //NOI18N
             } else if (!baseProject.isArtificial()) {
                 res = getLibrary((ProjectImpl)baseProject, folder);
-                if (TraceFlags.TRACE_RESOLVED_LIBRARY) trace("Library for folder "+folder, curFile, resolvedPath, res, baseProject); //NOI18N
+                if (res == null) {
+                    if (CndUtils.isDebugMode()) {
+                        trace("Not created library for folder "+folder, curFile, resolvedPath, res, baseProject); //NOI18N
+                    }
+                    res = baseProject;
+                }
+                if (TraceFlags.TRACE_RESOLVED_LIBRARY) {trace("Library for folder "+folder, curFile, resolvedPath, res, baseProject);} //NOI18N
             } else {
                 res = baseProject;
                 //if (TraceFlags.TRACE_RESOLVED_LIBRARY) trace("Base Project", curFile, resolvedPath, res, baseProject); //NOI18N
@@ -288,9 +295,9 @@ public final class LibraryManager {
             }
             if (needFire){
                 final LibraryEntry passEntry = entry;
-                CsmModelAccessor.getModel().enqueue(new Runnable() {
+                ModelImpl.instance().enqueueModelTask(new Runnable() {
                     public void run() {
-                        model.fireProjectOpened((ProjectBase)passEntry.getLibrary().getObject());
+                        ListenersImpl.getImpl().fireProjectOpened((ProjectBase)passEntry.getLibrary().getObject());
                     }
                 }, "postponed library opened " + includeFolder); // NOI18N
             }
