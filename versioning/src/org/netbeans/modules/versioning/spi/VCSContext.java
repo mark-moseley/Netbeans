@@ -85,6 +85,7 @@ public final class VCSContext {
 
     private final Lookup    elements;
     
+    private final Set<File> unfilteredRootFiles;
     private final Set<File> rootFiles;
     private final Set<File> exclusions;
 
@@ -133,7 +134,6 @@ public final class VCSContext {
             Node node = nodes[i];
             File aFile = node.getLookup().lookup(File.class);
             if (aFile != null) {
-                files.add(aFile);
                 rootFiles.add(aFile);
                 continue;
             }
@@ -142,7 +142,7 @@ public final class VCSContext {
                 addProjectFiles(rootFiles, rootFileExclusions, project);
                 continue;
             }
-            addFileObjects(node, files, rootFiles);
+            addFileObjects(node, rootFiles);
         }
         
         VCSContext ctx = new VCSContext(nodes, rootFiles, rootFileExclusions);
@@ -184,8 +184,28 @@ public final class VCSContext {
 
     /**
      * Retrieves set of files/folders that represent this context.
+     * This set contains all files the user selected, unfiltered.
+     * For example, if the user selects two elements: folder /var and file /var/Foo.java then getFiles() 
+     * returns both of them and getRootFiles returns only the folder /var. 
+     * This method is suitable for versioning systems that DO manage folders, such as Clearcase. 
      * 
      * @return Set<File> set of Files this context represents
+     * @see #getRootFiles() 
+     * @since 1.6
+     */ 
+    public Set<File> getFiles() {
+        return unfilteredRootFiles;
+    }
+
+    /**
+     * Retrieves set of root files/folders that represent this context.
+     * This set only contains context roots, not files/folders that are contained within these roots.
+     * For example, if the user selects two elements: folder /var and file /var/Foo.java then getFiles() 
+     * returns both of them and getRootFiles returns only the folder /var. 
+     * This method is suitable for versioning systems that do not manage folders, such as CVS. 
+     * 
+     * @return Set<File> set of Files this context represents
+     * @see #getFiles() 
      */ 
     public Set<File> getRootFiles() {
         return rootFiles;
@@ -234,6 +254,7 @@ public final class VCSContext {
             SourceGroup sourceGroup = sourceGroups[j];
             FileObject srcRootFo = sourceGroup.getRootFolder();
             File rootFile = FileUtil.toFile(srcRootFo);
+            if (rootFile == null) continue;
             VersioningSystem owner = VersioningManager.getInstance().getOwner(rootFile);
             if (owner == null) {
                 unversionedFiles.add(rootFile);
@@ -265,7 +286,7 @@ public final class VCSContext {
         }
     }
     
-    private static void addFileObjects(Node node, Set<File> files, Set<File> rootFiles) {
+    private static void addFileObjects(Node node, Set<File> rootFiles) {
         Collection<? extends NonRecursiveFolder> folders = node.getLookup().lookup(new Lookup.Template<NonRecursiveFolder>(NonRecursiveFolder.class)).allInstances();
         List<File> nodeFiles = new ArrayList<File>();
         if (folders.size() > 0) {
@@ -291,7 +312,6 @@ public final class VCSContext {
                 }
             }
         }
-        files.addAll(nodeFiles);
         rootFiles.addAll(nodeFiles);
     }
     
@@ -308,6 +328,7 @@ public final class VCSContext {
         this.elements = nodes != null ? Lookups.fixed(nodes) : Lookups.fixed(new Node[0]);
         Set<File> tempRootFiles = new HashSet<File>(rootFiles);
         Set<File> tempExclusions = new HashSet<File>(exclusions);
+        this.unfilteredRootFiles = Collections.unmodifiableSet(new HashSet<File>(tempRootFiles));
         while (normalize(tempRootFiles, tempExclusions));
         this.rootFiles = Collections.unmodifiableSet(tempRootFiles);
         this.exclusions = Collections.unmodifiableSet(tempExclusions);
