@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm.deep;
 
+import org.netbeans.modules.cnd.modelimpl.csm.core.CsmIdentifiable;
 import java.util.*;
 
 import org.netbeans.modules.cnd.api.model.*;
@@ -76,6 +77,14 @@ public class ExpressionBase extends OffsetableBase implements CsmExpression {
 	}
     }
 
+    public ExpressionBase(int startOffset, int endOffset, CsmFile file, CsmExpression parent, CsmScope scope) {
+        super(file, startOffset, endOffset);
+        this.parent = parent;
+        if( scope != null ) {
+	    setScope(scope);
+	}
+    }
+
     public CsmExpression.Kind getKind() {
         return kind;
     }
@@ -99,7 +108,7 @@ public class ExpressionBase extends OffsetableBase implements CsmExpression {
         }
     }
 
-    public List/*<CsmExpression>*/ getOperands() {
+    public List<CsmExpression> getOperands() {
         if( operands == null ) {
             operands = new ArrayList<CsmExpression>();
         }

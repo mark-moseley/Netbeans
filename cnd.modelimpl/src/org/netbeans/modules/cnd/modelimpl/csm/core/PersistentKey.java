@@ -41,7 +41,7 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
+import org.netbeans.modules.cnd.modelimpl.csm.core.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmProject;
 import org.netbeans.modules.cnd.api.model.CsmUID;
@@ -86,15 +86,15 @@ public final class PersistentKey {
         } else {
             //System.out.println("Skip "+uniq);
         }
-        return new PersistentKey(decl.getUID());
+        return new PersistentKey(UIDs.get(decl));
     }
     
-    public CsmIdentifiable getObject(){
+    public Object getObject(){
         switch(kind){
             case UID:
-                return (CsmIdentifiable) ((CsmUID)key).getObject();
+                return ((CsmUID)key).getObject();
             case PROXY:
-                return (CsmIdentifiable) key;
+                return key;
             case DECLARATION:
                 return project.findDeclaration((CharSequence)key);
         }

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,21 +31,64 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.api.model;
+package org.netbeans.modules.cnd.api.model.util;
+
+import org.netbeans.modules.cnd.api.model.CsmUID;
+import org.netbeans.modules.cnd.spi.model.UIDProvider;
+import org.openide.util.Lookup;
 
 /**
- * intefrace to present object that has unique ID
- * unique ID is used to long-time stored references on Csm Objects
- * 
- * @see CsmUID
- * @author Vladimir Voskresensky
+ * Utility class to get Object UID
+ * @author Egor Ushakov
  */
-public interface CsmIdentifiable<T> extends CsmObject {
-    
+public final class UIDs {
+    private static UIDProvider provider;
+    private static final UIDProvider EMPTY = new SelfUIDProvider();
+    private UIDs() {
+    }
+
     /**
-     * gets unique identifier associated with object to store reference
+     * returns never-null handler which can be used to restore object
+     * @param <T>
+     * @param obj object for which handler should be returned
+     * @return never-null handler
      */
-    CsmUID<T> getUID();
+    public static <T> CsmUID<T> get(T obj) {
+        return getProvider().get(obj);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // impl details
+    
+    private static synchronized UIDProvider getProvider() {
+        if (provider == null) {
+            provider = Lookup.getDefault().lookup(UIDProvider.class);
+        }
+        return provider == null ? EMPTY : provider;
+    }
+
+    private final static class SelfUIDProvider implements UIDProvider {
+        public <T> CsmUID<T> get(T obj) {
+            return new SelfUID<T>(obj);
+        }
+
+        private static final class SelfUID<T> implements CsmUID<T> {
+
+            private final T element;
+
+            SelfUID(T element) {
+                this.element = element;
+            }
+
+            public T getObject() {
+                return this.element;
+            }
+        }
+    }
 }

@@ -39,80 +39,22 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.modelimpl.csm.deep;
+package org.netbeans.modules.cnd.modelimpl.csm.core;
 
-
-import org.netbeans.modules.cnd.modelimpl.csm.core.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.*;
-import org.netbeans.modules.cnd.api.model.deep.*;
-
-import antlr.collections.AST;
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
-
-import org.netbeans.modules.cnd.modelimpl.csm.core.*;
-import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
-import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
 
 /**
- * Common ancestor for all statements
- * @author Vladimir Kvashin
+ * intefrace to present object that has unique ID
+ * unique ID is used to long-time stored references on Csm Objects
+ * class which implements CsmIdentifiable must return CsmUID<T> where T is
+ * the same as implementation class or one of it's super types
+ * @see CsmUID
+ * @author Vladimir Voskresensky
  */
-public abstract class StatementBase extends OffsetableBase implements CsmStatement {
+public interface CsmIdentifiable extends CsmObject {
     
-    private final AST ast;
-    
-    private CsmScope scopeRef;
-    private CsmUID<CsmScope> scopeUID;
-    
-    public StatementBase(AST ast, CsmFile file, CsmScope scope) {
-            super(ast, file);
-            this.ast = ast;
-	    if( scope != null ) {
-		setScope(scope);
-	    }
-    }
-    
-    public CsmScope getScope() {
-        CsmScope scope = this.scopeRef;
-        if (scope == null) {
-            scope = UIDCsmConverter.UIDtoScope(this.scopeUID);
-            assert (scope != null || this.scopeUID == null) : "null object for UID " + this.scopeUID;
-        }
-        return scope;
-    }
-    
-    protected void setScope(CsmScope scope) {
-	// within bodies scope is a statement - it is not Identifiable
-        if (scope instanceof CsmIdentifiable) {
-            this.scopeUID = UIDCsmConverter.scopeToUID(scope);
-            assert (scopeUID != null || scope == null);
-        } else {
-            this.scopeRef = scope;
-        }
-    }
-    
-    protected AST getAst() {
-        return ast;
-    }
-    
-    @Override
-    protected void write(DataOutput output) throws IOException {
-        super.write(output);
-        UIDObjectFactory.getDefaultFactory().writeUID(this.scopeUID, output);
-    }
-    
-    protected StatementBase(DataInput input) throws IOException {
-        super(input);
-        this.ast = null;
-        this.scopeUID = UIDObjectFactory.getDefaultFactory().readUID(input);
-    }   
-
-    @Override
-    public String toString() {
-        return "" + getKind() + ' ' + getOffsetString(); // NOI18N
-    }
-    
-    
+    /**
+     * gets unique identifier associated with object to store reference
+     */
+    CsmUID<?> getUID();
 }

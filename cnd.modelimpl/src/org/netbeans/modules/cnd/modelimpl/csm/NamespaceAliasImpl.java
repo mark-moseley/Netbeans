@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm;
 
+import org.netbeans.modules.cnd.modelimpl.csm.core.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.*;
 import antlr.collections.AST;
 import java.io.DataInput;
@@ -51,6 +52,7 @@ import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 import org.netbeans.modules.cnd.modelimpl.textcache.QualifiedNameCache;
+import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
 import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
 
@@ -65,9 +67,12 @@ public class NamespaceAliasImpl extends OffsetableDeclarationBase<CsmNamespaceAl
     private final CharSequence[] rawName;
     
     private CsmUID<CsmNamespace> referencedNamespaceUID = null;
+
+    private CsmUID<CsmScope> scopeUID = null;
     
-    public NamespaceAliasImpl(AST ast, CsmFile file) {
+    public NamespaceAliasImpl(AST ast, CsmFile file, CsmScope scope) {
         super(ast, file);
+        _setScope(scope);
         rawName = createRawName(ast);
         alias = QualifiedNameCache.getManager().getString(ast.getText());
         AST token = ast.getFirstChild();
@@ -97,10 +102,23 @@ public class NamespaceAliasImpl extends OffsetableDeclarationBase<CsmNamespaceAl
         }
     }
 
+    private void _setScope(CsmScope scope) {
+        if ((scope instanceof CsmIdentifiable)) {
+            this.scopeUID = UIDCsmConverter.scopeToUID(scope);
+            assert (scopeUID != null || scope == null);
+        }
+    }
+
+    private synchronized CsmScope _getScope() {
+        CsmScope scope = UIDCsmConverter.UIDtoScope(this.scopeUID);
+        assert (scope != null || this.scopeUID == null) : "null object for UID " + this.scopeUID;
+        return scope;
+    }
+
     public CsmNamespace getReferencedNamespace() {
 //        if (!Boolean.getBoolean("cnd.modelimpl.resolver2"))
         //assert ResolverFactory.resolver != 2;
-        return getContainingFile().getProject().findNamespace(namespace);
+        return ((ProjectBase)(getContainingFile().getProject())).findNamespace(namespace, true);
     }
 
     public CsmDeclaration.Kind getKind() {
@@ -116,6 +134,13 @@ public class NamespaceAliasImpl extends OffsetableDeclarationBase<CsmNamespaceAl
     }
     
     public CharSequence getQualifiedName() {
+        CsmScope scope = getScope();
+        if( (scope instanceof CsmNamespace) || (scope instanceof CsmNamespaceDefinition) ) {
+            CharSequence scopeQName = ((CsmQualifiedNamedElement) scope).getQualifiedName();
+            if( scopeQName != null && scopeQName.length() > 0 ) {
+                return CharSequenceKey.create(scopeQName.toString() + "::" + getQualifiedNamePostfix()); // NOI18N
+            }
+        }
         return getName();
     }
     
@@ -143,8 +168,16 @@ public class NamespaceAliasImpl extends OffsetableDeclarationBase<CsmNamespaceAl
     }
     
     public CsmScope getScope() {
-        //TODO: implement!
-        return null;
+        return _getScope();
+    }
+
+    @Override
+    public void dispose() {
+        super.dispose();
+        CsmScope scope = _getScope();
+        if( scope instanceof MutableDeclarationsContainer ) {
+            ((MutableDeclarationsContainer) scope).removeDeclaration(this);
+        }
     }
     
     ////////////////////////////////////////////////////////////////////////////
@@ -161,6 +194,7 @@ public class NamespaceAliasImpl extends OffsetableDeclarationBase<CsmNamespaceAl
         
         // save cached namespace
         UIDObjectFactory.getDefaultFactory().writeUID(this.referencedNamespaceUID, output);
+        UIDObjectFactory.getDefaultFactory().writeUID(this.scopeUID, output);
     }
     
     public NamespaceAliasImpl(DataInput input) throws IOException {
@@ -172,6 +206,7 @@ public class NamespaceAliasImpl extends OffsetableDeclarationBase<CsmNamespaceAl
         this.rawName = PersistentUtils.readStrings(input, NameCache.getManager());
         
         // read cached namespace
-        this.referencedNamespaceUID = UIDObjectFactory.getDefaultFactory().readUID(input);        
+        this.referencedNamespaceUID = UIDObjectFactory.getDefaultFactory().readUID(input);
+        this.scopeUID = UIDObjectFactory.getDefaultFactory().readUID(input);
     }    
 }
