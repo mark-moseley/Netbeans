@@ -127,6 +127,10 @@ class PSheet extends JPanel implements MouseListener {
         getActionMap().put("popup", new PopupAction()); //NOI18N
         getActionMap().put("PreviousViewAction", new SwitchTabAction(-1)); //NOI18N
         getActionMap().put("NextViewAction", new SwitchTabAction(1)); //NOI18N
+        if( PropUtils.isAqua ) {
+            setBackground( UIManager.getColor("NbExplorerView.background") ); //NOI18N
+            setOpaque(true);
+        }
     }
 
     SelectionAndScrollPositionManager manager() {
@@ -698,11 +702,17 @@ class PSheet extends JPanel implements MouseListener {
         pane.setResizeWeight(1);
         pane.setDividerLocation(0.80f);
         pane.setBorder(BorderFactory.createEmptyBorder());
-        pane.setUI(PropUtils.createSplitPaneUI());
+        //Do not install our custom split pane UI on Nimbus L&F
+        if (!"Nimbus".equals(UIManager.getLookAndFeel().getID())) {
+            pane.setUI(PropUtils.createSplitPaneUI());
+        }
 
         // #52188: default F6 behaviour doesn't make to much sense in NB 
         // property sheet and blocks NetBeans default F6
         pane.getActionMap().getParent().remove("toggleFocus");
+        if( PropUtils.isAqua ) {
+            pane.setBackground( UIManager.getColor("NbExplorerView.background") ); //NOI18N
+        }
 
         return pane;
     }
