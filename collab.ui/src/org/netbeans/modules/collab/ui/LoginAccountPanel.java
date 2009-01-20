@@ -49,6 +49,7 @@ import org.openide.util.*;
 import com.sun.collablet.Account;
 import com.sun.collablet.AccountManager;
 import com.sun.collablet.CollabManager;
+import java.util.prefs.Preferences;
 import org.netbeans.modules.collab.core.Debug;
 import org.openide.awt.Mnemonics;
 
@@ -70,6 +71,8 @@ public class LoginAccountPanel extends JPanel {
     private Set pendingLogins = Collections.synchronizedSet(new HashSet());
     private Account newAccount;
     private int locks;
+
+    private static final Preferences prefs = NbPreferences.forModule(LoginAccountPanel.class);
 
     /**
      *
@@ -108,7 +111,7 @@ public class LoginAccountPanel extends JPanel {
         updateAccountList();
 
         if (SHOW_BACKGROUND) {
-            backgroundImage = Utilities.loadImage("org/netbeans/modules/collab/ui/resources/login_bg.jpg");
+            backgroundImage = ImageUtilities.loadImage("org/netbeans/modules/collab/ui/resources/login_bg.jpg");
 
             if (backgroundImage == null) {
                 Debug.out.println("Couldn't load background image");
@@ -360,6 +363,11 @@ public class LoginAccountPanel extends JPanel {
         CollabManager manager = CollabManager.getDefault();
         assert manager != null : "Could not find default CollabManager"; // NOI18N
 
+        if (account.getServer().startsWith("share.java.net") && // NOI18N
+            prefs.getBoolean("server.warning.show", Boolean.TRUE)) { // NOI18N
+            ServerWarningAction a = SharedClassObject.findObject(ServerWarningAction.class, true);
+            a.showDialog();
+        }
         loginButton.setEnabled(false);
 
         // Prompt for the login
@@ -390,6 +398,11 @@ public class LoginAccountPanel extends JPanel {
         CollabManager manager = CollabManager.getDefault();
         assert manager != null : "Could not find default CollabManager"; // NOI18N
 
+        if (account.getServer().startsWith("share.java.net") && // NOI18N
+            prefs.getBoolean("server.warning.show", Boolean.TRUE)) { // NOI18N
+            ServerWarningAction a = SharedClassObject.findObject(ServerWarningAction.class, true);
+            a.showDialog();
+        }
         loginButton.setEnabled(false);
 
         // Prompt for the login
@@ -740,7 +753,7 @@ public class LoginAccountPanel extends JPanel {
      *
      */
     public final class AccountListRenderer extends DefaultListCellRenderer {
-        private final Image IMAGE = Utilities.loadImage("org/netbeans/modules/collab/core/resources/account_png.gif"); // NOI18N
+        private final Image IMAGE = ImageUtilities.loadImage("org/netbeans/modules/collab/core/resources/account_png.gif"); // NOI18N
         private final Image DISABLED_IMAGE = GrayFilter.createDisabledImage(IMAGE);
         private final Icon ICON = new ImageIcon(IMAGE);
         private final Icon DISABLED_ICON = new ImageIcon(DISABLED_IMAGE);
