@@ -45,9 +45,11 @@ import java.awt.BorderLayout;
 import java.util.Arrays;
 import javax.swing.JFrame;
 import javax.swing.JScrollPane;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
@@ -66,10 +68,9 @@ import org.netbeans.modules.editor.errorstripe.privatespi.Mark;
 import org.netbeans.modules.editor.errorstripe.privatespi.Status;
 import org.netbeans.spi.editor.errorstripe.UpToDateStatus;
 import org.netbeans.modules.editor.options.AnnotationTypeProcessor;
-import org.netbeans.modules.editor.options.BaseOptions;
 import org.netbeans.modules.editor.plain.PlainKit;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
@@ -81,13 +82,11 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         super(testName);
     }
 
-    protected void setUp() throws Exception {
+    protected @Override void setUp() throws Exception {
         UnitUtilities.prepareTest(new String[] {"/org/netbeans/modules/editor/resources/annotations-test-layer.xml",
                                                 "/org/netbeans/modules/editor/plain/resources/layer.xml",
                                                 "/org/netbeans/modules/editor/errorstripe/test-layer.xml"},
                                   new Object[0]);
-        BaseKit.getKit(PlainKit.class);
-        BaseOptions.findObject(BaseOptions.class, true);
                 
         AnnotationTypes.getTypes().registerLoader(new AnnotationsLoader());
         CaretMarkProviderCreator.switchOff = true;
@@ -254,12 +253,12 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         AnnotationView aView = new AnnotationView(editor);
         AnnotationViewDataImpl data = (AnnotationViewDataImpl) aView.getData();
         
-        List mergedMarks;
+        Collection mergedMarks;
         SortedMap map;
         
         mergedMarks = data.getMergedMarks();
         
-        assertEquals(marks, mergedMarks);
+        assertEquals(new LinkedHashSet(marks), mergedMarks);
         
         map = data.getMarkMap();
         
@@ -270,7 +269,7 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         
         mergedMarks = data.getMergedMarks();
         
-        assertEquals(marksOnlyFirst, mergedMarks);
+        assertEquals(new LinkedHashSet(marksOnlyFirst), mergedMarks);
         
         map = data.getMarkMap();
         
@@ -281,7 +280,7 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         
         mergedMarks = data.getMergedMarks();
         
-        assertEquals(marksFirstAndThird, mergedMarks);
+        assertEquals(new LinkedHashSet(marksFirstAndThird), mergedMarks);
         
         map = data.getMarkMap();
         
@@ -296,7 +295,7 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         
         mergedMarks = data.getMergedMarks();
         
-        assertEquals(Collections.EMPTY_LIST, mergedMarks);
+        assertEquals(Collections.emptySet(), mergedMarks);
         
         map = data.getMarkMap();
         
@@ -306,7 +305,7 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         
         mergedMarks = data.getMergedMarks();
         
-        assertEquals(marksFirstAndThird, mergedMarks);
+        assertEquals(new LinkedHashSet(marksFirstAndThird), mergedMarks);
         
         map = data.getMarkMap();
         
@@ -418,7 +417,7 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         assertEquals(test2, ((AnnotationMark) data.getMainMarkForBlock(2, 2)).getAnnotationDesc());
     }
     
-    protected boolean runInEQ() {
+    protected @Override boolean runInEQ() {
         return true;
     }
     
@@ -466,7 +465,7 @@ public class AnnotationViewDataImplTest extends NbTestCase {
         public void loadTypes() {
             try {
                 Map typesInstances = new HashMap();
-                FileObject typesFolder = Repository.getDefault().getDefaultFileSystem().findResource("Editors/AnnotationTypes");
+                FileObject typesFolder = FileUtil.getConfigFile("Editors/AnnotationTypes");
                 FileObject[] types = typesFolder.getChildren();
                 
                 for (int cntr = 0; cntr < types.length; cntr++) {
