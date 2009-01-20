@@ -45,6 +45,7 @@ import java.awt.Component;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.Timer;
 import javax.swing.JToggleButton;
@@ -63,6 +64,8 @@ import javax.swing.plaf.ButtonUI;
 public final class SlidingButton extends JToggleButton {
     /** UI Class ID for IndexButtons, to be used by providers of UI delegates */
     public static final String UI_CLASS_ID = "SlidingButtonUI";
+
+    private static final boolean isAqua = "Aqua".equals(UIManager.getLookAndFeel().getID()); //NOI18N
     
 //    /**** XXX temporary - should go into LFDefaults table *********/
 //    static {
@@ -95,39 +98,49 @@ public final class SlidingButton extends JToggleButton {
         
         this.orientation = orientation;
         data = buttonData;
-        // XXX
-        //setFont (displayer.getFont());
         setFocusable(false);
-//        setFocusPainted(false);
         setRolloverEnabled(true);
         setIconTextGap(3);
         setVerticalAlignment(SwingConstants.CENTER);
         setHorizontalAlignment(SwingConstants.CENTER);
-//        setMargin(new Insets(1,1,1,1));
-        setMargin(new Insets(0,3,0,3));
+        if ("Nimbus".equals(UIManager.getLookAndFeel().getID())) {
+            Insets insets = UIManager.getInsets("Button.contentMargins");
+            if (insets != null) {
+                setBorder(BorderFactory.createEmptyBorder(insets.top, insets.left, insets.bottom, insets.right));
+            } else {
+                setBorder(BorderFactory.createEmptyBorder(6, 14, 6, 14));
+            }
+        } else if( isAqua ) {
+            setBorder(BorderFactory.createEmptyBorder(4,10,4,10));
+            putClientProperty("JComponent.sizeVariant", "small");
+            setOpaque(false);
+        } else {
+            setMargin(new Insets(0,3,0,3));
+        }
         setBorderPainted(false);
-//        setHorizontalTextPosition(SwingConstants.);
-//        setVerticalTextPosition(SwingConstants.CENTER);
-        // note, updateUI() is called from superclass constructor
     }
 
+    @Override
     public void addNotify() {
         super.addNotify();
         //XXX register with tooltip manager
     }
 
+    @Override
     public void removeNotify() {
         super.removeNotify();
         setBlinking(false);
         //XXX register with tooltip manager
     }
     
+    @Override
     public String getToolTipText() {
         return data.getTooltip();
     }
-    
+
     /************** Swing standard technique for attaching UI class *********/
     
+    @Override
     public void updateUI () {
         ButtonUI ui = (ButtonUI)UIManager.getUI(this);
         if (ui == null) {
@@ -137,6 +150,7 @@ public final class SlidingButton extends JToggleButton {
         setUI (ui);
     }
 
+    @Override
     public String getUIClassID() {
         return UI_CLASS_ID;
     }
@@ -170,7 +184,7 @@ public final class SlidingButton extends JToggleButton {
             repaint();
         }
     }
-    
+
     private class BlinkListener implements ActionListener {
         public void actionPerformed (ActionEvent ae) {
             blinkState = !blinkState;
@@ -186,6 +200,7 @@ public final class SlidingButton extends JToggleButton {
         return blinkState;
     }
     
+    @Override
     public final Color getBackground() {
         return isBlinkState() ? 
             new Color(252, 250, 244) : super.getBackground();

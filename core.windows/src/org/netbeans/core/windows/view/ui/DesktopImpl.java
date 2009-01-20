@@ -41,11 +41,13 @@
 
 package org.netbeans.core.windows.view.ui;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.LayoutManager;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -55,6 +57,7 @@ import java.util.Set;
 import javax.swing.JLayeredPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import org.netbeans.core.windows.Constants;
 import org.netbeans.core.windows.view.SlidingView;
 import org.netbeans.core.windows.view.ViewElement;
@@ -78,8 +81,6 @@ public final class DesktopImpl {
     private JPanel desktop;
     /** root of slit views */
     private ViewElement splitRoot;
-    private ViewElement maximizedMode;
-    private Component splitRootComponent;
     private Component viewComponent;
     
     /** slide bars. Lazy initialization, because slide bars are optional. */
@@ -99,6 +100,11 @@ public final class DesktopImpl {
         // desktop represents regular layer of layeredPane
         desktop = new JPanel();
         desktop.setLayout(new GridBagLayout());
+        Color bkColor = UIManager.getColor("NbSplitPane.background"); //NOI18N
+        if( null != bkColor ) {
+            desktop.setBackground(bkColor);
+            desktop.setOpaque(true);
+        }
         layeredPane.add(desktop);
     }
     
@@ -134,7 +140,6 @@ public final class DesktopImpl {
     
    public void setMaximizedView(ViewElement component) {
 
-        maximizedMode = component;
         if (component.getComponent() != viewComponent) {
             setViewComponent(component.getComponent());
 
@@ -153,9 +158,12 @@ public final class DesktopImpl {
             GridBagConstraints constr = new GridBagConstraints();
             constr.gridx = 1;
             constr.gridy = 0;
-            constr.fill = constr.BOTH;
+            constr.fill = GridBagConstraints.BOTH;
             constr.weightx = 1;
             constr.weighty = 1;
+            Insets insets = UIManager.getInsets("nb.desktop.view.insets"); //NOI18N
+            if( null != insets )
+                constr.insets = insets;
             desktop.add(component, constr);
         }
         layeredPane.revalidate();
@@ -175,19 +183,20 @@ public final class DesktopImpl {
         GridBagConstraints constraint = new GridBagConstraints();
         constraint.fill = GridBagConstraints.BOTH;
         if (Constants.BOTTOM.equals(view.getSide())) {
-            constraint.gridx = 1;
+            constraint.gridx = 0;
             constraint.gridy = 1;
+            constraint.gridwidth = 3;
             constraint.anchor = GridBagConstraints.SOUTHWEST;
             
         } else if (Constants.LEFT.equals(view.getSide())) {
             constraint.gridx = 0;
             constraint.gridy = 0;
-            constraint.gridheight = 2;
+            constraint.gridheight = 1;
             constraint.anchor = GridBagConstraints.NORTHWEST;
         } else if (Constants.RIGHT.equals(view.getSide())) {
             constraint.gridx = 2;
             constraint.gridy = 0;
-            constraint.gridheight = 2;
+            constraint.gridheight = 1;
             constraint.anchor = GridBagConstraints.NORTHEAST;
         }
         desktop.add(view.getComponent(), constraint);
@@ -308,21 +317,37 @@ public final class DesktopImpl {
         editorBounds = new Rectangle(editorLeftTop, editorBounds.getSize());
         String side = operation.getSide();
         SlidingView view = findView(side);
-        Rectangle splitRootRect = viewComponent.getBounds();
+        return computeSlideInBounds( viewComponent.getBounds(), side, view.getComponent(), view.getSlideBounds(), view.getSelectedTopComponent() );
+    }
+    
+    //Package private for unit testing
+    Rectangle computeSlideInBounds( Rectangle splitRootRect, String side, Component slideComponent, Rectangle slideBounds, TopComponent selTc ) {
         Rectangle result = new Rectangle();
-        Rectangle viewRect = view.getComponent().getBounds();
-        Dimension viewPreferred = view.getComponent().getPreferredSize();
+        Rectangle viewRect = slideComponent.getBounds();
+        Dimension viewPreferred = slideComponent.getPreferredSize();
         int minThick = MIN_EDITOR_ALIGN_THICK;
         
-        TopComponent tc = view.getSelectedTopComponent();
-        if( null != tc && Boolean.TRUE.equals( tc.getClientProperty( "keepPreferredSizeWhenSlideIn" ) ) ) // NOI18N
+        Dimension tcPreferred = null;
+        boolean keepPreferredSizeWhenSlidedIn = null != selTc 
+                && Boolean.TRUE.equals( selTc.getClientProperty( Constants.KEEP_PREFERRED_SIZE_WHEN_SLIDED_IN ) );
+        if( keepPreferredSizeWhenSlidedIn ) {
+            tcPreferred = selTc.getPreferredSize();
+            if( null == tcPreferred )
+                tcPreferred = slideBounds.getSize();
+        }
+        
+        if( keepPreferredSizeWhenSlidedIn )
             minThick = 20;
         
         if (Constants.LEFT.equals(side)) {
             result.x = viewRect.x + Math.max(viewRect.width, viewPreferred.width);
             result.y = 0;
-            result.height = splitRootRect.height;
-            result.width = view.getSlideBounds().width;
+            result.height = keepPreferredSizeWhenSlidedIn 
+                    ? tcPreferred.height
+                    : splitRootRect.height;
+            result.width = keepPreferredSizeWhenSlidedIn 
+                    ? tcPreferred.width 
+                    : slideBounds.width;
             if (result.width < minThick) {
                 result.width = splitRootRect.width / 3;
             }
@@ -332,27 +357,37 @@ public final class DesktopImpl {
             }
         } else if (Constants.RIGHT.equals(side)) {
             int rightLimit = /*layeredPane.getBounds().x  + */ layeredPane.getBounds().width - Math.max(viewRect.width, viewPreferred.width);
-            result.x = (view.getSlideBounds().width < minThick)
-                        ? rightLimit - splitRootRect.width / 3 : rightLimit - view.getSlideBounds().width;
+            int width = keepPreferredSizeWhenSlidedIn
+                    ? tcPreferred.width
+                    : slideBounds.width;
+            result.x = (width < minThick)
+                        ? rightLimit - splitRootRect.width / 3 : rightLimit - width;
             if (result.x < 0) {
                 // make sure we are not bigger than the current window..
                 result.x = 0;
             }
             result.y = 0;
-            result.height = splitRootRect.height;
+            result.height = keepPreferredSizeWhenSlidedIn
+                    ? tcPreferred.height 
+                    : splitRootRect.height;
             result.width = rightLimit - result.x;
             
         } else if (Constants.BOTTOM.equals(side)) {
             int lowerLimit = viewRect.y + viewRect.height - Math.max(viewRect.height, viewPreferred.height);
+            int height = keepPreferredSizeWhenSlidedIn 
+                    ? tcPreferred.height
+                    : slideBounds.height;
             result.x = splitRootRect.x;
-            result.y = (view.getSlideBounds().height < minThick)
-                        ? lowerLimit - splitRootRect.height / 3 : lowerLimit - view.getSlideBounds().height;
+            result.y = (height < minThick)
+                        ? lowerLimit - splitRootRect.height / 3 : lowerLimit - height;
             if (result.y < 0) {
                 // make sure we are not bigger than the current window..
                 result.y = 0;
             }
             result.height = lowerLimit - result.y;
-            result.width = splitRootRect.width;
+            result.width = keepPreferredSizeWhenSlidedIn
+                    ? tcPreferred.width 
+                    : splitRootRect.width;
         }
         return result;
     }
@@ -436,13 +471,17 @@ public final class DesktopImpl {
                 // #43865, #49320 - sliding wiew or viewcomponent could be removed by closing
                 if (curView != null && viewComponent != null) {
                     Component slidedComp = curSlideIn.getComponent();
+                    TopComponent tc = curView.getSelectedTopComponent();
+                    boolean keepPreferredSizeWhenSlidedIn = null != tc 
+                            && Boolean.TRUE.equals( tc.getClientProperty( Constants.KEEP_PREFERRED_SIZE_WHEN_SLIDED_IN ) );
                     Rectangle result = slidedComp.getBounds();
                     Rectangle viewRect = curView.getComponent().getBounds();
                     Dimension viewPrefSize = curView.getComponent().getPreferredSize();
                     Rectangle splitRootRect = viewComponent.getBounds();
 
                     if (Constants.LEFT.equals(side)) {
-                        result.height = splitRootRect.height;
+                        if( !keepPreferredSizeWhenSlidedIn )
+                            result.height = splitRootRect.height;
                         if (lastSize != null && !lastSize.equals(size)) {
                             int wid = curView.getSlideBounds().width;
                             if (wid > (size.width - viewRect.width)) {
@@ -453,7 +492,8 @@ public final class DesktopImpl {
                             }
                         }
                     } else if (Constants.RIGHT.equals(side)) {
-                        result.height = splitRootRect.height;
+                        if( !keepPreferredSizeWhenSlidedIn )
+                            result.height = splitRootRect.height;
                         if (lastSize != null && !lastSize.equals(size)) {
                             int avail = size.width - Math.max(viewRect.width, viewPrefSize.width);
                             int wid = curView.getSlideBounds().width;
@@ -466,7 +506,8 @@ public final class DesktopImpl {
                             }
                         }
                     } else if (Constants.BOTTOM.equals(side)) {
-                        result.width = splitRootRect.width;
+                        if( !keepPreferredSizeWhenSlidedIn )
+                            result.width = splitRootRect.width;
                         if (lastSize != null && !lastSize.equals(size)) {
                             int avail = size.height - Math.max(viewRect.height, viewPrefSize.height);
                             int hei = viewRect.height;

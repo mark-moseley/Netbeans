@@ -41,8 +41,12 @@
 
 package org.netbeans.core.windows.view.ui.slides;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -52,14 +56,21 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.ButtonModel;
+import javax.swing.JPanel;
+import javax.swing.JToggleButton;
 import javax.swing.SingleSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.border.Border;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ListDataEvent;
 import org.netbeans.core.windows.Constants;
+import org.netbeans.core.windows.Switches;
 import org.netbeans.core.windows.WindowManagerImpl;
 import org.netbeans.core.windows.view.ui.Tabbed;
 import org.netbeans.core.windows.view.ui.tabcontrol.TabbedAdapter;
@@ -68,7 +79,7 @@ import org.netbeans.swing.tabcontrol.SlidingButton;
 import org.netbeans.swing.tabcontrol.TabData;
 import org.netbeans.swing.tabcontrol.TabDisplayer;
 import org.netbeans.swing.tabcontrol.TabbedContainer;
-import org.netbeans.swing.tabcontrol.WinsysInfoForTabbed;
+import org.netbeans.swing.tabcontrol.WinsysInfoForTabbedContainer;
 import org.netbeans.swing.tabcontrol.event.ComplexListDataEvent;
 import org.netbeans.swing.tabcontrol.event.ComplexListDataListener;
 import org.openide.windows.TopComponent;
@@ -84,7 +95,7 @@ import org.openide.windows.TopComponent;
  * @author Dafe Simonek
  */
 public final class SlideBar extends Box implements ComplexListDataListener,
-    SlideBarController, Tabbed.Accessor, WinsysInfoForTabbed, ChangeListener {
+    SlideBarController, Tabbed.Accessor, ChangeListener {
     
     /** Command indicating request for slide in (appear) of sliding component */
     public static final String COMMAND_SLIDE_IN = "slideIn"; //NOI18N
@@ -102,7 +113,9 @@ public final class SlideBar extends Box implements ComplexListDataListener,
 
     /** Action command indicating that component is going from regular to maximized size and vice versa */
     public static final String COMMAND_MAXIMIZE = "slideMaximize"; //NOI18N
-    
+
+    private static final boolean isAqua = "Aqua".equals(UIManager.getLookAndFeel().getID());
+
     /** Asociation with Tabbed implementation */
     private final TabbedSlideAdapter tabbed;
     /** Holds all data of slide bar */
@@ -135,6 +148,16 @@ public final class SlideBar extends Box implements ComplexListDataListener,
         
         dataModel.addComplexListDataListener(this);
         selModel.addChangeListener(this);
+
+        if( isAqua ) {
+            if( dataModel.getOrientation() == SlideBarDataModel.SOUTH ) {
+                setBorder(BorderFactory.createEmptyBorder(1, 0, 0, 0));
+            } else if( dataModel.getOrientation() == SlideBarDataModel.WEST ) {
+                setBorder(BorderFactory.createEmptyBorder(1, 0, 0, 4));
+            } else if( dataModel.getOrientation() == SlideBarDataModel.EAST ) {
+                setBorder(BorderFactory.createEmptyBorder(1, 4, 0, 0));
+            }
+        }
     }
     
     public SlideBarDataModel getModel() {
@@ -158,7 +181,7 @@ public final class SlideBar extends Box implements ComplexListDataListener,
             curButton = new SlidingButton(data.getTab(i), data.getOrientation());
             gestureRecognizer.attachButton(curButton);
             buttons.add(i, curButton);
-            add(curButton, i * 2);
+            add(isAqua ? new AquaButtonPanel(curButton) : curButton, i * 2 );
             add(createStrut(), i * 2 + 1);
             revalidate();
         }
@@ -254,8 +277,8 @@ public final class SlideBar extends Box implements ComplexListDataListener,
             }
         }
     }
-    
-    
+
+
     /********** implementation of SlideBarController *****************/
     
     public void userToggledAutoHide(int tabIndex, boolean enabled) {
@@ -263,8 +286,9 @@ public final class SlideBar extends Box implements ComplexListDataListener,
     }
     
     public void userToggledTransparency(int tabIndex) {
-        if( tabIndex == getSelectionModel().getSelectedIndex() )
-            commandMgr.toggleTransparency();
+        if( tabIndex != getSelectionModel().getSelectedIndex() )
+            getSelectionModel().setSelectedIndex( tabIndex );
+        commandMgr.toggleTransparency( tabIndex );
     }
     
     public void userTriggeredPopup(MouseEvent mouseEvent, Component clickedButton) {
@@ -368,19 +392,39 @@ public final class SlideBar extends Box implements ComplexListDataListener,
         return tabbed;
     }
     
-    /********* implementation of WinsysInfoForTabbed **************/
+    /********* implementation of WinsysInfoForTabbedContainer **************/
     
-    public Object getOrientation(Component comp) {
-        if (WindowManagerImpl.getInstance().getEditorAreaState() != Constants.EDITOR_AREA_JOINED) {
-            return TabDisplayer.ORIENTATION_INVISIBLE;
+    public WinsysInfoForTabbedContainer createWinsysInfo() {
+        return new SlidedWinsysInfoForTabbedContainer();
+    }
+    
+    private class SlidedWinsysInfoForTabbedContainer extends WinsysInfoForTabbedContainer {
+        public Object getOrientation(Component comp) {
+            if (WindowManagerImpl.getInstance().getEditorAreaState() != Constants.EDITOR_AREA_JOINED) {
+                return TabDisplayer.ORIENTATION_INVISIBLE;
+            }
+            return TabDisplayer.ORIENTATION_CENTER;
         }
-        return TabDisplayer.ORIENTATION_CENTER;
+
+        public boolean inMaximizedMode(Component comp) {
+            return TabbedAdapter.isInMaximizedMode(comp);
+        }
+
+        @Override
+        public boolean isTopComponentSlidingEnabled() {
+            return Switches.isTopComponentSlidingEnabled();
+        }
+
+        @Override
+        public boolean isTopComponentClosingEnabled() {
+            return Switches.isViewTopComponentClosingEnabled();
+        }
+
+        @Override
+        public boolean isTopComponentMaximizationEnabled() {
+            return Switches.isTopComponentMaximizationEnabled();
+        }
     }
-    
-    public boolean inMaximizedMode(Component comp) {
-        return TabbedAdapter.isInMaximizedMode(comp);
-    }
-    
     
     /*************** non public stuff **************************/
     
@@ -426,8 +470,9 @@ public final class SlideBar extends Box implements ComplexListDataListener,
     }
     
     private Component createStrut () {
+        int strutSize = isAqua ? 0 : 5;
         return dataModel.getOrientation() == SlideBarDataModel.SOUTH
-            ? createHorizontalStrut(5) : createVerticalStrut(5);
+            ? createHorizontalStrut(strutSize) : createVerticalStrut(strutSize);
     }
     
     private void syncWithModel () {
@@ -455,7 +500,7 @@ public final class SlideBar extends Box implements ComplexListDataListener,
             }
             gestureRecognizer.attachButton(curButton);
             buttons.add(curButton);
-            add(curButton);
+            add( isAqua ? new AquaButtonPanel(curButton) : curButton );
             add(createStrut());
         }
 
@@ -473,5 +518,109 @@ public final class SlideBar extends Box implements ComplexListDataListener,
             res = ((TabbedContainer)getSlidedComp()).isTransparent();
         }
         return res;
+    }
+
+    /**
+     * Container for sliding buttons when running under Mac Aqua l&f.
+     * It used to paint correct borders and background.
+     */
+    private class AquaButtonPanel extends JPanel {
+        private final JToggleButton slidingButton;
+        private final Border pressedBorder;
+
+        public AquaButtonPanel( JToggleButton button ) {
+            super( new GridBagLayout() );
+            this.slidingButton = button;
+            if( getModel().getOrientation() == SlideBarDataModel.SOUTH ) {
+                pressedBorder = new BottomBorder();
+            } else {
+                pressedBorder = new VerticalBorder();
+            }
+            add( button, new GridBagConstraints(0, 0, 1, 1, 0.0, 0.0,
+                    GridBagConstraints.CENTER, GridBagConstraints.NONE, new Insets(2,2,2,2), 0, 0) );
+            button.getModel().addChangeListener(new ChangeListener() {
+                public void stateChanged(ChangeEvent e) {
+                    AquaButtonPanel.this.repaint();
+                }
+            });
+        }
+
+        private boolean isPressed() {
+            if( null == slidingButton )
+                return false;
+            ButtonModel model = slidingButton.getModel();
+            return model.isArmed() || model.isPressed() || model.isSelected() || model.isRollover();
+        }
+
+        @Override
+        public boolean isOpaque() {
+            return isPressed();
+        }
+
+        @Override
+        public Color getBackground() {
+            if( isPressed() )
+                return UIManager.getColor("NbSplitPane.background"); //NOI18N
+            return super.getBackground();
+        }
+
+        @Override
+        public Border getBorder() {
+            if( isPressed() ) {
+                return pressedBorder;
+            }
+            return BorderFactory.createEmptyBorder();
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            return null == slidingButton ? super.getPreferredSize() : slidingButton.getPreferredSize();
+        }
+
+        @Override
+        public Dimension getMinimumSize() {
+            return null == slidingButton ? super.getMinimumSize() : slidingButton.getMinimumSize();
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            return null == slidingButton ? super.getMaximumSize() : slidingButton.getMaximumSize();
+        }
+    }
+
+    private static final class BottomBorder implements Border {
+
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            g.setColor(UIManager.getColor("NbTabControl.borderColor")); //NOI18N
+            g.drawLine(x, y, x, y+height);
+            g.setColor(UIManager.getColor("NbTabControl.borderShadowColor")); //NOI18N
+            g.drawLine(x+width-1, y, x+width-1, y+height);
+        }
+
+        public Insets getBorderInsets(Component c) {
+            return new Insets(3,1,3,1);
+        }
+
+        public boolean isBorderOpaque() {
+            return false;
+        }
+    }
+
+    private static final class VerticalBorder implements Border {
+
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            g.setColor(UIManager.getColor("NbTabControl.borderColor")); //NOI18N
+            g.drawLine(x, y, x+width-1, y);
+            g.setColor(UIManager.getColor("NbTabControl.borderShadowColor")); //NOI18N
+            g.drawLine(x, y+height-1, x+width-1, y+height-1);
+        }
+
+        public Insets getBorderInsets(Component c) {
+            return new Insets(1,3,1,3);
+        }
+
+        public boolean isBorderOpaque() {
+            return false;
+        }
     }
 }
