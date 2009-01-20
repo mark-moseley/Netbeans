@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -93,7 +94,7 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
     private List<MarkProvider> markProviders = new ArrayList<MarkProvider>();
     private List<UpToDateStatusProvider> statusProviders = new ArrayList<UpToDateStatusProvider>();
     
-    private List<Mark> currentMarks = null;
+    private Collection<Mark> currentMarks = null;
     private SortedMap<Integer, List<Mark>> marksMap = null;
     
     /** Creates a new instance of AnnotationViewData */
@@ -113,8 +114,7 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
             document.getAnnotations().addAnnotationsListener(this);
         }
         
-        currentMarks = null;
-        marksMap     = null;
+        clear();
     }
     
     public void unregister() {
@@ -224,8 +224,8 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
         }
     }
     
-    /*package private*/ static List<Mark> createMergedMarks(List<MarkProvider> providers) {
-        List<Mark> result = new ArrayList<Mark>();
+    /*package private*/ static Collection<Mark> createMergedMarks(List<MarkProvider> providers) {
+        Collection<Mark> result = new LinkedHashSet<Mark>();
         
         for(MarkProvider provider : providers) {
             result.addAll(provider.getMarks());
@@ -234,7 +234,7 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
         return result;
     }
     
-    /*package private for tests*/synchronized List<Mark> getMergedMarks() {
+    /*package private for tests*/synchronized Collection<Mark> getMergedMarks() {
         if (currentMarks == null) {
             currentMarks = createMergedMarks(markProviders);
         }
@@ -248,7 +248,10 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
     }
     
     public Mark getMainMarkForBlock(int startLine, int endLine) {
-        Mark m1 = getMainMarkForBlockImpl(startLine, endLine, getMarkMap());
+        Mark m1;
+        synchronized(this) {
+            m1 = getMainMarkForBlockImpl(startLine, endLine, getMarkMap());
+        }
         Mark m2 = getMainMarkForBlockAnnotations(startLine, endLine);
         
         if (m1 == null)
@@ -399,7 +402,7 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
     
     /*package private for tests*/synchronized SortedMap<Integer, List<Mark>> getMarkMap() {
         if (marksMap == null) {
-            List<Mark> marks = getMergedMarks();
+            Collection<Mark> marks = getMergedMarks();
             marksMap = new TreeMap<Integer, List<Mark>>();
             
             for (Mark mark : marks) {
@@ -479,8 +482,8 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
                     nue = ((MarkProvider) evt.getSource()).getMarks();
                 
                 if (old != null && nue != null) {
-                    List<Mark> added = new ArrayList<Mark>(nue);
-                    List<Mark> removed = new ArrayList<Mark>(old);
+                    Collection<Mark> added = new LinkedHashSet<Mark>(nue);
+                    Collection<Mark> removed = new LinkedHashSet<Mark>(old);
                     
                     added.removeAll(old);
                     removed.removeAll(nue);
@@ -516,7 +519,7 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
         }
     }
 
-    public void clear() {
+    public synchronized void clear() {
         currentMarks = null;
         marksMap = null;
     }
@@ -590,6 +593,7 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
         return get(ann.getSeverity());
     }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.editor.mimelookup.Class2LayerFolder.class)
     public static final class UpToDateStatusProviderFactoriesProvider implements Class2LayerFolder {
 
         public UpToDateStatusProviderFactoriesProvider() {
@@ -609,6 +613,7 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
         }
     } // End of UpToDateStatusProviderFactoriesProvider class
 
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.editor.mimelookup.Class2LayerFolder.class)
     public static final class MarkProviderCreatorsProvider implements Class2LayerFolder {
 
         public MarkProviderCreatorsProvider() {
@@ -631,6 +636,7 @@ final class AnnotationViewDataImpl implements PropertyChangeListener, Annotation
     // XXX: This is here to help to deal with legacy code
     // that registered stuff in text/base. The artificial text/base
     // mime type is deprecated and should not be used anymore.
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.editor.mimelookup.Class2LayerFolder.class)
     public static final class LegacyCrapProvider implements Class2LayerFolder, InstanceProvider {
 
         private final List<FileObject> instanceFiles;
