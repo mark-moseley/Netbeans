@@ -41,8 +41,7 @@
 package org.netbeans.modules.websvc.wsitconf.api;
 
 import java.util.logging.Logger;
-import org.netbeans.modules.websvc.wsitconf.*;
-import org.netbeans.modules.websvc.wsitconf.util.Util;
+import org.netbeans.modules.websvc.wsitconf.util.DefaultSettings;
 
 /**
  *
@@ -67,8 +66,8 @@ public final class DevDefaultsProvider extends Object {
       * Sets up the server environment by creating proper keystores if required, and 
       * filling proper keys into them
       */
-    public synchronized final void fillDefaultsToDefaultServer() {
-        Util.fillDefaultsToDefaultServer();
+    public synchronized final void fillDefaultsToServer(String serverID) {
+        DefaultSettings.fillDefaultsToServer(serverID);
     }
     
 }

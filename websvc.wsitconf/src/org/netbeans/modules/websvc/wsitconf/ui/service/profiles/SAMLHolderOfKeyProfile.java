@@ -42,7 +42,6 @@
 package org.netbeans.modules.websvc.wsitconf.ui.service.profiles;
 
 import java.awt.Dialog;
-import java.io.File;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -58,9 +57,12 @@ import org.netbeans.modules.websvc.wsitconf.spi.features.SecureConversationFeatu
 import org.netbeans.modules.websvc.wsitconf.spi.features.ServiceDefaultsFeature;
 import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
 import org.netbeans.modules.websvc.wsitconf.ui.service.subpanels.KeystorePanel;
+import org.netbeans.modules.websvc.wsitconf.util.DefaultSettings;
+import org.netbeans.modules.websvc.wsitconf.util.ServerUtils;
 import org.netbeans.modules.websvc.wsitconf.util.UndoCounter;
 import org.netbeans.modules.websvc.wsitconf.util.Util;
 import org.netbeans.modules.websvc.wsitconf.wizard.SamlCallbackCreator;
+import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.PolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProfilesModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProprietarySecurityPolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityPolicyModelHelper;
@@ -82,6 +84,7 @@ import org.openide.filesystems.FileObject;
  *
  * @author Martin Grebac
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.wsitconf.spi.SecurityProfile.class)
 public class SAMLHolderOfKeyProfile extends ProfileBase 
         implements SecureConversationFeature,ClientDefaultsFeature,ServiceDefaultsFeature {
     private static final String CERTS_DIR = "certs";
@@ -136,11 +139,11 @@ public class SAMLHolderOfKeyProfile extends ProfileBase
     }
 
     public void setServiceDefaults(WSDLComponent component, Project p) {
-//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
+        ProprietarySecurityPolicyModelHelper.clearValidators(component);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
 //        if (Util.isTomcat(p)) {
-            String storeLoc = Util.getStoreLocation(p, false, false);
+            String storeLoc = ServerUtils.getStoreLocation(p, false, false);
             ProprietarySecurityPolicyModelHelper.setStoreLocation(component, storeLoc, false, false);
             ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, false, false);
             ProprietarySecurityPolicyModelHelper.setStorePassword(component, KeystorePanel.DEFAULT_PASSWORD, false, false);
@@ -169,17 +172,16 @@ public class SAMLHolderOfKeyProfile extends ProfileBase
     }
     
     public void setClientDefaults(WSDLComponent component, WSDLComponent serviceBinding, Project p) {
-//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, true);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, true);
         ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);
 //        if (Util.isTomcat(p)) {
-            String kstoreLoc = Util.getStoreLocation(p, false, true);
+            String kstoreLoc = ServerUtils.getStoreLocation(p, false, true);
             ProprietarySecurityPolicyModelHelper.setStoreLocation(component, kstoreLoc, false, true);
             ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, false, true);
             ProprietarySecurityPolicyModelHelper.setStorePassword(component, KeystorePanel.DEFAULT_PASSWORD, false, true);
 
-            String tstoreLoc = Util.getStoreLocation(p, true, true);
+            String tstoreLoc = ServerUtils.getStoreLocation(p, true, true);
             ProprietarySecurityPolicyModelHelper.setStoreLocation(component, tstoreLoc, true, true);
             ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, true, true);
             ProprietarySecurityPolicyModelHelper.setStorePassword(component, KeystorePanel.DEFAULT_PASSWORD, true, true);
@@ -228,23 +230,20 @@ public class SAMLHolderOfKeyProfile extends ProfileBase
     }
     
     public boolean isServiceDefaultSetupUsed(WSDLComponent component, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String keyAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
         String keyLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, false);
         String keyPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, false);
-        if (ProfilesModelHelper.XWS_SECURITY_SERVER.equals(keyAlias)) {
-                String defPassword = Util.getDefaultPassword(p);
-                String defLocation = Util.getStoreLocation(p, false, false);
-                if ((defPassword != null) && (defLocation != null)) {
-                    if ((defPassword.equals(keyPasswd)) && 
-                        (defLocation.equals(keyLoc))) {
-                            return true;
-                    }
-                }
+        if ((Util.isEqual(DefaultSettings.getDefaultPassword(p), keyPasswd)) &&
+            (Util.isEqual(ServerUtils.getStoreLocation(p, false, false), keyLoc)) &&
+            (Util.isEqual(ProfilesModelHelper.XWS_SECURITY_SERVER, keyAlias))) { 
+            return true;
         }
         return false;
     }
 
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String samlVersion = getSamlVersion(serviceBinding);
         String cbName = null;
         
@@ -262,21 +261,15 @@ public class SAMLHolderOfKeyProfile extends ProfileBase
         String trustPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, true);
         
         String cbHandler = ProprietarySecurityPolicyModelHelper.getCallbackHandler((Binding)component, CallbackHandler.SAML_CBHANDLER);
-        if ((PKGNAME + "." + cbName).equals(cbHandler)) {
-            if (ProfilesModelHelper.XWS_SECURITY_CLIENT.equals(keyAlias) && 
-                ProfilesModelHelper.XWS_SECURITY_SERVER.equals(trustAlias)) {
-                    String defPassword = Util.getDefaultPassword(p);
-                    String defKeyLocation = Util.getStoreLocation(p, false, true);
-                    String defTrustLocation = Util.getStoreLocation(p, true, true);
-                    if ((defPassword != null) && (defKeyLocation != null) && (defTrustLocation != null)) {
-                        if ((defPassword.equals(keyPasswd)) && defPassword.equals(trustPasswd) &&
-                            (defKeyLocation.equals(keyLoc)) && (defTrustLocation.equals(trustLoc))) {
-                                return true;
-                        }
-                    }
-            }
+        if ((Util.isEqual(PKGNAME + "." + cbName, cbHandler)) &&
+            (Util.isEqual(ProfilesModelHelper.XWS_SECURITY_CLIENT, keyAlias)) &&
+            (Util.isEqual(ProfilesModelHelper.XWS_SECURITY_SERVER, trustAlias)) &&
+            (Util.isEqual(DefaultSettings.getDefaultPassword(p), keyPasswd)) &&
+            (Util.isEqual(DefaultSettings.getDefaultPassword(p), trustPasswd)) &&
+            (Util.isEqual(ServerUtils.getStoreLocation(p, true, true), trustLoc)) &&
+            (Util.isEqual(ServerUtils.getStoreLocation(p, false, true), keyLoc))) {
+            return true;
         }
-        
         return false;
     }
 
@@ -288,7 +281,7 @@ public class SAMLHolderOfKeyProfile extends ProfileBase
     }
 
     public void enableSecureConversation(WSDLComponent component, boolean enable) {
-        ProfilesModelHelper.enableSecureConversation(component, enable);
+        ProfilesModelHelper.getInstance(PolicyModelHelper.getConfigVersion(component)).setSecureConversation(component, enable);
     }
 
 }

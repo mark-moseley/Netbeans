@@ -58,6 +58,8 @@ import java.util.List;
 import java.util.Set;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.websvc.wsitconf.ui.ClassDialog;
+import org.netbeans.modules.websvc.wsitconf.util.ServerUtils;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 
 /**
  *
@@ -81,12 +83,15 @@ public class KeystorePanel extends JPanel {
     
     private boolean inSync = false;
     
-    public KeystorePanel(WSDLComponent comp, Project p, boolean jsr109, boolean client) {
+    private ConfigVersion cfgVersion = null;
+    
+    public KeystorePanel(WSDLComponent comp, Project p, boolean jsr109, boolean client, ConfigVersion cfgVersion) {
         super();
         this.comp = comp;
         this.jsr109 = jsr109;
         this.project = p;
         this.client = client;
+        this.cfgVersion = cfgVersion;
         
         initComponents();
 
@@ -174,7 +179,7 @@ public class KeystorePanel extends JPanel {
         if (keyStoreLocation != null) {
             setKeystorePath(keyStoreLocation);
         } else if (jsr109) {
-            setKeystorePath(Util.getStoreLocation(project, false, client));
+            setKeystorePath(ServerUtils.getStoreLocation(project, false, client));
         }
 
         ksType = ProprietarySecurityPolicyModelHelper.getStoreType(comp, false);
@@ -223,7 +228,6 @@ public class KeystorePanel extends JPanel {
         
     public void storeState() {
         String keystoreAlias = getKeystoreAlias();        
-        //ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         if ((keystoreAlias == null) || (keystoreAlias.length() == 0)) {
             ProprietarySecurityPolicyModelHelper.setKeyStoreAlias(comp, null, client);
         } else {
@@ -254,9 +258,10 @@ public class KeystorePanel extends JPanel {
 //        }
 
         String selector = getSelector();
-        if (selector != null) {
+        // IZ#129480, failed to clear selector textfield
+        //if (selector != null) {
             ProprietarySecurityPolicyModelHelper.setAliasSelector(comp, selector, false);
-        }
+        //}
         
     }
     

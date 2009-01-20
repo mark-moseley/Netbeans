@@ -57,10 +57,12 @@ import org.netbeans.modules.websvc.wsitconf.util.Util;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.PolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProfilesModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProprietarySecurityPolicyModelHelper;
+import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.RMModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityPolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityTokensModelHelper;
 import org.netbeans.modules.websvc.wsitmodelext.security.tokens.ProtectionToken;
 import org.netbeans.modules.websvc.wsitmodelext.security.tokens.SecureConversationToken;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import org.netbeans.modules.xml.wsdl.model.Binding;
 import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
@@ -73,19 +75,19 @@ import org.openide.DialogDisplayer;
  * @author Martin Grebac
  */
 @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.wsitconf.spi.SecurityProfile.class)
-public class STSIssuedEndorsingProfile extends ProfileBase 
+public class STSIssuedSupportingTokenProfile extends ProfileBase 
         implements SecureConversationFeature,ClientDefaultsFeature,ServiceDefaultsFeature {
     
     public int getId() {
-        return 110;
+        return 120;
     }
 
     public String getDisplayName() {
-        return ComboConstants.PROF_STSISSUEDENDORSE;
+        return ComboConstants.PROF_STSISSUEDSUPPORTING;
     }
 
     public String getDescription() {
-        return ComboConstants.PROF_STSISSUEDENDORSE_INFO;
+        return ComboConstants.PROF_STSISSUEDSUPPORTING_INFO;
     }
     
     /**
@@ -102,7 +104,7 @@ public class STSIssuedEndorsingProfile extends ProfileBase
         
         model.addUndoableEditListener(undoCounter);
 
-        JPanel profConfigPanel = new STSIssuedEndorsing(component, this);
+        JPanel profConfigPanel = new STSIssuedSupportingToken(component, this);
         DialogDescriptor dlgDesc = new DialogDescriptor(profConfigPanel, getDisplayName());
         Dialog dlg = DialogDisplayer.getDefault().createDialog(dlgDesc);
 
@@ -120,6 +122,7 @@ public class STSIssuedEndorsingProfile extends ProfileBase
 
     public void setServiceDefaults(WSDLComponent component, Project p) {
         ProprietarySecurityPolicyModelHelper.clearValidators(component);
+//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
 //        if (Util.isTomcat(p)) {
@@ -165,5 +168,16 @@ public class STSIssuedEndorsingProfile extends ProfileBase
     public void enableSecureConversation(WSDLComponent component, boolean enable) {
         ProfilesModelHelper.getInstance(PolicyModelHelper.getConfigVersion(component)).setSecureConversation(component, enable);
     }
+    
+    @Override
+    public void profileSelected(WSDLComponent component, boolean updateServiceUrl, ConfigVersion configVersion) {
+        ProfilesModelHelper pmh = ProfilesModelHelper.getInstance(configVersion);
+        RMModelHelper rmh = RMModelHelper.getInstance(configVersion);
+        pmh.setSecurityProfile(component, getDisplayName(), updateServiceUrl);
+        boolean isRM = rmh.isRMEnabled(component);
+        if (isRM) {
+            enableSecureConversation(component, true);
+        }
+    }    
 
 }

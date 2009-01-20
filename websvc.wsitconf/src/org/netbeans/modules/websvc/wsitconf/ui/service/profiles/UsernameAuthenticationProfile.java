@@ -42,7 +42,6 @@
 package org.netbeans.modules.websvc.wsitconf.ui.service.profiles;
 
 import java.awt.Dialog;
-import java.io.File;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -54,8 +53,11 @@ import org.netbeans.modules.websvc.wsitconf.spi.features.SecureConversationFeatu
 import org.netbeans.modules.websvc.wsitconf.spi.features.ServiceDefaultsFeature;
 import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
 import org.netbeans.modules.websvc.wsitconf.ui.service.subpanels.KeystorePanel;
+import org.netbeans.modules.websvc.wsitconf.util.DefaultSettings;
+import org.netbeans.modules.websvc.wsitconf.util.ServerUtils;
 import org.netbeans.modules.websvc.wsitconf.util.UndoCounter;
 import org.netbeans.modules.websvc.wsitconf.util.Util;
+import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.PolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProfilesModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProprietarySecurityPolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityPolicyModelHelper;
@@ -68,13 +70,13 @@ import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
-import org.openide.filesystems.FileObject;
 
 /**
  * Transport Security Profile definition
  *
  * @author Martin Grebac
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.wsitconf.spi.SecurityProfile.class)
 public class UsernameAuthenticationProfile extends ProfileBase 
         implements SecureConversationFeature,ClientDefaultsFeature,ServiceDefaultsFeature  {
     
@@ -126,33 +128,29 @@ public class UsernameAuthenticationProfile extends ProfileBase
     }
     
     public boolean isServiceDefaultSetupUsed(WSDLComponent component, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String storeAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, false);
         String storeLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, false);
         String storePasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, false);
-        if (ProfilesModelHelper.XWS_SECURITY_SERVER.equals(storeAlias)) {
-            String defPassword = Util.getDefaultPassword(p);
-            String defLocation = Util.getStoreLocation(p, false, false);
-            if ((defPassword != null) && (defLocation != null)) {
-                if ((defPassword.equals(storePasswd)) && 
-                    (defLocation.equals(storeLoc))) {
-                        return true;
-                }
-            }
+        if ((Util.isEqual(DefaultSettings.getDefaultPassword(p), storePasswd)) &&
+            (Util.isEqual(ServerUtils.getStoreLocation(p, false, false), storeLoc)) &&
+            (Util.isEqual(ProfilesModelHelper.XWS_SECURITY_SERVER, storeAlias))) { 
+            return true;
         }
         return false;
     }
 
     public void setServiceDefaults(WSDLComponent component, Project p) {
-//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
+        ProprietarySecurityPolicyModelHelper.clearValidators(component);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
 //        if (Util.isTomcat(p)) {
-            String storeLoc = Util.getStoreLocation(p, false, false);
+            String storeLoc = ServerUtils.getStoreLocation(p, false, false);
             ProprietarySecurityPolicyModelHelper.setStoreLocation(component, storeLoc, false, false);
             ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, false, false);
-            ProprietarySecurityPolicyModelHelper.setStorePassword(component, Util.getDefaultPassword(p), false, false);
+            ProprietarySecurityPolicyModelHelper.setStorePassword(component, DefaultSettings.getDefaultPassword(p), false, false);
 //        }
-        if (Util.isGlassfish(p)) {
+        if (ServerUtils.isGlassfish(p)) {
             try {
                 p.getProjectDirectory().getFileObject("nbproject").createData("wsit.createuser");
             } catch (IOException ex) {
@@ -163,7 +161,6 @@ public class UsernameAuthenticationProfile extends ProfileBase
     }
     
     public void setClientDefaults(WSDLComponent component, WSDLComponent serviceBinding, Project p) {
-//        ProprietarySecurityPolicyModelHelper pmh = ProprietarySecurityPolicyModelHelper.getInstance(cfgVersion);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, true);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, true);
         ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);
@@ -173,7 +170,7 @@ public class UsernameAuthenticationProfile extends ProfileBase
                 (Binding)component, CallbackHandler.PASSWORD_CBHANDLER, null, DEFAULT_PASSWORD, true);
         ProprietarySecurityPolicyModelHelper.setHandlerTimestampTimeout((Binding) component, null, true);
 //        if (Util.isTomcat(p)) {
-            String tstoreLoc = Util.getStoreLocation(p, true, true);
+            String tstoreLoc = ServerUtils.getStoreLocation(p, true, true);
             ProprietarySecurityPolicyModelHelper.setStoreLocation(component, tstoreLoc, true, true);
             ProprietarySecurityPolicyModelHelper.setStoreType(component, KeystorePanel.JKS, true, true);
             ProprietarySecurityPolicyModelHelper.setStorePassword(component, KeystorePanel.DEFAULT_PASSWORD, true, true);
@@ -182,24 +179,18 @@ public class UsernameAuthenticationProfile extends ProfileBase
     }
 
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String trustAlias = ProprietarySecurityPolicyModelHelper.getStoreAlias(component, true);
         String trustPasswd = ProprietarySecurityPolicyModelHelper.getStorePassword(component, true);
         String trustLoc = ProprietarySecurityPolicyModelHelper.getStoreLocation(component, true);
-        if (ProprietarySecurityPolicyModelHelper.getCBHConfiguration((Binding) component) != null) {
-            return false;
-        }
         if (ProfilesModelHelper.XWS_SECURITY_SERVER.equals(trustAlias)) {
             String user = ProprietarySecurityPolicyModelHelper.getDefaultUsername((Binding)component);
             String passwd = ProprietarySecurityPolicyModelHelper.getDefaultPassword((Binding)component);
-            if ((DEFAULT_PASSWORD.equals(passwd)) && (DEFAULT_USERNAME.equals(user))) {
-                String defPassword = Util.getDefaultPassword(p);
-                String defLocation = Util.getStoreLocation(p, true, true);
-                if ((defPassword != null) && (defLocation != null)) {
-                    if ((defPassword.equals(trustPasswd)) && 
-                        (defLocation.equals(trustLoc))) {
-                            return true;
-                    }
-                }
+            if ((Util.isEqual(DEFAULT_PASSWORD, passwd)) &&
+                (Util.isEqual(DEFAULT_USERNAME, user)) && 
+                (Util.isEqual(DefaultSettings.getDefaultPassword(p), trustPasswd)) &&
+                (Util.isEqual(ServerUtils.getStoreLocation(p, true, true), trustLoc))) {
+                return true;
             }
         }
         return false;
@@ -213,7 +204,7 @@ public class UsernameAuthenticationProfile extends ProfileBase
     }
 
     public void enableSecureConversation(WSDLComponent component, boolean enable) {
-        ProfilesModelHelper.enableSecureConversation(component, enable);
+        ProfilesModelHelper.getInstance(PolicyModelHelper.getConfigVersion(component)).setSecureConversation(component, enable);
     }
     
 }
