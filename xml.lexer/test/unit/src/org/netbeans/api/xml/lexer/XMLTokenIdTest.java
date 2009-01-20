@@ -39,9 +39,6 @@
 package org.netbeans.api.xml.lexer;
 
 import junit.framework.*;
-import org.netbeans.api.lexer.Token;
-import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenSequence;
 
 /**
  * The XMLTokenIdTest tests the parsing algorithm of XMLLexer.
@@ -117,20 +114,10 @@ public class XMLTokenIdTest extends AbstractTestCase {
             XMLTokenId.OPERATOR, XMLTokenId.VALUE, XMLTokenId.WS, XMLTokenId.ARGUMENT, XMLTokenId.OPERATOR, XMLTokenId.VALUE,
             XMLTokenId.WS, XMLTokenId.ARGUMENT, XMLTokenId.OPERATOR, XMLTokenId.VALUE, XMLTokenId.WS, XMLTokenId.ARGUMENT,
             XMLTokenId.OPERATOR, XMLTokenId.VALUE, XMLTokenId.WS, XMLTokenId.TAG, XMLTokenId.TEXT, XMLTokenId.TAG,
-            XMLTokenId.TAG, XMLTokenId.TEXT, XMLTokenId.BLOCK_COMMENT, XMLTokenId.BLOCK_COMMENT, XMLTokenId.BLOCK_COMMENT,
-            XMLTokenId.TEXT, XMLTokenId.TAG, XMLTokenId.TAG, XMLTokenId.TEXT, XMLTokenId.TAG, XMLTokenId.TAG, XMLTokenId.TEXT};
+            XMLTokenId.TAG, XMLTokenId.TEXT, XMLTokenId.BLOCK_COMMENT, XMLTokenId.TEXT, XMLTokenId.TAG, XMLTokenId.TAG,
+            XMLTokenId.TEXT, XMLTokenId.TAG, XMLTokenId.TAG, XMLTokenId.TEXT};
         
         javax.swing.text.Document document = getDocument("resources/test.xml");
-        TokenHierarchy th = TokenHierarchy.get(document);
-        TokenSequence ts = th.tokenSequence();
-        assert(ts.tokenCount() == expectedIds.length);        
-        int index = 0;
-        while(ts.moveNext()) {
-            Token token = ts.token();
-            System.out.println("Id :["+ token.id().name() +
-                    "] [Text :["+ token.text()+"]");
-            assert(token.id() == expectedIds[index]);
-            index++;
-        }
+        assertTokenSequence(document, expectedIds);
     }    
 }

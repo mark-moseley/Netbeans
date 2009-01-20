@@ -656,13 +656,13 @@ public class XMLLexer implements Lexer<XMLTokenId> {
                         case '-':
                             state = ISA_XML_COMMENT_DASH;
                             break;
-                            //create an XML comment token for each line of the comment - a workaround fix for performance bug #39446
-                            //this also causes a SyntaxtElement to be created for each line of the comment - see XMLSyntaxSupport.createElement:277
-                            //PENDING - this code can be removed after editor solve it somehow in their code
-                        case '\n':
-                            //leave the some state - we are still in an XML comment,
-                            //we just need to create a token for each line.
-                            return token(XMLTokenId.BLOCK_COMMENT);
+//                            //create an XML comment token for each line of the comment - a workaround fix for performance bug #39446
+//                            //this also causes a SyntaxtElement to be created for each line of the comment - see XMLSyntaxSupport.createElement:277
+//                            //PENDING - this code can be removed after editor solve it somehow in their code
+//                        case '\n':
+//                            //leave the some state - we are still in an XML comment,
+//                            //we just need to create a token for each line.
+//                            return token(XMLTokenId.BLOCK_COMMENT);
                     }
                     break;
                     
@@ -718,11 +718,15 @@ public class XMLLexer implements Lexer<XMLTokenId> {
                         case '"':
                             state = ISP_DECL_STRING;
                             input.backup(1);
-                            return token(XMLTokenId.DECLARATION);
+                            if (input.readLength() > 0)
+                                return token(XMLTokenId.DECLARATION);
+                            break;
                         case '\'':
                             state = ISP_DECL_CHARS;
                             input.backup(1);
-                            return token(XMLTokenId.DECLARATION);
+                            if (input.readLength() > 0)
+                                return token(XMLTokenId.DECLARATION);
+                            break;
                         case '[':
                             state = INIT;
                             enterInternalDTD();
@@ -742,8 +746,10 @@ public class XMLLexer implements Lexer<XMLTokenId> {
                     } else {
                         state = INIT;
                         input.backup(1);
-                        return token(XMLTokenId.ERROR);
+                        if (input.readLength() > 0)
+                            return token(XMLTokenId.ERROR);
                     }
+                    break;
                     
                 case ISA_SGML_DECL_DASH:
                     if( actChar == '-' ) {
