@@ -54,7 +54,6 @@ package org.netbeans.modules.cnd.debugger.gdb.proxy;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.logging.Logger;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
 
 /**
@@ -64,16 +63,21 @@ public class GdbLogger {
     
     private GdbConsoleWindow gdbConsoleWindow = null;
     private FileWriter logFile;
-    private Logger log = Logger.getLogger("gdb.gdbproxy.logger"); // NOI18N
+    //private Logger log = Logger.getLogger("gdb.gdbproxy.logger"); // NOI18N
     
     /** Creates a new instance of GdbLogger */
     public GdbLogger(GdbDebugger debugger, GdbProxy gdbProxy) {
         File tmpfile;
+
         try {
-            tmpfile = File.createTempFile("gdb-cmds", ".log"); // NOI18N
-	    if (!Boolean.getBoolean("gdb.console.savelog")) { // NOI18N - This lets me save logs
-		tmpfile.deleteOnExit();
-	    }
+            if (!debugger.isUnitTest()) {
+                tmpfile = File.createTempFile("gdb-cmds", ".log"); // NOI18N
+                if (!Boolean.getBoolean("gdb.console.savelog")) { // NOI18N - This lets me save logss
+                    tmpfile.deleteOnExit();
+                }
+            } else {
+                tmpfile = File.createTempFile("gdb-unit_test", ".log"); // NOI18N
+            }
             logFile = new FileWriter(tmpfile);
         } catch (IOException ex) {
             logFile = null;

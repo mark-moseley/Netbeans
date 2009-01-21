@@ -88,8 +88,7 @@ public class GdbConsoleWindow extends TopComponent implements ActionListener, Pr
         this.debugger = debugger;
         this.gdbProxy = gdbProxy;
         debugger.addPropertyChangeListener(this);
-        ProjectActionEvent pae = (ProjectActionEvent)
-                        debugger.getLookup().lookupFirst(null, ProjectActionEvent.class);
+        ProjectActionEvent pae = debugger.getLookup().lookupFirst(null, ProjectActionEvent.class);
         programName.setText(pae.getExecutable());
     }
     
@@ -158,9 +157,9 @@ public class GdbConsoleWindow extends TopComponent implements ActionListener, Pr
     }
   
     public void propertyChange(PropertyChangeEvent ev) { 
-        if (ev.getPropertyName() == GdbDebugger.PROP_STATE) {
+        if (GdbDebugger.PROP_STATE.equals(ev.getPropertyName())) {
             Object state = ev.getNewValue();
-            if (state == GdbDebugger.STATE_NONE) {
+            if (state == GdbDebugger.State.EXITED) {
                 closeConsole();
             } else {
                 updateStatus(state.toString());
@@ -183,11 +182,15 @@ public class GdbConsoleWindow extends TopComponent implements ActionListener, Pr
         } else {
             return;
         }
-        if (command == null) return;
+        if (command == null) {
+            return;
+        }
         addCommandToList(command);
         // Reset input field
         debuggerCommand.setSelectedIndex(0);
-        if (gdbProxy == null) return;
+        if (gdbProxy == null) {
+            return;
+        }
         gdbProxy.getProxyEngine().sendConsoleCommand(command);
     }
     
@@ -236,7 +239,7 @@ public class GdbConsoleWindow extends TopComponent implements ActionListener, Pr
         programStatus.setText(status);
     }
     
-    class HideTextAction extends AbstractAction {
+    static class HideTextAction extends AbstractAction {
         public HideTextAction() {
             super("Hide Text", new ImageIcon("cut.gif")); //FIXUP //NOI18N
         }
