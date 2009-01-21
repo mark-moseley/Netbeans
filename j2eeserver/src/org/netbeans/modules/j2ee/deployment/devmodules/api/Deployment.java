@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.j2ee.deployment.devmodules.api;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -54,8 +53,10 @@ import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
 import org.netbeans.modules.j2ee.deployment.common.api.ConfigurationException;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.InstanceListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
+import org.netbeans.modules.j2ee.deployment.impl.DeployOnSaveManager;
 import org.netbeans.modules.j2ee.deployment.impl.ProgressObjectUtil;
 import org.netbeans.modules.j2ee.deployment.impl.Server;
+import org.netbeans.modules.j2ee.deployment.impl.ServerException;
 import org.netbeans.modules.j2ee.deployment.impl.ServerInstance;
 import org.netbeans.modules.j2ee.deployment.impl.ServerRegistry;
 import org.netbeans.modules.j2ee.deployment.impl.ServerString;
@@ -76,9 +77,18 @@ import org.openide.util.Parameters;
  */
 public final class Deployment {
 
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(Deployment.class.getName());
+    
     private static boolean alsoStartTargets = true;    //TODO - make it a property? is it really needed?
     
     private static Deployment instance = null;
+
+    /**
+     * Deployment mode enumeration
+     */
+    public static enum Mode {
+        RUN, DEBUG, PROFILE;
+    }
 
     public static synchronized Deployment getDefault () {
         if (instance == null) {
@@ -90,6 +100,19 @@ public final class Deployment {
     private Deployment () {
     }
     
+    /*Deploys a web J2EE module to server.
+     * @param clientModuleUrl URL of module within a J2EE Application that 
+     * should be used as a client (can be null for standalone modules)
+     * <div class="nonnormative">
+     * <p>Note: if null for J2EE application the first web or client module will be used.</p>
+     * </div>
+     * @return complete URL to be displayed in browser (server part plus the client module and/or client part provided as a parameter)
+     * @deprecated Should use {@link Deployment#deploy(org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider, org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment.Mode, java.lang.String, java.lang.String, boolean) } instead
+     */
+    public String deploy (J2eeModuleProvider jmp, boolean debug, String clientModuleUrl, String clientUrlPart, boolean forceRedeploy) throws DeploymentException {
+        return deploy(jmp, debug ? Mode.DEBUG : Mode.RUN, clientModuleUrl, clientUrlPart, forceRedeploy, null);
+    }
+
     /** Deploys a web J2EE module to server.
      * @param clientModuleUrl URL of module within a J2EE Application that 
      * should be used as a client (can be null for standalone modules)
@@ -98,11 +121,18 @@ public final class Deployment {
      * </div>
      * @return complete URL to be displayed in browser (server part plus the client module and/or client part provided as a parameter)
      */
-    public String deploy (J2eeModuleProvider jmp, boolean debugmode, String clientModuleUrl, String clientUrlPart, boolean forceRedeploy) throws DeploymentException {
-        return deploy(jmp, debugmode, clientModuleUrl, clientUrlPart, forceRedeploy, null);
+    public String deploy (J2eeModuleProvider jmp, Mode mode, String clientModuleUrl, String clientUrlPart, boolean forceRedeploy) throws DeploymentException {
+        return deploy(jmp, mode, clientModuleUrl, clientUrlPart, forceRedeploy, null);
     }
-    
-    public String deploy (J2eeModuleProvider jmp, boolean debugmode, String clientModuleUrl, String clientUrlPart, boolean forceRedeploy, Logger logger) throws DeploymentException {
+
+    /**
+     * @deprecated Should use {@link Deployment#deploy(org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider, org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment.Mode, java.lang.String, java.lang.String, boolean, org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment.Logger) } instead
+     */
+    public String deploy (J2eeModuleProvider jmp, boolean debug, String clientModuleUrl, String clientUrlPart, boolean forceRedeploy, Logger logger) throws DeploymentException {
+        return deploy(jmp, debug ? Mode.DEBUG : Mode.RUN, clientModuleUrl, clientUrlPart, forceRedeploy, logger);
+    }
+
+    public String deploy (J2eeModuleProvider jmp, Mode mode, String clientModuleUrl, String clientUrlPart, boolean forceRedeploy, Logger logger) throws DeploymentException {
         
         DeploymentTargetImpl deploymentTarget = new DeploymentTargetImpl(jmp, clientModuleUrl);
         TargetModule[] modules = null;
@@ -147,8 +177,8 @@ public final class Deployment {
             boolean serverReady = false;
             TargetServer targetserver = new TargetServer(deploymentTarget);
 
-            if (alsoStartTargets || debugmode) {
-                targetserver.startTargets(debugmode, progress);
+            if (alsoStartTargets || mode != Mode.RUN) {
+                targetserver.startTargets(mode, progress);
             } else { //PENDING: how do we know whether target does not need to start when deploy only
                 server.getServerInstance().start(progress);
             }
@@ -160,17 +190,37 @@ public final class Deployment {
             // inform the plugin about the deploy action, even if there was
             // really nothing needed to be deployed
             targetserver.notifyIncrementalDeployment(modules);
-            
+            if (targetserver.supportsDeployOnSave(modules)) {
+                DeployOnSaveManager.getDefault().notifyInitialDeployment(jmp);
+            }
+
             if (modules != null && modules.length > 0) {
+                // this write modules to files too
                 deploymentTarget.setTargetModules(modules);
             } else {
                 String msg = NbBundle.getMessage(Deployment.class, "MSG_ModuleNotDeployed");
-                throw new DeploymentException (msg);
+                throw new DeploymentException(msg);
             }
             return deploymentTarget.getClientUrl(clientUrlPart);
-        } catch (Exception ex) {            
+        } catch (ServerException ex) {
+            // The thrower is expected to provide a useful message. If the throwing
+            // code provides a cause, this will forward it to the next level and
+            // the ant output.
+            //
             String msg = NbBundle.getMessage (Deployment.class, "MSG_DeployFailed", ex.getLocalizedMessage ());
             java.util.logging.Logger.getLogger("global").log(Level.INFO, null, ex);
+            if (null != ex.getCause()) {
+                throw new DeploymentException(msg, ex);
+            } else {
+                throw new DeploymentException(msg);
+            }
+        } catch (DeploymentException de) {
+            throw de;
+        } catch (Exception ex) {
+            // Don't know where this came from, so we send as much info as possible
+            // to the ant output.
+            String msg = NbBundle.getMessage (Deployment.class, "MSG_DeployFailed", ex.getLocalizedMessage ());
+            LOGGER.log(Level.INFO, null, ex);
             throw new DeploymentException(msg, ex);
         } finally {
             if (progress != null) {
@@ -178,7 +228,61 @@ public final class Deployment {
             }
         }
     }
-    
+
+    /**
+     * Undeploys the project (if it is deployed and available).
+     *
+     * @param jmp provider representing the project
+     * @param startServer if <code>true</code> server may be started while
+     *            trying to determine whether the project is deployed
+     * @param logger logger for undeploy related events
+     * @throws org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment.DeploymentException
+     * @since 1.52
+     */
+    public void undeploy(J2eeModuleProvider jmp, boolean startServer, Logger logger) throws DeploymentException {
+        DeploymentTargetImpl deploymentTarget = new DeploymentTargetImpl(jmp, null);
+        final J2eeModule module = deploymentTarget.getModule();
+
+        String title = NbBundle.getMessage(Deployment.class, "LBL_Undeploying", jmp.getDeploymentName());
+        ProgressUI progress = new ProgressUI(title, false, logger);
+
+        try {
+            progress.start();
+
+            ServerString server = deploymentTarget.getServer(); //will throw exception if bad server id
+
+            if (module == null) {
+                String msg = NbBundle.getMessage (Deployment.class, "MSG_NoJ2eeModule");
+                throw new DeploymentException(msg);
+            }
+            ServerInstance serverInstance = server.getServerInstance();
+            if (server == null || serverInstance == null) {
+                String msg = NbBundle.getMessage (Deployment.class, "MSG_NoTargetServer");
+                throw new DeploymentException(msg);
+            }
+
+            TargetServer targetserver = new TargetServer(deploymentTarget);
+
+            targetserver.undeploy(progress, startServer);
+        } catch (Exception ex) {
+            String msg = NbBundle.getMessage (Deployment.class, "MSG_UndeployFailed", ex.getLocalizedMessage ());
+            LOGGER.log(Level.INFO, null, ex);
+            throw new DeploymentException(msg, ex);
+        } finally {
+            if (progress != null) {
+                progress.finish();
+            }
+        }
+    }
+
+    public void enableCompileOnSaveSupport(J2eeModuleProvider provider) {
+        DeployOnSaveManager.getDefault().startListening(provider);
+    }
+
+    public void disableCompileOnSaveSupport(J2eeModuleProvider provider) {
+        DeployOnSaveManager.getDefault().stopListening(provider);
+    }
+
     private static void deployMessageDestinations(J2eeModuleProvider jmp) throws ConfigurationException {
         ServerInstance si = ServerRegistry.getInstance ().getServerInstance (jmp.getServerInstanceID ());
         if (si != null) {
@@ -200,11 +304,13 @@ public final class Deployment {
         private DeploymentException (String s, Throwable t) {
             super (s, t);
         }
+
         /**
          * Returns a short description of this DeploymentException.
          * overwrite the one from Exception to avoid showing the class name that does nto provide any real value.
          * @return a string representation of this DeploymentException.
          */
+        @Override
         public String toString() {
             String s = getClass().getName();
             String message = getLocalizedMessage();
@@ -358,15 +464,11 @@ public final class Deployment {
      */
     public boolean canFileDeploy(String instanceId, J2eeModule mod) {
         boolean retVal = false;
-        ServerInstance instance = ServerRegistry.getInstance().getServerInstance(instanceId);
-        if (null != instance) {
-            IncrementalDeployment incr = instance.getIncrementalDeployment();
-            try {
-                if (null != incr && null != mod.getContentDirectory()) {
-                    retVal = incr.canFileDeploy(null, mod);
-                }
-            } catch (IOException ioe) {
-                java.util.logging.Logger.getLogger("global").log(Level.FINER,"",ioe); // NOI18N                
+        ServerInstance localInstance = ServerRegistry.getInstance().getServerInstance(instanceId);
+        if (null != localInstance) {
+            IncrementalDeployment incr = localInstance.getIncrementalDeployment();
+            if (null != incr) {
+                retVal = incr.canFileDeploy(null, mod);
             }
         }
         return retVal;
