@@ -36,31 +36,53 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.dlight.core.actions;
+package org.netbeans.modules.nativeexecution;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import org.netbeans.modules.dlight.util.DLightLogger;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTarget;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTargetConfiguration;
-import org.netbeans.modules.dlight.execution.api.DLightTarget;
-import org.netbeans.modules.dlight.management.api.DLightManager;
-import org.netbeans.modules.dlight.management.api.DLightSession;
+import org.netbeans.modules.nativeexecution.util.RemoveTask;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
-public final class StartDLightAction implements ActionListener {
+/**
+ *
+ * @author ak119685
+ */
+public class RemoveTaskTest {
 
-  public void actionPerformed(ActionEvent e) {
-    DLightLogger.instance.info("StartDLightAction performed @ " + System.currentTimeMillis());
-     String application = System.getProperty("dlight.application", "/export/home/ak119685/welcome");
-    String[] arguments = System.getProperty("dlight.application.params", "1 2 3").split("[ \t]+");
-    String[] environment = new String[]{};
-    DLightLogger.instance.info("Set D-Light target! Application " + application);
-      NativeExecutableTargetConfiguration conf = new NativeExecutableTargetConfiguration(application, arguments, environment);
-//    conf.setHost("localhost");
-//    conf.setSSHPort(2222);
-//    conf.setUser("masha");
-    DLightTarget target = new NativeExecutableTarget(conf);
-    DLightSession session = DLightManager.getDefault().createSession(target, "Gizmo");
-    DLightManager.getDefault().startSession(session);
-  }
+    public RemoveTaskTest() {
+    }
+
+    @BeforeClass
+    public static void setUpClass() throws Exception {
+    }
+
+    @AfterClass
+    public static void tearDownClass() throws Exception {
+    }
+
+    @Before
+    public void setUp() {
+    }
+
+    @After
+    public void tearDown() {
+    }
+
+    /**
+     * Test of removeDirectory method, of class RemoveTask.
+     */
+    @Test
+    public void testRemoveDirectory() {
+        System.out.println("removeDirectory");
+        String dir = "/tmp/test";
+        boolean force = true;
+        boolean expResult = true;
+        boolean result = RemoveTask.removeDirectory(new ExecutionEnvironment(null, null, 22), dir, force);
+        assertEquals(expResult, result);
+    }
 }
+

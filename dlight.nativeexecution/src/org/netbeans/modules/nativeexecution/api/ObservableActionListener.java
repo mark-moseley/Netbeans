@@ -36,31 +36,37 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.dlight.core.actions;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import org.netbeans.modules.dlight.util.DLightLogger;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTarget;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTargetConfiguration;
-import org.netbeans.modules.dlight.execution.api.DLightTarget;
-import org.netbeans.modules.dlight.management.api.DLightManager;
-import org.netbeans.modules.dlight.management.api.DLightSession;
+package org.netbeans.modules.nativeexecution.api;
 
-public final class StartDLightAction implements ActionListener {
+import javax.swing.Action;
 
-  public void actionPerformed(ActionEvent e) {
-    DLightLogger.instance.info("StartDLightAction performed @ " + System.currentTimeMillis());
-     String application = System.getProperty("dlight.application", "/export/home/ak119685/welcome");
-    String[] arguments = System.getProperty("dlight.application.params", "1 2 3").split("[ \t]+");
-    String[] environment = new String[]{};
-    DLightLogger.instance.info("Set D-Light target! Application " + application);
-      NativeExecutableTargetConfiguration conf = new NativeExecutableTargetConfiguration(application, arguments, environment);
-//    conf.setHost("localhost");
-//    conf.setSSHPort(2222);
-//    conf.setUser("masha");
-    DLightTarget target = new NativeExecutableTarget(conf);
-    DLightSession session = DLightManager.getDefault().createSession(target, "Gizmo");
-    DLightManager.getDefault().startSession(session);
-  }
+/**
+ * The listener interface for receiving ObservableAction's start/completion
+ * events. The class that is interested in processing an action event implements
+ * this interface, and the object created with that class is registered with a
+ * component, using the component's addActionListener method
+ * <tt>addObservableActionListener</tt>. When the action starts, that object's
+ * <tt>actionStarted</tt> method is invoked. On action completion
+ * <tt>actionCompleted</tt> is invoked.
+ * 
+ * @param <T> type of action's result.
+ *
+ * @author ak119685
+ */
+
+public interface ObservableActionListener<T> {
+
+    /**
+     * Notifies listeners that action started.
+     * @param source the Action that has been started.
+     */
+    public void actionStarted(Action source);
+
+    /**
+     * Notifies listeners that action completed.
+     * @param source the Action that has been completed.
+     * @param result result of the action.
+     */
+    public void actionCompleted(Action source, T result);
 }

@@ -36,31 +36,23 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.dlight.core.actions;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import org.netbeans.modules.dlight.util.DLightLogger;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTarget;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTargetConfiguration;
-import org.netbeans.modules.dlight.execution.api.DLightTarget;
-import org.netbeans.modules.dlight.management.api.DLightManager;
-import org.netbeans.modules.dlight.management.api.DLightSession;
+package org.netbeans.modules.dlight.execution.api.support;
 
-public final class StartDLightAction implements ActionListener {
+import org.netbeans.modules.nativeexecution.api.NativeTask;
+import org.openide.windows.InputOutput;
 
-  public void actionPerformed(ActionEvent e) {
-    DLightLogger.instance.info("StartDLightAction performed @ " + System.currentTimeMillis());
-     String application = System.getProperty("dlight.application", "/export/home/ak119685/welcome");
-    String[] arguments = System.getProperty("dlight.application.params", "1 2 3").split("[ \t]+");
-    String[] environment = new String[]{};
-    DLightLogger.instance.info("Set D-Light target! Application " + application);
-      NativeExecutableTargetConfiguration conf = new NativeExecutableTargetConfiguration(application, arguments, environment);
-//    conf.setHost("localhost");
-//    conf.setSSHPort(2222);
-//    conf.setUser("masha");
-    DLightTarget target = new NativeExecutableTarget(conf);
-    DLightSession session = DLightManager.getDefault().createSession(target, "Gizmo");
-    DLightManager.getDefault().startSession(session);
-  }
+/**
+ * Input/Output tabs manager, register your own implementation
+ * using global Lookup service. The result of {@link #getIO(org.netbeans.modules.nativeexecution.NativeTask, boolean) }
+ * is used as input output for {@link org.netbeans.modules.nativeexecution.NativeTask#setInputOutput(org.openide.windows.InputOutput) }.
+ */
+public interface IOTabManager {
+  /**
+   *
+   * @param task task to get Input/Output
+   * @param reuse <code>true</code> if is is allowed to reuse tab, <code>false</code> otherwise
+   * @return Input/Ouput <param>task</param> task will redirect inout/output/error streams to
+   */
+  public InputOutput getIO(NativeTask task, boolean reuse);
 }

@@ -36,31 +36,13 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.dlight.core.actions;
+package org.netbeans.modules.nativeexecution.util;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import org.netbeans.modules.dlight.util.DLightLogger;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTarget;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTargetConfiguration;
-import org.netbeans.modules.dlight.execution.api.DLightTarget;
-import org.netbeans.modules.dlight.management.api.DLightManager;
-import org.netbeans.modules.dlight.management.api.DLightSession;
-
-public final class StartDLightAction implements ActionListener {
-
-  public void actionPerformed(ActionEvent e) {
-    DLightLogger.instance.info("StartDLightAction performed @ " + System.currentTimeMillis());
-     String application = System.getProperty("dlight.application", "/export/home/ak119685/welcome");
-    String[] arguments = System.getProperty("dlight.application.params", "1 2 3").split("[ \t]+");
-    String[] environment = new String[]{};
-    DLightLogger.instance.info("Set D-Light target! Application " + application);
-      NativeExecutableTargetConfiguration conf = new NativeExecutableTargetConfiguration(application, arguments, environment);
-//    conf.setHost("localhost");
-//    conf.setSSHPort(2222);
-//    conf.setUser("masha");
-    DLightTarget target = new NativeExecutableTarget(conf);
-    DLightSession session = DLightManager.getDefault().createSession(target, "Gizmo");
-    DLightManager.getDefault().startSession(session);
-  }
+/**
+ * This exception is thrown to indicate that no ssh connection with a host has
+ * been established prior to an attempt to execute NativeTask on it.
+ * 
+ * @author ak119685
+ */
+public final class HostNotConnectedException extends Throwable {
 }

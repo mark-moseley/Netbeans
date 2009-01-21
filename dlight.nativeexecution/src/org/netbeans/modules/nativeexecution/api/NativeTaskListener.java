@@ -36,31 +36,48 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.dlight.core.actions;
+package org.netbeans.modules.nativeexecution.api;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import org.netbeans.modules.dlight.util.DLightLogger;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTarget;
-import org.netbeans.modules.dlight.execution.api.NativeExecutableTargetConfiguration;
-import org.netbeans.modules.dlight.execution.api.DLightTarget;
-import org.netbeans.modules.dlight.management.api.DLightManager;
-import org.netbeans.modules.dlight.management.api.DLightSession;
+import java.util.concurrent.CancellationException;
 
-public final class StartDLightAction implements ActionListener {
+/**
+ * The listener interface for receiving task's execution state shanges events.
+ * @author ak119685
+ */
+public interface NativeTaskListener {
 
-  public void actionPerformed(ActionEvent e) {
-    DLightLogger.instance.info("StartDLightAction performed @ " + System.currentTimeMillis());
-     String application = System.getProperty("dlight.application", "/export/home/ak119685/welcome");
-    String[] arguments = System.getProperty("dlight.application.params", "1 2 3").split("[ \t]+");
-    String[] environment = new String[]{};
-    DLightLogger.instance.info("Set D-Light target! Application " + application);
-      NativeExecutableTargetConfiguration conf = new NativeExecutableTargetConfiguration(application, arguments, environment);
-//    conf.setHost("localhost");
-//    conf.setSSHPort(2222);
-//    conf.setUser("masha");
-    DLightTarget target = new NativeExecutableTarget(conf);
-    DLightSession session = DLightManager.getDefault().createSession(target, "Gizmo");
-    DLightManager.getDefault().startSession(session);
-  }
+    /**
+     * Invoked when <tt>NativeTask</tt> started.
+     * Task is considered to be started if and only if it has been submitted,
+     * native process has been crreated and PID of this process has been
+     * obtained.
+     *
+     * @param task task that started
+     */
+    public void taskStarted(NativeTask task);
+
+    /**
+     * Invoked when <tt>NativeTask</tt> finished.
+     * Task is considered to be finished if underlaying system process exited
+     * normally.
+     *
+     * @param task task that finished
+     * @param result exit code of the underlaying system process
+     */
+    public void taskFinished(NativeTask task, Integer result);
+
+    /**
+     * Invoked when <tt>NativeTask</tt> cancelled.
+     *
+     * @param task task that was cancelled
+     * @param cex <tt>CancellationException</tt> that causes cancellation.
+     */
+    public void taskCancelled(NativeTask task, CancellationException cex);
+
+    /**
+     * Invoked when some exception occured during <tt>NativeTask</tt> execution.
+     * @param task task that failed due to error
+     * @param t causing <tt>Throwable</tt>
+     */
+    public void taskError(NativeTask task, Throwable t);
 }
