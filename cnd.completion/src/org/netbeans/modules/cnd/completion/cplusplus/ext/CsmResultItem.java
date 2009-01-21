@@ -336,7 +336,8 @@ public abstract class CsmResultItem implements CompletionItem {
         ts.moveStart();
         while (ts.moveNext()) {
             if (ts.token().id().equals(CppTokenId.PREPROCESSOR_DIRECTIVE)) {
-                if (isIncludesEqual(include, ts.token().text().toString())) {
+                StringBuffer buf = new StringBuffer(ts.token().text());
+                if (isIncludesEqual(include, buf.toString())) {
                     return true;
                 }
             }
@@ -667,7 +668,6 @@ public abstract class CsmResultItem implements CompletionItem {
         private Color typeColor;
         private String fldName;
         private int modifiers;
-        private boolean isDeprecated;
         private static CsmPaintComponent.FieldPaintComponent fieldComponent = null;
         private static CsmPaintComponent.FieldPaintComponent globVarComponent = null;
         private static CsmPaintComponent.FieldPaintComponent localVarComponent = null;
@@ -1256,9 +1256,7 @@ public abstract class CsmResultItem implements CompletionItem {
     public static class EnumResultItem extends CsmResultItem {
 
         private CsmEnum enm;
-        private boolean isInterface;
         private int classDisplayOffset;
-        private boolean isDeprecated;
         private boolean displayFQN;
         private static CsmPaintComponent.EnumPaintComponent enumComponent = null;
 
@@ -1308,7 +1306,6 @@ public abstract class CsmResultItem implements CompletionItem {
 
         private CsmEnumerator enmtr;
         private int enumDisplayOffset;
-        private boolean isDeprecated;
         private boolean displayFQN;
         private static CsmPaintComponent.EnumeratorPaintComponent enumtrComponent = null;
 
@@ -1359,9 +1356,7 @@ public abstract class CsmResultItem implements CompletionItem {
 
         private CsmClass cls;
         private CsmDeclaration.Kind kind;
-        private boolean isInterface;
         private int classDisplayOffset;
-        private boolean isDeprecated;
         private boolean displayFQN;
         private static CsmPaintComponent.ClassPaintComponent clsComponent = null;
         private static CsmPaintComponent.StructPaintComponent structComponent = null;
@@ -1522,7 +1517,6 @@ public abstract class CsmResultItem implements CompletionItem {
 
         private CsmTypedef def;
         private int defDisplayOffset;
-        private boolean isDeprecated;
         private boolean displayFQN;
         private static CsmPaintComponent.TypedefPaintComponent defComponent = null;
 
