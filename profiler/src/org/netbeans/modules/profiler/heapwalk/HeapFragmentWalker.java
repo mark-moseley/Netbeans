@@ -62,8 +62,7 @@ public class HeapFragmentWalker {
     private InstancesController instancesController;
     private NavigationHistoryManager navigationHistoryManager;
     private SummaryController summaryController;
-    private int totalLiveBytes; // TODO: will be read from HeapSummary
-    private int totalLiveInstances; // TODO: will be read from HeapSummary
+    private ThreadsController threadsController;
 
     //~ Constructors -------------------------------------------------------------------------------------------------------------
 
@@ -72,15 +71,11 @@ public class HeapFragmentWalker {
         this.heapFragment = heapFragment;
         this.heapWalker = heapWalker;
 
-        HeapSummary summary = heapFragment.getSummary();
-
-        totalLiveBytes = summary.getTotalLiveBytes();
-        totalLiveInstances = summary.getTotalLiveInstances();
-
         summaryController = new SummaryController(this);
         classesController = new ClassesController(this);
         instancesController = new InstancesController(this);
         analysisController = new AnalysisController(this);
+        threadsController = new ThreadsController(this);
 
         navigationHistoryManager = new NavigationHistoryManager(this);
     }
@@ -100,6 +95,8 @@ public class HeapFragmentWalker {
             return classesController;
         } else if (ui.isInstancesViewActive()) {
             return instancesController;
+        } else if (ui.isThreadsViewActive()) {
+            return threadsController;
         } else if (ui.isAnalysisViewActive()) {
             return analysisController;
         }
@@ -113,6 +110,10 @@ public class HeapFragmentWalker {
 
     public ClassesController getClassesController() {
         return classesController;
+    }
+    
+    public ThreadsController getThreadsController() {
+        return threadsController;
     }
 
     // --- Public interface ------------------------------------------------------
@@ -152,16 +153,12 @@ public class HeapFragmentWalker {
         return summaryController;
     }
 
-    public int getTotalLiveBytes() {
-        return totalLiveBytes;
-
-        //    return heapFragment.getSummary().getTotalLiveBytes();
+    public long getTotalLiveBytes() {
+        return heapFragment.getSummary().getTotalLiveBytes();
     }
 
-    public int getTotalLiveInstances() {
-        return totalLiveInstances;
-
-        //    return heapFragment.getSummary().getTotalLiveInstances();
+    public long getTotalLiveInstances() {
+        return heapFragment.getSummary().getTotalLiveInstances();
     }
 
     // --- Navigation history support
@@ -233,6 +230,14 @@ public class HeapFragmentWalker {
 
     public void switchToSummaryView() {
         ((HeapFragmentWalkerUI) getPanel()).showSummaryView();
+    }
+    
+    public void switchToThreadsView() {
+        ((HeapFragmentWalkerUI) getPanel()).showThreadsView();
+    }
+    
+    public void switchToHistoryThreadsView() {
+        ((HeapFragmentWalkerUI) getPanel()).showHistoryThreadsView();
     }
 
     // ---

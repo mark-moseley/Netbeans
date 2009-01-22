@@ -58,6 +58,7 @@ import org.netbeans.modules.profiler.NetBeansProfiler;
 import org.netbeans.modules.profiler.heapwalk.ClassesListController;
 import org.netbeans.modules.profiler.ui.NBSwingWorker;
 import org.netbeans.modules.profiler.utils.IDEUtils;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import java.awt.BorderLayout;
@@ -250,8 +251,12 @@ public class ClassesListControllerUI extends JTitledPanel {
                                                                              "ClassesListControllerUI_FilteringProgressText"); // NOI18N
     private static final String RESULT_NOT_AVAILABLE_STRING = NbBundle.getMessage(ClassesListControllerUI.class,
                                                                                   "ClassesListControllerUI_ResultNotAvailableString"); // NOI18N
+    private static final String CLASSES_TABLE_ACCESS_NAME = NbBundle.getMessage(ClassesListControllerUI.class,
+                                                                             "ClassesListControllerUI_ClassesTableAccessName"); // NOI18N
+    private static final String CLASSES_TABLE_ACCESS_DESCR = NbBundle.getMessage(ClassesListControllerUI.class,
+                                                                                  "ClassesListControllerUI_ClassesTableAccessDescr"); // NOI18N
                                                                                                                                        // -----
-    private static ImageIcon ICON_CLASSES = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/heapwalk/ui/resources/classes.png")); // NOI18N
+    private static ImageIcon ICON_CLASSES = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/heapwalk/ui/resources/classes.png")); // NOI18N
     private static String filterValue = ""; // NOI18N
     private static int filterType = CommonConstants.FILTER_CONTAINS;
 
@@ -482,7 +487,7 @@ public class ClassesListControllerUI extends JTitledPanel {
     }
 
     private JButton createHeaderPopupCornerButton(final JPopupMenu headerPopup) {
-        final JButton cornerButton = new JButton(new ImageIcon(Utilities.loadImage("org/netbeans/lib/profiler/ui/resources/hideColumn.png"))); // NOI18N
+        final JButton cornerButton = new JButton(new ImageIcon(ImageUtilities.loadImage("org/netbeans/lib/profiler/ui/resources/hideColumn.png"))); // NOI18N
         cornerButton.setToolTipText(SHOW_HIDE_COLUMNS_STRING);
         cornerButton.setDefaultCapable(false);
 
@@ -650,6 +655,8 @@ public class ClassesListControllerUI extends JTitledPanel {
         classesListTableModel.setTable(classesListTable);
         classesListTableModel.setInitialSorting(sortingColumn, sortingOrder);
         classesListTable.getColumnModel().getColumn(0).setMinWidth(150);
+        classesListTable.getAccessibleContext().setAccessibleName(CLASSES_TABLE_ACCESS_NAME);
+        classesListTable.getAccessibleContext().setAccessibleDescription(CLASSES_TABLE_ACCESS_DESCR);
         classesListTable.getInputMap(JTable.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
                         .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "DEFAULT_ACTION"); // NOI18N
         classesListTable.getActionMap().put("DEFAULT_ACTION",
@@ -720,8 +727,6 @@ public class ClassesListControllerUI extends JTitledPanel {
 
         cornerPopup = new JPopupMenu();
 
-        JButton cornerButton = createHeaderPopupCornerButton(cornerPopup);
-
         JExtendedTablePanel tablePanel = new JExtendedTablePanel(classesListTable);
         tablePanel.setCorner(JScrollPane.UPPER_RIGHT_CORNER, createHeaderPopupCornerButton(cornerPopup));
 
@@ -758,8 +763,8 @@ public class ClassesListControllerUI extends JTitledPanel {
     private void initData() {
         saveSelection();
 
-        int totalLiveInstances = classesListController.getClassesController().getHeapFragmentWalker().getTotalLiveInstances();
-        int totalLiveBytes = classesListController.getClassesController().getHeapFragmentWalker().getTotalLiveBytes();
+        long totalLiveInstances = classesListController.getClassesController().getHeapFragmentWalker().getTotalLiveInstances();
+        long totalLiveBytes = classesListController.getClassesController().getHeapFragmentWalker().getTotalLiveBytes();
 
         if (classesCount == -1) {
             classesCount = classesListController.getClassesController().getHeapFragmentWalker().getHeapFragment().getAllClasses()
@@ -775,15 +780,15 @@ public class ClassesListControllerUI extends JTitledPanel {
 
             int instancesCount = jClass.getInstancesCount();
             int instanceSize = jClass.getInstanceSize();
-            int allInstancesSize = jClass.getAllInstancesSize();
+            long allInstancesSize = jClass.getAllInstancesSize();
 
             displayCache[i][0] = jClass.getName();
-            displayCache[i][1] = new Float((float) instancesCount / (float) totalLiveInstances * 100);
+            displayCache[i][1] = new Double((double) instancesCount / (double) totalLiveInstances * 100);
             displayCache[i][2] = Integer.toString(instancesCount) + " (" // NOI18N
-                                 + percentFormat.format((float) instancesCount / (float) totalLiveInstances) + ")"; // NOI18N
+                                 + percentFormat.format((double) instancesCount / (double) totalLiveInstances) + ")"; // NOI18N
             displayCache[i][3] = (allInstancesSize < 0) ? RESULT_NOT_AVAILABLE_STRING
-                                                    : (Integer.toString(allInstancesSize) + " (" // NOI18N
-                                                    + percentFormat.format((float) allInstancesSize / (float) totalLiveBytes)
+                                                    : (Long.toString(allInstancesSize) + " (" // NOI18N
+                                                    + percentFormat.format((double) allInstancesSize / (double) totalLiveBytes)
                                                     + ")"); // NOI18N
             displayCache[i][4] = jClass;
         }
