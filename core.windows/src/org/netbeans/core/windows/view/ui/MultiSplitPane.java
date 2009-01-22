@@ -62,6 +62,7 @@ import javax.accessibility.AccessibleStateSet;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.UIManager;
+import org.netbeans.core.windows.Switches;
 import org.netbeans.core.windows.view.ViewElement;
 
 
@@ -96,11 +97,6 @@ public class MultiSplitPane extends JPanel
         setLayout( new MultiSplitLayout() );
         addMouseMotionListener( this );
         addMouseListener( this );
-        
-        //get default divider size from SplitPane's UI
-        dividerSize = UIManager.getInt("SplitPane.dividerSize"); //NOI18N
-        if( 0 == dividerSize )
-            dividerSize = 7;
     }
     
     /**
@@ -217,6 +213,7 @@ public class MultiSplitPane extends JPanel
         this.dividerSize = newDividerSize;
     }
     
+    @Override
     public Dimension getMinimumSize() {
         //the minimum size is a sum of minimum sizes of all children components
         Dimension d = new Dimension();
@@ -268,6 +265,8 @@ public class MultiSplitPane extends JPanel
     }
 
     public void mousePressed(MouseEvent e) {
+        if( !Switches.isTopComponentResizingEnabled() )
+            return;
         MultiSplitDivider divider = dividerAtPoint( e.getPoint() );
         if( null == divider )
             return;
@@ -292,6 +291,8 @@ public class MultiSplitPane extends JPanel
     
 
     private void switchCursor( MouseEvent e ) {
+        if( !Switches.isTopComponentResizingEnabled() )
+            return;
         MultiSplitDivider divider = dividerAtPoint( e.getPoint() );
         if( null == divider ) {
             setCursor( Cursor.getDefaultCursor() );
@@ -312,6 +313,7 @@ public class MultiSplitPane extends JPanel
         return null;
     }
 
+    @Override
     public void paint( Graphics g ) {
         super.paint(g);
         //paint split bars
@@ -528,6 +530,7 @@ public class MultiSplitPane extends JPanel
     // *************************************************************************
     // Accessibility
     
+    @Override
     public AccessibleContext getAccessibleContext() {
         if( accessibleContext == null ) {
             accessibleContext = new AccessibleMultiSplitPane();
@@ -542,6 +545,7 @@ public class MultiSplitPane extends JPanel
     }
 
     protected class AccessibleMultiSplitPane extends AccessibleJComponent {
+        @Override
         public AccessibleStateSet getAccessibleStateSet() {
             AccessibleStateSet states = super.getAccessibleStateSet();
             if( isHorizontalSplit() ) {
@@ -552,10 +556,12 @@ public class MultiSplitPane extends JPanel
             return states;
         }
 
+        @Override
         public AccessibleRole getAccessibleRole() {
             return AccessibleRole.SPLIT_PANE;
         }
 
+        @Override
         public Accessible getAccessibleAt( Point p ) {
             MultiSplitDivider divider = dividerAtPoint( p );
             if( null != divider ) {
@@ -564,6 +570,7 @@ public class MultiSplitPane extends JPanel
             return super.getAccessibleAt( p );
         }
 
+        @Override
         public Accessible getAccessibleChild(int i) {
 
             int childrenCount = super.getAccessibleChildrenCount();
@@ -578,6 +585,7 @@ public class MultiSplitPane extends JPanel
             return divider;
         }
 
+        @Override
         public int getAccessibleChildrenCount() {
             return super.getAccessibleChildrenCount() + dividers.size();
         }
