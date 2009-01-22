@@ -38,23 +38,24 @@
  */
 package org.netbeans.modules.xml.text;
 
-import org.netbeans.modules.xml.text.indent.*;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
+import java.util.Scanner;
 import javax.swing.text.Document;
 import junit.framework.*;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.api.xml.lexer.XMLTokenId;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.BaseKit;
+import org.netbeans.modules.xml.text.syntax.XMLSyntaxSupport;
 import org.netbeans.modules.xml.xam.ModelSource;
 import org.netbeans.modules.xml.xdm.XDMModel;
 import org.netbeans.modules.xml.xdm.diff.DefaultElementIdentity;
 import org.netbeans.modules.xml.xdm.diff.DiffFinder;
 import org.netbeans.modules.xml.xdm.diff.Difference;
+import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 
@@ -86,7 +87,7 @@ public class AbstractTestCase extends TestCase {
                  
     protected static BaseDocument getResourceAsDocument(String path) throws Exception {
         InputStream in = AbstractTestCase.class.getResourceAsStream(path);
-        BaseDocument sd = new BaseDocument(BaseKit.class, false);
+        BaseDocument sd = new BaseDocument(true, "text/xml"); //NOI18N
         BufferedReader br = new BufferedReader(new InputStreamReader(in,"UTF-8"));
         StringBuffer sbuf = new StringBuffer();
         try {
@@ -122,4 +123,34 @@ public class AbstractTestCase extends TestCase {
         
         return false;        
     }
+
+    protected XMLSyntaxSupport getSyntaxSupport(String path) throws Exception {
+        BaseDocument doc = getResourceAsDocument(path);
+        //must set the language inside unit tests
+        doc.putProperty(Language.class, XMLTokenId.language());
+        return ((XMLSyntaxSupport)doc.getSyntaxSupport());
+    }
+
+    /**
+     * Converts expected result data into a string. See result*.txt files.
+     */
+    protected String getExpectedResultAsString(String resultFile) {
+        StringBuilder expectedResult = new StringBuilder();
+        InputStream in = AbstractTestCase.class.getResourceAsStream(resultFile);
+        Scanner scanner = new Scanner(in);
+        try {
+            while(scanner.hasNextLine()) {
+                expectedResult.append(scanner.nextLine());
+            }
+        } finally {
+            scanner.close();
+            try {
+                in.close();
+            } catch (IOException ex) {
+                //stupid catch
+            }
+        }
+        return expectedResult.toString();        
+    }
+
 }
