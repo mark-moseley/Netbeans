@@ -146,6 +146,7 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
                 <equals arg1="${cluster.dir}" arg2="${cluster.dir.fallback}"/>
             </not>
         </condition>
+        <property name="jnlp.dest.dir" location="${nb_all}/nbbuild/build/jnlp"/>
         <property name="build.javahelp.dir" location="build/javahelp"/>
         <property name="javahelp.base" value="${code.name.base.slashes}/docs"/>
         <property name="javahelp.search" value="JavaHelpSearch"/>
@@ -201,12 +202,16 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
     </target>
 
     <target name="javadoc" depends="build-init,-javadoc-init,-conditional-javadoc-warn" unless="skip.javadoc">
+        <path id="javadoc.classpath">
+            <path refid="cp"/>
+            <path path="${module.run.classpath}"/><!-- XXX #157320: JDK 5 bug workaround -->
+        </path>
         <!-- This should become an import at some point, perhaps: -->
         <ant dir="${nb_all}/nbbuild/javadoctools" antfile="template.xml" target="javadoc">
             <property name="javadoc.base" location="."/>
             <property name="javadoc.name" value="${code.name.base.dashes}" />
             <property name="javadoc.packages" value="${module.javadoc.packages}"/>
-            <property name="javadoc.classpath" refid="cp"/>
+            <property name="javadoc.classpath" refid="javadoc.classpath"/>
             <property name="javadoc.project" location="nbproject/project.xml"/>
         </ant>
     </target>
@@ -303,6 +308,7 @@ If you are sure you want to build with JDK 6+ anyway, use: -Dpermit.jdk6.builds=
         <jhindexer basedir="${build.javahelp.dir}/${javahelp.base}"
                    db="${build.javahelp.dir}/${javahelp.base}/${javahelp.search}">
             <classpath>
+                <pathelement location="${nb_all}/nbbuild/nbantext.jar"/>
                 <fileset dir="${nb_all}">
                     <include name="apisupport.harness/external/jsearch*.jar"/>
                 </fileset>
