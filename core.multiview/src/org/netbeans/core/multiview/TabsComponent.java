@@ -72,7 +72,7 @@ class TabsComponent extends JPanel {
     MultiViewModel model;
     private MouseListener buttonMouseListener = null;
     private JComponent toolbarPanel;
-    private JPanel componentPanel;
+    JPanel componentPanel; /** package private for tests */
     private CardLayout cardLayout;
     private Set<MultiViewElement> alreadyAddedElements;
     private JToolBar bar;
@@ -164,7 +164,16 @@ class TabsComponent extends JPanel {
         }
         cardLayout.show(componentPanel, id);
     }
-    
+
+    /** Part of 130919 fix - don't hold visual representations after close */
+    void peerComponentClosed() {
+        if (componentPanel != null) {
+            componentPanel.removeAll();
+        }
+        if (alreadyAddedElements != null) {
+            alreadyAddedElements.clear();
+        }
+    }
     
     void changeActiveManually(MultiViewDescription desc) {
         Enumeration en = model.getButtonGroup().getElements();
@@ -441,6 +450,7 @@ class TabsComponent extends JPanel {
          */
         @Override
         public void mousePressed(MouseEvent e) {
+            e.consume();
             AbstractButton b = (AbstractButton)e.getComponent();
             MultiViewModel model = TabsComponent.this.model;
             if (model != null) {
@@ -454,32 +464,13 @@ class TabsComponent extends JPanel {
    
     
     private static final class TB extends JToolBar {
-        private boolean updating = false;
-        
+
         public TB() {
             //Aqua UI will look for this value to ensure the
             //toolbar is tall enough that the "glow" which paints
             //outside the combo box bounds doesn't make a mess painting
             //into other components
-            setName("editorToolbar"); //NOI18N
-        }
-        
-        @Override
-        public void setBorder (Border b) {
-            if (!updating) {
-                return;
-            }
-            super.setBorder(b);
-        }
-        
-        @Override
-        public void updateUI() {
-            updating = true;
-            try {
-                super.updateUI();
-            } finally {
-                updating = false;
-            }
+            super( "editorToolbar" );
         }
         
         @Override
