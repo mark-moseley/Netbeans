@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -75,6 +75,13 @@ import static java.util.logging.Level.FINEST;
  */
 final class BasicSearchCriteria {
 
+    /**
+     * maximum size of file of unrecognized file that will be searched.
+     * Files of uknown type that whose size exceed this limit will be considered
+     * binary and will not be searched.
+     */
+    private static final int MAX_UNRECOGNIZED_FILE_SIZE = 5 * (1 << 20); //5 MiB
+
     private static int instanceCounter;
     private final int instanceId = instanceCounter++;
     private static final Logger LOG = Logger.getLogger(
@@ -118,6 +125,12 @@ final class BasicSearchCriteria {
     private boolean criteriaUsable = false;
     
     private ChangeListener usabilityChangeListener;
+
+    /**
+     * holds {@code Charset} that was used for full-text search of the last
+     * tested file
+     */
+    private Charset lastCharset = null;
 
     /**
      * Holds information about occurences of matching strings within individual
@@ -262,7 +275,7 @@ final class BasicSearchCriteria {
         assert !regexp;
         assert textPatternExpr != null;
         try {
-            int flags = 0;
+            int flags = Pattern.UNICODE_CASE;
             if (!caseSensitive) {
                 flags |= Pattern.CASE_INSENSITIVE;
             }
@@ -536,12 +549,28 @@ final class BasicSearchCriteria {
         assert !fileNamePatternValid || (fileNamePattern != null);
     }
     
+    /**
+     * Checks whether the given {@code DataObject} matches this criteria.
+     * If the check includes full-text search, charset used for the search
+     * is remembered. It may be later obtained using method
+     * {@link #getUsedCharset}. If the check did not include full-text search,
+     * the charset is {@code null}-ed.
+     * 
+     * @param  dataObj  {@code DataObject} to be checked
+     * @return  {@code true} if the {@code DataObject} matches the given
+     *          criteria, {@code false} otherwise
+     */
     boolean matches(DataObject dataObj) {
-        if (!dataObj.isValid()) {
+        return matches(dataObj.getPrimaryFile());
+    }
+
+    boolean matches(FileObject fileObj) {
+        lastCharset = null;
+
+        if (!fileObj.isValid()) {
             return false;
         }
         
-        FileObject fileObj = dataObj.getPrimaryFile();
         if (fileObj.isFolder() || !fileObj.isValid() || (isFullText() && !isTextFile(fileObj))) {
             return false;
         }
@@ -554,11 +583,23 @@ final class BasicSearchCriteria {
         
         /* Check the file's content: */
         if (textPatternValid
-                && !checkFileContent(fileObj, dataObj)) {
+                && !checkFileContent(fileObj)) {
             return false;
         }
         
         return true;
+    }
+
+    /**
+     * Returns {@code Charset} used for decoding of the last tested file.
+     * 
+     * @return  {@code Charset} used for decoding of the last tested file,
+     *          or {@code null} if no file has been tested since creation
+     *          of this object or if the last tested file was not full-text
+     *          searched
+     */
+    Charset getLastUsedCharset() {
+        return lastCharset;
     }
 
     /**
@@ -572,8 +613,11 @@ final class BasicSearchCriteria {
     private static boolean isTextFile(FileObject fileObj) {
         String mimeType = fileObj.getMIMEType();
         
-        if (mimeType.equals("content/unknown")                          //NOI18N
-                || mimeType.startsWith("text/")) {                      //NOI18N
+        if (mimeType.equals("content/unknown")) {                       //NOI18N
+            return fileObj.getSize() <= MAX_UNRECOGNIZED_FILE_SIZE;
+        }
+
+        if (mimeType.startsWith("text/")) {                             //NOI18N
             return true;
         }
 
@@ -594,14 +638,15 @@ final class BasicSearchCriteria {
      * Checks whether the file's content matches the text pattern.
      * 
      * @param  fileObj  file whose content is to be checked
-     * @param  dataObj  {@code DataObject} corresponding to the file
      * @return  {@code true} if the file contains at least one substring
      *          matching the pattern, {@code false} otherwise
      */
-    private boolean checkFileContent(FileObject fileObj, DataObject dataObj) {
+    private boolean checkFileContent(FileObject fileObj) {
         boolean firstMatch = true;
         SearchPattern searchPattern = null;
         ArrayList<TextDetail> txtDetails = null;
+
+        DataObject dObj = null;
 
         LineNumberReader reader = null;
         try {
@@ -615,8 +660,9 @@ final class BasicSearchCriteria {
                         searchPattern = createSearchPattern();
                         txtDetails = new ArrayList<TextDetail>(5);
                         firstMatch = false;
+                        dObj = DataObject.find(fileObj);
                     }
-                    TextDetail det = new TextDetail(dataObj, searchPattern);
+                    TextDetail det = new TextDetail(dObj, searchPattern);
                     det.setLine(reader.getLineNumber());
                     det.setLineText(line);
                     int start = matcher.start();
@@ -628,7 +674,7 @@ final class BasicSearchCriteria {
             }
             if (txtDetails != null) {
                 txtDetails.trimToSize();
-                getDetailsMap().put(dataObj, txtDetails);
+                getDetailsMap().put(dObj, txtDetails);
                 return true;
             } else {
                 return false;
@@ -659,14 +705,12 @@ final class BasicSearchCriteria {
     private LineNumberReader getFileObjectReader(FileObject fileObj)
                                                 throws FileNotFoundException {
         InputStream is = fileObj.getInputStream();//throws FileNotFoundException
-        Charset charset = getCharset(fileObj);
-        return new LineNumberReader(new InputStreamReader(is, charset));
+        Charset charset = FileEncodingQuery.getEncoding(fileObj);
+        LineNumberReader result = new LineNumberReader(new InputStreamReader(is, charset));
+        lastCharset = charset;
+        return result;
     }
 
-    static Charset getCharset(FileObject fileObj) {
-        return FileEncodingQuery.getEncoding(fileObj);
-    }
-    
     /**
      * @param  resultObject  <code>DataObject</code> to create the nodes for
      * @return  <code>DetailNode</code>s representing the matches,
