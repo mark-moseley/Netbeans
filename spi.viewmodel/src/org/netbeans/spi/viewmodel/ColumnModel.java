@@ -42,7 +42,10 @@
 package org.netbeans.spi.viewmodel;
 
 import java.beans.PropertyEditor;
-import javax.swing.table.TableCellEditor;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import javax.swing.table.TableCellRenderer;
 
 
@@ -63,9 +66,10 @@ public abstract class ColumnModel implements Model {
     public abstract String getID ();
 
     /**
-     * Returns display name of this column.
+     * Returns display name of this column. The returned String can contain an
+     * ampersand marking the location of the mnemonic.
      *
-     * @return display name of this column
+     * @return display name of this column, including an optional ampersand for mnemonic location.
      */
     public abstract String getDisplayName ();
     
@@ -75,6 +79,7 @@ public abstract class ColumnModel implements Model {
      *
      * @return the mnemonic key or <code>null</code>.
      * @since 1.11
+     * @deprecated Use ampersand in {@link #getDisplayName()}.
      */
     public Character getDisplayedMnemonic() {
         return null;
@@ -258,4 +263,11 @@ public abstract class ColumnModel implements Model {
 //    public TableCellRenderer getTableCellRenderer () {
 //        return null;
 //    }
+    
+    @Retention(RetentionPolicy.SOURCE)
+    @Target({ElementType.TYPE})
+    public @interface Registration {
+        String path();
+    }
+
 }

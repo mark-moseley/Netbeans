@@ -41,6 +41,11 @@
 
 package org.netbeans.spi.debugger;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
 import org.netbeans.api.debugger.DebuggerEngine;
 
 /**
@@ -72,6 +77,9 @@ public abstract class DebuggerEngineProvider {
      * Returns array of services for 
      * {@link org.netbeans.api.debugger.DebuggerEngine} provided by this 
      * DebuggerEngineProvider.
+     * If there are instanceof of {@link java.beans.beancontext.BeanContextChildComponentProxy},
+     * the provided components are opened when the engine starts and are closed
+     * when the debugging session finishes.
      *
      * @return array of services
      */
@@ -85,5 +93,16 @@ public abstract class DebuggerEngineProvider {
      *        by this instance
      */
     public abstract void setDestructor (DebuggerEngine.Destructor desctuctor);
+    
+    @Retention(RetentionPolicy.SOURCE)
+    @Target({ElementType.TYPE})
+    public @interface Registration {
+        /**
+         * An optional path to register this implementation in.
+         */
+        String path() default "";
+
+    }
+
 }
 
