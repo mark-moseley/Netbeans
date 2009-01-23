@@ -78,11 +78,14 @@ public class CCTFlattener extends CPUCCTVisitorAdapter {
     private long[] timePM1;
     private int nMethods;
 
+    private CCTResultsFilter currentFilter = null;
+    
     //~ Constructors -------------------------------------------------------------------------------------------------------------
 
-    public CCTFlattener(ProfilerClient client) {
+    public CCTFlattener(ProfilerClient client, CCTResultsFilter filter) {
         this.client = client;
         parentStack = new Stack();
+        this.currentFilter = filter;
     }
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
@@ -104,7 +107,7 @@ public class CCTFlattener extends CPUCCTVisitorAdapter {
         long totalNInv = 0;
 
         for (int i = 0; i < nMethods; i++) {
-            double time = TimingAdjusterOld.getDefault(status)
+            double time = TimingAdjusterOld.getInstance(status)
                                            .adjustTime(timePM0[i], (invPM[i] + invDiff[i]), (nCalleeInvocations[i] + invDiff[i]),
                                                        false);
 
@@ -123,7 +126,7 @@ public class CCTFlattener extends CPUCCTVisitorAdapter {
             }
 
             if (status.collectingTwoTimeStamps()) {
-                time = TimingAdjusterOld.getDefault(status)
+                time = TimingAdjusterOld.getInstance(status)
                                         .adjustTime(timePM1[i], (invPM[i] + invDiff[i]), (nCalleeInvocations[i] + invDiff[i]),
                                                     true);
                 timePM1[i] = (long) time;
@@ -145,6 +148,7 @@ public class CCTFlattener extends CPUCCTVisitorAdapter {
         timePM0 = timePM1 = null;
         invPM = invDiff = nCalleeInvocations = null;
         parentStack.clear();
+//        currentFilter = null;
     }
 
     public void beforeWalk() {
@@ -157,6 +161,8 @@ public class CCTFlattener extends CPUCCTVisitorAdapter {
         nCalleeInvocations = new int[nMethods];
         parentStack.clear();
 
+//        currentFilter = (CCTResultsFilter)Lookup.getDefault().lookup(CCTResultsFilter.class);
+        
         synchronized (containerGuard) {
             container = null;
         }
@@ -178,8 +184,8 @@ public class CCTFlattener extends CPUCCTVisitorAdapter {
             }
         }
 
-        if (!filteredOut && (client.getMarkFilter() != null)) {
-            filteredOut = !client.getMarkFilter().passesFilter(); // finally use the mark filter
+        if (!filteredOut && (currentFilter != null)) {
+            filteredOut = !currentFilter.passesFilter(); // finally use the mark filter
         }
 
         if (LOGGER.isLoggable(Level.FINEST)) {

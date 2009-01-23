@@ -59,8 +59,6 @@ import org.netbeans.lib.profiler.results.coderegion.CodeRegionResultsSnapshot;
 import org.netbeans.lib.profiler.results.cpu.CPUCCTProvider;
 import org.netbeans.lib.profiler.results.cpu.CPUResultsSnapshot;
 import org.netbeans.lib.profiler.results.cpu.FlatProfileProvider;
-import org.netbeans.lib.profiler.results.cpu.cct.CCTResultsFilter;
-import org.netbeans.lib.profiler.results.cpu.cct.TimeCollector;
 import org.netbeans.lib.profiler.results.memory.*;
 import org.netbeans.lib.profiler.utils.MiscUtils;
 import org.netbeans.lib.profiler.utils.StringUtils;
@@ -69,7 +67,6 @@ import java.awt.EventQueue;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.lang.reflect.InvocationTargetException;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.text.MessageFormat;
@@ -341,14 +338,11 @@ public class ProfilerClient implements CommonConstants {
     private static final String CONNECT_VM_MSG = messages.getString("ProfilerClient_ConnectVmMsg"); // NOI18N
     private static final String TARGET_JVM_ERROR_MSG = messages.getString("ProfilerClient_TargetJvmErrorMsg"); // NOI18N
     private static final String UNSUPPORTED_JVM_MSG = messages.getString("ProfilerClient_UnsupportedJvmMsg"); // NOI18N
-                                                                                                              // -----
-    private static final String a = "AAQ";
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
     private AppStatusHandler.ServerCommandHandler serverCommandHandler;
     private AppStatusHandler appStatusHandler;
-    private CCTResultsFilter markFilter;
     private CPUCCTProvider cpuCctProvider;
     private Command execInSeparateThreadCmd;
     private FlatProfileProvider flatProvider;
@@ -363,7 +357,6 @@ public class ProfilerClient implements CommonConstants {
     private Object instrumentationLock = new Object(); // To make sure all instrumentation-related operations
                                                        // happen serially
     private Object responseLock = new Object();
-    private Object wdLock = new Object();
     private ObjectInputStream socketIn;
     private ObjectOutputStream socketOut;
     private ProfilerEngineSettings settings;
@@ -374,7 +367,6 @@ public class ProfilerClient implements CommonConstants {
 
     //--------------------- Connection management --------------------
     private Socket clientSocket;
-    private TimeCollector timeCollector;
     private WireIO wireIO;
 
     /**
@@ -394,7 +386,6 @@ public class ProfilerClient implements CommonConstants {
     private volatile boolean handlingEventBufferDump;
     private volatile boolean instrMethodsLimitReported;
     private boolean serverClassesInitialized;
-    private boolean shouldDisplayDialog = true;
     private volatile boolean targetVMAlive;
     private volatile boolean terminateOrDetachCommandIssued;
     private int currentAgentId = -1;
@@ -410,13 +401,9 @@ public class ProfilerClient implements CommonConstants {
         appStatusHandler = ash;
         serverCommandHandler = sch;
         instrumentor = new Instrumentor(status, settings);
-
-        if (separateCmdExecThread == null) {
-            separateCmdExecThread = new SeparateCmdExecutionThread();
-            separateCmdExecThread.setDaemon(true);
-            separateCmdExecThread.start();
-        }
-
+        separateCmdExecThread = new SeparateCmdExecutionThread();
+        separateCmdExecThread.setDaemon(true);
+        separateCmdExecThread.start();
         EventBufferProcessor.initialize(this);
         EventBufferResultsProvider.getDefault().addDispatcher(ProfilingResultsDispatcher.getDefault());
     }
@@ -480,8 +467,24 @@ public class ProfilerClient implements CommonConstants {
                 return null;
             }
         }
+        int len = 0;
+        boolean twoTimeStamps = false;
+        String[] instrClassNames, instrMethodNames, instrMethodSigs;
+        try {
+            status.beginTrans(false);
+            twoTimeStamps = status.collectingTwoTimeStamps();
+            len = status.getNInstrMethods();
+            instrClassNames = new String[len];
+            System.arraycopy(status.getInstrMethodClasses(), 0, instrClassNames, 0, len);
+            instrMethodNames = new String[len];
+            System.arraycopy(status.getInstrMethodNames(), 0, instrMethodNames, 0, len);
+            instrMethodSigs = new String[len];
+            System.arraycopy(status.getInstrMethodSignatures(), 0, instrMethodSigs, 0, len);
+        } finally {
+            status.endTrans();
+        }
 
-        return new CPUResultsSnapshot(resultsStart, System.currentTimeMillis(), cpuCctProvider, status);
+        return new CPUResultsSnapshot(resultsStart, System.currentTimeMillis(), cpuCctProvider, twoTimeStamps, instrClassNames, instrMethodNames, instrMethodSigs, len);
     }
 
     /**
@@ -567,10 +570,6 @@ public class ProfilerClient implements CommonConstants {
         InternalStatsResponse resp = (InternalStatsResponse) getLastResponse();
 
         return resp;
-    }
-
-    public CCTResultsFilter getMarkFilter() {
-        return markFilter;
     }
 
     public MemoryCCTProvider getMemoryCCTProvider() {
@@ -699,10 +698,6 @@ public class ProfilerClient implements CommonConstants {
 
     public ProfilingSessionStatus getStatus() {
         return status;
-    }
-
-    public TimeCollector getTimeCollector() {
-        return timeCollector;
     }
 
     public synchronized boolean cpuResultsExist() throws ClientUtils.TargetAppOrVMTerminated {
@@ -1015,16 +1010,8 @@ public class ProfilerClient implements CommonConstants {
         flatProvider = provider;
     }
 
-    public void registerMarkFilter(CCTResultsFilter filter) {
-        markFilter = filter;
-    }
-
     public void registerMemoryCCTProvider(MemoryCCTProvider provider) {
         memCctProvider = provider;
-    }
-
-    public void registerTimeCollector(TimeCollector collector) {
-        timeCollector = collector;
     }
 
     public void removeAllInstrumentation(boolean cleanupClient)

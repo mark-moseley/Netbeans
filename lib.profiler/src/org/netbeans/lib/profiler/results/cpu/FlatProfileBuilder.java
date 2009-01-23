@@ -40,23 +40,24 @@
 
 package org.netbeans.lib.profiler.results.cpu;
 
-import org.netbeans.lib.profiler.ContextAware;
 import org.netbeans.lib.profiler.ProfilerClient;
 import org.netbeans.lib.profiler.results.RuntimeCCTNode;
-import org.netbeans.lib.profiler.results.cpu.CPUCallGraphBuilder.ThreadInfo;
 import org.netbeans.lib.profiler.results.cpu.cct.CCTFlattener;
 import org.netbeans.lib.profiler.results.cpu.cct.CompositeCPUCCTWalker;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.RuntimeCPUCCTNode;
 
 //import org.netbeans.lib.profiler.results.cpu.cct.NodeMarker;
 import java.util.logging.Logger;
+import org.netbeans.lib.profiler.results.cpu.cct.CCTResultsFilter;
+import org.netbeans.lib.profiler.results.cpu.cct.TimeCollector;
 
 
 /**
  *
  * @author Jaroslav Bachorik
  */
-public class FlatProfileBuilder implements FlatProfileProvider, CPUCCTProvider.Listener, ContextAware {
+@org.openide.util.lookup.ServiceProviders({@org.openide.util.lookup.ServiceProvider(service=org.netbeans.lib.profiler.results.cpu.CPUCCTProvider.Listener.class), @org.openide.util.lookup.ServiceProvider(service=org.netbeans.lib.profiler.results.cpu.FlatProfileBuilder.class)})
+public class FlatProfileBuilder implements FlatProfileProvider, CPUCCTProvider.Listener {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
     private static final Logger LOGGER = Logger.getLogger(FlatProfileBuilder.class.getName());
@@ -68,15 +69,22 @@ public class FlatProfileBuilder implements FlatProfileProvider, CPUCCTProvider.L
     private ProfilerClient client;
     private RuntimeCPUCCTNode appNode;
 
+    private TimeCollector collector = null;
+    private CCTResultsFilter filter = null;
+
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
-    public void setContext(ProfilerClient client) {
+    public void setContext(ProfilerClient client, TimeCollector collector, CCTResultsFilter filter) {
         if (this.client != null) {
+            this.collector = null;
+            this.filter = null;
             this.client.registerFlatProfileProvider(null);
         }
 
         if (client != null) {
-            flattener = new CCTFlattener(client);
+            this.collector = collector;
+            this.filter = filter;
+            flattener = new CCTFlattener(client, filter);
             client.registerFlatProfileProvider(this);
         } else {
             flattener = null;
@@ -108,20 +116,22 @@ public class FlatProfileBuilder implements FlatProfileProvider, CPUCCTProvider.L
         client.getStatus().beginTrans(false);
 
         try {
-            if (ThreadInfo.beginTrans(false, true)) {
-                try {
-                    CompositeCPUCCTWalker walker = new CompositeCPUCCTWalker();
-                    walker.add(0, client.getMarkFilter());
-                    walker.add(1, flattener);
-                    walker.add(2, client.getTimeCollector());
+            CompositeCPUCCTWalker walker = new CompositeCPUCCTWalker();
+            int index = 0;
 
-                    walker.walk(appNode);
-
-                    lastFlatProfile = flattener.getFlatProfile();
-                } finally {
-                    ThreadInfo.endTrans();
-                }
+            if (filter != null) {
+                walker.add(index++, filter);
             }
+            walker.add(index++, flattener);
+
+            if (collector != null) {
+                walker.add(index++ , collector);
+            }
+
+            walker.walk(appNode);
+
+            lastFlatProfile = flattener.getFlatProfile();
+
         } finally {
             client.getStatus().endTrans();
         }

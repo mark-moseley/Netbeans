@@ -71,7 +71,54 @@ import java.util.logging.Level;
  * @author Misha Dmitriev
  */
 public class CPUResultsSnapshot extends ResultsSnapshot {
-    //~ Inner Classes ------------------------------------------------------------------------------------------------------------
+    /**************************************************************************
+    +------------------------------------------------------------------------------+
+    | Profiler CPU snapshot format description                                     |
+    +------------------------------------------------------------------------------+
+    int         version
+    long        timestamp
+    long        duration
+    boolean     measure thread time?
+    int         #instrumented methods
+    ===> (for #instrumented methods)
+    string      class name
+    string      method name
+    string      signature
+    <===
+    int         #threads
+    ===> (for #threads)
+    int         thread id
+    string      thread name
+    boolean     measure thread time?
+    int         compact data length
+    byte[]      compact data with the given length
+    int         node size
+    long        wholeGraphGrossTimeAbs
+    long        wholeGraphGrossTimeThreadCPU
+    double      timeInInjectedCodeInAbsCounts
+    double      timeInInjectedCodeInThreadCPUCounts
+    long        wholeGraphPureTimeAbs
+    long        wholeGraphPureTimeThreadCPU
+    long        wholeGraphNetTime0
+    long        wholeGraphNetTime1
+    long        totalInvNo
+    boolean     displayWholeThreadCPUTime
+    <===
+
+
+    +------------------------------------------------------------------------------+
+    | CPU compact data format description                                          |
+    +------------------------------------------------------------------------------+
+    0-1     2 bytes         methodID
+    2-5     4 bytes         nCalls
+    6-10    5 bytes         time0
+    11-15   5 bytes         self time0
+    16-20   5 bytes         time1(if measuring thread time)
+    21-25   5 bytes         self time1(if measuring thread time)
+    26-27   2 bytes         # of subnodes
+    28-30   3 bytes         if compact data size <= 16777215
+    28-31   4 bytes         if compact data size > 16777215
+    ***************************************************************************/
 
     /**
      * This exception just indicates that snapshot can't be created because no data is available
@@ -94,22 +141,22 @@ public class CPUResultsSnapshot extends ResultsSnapshot {
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
-    private Map threadIdMap;
-    private CPUCCTContainer[] allThreadsMergedCCTContainers; // [method|class|package aggregation level] -> CPUCCTContainer Per-view representation of all threads merged CCT containers
+    protected Map threadIdMap;
+    protected CPUCCTContainer[] allThreadsMergedCCTContainers; // [method|class|package aggregation level] -> CPUCCTContainer Per-view representation of all threads merged CCT containers
 
     // <class name>,<method name>,<method signature> triplets corresponding to methodIds in the profiling results
     // The 0th entry is reserved for a special "Threads" node
     // instrMethodClasses consists of 3 arrays, each per different "view"
-    private String[][] instrMethodClassesViews;
-    private String[] instrMethodNames;
-    private String[] instrMethodSignatures;
-    private PrestimeCPUCCTNode[] rootNode; // Per-view root nodes
-    private CPUCCTContainer[][] threadCCTContainers; // [method|class|package aggregation level][0-nThreads] -> CPUCCTContainer
-    private boolean collectingTwoTimeStamps;
-    private boolean sortNodesOrder;
+    protected String[][] instrMethodClassesViews;
+    protected String[] instrMethodNames;
+    protected String[] instrMethodSignatures;
+    protected PrestimeCPUCCTNode[] rootNode; // Per-view root nodes
+    protected CPUCCTContainer[][] threadCCTContainers; // [method|class|package aggregation level][0-nThreads] -> CPUCCTContainer
+    protected boolean collectingTwoTimeStamps;
+    protected boolean sortNodesOrder;
 
     // Number of instrumented methods - may be smaller than the size of the above arrays
-    private int nInstrMethods;
+    protected int nInstrMethods;
 
     // Remembered sorting parameters for CCT nodes
     private int sortNodesBy;
@@ -121,22 +168,18 @@ public class CPUResultsSnapshot extends ResultsSnapshot {
         threadIdMap = new HashMap();
     }
 
-    public CPUResultsSnapshot(long beginTime, long timeTaken, CPUCCTProvider cctProvider, ProfilingSessionStatus status)
+    public CPUResultsSnapshot(long beginTime, long timeTaken, CPUCCTProvider cctProvider, boolean collectingTwoTimestamps,
+                              String[] instrClassNames, String[] instrMethodNames, String[] instrMethodSigs, int nInstrMethods)
                        throws NoDataAvailableException {
         super(beginTime, timeTaken);
-        status.beginTrans(false);
 
-        try {
-            collectingTwoTimeStamps = status.collectingTwoTimeStamps();
+        this.collectingTwoTimeStamps = collectingTwoTimestamps;
 
-            instrMethodClassesViews = new String[3][];
-            instrMethodClassesViews[METHOD_LEVEL_VIEW] = status.getInstrMethodClasses();
-            instrMethodNames = status.getInstrMethodNames();
-            instrMethodSignatures = status.getInstrMethodSignatures();
-            nInstrMethods = status.getNInstrMethods();
-        } finally {
-            status.endTrans();
-        }
+        this.instrMethodClassesViews = new String[3][];
+        this.instrMethodClassesViews[METHOD_LEVEL_VIEW] = instrClassNames;
+        this.instrMethodNames = instrMethodNames;
+        this.instrMethodSignatures = instrMethodSigs;
+        this.nInstrMethods = nInstrMethods;
 
         // Generate individual CCT containers for all threads in CPUCallGraphBuilder.
         CPUCCTContainer[] methodLevelCCTs = cctProvider.createPresentationCCTs(this);
@@ -365,7 +408,7 @@ public class CPUResultsSnapshot extends ResultsSnapshot {
         return (cId != null) ? cId.intValue() : 0;
     }
 
-    private PrestimeCPUCCTNode createRootNodeForAllThreads(int view) {
+    protected PrestimeCPUCCTNode createRootNodeForAllThreads(int view) {
         CPUCCTContainer[] ccts = threadCCTContainers[view];
         int len = ccts.length;
         PrestimeCPUCCTNode[] threadNodes = new PrestimeCPUCCTNode[len];
