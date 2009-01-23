@@ -81,45 +81,45 @@ public class FortranParser {
      *  comments and labels) and checks for 2 specific keywords, MODULE and USE. It
      *  creates a list containing each MODULE or USE name preceded by an 'M' or 'U'.
      */
-    public ArrayList parser() {
-	ArrayList list = new ArrayList();
-	String line;
-	String arg;
+    public ArrayList<String> parser() {
+        ArrayList<String> list = new ArrayList<String>();
+        String line;
+        String arg;
 
-	if (in == null) {
-	    return null;
-	}
+        if (in == null) {
+            return null;
+        }
 
-	try {
-	    while ((line = in.getStatement()) != null) {
-		if (line.length() >= 15 && line.substring(0, 15).
-				equalsIgnoreCase("moduleprocedure")) {	// NOI18N
-		    // ignore this keyword
-		} else if (line.length() >= 6 &&
-				line.substring(0, 6).equalsIgnoreCase("module")) { // NOI18N
-		    arg = getName(line.substring(6));
-		    list.add("M" + arg);    // NOI18N
-		} else if (line.length() >= 3 &&
-				line.substring(0, 3).equalsIgnoreCase("use")) {	// NOI18N
-		    arg = getName(line.substring(3));
-		    list.add("U" + arg);    // NOI18N
-		}
-	    }
-	} catch (UnexpectedEOFException ex) {
-	    if (verbose) {
-		System.err.println("Error: Unexpected EOF"); // NOI18N
-		ex.printStackTrace();
-	    }
-	    return null;
-	}
+        try {
+            while ((line = in.getStatement()) != null) {
+                if (line.length() >= 15 && line.substring(0, 15).
+                        equalsIgnoreCase("moduleprocedure")) {	// NOI18N
+                    // ignore this keyword
+                } else if (line.length() >= 6 &&
+                        line.substring(0, 6).equalsIgnoreCase("module")) { // NOI18N
+                    arg = getName(line.substring(6));
+                    list.add("M" + arg);    // NOI18N
+                } else if (line.length() >= 3 &&
+                        line.substring(0, 3).equalsIgnoreCase("use")) {	// NOI18N
+                    arg = getName(line.substring(3));
+                    list.add("U" + arg);    // NOI18N
+                }
+            }
+        } catch (UnexpectedEOFException ex) {
+            if (verbose) {
+                System.err.println("Error: Unexpected EOF"); // NOI18N
+                ex.printStackTrace();
+            }
+            return null;
+        }
 
-	return list;
+        return list;
     }
 
 
     /** Get the name following a MODULE or USE keyword */
     private String getName(String arg) {
-	StringBuffer buf = new StringBuffer();
+	StringBuilder buf = new StringBuilder();
 	String arg2 = arg.trim();
 	
 	for (int i = 0; i < arg2.length(); i++) {

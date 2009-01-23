@@ -47,17 +47,15 @@ import java.io.File;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ImageIcon;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
+import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
-import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.netbeans.modules.cnd.api.execution.ExecutionListener;
 import org.netbeans.modules.cnd.api.execution.NativeExecutor;
@@ -66,11 +64,14 @@ import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
 import org.netbeans.modules.cnd.api.remote.PathMap;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.api.utils.PlatformInfo;
+import org.netbeans.modules.cnd.makeproject.MakeActionProvider;
 import org.netbeans.modules.cnd.makeproject.MakeOptions;
 import org.netbeans.modules.cnd.makeproject.api.BuildActionsProvider.BuildAction;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
+import org.netbeans.modules.cnd.makeproject.api.configurations.DebuggerChooserConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ui.CustomizerNode;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
 import org.netbeans.modules.cnd.makeproject.ui.MakeLogicalViewProvider;
@@ -88,7 +89,10 @@ import org.openide.windows.IOProvider;
 import org.openide.windows.InputOutput;
 
 public class DefaultProjectActionHandler implements ActionListener {
+
+    private final static List<CustomProjectActionHandlerProvider> ahplist = getActionHandlerProvidersList();
     private CustomProjectActionHandlerProvider customActionHandlerProvider = null;
+    private CustomProjectActionHandlerProvider overrideActionHandlerProvider = null;
     private CustomProjectActionHandler customActionHandler = null;
     
     private static DefaultProjectActionHandler instance = null;
@@ -98,33 +102,38 @@ public class DefaultProjectActionHandler implements ActionListener {
             instance = new DefaultProjectActionHandler();
         return instance;
     }
+
+    private static List<CustomProjectActionHandlerProvider> getActionHandlerProvidersList() {
+        Lookup.Template<CustomProjectActionHandlerProvider> template = new Lookup.Template<CustomProjectActionHandlerProvider>(CustomProjectActionHandlerProvider.class);
+        Lookup.Result<CustomProjectActionHandlerProvider> result = Lookup.getDefault().lookup(template);
+        List<CustomProjectActionHandlerProvider> list = new ArrayList<CustomProjectActionHandlerProvider>(result.allInstances());
+        return list;
+    }
     
     /*
      * @deprecated. Register via services using org.netbeans.modules.cnd.makeproject.api.CustomProjectActionHandlerProvider
      */ 
-    public void setCustomDebugActionHandlerProvider(CustomProjectActionHandlerProvider customDebugActionHandlerProvider) {
-        customActionHandlerProvider = customDebugActionHandlerProvider;
+    public void setCustomDebugActionHandlerProvider(CustomProjectActionHandlerProvider overrideActionHandlerProvider) {
+        this.overrideActionHandlerProvider = overrideActionHandlerProvider;
+    }
+
+    public CustomProjectActionHandlerProvider getCustomDebugActionHandlerProvider() {
+        return getCustomDebugActionHandlerProvider(null);
     }
     
-    public CustomProjectActionHandlerProvider getCustomDebugActionHandlerProvider() {
-        // First try old-style registration (deprecated)
-        if (customActionHandlerProvider != null) {
-            return customActionHandlerProvider;
-        }
-        // Then try services
-        Lookup.Template template = new Lookup.Template(CustomProjectActionHandlerProvider.class);
-        Lookup.Result result = Lookup.getDefault().lookup(template);
-        Collection collection = result.allInstances();
-        Iterator iterator = collection.iterator();
-        while (iterator.hasNext()) {
-            Object caop = iterator.next();
-            if (caop instanceof CustomProjectActionHandlerProvider) {
-                customActionHandlerProvider = (CustomProjectActionHandlerProvider)caop;
-                if (customActionHandlerProvider.getClass().getName().contains("dbx")) { // NOI18N
-                    // prefer dbx over gdb ....
-                    break;
-                }
+    public CustomProjectActionHandlerProvider getCustomDebugActionHandlerProvider(MakeConfiguration conf) {
+        if (conf != null) {
+            DebuggerChooserConfiguration chooser = conf.getDebuggerChooserConfiguration();
+            CustomizerNode node = chooser.getNode();
+            if (node instanceof CustomProjectActionHandlerProvider) {
+                return (CustomProjectActionHandlerProvider) node;
+            } else if (node != null && overrideActionHandlerProvider != null && node.getClass().getName().toLowerCase().contains("dbx")) { // NOI18N
+                return overrideActionHandlerProvider;
             }
+        }
+
+        for (CustomProjectActionHandlerProvider caop : ahplist) {
+            customActionHandlerProvider = caop;
         }
         return customActionHandlerProvider;
     }
@@ -302,8 +311,9 @@ public class DefaultProjectActionHandler implements ActionListener {
                     pae.getID() == ProjectActionEvent.DEBUG ||
                     pae.getID() == ProjectActionEvent.DEBUG_LOAD_ONLY ||
                     pae.getID() == ProjectActionEvent.DEBUG_STEPINTO ||
+                    pae.getID() == ProjectActionEvent.CHECK_EXECUTABLE ||
                     pae.getID() == ProjectActionEvent.CUSTOM_ACTION) {
-                if (!checkExecutable(pae)) {
+                if (!checkExecutable(pae) || pae.getID() == ProjectActionEvent.CHECK_EXECUTABLE) {
                     progressHandle.finish();
                     return;
                 }
@@ -312,12 +322,12 @@ public class DefaultProjectActionHandler implements ActionListener {
             if ((pae.getID() == ProjectActionEvent.DEBUG ||
                     pae.getID() == ProjectActionEvent.DEBUG_LOAD_ONLY ||
                     pae.getID() == ProjectActionEvent.DEBUG_STEPINTO) &&
-                    getCustomDebugActionHandlerProvider() != null) {
+                    getCustomDebugActionHandlerProvider((MakeConfiguration) pae.getConfiguration()) != null) {
                 // See 130827
                 progressHandle.finish();
                 progressHandle = createPogressHandleNoCancel();
                 progressHandle.start();
-                CustomProjectActionHandler ah = getCustomDebugActionHandlerProvider().factoryCreate();
+                CustomProjectActionHandler ah = getCustomDebugActionHandlerProvider((MakeConfiguration) pae.getConfiguration()).factoryCreate();
                 ah.addExecutionListener(this);
                 ah.execute(pae, getTab());
             } else if (pae.getID() == ProjectActionEvent.RUN ||
@@ -329,12 +339,21 @@ public class DefaultProjectActionHandler implements ActionListener {
                 boolean showInput = pae.getID() == ProjectActionEvent.RUN;
                 MakeConfiguration conf = (MakeConfiguration) pae.getConfiguration();
                 String key = conf.getDevelopmentHost().getName();
-                
+
+                String runDirectory = pae.getProfile().getRunDirectory();
+
                 if (!conf.getDevelopmentHost().isLocalhost()) {
                     // Make sure the project root is visible remotely
                     String basedir = pae.getProfile().getBaseDir();
-                    PathMap mapper = HostInfoProvider.getDefault().getMapper(key);
-                    if (!mapper.isRemote(basedir, true)) {
+                    if (MakeActionProvider.useRsync) {
+//                        ProjectInformation info = pae.getProject().getLookup().lookup(ProjectInformation.class);
+//                        final String projectName = info.getDisplayName();
+//                        runDirectory = MakeActionProvider.REMOTE_BASE_PATH + "/" + projectName;
+
+
+                    } else {
+                        PathMap mapper = HostInfoProvider.getDefault().getMapper(key);
+                        if (!mapper.isRemote(basedir, true)) {
 //                        mapper.showUI();
 //                        if (!mapper.isRemote(basedir)) {
 //                            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
@@ -342,8 +361,9 @@ public class DefaultProjectActionHandler implements ActionListener {
                             progressHandle.finish();
                             return;
 //                        }
+                        }
                     }
-                    //CompilerSetManager rcsm = CompilerSetManager.getDefault(key);
+                //CompilerSetManager rcsm = CompilerSetManager.getDefault(key);
                 }
                 
                 PlatformInfo pi = PlatformInfo.getDefault(conf.getDevelopmentHost().getName());
@@ -388,7 +408,7 @@ public class DefaultProjectActionHandler implements ActionListener {
                             String args2;
                             if (pae.getProfile().getTerminalPath().indexOf("gnome-terminal") != -1) { // NOI18N
                                 /* gnome-terminal has differnt quoting rules... */
-                                StringBuffer b = new StringBuffer();
+                                StringBuilder b = new StringBuilder();
                                 for (int i = 0; i < args.length(); i++) {
                                     if (args.charAt(i) == '"') {
                                         b.append("\\\""); // NOI18N
@@ -399,6 +419,12 @@ public class DefaultProjectActionHandler implements ActionListener {
                                 args2 = b.toString();
                             } else {
                                 args2 = "";
+                            }
+                            if (pae.getID() == ProjectActionEvent.RUN &&
+                                    ((MakeConfiguration)pae.getConfiguration()).isApplicationConfiguration() &&
+                                    HostInfoProvider.getDefault().getPlatform(key) == PlatformTypes.PLATFORM_WINDOWS &&
+                                    !exe.endsWith(".exe")) { // NOI18N
+                                exe = exe + ".exe"; // NOI18N
                             }
                             args = MessageFormat.format(pae.getProfile().getTerminalOptions(), rcfile, exe, args, args2);
                             exe = pae.getProfile().getTerminalPath();
@@ -461,7 +487,7 @@ public class DefaultProjectActionHandler implements ActionListener {
                 }
                 projectExecutor =  new NativeExecutor(
                         key,
-                        pae.getProfile().getRunDirectory(),
+                        runDirectory,
                         exe, args, env,
                         pae.getTabName(),
                         pae.getActionName(),
