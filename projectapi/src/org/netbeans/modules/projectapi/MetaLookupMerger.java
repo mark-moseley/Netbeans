@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,29 +21,34 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
+ * If you wish your version of this file to be governed by only the CDDL
+ * or only the GPL Version 2, indicate your decision by adding
+ * "[Contributor] elects to include this software in this distribution
+ * under the [CDDL or GPL Version 2] license." If you do not indicate a
+ * single choice of license, a recipient has the option to distribute
+ * your version of this file under either the CDDL, the GPL Version 2 or
+ * to extend the choice of license to its licensees as provided above.
+ * However, if you add GPL Version 2 code and therefore, elected the GPL
+ * Version 2 license, then the option applies only if the new code is
+ * made subject to such option by the copyright holder.
+ *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.xml.jaxb.model;
 
-import org.netbeans.api.project.Project;
-import org.netbeans.modules.xml.jaxb.api.model.JAXBWizModel;
-import org.netbeans.spi.project.LookupProvider;
+package org.netbeans.modules.projectapi;
+
+import org.netbeans.spi.project.LookupMerger;
 import org.openide.util.Lookup;
-import org.openide.util.lookup.Lookups;
 
 /**
- *
- * @author gpatil
+ * @see LazyLookupProviders#forLookupMerger
  */
-public class JAXBWizLookupProvider implements LookupProvider {
+public interface MetaLookupMerger {
 
-    public Lookup createAdditionalLookup(Lookup baseContext) {
-        Project project = baseContext.lookup(Project.class);
-        JAXBWizModel model = new JAXBWizModelImpl(project);
-        JAXBGenSourceClassPathProvider cpProvider = 
-                new JAXBGenSourceClassPathProvider(project);
-        return Lookups.fixed(new Object[] {model, cpProvider});
-    }
+    boolean canNowMerge(Class<?> service);
+
+    LookupMerger/*|null*/ merger();
+
 }

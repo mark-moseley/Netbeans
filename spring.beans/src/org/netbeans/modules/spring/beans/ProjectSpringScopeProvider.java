@@ -42,12 +42,20 @@
 package org.netbeans.modules.spring.beans;
 
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.spring.api.beans.ConfigFileManager;
 import org.netbeans.modules.spring.api.beans.SpringScope;
+import org.netbeans.spi.project.ProjectServiceProvider;
 
 /**
  *
  * @author Andrei Badea
  */
+@ProjectServiceProvider(service=ProjectSpringScopeProvider.class, projectType={
+    "org-netbeans-modules-java-j2seproject",
+    "org-netbeans-modules-j2ee-ejbjarproject",
+    "org-netbeans-modules-web-project",
+    "org-netbeans-modules-maven"
+})
 public class ProjectSpringScopeProvider {
 
     private final Project project;
@@ -58,9 +66,9 @@ public class ProjectSpringScopeProvider {
     }
 
     public synchronized SpringScope getSpringScope() {
-        // XXX read the Spring scope from the project.
         if (springScope == null) {
-            springScope = SpringScopeAccessor.DEFAULT.createSpringScope();
+            ConfigFileManager manager = ConfigFileManagerAccessor.getDefault().createConfigFileManager(new ProjectConfigFileManagerImpl(project));
+            springScope = SpringScopeAccessor.getDefault().createSpringScope(manager);
         }
         return springScope;
     }

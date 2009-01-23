@@ -1,8 +1,9 @@
+
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +21,13 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * Contributor(s):
- * 
+ *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -39,52 +40,44 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.websvc.rest.projects;
-
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.netbeans.api.project.Project;
-import org.netbeans.modules.j2ee.metadata.model.api.MetadataModelAction;
-import org.netbeans.modules.websvc.rest.RestUtils;
-import org.netbeans.modules.websvc.rest.model.api.RestServices;
-import org.netbeans.modules.websvc.rest.model.api.RestServicesMetadata;
-import org.netbeans.modules.websvc.rest.model.api.RestServicesModel;
-import org.netbeans.modules.websvc.rest.spi.RestSupport;
-import org.netbeans.spi.project.LookupProvider;
-import org.netbeans.spi.project.ui.PrivilegedTemplates;
-import org.netbeans.spi.project.ui.ProjectOpenedHook;
-import org.openide.util.Lookup;
-import org.openide.util.lookup.Lookups;
-
-/** Lookup Provider for WS Support
+/*
+ * WebProjectJAXWSVersionProvider.java
  *
- * @author mkuchtiak
+ * Created on March 21, 2007, 3:21 AM
+ *
+ * To change this template, choose Tools | Template Manager
+ * and open the template in the editor.
  */
-public class WebRestSupportLookupProvider implements LookupProvider {
+
+package org.netbeans.modules.websvc.core.jaxws.projects;
+
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.websvc.api.jaxws.project.JAXWSVersionProvider;
+import org.netbeans.modules.websvc.core.WSStackUtils;
+import org.netbeans.modules.websvc.wsstack.api.WSStack;
+import org.netbeans.modules.websvc.wsstack.jaxws.JaxWs;
+import org.netbeans.spi.project.ProjectServiceProvider;
+
+/**
+ *
+ * @author rico
+ */
+@ProjectServiceProvider(service=JAXWSVersionProvider.class, projectType={
+    "org-netbeans-modules-web-project",
+    "org-netbeans-modules-j2ee-ejbjarproject",
+    "org-netbeans-modules-j2ee-clientproject"
+})
+public class JavaEEJAXWSVersionProvider implements JAXWSVersionProvider{
     
-    /** Creates a new instance of JaxWSLookupProvider */
-    public WebRestSupportLookupProvider() {
+    private Project project;
+    /** Creates a new instance of WebProjectJAXWSVersionProvider */
+    public JavaEEJAXWSVersionProvider(Project project) {
+        this.project = project;
     }
     
-    public Lookup createAdditionalLookup(Lookup baseContext) {
-        final Project prj = baseContext.lookup(Project.class);
-        final RestSupport restSupport = new WebProjectRestSupport(prj);
-        
-        PrivilegedTemplates templates = new PrivilegedTemplates() {
-            public String[] getPrivilegedTemplates() {
-                return new String[] {
-                    "Templates/WebServices/RestServicesFromEntities", // NOI18N
-                    "Templates/WebServices/RestServicesFromPatterns",  //NOI18N
-                    "Templates/WebServices/RestClientStubs"    //NOI18N
-                };
-            }
-        };
-        
-        //ProjectRestServiceNotifier servicesNotifier = new ProjectRestServiceNotifier(prj);
-        return Lookups.fixed(new Object[] {restSupport, templates});
+    public String getJAXWSVersion() {
+        WSStackUtils stackUtils = new WSStackUtils(project);
+        WSStack wsStack = stackUtils.getWsStack(JaxWs.class);
+        return wsStack == null ? null:wsStack.getVersion().toString();
     }
-    
 }

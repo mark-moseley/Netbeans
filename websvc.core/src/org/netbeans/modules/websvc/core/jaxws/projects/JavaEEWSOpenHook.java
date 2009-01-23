@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,7 +34,7 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.websvc.core.jaxws.projects;
 
@@ -59,28 +59,25 @@ import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
 import org.netbeans.modules.websvc.api.jaxws.project.config.ServiceAlreadyExistsExeption;
 import org.netbeans.modules.websvc.core.JaxWsUtils;
 import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
-import org.netbeans.spi.project.LookupProvider;
+import org.netbeans.spi.project.ProjectServiceProvider;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.openide.ErrorManager;
-import org.openide.util.Lookup;
 import org.openide.util.RequestProcessor;
-import org.openide.util.lookup.Lookups;
 
 /**
- * Lookup Provider for WS Support in JavaEE project types
- *
  * @author mkuchtiak
  */
-public class JavaEEWSSupportLookupProvider implements LookupProvider {
+@ProjectServiceProvider(service=ProjectOpenedHook.class, projectType={
+    "org-netbeans-modules-web-project",
+    "org-netbeans-modules-j2ee-ejbjarproject",
+    "org-netbeans-modules-j2ee-clientproject"
+})
+public class JavaEEWSOpenHook extends ProjectOpenedHook {
 
-    /** Creates a new instance of JavaEEWSSupportLookupProvider */
-    public JavaEEWSSupportLookupProvider() {
+    private final Project prj;
+    public JavaEEWSOpenHook(Project prj) {
+        this.prj = prj;
     }
-
-    public Lookup createAdditionalLookup(Lookup baseContext) {
-        final Project prj = baseContext.lookup(Project.class);
-
-        ProjectOpenedHook openhook = new ProjectOpenedHook() {
 
             PropertyChangeListener pcl;
 
@@ -122,11 +119,6 @@ public class JavaEEWSSupportLookupProvider implements LookupProvider {
                     }
                 }
             }
-        };
-
-        ProjectWebServiceNotifier servicesNotifier = new ProjectWebServiceNotifier(prj);
-        return Lookups.fixed(new Object[]{openhook, servicesNotifier, new JaxWsArtifactsClassPathProvider(prj)});
-    }
 
     private class WebservicesChangeListener implements PropertyChangeListener {
 
@@ -159,8 +151,12 @@ public class JavaEEWSSupportLookupProvider implements LookupProvider {
                         for (WebserviceDescription wsDesc : webServices.getWebserviceDescription()) {
                             PortComponent[] ports = wsDesc.getPortComponent();
                             for (PortComponent port : ports) {
-                                if (JaxWsUtils.isInSourceGroup(prj, port.getServiceEndpointInterface())) {
-                                    result.put(port.getDisplayName(), wsDesc.getDisplayName());
+                                if ("javax.xml.ws.WebServiceProvider".equals(wsDesc.getDisplayName())) { //NOI18N
+                                    result.put("fromWsdl:"+wsDesc.getWebserviceDescriptionName(), port.getDisplayName()); //NOI18N
+                                } else if (JaxWsUtils.isInSourceGroup(prj, port.getServiceEndpointInterface())) {
+                                    result.put(port.getDisplayName(), port.getPortComponentName());
+                                } else if (wsDesc.getWsdlFile() != null) {
+                                    result.put("fromWsdl:"+wsDesc.getWebserviceDescriptionName(), port.getDisplayName()); //NOI18N
                                 }
                             }
 
@@ -172,13 +168,18 @@ public class JavaEEWSSupportLookupProvider implements LookupProvider {
                 final JaxWsModel jaxWsModel = prj.getLookup().lookup(JaxWsModel.class);
                 if (jaxWsModel != null) {
                     // create list of all existing services (from java)
-                    Map<String, String> oldServices = new HashMap<String, String>();
+                    Map<String, Service> oldServices = new HashMap<String, Service>();
+                    Map<String, Service> oldServicesFromWsdl = new HashMap<String, Service>();
                     Service[] allServices = jaxWsModel.getServices();
 
                     for (Service s: allServices) {
                         // add only services created from java
                         if (s.getWsdlUrl() == null) {
-                            oldServices.put(s.getImplementationClass(), s.getName());
+                            // implementationClass -> Service
+                            oldServices.put(s.getImplementationClass(), s);
+                        } else {
+                            // serviceName -> Service
+                            oldServicesFromWsdl.put("fromWsdl:"+s.getServiceName(), s); //NOI18N
                         }
                     }
                     // compare new services with existing
@@ -200,18 +201,27 @@ public class JavaEEWSSupportLookupProvider implements LookupProvider {
                     // remove old services
                     boolean needToSave = false;
                     for (String key : oldServices.keySet()) {
-                        jaxWsModel.removeService(oldServices.get(key));
+                        jaxWsModel.removeService(oldServices.get(key).getName());
                         needToSave = true;
                     }
                     // add new services
-                    for (String key : newServices.keySet()) {
-                        // add only if doesn't exists
-                        if (jaxWsModel.findServiceByImplementationClass(key) == null) {
-                            try {
-                                jaxWsModel.addService(newServices.get(key), key);
+                    for (String key : newServices.keySet()) { // services from WSDL
+                        if (key.startsWith("fromWsdl:")) { //NOI18N
+                            Service oldServiceFromWsdl = oldServicesFromWsdl.get(key);
+                            String newImplClass = newServices.get(key);
+                            if (oldServiceFromWsdl != null && !oldServiceFromWsdl.getImplementationClass().equals(newImplClass)) {
+                                oldServiceFromWsdl.setImplementationClass(newImplClass);
                                 needToSave = true;
-                            } catch (ServiceAlreadyExistsExeption ex) {
-                            // TODO: need to handle this
+                            }
+                        } else { // services from JAVA
+                            // add only if doesn't exists
+                            if (jaxWsModel.findServiceByImplementationClass(key) == null) {
+                                try {
+                                    jaxWsModel.addService(newServices.get(key), key);
+                                    needToSave = true;
+                                } catch (ServiceAlreadyExistsExeption ex) {
+                                // TODO: need to handle this
+                                }
                             }
                         }
                     }

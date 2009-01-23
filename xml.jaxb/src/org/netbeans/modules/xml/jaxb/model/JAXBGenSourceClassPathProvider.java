@@ -34,6 +34,7 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.spi.java.classpath.ClassPathProvider;
+import org.netbeans.spi.project.ProjectServiceProvider;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 
@@ -41,20 +42,35 @@ import org.openide.filesystems.FileUtil;
  *
  * @author gpatil
  */
+@ProjectServiceProvider(service=ClassPathProvider.class, projectType={
+    "org-netbeans-modules-java-j2seproject",
+    "org-netbeans-modules-web-project",
+    "org-netbeans-modules-j2ee-ejbjarproject"
+})
 public class JAXBGenSourceClassPathProvider implements ClassPathProvider {
-    private static final String JAXB_GEN_SRC_ROOT= 
-            "build/generated/addons/jaxb" ;//NOI18N
-    
+    private static final String JAXB_GEN_SRC_ROOT = "/generated/addons/jaxb"; //NOI18N
+    private static ThreadLocal inAPICall = new ThreadLocal() {
+        @Override
+         protected synchronized Object initialValue() {
+             return Boolean.FALSE;
+         }
+     };
+
     private Project project;
     private ClassPath sourceCP, compileCP, bootCP;
-    
-    JAXBGenSourceClassPathProvider(Project project) {
+    private String buildDir = "build" ; //NOI18N
+    private String jaxbSrcGenDir = buildDir + JAXB_GEN_SRC_ROOT; 
+    public JAXBGenSourceClassPathProvider(Project project) {
         this.project = project;
+        //TODO get/update buildDir, JAXB_SRC_GEN_DIR
     }
     
     public ClassPath findClassPath(FileObject file, String type) {
+        project.getProjectDirectory().refresh(true);
+                
         FileObject clientArtifactsFolder = 
-                project.getProjectDirectory().getFileObject(JAXB_GEN_SRC_ROOT);
+                project.getProjectDirectory().getFileObject(jaxbSrcGenDir);
+        
         if (clientArtifactsFolder != null && 
                 (file.equals(clientArtifactsFolder) || FileUtil.isParentOf(
                 clientArtifactsFolder, file))) {
@@ -80,12 +96,19 @@ public class JAXBGenSourceClassPathProvider implements ClassPathProvider {
     }
     
     private ClassPath getClassPath(String classPathType) {
-        Sources sources = project.getLookup().lookup(Sources.class);
-        SourceGroup[] groups = ProjectUtils.getSources(project).
-                getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
-        if (groups.length > 0) {
-            return ClassPath.getClassPath(groups[0].getRootFolder(), 
-                    classPathType);
+        try {
+            if (!((Boolean)inAPICall.get())){
+                inAPICall.set(Boolean.TRUE);
+                Sources sources = project.getLookup().lookup(Sources.class);
+                SourceGroup[] groups = ProjectUtils.getSources(project).
+                        getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
+                if (groups.length > 0) {
+                    return ClassPath.getClassPath(groups[0].getRootFolder(),
+                            classPathType);
+                }
+            }
+        } finally{
+            inAPICall.remove();
         }
         return null;
     }
