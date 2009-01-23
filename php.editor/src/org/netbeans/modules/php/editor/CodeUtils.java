@@ -122,6 +122,10 @@ public class CodeUtils {
                 return scalar.getStringValue();
             } else if (name instanceof Variable) {
                 var = (Variable)name;
+                return extractVariableName(var);
+            } else if (name instanceof FieldAccess) {
+                var = ((FieldAccess)name).getField();
+                return extractVariableName(var);
             }
         }
         if (var.getName() instanceof Identifier) {
@@ -138,7 +142,7 @@ public class CodeUtils {
             Variable name = (Variable) var.getName();
             return extractVariableName(name);
         }
-
+        assert false : var.getClass().toString();
         return null;
     }
 
@@ -268,12 +272,12 @@ public class CodeUtils {
         }
     }
 
-    public static String extractVariableTypeFromAssignment(Assignment assignment) {
+    public static String extractVariableType(Assignment assignment) {
         Expression rightSideExpression = assignment.getRightHandSide();
 
         if (rightSideExpression instanceof Assignment) {
             // handle nested assignments, e.g. $l = $m = new ObjectName;
-            return extractVariableTypeFromAssignment((Assignment) assignment.getRightHandSide());
+            return extractVariableType((Assignment) assignment.getRightHandSide());
         } else if (rightSideExpression instanceof Reference) {
             Reference ref = (Reference) rightSideExpression;
             rightSideExpression = ref.getExpression();
