@@ -73,6 +73,11 @@ import java.util.*;
 import java.util.List;
 import java.io.*;
 import java.text.MessageFormat;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.EditorStyleConstants;
+import org.netbeans.api.editor.settings.FontColorNames;
+import org.netbeans.api.editor.settings.FontColorSettings;
+import org.netbeans.modules.editor.NbEditorUtilities;
 
 /**
  * Represents annotation sidebar componnet in editor. It's
@@ -186,13 +191,13 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         this.doc = editorUI.getDocument();
         this.caret = textComponent.getCaret();
         if (textComponent instanceof JEditorPane) {
-            JEditorPane jep = (JEditorPane) textComponent;
-            Class kitClass = jep.getEditorKit().getClass();
-            Object userSetHints = Settings.getValue(kitClass, SettingsNames.RENDERING_HINTS);
-            renderingHints = (userSetHints instanceof Map && ((Map)userSetHints).size() > 0) ? (Map)userSetHints : null;
+            String mimeType = NbEditorUtilities.getMimeType(textComponent);
+            FontColorSettings fcs = MimeLookup.getLookup(mimeType).lookup(FontColorSettings.class);
+            renderingHints = (Map) fcs.getFontColors(FontColorNames.DEFAULT_COLORING).getAttribute(EditorStyleConstants.RenderingHints);
         } else {
             renderingHints = null;
         }
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
     }
     
     // public contract ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -221,10 +226,10 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
      * Takes AnnotateLines and shows them.
      */
     public void annotationLines(File file, List annotateLines) {
-        List lines = new LinkedList(annotateLines);
+        final List lines = new LinkedList(annotateLines);
         int lineCount = lines.size();
         /** 0 based line numbers => 1 based line numbers*/
-        int ann2editorPermutation[] = new int[lineCount];
+        final int ann2editorPermutation[] = new int[lineCount];
         for (int i = 0; i< lineCount; i++) {
             ann2editorPermutation[i] = i+1;
         }
@@ -289,27 +294,26 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
             }
         }
 
-        try {
-            doc.atomicLock();
-            StyledDocument sd = (StyledDocument) doc;
-            Iterator it = lines.iterator();
-            elementAnnotations = Collections.synchronizedMap(new HashMap(lines.size()));
-            while (it.hasNext()) {
-                AnnotateLine line = (AnnotateLine) it.next();
-                int lineNum = ann2editorPermutation[line.getLineNum() -1];
-                try {
-                    int lineOffset = NbDocument.findLineOffset(sd, lineNum -1);
-                    Element element = sd.getParagraphElement(lineOffset);
-                    elementAnnotations.put(element, line);
-                } catch (IndexOutOfBoundsException ex) {
-                    // TODO how could I get line behind document end?
-                    // furtunately user does not spot it
-                    ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+        doc.runAtomic(new Runnable() {
+            public void run() {
+                StyledDocument sd = (StyledDocument) doc;
+                Iterator it = lines.iterator();
+                elementAnnotations = Collections.synchronizedMap(new HashMap(lines.size()));
+                while (it.hasNext()) {
+                    AnnotateLine line = (AnnotateLine) it.next();
+                    int lineNum = ann2editorPermutation[line.getLineNum() -1];
+                    try {
+                        int lineOffset = NbDocument.findLineOffset(sd, lineNum -1);
+                        Element element = sd.getParagraphElement(lineOffset);
+                        elementAnnotations.put(element, line);
+                    } catch (IndexOutOfBoundsException ex) {
+                        // TODO how could I get line behind document end?
+                        // furtunately user does not spot it
+                        ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
+                    }
                 }
             }
-        } finally {
-            doc.atomicUnlock();
-        }
+        });
 
         // lazy listener registration
         caret.addChangeListener(this);
@@ -423,7 +427,7 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
                     String message = (String) commitMessages.get(al.getRevision());
                     File file = getCurrentFile();
                     Project project = Utils.getProject(file);                
-                    Context context = Utils.getProjectsContext(new Project[] { project });
+                    Context context = Utils.getProjectContext(project, file);
                     SearchHistoryAction.openSearch(
                             context, 
                             ProjectUtils.getInformation(project).getDisplayName(),
@@ -646,15 +650,6 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         dim.width = width;
         dim.height *=2;  // XXX
         return dim;
-    }
-
-    /**
-     * Gets the maximum size of this component.
-     *
-     * @return the maximum size of this component
-     */
-    public Dimension getMaximumSize() {
-        return getPreferredSize();
     }
 
     /**
