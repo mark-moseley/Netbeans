@@ -51,10 +51,8 @@ import org.netbeans.modules.mercurial.ui.update.RevertModificationsAction;
 import org.netbeans.modules.mercurial.ui.diff.DiffAction;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.HgProgressSupport;
-import org.netbeans.modules.mercurial.util.HgUtils;
-import org.netbeans.modules.mercurial.util.HgLogMessage;
+import org.netbeans.modules.mercurial.ui.log.HgLogMessage;
 import org.netbeans.modules.versioning.util.Utils;
-import org.openide.*;
 import org.openide.loaders.*;
 import org.openide.filesystems.*;
 import org.openide.text.*;
@@ -189,6 +187,7 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         this.foldHierarchy = FoldHierarchy.get(editorUI.getComponent());
         this.doc = editorUI.getDocument();
         this.caret = textComponent.getCaret();
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
     }
     
     // public contract ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -219,10 +218,10 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
      * Takes AnnotateLines and shows them.
      */
     public void annotationLines(File file, List<AnnotateLine> annotateLines) {
-        List<AnnotateLine> lines = new LinkedList<AnnotateLine>(annotateLines);
+        final List<AnnotateLine> lines = new LinkedList<AnnotateLine>(annotateLines);
         int lineCount = lines.size();
         /** 0 based line numbers => 1 based line numbers*/
-        int ann2editorPermutation[] = new int[lineCount];
+        final int ann2editorPermutation[] = new int[lineCount];
         for (int i = 0; i< lineCount; i++) {
             ann2editorPermutation[i] = i+1;
         }
@@ -285,27 +284,26 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
             }
         }
 
-        try {
-            doc.atomicLock();
-            StyledDocument sd = (StyledDocument) doc;
-            Iterator<AnnotateLine> it = lines.iterator();
-            elementAnnotations = Collections.synchronizedMap(new HashMap<Element, AnnotateLine>(lines.size()));
-            while (it.hasNext()) {
-                AnnotateLine line = it.next();
-                int lineNum = ann2editorPermutation[line.getLineNum() -1];
-                try {
-                    int lineOffset = NbDocument.findLineOffset(sd, lineNum -1);
-                    Element element = sd.getParagraphElement(lineOffset);
-                    elementAnnotations.put(element, line);
-                } catch (IndexOutOfBoundsException ex) {
-                    // TODO how could I get line behind document end?
-                    // furtunately user does not spot it
-                    Mercurial.LOG.log(Level.INFO, null, ex);
+        doc.runAtomic(new Runnable() {
+            public void run() {
+                StyledDocument sd = (StyledDocument) doc;
+                Iterator<AnnotateLine> it = lines.iterator();
+                elementAnnotations = Collections.synchronizedMap(new HashMap<Element, AnnotateLine>(lines.size()));
+                while (it.hasNext()) {
+                    AnnotateLine line = it.next();
+                    int lineNum = ann2editorPermutation[line.getLineNum() -1];
+                    try {
+                        int lineOffset = NbDocument.findLineOffset(sd, lineNum -1);
+                        Element element = sd.getParagraphElement(lineOffset);
+                        elementAnnotations.put(element, line);
+                    } catch (IndexOutOfBoundsException ex) {
+                        // TODO how could I get line behind document end?
+                        // furtunately user does not spot it
+                        Mercurial.LOG.log(Level.INFO, null, ex);
+                    }
                 }
             }
-        } finally {
-            doc.atomicUnlock();
-        }
+        });
 
         // lazy listener registration
         caret.addChangeListener(this);
@@ -402,17 +400,20 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
                 hideBar();
             }
         });
-        popupMenu.add(new JSeparator());
+        JSeparator separator = new JSeparator();
+        popupMenu.add(separator);
         popupMenu.add(menu);
 
         diffMenu.setVisible(false);
         rollbackMenu.setVisible(false);
+        separator.setVisible(false);
         if (recentRevision != null) {
             if (getPreviousRevision(recentRevision) != null) {
                 String format = loc.getString("CTL_MenuItem_DiffToRevision"); // NOI18N
                 diffMenu.setText(MessageFormat.format(format, new Object [] { recentRevision, getPreviousRevision(recentRevision) }));
                 diffMenu.setVisible(true);
                 rollbackMenu.setVisible(true);
+                separator.setVisible(true);
             }
         }
 
@@ -420,7 +421,9 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
     }
 
     private void revert(final File file, String revision) {
-        final File root = Mercurial.getInstance().getTopmostManagedParent(file);
+        final File root = Mercurial.getInstance().getRepositoryRoot(file);
+        if(root == null) return;
+        
         File[] files = new File [1];
         files[0] = file; 
         final RevertModifications revertModifications = new RevertModifications(root, files, revision);
@@ -428,10 +431,12 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
             return;
         }
         final String revStr =  revertModifications.getSelectionRevision();
+        final boolean doBackup = revertModifications.isBackupRequested();
+
         RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(root);
         HgProgressSupport support = new HgProgressSupport() {
             public void perform() {                 
-                RevertModificationsAction.performRevert(root, revStr, file);
+                RevertModificationsAction.performRevert(root, revStr, file, doBackup, this.getLogger());
             }
         };
         support.start(rp, root.getAbsolutePath(), NbBundle.getMessage(AnnotationBar.class, "MSG_Revert_Progress")); // NOI18N
@@ -439,9 +444,10 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
 
     private String getPreviousRevision(String revision) {
         for(int i = 0; i < logs.length; i++) {
-            if (logs[i].getRevision() == Long.parseLong(revision)) {
-                if (i < logs.length - 1)
-                    return Long.toString(logs[i+1].getRevision());
+            if (logs[i].getRevision().equals(revision)) {
+                if (i > 0) {
+                    return logs[i - 1].getRevision();
+                }
             }
         }
         return null;
@@ -520,7 +526,7 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         String revision = al.getRevision();
         if (revision.equals(recentRevision) == false) {
             recentRevision = revision;
-            File file = Mercurial.getInstance().getTopmostManagedParent(getCurrentFile());
+            File file = Mercurial.getInstance().getRepositoryRoot(getCurrentFile());
             recentFile = new File(file, al.getFileName());
             recentRevisionCanBeRolledBack = al.canBeRolledBack();
             repaint();
@@ -560,7 +566,7 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
 
         if (al.getCommitMessage() != null) {
             recentStatusMessage = al.getCommitMessage();
-            statusBar.setText(StatusBar.CELL_MAIN, al.getAuthor() + ": " + recentStatusMessage); // NOI18N
+            statusBar.setText(StatusBar.CELL_MAIN, al.getRevision() + ":" + al.getId() + " - " + al.getAuthor() + ": " + recentStatusMessage); // NOI18N
         } else {
             clearRecentFeedback();
         };
@@ -592,15 +598,6 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         dim.width = width;
         dim.height *=2;  // XXX
         return dim;
-    }
-
-    /**
-     * Gets the maximum size of this component.
-     *
-     * @return the maximum size of this component
-     */
-    public Dimension getMaximumSize() {
-        return getPreferredSize();
     }
 
     /**
@@ -710,7 +707,7 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
                 }
 
                 // always return unique string to avoid tooltip sharing on mouse move over same revisions -->
-                annotation.append("<html><!-- line=" + line++ + " -->" + al.getRevision()  + " - <b>" + escapedAuthor + "</b>"); // NOI18N
+                annotation.append("<html><!-- line=" + line++ + " -->" + al.getRevision()  + ":" + al.getId() + " - <b>" + escapedAuthor + "</b>"); // NOI18N
                 if (al.getDate() != null) {
                     annotation.append(" " + DateFormat.getDateInstance().format(al.getDate())); // NOI18N                    
                 }
