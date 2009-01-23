@@ -87,7 +87,7 @@ public class GlassFishUtils {
         createDomain(location, domainName, username, adminPassword, httpPort, httpsPort, adminPort, null);
     }
     public static void createDomain(File location, String domainName, String username, String adminPassword, String httpPort, String httpsPort, String adminPort, String domainProperties) throws IOException {
-        createDomain(location, domainName, username, adminPassword, DEFAULT_MASTER_PASSWORD, httpPort, httpsPort, adminPort, null);
+        createDomain(location, domainName, username, adminPassword, DEFAULT_MASTER_PASSWORD, httpPort, httpsPort, adminPort, domainProperties);
     }
     public static void createDomain(File location, String domainName, String username, String adminPassword, String masterPassword, String httpPort, String httpsPort, String adminPort, String domainProperties) throws IOException {
         final File passwordFile = createPasswordFile(adminPassword, masterPassword, location);
@@ -110,7 +110,7 @@ public class GlassFishUtils {
                 httpPort,
                 "--domainproperties",
                 "http.ssl.port=" + httpsPort + (domainProperties != null ? ":" + domainProperties : ""),
-                "--savemasterpassword=true",
+                "--savelogin",
                 domainName
                 );
         
@@ -169,6 +169,17 @@ public class GlassFishUtils {
                 domainName
                 );
         
+        return results.getErrorCode() != ExecutionResults.TIMEOUT_ERRORCODE;
+    }
+
+    public static boolean stopDerby(File location) throws IOException {
+        String executable = getAsadmin(location).getAbsolutePath();
+
+        ExecutionResults results = SystemUtils.executeCommand(location,
+                executable,
+                STOP_DATABASE_COMMAND
+                );
+
         return results.getErrorCode() != ExecutionResults.TIMEOUT_ERRORCODE;
     }
     
