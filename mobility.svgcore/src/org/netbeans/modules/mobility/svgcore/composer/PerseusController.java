@@ -150,7 +150,7 @@ public final class PerseusController {
         m_animator.pause();
         SceneManager.log(Level.INFO, toString() + " initialized."); //NOI18N
     }
-    
+
     public SVGPoint convertCoords(float x, float y) {
         SVGMatrix m = getSVGRootElement().getScreenCTM().inverse();
         return new Point( m.getComponent(0) * x + m.getComponent(2) * y + m.getComponent(4),
@@ -160,7 +160,17 @@ public final class PerseusController {
     public SVGLocatableElement getViewBoxMarker() {
         return m_viewBoxMarker;
     }
-        
+
+    public boolean isImgHorizontallyOriented() {
+        SVGSVGElement svg = getSVGRootElement();
+        SVGRect rect = svg.getRectTrait(SVGConstants.SVG_VIEW_BOX_ATTRIBUTE);
+        if (rect != null) {
+            return (rect.getWidth() > rect.getHeight());
+        } else {
+            return false;
+        }
+    }
+
     public JComponent getAnimatorGUI() {
         return (JComponent) m_animator.getTargetComponent();
     }
@@ -183,16 +193,25 @@ public final class PerseusController {
     
     public SVGObject getObjectById(String id) {
         SVGElement elem = getElementById(id);
+        SVGObject res = getObjectForSVGElement(elem);
+        if (res != null){
+            return res;
+        }
+        SceneManager.log(Level.INFO, "No object found for id " + id + "(" + toString() + ")"); //NOI18N
+        return null;
+    }
+
+    public SVGObject getObjectForSVGElement(SVGElement elem) {
         if ( elem != null && elem instanceof SVGLocatableElement) {
             SVGLocatableElement locElem = (SVGLocatableElement) elem;
             if ( getSafeScreenBBox(locElem) != null) {
                 return getSVGObject( locElem);
             }
         }
-        SceneManager.log(Level.INFO, "No object found for id " + id + "(" + toString() + ")"); //NOI18N
+        //SceneManager.log(Level.INFO, "No object found for id " + id + "(" + toString() + ")"); //NOI18N
         return null;
     }
-    
+
     public SVGElement getElementById(String id) {
         SVGElement elem = getElementById( (ModelNode) getSVGRootElement(), id);
         return elem;
@@ -523,7 +542,9 @@ public final class PerseusController {
         return node;
     }
         
-    public static SVGImage createImage(InputStream stream) throws IOException {
+    public static SVGImage createImage(InputStream stream) 
+            throws IOException, InterruptedException 
+    {
         if (stream == null) {
             throw new NullPointerException();
         }
@@ -548,7 +569,8 @@ public final class PerseusController {
     }
     
     protected static SVGImage loadDocument( final InputStream is, final ExternalResourceHandler handler) 
-        throws IOException {
+        throws IOException, InterruptedException 
+    {
 
         DocumentNode documentNode   = new DocumentNode();
         UpdateAdapter updateAdapter = new UpdateAdapter();
@@ -561,8 +583,12 @@ public final class PerseusController {
         
         if (updateAdapter.hasLoadingFailed()) {
             if (updateAdapter.getLoadingFailedException() != null) {
-                throw new IOException
-                    (updateAdapter.getLoadingFailedException().getMessage());
+                String message = updateAdapter.getLoadingFailedException().getMessage();
+                if (message != null && message.startsWith(ModelBuilder.LOAD_INTERRUPTED)){
+                    throw new InterruptedException(message);
+                } else {
+                    throw new IOException(message);
+                }
             }
             throw new IOException("Loading of SVG document failed.");
         }

@@ -45,6 +45,7 @@ import com.sun.perseus.util.SVGConstants;
 import java.awt.Rectangle;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.modules.mobility.svgcore.composer.prototypes.PatchedTransformableElement;
 import org.netbeans.modules.mobility.svgcore.model.SVGFileModel;
 import org.w3c.dom.svg.SVGElement;
@@ -59,7 +60,7 @@ import org.w3c.dom.svg.SVGRect;
 public final class SVGObject {
     private final SceneManager        m_sceneMgr;
     private final SVGLocatableElement m_elem;
-    private final Transform           m_initialTransform;
+    private       Transform           m_initialTransform;
     private       SVGObjectOutline    m_outline   = null;
     private       boolean             m_isDeleted = false;
 
@@ -67,15 +68,42 @@ public final class SVGObject {
     private       float               m_translateDy = 0;
     private       float               m_skewX       = 0;
     private       float               m_skewY       = 0;
-    private       float               m_scale       = 1;
+    private       float               m_scaleX      = 1;
+    private       float               m_scaleY      = 1;
     private       float               m_rotate      = 0;
-    
-    private       float               m_tempTranslateDx = 0;
-    private       float               m_tempTranslateDy = 0;
-    private       float               m_tempSkewX       = 0;
-    private       float               m_tempSkewY       = 0;
-    private       float               m_tempScale       = 1;
-    private       float               m_tempRotate      = 0;
+    //AVKprivate       float[]             m_rotatePivot = null;
+    private       ScalePivotPoint     m_scalePivot  = null;
+    private       boolean             m_lanscapeUpdate = false;
+
+    //private final static Logger LOG = Logger.getLogger(SVGObject.class.getName());
+
+    public enum ScalePivotPoint{
+        NW_CORNER,
+        SE_CORNER;
+
+        public boolean isSECorner(){
+            switch (this){
+                case SE_CORNER: return true;
+                default:        return false;
+            }
+        }
+
+        public boolean isNWCorner(){
+            switch (this){
+                case NW_CORNER: return true;
+                default:        return false;
+            }
+        }
+
+        @Override
+        public String toString() {
+            switch (this){
+                case NW_CORNER: return "NW_CORNER";// NOI18N
+                case SE_CORNER: return "SE_CORNER";// NOI18N
+                default:        return "Unsupported"; // NOI18N
+            }
+        }
+    }
 
     public SVGObject(SceneManager sceneMgr, SVGLocatableElement elem) {
         assert sceneMgr != null;
@@ -163,11 +191,11 @@ public final class SVGObject {
                     } 
                     
                     if ( isRelative) {
-                        m_tempTranslateDx += _dx;
-                        m_tempTranslateDy += _dy;
+                        m_translateDx += _dx;
+                        m_translateDy += _dy;
                     } else {
-                        m_tempTranslateDx = _dx;
-                        m_tempTranslateDy = _dy;
+                        m_translateDx = _dx;
+                        m_translateDy = _dy;
                     }
                     applyUserTransform();
                 } catch (Exception ex) {
@@ -177,11 +205,14 @@ public final class SVGObject {
         });
     }
     
-    public void scale(final float scale) {
+    public void scale(final float scaleX, final float scaleY,
+            final ScalePivotPoint scalePivot) {
         m_sceneMgr.getPerseusController().execute(new Runnable() {
             public void run() {
                 try {
-                    m_tempScale = scale;
+                    m_scaleX = scaleX;
+                    m_scaleY = scaleY;
+                    m_scalePivot = scalePivot;
                     applyUserTransform();
                 } catch (Exception ex) {
                     SceneManager.error( "Scale operation failed!", ex); //NOI18N        
@@ -190,16 +221,27 @@ public final class SVGObject {
         });
     }
 
+    public void setLandscape(int rotateAngle, float[] translate){
+        m_lanscapeUpdate = true;
+        rotate(rotateAngle);
+        translate(translate[0], translate[1], true);
+    }
+
     public void rotate(final float rotate) {
+//AVK        rotate(rotate, null);
+//AVK    }
+
+//AVK    public void rotate(final float rotate, final float[] rotatePrivot) {
         m_sceneMgr.getPerseusController().execute(new Runnable() {
             public void run() {
                 try {
-                    m_tempRotate = rotate;
+                    m_rotate = rotate;
+                    //AVKm_rotatePivot = rotatePrivot;
                     applyUserTransform();
                 } catch (Exception ex) {
-                    SceneManager.error( "Rotate operation failed!", ex); //NOI18N        
+                    SceneManager.error( "Rotate operation failed!", ex); //NOI18N
                 }
-            }            
+            }
         });
     }
 
@@ -207,8 +249,8 @@ public final class SVGObject {
         m_sceneMgr.getPerseusController().execute(new Runnable() {
             public void run() {
                 try {
-                    m_tempSkewX = skewX;
-                    m_tempSkewY = skewY;
+                    m_skewX = skewX;
+                    m_skewY = skewY;
                     applyUserTransform();
                 } catch (Exception ex) {
                     SceneManager.error( "Skew operation failed!", ex); //NOI18N        
@@ -286,56 +328,55 @@ public final class SVGObject {
     }
     
     public void commitChanges() {
-        m_translateDx = getCurrentTranslateX();
-        m_translateDy = getCurrentTranslateY();
-        m_scale       = getCurrentScale();
-        m_rotate      = getCurrentRotate();
-        m_skewX       = getCurrentSkewX();
-        m_skewY       = getCurrentSkewY();
-        m_tempTranslateDx = m_tempTranslateDy = 0;
-        m_tempSkewX = m_tempSkewY = 0;
-        m_tempScale = 1;
-        m_tempRotate = 0;
-        applyUserTransform();
-        repaint(SVGObjectOutline.SELECTOR_OVERLAP);        
+        applyUserTransform(true);
+
+        m_translateDx = 0;
+        m_translateDy = 0;
+        m_skewX = 0;
+        m_skewY = 0;
+        m_scaleX = 1;
+        m_scaleY = 1;
+        m_scalePivot = null;
+        m_rotate = 0;
+//AVK        m_rotatePivot = null;
+        m_lanscapeUpdate = false;
+        repaint(SVGObjectOutline.SELECTOR_OVERLAP);
     }
-    
-    public void rollbackChanges() {
-        repaint(SVGObjectOutline.SELECTOR_OVERLAP);          
-        m_tempTranslateDx = m_tempTranslateDy = 0;
-        m_tempSkewX = m_tempSkewY = 0;
-        m_tempScale = 1;
-        m_tempRotate = 0;
-        applyUserTransform();
-        repaint(SVGObjectOutline.SELECTOR_OVERLAP);        
-    }
-    
+
     public float [] getCurrentTranslate() {
         return new float [] { getCurrentTranslateX(), getCurrentTranslateY() };
     }
     
     public float getCurrentTranslateX() {
-        return m_translateDx + m_tempTranslateDx;
+        return m_translateDx;
     }
 
     public float getCurrentTranslateY() {
-        return m_translateDy + m_tempTranslateDy;
+        return m_translateDy;
     }
 
-    public float getCurrentScale() {
-        return m_scale * m_tempScale;
+    public float getCurrentScaleX() {
+        return m_scaleX;
+    }
+
+    public float getCurrentScaleY() {
+        return m_scaleY;
+    }
+
+    public ScalePivotPoint getCurrentScalePivot() {
+        return m_scalePivot != null ? m_scalePivot : ScalePivotPoint.NW_CORNER;
     }
 
     public float getCurrentRotate() {
-        return (m_rotate + m_tempRotate) % 360;
+        return (m_rotate) % 360;
     }
 
     public float getCurrentSkewX() {
-        return m_skewX + m_tempSkewX;
+        return m_skewX;
     }
 
     public float getCurrentSkewY() {
-        return m_skewY + m_tempSkewY;
+        return m_skewY;
     }
     
     public String toString() {
@@ -354,29 +395,36 @@ public final class SVGObject {
         sb.append( m_skewX);
         sb.append( " skewY="); //NOI18N
         sb.append( m_skewY);
-        sb.append( " scale="); //NOI18N
-        sb.append( m_scale);
+        sb.append( " scaleX="); //NOI18N
+        sb.append( m_scaleX);
+        sb.append( " scaleY="); //NOI18N
+        sb.append( m_scaleY);
+        sb.append( " scalePivot="); //NOI18N
+        sb.append( m_scalePivot);
         sb.append( " rotate="); //NOI18N
         sb.append( m_rotate);
+//AVK        sb.append( " rotatePivot="); //NOI18N
+//AVK        sb.append( m_rotatePivot ==null ? "null" : "["+m_rotatePivot[0]+","+m_rotatePivot[1]+"]" );
+        sb.append( " lanscapeUpdate="); //NOI18N
+        sb.append( m_lanscapeUpdate);
         sb.append(")"); //NOI18N
 
         return sb.toString();
     }
     
     protected void applyUserTransform() {
+        applyUserTransform(false);
+    }
+
+    protected void applyUserTransform(boolean commit) {
         if (m_elem instanceof PatchedTransformableElement) {
             getScreenManager().incrementChangeTicker();
             PatchedTransformableElement pe = (PatchedTransformableElement) m_elem;
             SVGRect rect = PerseusController.getSafeBBox(m_elem);
             
             if (rect != null) {
-                float [] temp = new float[] {
-                    rect.getX() + rect.getWidth() / 2,
-                    rect.getY() + rect.getHeight() / 2
-                };
-                float []  rotatePivot = new float[2];
-                m_initialTransform.transformPoint( temp, rotatePivot);
-                //System.out.println("Rotate pivot: [" + rotatePivot[0] + "," + rotatePivot[1] + "]");
+                float []  rotatePivot = prepareRotatePivot(rect);
+                float []  scalePivot = prepareScalePivot(rect);
 
                 Transform txf = new Transform( 1, 0, 0, 1, 0, 0);
                 txf.mTranslate(getCurrentTranslateX() + rotatePivot[0],
@@ -394,18 +442,64 @@ public final class SVGObject {
                     txf.mMultiply(skewTxf);
                 }
                 
-                txf.mScale(getCurrentScale());
                 txf.mRotate(getCurrentRotate());
                 txf.mTranslate( -rotatePivot[0], -rotatePivot[1]);
                 
-                txf.mMultiply(m_initialTransform);
-                pe.setTransform(txf);
+                txf.mTranslate( scalePivot[0], scalePivot[1]);
+                txf.mScale(getCurrentScaleX(), getCurrentScaleY());
+                txf.mTranslate( -scalePivot[0], -scalePivot[1]);
+
+//                if (!m_lanscapeUpdate) {
+                    txf.mMultiply(m_initialTransform);
+                    pe.setTransform(txf);
+                    if (commit) {
+                        m_initialTransform = txf;
+                    }
+//                } else {
+//                    Transform resultTxf = new Transform(m_initialTransform);
+//                    resultTxf.mMultiply(txf);
+//                    LOG.warning("         final init*tmp : " + getTransformAsText(resultTxf));
+//                    pe.setTransform(resultTxf);
+//                    if (commit) {
+//                        m_initialTransform = resultTxf;
+//                    }
+//                }
+
             } else {
                 SceneManager.log( Level.SEVERE, "Null BBox for " + pe); //NOI18N                        
             }
         }
     }
-            
+
+    private float[] prepareRotatePivot(SVGRect rect){
+        if (!m_lanscapeUpdate) {
+//AVK        float[] tempRotatePivot = m_rotatePivot != null ? m_rotatePivot : new float[]{
+//AVK                    rect.getX() + rect.getWidth() / 2,
+//AVK                    rect.getY() + rect.getHeight() / 2
+//AVK                };
+            float[] tempRotatePivot = new float[]{
+                rect.getX() + rect.getWidth() / 2,
+                rect.getY() + rect.getHeight() / 2
+            };
+            float[] rotatePivot = new float[2];
+            m_initialTransform.transformPoint(tempRotatePivot, rotatePivot);
+            return rotatePivot;
+        } else {
+            return new float[]{0f, 0f};
+        }
+    }
+
+    private float[] prepareScalePivot(SVGRect rect){
+        float[] tempScalePivot = getCurrentScalePivot().isNWCorner()
+                ? new float[]{rect.getX(), rect.getY()}
+                : new float[]{rect.getX() + rect.getWidth(),
+                    rect.getY() + rect.getHeight()};
+
+        float[] scalePivot = new float[2];
+        m_initialTransform.transformPoint(tempScalePivot, scalePivot);
+        return scalePivot;
+    }
+
     protected final PerseusController getPerseusController() {
         return m_sceneMgr.getPerseusController();
     }

@@ -44,15 +44,20 @@ import com.sun.perseus.util.SVGConstants;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Rectangle;
 import java.awt.event.KeyListener;
 import java.util.Stack;
+
 import javax.microedition.m2g.SVGImage;
 import javax.swing.Action;
 import javax.swing.JComponent;
+import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
+
 import org.netbeans.modules.mobility.svgcore.view.svg.SVGImagePanel;
 import org.netbeans.modules.mobility.svgcore.view.svg.SVGStatusBar;
 import org.openide.util.Lookup;
@@ -78,6 +83,7 @@ public final class ScreenManager {
     private       SVGImagePanel  m_imageContainer;
     private       Cursor         m_cursor;    
     private       boolean        m_showAllArea;
+    private       boolean        m_landscapeMode;
     private       boolean        m_showTooltip;
     private       boolean        m_highlightObject;
     private       short          m_changeTicker = 0;
@@ -86,13 +92,15 @@ public final class ScreenManager {
         m_sceneMgr        = sceneMgr;
         m_statusBar       = new SVGStatusBar();
         m_showAllArea     = false;
+        m_landscapeMode   = false;
         m_showTooltip     = true;
         m_highlightObject = true;
     }
     
     void initialize() {
         PerseusController perseus = m_sceneMgr.getPerseusController();
-        m_animatorView = perseus.getAnimatorGUI();
+        m_animatorView =perseus.getAnimatorGUI();
+        
                        
         m_imageContainer = new SVGImagePanel(m_animatorView) {
             protected void paintPanel(Graphics g, int x, int y) {
@@ -205,7 +213,19 @@ public final class ScreenManager {
     public boolean getShowAllArea() {
         return m_showAllArea;
     }
-    
+
+    public void setLandscapeMode(boolean landscapeMode) {
+        if (landscapeMode != m_landscapeMode) {
+            m_landscapeMode = landscapeMode;
+            //refresh();
+            incrementChangeTicker();
+        }
+    }
+
+    public boolean isLandscapeMode() {
+        return m_landscapeMode;
+    }
+
     public boolean setShowTooltip(boolean showTooltip) {
         boolean oldValue = m_showTooltip;
         m_showTooltip = showTooltip;
@@ -250,6 +270,7 @@ public final class ScreenManager {
     
     public void repaint() {
         //TODO FIX: NPE when playing with window cloning
+        m_imageContainer.setTryPaint();
         m_animatorView.invalidate();
         m_topComponent.validate(); 
         m_animatorView.repaint();
@@ -257,6 +278,15 @@ public final class ScreenManager {
     }
     
     public void refresh() {
+        /*
+         * Fix for #145736 - [65cat] NullPointerException at 
+         * org.netbeans.modules.mobility.svgcore.composer.ScreenManager.refresh
+         * 
+         * getPerseusController() is synchronized now so it is safe to call it 
+         */
+        if ( m_sceneMgr.getPerseusController() == null ){
+            return;
+        }
         SVGSVGElement svg        = m_sceneMgr.getPerseusController().getSVGRootElement();                
         SVGRect   viewBoxRect    = svg.getRectTrait(SVGConstants.SVG_VIEW_BOX_ATTRIBUTE);
         SVGPoint  translatePoint = svg.getCurrentTranslate();
@@ -276,7 +306,7 @@ public final class ScreenManager {
                                  (int) (rect.getHeight() * m_sceneMgr.m_zoomRatio));
             SVGImage svgImage = m_sceneMgr.getSVGImage();
             svgImage.setViewportWidth(size.width); 
-            svgImage.setViewportHeight(size.height);        
+            svgImage.setViewportHeight(size.height);
 
             if ( showAll) {
                 if (viewBoxRect != null) {
@@ -307,4 +337,5 @@ public final class ScreenManager {
             m_changeTicker = 0;
         }
     }
+    
 }

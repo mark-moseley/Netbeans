@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.mobility.svgcore.view.svg;
 
+import com.sun.perseus.util.SVGConstants;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -50,6 +51,7 @@ import java.awt.FontMetrics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
@@ -74,6 +76,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractButton;
 import javax.swing.Action;
 import javax.swing.Box;
@@ -123,13 +126,15 @@ import org.openide.windows.TopComponent;
 import org.netbeans.modules.mobility.svgcore.SVGDataObject;
 import org.netbeans.modules.mobility.svgcore.composer.PerseusController;
 import org.netbeans.modules.mobility.svgcore.composer.SVGObject;
+import org.netbeans.modules.mobility.svgcore.composer.SVGObjectOutline;
 import org.netbeans.modules.mobility.svgcore.composer.SceneManager;
 import org.netbeans.modules.mobility.svgcore.composer.ScreenManager;
 import org.netbeans.modules.mobility.svgcore.export.ScreenSizeHelper;
+import org.netbeans.modules.mobility.svgcore.items.form.SVGComponentDrop;
 import org.netbeans.modules.mobility.svgcore.model.SVGFileModel;
 import org.netbeans.modules.mobility.svgcore.navigator.SVGNavigatorContent;
 import org.netbeans.modules.mobility.svgcore.palette.SVGPaletteItemDataObject;
-import org.netbeans.modules.mobility.svgcore.view.svg.AbstractSVGToggleAction;
+import org.netbeans.modules.xml.multiview.XmlMultiViewEditorSupport;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.awt.MouseUtils;
@@ -137,8 +142,13 @@ import org.openide.loaders.XMLDataObject;
 import org.openide.nodes.FilterNode;
 import org.openide.util.lookup.ProxyLookup;
 import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.w3c.dom.svg.SVGElement;
 import org.w3c.dom.svg.SVGLocatableElement;
+import org.w3c.dom.svg.SVGRect;
+import org.w3c.dom.svg.SVGSVGElement;
 import org.xml.sax.SAXException;
 
 /**
@@ -169,6 +179,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
     private transient AbstractButton          pauseAnimationButton;
     private transient AbstractButton          scaleToggleButton;
     private transient AbstractButton          showViewBoxToggleButton;
+    private transient AbstractButton          landscapeModeToggleButton;
     private transient ChangeListener          changeListener;
     private transient boolean                 doScale = false;
     //decoration
@@ -180,6 +191,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
     private transient ZoomInAction            zoomInAction;
     private transient ZoomOutAction           zoomOutAction;
     private transient ToggleShowViewBoxAction showViewBoxAction;
+    private transient ToggleLandscapeModeAction landscapeModeAction;
 
     private final class UpdateThread extends Thread {
 
@@ -189,6 +201,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
             setPriority(Thread.MIN_PRIORITY);
         }
 
+        @Override
         public void run() {
             PerseusController pctrl;
 
@@ -213,6 +226,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
     }
     
     private final transient AbstractSVGToggleAction allowEditAction = new AbstractSVGToggleAction("svg_allow_edit") { //NOI18N
+        @Override
         public void actionPerformed(ActionEvent e) {
             SceneManager smgr = getSceneManager();
 
@@ -236,6 +250,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
     };
     
     private final transient AbstractSVGToggleAction startAnimationAction = new AbstractSVGToggleAction("svg_anim_start") { //NOI18N
+        @Override
         public void actionPerformed(ActionEvent e) {
             PerseusController pc = getPerseusController();
             if (pc != null) {
@@ -264,6 +279,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
     };
     
     private final transient AbstractSVGToggleAction pauseAnimationAction = new AbstractSVGToggleAction("svg_anim_pause", false) { //NOI18N
+        @Override
         public void actionPerformed(ActionEvent e) {
             PerseusController pc = getPerseusController();
 
@@ -290,6 +306,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
                     return;
                 } else {
                     Thread th = new Thread("InsertGraphicsTask") { //NOI18N
+                        @Override
                         public void run() {
                             try {
                                 getSceneManager().setBusyState(SceneManager.OPERATION_TOKEN, true);
@@ -342,6 +359,19 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         m_svgDataObject = dObj;
         initialize();
     }
+    
+    Action[] getImageContextActions(){
+        return new Action[]{ 
+            zoomToFitAction , 
+            scaleToggleButton.getAction(), 
+            getToggleHighlightAction()};
+    }
+    
+    private Action getToggleHighlightAction(){
+        Action acts[] = getSceneManager().getToolbarActions("svg_toggle_highlight");
+        assert acts.length > 0 && acts[0] != null;
+        return acts[0];
+   }
 
     private SceneManager getSceneManager() {
         return m_svgDataObject.getSceneManager();
@@ -370,7 +400,10 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
 
         nameChangeL = new PropertyChangeListener() {
             public void propertyChange(PropertyChangeEvent evt) {
-                if (DataObject.PROP_COOKIE.equals(evt.getPropertyName()) || DataObject.PROP_NAME.equals(evt.getPropertyName())) {
+                if (DataObject.PROP_COOKIE.equals(evt.getPropertyName()) 
+                        || DataObject.PROP_NAME.equals(evt.getPropertyName())
+                        || DataObject.PROP_MODIFIED.equals(evt.getPropertyName())) 
+                {
                     updateName();
                 }
 
@@ -394,13 +427,17 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
 
         changeListener = new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
+                PerseusController pctl = getPerseusController();
+                if (pctl == null) {
+                    return;
+                }
                 if (e.getSource() == slider) {
                     float currentTime = ((float) slider.getValue()) * SLIDER_DEFAULT_STEP;
-                    getPerseusController().setAnimatorTime(currentTime);
+                    pctl.setAnimatorTime(currentTime);
                     updateAnimationTime(currentTime, getSceneManager().getAnimationDuration());
                 } else if (e.getSource() == currentTimeSpinner) {
                     float currentTime = ((Float) currentTimeSpinner.getValue()).floatValue();
-                    getPerseusController().setAnimatorTime(currentTime);
+                    pctl.setAnimatorTime(currentTime);
                     updateAnimationTime(currentTime, getSceneManager().getAnimationDuration());
                 }
             }
@@ -421,12 +458,14 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
     private void updateAnimationTime(float time, float maxTime) {
         currentTimeSpinner.removeChangeListener(changeListener);
         slider.removeChangeListener(changeListener);
+        
         if (maxTime != -1) {
             slider.setMaximum(Math.round(maxTime / SLIDER_DEFAULT_STEP));
         }
         slider.setValue(Math.round(time / SLIDER_DEFAULT_STEP));
         time = Math.round(time * 10) / 10.0f;
         currentTimeSpinner.setValue(new Float(time));
+        
         slider.addChangeListener(changeListener);
         currentTimeSpinner.addChangeListener(changeListener);
     }
@@ -453,6 +492,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         return basePanel;
     }
 
+    @Override
     public int getPersistenceType() {
         return TopComponent.PERSISTENCE_ONLY_OPENED;
     }
@@ -464,6 +504,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
             assert obj[0] != null;
             Thread th = new Thread() {
 
+                @Override
                 public void run() {
                     try {
                         String elId = obj[0].getElementId();
@@ -485,6 +526,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         }
     }
 
+    @Override
     public void componentOpened() {
         getModel().setChanged(true);
         SwingUtilities.invokeLater(new Runnable() {
@@ -501,6 +543,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         getSceneManager().addSelectionListener(this);
     }
 
+    @Override
     public void componentClosed() {
         SwingUtilities.invokeLater(new Runnable() {
 
@@ -511,15 +554,18 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         removeSvgPanel();
     }
 
+    @Override
     public boolean isFocusable() {
         return true;
     }
     
+    @Override
     public void componentActivated() {
         super.componentActivated();
         updateDataTransferActions();
     }
 
+    @Override
     public void componentDeactivated() {
         super.componentDeactivated();
     }
@@ -539,11 +585,15 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         }
     }
 
+    @Override
     public void componentHidden() {
         PerseusController perseus = getPerseusController();
 
         if (perseus != null) {
+            float stoppedTime = perseus.getAnimatorTime();
             perseus.stopAnimator();
+            perseus.setAnimatorTime(stoppedTime);
+            updateAnimationActions();
         }
     }
 
@@ -573,18 +623,25 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
     return new SVGViewTopComponent(m_svgDataObject);
     }
      */
+    @Override
     protected String preferredID() {
         return PREFERRED_ID;
     }
 
     /** Updates the name and tooltip of this top component according to associated data object. */
     private void updateName() {
+        // DataObject check
+        if (! m_svgDataObject.isValid())
+            return;
         // update name
         String name = m_svgDataObject.getNodeDelegate().getDisplayName();
         setName(name);
-        // update tooltip
-        FileObject fo = m_svgDataObject.getPrimaryFile();
-        setToolTipText(FileUtil.getFileDisplayName(fo));
+        // update display name and tooltip
+        XmlMultiViewEditorSupport edSup = m_svgDataObject.getCookie(
+                XmlMultiViewEditorSupport.class);
+        if (edSup != null){
+            edSup.updateDisplayName();
+        }
     }
 
     private void addButtonsForActions(JToolBar toolbar, Action[] toolbarActions, GridBagConstraints constrains) {
@@ -698,7 +755,9 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         initButton(toolbar, zoomOutAction = new ZoomOutAction(), false);
         toolbar.add(createToolBarSeparator(), constrains);
 
-        addButtonsForActions(toolbar, smgr.getToolbarActions("svg_toggle_tooltip", "svg_toggle_highlight"), constrains); //NOI18N
+        addButtonsForActions(toolbar, smgr.getToolbarActions(
+                "svg_toggle_tooltip",
+                "svg_toggle_highlight"), constrains); //NOI18N
         //hoverToggleButton = initButton(toolbar, highlightAction = new ToggleHighlightAction(), true);
         constrains = new GridBagConstraints();
         constrains.anchor = GridBagConstraints.WEST;
@@ -719,7 +778,16 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         toolbar.add(createToolBarSeparator(), constrains);
         initButton(toolbar, insertGraphicsAction, false);
 
-        addButtonsForActions(toolbar, smgr.getToolbarActions("svg_delete", null, "svg_move_to_top", "svg_move_to_bottom", "svg_move_forward", "svg_move_backward"), constrains); //NOI18N
+        landscapeModeToggleButton = initButton(toolbar, landscapeModeAction = new ToggleLandscapeModeAction(), true);
+        toolbar.add(createToolBarSeparator(), constrains);
+
+        addButtonsForActions(toolbar, smgr.getToolbarActions(
+                "svg_delete",
+                null,
+                "svg_move_to_top",
+                "svg_move_to_bottom",
+                "svg_move_forward",
+                "svg_move_backward"), constrains); //NOI18N
         constrains = new GridBagConstraints();
         constrains.anchor = GridBagConstraints.WEST;
         constrains.fill = GridBagConstraints.HORIZONTAL;
@@ -870,15 +938,26 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         if (pc != null) {
             int state = pc.getAnimatorState();
             boolean isReadOnly = getSceneManager().isReadOnly();
-            enableComponentsInToolbar(animationToolbar, isReadOnly && state != PerseusController.ANIMATION_NOT_AVAILABLE, startAnimationButton, pauseAnimationButton);
+            boolean isAnimAvailable = state != PerseusController.ANIMATION_NOT_AVAILABLE;
+            enableComponentsInToolbar(animationToolbar, 
+                    isReadOnly && isAnimAvailable,
+                    startAnimationButton, pauseAnimationButton);
 
-            startAnimationAction.setEnabled(state != PerseusController.ANIMATION_NOT_AVAILABLE);
+            startAnimationAction.setEnabled(isAnimAvailable);
 
             boolean isActive = isReadOnly && pc.isAnimatorStarted();
             startAnimationAction.setIsSelected(isActive);
             pauseAnimationAction.setEnabled(isActive);
             pauseAnimationAction.setIsSelected(state == PerseusController.ANIMATION_PAUSED);
+        } else {
+            disableAnimationActions();
         }
+    }
+    
+    private void disableAnimationActions() {
+        enableComponentsInToolbar(animationToolbar, false, startAnimationButton, pauseAnimationButton);
+        startAnimationAction.setEnabled(false);
+        pauseAnimationAction.setEnabled(false);
     }
 
     private static JSeparator createToolBarSeparator() {
@@ -896,6 +975,9 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
 
     protected synchronized void updateImage() {
         assert SwingUtilities.isEventDispatchThread() : "Not in AWT event dispach thread"; //NOI18N
+        
+        disableImageContext();
+        
         getSceneManager().saveSelection();
 
         if (parsingTask != null) {
@@ -907,6 +989,13 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+    }
+    
+    void enableImageContext(){
+        for ( Action action : getImageContextActions() ){
+            action.setEnabled( true );
+        }
+        updateAnimationActions();
     }
 
     void showImage(SVGImage img) {
@@ -949,12 +1038,13 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
             zoomOutAction,
             scaleAction,
             showViewBoxAction,
+            landscapeModeAction,
             startAnimationAction,
             pauseAnimationAction,
             allowEditAction}, this, lookup);
 
         updateZoomCombo();
-        updateAnimationActions();
+        enableImageContext();
         smgr.processEvent(SceneManager.createEvent(this, SceneManager.EVENT_IMAGE_DISPLAYED));
 
         SVGLocatableElement elem = getPerseusController().getViewBoxMarker();
@@ -966,13 +1056,26 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         } else {
             showViewBoxAction.setEnabled(true);
         }
+        landscapeModeAction.setEnabled(true);
         showViewBoxToggleButton.setSelected(scrMgr.getShowAllArea());
 
+        // TODO save info about orientation to refresh it correctly
+        scrMgr.setLandscapeMode(getPerseusController().isImgHorizontallyOriented());
+        landscapeModeToggleButton.setSelected(scrMgr.isLandscapeMode());
+
+                
         topComponent.requestFocus();
         //updateSelection(actualSelection);
         repaintAll();
     }
-
+    
+    private void disableImageContext(){
+        for ( Action action : getImageContextActions() ){
+            action.setEnabled( false );
+        }
+        disableAnimationActions();
+    }
+    
     private void doDrag(DropTargetDragEvent dtde) {
         if ( getDroppedDataObject( dtde) != null) {
             dtde.acceptDrag( DnDConstants.ACTION_COPY_OR_MOVE);
@@ -981,12 +1084,24 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         }
     }
 
+    private float[] getSVGPoint( DropTargetDropEvent dtde) {
+        Point onTopComponent = dtde.getLocation();
+        Point imageZero = getScreenManager().getAnimatorView().getLocation();
+        float zoom = getScreenManager().getZoomRatio();
+        
+        float x = (float)(onTopComponent.getX() - imageZero.getX()) / zoom;
+        float y = (float)(onTopComponent.getY() - imageZero.getY()) / zoom;
+        
+        return new float[]{x, y};
+    }
+    
     private void doDrop( DropTargetDropEvent dtde) {
+        float[] point = getSVGPoint(dtde);
         DataObject dObj;
         if ( (dObj=getDroppedDataObject(dtde)) != null) {
             dtde.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);
             try {
-                if ( dropDataObject(dObj)) {
+                if ( dropDataObject(dObj, point)) {
                     dtde.dropComplete(true);
                 }
             } catch( Exception e) {
@@ -998,19 +1113,36 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         }
     }
     
-    public boolean dropDataObject( DataObject dObj) throws IOException, SAXException, DocumentModelException, BadLocationException {
+    /**
+     * drops data object into specified position.
+     * @param dObj DataObject top drop
+     * @param point svg coordinates of point wher to drop DataObject. 
+     * Coordinates are expected in {x,y} format.
+     * @return if drop was performed successfully
+     * @throws java.io.IOException
+     * @throws org.xml.sax.SAXException
+     * @throws org.netbeans.modules.editor.structure.api.DocumentModelException
+     * @throws javax.swing.text.BadLocationException
+     */
+    public boolean dropDataObject( DataObject dObj, float[] point) 
+            throws IOException, SAXException, DocumentModelException, BadLocationException 
+    {
         if ( dObj instanceof XMLDataObject) {
             Document doc = ((XMLDataObject) dObj).getDocument();
 
-            NodeList bodyTags = doc.getElementsByTagName("body"); //NOI18N
-            if ( bodyTags.getLength() > 0) {
-                String body = bodyTags.item(0).getTextContent();
-                SceneManager.log(Level.INFO, "Dropping text: \"" + body + "\""); //NOI18N
-                String id = m_svgDataObject.getModel().mergeImage(body, false);
-                getSceneManager().setSelection(id, true);
-            } else {
-                SceneManager.log(Level.SEVERE, "Nothing to drop, empty body!"); //NOI18N
+            // class was specified in editor-palette-item xml
+            SVGComponentDrop dropSupport = getAEDClass(doc);
+            if (dropSupport != null){
+                return dropSupport.handleTransfer(m_svgDataObject, point);
+            } 
+            
+            // xml snipped was specified in editor-palette-item xml
+            String snippet = getSnippetBody(doc);
+            if (snippet != null){
+                return SVGComponentDrop.getDefault(snippet)
+                        .handleTransfer(m_svgDataObject, point);
             }
+            SceneManager.log(Level.SEVERE, "Nothing to drop, empty body and class!"); //NOI18N
             return true;
         } else if ( dObj instanceof SVGPaletteItemDataObject) {
             dropFile( ((SVGPaletteItemDataObject) dObj).getReferencedFile());
@@ -1022,6 +1154,49 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
         return false;
     }
     
+    private String getSnippetBody(Document doc) {
+        String snippet = null;
+        NodeList bodyTags = doc.getElementsByTagName("body"); //NOI18N
+
+        if (bodyTags.getLength() > 0) {
+            snippet = bodyTags.item(0).getTextContent();
+        }
+        return snippet;
+    }
+    
+    private SVGComponentDrop getAEDClass(Document doc){
+            String className = getClassName(doc);
+            if (className != null){
+                try {
+                    Class nameClass = this.getClass().getClassLoader().loadClass(className);
+                    if (SVGComponentDrop.class.isAssignableFrom(nameClass)) {
+                        SVGComponentDrop impl = (SVGComponentDrop) nameClass.newInstance();
+                        return impl;
+                    } else {
+                        SceneManager.log(Level.SEVERE, "className doesn't implement SVGComponentDrop!"); //NOI18N
+                    }
+                } catch (Exception ex) {
+                    SceneManager.log(Level.SEVERE, "can't create "+className+" instance", ex); //NOI18N
+                }
+            }
+            return null;
+    }
+    
+    private String getClassName(Document doc){
+        String name = null;
+            NodeList classTags = doc.getElementsByTagName("class"); //NOI18N
+            if ( classTags.getLength() > 0) {
+                Node classNode = classTags.item(0);
+                if (classNode.hasAttributes()){
+                    NamedNodeMap attrs = classNode.getAttributes();
+                    Node nameNode = attrs.getNamedItem("name");
+                    if (nameNode != null){
+                        name = nameNode.getNodeValue();
+                    }
+                }
+            }
+        return name;
+    }
     private void dropFile(File file) throws FileNotFoundException, IOException, DocumentModelException, BadLocationException {
         if ( file != null && file.exists() && file.isFile()) {
             SceneManager.log(Level.INFO, "Dropping file " + file.getPath()); //NOI18N
@@ -1114,12 +1289,14 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
             return new Class[]{SVGObject.class};
         }
 
+        @Override
         public Action[] getActions(boolean context) {
             return new SystemAction[]{SystemAction.get(SaveElementAsImage.class)};
         }
     }
 
     private class ButtonMouseListener extends MouseUtils.PopupMouseAdapter {
+        @Override
         public void mouseEntered(MouseEvent evt) {
             if (evt.getSource() instanceof JButton) {
                 JButton button = (JButton) evt.getSource();
@@ -1132,6 +1309,7 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
 //            b.getModel().setRollover(true);
         }
 
+        @Override
         public void mouseExited(MouseEvent evt) {
             if (evt.getSource() instanceof JButton) {
                 JButton button = (JButton) evt.getSource();
@@ -1202,6 +1380,82 @@ public final class SVGViewTopComponent extends TopComponent implements SceneMana
             showViewBoxToggleButton.setSelected(b);
             repaint();
         }
+    }
+
+    private class ToggleLandscapeModeAction extends AbstractSVGAction implements Presenter.Popup {
+        private static final long serialVersionUID = 5862679852552354L;
+
+     private final Logger LOG = Logger.getLogger(ToggleLandscapeModeAction.class.getName());
+        ToggleLandscapeModeAction() {
+            super("svg_landscape_mode"); //NOI18N
+        }
+
+        public void actionPerformed(ActionEvent e) {
+            ScreenManager smgr = getScreenManager();
+            boolean b = !smgr.isLandscapeMode();
+            rotateElements(b);
+            changeViewBox(b);
+            smgr.setLandscapeMode(b);
+            landscapeModeToggleButton.setSelected(b);
+            //repaint();
+            updateImage();
+        }
+
+        private void changeViewBox(boolean isLandscape) {
+            SVGSVGElement svg = getSceneManager().getPerseusController().getSVGRootElement();
+            SVGRect viewBoxRect = svg.getRectTrait(SVGConstants.SVG_VIEW_BOX_ATTRIBUTE);
+            if (getScreenManager().isLandscapeMode() != isLandscape){
+                float w = viewBoxRect.getWidth();
+                float h = viewBoxRect.getHeight();
+                viewBoxRect.setHeight(w);
+                viewBoxRect.setWidth(h);
+
+                getModel().setViewBox(viewBoxRect);
+            }
+
+        }
+
+
+        // rotate correctly
+        private void rotateElements(boolean isLandscape) {
+            SceneManager m_sceneMgr = getSceneManager();
+            int angle = isLandscape ? 90 : -90;
+            SVGSVGElement svgRoot = m_sceneMgr.getPerseusController().getSVGRootElement();
+
+            SVGRect viewBoxRect = svgRoot.getRectTrait(SVGConstants.SVG_VIEW_BOX_ATTRIBUTE);
+            float translateH = viewBoxRect != null ? viewBoxRect.getHeight() : 0f;
+            float translateW = viewBoxRect != null ? viewBoxRect.getWidth() : 0f;
+            float[] translate = isLandscape 
+                    ? new float[]{ translateH, 0f}
+                    : new float[]{ 0f, translateW};
+
+            SVGElement elem = (SVGElement) svgRoot.getFirstElementChild();
+            Rectangle bBox = new Rectangle();
+
+            while (elem != null) {
+                //  process
+                rotateElement(elem, angle, translate, bBox);
+                // get next
+                elem = (SVGElement) elem.getNextElementSibling();
+            }
+            m_sceneMgr.getScreenManager().repaint(bBox, SVGObjectOutline.SELECTOR_OVERLAP);
+            m_sceneMgr.getScreenManager().refresh();
+        }
+    }
+
+    private void rotateElement(SVGElement elem, int angle, float[] translate, Rectangle bBox){
+        SVGObject obj = getSceneManager().getPerseusController().getObjectForSVGElement(elem);
+        if (obj == null) {
+            return;
+        }
+        bBox.add(obj.getScreenBBox());
+        obj.setLandscape(angle, translate);
+        bBox.add(obj.getScreenBBox());
+
+        if (!PerseusController.ID_VIEWBOX_MARKER.equals(obj.getElementId())) {
+            obj.applyTextChanges();
+        }
+        obj.commitChanges();
     }
 
     private class ZoomToFitAction extends AbstractSVGAction {
