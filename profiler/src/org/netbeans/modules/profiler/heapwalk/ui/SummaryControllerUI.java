@@ -40,16 +40,18 @@
 
 package org.netbeans.modules.profiler.heapwalk.ui;
 
+import java.util.Enumeration;
 import org.netbeans.lib.profiler.heap.Heap;
 import org.netbeans.lib.profiler.heap.HeapSummary;
 import org.netbeans.lib.profiler.heap.JavaClass;
+import org.netbeans.lib.profiler.heap.Instance;
 import org.netbeans.lib.profiler.ui.components.HTMLTextArea;
 import org.netbeans.modules.profiler.heapwalk.SummaryController;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -73,8 +75,6 @@ import javax.swing.JSeparator;
 import javax.swing.JSplitPane;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
-import javax.swing.border.TitledBorder;
-
 
 /**
  *
@@ -87,7 +87,7 @@ public class SummaryControllerUI extends JPanel {
     private static class Presenter extends JToggleButton {
         //~ Static fields/initializers -------------------------------------------------------------------------------------------
 
-        private static ImageIcon ICON_INFO = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/infoTab.png")); // NOI18N
+        private static ImageIcon ICON_INFO = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/profiler/resources/infoTab.png")); // NOI18N
 
         //~ Constructors ---------------------------------------------------------------------------------------------------------
 
@@ -132,6 +132,8 @@ public class SummaryControllerUI extends JPanel {
                                                                                "SummaryControllerUI_ClassloadersItemString"); // NOI18N
     private static final String GCROOTS_ITEM_STRING = NbBundle.getMessage(SummaryControllerUI.class,
                                                                           "SummaryControllerUI_GcRootsItemString"); // NOI18N
+    private static final String FINALIZERS_ITEM_STRING = NbBundle.getMessage(SummaryControllerUI.class,
+                                                                          "SummaryControllerUI_FinalizersItemString"); // NOI18N
     private static final String OS_ITEM_STRING = NbBundle.getMessage(SummaryControllerUI.class, "SummaryControllerUI_OsItemString"); // NOI18N
     private static final String ARCHITECTURE_ITEM_STRING = NbBundle.getMessage(SummaryControllerUI.class,
                                                                                "SummaryControllerUI_ArchitectureItemString"); // NOI18N
@@ -229,7 +231,7 @@ public class SummaryControllerUI extends JPanel {
         File file = summaryController.getHeapFragmentWalker().getHeapDumpFile();
         Heap heap = summaryController.getHeapFragmentWalker().getHeapFragment();
         HeapSummary hsummary = heap.getSummary();
-
+        long finalizers = computeFinalizers(heap);
         int nclassloaders = 0;
         JavaClass cl = heap.getJavaClassByName("java.lang.ClassLoader"); // NOI18N
 
@@ -242,18 +244,21 @@ public class SummaryControllerUI extends JPanel {
                 nclassloaders += jc.getInstancesCount();
             }
         }
-
+        NumberFormat numberFormat = (NumberFormat)NumberFormat.getInstance().clone();
+        numberFormat.setMaximumFractionDigits(1);
+        
         String filename = "&nbsp;&nbsp;&nbsp;&nbsp;"
                           + MessageFormat.format(FILE_ITEM_STRING,
                                                  new Object[] {
-                                                     (((file != null) && file.exists()) ? file.getAbsolutePath() : NOT_AVAILABLE_MSG)
+                                                     file != null && file.exists() ? file.getAbsolutePath() : NOT_AVAILABLE_MSG
                                                  }); // NOI18N
 
         String filesize = "&nbsp;&nbsp;&nbsp;&nbsp;"
                           + MessageFormat.format(FILE_SIZE_ITEM_STRING,
                                                  new Object[] {
-                                                     (((file != null) && file.exists()) ? ((file.length() / (1024 * 1024))
-                                                                                        + " MB") : NOT_AVAILABLE_MSG)
+                                                     file != null && file.exists() ? 
+                                                         numberFormat.format(file.length()/(1024 * 1024.0)) + " MB" :
+                                                         NOT_AVAILABLE_MSG
                                                  }); // NOI18N
 
         String dateTaken = "&nbsp;&nbsp;&nbsp;&nbsp;"
@@ -261,31 +266,49 @@ public class SummaryControllerUI extends JPanel {
 
         String liveBytes = "&nbsp;&nbsp;&nbsp;&nbsp;"
                            + MessageFormat.format(TOTAL_BYTES_ITEM_STRING,
-                                                  new Object[] { NumberFormat.getInstance().format(hsummary.getTotalLiveBytes()) }); // NOI18N
+                                                  new Object[] { numberFormat.format(hsummary.getTotalLiveBytes()) }); // NOI18N
 
         String liveClasses = "&nbsp;&nbsp;&nbsp;&nbsp;"
                              + MessageFormat.format(TOTAL_CLASSES_ITEM_STRING,
-                                                    new Object[] { NumberFormat.getInstance().format(heap.getAllClasses().size()) }); // NOI18N
+                                                    new Object[] { numberFormat.format(heap.getAllClasses().size()) }); // NOI18N
 
         String liveInstances = "&nbsp;&nbsp;&nbsp;&nbsp;"
                                + MessageFormat.format(TOTAL_INSTANCES_ITEM_STRING,
                                                       new Object[] {
-                                                          NumberFormat.getInstance().format(hsummary.getTotalLiveInstances())
+                                                          numberFormat.format(hsummary.getTotalLiveInstances())
                                                       }); // NOI18N
 
         String classloaders = "&nbsp;&nbsp;&nbsp;&nbsp;"
                               + MessageFormat.format(CLASSLOADERS_ITEM_STRING,
-                                                     new Object[] { NumberFormat.getInstance().format(nclassloaders) }); // NOI18N
+                                                     new Object[] { numberFormat.format(nclassloaders) }); // NOI18N
 
         String gcroots = "&nbsp;&nbsp;&nbsp;&nbsp;"
                          + MessageFormat.format(GCROOTS_ITEM_STRING,
-                                                new Object[] { NumberFormat.getInstance().format(heap.getGCRoots().size()) }); // NOI18N
+                                                new Object[] { numberFormat.format(heap.getGCRoots().size()) }); // NOI18N
 
-        return "<b><img border='0' align='bottom' src='nbresloc:/org/netbeans/modules/profiler/resources/memory.png'>&nbsp;&nbsp;"
+        String finalizersInfo = "&nbsp;&nbsp;&nbsp;&nbsp;"
+                         + MessageFormat.format(FINALIZERS_ITEM_STRING,
+                                                new Object[] { numberFormat.format(finalizers) }); // NOI18N
+
+          return "<b><img border='0' align='bottom' src='nbresloc:/org/netbeans/modules/profiler/resources/memory.png'>&nbsp;&nbsp;"
                + SUMMARY_STRING + "</b><br><hr>" + dateTaken + "<br>" + filename + "<br>" + filesize + "<br><br>" + liveBytes
-               + "<br>" + liveClasses + "<br>" + liveInstances + "<br>" + classloaders + "<br>" + gcroots; // NOI18N
+               + "<br>" + liveClasses + "<br>" + liveInstances + "<br>" + classloaders + "<br>" + gcroots + "<br>" + finalizersInfo; // NOI18N
     }
 
+    private long computeFinalizers(Heap heap) {
+        JavaClass finalizerClass = heap.getJavaClassByName("java.lang.ref.Finalizer");
+        if (finalizerClass != null) {
+            Instance queue = (Instance) finalizerClass.getValueOfStaticField("queue");
+            if (queue != null) {
+                Long len = (Long) queue.getValueOfField("queueLength");
+                if (len != null) {
+                    return len.longValue();
+                }
+            }
+        }
+        return -1;
+    }
+    
     private String computeSystemProperties(boolean showSystemProperties) {
         Properties systemProperties = getSystemProperties();
 
@@ -326,15 +349,24 @@ public class SummaryControllerUI extends JPanel {
 
     private String formatSystemProperties(Properties properties) {
         StringBuffer text = new StringBuffer(200);
-        List keys = new ArrayList(properties.keySet());
+        List keys = new ArrayList();
+        Enumeration en = properties.propertyNames();
         Iterator keyIt;
-
+        
+        while (en.hasMoreElements()) {
+            keys.add(en.nextElement());
+        }
         Collections.sort(keys);
         keyIt = keys.iterator();
 
         while (keyIt.hasNext()) {
             String key = (String) keyIt.next();
             String val = properties.getProperty(key);
+
+            if ("line.separator".equals(key) && val != null) {  // NOI18N
+                val = val.replace("\n", "\\n"); // NOI18N
+                val = val.replace("\r", "\\r"); // NOI18N
+            }
 
             text.append("<nobr>&nbsp;&nbsp;&nbsp;&nbsp;<b>"); // NOI18N
             text.append(key);
