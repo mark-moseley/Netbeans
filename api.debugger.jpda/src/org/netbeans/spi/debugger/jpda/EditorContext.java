@@ -41,14 +41,20 @@
 package org.netbeans.spi.debugger.jpda;
 
 import java.beans.PropertyChangeListener;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
-import org.netbeans.api.debugger.jpda.LineBreakpoint;
-import org.netbeans.api.debugger.jpda.LocalVariable;
+import java.util.Map;
+import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.api.debugger.jpda.Variable;
+import org.netbeans.modules.debugger.jpda.apiregistry.DebuggerProcessor;
+import org.netbeans.spi.debugger.ContextAwareService;
+import org.netbeans.spi.debugger.ContextAwareSupport;
+import org.netbeans.spi.debugger.ContextProvider;
 
 /**
  * Defines bridge to editor and src hierarchy. It allows to use different
@@ -86,6 +92,9 @@ public abstract class EditorContext {
     public static final String CURRENT_EXPRESSION_SECONDARY_LINE_ANNOTATION_TYPE = "CurrentExpression";
     /** Annotation type constant. */
     public static final String CURRENT_EXPRESSION_CURRENT_LINE_ANNOTATION_TYPE = "CurrentExpressionLine";
+    /** Annotation type constant.
+     * @since 2.16     */
+    public static final String OTHER_THREAD_ANNOTATION_TYPE = "OtherThread";
 
     /** Property name constant. */
     public static final String PROP_LINE_NUMBER = "lineNumber";
@@ -143,6 +152,29 @@ public abstract class EditorContext {
         String annotationType,
         Object timeStamp
     );
+
+    /**
+     * Adds annotation to given url on given line.
+     *
+     * @param url a url of source annotation should be set into
+     * @param lineNumber a number of line annotation should be set into
+     * @param annotationType a type of annotation to be set
+     * @param timeStamp a time stamp to be used
+     * @param thread the thread to annotate
+     *
+     * @return annotation or <code>null</code>, when the annotation can not be
+     *         created at the given URL or line number.
+     * @since 2.16
+     */
+    public Object annotate (
+        String url, 
+        int lineNumber, 
+        String annotationType,
+        Object timeStamp,
+        JPDAThread thread
+    ) {
+        return null;
+    }
 
     /**
      * Adds annotation to given url on given character range.
@@ -375,7 +407,7 @@ public abstract class EditorContext {
      * @param operation The operation
      */
     public MethodArgument[] getArguments(String url, Operation operation) {
-        throw new UnsupportedOperationException("This method is not implemented.");
+        throw new UnsupportedOperationException("This method is not implemented by "+this);
     }
     
     /**
@@ -384,7 +416,7 @@ public abstract class EditorContext {
      * @param methodLineNumber The line number of the method header
      */
     public MethodArgument[] getArguments(String url, int methodLineNumber) {
-        throw new UnsupportedOperationException("This method is not implemented.");
+        throw new UnsupportedOperationException("This method is not implemented by "+this);
     }
     
     /**
@@ -664,8 +696,8 @@ public abstract class EditorContext {
         public MethodArgument(String name, String type, Position startPos, Position endPos) {
             this.name = name;
             this.type = type;
-            startPos = startPos;
-            endPos = endPos;
+            this.startPos = startPos;
+            this.endPos = endPos;
         }
         
         /**
@@ -700,6 +732,147 @@ public abstract class EditorContext {
             return endPos;
         }
         
+    }
+
+    @Retention(RetentionPolicy.SOURCE)
+    @Target({ElementType.TYPE})
+    public @interface Registration {
+        /**
+         * An optional path to register this implementation in.
+         */
+        String path() default "";
+
+    }
+
+    static class ContextAware extends EditorContext implements ContextAwareService<EditorContext> {
+
+        private String serviceName;
+
+        private ContextAware(String serviceName) {
+            this.serviceName = serviceName;
+        }
+
+        public EditorContext forContext(ContextProvider context) {
+            return (EditorContext) ContextAwareSupport.createInstance(serviceName, context);
+        }
+
+        @Override
+        public boolean showSource(String url, int lineNumber, Object timeStamp) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void createTimeStamp(Object timeStamp) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void disposeTimeStamp(Object timeStamp) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void updateTimeStamp(Object timeStamp, String url) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public Object annotate(String url, int lineNumber, String annotationType, Object timeStamp) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public int getLineNumber(Object annotation, Object timeStamp) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void removeAnnotation(Object annotation) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public int getCurrentLineNumber() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public String getCurrentClassName() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public String getCurrentURL() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public String getCurrentMethodName() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public String getCurrentFieldName() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public String getSelectedIdentifier() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public String getSelectedMethodName() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public int getFieldLineNumber(String url, String className, String fieldName) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public String getClassName(String url, int lineNumber) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public String[] getImports(String url) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void addPropertyChangeListener(PropertyChangeListener l) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void removePropertyChangeListener(PropertyChangeListener l) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void addPropertyChangeListener(String propertyName, PropertyChangeListener l) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void removePropertyChangeListener(String propertyName, PropertyChangeListener l) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        /**
+         * Creates instance of <code>ContextAwareService</code> based on layer.xml
+         * attribute values
+         *
+         * @param attrs attributes loaded from layer.xml
+         * @return new <code>ContextAwareService</code> instance
+         */
+        static ContextAwareService createService(Map attrs) throws ClassNotFoundException {
+            String serviceName = (String) attrs.get(DebuggerProcessor.SERVICE_NAME);
+            return new ContextAware(serviceName);
+        }
+
     }
 
 }

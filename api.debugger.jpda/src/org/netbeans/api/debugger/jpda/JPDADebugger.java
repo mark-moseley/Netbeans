@@ -41,27 +41,29 @@
 
 package org.netbeans.api.debugger.jpda;
 
-import com.sun.jdi.Bootstrap;
 import com.sun.jdi.VirtualMachine;
-import com.sun.jdi.connect.AttachingConnector;
 import com.sun.jdi.connect.Connector.Argument;
-import com.sun.jdi.connect.IllegalConnectorArgumentsException;
 import com.sun.jdi.connect.ListeningConnector;
 import com.sun.jdi.request.EventRequest;
 
 import java.beans.PropertyChangeListener;
-import java.io.File;
-import java.io.IOException;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerInfo;
 import org.netbeans.api.debugger.DebuggerManager;
-import org.netbeans.api.debugger.jpda.InvalidExpressionException;
-import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.api.debugger.jpda.event.JPDABreakpointEvent;
+
+import org.netbeans.modules.debugger.jpda.apiregistry.DebuggerProcessor;
+import org.netbeans.spi.debugger.ContextAwareService;
+import org.netbeans.spi.debugger.ContextAwareSupport;
+import org.netbeans.spi.debugger.ContextProvider;
 import org.openide.util.NbBundle;
 
 
@@ -88,6 +90,16 @@ public abstract class JPDADebugger {
     /** Property name constant. */
     public static final String          PROP_SUSPEND = "suspend"; // NOI18N
 
+    /** Property name constant.
+     * @since 2.16     */
+    public static final String          PROP_THREAD_STARTED = "threadStarted";   // NOI18N
+    /** Property name constant.
+     * @since 2.16     */
+    public static final String          PROP_THREAD_DIED = "threadDied";         // NOI18N
+    /** Property name constant.
+     * @since 2.16     */
+    public static final String          PROP_THREAD_GROUP_ADDED = "threadGroupAdded";  // NOI18N
+    
     /** Suspend property value constant. */
     public static final int             SUSPEND_ALL = EventRequest.SUSPEND_ALL;
     /** Suspend property value constant. */
@@ -176,8 +188,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             if (d == null) continue;
             d.waitRunning ();
             return d;
@@ -247,8 +258,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             if (d == null) continue;
             d.waitRunning ();
             return d;
@@ -282,8 +292,7 @@ public abstract class JPDADebugger {
             );
         int i, k = es.length;
         for (i = 0; i < k; i++) {
-            JPDADebugger d = (JPDADebugger) es [i].lookupFirst 
-                (null, JPDADebugger.class);
+            JPDADebugger d = es[i].lookupFirst(null, JPDADebugger.class);
             d.waitRunning ();
             if (d == null) continue;
             return d;
@@ -316,6 +325,17 @@ public abstract class JPDADebugger {
      * @param s a new value of suspend property
      */
     public abstract void setSuspend (int s);
+    
+    /*
+     * Returns all threads that exist in the debuggee.
+     *
+     * @return all threads
+     * @since 2.16
+     * Use ThreadsCollector instead.
+    public List<JPDAThread> getAllThreads() {
+        return Collections.emptyList();
+    }
+     */
     
     /**
      * Returns current thread or null.
@@ -493,6 +513,137 @@ public abstract class JPDADebugger {
      */
     public long[] getInstanceCounts(List<JPDAClassType> classTypes) throws UnsupportedOperationException {
         throw new UnsupportedOperationException("Not supported.");
+    }
+    
+    /**
+     * Get the collector of threads.
+     * 
+     * @return The threads collector
+     * @since 2.16
+     */
+    public ThreadsCollector getThreadsCollector() {
+        return null;
+    }
+    
+    /**
+     * Creates a deadlock detector.
+     * @return deadlock detector with automatic detection of deadlock among suspended threads
+     * @since 2.16
+     *
+    public DeadlockDetector getDeadlockDetector() {
+        return new DeadlockDetector() {};
+    }
+     */
+
+    @Retention(RetentionPolicy.SOURCE)
+    @Target({ElementType.TYPE})
+    public @interface Registration {
+        /**
+         * An optional path to register this implementation in.
+         */
+        String path() default "";
+
+    }
+
+    static class ContextAware extends JPDADebugger implements ContextAwareService<JPDADebugger> {
+
+        private String serviceName;
+
+        private ContextAware(String serviceName) {
+            this.serviceName = serviceName;
+        }
+
+        public JPDADebugger forContext(ContextProvider context) {
+            return (JPDADebugger) ContextAwareSupport.createInstance(serviceName, context);
+        }
+
+        @Override
+        public int getState() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public int getSuspend() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void setSuspend(int s) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public JPDAThread getCurrentThread() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public CallStackFrame getCurrentCallStackFrame() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public Variable evaluate(String expression) throws InvalidExpressionException {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void waitRunning() throws DebuggerStartException {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public boolean canFixClasses() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public boolean canPopFrames() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void fixClasses(Map<String, byte[]> classes) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public SmartSteppingFilter getSmartSteppingFilter() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void addPropertyChangeListener(PropertyChangeListener l) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void removePropertyChangeListener(PropertyChangeListener l) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void addPropertyChangeListener(String propertyName, PropertyChangeListener l) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        @Override
+        public void removePropertyChangeListener(String propertyName, PropertyChangeListener l) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        /**
+         * Creates instance of <code>ContextAwareService</code> based on layer.xml
+         * attribute values
+         *
+         * @param attrs attributes loaded from layer.xml
+         * @return new <code>ContextAwareService</code> instance
+         */
+        static ContextAwareService createService(Map attrs) throws ClassNotFoundException {
+            String serviceName = (String) attrs.get(DebuggerProcessor.SERVICE_NAME);
+            return new ContextAware(serviceName);
+        }
+
     }
 
 }
