@@ -69,7 +69,7 @@ public class SearchRunnable implements Runnable {
     protected volatile boolean stop = false;
     protected Notifier notifier;
     private Set<File> roots;
-    protected SearchPanel panel;
+    SearchPanel panel;
     protected ProgressHandle progress;
     private int maxLevel;
     private Collection<? extends CustomCLDCPlatformConfigurator> customConfigurators;
@@ -108,6 +108,11 @@ public class SearchRunnable implements Runnable {
                             stop();
                         }
                     }));
+                    if (dialog[0] != null) {
+                        dialog[0].getAccessibleContext().setAccessibleName(NbBundle.getMessage(SearchRunnable.class, "ACSN_searchingPlatform")); //NOI18N
+                        dialog[0].getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(SearchRunnable.class, "ACSD_searchingPlatform")); //NOI18N
+                    }
+                        
                 }
             });
             SwingUtilities.invokeLater(new Runnable() {

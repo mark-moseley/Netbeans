@@ -188,7 +188,7 @@ public abstract class Node {
     /**
      * Zero-arg Constructor.
      */
-    public Node() {
+    Node() {
 	this.isDummy = true;
     }
 
@@ -198,7 +198,7 @@ public abstract class Node {
      * @param start The location of the jsp page
      * @param parent The enclosing node
      */
-    public Node(Mark start, Node parent) {
+    Node(Mark start, Node parent) {
 	this.startMark = start;
 	this.isDummy = (start == null);
 	addToParent(parent);
@@ -212,7 +212,7 @@ public abstract class Node {
      * @param start The location of the jsp page
      * @param parent The enclosing node
      */
-    public Node(String qName, String localName, Mark start, Node parent) {
+    Node(String qName, String localName, Mark start, Node parent) {
 	this.qName = qName;
 	this.localName = localName;
 	this.startMark = start;
@@ -229,7 +229,7 @@ public abstract class Node {
      * @param start The location of the jsp page
      * @param parent The enclosing node
      */
-    public Node(String qName, String localName, Attributes attrs, Mark start, Node parent) {
+    Node(String qName, String localName, Attributes attrs, Mark start, Node parent) {
 	this.qName = qName;
 	this.localName = localName;
 	this.attrs = attrs;
@@ -252,7 +252,7 @@ public abstract class Node {
      * @param start The location of the jsp page
      * @param parent The enclosing node
      */
-    public Node(String qName, String localName, Attributes attrs, Attributes nonTaglibXmlnsAttrs, Attributes taglibAttrs, Mark start, Node parent) {
+    Node(String qName, String localName, Attributes attrs, Attributes nonTaglibXmlnsAttrs, Attributes taglibAttrs, Mark start, Node parent) {
 	this.qName = qName;
 	this.localName = localName;
 	this.attrs = attrs;
@@ -272,7 +272,7 @@ public abstract class Node {
      * @param start The location of the jsp page
      * @param parent The enclosing node
      */
-    public Node(String qName, String localName, String text, Mark start, Node parent) {
+    Node(String qName, String localName, String text, Mark start, Node parent) {
 	this.qName = qName;
 	this.localName = localName;
 	this.text = text;
@@ -883,7 +883,7 @@ public abstract class Node {
 	public String getText() {
 	    String ret = text;
 	    if ((ret == null) && (body != null)) {
-		StringBuffer buf = new StringBuffer();
+		StringBuilder buf = new StringBuilder();
 		for (int i=0; i<body.size(); i++) {
 		    buf.append(body.getNode(i).getText());
 		}
@@ -2020,7 +2020,7 @@ public abstract class Node {
 	public boolean isAllSpace() {
 	    boolean isAllSpace = true;
 	    for (int i=0; i<text.length(); i++) {
-		if (!Character.isSpace(text.charAt(i))) {
+		if (!Character.isWhitespace(text.charAt(i))) {
 		    isAllSpace = false;
 		    break;
 		}
