@@ -38,15 +38,11 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
+package org.netbeans.modules.javascript.editing;
 
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.csl.api.CodeCompletionHandler;
 import org.netbeans.modules.csl.api.DeclarationFinder;
 import org.netbeans.modules.csl.api.Formatter;
@@ -57,80 +53,56 @@ import org.netbeans.modules.csl.api.OccurrencesFinder;
 import org.netbeans.modules.csl.api.SemanticAnalyzer;
 import org.netbeans.modules.csl.api.StructureScanner;
 import org.netbeans.modules.csl.spi.DefaultLanguageConfig;
+import org.netbeans.modules.javascript.editing.lexer.JsTokenId;
 import org.netbeans.modules.parsing.spi.Parser;
 import org.netbeans.modules.parsing.spi.indexing.EmbeddingIndexerFactory;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.openide.filesystems.FileObject;
+
 
 /*
- * Language/lexing configuration for Ruby
+ * Language/lexing configuration for JavaScript
  *
  * @author Tor Norbye
  */
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-public class RubyLanguage extends DefaultLanguageConfig {
+public class JsLanguage extends DefaultLanguageConfig {
 
-    public final static String BOOT = "ruby/classpath/boot";
-    public final static String COMPILE = "ruby/classpath/compile";
-    public final static String EXECUTE = "ruby/classpath/execute";
-    public final static String SOURCE = "ruby/classpath/source";
-
-    public RubyLanguage() {
+    public JsLanguage() {
     }
 
     @Override
     public String getLineCommentPrefix() {
-        return RubyUtils.getLineCommentPrefix();
+        return JsUtils.getLineCommentPrefix();
     }
 
     @Override
     public boolean isIdentifierChar(char c) {
-        return RubyUtils.isIdentifierChar(c);
+        return JsUtils.isIdentifierChar(c);
     }
 
     @Override
     public Language getLexerLanguage() {
-        return RubyTokenId.language();
+        return JsTokenId.language();
     }
 
     @Override
     public String getDisplayName() {
-        return "Ruby";
+        return "JavaScript"; //NOI18N
     }
-
+    
     @Override
     public String getPreferredExtension() {
-        return "rb"; // NOI18N
-    }
-
-    @Override
-    public Map<String,String> getSourceGroupNames() {
-        Map<String,String> sourceGroups = new HashMap<String,String>();
-        sourceGroups.put("RubyProject", "ruby"); // NOI18N
-        sourceGroups.put("WebProject", "ruby"); // NOI18N
-        sourceGroups.put("RailsProject", "ruby"); // NOI18N
-        
-        return sourceGroups;
+        return "js"; // NOI18N
     }
     
+    @Override
+    public Set<String> getLibraryPathIds() {
+        return Collections.singleton(JsClassPathProvider.BOOT_CP);
+    }
+
+    // Service Registrations
     
     @Override
-    public Collection<FileObject> getCoreLibraries() {
-        return Collections.singletonList(RubyPlatform.getRubyStubs());
-    }
-
-    @Override
-    public CodeCompletionHandler getCompletionHandler() {
-        return new RubyCodeCompleter();
-    }
-
-    @Override
-    public DeclarationFinder getDeclarationFinder() {
-        return new RubyDeclarationFinder();
+    public KeystrokeHandler getKeystrokeHandler() {
+        return new JsKeystrokeHandler();
     }
 
     @Override
@@ -140,37 +112,17 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public Formatter getFormatter() {
-        return new RubyFormatter();
-    }
-
-    @Override
-    public InstantRenamer getInstantRenamer() {
-        return new RubyRenameHandler();
-    }
-
-    @Override
-    public KeystrokeHandler getKeystrokeHandler() {
-        return new RubyKeystrokeHandler();
-    }
-
-    @Override
-    public boolean hasOccurrencesFinder() {
-        return true;
-    }
-
-    @Override
-    public OccurrencesFinder getOccurrencesFinder() {
-        return new RubyOccurrencesFinder();
+        return new JsFormatter();
     }
 
     @Override
     public Parser getParser() {
-        return new RubyParser();
+        return new JsParser();
     }
-
+    
     @Override
-    public SemanticAnalyzer getSemanticAnalyzer() {
-        return new RubySemanticAnalyzer();
+    public CodeCompletionHandler getCompletionHandler() {
+        return new JsCodeCompletion();
     }
 
     @Override
@@ -180,27 +132,41 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public StructureScanner getStructureScanner() {
-        return new RubyStructureAnalyzer();
-    }
-
-    @Override
-    public IndexSearcher getIndexSearcher() {
-        return new RubyTypeSearcher();
+        return new JsAnalyzer();
     }
 
     @Override
     public EmbeddingIndexerFactory getIndexerFactory() {
-        return new RubyIndexer.Factory();
+        return new JsIndexer.Factory();
     }
 
     @Override
-    public Set<String> getSourcePathIds() {
-        return Collections.singleton(SOURCE);
+    public DeclarationFinder getDeclarationFinder() {
+        return new JsDeclarationFinder();
     }
 
     @Override
-    public Set<String> getLibraryPathIds() {
-        return Collections.singleton(BOOT);
+    public SemanticAnalyzer getSemanticAnalyzer() {
+        return new JsSemanticAnalyzer();
     }
 
+    @Override
+    public boolean hasOccurrencesFinder() {
+        return true;
+    }
+
+    @Override
+    public OccurrencesFinder getOccurrencesFinder() {
+        return new JsOccurrenceFinder();
+    }
+
+    @Override
+    public InstantRenamer getInstantRenamer() {
+        return new JsRenameHandler();
+    }
+
+    @Override
+    public IndexSearcher getIndexSearcher() {
+        return new JsTypeSearcher();
+    }
 }

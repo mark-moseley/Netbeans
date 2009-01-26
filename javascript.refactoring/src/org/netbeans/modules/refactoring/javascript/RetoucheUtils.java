@@ -39,25 +39,21 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.refactoring.ruby;
+package org.netbeans.modules.refactoring.javascript;
 
 import java.awt.Color;
 import java.io.CharConversionException;
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.StyleConstants;
-import org.jruby.nb.ast.AliasNode;
-import org.jruby.nb.ast.Colon2Node;
-import org.jruby.nb.ast.IScopingNode;
-import org.jruby.nb.ast.Node;
-import org.jruby.nb.ast.types.INameNode;
+import org.mozilla.nb.javascript.Node;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.settings.FontColorSettings;
+import org.netbeans.editor.BaseDocument;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
@@ -66,117 +62,98 @@ import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.csl.spi.GsfUtilities;
-import org.netbeans.modules.csl.spi.ParserResult;
-import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
-import org.netbeans.modules.ruby.AstUtilities;
-import org.netbeans.modules.ruby.RubyIndex;
-import org.netbeans.modules.ruby.RubyUtils;
-import org.netbeans.modules.ruby.elements.IndexedMethod;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.netbeans.modules.ruby.rubyproject.RubyProject;
-import org.openide.cookies.EditorCookie;
+import org.netbeans.modules.javascript.editing.AstUtilities;
+import org.netbeans.modules.javascript.editing.JsClassPathProvider;
+import org.netbeans.modules.javascript.editing.JsParseResult;
+import org.netbeans.modules.javascript.editing.JsUtils;
+import org.netbeans.modules.javascript.editing.lexer.JsTokenId;
+import org.netbeans.modules.parsing.spi.Parser;
 import org.openide.filesystems.FileObject;
+import org.openide.util.Lookup;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.util.Exceptions;
-import org.openide.util.Lookup;
 import org.openide.util.Utilities;
 import org.openide.xml.XMLUtil;
 
 /**
- * Various utilities related to Ruby refactoring; the generic ones are based
+ * Various utilies related to Js refactoring; the generic ones are based
  * on the ones from the Java refactoring module.
  * 
  * @author Jan Becicka
  * @author Tor Norbye
  */
 public class RetoucheUtils {
-    
     private RetoucheUtils() {
     }
 
-    public static BaseDocument getDocument(ParserResult parserResult, FileObject fo) {
-        BaseDocument doc = null;
+    public static boolean isJsFile(FileObject fo) {
+        // XXX: parsingapi; this should somehow be available in Parsing API
+        //return LanguageRegistry.getInstance().isRelevantFor(fo, JsTokenId.JAVASCRIPT_MIME_TYPE);
 
-        if (parserResult != null) {
-            doc = RubyUtils.getDocument(parserResult);
-        }
-
-        if (doc == null) {
-            try {
-                // Gotta open it first
-                DataObject od = DataObject.find(fo);
-                EditorCookie ec = od.getCookie(EditorCookie.class);
-
-                if (ec != null) {
-                    doc = (BaseDocument)ec.openDocument();
-                }
-            } catch (IOException ex) {
-                Exceptions.printStackTrace(ex);
-            }
-        }
-
-        return doc;
+        // these are the mimetypes for which JsEmbeddingProvider is registered
+        return JsUtils.isJsFile(fo)
+                || fo.getMIMEType().equals("application/x-httpd-eruby") //NOI18N
+                || fo.getMIMEType().equals("text/html")  //NOI18N
+                || fo.getMIMEType().equals("text/x-jsp")  //NOI18N
+                || fo.getMIMEType().equals("text/x-tag")  //NOI18N
+                || fo.getMIMEType().equals("text/x-php5");  //NOI18N
     }
 
-    public static BaseDocument getDocument(ParserResult info) {
+    public static BaseDocument getDocument(Parser.Result info) {
         BaseDocument doc = null;
 
         if (info != null) {
-            doc = RubyUtils.getDocument(info, true);
+            doc = (BaseDocument) info.getSnapshot().getSource().getDocument(true);
         }
 
         return doc;
     }
-
+    
+    
     /** Compute the names (full and simple, e.g. Foo::Bar and Bar) for the given node, if any, and return as 
      * a String[2] = {name,simpleName} */
     public static String[] getNodeNames(Node node) {
         String name = null;
         String simpleName = null;
-       
-        if (node instanceof Colon2Node) {
-            Colon2Node c2n = (Colon2Node)node;
-            simpleName = c2n.getName();
-            name = AstUtilities.getFqn(c2n);
-        } else if (node instanceof AliasNode) {
-            name = ((AliasNode)node).getNewName();
-        }
-        
-        if (name == null && node instanceof INameNode) {
-            name = ((INameNode)node).getName();
-        }
-        if (name == null && node instanceof IScopingNode) {
-            if (((IScopingNode)node).getCPath() instanceof Colon2Node) {
-                Colon2Node c2n = (Colon2Node)((IScopingNode)node).getCPath();
-                simpleName = c2n.getName();
-                name = AstUtilities.getFqn(c2n);
-            } else {
-                name = AstUtilities.getClassOrModuleName((IScopingNode)node);
+        int type = node.getType();
+        if (type == org.mozilla.nb.javascript.Token.CALL || type == org.mozilla.nb.javascript.Token.NEW) {
+            name = AstUtilities.getCallName(node, true);
+            simpleName = AstUtilities.getCallName(node, false);
+        } else if (node instanceof Node.StringNode) {
+            name = node.getString();
+        } else if (node.getType() == org.mozilla.nb.javascript.Token.FUNCTION) {
+            name = AstUtilities.getFunctionFqn(node, null);
+            if (name != null && name.indexOf('.') != -1) {
+                name = name.substring(name.indexOf('.')+1);
             }
+        } else {
+            return new String[] { null, null};
         }
+        // TODO - FUNCTION - also get full name!
+        
         if (simpleName == null) {
             simpleName = name;
         }
         
         return new String[] { name, simpleName };
     }
-    
-    public static CloneableEditorSupport findCloneableEditorSupport(ParserResult info) {
+
+    public static CloneableEditorSupport findCloneableEditorSupport(JsParseResult info) {
         DataObject dob = null;
         try {
-            dob = DataObject.find(RubyUtils.getFileObject(info));
+            dob = DataObject.find(info.getSnapshot().getSource().getFileObject());
         } catch (DataObjectNotFoundException ex) {
             Exceptions.printStackTrace(ex);
         }
         return RetoucheUtils.findCloneableEditorSupport(dob);
     }
-    
+
     public static CloneableEditorSupport findCloneableEditorSupport(DataObject dob) {
         Object obj = dob.getCookie(org.openide.cookies.OpenCookie.class);
         if (obj instanceof CloneableEditorSupport) {
@@ -198,19 +175,19 @@ public class RetoucheUtils {
         }
     }
 
-    /** Return the most distant method in the hierarchy that is overriding the given method, or null */
-    public static IndexedMethod getOverridingMethod(RubyElementCtx element, ParserResult info) {
-        RubyIndex index = RubyIndex.get(info);
-        String fqn = AstUtilities.getFqnName(element.getPath());
-
-        return index.getOverridingMethod(fqn, element.getName());
-    }
+//    /** Return the most distant method in the hierarchy that is overriding the given method, or null */
+//    public static IndexedMethod getOverridingMethod(JsElementCtx element, CompilationInfo info) {
+//        JsIndex index = JsIndex.get(info.getIndex());
+//        String fqn = AstUtilities.getFqnName(element.getPath());
+//
+//        return index.getOverridingMethod(fqn, element.getName());
+//    }
 
     public static String getHtml(String text) {
         StringBuffer buf = new StringBuffer();
-        // TODO - check whether we need ruby highlighting or rhtml highlighting
-        TokenHierarchy tokenH = TokenHierarchy.create(text, RubyTokenId.language());
-        Lookup lookup = MimeLookup.getLookup(MimePath.get(RubyUtils.RUBY_MIME_TYPE));
+        // TODO - check whether we need Js highlighting or rhtml highlighting
+        TokenHierarchy tokenH = TokenHierarchy.create(text, JsTokenId.language());
+        Lookup lookup = MimeLookup.getLookup(MimePath.get(JsTokenId.JAVASCRIPT_MIME_TYPE));
         FontColorSettings settings = lookup.lookup(FontColorSettings.class);
         @SuppressWarnings("unchecked")
         TokenSequence<? extends TokenId> tok = tokenH.tokenSequence();
@@ -287,7 +264,8 @@ public class RetoucheUtils {
         Project[] opened = OpenProjects.getDefault().getOpenProjects();
         for (int i = 0; i<opened.length; i++) {
             if (p==opened[i]) {
-                SourceGroup[] gr = ProjectUtils.getSources(p).getSourceGroups(RubyProject.SOURCES_TYPE_RUBY);
+                //SourceGroup[] gr = ProjectUtils.getSources(p).getSourceGroups(JsProject.SOURCES_TYPE_Js);
+                SourceGroup[] gr = ProjectUtils.getSources(p).getSourceGroups(Sources.TYPE_GENERIC);
                 for (int j = 0; j < gr.length; j++) {
                     if (fo==gr[j].getRootFolder()) {
                         return true;
@@ -302,7 +280,11 @@ public class RetoucheUtils {
         return false;
     }
 
-    // XXX Parsing API
+    public static boolean isRefactorable(FileObject file) {
+        return isJsFile(file) && isFileInOpenProject(file) && isOnSourceClasspath(file);
+    }
+
+// XXX: parsingapi
 //    public static boolean isClasspathRoot(FileObject fo) {
 //        ClassPath cp = ClassPath.getClassPath(fo, ClassPath.SOURCE);
 //        if (cp != null) {
@@ -314,18 +296,23 @@ public class RetoucheUtils {
 //
 //        return false;
 //    }
-    
-    public static boolean isRefactorable(FileObject file) {
-        return RubyUtils.canContainRuby(file) && isFileInOpenProject(file) && isOnSourceClasspath(file);
-    }
 
     public static String getPackageName(FileObject folder) {
-        assert folder.isFolder() : "argument must be folder";
-        return ClassPath.getClassPath(
-                folder, ClassPath.SOURCE)
-                .getResourceName(folder, '.', false);
+        assert folder.isFolder() : "argument must be folder"; //NOI18N
+        Project p = FileOwnerQuery.getOwner(folder);
+        if (p != null) {
+            Sources s = ProjectUtils.getSources(p);
+            for(SourceGroup g : s.getSourceGroups(Sources.TYPE_GENERIC)) {
+                String relativePath = FileUtil.getRelativePath(g.getRootFolder(), folder);
+                if (relativePath != null) {
+                    return relativePath.replace('/', '.'); //NOI18N
+                }
+            }
+        }
+        return ""; //NOI18N
     }
 
+// XXX: parsingapi
 //    public static FileObject getClassPathRoot(URL url) throws IOException {
 //        FileObject result = URLMapper.findFileObject(url);
 //        File f = FileUtil.normalizeFile(new File(url.getPath()));
@@ -334,10 +321,6 @@ public class RetoucheUtils {
 //            f = f.getParentFile();
 //        }
 //        return ClassPath.getClassPath(result, ClassPath.SOURCE).findOwnerRoot(result);
-//    }
-//
-//    public static ElementKind getElementKind(RubyElementCtx tph) {
-//        return tph.getKind();
 //    }
 //
 //    public static ClasspathInfo getClasspathInfoFor(FileObject ... files) {
@@ -357,7 +340,8 @@ public class RetoucheUtils {
 //                if (ownerRoot != null) {
 //                    URL sourceRoot = URLMapper.findURL(ownerRoot, URLMapper.INTERNAL);
 //                    dependentRoots.addAll(SourceUtils.getDependentRoots(sourceRoot));
-//                    for (SourceGroup root:ProjectUtils.getSources(p).getSourceGroups(RubyProject.SOURCES_TYPE_RUBY)) {
+//                    //for (SourceGroup root:ProjectUtils.getSources(p).getSourceGroups(JsProject.SOURCES_TYPE_Js)) {
+//                    for (SourceGroup root:ProjectUtils.getSources(p).getSourceGroups(Sources.TYPE_GENERIC)) {
 //                        dependentRoots.add(URLMapper.findURL(root.getRootFolder(), URLMapper.INTERNAL));
 //                    }
 //                } else {
@@ -385,33 +369,34 @@ public class RetoucheUtils {
 //        return cpInfo;
 //    }
 //
-//    public static ClasspathInfo getClasspathInfoFor(RubyElementCtx ctx) {
+//    public static ClasspathInfo getClasspathInfoFor(JsElementCtx ctx) {
 //        return getClasspathInfoFor(ctx.getFileObject());
 //    }
 //
-    public static Set<FileObject> getRubyFilesInProject(FileObject fileInProject) {
+    public static Set<FileObject> getJsFilesInProject(FileObject fileInProject) {
         Set<FileObject> files = new HashSet<FileObject>(100);
-        // XXX: user ruby specific classpath IDs
-        Collection<FileObject> sourceRoots = GsfUtilities.getRoots(fileInProject, 
-                null, Collections.<String>emptySet(), Collections.<String>emptySet());
+        Collection<FileObject> sourceRoots = GsfUtilities.getRoots(fileInProject,
+                null,
+                Collections.singleton(JsClassPathProvider.BOOT_CP),
+                Collections.<String>emptySet());
         for (FileObject root : sourceRoots) {
             String name = root.getName();
             // Skip non-refactorable parts in renaming
             if (name.equals("vendor") || name.equals("script")) { // NOI18N
                 continue;
             }
-            addRubyFiles(files, root);
+            addJsFiles(files, root);
         }
 
         return files;
     }
-    
-    private static void addRubyFiles(Set<FileObject> files, FileObject f) {
+
+    private static void addJsFiles(Set<FileObject> files, FileObject f) {
         if (f.isFolder()) {
             for (FileObject child : f.getChildren()) {
-                addRubyFiles(files, child);
+                addJsFiles(files, child);
             }
-        } else if (RubyUtils.canContainRuby(f)) {
+        } else if (isJsFile(f)) {
             files.add(f);
         }
     }

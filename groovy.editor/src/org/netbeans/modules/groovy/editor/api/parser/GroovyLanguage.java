@@ -38,18 +38,17 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
 
-import java.util.Collection;
+package org.netbeans.modules.groovy.editor.api.parser;
+
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
+import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.csl.api.CodeCompletionHandler;
 import org.netbeans.modules.csl.api.DeclarationFinder;
 import org.netbeans.modules.csl.api.Formatter;
+import org.netbeans.modules.csl.api.HintsProvider;
 import org.netbeans.modules.csl.api.IndexSearcher;
 import org.netbeans.modules.csl.api.InstantRenamer;
 import org.netbeans.modules.csl.api.KeystrokeHandler;
@@ -57,80 +56,60 @@ import org.netbeans.modules.csl.api.OccurrencesFinder;
 import org.netbeans.modules.csl.api.SemanticAnalyzer;
 import org.netbeans.modules.csl.api.StructureScanner;
 import org.netbeans.modules.csl.spi.DefaultLanguageConfig;
+import org.netbeans.modules.groovy.editor.api.BracketCompleter;
+import org.netbeans.modules.groovy.editor.api.GroovyDeclarationFinder;
+import org.netbeans.modules.groovy.editor.api.GroovyIndexer;
+import org.netbeans.modules.groovy.editor.api.GroovyInstantRenamer;
+import org.netbeans.modules.groovy.editor.api.GroovyTypeSearcher;
+import org.netbeans.modules.groovy.editor.api.GroovyUtils;
+import org.netbeans.modules.groovy.editor.api.StructureAnalyzer;
+import org.netbeans.modules.groovy.editor.api.completion.CompletionHandler;
+import org.netbeans.modules.groovy.editor.hints.infrastructure.GroovyHintsProvider;
+import org.netbeans.modules.groovy.editor.api.lexer.GroovyTokenId;
 import org.netbeans.modules.parsing.spi.Parser;
 import org.netbeans.modules.parsing.spi.indexing.EmbeddingIndexerFactory;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
-import org.openide.filesystems.FileObject;
 
-/*
- * Language/lexing configuration for Ruby
+/**
+ * Language/lexing configuration for Groovy
  *
  * @author Tor Norbye
+ * @author Martin Adamek
  */
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-public class RubyLanguage extends DefaultLanguageConfig {
-
-    public final static String BOOT = "ruby/classpath/boot";
-    public final static String COMPILE = "ruby/classpath/compile";
-    public final static String EXECUTE = "ruby/classpath/execute";
-    public final static String SOURCE = "ruby/classpath/source";
-
-    public RubyLanguage() {
+public class GroovyLanguage extends DefaultLanguageConfig {
+    
+    public GroovyLanguage() {
     }
 
     @Override
     public String getLineCommentPrefix() {
-        return RubyUtils.getLineCommentPrefix();
+        return GroovyUtils.getLineCommentPrefix();
     }
 
     @Override
     public boolean isIdentifierChar(char c) {
-        return RubyUtils.isIdentifierChar(c);
+        return GroovyUtils.isIdentifierChar(c);
     }
 
     @Override
     public Language getLexerLanguage() {
-        return RubyTokenId.language();
+        return GroovyTokenId.language();
     }
 
     @Override
     public String getDisplayName() {
-        return "Ruby";
+        return "Groovy";
     }
 
     @Override
     public String getPreferredExtension() {
-        return "rb"; // NOI18N
+        return "groovy"; // NOI18N
     }
 
-    @Override
-    public Map<String,String> getSourceGroupNames() {
-        Map<String,String> sourceGroups = new HashMap<String,String>();
-        sourceGroups.put("RubyProject", "ruby"); // NOI18N
-        sourceGroups.put("WebProject", "ruby"); // NOI18N
-        sourceGroups.put("RailsProject", "ruby"); // NOI18N
-        
-        return sourceGroups;
-    }
-    
+    // Service Registrations
     
     @Override
-    public Collection<FileObject> getCoreLibraries() {
-        return Collections.singletonList(RubyPlatform.getRubyStubs());
-    }
-
-    @Override
-    public CodeCompletionHandler getCompletionHandler() {
-        return new RubyCodeCompleter();
-    }
-
-    @Override
-    public DeclarationFinder getDeclarationFinder() {
-        return new RubyDeclarationFinder();
+    public Parser getParser() {
+        return new GroovyParser();
     }
 
     @Override
@@ -140,17 +119,22 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public Formatter getFormatter() {
-        return new RubyFormatter();
-    }
-
-    @Override
-    public InstantRenamer getInstantRenamer() {
-        return new RubyRenameHandler();
+        return new org.netbeans.modules.groovy.editor.api.Formatter();
     }
 
     @Override
     public KeystrokeHandler getKeystrokeHandler() {
-        return new RubyKeystrokeHandler();
+        return new BracketCompleter();
+    }
+
+    @Override
+    public CodeCompletionHandler getCompletionHandler() {
+        return new CompletionHandler();
+    }
+
+    @Override
+    public SemanticAnalyzer getSemanticAnalyzer() {
+        return new GroovySemanticAnalyzer();
     }
 
     @Override
@@ -160,17 +144,7 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public OccurrencesFinder getOccurrencesFinder() {
-        return new RubyOccurrencesFinder();
-    }
-
-    @Override
-    public Parser getParser() {
-        return new RubyParser();
-    }
-
-    @Override
-    public SemanticAnalyzer getSemanticAnalyzer() {
-        return new RubySemanticAnalyzer();
+        return new GroovyOccurrencesFinder();
     }
 
     @Override
@@ -180,27 +154,45 @@ public class RubyLanguage extends DefaultLanguageConfig {
 
     @Override
     public StructureScanner getStructureScanner() {
-        return new RubyStructureAnalyzer();
+        return new StructureAnalyzer();
+    }
+
+    @Override
+    public boolean hasHintsProvider() {
+        return true;
+    }
+
+    @Override
+    public HintsProvider getHintsProvider() {
+        return new GroovyHintsProvider();
+    }
+
+    @Override
+    public DeclarationFinder getDeclarationFinder() {
+        return new GroovyDeclarationFinder();
+    }
+
+    @Override
+    public InstantRenamer getInstantRenamer() {
+        return new GroovyInstantRenamer();
     }
 
     @Override
     public IndexSearcher getIndexSearcher() {
-        return new RubyTypeSearcher();
+        return new GroovyTypeSearcher();
     }
 
     @Override
     public EmbeddingIndexerFactory getIndexerFactory() {
-        return new RubyIndexer.Factory();
+        return new GroovyIndexer.Factory();
     }
 
     @Override
     public Set<String> getSourcePathIds() {
-        return Collections.singleton(SOURCE);
+        // We don't have our own source path id, because javascript files can be
+        // anywhere in a project. So, for index search we will use all available
+        // sourcepath ids.
+        // FIXME parsing API
+        return Collections.singleton(ClassPath.SOURCE);
     }
-
-    @Override
-    public Set<String> getLibraryPathIds() {
-        return Collections.singleton(BOOT);
-    }
-
 }
