@@ -47,6 +47,7 @@ import java.io.OutputStream;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
 import org.netbeans.modules.cnd.api.xml.XMLDocWriter;
 import org.netbeans.modules.cnd.api.xml.XMLEncoderStream;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor.State;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 
@@ -59,36 +60,40 @@ public class ConfigurationXMLWriter extends XMLDocWriter {
 
     public ConfigurationXMLWriter(FileObject projectDirectory,
 				  ConfigurationDescriptor projectDescriptor) {
-	this.projectDirectory = projectDirectory;
-	this.projectDescriptor = projectDescriptor;
+        this.projectDirectory = projectDirectory;
+        this.projectDescriptor = projectDescriptor;
     }
 
     public void write() {
-	if (projectDescriptor == null)
-	    return;
+        if (projectDescriptor == null) {
+            return;
+        }
 
-	String tag = CommonConfigurationXMLCodec.CONFIGURATION_DESCRIPTOR_ELEMENT;
+        String tag = CommonConfigurationXMLCodec.CONFIGURATION_DESCRIPTOR_ELEMENT;
 
-	encoder = new ConfigurationXMLCodec(tag, null, projectDescriptor, null);
-	write("nbproject/configurations.xml"); // NOI18N
+        encoder = new ConfigurationXMLCodec(tag, null, projectDescriptor, null);
+        assert projectDescriptor.getState() != State.READING;
+        write("nbproject/configurations.xml"); // NOI18N
 
-	encoder = new AuxConfigurationXMLCodec(tag, projectDescriptor);
-	write("nbproject/private/configurations.xml"); // NOI18N
+        encoder = new AuxConfigurationXMLCodec(tag, projectDescriptor);
+        write("nbproject/private/configurations.xml"); // NOI18N
     }
 
     /*
      * was: ConfigurationDescriptorHelper.storeDescriptor()
      */
     private void write(String relPath) {
-	File projectDirectoryFile = FileUtil.toFile(projectDirectory);
-	File projectDescriptorFile = new File(projectDirectoryFile.getPath() + '/' + relPath); // UNIX path
+    	File projectDirectoryFile = FileUtil.toFile(projectDirectory);
+        File projectDescriptorFile = new File(projectDirectoryFile.getPath() + '/' + relPath); // UNIX path
 
         if (!projectDescriptorFile.exists()) {
             try {
-		// make sure folder is created first...
-                projectDescriptorFile.getParentFile().mkdir();
-                projectDescriptorFile.createNewFile();
-                projectDirectory.getFileSystem().refresh(false);
+                // make sure folder is created first...
+                //projectDescriptorFile.getParentFile().mkdir();
+                //projectDescriptorFile.createNewFile();
+                //projectDirectory.getFileSystem().refresh(false);
+                FileObject folder = FileUtil.createFolder(projectDescriptorFile.getParentFile());
+                folder.createData(projectDescriptorFile.getName());
             }
             catch (IOException ioe) {
                 ioe.printStackTrace();
@@ -100,7 +105,7 @@ public class ConfigurationXMLWriter extends XMLDocWriter {
             org.openide.filesystems.FileLock lock = xml.lock();
             try {
                 OutputStream os = xml.getOutputStream(lock);
-		write(os);
+                write(os);
             }
             finally {
                 lock.releaseLock();
@@ -112,6 +117,6 @@ public class ConfigurationXMLWriter extends XMLDocWriter {
 
     // interface XMLEncoder
     public void encode(XMLEncoderStream xes) {
-	encoder.encode(xes);
+        encoder.encode(xes);
     }
 }
