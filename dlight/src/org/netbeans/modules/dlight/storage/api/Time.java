@@ -37,73 +37,69 @@
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.dlight.dtrace.collector;
+package org.netbeans.modules.dlight.storage.api;
 
-import org.netbeans.modules.dlight.dtrace.collector.impl.MultipleDTDCConfigurationAccessor;
-import org.netbeans.modules.dlight.collector.api.DataCollectorConfiguration;
-import org.netbeans.modules.dlight.indicator.api.IndicatorDataProviderConfiguration;
+import java.beans.PropertyEditorManager;
+import org.netbeans.modules.dlight.storage.impl.TimeEditor;
 
 /**
- * This class is to configure
+ * Metric value class for time interval in nanoseconds. Immutable.
+ *
+ * @author Alexey Vladykin
  */
-public final class MultipleDTDCConfiguration
-        implements DataCollectorConfiguration,
-        IndicatorDataProviderConfiguration {
+public class Time implements Comparable<Time> {
 
-    private static final String ID =
-            "MultipleDtraceDataCollectorConfiguration"; // NOI18N
-    private final DTDCConfiguration configuration;
-    private final String prefix;
+    private final long nanos;
 
+    /**
+     * Creates new instance.
+     *
+     * @param nanos  time in nanoseconds
+     */
+    public Time(long nanos) {
+        this.nanos = nanos;
+    }
+
+    /**
+     * @return time in nanoseconds
+     */
+    public long getNanos() {
+        return nanos;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder();
+        buf.append(nanos).append(" nanoseconds");
+        return buf.toString();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof Time) {
+            return this.nanos == ((Time) obj).nanos;
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        return 29 + (int) (nanos ^ (nanos >>> 32));
+    }
+
+    public int compareTo(Time that) {
+        if (this.nanos < that.nanos) {
+            return -1;
+        } else if (this.nanos == that.nanos) {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
 
     static {
-        MultipleDTDCConfigurationAccessor.setDefault(
-                new MultipleDTDCConfigurationAccessorImpl());
+        PropertyEditorManager.registerEditor(Time.class, TimeEditor.class);
     }
 
-    /**
-     * Constructs new MultipleDTDCConfiguration object
-     * @param configuration dtrace data collector configuration
-     * @param prefix script output prefix
-     */
-    public MultipleDTDCConfiguration(
-            final DTDCConfiguration configuration, final String prefix) {
-        this.configuration = configuration;
-        this.prefix = prefix;
-    }
-
-    /**
-     * Returns unique ID to be used to identify configuration
-     * @return unique id
-     */
-    public String getID() {
-        return ID;
-    }
-
-    /*package*/ DTDCConfiguration getDTDCConfiguration() {
-        return configuration;
-    }
-
-    /*package*/ String getOutputPrefix() {
-        return prefix;
-    }
-
-    private static final class MultipleDTDCConfigurationAccessorImpl
-            extends MultipleDTDCConfigurationAccessor {
-
-        @Override
-        public String getID() {
-            return ID;
-        }
-
-        @Override
-        public DTDCConfiguration getDTDCConfiguration(
-                MultipleDTDCConfiguration configuration) {
-            return configuration.getDTDCConfiguration();
-        }
-
-        public String getOutputPrefix(MultipleDTDCConfiguration configuration) {
-            return configuration.getOutputPrefix();
-        }
-    }
 }
