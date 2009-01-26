@@ -53,6 +53,7 @@ import javax.swing.*;
  * @author Samaresh (Samaresh.Panda@Sun.Com)
  */
 public class XMLCompletionResultItemPaintComponent extends JPanel {
+    private Icon icon;
     
     /**
      * Creates a new instance of XMLCompletionResultItemPaintComponent
@@ -85,7 +86,11 @@ public class XMLCompletionResultItemPaintComponent extends JPanel {
     }
 
     protected Icon getIcon() {
-        return null;
+        return icon;
+    }
+    
+    public void setIcon(Icon icon) {
+        this.icon = icon;
     }
     
     public void paintComponent(Graphics g) {
@@ -163,25 +168,6 @@ public class XMLCompletionResultItemPaintComponent extends JPanel {
 
     }
     
-    protected void drawTypeName(Graphics g, String s, Color c) {
-        if (g == null) {
-            drawString(g, "   "); // NOI18N
-            drawString(g, s, c);
-        } else {
-            int w = getWidth() - getWidth(s) - drawX;
-            int spaceWidth = getWidth(" "); // NOI18N
-            if (w > spaceWidth * 2) {
-                drawX = getWidth() - 2 * spaceWidth - getWidth(s);
-            } else {
-                drawX = getWidth() - 2 * spaceWidth - getWidth(s) - getWidth("...   "); // NOI18N
-                g.setColor(getBackground());
-                g.fillRect(drawX, 0, getWidth() - drawX, getHeight());
-                drawString(g, "...   ", c); // NOI18N
-            }
-            drawString(g, s, c);
-        }
-    }
-
     protected void drawStringToGraphics(Graphics g, String s) {
         drawStringToGraphics(g, s, null, false);
     }
@@ -201,21 +187,10 @@ public class XMLCompletionResultItemPaintComponent extends JPanel {
         drawX += getWidth(s, font);
     }
 
-    protected int getWidth(String s) {
-        Integer i = (Integer)widths.get(s);
-        if (i != null) {
-            return i.intValue();
-        } else {
-            if (s == null) {
-                s = "";
-            }
-            return fontMetrics.stringWidth(s);
-        }
-    }
-
     protected int getWidth(String s, Font font) {
-        if (font == null) return getWidth(s);
-        return getFontMetrics(font).stringWidth(s);
+        if (font != null)
+            return getFontMetrics(getDrawFont()).stringWidth(s)*2;
+        return (s == null)?fontMetrics.stringWidth(""):fontMetrics.stringWidth(s)*2;
     }
 
     protected Color getColor(String s, Color defaultColor) {
