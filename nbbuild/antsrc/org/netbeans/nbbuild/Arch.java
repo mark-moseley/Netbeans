@@ -58,6 +58,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -269,7 +271,7 @@ public class Arch extends Task implements ErrorHandler, EntityResolver, URIResol
                     log ("Missing answers to questions: " + s);
                     log ("Generating the answers to end of file " + questionsFile);
                     try {
-                        generateMissingQuestions (s);
+                        generateMissingQuestions(questionsVersion, s);
                     } catch (IOException ex) {
                         throw new BuildException (ex);
                     }
@@ -390,38 +392,6 @@ public class Arch extends Task implements ErrorHandler, EntityResolver, URIResol
                 }
             }
 
-            // finds out the lotion in CVS
-            // will be available as element under
-            // <project>
-            //    <cvs-location>openide/util</cvs-location>
-            {
-                File f = project;
-                StringBuffer sb = new StringBuffer();
-                String sep = "";
-                for (;;) {
-                    if (new File(f, "nbbuild").isDirectory()) {
-                        break;
-                    }
-                    
-                    if (f.isDirectory() && !"nbproject".equals (f.getName())) {
-                        sb.insert(0, sep);
-                        sep = "/";
-                        sb.insert(0, f.getName());
-                    }
-                    
-                    f = f.getParentFile();
-                    if (f == null) {
-                        // not found anything
-                        sb.setLength(0);
-                        break;
-                    }
-                }
-                Element el = prj.createElement("cvs-location");
-                el.appendChild(prj.createTextNode(sb.toString()));
-                prj.getDocumentElement().appendChild(el);
-            }
-            
-            
             DOMSource prjSrc = new DOMSource(prj);
             
             NodeList node = prj.getElementsByTagName("project");
@@ -559,7 +529,7 @@ public class Arch extends Task implements ErrorHandler, EntityResolver, URIResol
         }
     }
     
-    private void generateMissingQuestions(SortedSet<String> missing) throws IOException, BuildException {
+    private void generateMissingQuestions(String version, SortedSet<String> missing) throws IOException, BuildException {
         StringBuffer sb = new StringBuffer();
         InputStreamReader is = new InputStreamReader(new FileInputStream(questionsFile.toString()));
         char[] arr = new char[4096];
@@ -576,6 +546,12 @@ public class Arch extends Task implements ErrorHandler, EntityResolver, URIResol
         }
         
         sb.delete (indx, indx + "</api-answers>".length());
+
+        Matcher m = Pattern.compile("question-version='([0-9\\.]*)'").matcher(sb);
+        if (m.find()) {
+            sb.delete(m.start(1), m.end(1));
+            sb.insert(m.start(1), version);
+        }
         
         Writer w = new OutputStreamWriter (new FileOutputStream (questionsFile.toString ()));
         w.write(sb.toString());
@@ -629,30 +605,12 @@ public class Arch extends Task implements ErrorHandler, EntityResolver, URIResol
     private void generateTemplateFile(String versionOfQuestions, SortedSet<String> missing) throws IOException {
         String nbRoot = findNbRoot(questionsFile);
         if (nbRoot == null) {
-            nbRoot = "http://www.netbeans.org/source/browse/~checkout~/";
+            nbRoot = "http://hg.netbeans.org/main/raw-file/tip/";
         }
         
         Writer w = new FileWriter (questionsFile);
         
-        w.write ("<?xml version=\"1.0\" encoding=\"UTF-8\"?><!-- -*- sgml-indent-step: 1 -*- -->\n");
-        w.write ("<!--\n");
-        w.write("The contents of this file are subject to the terms of the Common Development\n");
-        w.write("and Distribution License (the License). You may not use this file except in\n");
-        w.write("compliance with the License.\n");
-        w.write("\n");
-        w.write("You can obtain a copy of the License at http://www.netbeans.org/cddl.html\n");
-        w.write("or http://www.netbeans.org/cddl.txt.\n");
-        w.write("\n");
-        w.write("When distributing Covered Code, include this CDDL Header Notice in each file\n");
-        w.write("and include the License file at http://www.netbeans.org/cddl.txt.\n");
-        w.write("If applicable, add the following below the CDDL Header, with the fields\n");
-        w.write("enclosed by brackets [] replaced by your own identifying information:\n");
-        w.write("\"Portions Copyrighted [year] [name of copyright owner]\"\n");
-        w.write("\n");
-        w.write("The Original Software is NetBeans. The Initial Developer of the Original\n");
-        w.write("Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun\n");
-        w.write("Microsystems, Inc. All Rights Reserved.\n");
-        w.write ("-->\n");
+        w.write ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         w.write ("<!DOCTYPE api-answers PUBLIC \"-//NetBeans//DTD Arch Answers//EN\" \""); w.write (nbRoot); w.write ("nbbuild/antsrc/org/netbeans/nbbuild/Arch.dtd\" [\n");
         w.write ("  <!ENTITY api-questions SYSTEM \""); w.write (nbRoot); w.write ("nbbuild/antsrc/org/netbeans/nbbuild/Arch-api-questions.xml\">\n");
         w.write ("]>\n");
