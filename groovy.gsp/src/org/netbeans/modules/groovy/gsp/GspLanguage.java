@@ -38,148 +38,136 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.ruby;
 
-import java.util.Collections;
-import java.util.Set;
+package org.netbeans.modules.groovy.gsp;
+
 import org.netbeans.api.lexer.Language;
 import org.netbeans.modules.csl.api.CodeCompletionHandler;
 import org.netbeans.modules.csl.api.DeclarationFinder;
 import org.netbeans.modules.csl.api.Formatter;
-import org.netbeans.modules.csl.api.IndexSearcher;
+import org.netbeans.modules.csl.api.HintsProvider;
 import org.netbeans.modules.csl.api.InstantRenamer;
 import org.netbeans.modules.csl.api.KeystrokeHandler;
 import org.netbeans.modules.csl.api.OccurrencesFinder;
 import org.netbeans.modules.csl.api.SemanticAnalyzer;
 import org.netbeans.modules.csl.api.StructureScanner;
 import org.netbeans.modules.csl.spi.DefaultLanguageConfig;
-import org.netbeans.modules.parsing.spi.Parser;
 import org.netbeans.modules.parsing.spi.indexing.EmbeddingIndexerFactory;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
+import org.netbeans.modules.groovy.editor.api.StructureAnalyzer;
+import org.netbeans.modules.groovy.editor.api.GroovyUtils;
+import org.netbeans.modules.groovy.gsp.lexer.GspTokenId;
+import org.netbeans.modules.parsing.spi.Parser;
 
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-/*
- * Language/lexing configuration for Ruby
- *
- * @author Tor Norbye
- */
-public class RubyLanguage extends DefaultLanguageConfig {
 
-    public final static String BOOT = "ruby/classpath/boot";
-    public final static String COMPILE = "ruby/classpath/compile";
-    public final static String EXECUTE = "ruby/classpath/execute";
-    public final static String SOURCE = "ruby/classpath/source";
+public class GspLanguage extends DefaultLanguageConfig {
 
-    public RubyLanguage() {
+    public GspLanguage() {
+        super();
     }
 
     @Override
     public String getLineCommentPrefix() {
-        return RubyUtils.getLineCommentPrefix();
+        return GroovyUtils.getLineCommentPrefix();
     }
 
     @Override
     public boolean isIdentifierChar(char c) {
-        return RubyUtils.isIdentifierChar(c);
+        return GroovyUtils.isIdentifierChar(c);
     }
 
     @Override
     public Language getLexerLanguage() {
-        return RubyTokenId.language();
+        return GspTokenId.language();
     }
 
     @Override
     public String getDisplayName() {
-        return "Ruby";
+        return "GSP";
     }
 
     @Override
     public String getPreferredExtension() {
-        return "rb"; // NOI18N
+        return "gsp"; // NOI18N
+    }
+
+    @Override
+    public boolean isUsingCustomEditorKit() {
+        return true;
     }
 
     @Override
     public CodeCompletionHandler getCompletionHandler() {
-        return new RubyCodeCompleter();
+        return null;
     }
 
     @Override
     public DeclarationFinder getDeclarationFinder() {
-        return new RubyDeclarationFinder();
+        return null;
     }
 
     @Override
     public boolean hasFormatter() {
-        return true;
+        return false;
+    }
+    
+    @Override
+    public Formatter getFormatter() {
+        return null;
     }
 
     @Override
-    public Formatter getFormatter() {
-        return new RubyFormatter();
+    public EmbeddingIndexerFactory getIndexerFactory() {
+        return null;
     }
+
 
     @Override
     public InstantRenamer getInstantRenamer() {
-        return new RubyRenameHandler();
+        return null;
     }
 
     @Override
     public KeystrokeHandler getKeystrokeHandler() {
-        return new RubyKeystrokeHandler();
+        return null;
     }
 
     @Override
     public boolean hasOccurrencesFinder() {
-        return true;
+        return false;
     }
 
     @Override
     public OccurrencesFinder getOccurrencesFinder() {
-        return new RubyOccurrencesFinder();
+        return null;
     }
 
     @Override
     public Parser getParser() {
-        return new RubyParser();
+        return null;
     }
 
     @Override
     public SemanticAnalyzer getSemanticAnalyzer() {
-        return new RubySemanticAnalyzer();
+        return null;
     }
 
     @Override
     public boolean hasStructureScanner() {
         return true;
     }
-
+    
     @Override
     public StructureScanner getStructureScanner() {
-        return new RubyStructureAnalyzer();
+        return new StructureAnalyzer();
     }
 
     @Override
-    public IndexSearcher getIndexSearcher() {
-        return new RubyTypeSearcher();
+    public boolean hasHintsProvider() {
+        return false;
     }
 
     @Override
-    public EmbeddingIndexerFactory getIndexerFactory() {
-        return new RubyIndexer.Factory();
+    public HintsProvider getHintsProvider() {
+        return null;
     }
-
-    @Override
-    public Set<String> getSourcePathIds() {
-        return Collections.singleton(SOURCE);
-    }
-
-    @Override
-    public Set<String> getLibraryPathIds() {
-        return Collections.singleton(BOOT);
-    }
-
 }
