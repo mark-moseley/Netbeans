@@ -39,50 +39,65 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.db.explorer.actions;
+package javax.help;
 
-import java.text.MessageFormat;
+import java.awt.*;
+import java.lang.reflect.Method;
+import java.util.Enumeration;
+import javax.swing.*;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.help.plaf.basic.BasicSearchCellRenderer;
+import org.openide.util.Exceptions;
 
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
-import org.openide.nodes.Node;
-import org.openide.util.NbBundle;
-import org.openide.util.RequestProcessor;
+public class ModifiedBasicSearchCellRenderer extends BasicSearchCellRenderer {
 
-import org.netbeans.modules.db.explorer.infos.DatabaseNodeInfo;
+    /**
+     * Returns a new instance of BasicSearchCellRender.  Left alignment is
+     * set. Icons and text color are determined from the
+     * UIManager.
+     */
+    public ModifiedBasicSearchCellRenderer(Map map) {
+        super(map);
+    }
 
-public class RefreshChildrenAction extends DatabaseAction {
-    static final long serialVersionUID =-2858583720506557569L;
-
-    protected boolean enable(Node[] activatedNodes) {
-        if (activatedNodes != null && activatedNodes.length == 1) {
-            Node[] children = activatedNodes[0].getChildren().getNodes();
-            if (children.length == 1 && children[0].getName().equals(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("WaitNode"))) // NOI18N
-                return false;
-            else
+    private boolean isTagged(SearchTOCItem item) {
+        Enumeration searchHits = item.getSearchHits();
+        while (searchHits.hasMoreElements()) {
+            SearchHit hit = (SearchHit) searchHits.nextElement();
+            if (hit.getBegin() >= Integer.MAX_VALUE / 4) {
                 return true;
+            }
         }
         return false;
     }
-    
-    public void performAction (Node[] activatedNodes) {
-        final Node node;
-        if (activatedNodes != null && activatedNodes.length == 1)
-            node = activatedNodes[0];
-        else
-            return;
+    /**
+     * Configures the renderer based on the components passed in.
+     * Sets the value from messaging value with toString().
+     * The foreground color is set based on the selection and the icon
+     * is set based on on leaf and expanded.
+     */
+    public Component getTreeCellRendererComponent(JTree tree, Object value,
+            boolean sel,
+            boolean expanded,
+            boolean leaf, int row,
+            boolean hasFocus) {
 
-        RequestProcessor.getDefault().post(new Runnable() {
-            public void run () {
+        Component ret = super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
+        SearchTOCItem item = (SearchTOCItem) ((DefaultMutableTreeNode) value).getUserObject();
+        if (item != null) {
+            boolean tagged = isTagged(item);
+            if (tagged) {
                 try {
-                    DatabaseNodeInfo nfo = (DatabaseNodeInfo) node.getCookie(DatabaseNodeInfo.class);
-                    if (nfo != null)
-                        nfo.refreshChildren();
-                } catch(Exception exc) {
-                    String message = bundle().getString("RefreshChildrenErrorPrefix") + " " + MessageFormat.format(bundle().getString("EXC_ConnectionError"), new String[] {exc.getMessage()}); // NOI18N
-                    DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(message, NotifyDescriptor.ERROR_MESSAGE));
+                    Method setIconMethod = JLabel.class.getDeclaredMethod("setIcon", new Class[]{Icon.class});
+                    setIconMethod.invoke(quality, new Object[] {veryhigh});
+                } catch (Exception ex) {
+                    Exceptions.printStackTrace(ex);
                 }
             }
-        }, 0);
+        }
+        return ret;
     }
+
+    // icons used for the ModifiedBasicSearchCellRenderer
+    private static Icon veryhigh = SwingHelpUtilities.getImageIcon(javax.help.plaf.basic.BasicHelpUI.class, "images/SearchVeryHigh.gif");
 }
