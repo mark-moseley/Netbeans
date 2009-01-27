@@ -160,8 +160,9 @@ public abstract class AbstractModeContainer implements ModeContainer {
         Window oldFocusedW = FocusManager.getCurrentManager().getFocusedWindow();
         Window newFocusedW = SwingUtilities.getWindowAncestor(selectedTopComponent);
         
-        if (newFocusedW != null && newFocusedW.equals(oldFocusedW)) {
-            // focus transfer inside one window, so requestFocusInWindow call is enough
+        if ((newFocusedW != null && newFocusedW.equals(oldFocusedW))) {
+            // focus transfer inside one window or system is not active in OS at all
+            // so requestFocusInWindow call is right and enough
             if (!Utilities.isMac()) {
                 selectedTopComponent.requestFocusInWindow();
             } else {
@@ -175,7 +176,7 @@ public abstract class AbstractModeContainer implements ModeContainer {
                         // the DefautlkeyboardFocusmanager doen't do it's job then and locks the keyboard.
                         // hack it by make it believe the focus changed.
                         try {
-                            Field fld = KeyboardFocusManager.class.getDeclaredField("focusOwner");//NOI8N
+                            Field fld = KeyboardFocusManager.class.getDeclaredField("focusOwner");//NOI18N
                             fld.setAccessible(true);
                             fld.set(KeyboardFocusManager.getCurrentKeyboardFocusManager(), null);
                         } catch (IllegalArgumentException ex) {
