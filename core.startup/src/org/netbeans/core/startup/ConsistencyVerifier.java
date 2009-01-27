@@ -99,7 +99,9 @@ public class ConsistencyVerifier {
         mgr.mutexPrivileged().enterWriteAccess();
         Manifest dummy = new Manifest();
         dummy.getMainAttributes().putValue("OpenIDE-Module", "__dummy__"); // NOI18N
-        dummy.getMainAttributes().putValue("OpenIDE-Module-Provides", "org.openide.modules.ModuleFormat1, " + // NOI18N
+        dummy.getMainAttributes().putValue("OpenIDE-Module-Provides",
+                "org.openide.modules.ModuleFormat1, " + // NOI18N
+                "org.openide.modules.ModuleFormat2, " + // NOI18N
                 "org.openide.modules.os.Unix, " + // NOI18N
                 "org.openide.modules.os.PlainUnix, " + // NOI18N
                 "org.openide.modules.os.Windows, " + // NOI18N
@@ -126,7 +128,7 @@ public class ConsistencyVerifier {
                     regularMods.add(mod);
                 }
             } catch (Exception x) {
-                throw new IllegalArgumentException(x);
+                throw new IllegalArgumentException("Error parsing " + m.getMainAttributes().entrySet() + ": " + x, x);
             }
         }
         SortedMap<String,SortedSet<String>> problems = new TreeMap<String,SortedSet<String>>();
@@ -145,7 +147,7 @@ public class ConsistencyVerifier {
             for (Object prob : probs) {
                 String description;
                 if (formatted) {
-                    description = NbProblemDisplayer.messageForProblem(m, prob);
+                    description = NbProblemDisplayer.messageForProblem(m, prob, false);
                 } else {
                     description = prob.toString();
                 }
