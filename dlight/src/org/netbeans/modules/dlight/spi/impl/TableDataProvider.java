@@ -36,59 +36,26 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
+package org.netbeans.modules.dlight.spi.impl;
+
+import org.netbeans.modules.dlight.spi.dataprovider.DataProvider;
 import java.util.List;
+import org.netbeans.modules.dlight.api.storage.DataRow;
 import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
 
 /**
- *
- * @author masha
+ * This data provider should provide information
+ * to the {@link org.netbeans.modules.dlight.spi.visualizer.Visualizer}
+ * in table. In almost all cases data to visualize can
+ * be presented in the table view. 
+ * 
  */
-public abstract class DTDCConfigurationAccessor {
-
-    private static volatile DTDCConfigurationAccessor DEFAULT;
-
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
-    }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
-    }
-
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+public interface TableDataProvider extends DataProvider{
+  /**
+   * Returns table view to visualize
+   * @param tableMetadata table description to get data from
+   * @return list of {@link org.netbeans.modules.dlight.api.storage.DataRow}
+   */
+  public List<DataRow> queryData(DataTableMetadata tableMetadata);
 }

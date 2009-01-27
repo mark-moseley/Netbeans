@@ -36,59 +36,32 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.spi.collector;
+
+import org.netbeans.modules.dlight.api.collector.DataCollectorConfiguration;
 
 /**
- *
- * @author masha
+ * Factory to create {@link org.netbeans.modules.dlight.spi.collector.DataCollector} instance.
+ * Please register your factory as a Service Provider.
+ * @param <T> configuration data collector will be created on the base of
  */
-public abstract class DTDCConfigurationAccessor {
+public interface DataCollectorFactory<T extends DataCollectorConfiguration> {
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+  /**
+   * Returns newly created instance of  {@link DataCollector} using
+   * {@link org.netbeans.modules.dlight.api.collector.DataCollectorConfiguration}
+   * @param configuration configuration used to create new DataColelctor for
+   * @return data colletor new instance
+   */
+  DataCollector<T> create(T configuration);
+  /**
+   * Unique id, it is used by infrastructure to compare with the
+   *  {@link org.netbeans.modules.dlight.api.collector.DataCollectorConfiguration#getID()}
+   *  to find the proper factory.
+   * @return unique ID, should be the same as configuration  id this factory can create Data Collector for
+   *
+   */
+  String getID();
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
-    }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
-    }
-
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
 }

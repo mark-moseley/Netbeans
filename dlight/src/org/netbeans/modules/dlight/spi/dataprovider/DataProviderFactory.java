@@ -36,59 +36,31 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.spi.dataprovider;
+
+import java.util.Collection;
+import org.netbeans.modules.dlight.spi.storage.DataStorageType;
+import org.netbeans.modules.dlight.spi.visualizer.VisualizerDataProviderFactory;
 
 /**
- *
- * @author masha
+ * Factory to create {@link org.netbeans.modules.dlight.spi.dataprovider.DataProvider} instances.
+ * Register your factory instance in Global Lookup.
  */
-public abstract class DTDCConfigurationAccessor {
+public interface DataProviderFactory extends VisualizerDataProviderFactory<DataProvider>{
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+  /**
+   * Creates new DataProvider instance
+   * @return newly created instance of DataProvider
+   */
+  DataProvider create();
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
-    }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
-    }
-
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+ 
+  /**
+   * The types of {@link org.netbeans.modules.dlight.spi.storage.DataStorage} this
+   *  DataProvider can get data from
+   * @return the list of {@link org.netbeans.modules.dlight.spi.storage.DataStorageType}
+   *  supported by this DataProvider
+   */
+  Collection<DataStorageType> getSupportedDataStorageTypes();
 }

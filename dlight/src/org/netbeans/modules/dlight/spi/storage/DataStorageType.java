@@ -36,59 +36,66 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
+package org.netbeans.modules.dlight.spi.storage;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+import org.netbeans.modules.dlight.spi.impl.DataStorageTypeAccessor;
 
 /**
+ * This object is marker object to define the following:
+ * {@link  org.netbeans.modules.dlight.spi.collector.DataCollector} should
+ * find the {@link  org.netbeans.modules.dlight.spi.storage.DataStorage}
+ * it can put data into (it support),
+ * {@link  org.netbeans.modules.dlight.spi.dataprovider.DataProvider} should
+ * find the {@link  org.netbeans.modules.dlight.spi.storage.DataStorage} which
+ * it can get data from and which contains data required.
+ * Two objects of this typea are equals if they have the same  id returned by {@link  org.netbeans.modules.dlight.spi.storage.DataStorageType#getID() }
  *
- * @author masha
  */
-public abstract class DTDCConfigurationAccessor {
+public final class DataStorageType {
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+  static{
+    DataStorageTypeAccessor.setDefault(new DataStorageTypeAccessorImpl());
+  }     
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
+  private String id;
 
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
+  DataStorageType(String id) {
+    if (id == null) {
+      throw new IllegalArgumentException("DataStorageType can be created only with NON NULL id");
     }
+    this.id = id;
+  }
 
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
+  /**
+   * Unique type id
+   * @return unique id
+   */
+  public String getID() {
+    return id;
+  }
+
+  @Override
+  public String toString() {
+    return getID();
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (obj == null) {
+      return false;
     }
-
-    public DTDCConfigurationAccessor() {
+    if (getClass() != obj.getClass()) {
+      return false;
     }
+    DataStorageType other = (DataStorageType) obj;
+    return other.getID().equals(this.id);
+  }
 
-    public abstract String getArgs(DTDCConfiguration conf);
+  private static final class DataStorageTypeAccessorImpl extends DataStorageTypeAccessor {
 
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+    @Override
+    public DataStorageType createNew(String id) {
+      return new DataStorageType(id);
+    }
+  }
 }

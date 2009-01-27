@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,61 +34,37 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.spi.tool;
+
+import org.netbeans.modules.dlight.api.tool.DLightToolConfiguration;
 
 /**
- *
- * @author masha
+ * Implement this interface whenever you want to create new {@link org.netbeans.modules.dlight.api.tool.DLightToolConfiguration} which
+ * is used  DLightTool instance will be created for.
+ * <p>
+ * To register your D-Light tool configuration provider add the following to the D-Light filesystem
+ * (layer.xml file).
+  <pre>
+  &lt;filesystem&gt;
+    &lt;folder name="DLight"&gt;
+        &lt;folder name="ToolConfigurationProviders"&gt;
+            &lt;file name="MyDLightToolConfigurationProvider.instance"&gt;
+               &lt;attr name="instanceClass" stringvalue="org.netbeans.mytool.MyDLightToolConfigurationProvider"/&gt;
+            &lt;/file&gt;
+        &lt;/folder&gt;
+    &lt;/folder&gt;
+&lt;/filesystem&gt;
+  </pre>
  */
-public abstract class DTDCConfigurationAccessor {
-
-    private static volatile DTDCConfigurationAccessor DEFAULT;
-
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
-    }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
-    }
-
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+ 
+public interface DLightToolConfigurationProvider {
+  /**
+   * Please be aware that instance returned by this method should be
+   * new every time this method is invoked
+   * @return new instance of {@link org.netbeans.modules.dlight.api.tool.DLightToolConfiguration}
+   */
+  public DLightToolConfiguration create();
 }

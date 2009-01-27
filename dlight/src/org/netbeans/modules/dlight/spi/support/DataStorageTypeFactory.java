@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,61 +34,40 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.spi.support;
+
+import org.netbeans.modules.dlight.spi.storage.*;
+import java.util.HashMap;
+import org.netbeans.modules.dlight.spi.impl.DataStorageTypeAccessor;
 
 /**
- *
- * @author masha
+ *This is factory to get instance of {@link org.netbeans.modules.dlight.spi.storage.DataStorageType} object
  */
-public abstract class DTDCConfigurationAccessor {
+public final class DataStorageTypeFactory {
+  private static DataStorageTypeFactory instance = null;
+  private final HashMap<String, DataStorageType> storageTypesCache = new HashMap<String, DataStorageType>();
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
-
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
+  private DataStorageTypeFactory(){
+    
+  }
+  
+  public static DataStorageTypeFactory getInstance(){
+    if (instance == null){
+      instance = new DataStorageTypeFactory();
     }
+    return instance;
+  }
 
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
+  public synchronized  DataStorageType getDataStorageType(String id){
+    if (storageTypesCache.containsKey(id)){
+      return  storageTypesCache.get(id);
     }
+    DataStorageType type = DataStorageTypeAccessor.getDefault().createNew(id);
+    storageTypesCache.put(id, type);
+    return type;
+  }
 
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
 }

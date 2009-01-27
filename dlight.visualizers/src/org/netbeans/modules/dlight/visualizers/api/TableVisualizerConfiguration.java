@@ -36,59 +36,48 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
+package org.netbeans.modules.dlight.visualizers.api;
+
+import org.netbeans.modules.dlight.api.dataprovider.DataModelScheme;
 import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+import org.netbeans.modules.dlight.api.support.DataModelSchemeProvider;
+import org.netbeans.modules.dlight.api.visualizer.VisualizerConfiguration;
+import org.netbeans.modules.dlight.visualizers.api.impl.VisualizerConfigurationIDsProvider;
+
+
 
 /**
- *
- * @author masha
+ * This configuration is used to be able to show data collected
+ * in Table View. It supports "model:table" scheme. Which means
+ * if you would like to create own implementation of  implementation of Visualizer DataProvider which will be used by default implementation
+ * of Table visualizer, it should return that it supports model scheme which can be retrieved  using
+ * {@link org.netbeans.modules.dlight.api.support.DataModelSchemeProvider#getScheme(java.lang.String)} where id equals to "model:table".
  */
-public abstract class DTDCConfigurationAccessor {
+public final  class TableVisualizerConfiguration implements VisualizerConfiguration {
+  private DataTableMetadata metadata;
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+  /**
+   * Creates new configuration to display meta table <code>metadata</code>
+   * @param metadata see {@link @org-netbeans-modules-dlight@org/netbeans/modules/dlight/api/storage/DataTableMetadata.html}
+   */
+  public TableVisualizerConfiguration(DataTableMetadata metadata) {
+    this.metadata = metadata;
+  }
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
 
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
-    }
+  public final DataTableMetadata getMetadata() {
+    return metadata;
+  }
 
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
-    }
 
-    public DTDCConfigurationAccessor() {
-    }
+  public final DataModelScheme getSupportedDataScheme() {
+    return DataModelSchemeProvider.getInstance().getScheme("model:table");
+  }
 
-    public abstract String getArgs(DTDCConfiguration conf);
+  public final String getID() {
+    return VisualizerConfigurationIDsProvider.TABLE_VISUALIZER;
+  }
 
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
 }
+

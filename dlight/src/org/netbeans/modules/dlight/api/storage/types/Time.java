@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,61 +34,72 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.api.storage.types;
+
+import java.beans.PropertyEditorManager;
+import org.netbeans.modules.dlight.spi.impl.TimeEditor;
 
 /**
+ * Metric value class for time interval in nanoseconds. Immutable.
  *
- * @author masha
+ * @author Alexey Vladykin
  */
-public abstract class DTDCConfigurationAccessor {
+public class Time implements Comparable<Time> {
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+    private final long nanos;
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
+    /**
+     * Creates new instance.
+     *
+     * @param nanos  time in nanoseconds
+     */
+    public Time(long nanos) {
+        this.nanos = nanos;
     }
 
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
+    /**
+     * @return time in nanoseconds
+     */
+    public long getNanos() {
+        return nanos;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder();
+        buf.append(nanos).append(" nanoseconds");
+        return buf.toString();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof Time) {
+            return this.nanos == ((Time) obj).nanos;
+        } else {
+            return false;
         }
-        DEFAULT = accessor;
     }
 
-    public DTDCConfigurationAccessor() {
+    @Override
+    public int hashCode() {
+        return 29 + (int) (nanos ^ (nanos >>> 32));
     }
 
-    public abstract String getArgs(DTDCConfiguration conf);
+    public int compareTo(Time that) {
+        if (this.nanos < that.nanos) {
+            return -1;
+        } else if (this.nanos == that.nanos) {
+            return 0;
+        } else {
+            return 1;
+        }
+    }
 
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
+    static {
+        PropertyEditorManager.registerEditor(Time.class, TimeEditor.class);
+    }
 
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
 }

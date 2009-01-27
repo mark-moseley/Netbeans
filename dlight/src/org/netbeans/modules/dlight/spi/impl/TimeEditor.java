@@ -36,59 +36,42 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.spi.impl;
+
+import org.netbeans.modules.dlight.api.storage.types.Time;
+import java.beans.PropertyEditorSupport;
+import java.text.NumberFormat;
 
 /**
+ * Property editor for {@link Time} value type. Does not actually support
+ * editing, but represents nanosecond times in human-readable format.
  *
- * @author masha
+ * @author Alexey Vladykin
  */
-public abstract class DTDCConfigurationAccessor {
+public class TimeEditor extends PropertyEditorSupport {
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+    private final NumberFormat format;
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
+    /**
+     * Creates new instance.
+     */
+    public TimeEditor() {
+        format = NumberFormat.getNumberInstance();
+        format.setGroupingUsed(false);
+        format.setMinimumIntegerDigits(1);
+        format.setMinimumFractionDigits(0);
+        format.setMaximumFractionDigits(3);
     }
 
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
+    @Override
+    public String getAsText() {
+        return format.format(((Time)getValue()).getNanos() / 1e9);
     }
 
-    public DTDCConfigurationAccessor() {
+    @Override
+    public void setAsText(String text) {
+        throw new UnsupportedOperationException();
     }
 
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
 }

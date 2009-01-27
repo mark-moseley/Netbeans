@@ -36,59 +36,37 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.spi.visualizer;
+
+import java.util.Collection;
+import org.netbeans.modules.dlight.api.dataprovider.DataModelScheme;
 
 /**
- *
- * @author masha
+ * Factory to create {@link  org.netbeans.modules.dlight.spi.visualizer.VisualizerDataProvider},
+ * Register your implementation in Global Lookup
+ * @param <T> VisualizerDataProvider implemenration this factory can create instances of
  */
-public abstract class DTDCConfigurationAccessor {
+public interface VisualizerDataProviderFactory<T extends VisualizerDataProvider> {
+     /**
+   * Returns the list of {@link org.netbeans.modules.dlight.api.dataprovider.DataModelScheme}
+   * this data provider can serve.
+   * @return the list of data model this DataProvider can serve
+   */
+  Collection<DataModelScheme> getProvidedDataModelScheme();
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+  /**
+   * Checks if DataProvider can provider information according to
+   * te <param>dataModel</param>
+   * @param dataModel
+   * @return <code>true</code> if DataProvider provides information required
+   * by <param>dataModel</param>
+   */
+  boolean provides(DataModelScheme dataModel);
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
-    }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
-    }
-
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+  /**
+   * Creates new {@link org.netbeans.modules.dlight.spi.visualizer.VisualizerDataProvider}
+   * @return Visualizer data provider
+   */
+  T create();
 }

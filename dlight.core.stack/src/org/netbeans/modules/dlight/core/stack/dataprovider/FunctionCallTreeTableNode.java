@@ -36,59 +36,67 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
+package org.netbeans.modules.dlight.core.stack.dataprovider;
 
+import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+import org.netbeans.modules.dlight.api.support.TreeTableNode;
+import org.netbeans.modules.dlight.core.stack.api.FunctionCall;
 
 /**
  *
- * @author masha
+ * @author mt154047
  */
-public abstract class DTDCConfigurationAccessor {
+public final class FunctionCallTreeTableNode implements TreeTableNode {
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+  private final FunctionCall deligator;
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
+  public static List<FunctionCallTreeTableNode> getFunctionCallTreeTableNodes(List<FunctionCall> list) {
+    List<FunctionCallTreeTableNode> result = new ArrayList<FunctionCallTreeTableNode>();
+    for (FunctionCall fc : list) {
+      result.add(new FunctionCallTreeTableNode(fc));
     }
+    return result;
+  }
 
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
+  public static List<FunctionCall> getFunctionCalls(List<FunctionCallTreeTableNode> list) {
+    List<FunctionCall> result = new ArrayList<FunctionCall>();
+    for (FunctionCallTreeTableNode fcNode : list) {
+      result.add(fcNode.getDeligator());
     }
+    return result;
+  }
 
-    public DTDCConfigurationAccessor() {
+
+  public static FunctionCallTreeTableNode[] getFunctionCallTreeTableNodes(FunctionCall[] list) {
+    List<FunctionCallTreeTableNode> result = new ArrayList<FunctionCallTreeTableNode>();
+    for (FunctionCall fc : list) {
+      result.add(new FunctionCallTreeTableNode(fc));
     }
+    return result.toArray(new FunctionCallTreeTableNode[0]);
+  }
 
-    public abstract String getArgs(DTDCConfiguration conf);
+ public static FunctionCall[] getFunctionCalls(FunctionCallTreeTableNode[] list) {
+    List<FunctionCall> result = new ArrayList<FunctionCall>();
+    for (FunctionCallTreeTableNode fcNode : list) {
+      result.add(fcNode.getDeligator());
+    }
+    return result.toArray(new FunctionCall[0]);
+  }
 
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
+  public FunctionCallTreeTableNode(FunctionCall functionCall) {
+    deligator = functionCall;
+  }
 
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
+  public FunctionCall getDeligator() {
+    return deligator;
+  }
 
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
+  public Object getValue(String columnName) {
+    return deligator.getMetricValue(columnName);
+  }
 
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+  public Object getValue() {
+    return deligator.getFunction().getName();
+  }
 }

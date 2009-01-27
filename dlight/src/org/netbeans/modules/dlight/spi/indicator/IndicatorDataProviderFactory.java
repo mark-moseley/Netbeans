@@ -36,59 +36,32 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
+package org.netbeans.modules.dlight.spi.indicator;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+import org.netbeans.modules.dlight.api.indicator.IndicatorDataProviderConfiguration;
 
 /**
- *
- * @author masha
+ * Factory to create {@link org.netbeans.modules.dlight.spi.indicator.IndicatorDataProvider} instance.
+ * Please register your factory in the Global Lookup.
+ * @param <T> indicator data provider configuration implementation that this factory can create
+ * {@link org.netbeans.modules.dlight.spi.indicator.IndicatorDataProvider} instances on the base of
  */
-public abstract class DTDCConfigurationAccessor {
+public interface IndicatorDataProviderFactory<T extends IndicatorDataProviderConfiguration> {
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+    /**
+     * Creates new instance of {@link org.netbeans.modules.dlight.spi.indicator.IndicatorDataProvider} on
+     * the base of <code>configuration</code>
+     * @param configuration configuration to create {@link org.netbeans.modules.dlight.spi.indicator.IndicatorDataProvider} on the base of
+     * @return newly created instance
+     */
+    IndicatorDataProvider<T> create(T configuration);
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
-    }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
-    }
-
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+    /**
+     * Unique id, it is used by infrastructure to compare with the
+     *  {@link org.netbeans.modules.dlight.api.indicator.IndicatorDataProviderConfiguration#getID() }
+     *  to find the proper factory.
+     * @return unique ID, should be the same as configuration  id this factory can create Indicator  DataProvider for for
+     *
+     */
+    String getID();
 }

@@ -36,59 +36,34 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.spi.visualizer;
+
+import org.netbeans.modules.dlight.api.visualizer.VisualizerConfiguration;
+import javax.swing.JComponent;
 
 /**
- *
- * @author masha
+ * Visualizer represents Datailed View of data collected
+ * using {@link org.netbeans.modules.dlight.spi.collector.DataCollector}.<br>
+ * Visualizer should get data from  {@link org.netbeans.modules.dlight.spi.dataprovider.DataProvider}.
+ * 
+ * @param <T>  Visualizer configuration this Visualizer can be created on the base of
  */
-public abstract class DTDCConfigurationAccessor {
+public interface Visualizer<T extends VisualizerConfiguration> {
+  /**
+   * Visualizer configuration this visualizer was created on the base of
+   * @return {@link org.netbeans.modules.dlight.api.visualizer.VisualizerConfiguration}
+   */
+  T getVisualizerConfiguration();
+  /**
+   * Components which is displaying Visualizer
+   * @return component
+   */
+  JComponent getComponent();
+  /**
+   * Container visualizer should be placed in
+   * @return container visualizer should be placed in
+   */
+  VisualizerContainer getDefaultContainer();
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
-
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
-    }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
-    }
-
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
 }

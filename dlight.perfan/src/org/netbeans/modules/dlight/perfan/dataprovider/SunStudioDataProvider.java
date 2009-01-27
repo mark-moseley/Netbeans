@@ -36,59 +36,59 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
+package org.netbeans.modules.dlight.perfan.dataprovider;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
+import org.netbeans.modules.dlight.api.storage.DataRow;
 import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+import org.netbeans.modules.dlight.api.storage.DataTableMetadata.Column;
+import org.netbeans.modules.dlight.core.stack.dataprovider.FunctionCallTreeTableNode;
+import org.netbeans.modules.dlight.core.stack.api.FunctionCall;
+import org.netbeans.modules.dlight.spi.impl.TableDataProvider;
+import org.netbeans.modules.dlight.util.DLightLogger;
+
+
+
 
 /**
  *
- * @author masha
+ * @author mt154047
  */
-public abstract class DTDCConfigurationAccessor {
+final class SunStudioDataProvider extends SSStackDataProvider implements TableDataProvider {
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
+  private static final Logger log = DLightLogger.getLogger(SSStackDataProvider.class);
 
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
+  SunStudioDataProvider() {
+  }
 
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
+
+  public List<DataRow> queryData(DataTableMetadata tableMetadata) {
+
+    String table = tableMetadata.getName();
+    List<Column> columns = tableMetadata.getColumns();
+
+    List<DataRow> result = new ArrayList<DataRow>();
+    List<String> columnNames = new ArrayList<String>();
+    for (Column c : columns){
+      columnNames.add(c.getColumnName());
     }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
+    List<FunctionCallTreeTableNode> nodes= super.getTableView(columns, null, Integer.MAX_VALUE);
+    for (FunctionCallTreeTableNode node : nodes){
+      FunctionCall call = node.getDeligator();
+      List<Object> data = new ArrayList<Object>();
+      for (Column c : columns){
+       if (c.getColumnName().equals("name")){
+         data.add(call.getFunction().getName());
+         continue;
         }
-        DEFAULT = accessor;
+        data.add(call.getMetricValue(c.getColumnName()));
+      }
+      DataRow row = new DataRow(columnNames, data);
+      result.add(row);
+
     }
-
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+    return result;
+  }
 }

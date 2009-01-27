@@ -36,59 +36,75 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.dtrace.collector.impl;
 
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
-import org.netbeans.modules.dlight.dtrace.collector.support.DtraceParser;
+package org.netbeans.modules.dlight.api.impl;
+
+import java.util.HashMap;
 
 /**
- *
- * @author masha
+ * Represents Map to be used by {@link org.netbeans.modules.dlight.api.indicator.IndicatorConfiguration}
  */
-public abstract class DTDCConfigurationAccessor {
+final class ConfigurationData {
+  private final HashMap<String, Object> map;
+  private final String path;
+  
+  private ConfigurationData(HashMap<String, Object> map, String path) {
+    this.path = path;
+    this.map = map == null ? new HashMap<String, Object>() : map;
+  }
+  
+  /**
+   * Creates new configuration data 
+   * @param map pair name-value
+   */
+  public ConfigurationData(HashMap<String, Object> map) {
+    this(map, null);
+  }
 
-    private static volatile DTDCConfigurationAccessor DEFAULT;
-
-    public static DTDCConfigurationAccessor getDefault() {
-        DTDCConfigurationAccessor a = DEFAULT;
-        if (a != null) {
-            return a;
-        }
-
-        try {
-            Class.forName(DTDCConfiguration.class.getName(), true,
-                    DTDCConfiguration.class.getClassLoader());
-        } catch (Exception e) {
-        }
-        return DEFAULT;
+ 
+  
+  /**
+   *Returns value for the key
+   * @param key key to get value for
+   * @return value  if record with <code>key</code> exists, <code>null</code> otherwise
+   */
+  public Object get(String key) {
+    return get(path, key);
+  }
+  
+  private Object get(final String path, final String key) {
+    String k = path == null ? key : path + key;
+    if (map.containsKey(k)) {
+      return map.get(k);
     }
-
-    public static void setDefault(DTDCConfigurationAccessor accessor) {
-        if (DEFAULT != null) {
-            throw new IllegalStateException();
-        }
-        DEFAULT = accessor;
+    
+    if (path == null || path.length() == 0) {
+      return null;
     }
+    
+    String prevPath = path.substring(0, path.length() - 1);
+    int idx = prevPath.lastIndexOf('/');
+    prevPath = (idx >= 0) ? prevPath.substring(0, idx) : null;
+    
+    return get(prevPath == null ? null : prevPath.concat("/"), key);
+  }
 
-    public DTDCConfigurationAccessor() {
-    }
-
-    public abstract String getArgs(DTDCConfiguration conf);
-
-    public abstract List<DataTableMetadata> getDatatableMetadata(
-            DTDCConfiguration conf);
-
-    public abstract DtraceParser getParser(DTDCConfiguration conf);
-
-    public abstract List<String> getRequiredPrivileges(DTDCConfiguration conf);
-
-    public abstract String getScriptPath(DTDCConfiguration conf);
-
-    public abstract String getID();
-
-    public abstract boolean isStackSupportEnabled(DTDCConfiguration conf);
-
-    public abstract int getIndicatorFiringFactor(DTDCConfiguration conf);
+  /**
+   * Returns full keey value
+   * @param key
+   * @return
+   */
+  private String getFullKey(String key) {
+    return path == null ? key : path + key;    
+  }
+  
+  /**
+   * Return node
+   * @param key
+   * @return ConfigurationData for the <code>key</code>
+   */
+  public ConfigurationData getNode(String key) {
+    String nodepath = getFullKey(key) + '/';
+    return new ConfigurationData(map, nodepath);
+  }
 }
