@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,51 +31,50 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- */
-
-package org.netbeans.modules.search;
-
-import java.lang.reflect.Field;
-import junit.framework.TestCase;
-import junit.framework.*;
-
-/**
  *
+ * Contributor(s):
  *
- * @author  Marian Petras
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-public final class ResultModelTest extends TestCase {
-    
-    private static final String FIELD_SEARCH_TYPE_PACKAGE = "DEF_SEARCH_TYPES_PACKAGE";
-    private static final String FIELD_FULLTEXT_SEARCH_TYPE = "FULLTEXT_SEARCH_TYPE";
-    
-    public ResultModelTest(String testName) {
-        super(testName);
+package org.netbeans.modules.groovy.editor.api.elements;
+
+import org.codehaus.groovy.ast.ASTNode;
+import org.codehaus.groovy.ast.FieldNode;
+import org.netbeans.modules.csl.api.ElementKind;
+
+public class AstFieldElement extends AstElement {
+
+    private boolean property;
+
+    public AstFieldElement(ASTNode node) {
+        super(node);
     }
-    
-    /**
-     */
-    public void testConstants() throws Exception {
-        Class clazz = ResultModel.class;
-        String pkg = getStaticString(clazz, FIELD_SEARCH_TYPE_PACKAGE);
-        String className = getStaticString(clazz, FIELD_FULLTEXT_SEARCH_TYPE);
-        String fullClassName = pkg + '.' + className;
-        try {
-            Class.forName(fullClassName, false, getClass().getClassLoader());
-        } catch (ClassNotFoundException ex) {
-            fail("class " + fullClassName + " does not exist" +
-                 " (wrong values of fields " + FIELD_SEARCH_TYPE_PACKAGE +
-                 " and/or " + FIELD_FULLTEXT_SEARCH_TYPE + ")");
+
+    @Override
+    public String getName() {
+        if (name == null) {
+            if (node instanceof FieldNode) {
+                name = ((FieldNode) node).getName();
+            }
+
+            if (name == null) {
+                name = node.toString();
+            }
         }
+
+        return name;
     }
-    
-    /**
-     */
-    private static String getStaticString(Class clazz,
-                                          String fieldName) throws Exception {
-        Field field = clazz.getDeclaredField(fieldName);
-        field.setAccessible(true);
-        return (String) field.get(null);
+
+    @Override
+    public ElementKind getKind() {
+        return ElementKind.FIELD;
     }
-    
+
+    public boolean isProperty() {
+        return property;
+    }
+
+    public void setProperty(boolean isProperty) {
+        this.property = isProperty;
+    }
 }

@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,20 +38,47 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.php.project.classpath;
 
-package org.netbeans.modules.cnd.api.model;
+import java.util.List;
+import java.util.Set;
+import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.modules.php.project.api.PhpSourcePath;
+import org.netbeans.modules.php.project.api.PhpSourcePath.FileType;
+import org.netbeans.modules.php.project.ui.actions.support.CommandUtils;
+import org.netbeans.spi.java.classpath.ClassPathProvider;
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
+import org.openide.filesystems.FileObject;
+import org.openide.util.WeakSet;
 
 /**
- * intefrace to present object that has unique ID
- * unique ID is used to long-time stored references on Csm Objects
- * 
- * @see CsmUID
- * @author Vladimir Voskresensky
+ * Provides ClassPath for php files on include path
  */
-public interface CsmIdentifiable<T> extends CsmObject {
-    
-    /**
-     * gets unique identifier associated with object to store reference
-     */
-    CsmUID<T> getUID();
+@org.openide.util.lookup.ServiceProvider(service = ClassPathProvider.class, position = 200)
+public class IncludePathClassPathProvider implements ClassPathProvider {
+    static Set<ClassPath> projectIncludes = new WeakSet<ClassPath>();
+    /** Default constructor for lookup. */
+    public IncludePathClassPathProvider() {
+    }
+    public static void addProjectIncludePath(ClassPath cp) {
+        projectIncludes.add(cp);
+    }
+    public ClassPath findClassPath(FileObject file, String type) {
+        if (CommandUtils.isPhpFile(file)) {
+            FileType fileType = PhpSourcePath.getFileType(file);
+            if (fileType.equals(FileType.INCLUDE)) {
+                /*for global include path*/
+                List<FileObject> includePath = PhpSourcePath.getIncludePath(file);
+                return ClassPathSupport.createClassPath(includePath.toArray(new FileObject[includePath.size()]));
+            } else if (fileType.equals(FileType.UNKNOWN)) {
+                /*include pathes for individual projects*/
+                for (ClassPath classPath : projectIncludes) {
+                    if (classPath.contains(file)) {
+                        return classPath;
+                    }
+                }
+            }
+        }
+        return null;
+    }
 }

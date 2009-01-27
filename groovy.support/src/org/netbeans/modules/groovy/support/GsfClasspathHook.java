@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,29 +31,53 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
+ * 
  * Contributor(s):
- *
+ * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.model.impl;
 
-import java.util.Map;
-import org.netbeans.api.annotations.common.CheckForNull;
-import org.netbeans.modules.csl.api.OffsetRange;
-import org.netbeans.modules.php.editor.parser.astnodes.Assignment;
+package org.netbeans.modules.groovy.support;
+
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.groovy.support.spi.GroovyFeature;
+import org.netbeans.spi.project.ProjectServiceProvider;
+import org.netbeans.spi.project.ui.ProjectOpenedHook;
 
 /**
- *
- * @author Radek Matous
+ * Temporary solution to have GSF indexing enabled on projects with only
+ * Java classpath. It has 2 drawbacks:<br/>
+ * - will not work in closed projects<br/>
+ * - will not update GFS classpath on project source roots changes
+ * 
+ * @author Martin Adamek
  */
-class VarAssignmentImpl extends AssignmentImpl<VariableNameImpl> {
-    VarAssignmentImpl(VariableNameImpl var, ScopeImpl scope, OffsetRange scopeRange,OffsetRange nameRange, Assignment assignment,
-            Map<String, AssignmentImpl> allAssignments) {
-        super(var, scope, scopeRange, nameRange, assignment, allAssignments);
+@ProjectServiceProvider(service=ProjectOpenedHook.class, projectType="org-netbeans-modules-java-j2seproject")
+public class GsfClasspathHook extends ProjectOpenedHook {
+
+    private final Project project;
+    
+    public GsfClasspathHook(Project project) {
+        this.project = project;
+    }
+    
+    @Override
+    protected void projectOpened() {
+        if (isGroovyEnabled()) {
+            //GroovyProjectExtender.registerGsfClassPath(project);
+        }
     }
 
-    VarAssignmentImpl(VariableNameImpl var, ScopeImpl scope, OffsetRange scopeRange, OffsetRange nameRange, String typeName) {
-        super(var, scope, scopeRange, nameRange, typeName);
+    @Override
+    protected void projectClosed() {
+        if (isGroovyEnabled()) {
+            //GroovyProjectExtender.unregisterGsfClassPath(project);
+        }
     }
+
+    private boolean isGroovyEnabled() {
+        GroovyFeature groovyFeature = project.getLookup().lookup(GroovyFeature.class);
+        return groovyFeature == null ? false : groovyFeature.isGroovyEnabled();
+    }
+
 }

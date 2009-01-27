@@ -39,21 +39,19 @@
 package org.netbeans.modules.php.editor.model.impl;
 
 import java.util.Map;
-import org.netbeans.api.annotations.common.CheckForNull;
 import org.netbeans.modules.csl.api.OffsetRange;
 import org.netbeans.modules.php.editor.parser.astnodes.Assignment;
 
 /**
- *
  * @author Radek Matous
  */
-class VarAssignmentImpl extends AssignmentImpl<VariableNameImpl> {
-    VarAssignmentImpl(VariableNameImpl var, ScopeImpl scope, OffsetRange scopeRange,OffsetRange nameRange, Assignment assignment,
+class FieldAssignmentImpl extends AssignmentImpl<FieldElementImpl> {
+    FieldAssignmentImpl(FieldElementImpl field, ScopeImpl scope, OffsetRange scopeRange,OffsetRange nameRange, Assignment assignment,
             Map<String, AssignmentImpl> allAssignments) {
-        super(var, scope, scopeRange, nameRange, assignment, allAssignments);
+        super(field, scope, scopeRange, nameRange, assignment, allAssignments);
     }
 
-    VarAssignmentImpl(VariableNameImpl var, ScopeImpl scope, OffsetRange scopeRange, OffsetRange nameRange, String typeName) {
-        super(var, scope, scopeRange, nameRange, typeName);
+    FieldAssignmentImpl(FieldElementImpl field, ScopeImpl scope, OffsetRange scopeRange, OffsetRange nameRange, String typeName) {
+        super(field, scope, scopeRange, nameRange, typeName);
     }
 }
