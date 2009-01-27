@@ -43,7 +43,13 @@ package org.netbeans.api.java.source;
 
 
 import java.io.IOException;
-import static org.netbeans.api.java.source.JavaSource.Phase.*;
+import org.netbeans.api.annotations.common.NonNull;
+import org.netbeans.api.annotations.common.NullUnknown;
+import org.netbeans.modules.java.source.parsing.CompilationInfoImpl;
+import org.netbeans.modules.java.source.parsing.JavacParser;
+import org.netbeans.modules.java.source.parsing.JavacParserResult;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.openide.util.Parameters;
 
 /** Class for explicit invocation of compilation phases on a java source.
  *  The implementation delegates to the {@link CompilationInfo} to get the data,
@@ -59,6 +65,26 @@ public class CompilationController extends CompilationInfo {
     CompilationController(final CompilationInfoImpl impl) {        
         super(impl);
 
+    }
+
+    /**
+     * Returns an instance of the {@link CompilationController} for
+     * given {@link Parser.Result} if it is a result
+     * of a java parser.
+     * @param result for which the {@link CompilationController} should be
+     * returned.
+     * @return a {@link CompilationController} or null when the given result
+     * is not a result of java parsing.
+     * @since 0.42
+     */
+    public static @NullUnknown CompilationController get (final @NonNull Parser.Result result) {
+        Parameters.notNull("result", result);   //NOI18N
+        CompilationController info = null;
+        if (result instanceof JavacParserResult) {
+            final JavacParserResult javacResult = (JavacParserResult)result;            
+            info = javacResult.get(CompilationController.class);            
+        }
+        return info;
     }
         
     // API of the class --------------------------------------------------------
@@ -76,8 +102,21 @@ public class CompilationController extends CompilationInfo {
      *         reached using this method
      * @throws IOException when the file cannot be red
      */    
-    public JavaSource.Phase toPhase(JavaSource.Phase phase ) throws IOException {
-        checkConfinement();
-        return this.impl.toPhase(phase);
-    }                
+    public @NonNull JavaSource.Phase toPhase(@NonNull JavaSource.Phase phase ) throws IOException {
+        return impl.toPhase (phase);
+    }
+    
+    /**
+     * Marks this {@link CompilationInfo} as invalid, may be used to
+     * verify confinement.
+     */
+    @Override
+    protected void doInvalidate () {
+        final JavacParser parser = this.impl.getParser();    //Parser may be null in case when JS was
+                                                                         //created with no sources - java corner case
+                                                                         //not covered by parsing API.
+        if (parser != null) {
+            parser.resultFinished (false);
+        }
+    }
 }

@@ -45,7 +45,9 @@ import com.sun.tools.javac.api.JavacTaskImpl;
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.jvm.Target;
 import com.sun.tools.javac.model.JavacElements;
+import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -55,8 +57,12 @@ import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
+import org.netbeans.api.annotations.common.CheckForNull;
+import org.netbeans.api.annotations.common.NonNull;
+import org.netbeans.api.annotations.common.NullAllowed;
 import org.netbeans.modules.java.source.ElementHandleAccessor;
 import org.netbeans.modules.java.source.usages.ClassFileUtil;
+import org.openide.util.Parameters;
 
 /**
  * Represents a handle for {@link Element} which can be kept and later resolved
@@ -100,8 +106,8 @@ public final class ElementHandle<T extends Element> {
         ElementHandleAccessor.INSTANCE = new ElementHandleAccessorImpl ();
     }
     
-    private ElementKind kind;
-    private String[] signatures;
+    private final ElementKind kind;
+    private final String[] signatures;
         
        
     private ElementHandle(final ElementKind kind, String[] signatures) {
@@ -120,10 +126,15 @@ public final class ElementHandle<T extends Element> {
      * the classpath/sourcepath of {@link javax.tools.CompilationTask}.
      */
     @SuppressWarnings ("unchecked")     // NOI18N
-    public T resolve (final CompilationInfo compilationInfo) {
-        assert compilationInfo != null;
-        return resolveImpl (compilationInfo.impl.getJavacTask());
+    public @CheckForNull T resolve (@NonNull final CompilationInfo compilationInfo) {
+        Parameters.notNull("compilationInfo", compilationInfo);
+        T result = resolveImpl (compilationInfo.impl.getJavacTask());
+        if (result == null) {
+            Logger.getLogger(ElementHandle.class.getName()).info("Cannot resolve: "+toString());    //NOI18N
+        }
+        return result;
     }
+        
     
     private T resolveImpl (final JavacTaskImpl jt) {
                 
@@ -250,7 +261,7 @@ public final class ElementHandle<T extends Element> {
      * @return true if the handles resolve into the same {@link Element}s
      * in the same {@link javax.tools.JavaCompiler} task.
      */
-    public boolean signatureEquals (final ElementHandle<? extends Element> handle) {
+    public boolean signatureEquals (@NonNull final ElementHandle<? extends Element> handle) {
          if (!isSameKind (this.kind, handle.kind) || this.signatures.length != handle.signatures.length) {
              return false;
          }
@@ -281,7 +292,7 @@ public final class ElementHandle<T extends Element> {
      * @throws an {@link IllegalStateException} when this {@link ElementHandle} 
      * isn't creatred for the {@link TypeElement}.
      */
-    public String getBinaryName () throws IllegalStateException {
+    public @NonNull String getBinaryName () throws IllegalStateException {
         if ((this.kind.isClass() && !isArray(signatures[0])) || this.kind.isInterface() || this.kind == ElementKind.OTHER) {
             return this.signatures[0];
         }
@@ -299,7 +310,7 @@ public final class ElementHandle<T extends Element> {
      * @throws an {@link IllegalStateException} when this {@link ElementHandle} 
      * isn't creatred for the {@link TypeElement}.
      */
-    public String getQualifiedName () throws IllegalStateException {
+    public @NonNull String getQualifiedName () throws IllegalStateException {
         if ((this.kind.isClass() && !isArray(signatures[0])) || this.kind.isInterface() || this.kind == ElementKind.OTHER) {
             return this.signatures[0].replace (Target.DEFAULT.syntheticNameChar(),'.');    //NOI18N
         }
@@ -318,7 +329,7 @@ public final class ElementHandle<T extends Element> {
      * @return true if this handle resolves into the same {@link Element}
      * in the same {@link javax.tools.JavaCompiler} task.
      */
-    public boolean signatureEquals (final T element) {
+    public boolean signatureEquals (@NonNull final T element) {
         final ElementKind ek = element.getKind();
         final ElementKind thisKind = getKind();
         if ((ek != thisKind) && !(thisKind == ElementKind.OTHER && (ek.isClass() || ek.isInterface()))) {
@@ -335,7 +346,7 @@ public final class ElementHandle<T extends Element> {
      * @return {@link ElementKind}
      *
      */
-    public ElementKind getKind () {
+    public @NonNull ElementKind getKind () {
         return this.kind;
     }
     
@@ -351,8 +362,8 @@ public final class ElementHandle<T extends Element> {
      * @return a new {@link ElementHandle}
      * @throws IllegalArgumentException if the element is of an unsupported {@link ElementKind}
      */
-    public static<T extends Element> ElementHandle<T> create (final T element) throws IllegalArgumentException {
-        assert element != null;
+    public static @NonNull <T extends Element> ElementHandle<T> create (@NonNull final T element) throws IllegalArgumentException {
+        Parameters.notNull("element", element);
         ElementKind kind = element.getKind();
         String[] signatures;
         switch (kind) {
@@ -414,8 +425,11 @@ public final class ElementHandle<T extends Element> {
      * @return an {@link ElementHandle}
      * @since 0.29.0
      */
-    public static ElementHandle<? extends TypeElement> from (final TypeMirrorHandle<? extends DeclaredType> typeMirrorHandle) {
-        assert typeMirrorHandle.getKind() == TypeKind.DECLARED;
+    public static @NonNull ElementHandle<? extends TypeElement> from (@NonNull final TypeMirrorHandle<? extends DeclaredType> typeMirrorHandle) {
+        Parameters.notNull("typeMirrorHandle", typeMirrorHandle);
+        if (typeMirrorHandle.getKind() != TypeKind.DECLARED) {
+            throw new IllegalStateException("Incorrect kind: " + typeMirrorHandle.getKind());
+        }
         return (ElementHandle<TypeElement>)typeMirrorHandle.getElementHandle();
     }
     
