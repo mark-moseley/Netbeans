@@ -41,11 +41,8 @@
 
 package org.netbeans.modules.registration;
 
-import com.sun.servicetag.RegistrationData;
-import com.sun.servicetag.ServiceTag;
-import java.awt.Frame;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
+import org.netbeans.modules.servicetag.RegistrationData;
+import org.netbeans.modules.servicetag.ServiceTag;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -63,13 +60,15 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.prefs.Preferences;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.reglib.BrowserSupport;
 import org.netbeans.modules.reglib.NbConnectionSupport;
 import org.netbeans.modules.reglib.NbServiceTagSupport;
 import org.netbeans.modules.reglib.StatusData;
 import org.openide.awt.HtmlBrowser;
-import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
+import org.openide.util.RequestProcessor;
 import org.openide.util.SharedClassObject;
 import org.openide.windows.WindowManager;
 
@@ -95,26 +94,18 @@ class NbConnection {
     
     private static StatusData status = new StatusData(StatusData.STATUS_UNKNOWN,StatusData.DEFAULT_DELAY);
     
+    private static final RequestProcessor RP = new RequestProcessor("NetBeans Registration RP");
+    
     private NbConnection() {
     }
     
     static void init () {
-        //As we need this code for NB 5.5 we cannot use new Winsys API method
-        //WindowManager.invokeWhenUIReady(Runnable). Here we use old way how to
-        //perform something after opening of main window
         if ((System.getProperty ("netbeans.full.hack") == null) && (System.getProperty ("netbeans.close") == null)) {
-            SwingUtilities.invokeLater(new Runnable() {
+            WindowManager.getDefault().invokeWhenUIReady(new Runnable() {
                 public void run() {
-                    final Frame mainWindow = WindowManager.getDefault().getMainWindow();
-                    mainWindow.addComponentListener(new ComponentAdapter() {
-                        @Override
-                        public void componentShown(ComponentEvent evt) {
-                            mainWindow.removeComponentListener(this);
-                            SwingUtilities.invokeLater(new Runnable() {
-                                public void run() {
-                                    checkStatus();
-                                }
-                            });
+                    RP.post(new Runnable() {
+                        public void run() {
+                            checkStatus();
                         }
                     });
                 }
@@ -123,7 +114,8 @@ class NbConnection {
     }
     
     private static void checkStatus () {
-        LOG.log(Level.FINE,"Check registration status");
+        LOG.log(Level.FINE,"Check registration status. Thread: "
+        + Thread.currentThread().getName());
         File dir = NbServiceTagSupport.getServiceTagDirHome();
         File statusFile = new File(dir,STATUS_FILE);
         if (statusFile.exists()) {
@@ -163,28 +155,49 @@ class NbConnection {
                     //Time is over, ask again
                     status.setDelay(StatusData.DEFAULT_DELAY);
                     storeStatus();
-                    RegisterAction a = SharedClassObject.findObject(RegisterAction.class, true);
-                    a.showDialog();
+                    showDialog();
                 }
             } else {
                 LOG.log(Level.FINE,"Status is unknown");
                 //Status is unknown, ask user
-                RegisterAction a = SharedClassObject.findObject(RegisterAction.class, true);
-                a.showDialog();
+                showDialog();
             }
         } else {
             //Status file does not exist so directly show dialog
-            RegisterAction a = SharedClassObject.findObject(RegisterAction.class, true);
-            a.showDialog();
+            showDialog();
         }
+    }
+    
+    private static void showDialog () {
+        SwingUtilities.invokeLater(new Runnable() {
+           public void run() {
+                LOG.log(Level.INFO,"Method showDialog. Thread: " + Thread.currentThread().getName());
+                RegisterAction a = SharedClassObject.findObject(RegisterAction.class, true);
+                a.showDialog();
+            }
+        });
     }
     
     /**
      * Query web service if all products are registered. If there is confirmation that any product is
      * not registered show Reminder dialog.
      * It is done only if local registration status is 'registered'.
+     * 
      */
     private static void checkProductRegistrationStatus () {
+        //#140203: If autoupdate is set to never chack update status do not try
+        //to query registration status.
+        //We use this because we do not want to introduce separate option
+        //to disable registration status check.
+        //Main reason for disabling this is to avoid network communication.
+        String AU_PREF_NODE = "org/netbeans/modules/autoupdate"; // NOI18N
+        Preferences auPref = NbPreferences.root().node(AU_PREF_NODE);
+
+        int period = auPref.getInt("period", 2);
+        if (period == 5) {
+            return;
+        }
+
         RegistrationData regData = null;
         try {
             regData = NbServiceTagSupport.getRegistrationData();
@@ -198,8 +211,7 @@ class NbConnection {
             registered = NbConnectionSupport.isRegistered(NbConnectionSupport.getRegistrationQueryHost(), st.getInstanceURN());
             if (!registered) {
                 //If one service tag is not registered show reminder dialog
-                RegisterAction a = SharedClassObject.findObject(RegisterAction.class, true);
-                a.showDialog();
+                showDialog();
                 break;
             }
         }
@@ -284,7 +296,7 @@ class NbConnection {
      * If user selects Register registration is started
      * @param value User choice in reminder dialog
      */
-    static void updateStatus (String value, String product) {
+    static void updateStatus (String value) {
         LOG.log(Level.FINE,"updateStatus status:" + value);
         //Ignore null value ie. do not change status if null is passed
         if (value != null) {
@@ -297,10 +309,9 @@ class NbConnection {
         
         if (StatusData.STATUS_REGISTERED.equals(status.getStatus())) {
             try {
-                NbConnection.register(NbServiceTagSupport.getRegistrationData(), product);
+                NbConnection.register(NbServiceTagSupport.getRegistrationData());
             } catch (IOException ex) {
-                LOG.log(Level.INFO,
-                "Error: Cannot register product", ex);
+                LOG.log(Level.INFO, "Error: Cannot register product", ex);
             }
         }
     }
@@ -336,26 +347,38 @@ class NbConnection {
      * 
      * @param regData registration data to be posted to the Sun Connection
      *             for registration.
-     *
-     * @throws IOException if I/O error occurs in this operation
      */
-    static void register(RegistrationData regData, String product) throws IOException {
-        // Gets the URL for SunConnection registration relay service
-        LOG.log(Level.FINE,"Product registration");
-        URL url = NbConnectionSupport.getRegistrationURL(regData.getRegistrationURN(), product);
+    static void register(final RegistrationData regData) {
+        RP.post(new Runnable() {
+            public void run() {
+                //We will determine product id from registration data content
+                String product = NbServiceTagSupport.getProductId(regData);
+                // Gets the URL for SunConnection registration relay service
+                LOG.log(Level.FINE,"Product registration");
+                URL url = NbConnectionSupport.getRegistrationURL(regData.getRegistrationURN(), product);
 
-        // Post the Product Registry to Sun Connection
-        LOG.log(Level.FINE,"POST registration data to:" + url);
-        boolean succeed = NbConnectionSupport.postRegistrationData(url, regData);
-        if (succeed) {
-            // service tags posted successfully
-            // now prompt for registration
-            LOG.log(Level.FINE,"Open browser with:" + url);
-            openBrowser(url);
-        } else {
-            // open browser with the offline registration page
-            openOfflineRegisterPage(product);
-        }
+                // Post the Product Registry to Sun Connection
+                LOG.log(Level.FINE,"POST registration data to:" + url);
+                boolean succeed = NbConnectionSupport.postRegistrationData(url, regData);
+                if (succeed) {
+                    // service tags posted successfully
+                    // now prompt for registration
+                    LOG.log(Level.FINE,"Open browser with:" + url);
+                    try {
+                        openBrowser(url);
+                    } catch (IOException ex) {
+                        LOG.log(Level.INFO, "Error: Cannot open browser", ex);
+                    }
+                } else {
+                    // open browser with the offline registration page
+                    try {
+                        openOfflineRegisterPage(product, NbServiceTagSupport.getProductNames(regData));
+                    } catch (IOException ex) {
+                        LOG.log(Level.INFO, "Error: Cannot open browser", ex);
+                    }
+                }
+            }
+        });
     }
 
     /**
@@ -386,11 +409,10 @@ class NbConnection {
      * Opens the offline registratioin page in the browser.
      * 
      */
-    private static void openOfflineRegisterPage (String product)
+    private static void openOfflineRegisterPage (String product, String [] productNames)
             throws IOException {
         File registerPage = 
-        NbServiceTagSupport.getRegistrationHtmlPage
-        (product, new String [] {NbBundle.getMessage(NbConnection.class,"nb.product.name")});
+        NbServiceTagSupport.getRegistrationHtmlPage(product, productNames);
         if (BrowserSupport.isSupported()) {
             try {
                 BrowserSupport.browse(registerPage.toURI());
