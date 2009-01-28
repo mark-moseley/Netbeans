@@ -203,7 +203,9 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
     public void fileDataCreated(FileEvent fe) {
         final FileObject fo = fe.getFile();
         final URL root = getOwningSourceRoot (fo);
-        if (root != null &&  VisibilityQuery.getDefault().isVisible(fo) && FileUtil.getMIMEType(fo, recognizers.getMimeTypes())!=null) {
+        if (root != null && VisibilityQuery.getDefault().isVisible(fo) && 
+            FileUtil.getMIMEType(fo, recognizers.getMimeTypesAsArray()) != null)
+        {
             final Work w = new FileListWork(WorkType.COMPILE,root,fo);
             submit(w);
         }
@@ -212,13 +214,21 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
     public void fileChanged(FileEvent fe) {
         final FileObject fo = fe.getFile();
         final URL root = getOwningSourceRoot (fo);
-        if (root != null &&  VisibilityQuery.getDefault().isVisible(fo) && FileUtil.getMIMEType(fo, recognizers.getMimeTypes())!=null) {
+        if (root != null && VisibilityQuery.getDefault().isVisible(fo) && 
+            FileUtil.getMIMEType(fo, recognizers.getMimeTypesAsArray()) != null)
+        {
             final Work w = new FileListWork(WorkType.COMPILE,root,fo);
             submit(w);
         }
     }
 
     public void fileDeleted(FileEvent fe) {
+        final FileObject fo = fe.getFile();
+        final URL root = getOwningSourceRoot (fo);
+        if (root != null &&  VisibilityQuery.getDefault().isVisible(fo) /*&& FileUtil.getMIMEType(fo, recognizers.getMimeTypes())!=null*/) {
+            final Work w = new FileListWork(WorkType.DELETE,root,fo);
+            submit(w);
+        }
     }
 
     public void fileRenamed(FileRenameEvent fe) {
@@ -258,7 +268,7 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
 
     enum State {CREATED, INITIALIZED, INITIALIZED_AFTER_FIRST_SCAN, CLOSED};
 
-    private enum WorkType {COMPILE_BATCH, COMPILE};
+    private enum WorkType {COMPILE_BATCH, COMPILE, DELETE};
 
     private static class Work {
         
@@ -351,7 +361,12 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
                     case COMPILE:
                         LOGGER.fine("Compile: " + work);
                         final FileListWork sfw = (FileListWork) work;
-                        compile (sfw.getFiles(),sfw.root);
+                        compile (sfw.getFiles(),sfw.getRoot());
+                        break;
+                    case DELETE:
+                        LOGGER.fine("Delete: " + work);
+                        final FileListWork swf = (FileListWork) work;
+                        delete (swf.getFiles(),swf.getRoot());
                         break;
                     default:
                         throw new IllegalArgumentException();
@@ -372,6 +387,20 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
             return !empty;
         }
 
+        private void delete (final FileObject[] affected, final URL root) {
+            try {
+                final ArrayList<Indexable> indexables = new ArrayList<Indexable>(affected.length);
+                final FileObject rootFo = URLMapper.findFileObject(root);
+                for (int i=0; i< affected.length; i++) {
+                    indexables.add(SPIAccessor.getInstance().create(new DeletedIndexable (root, FileUtil.getRelativePath(rootFo, affected[i]))));
+                }
+                index(Collections.<String,Collection<Indexable>>emptyMap(), indexables, root);
+                TEST_LEGGER.log(Level.FINEST, "delete");         //NOI18N
+            } catch (IOException ioe) {
+                Exceptions.printStackTrace(ioe);
+            }
+        }
+
         private void compile (final FileObject[] affected, final URL root) {
             final FileObject rootFo = URLMapper.findFileObject(root);
             if (rootFo == null) {
@@ -390,9 +419,11 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
             try {
                 final DependenciesContext ctx = new DependenciesContext(scannedRoots, scannedBinaries, true);
                 final List<URL> newRoots = new LinkedList<URL>();
-                newRoots.addAll (regs.getSources());
-                newRoots.addAll (regs.getUnknownRoots());                
-                ctx.newBinaries.addAll(regs.getBinaries());
+                newRoots.addAll(regs.getSources());
+                newRoots.addAll(regs.getLibraries());
+                newRoots.addAll(regs.getUnknownRoots());
+
+                ctx.newBinaries.addAll(regs.getBinaryLibraries());
                 for (Iterator<URL> it = ctx.newBinaries.iterator(); it.hasNext();) {
                     if (ctx.oldBinaries.remove(it.next())) {
                         it.remove();
@@ -402,7 +433,7 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
                 final Map<URL,List<URL>> depGraph = new HashMap<URL,List<URL>> ();
                 
                 for (URL url : newRoots) {
-                    findDependencies (url, depGraph, ctx, recognizers.getBinaryIds());
+                    findDependencies (url, depGraph, ctx, recognizers.getLibraryIds(), recognizers.getBinaryLibraryIds());
                 }
                 ctx.newRoots.addAll(org.openide.util.Utilities.topologicalSort(depGraph.keySet(), depGraph));
                 scanBinaries(ctx);
@@ -469,10 +500,10 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
             try {
                 final FileObject cacheRoot = CacheFolder.getDataFolder(root);
                 //First use all custom indexers
-                for (Iterator<Map.Entry<String,Collection<Indexable>>> it = resources.entrySet().iterator(); it.hasNext();) {
-                    final Map.Entry<String,Collection<Indexable>> entry = it.next();
-                    final Collection<? extends CustomIndexerFactory> factories = MimeLookup.getLookup(entry.getKey()).lookupAll(CustomIndexerFactory.class);
-                    LOGGER.fine("Using CustomIndexerFactories(" + entry.getKey() + "): " + factories);
+                Set<String> allMimeTypes = Util.getAllMimeTypes();
+                for (String mimeType : allMimeTypes) {
+                    final Collection<? extends CustomIndexerFactory> factories = MimeLookup.getLookup(mimeType).lookupAll(CustomIndexerFactory.class);
+                    LOGGER.fine("Using CustomIndexerFactories(" + mimeType + "): " + factories);
                     
                     boolean supportsEmbeddings = true;
                     try {
@@ -483,13 +514,16 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
                             supportsEmbeddings &= b;
                             final Context ctx = SPIAccessor.getInstance().createContext(cacheRoot, root, factory.getIndexerName(), factory.getIndexVersion(), null);
                             factory.filesDeleted(deleted, ctx);
-                            final CustomIndexer indexer = factory.createIndexer();
-                            SPIAccessor.getInstance().index(indexer, Collections.unmodifiableCollection(entry.getValue()), ctx);
+                            final Collection<? extends Indexable> indexables = resources.get(mimeType);
+                            if (indexables != null) {
+                                final CustomIndexer indexer = factory.createIndexer();
+                                SPIAccessor.getInstance().index(indexer, Collections.unmodifiableCollection(indexables), ctx);
+                            }
                         }
                     } finally {
                         if (!supportsEmbeddings) {
-                            LOGGER.fine("Removing roots for " + entry.getKey() + ", indexed by custom indexers, embedded indexers forbidden");
-                            it.remove();
+                            LOGGER.fine("Removing roots for " + mimeType + ", indexed by custom indexers, embedded indexers forbidden");
+                            resources.remove(mimeType);
                         }
                     }
                 }
@@ -508,7 +542,14 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
             }
         }
 
-        private void findDependencies(final URL rootURL, final Map<URL, List<URL>> depGraph, DependenciesContext ctx, final Set<String> binaryClassPathIds) {
+        private void findDependencies(
+                final URL rootURL,
+                final Map<URL,
+                List<URL>> depGraph,
+                DependenciesContext ctx,
+                final Set<String> libraryClassPathIds,
+                final Set<String> binaryLibraryClassPathIds)
+        {
             if (ctx.useInitialState && ctx.scannedRoots.contains(rootURL)) {
                 ctx.oldRoots.remove(rootURL);
                 return;
@@ -520,42 +561,69 @@ public class RepositoryUpdater implements PathRegistryListener, FileChangeListen
             if (rootFo == null) {
                 return;
             }
-            ctx.cycleDetector.push(rootURL);
-            final List<ClassPath> pathToResolve = new ArrayList<ClassPath>(binaryClassPathIds.size());
-            for (String binaryClassPathId : binaryClassPathIds) {
-                ClassPath cp = ClassPath.getClassPath(rootFo, binaryClassPathId);
-                if (cp != null) {
-                    pathToResolve.add(cp);
-                }
-            }
+
             final List<URL> deps = new LinkedList<URL>();
-            for (ClassPath cp : pathToResolve) {
-                for (ClassPath.Entry entry : cp.entries()) {
-                    final URL url = entry.getURL();
-                    final URL[] sourceRoots = regs.sourceForBinaryQuery(url, cp, false);
-                    if (sourceRoots != null) {
-                        for (URL sourceRoot : sourceRoots) {
+            ctx.cycleDetector.push(rootURL);
+            try {
+                { // libraries
+                    final List<ClassPath> libraryPathToResolve = new ArrayList<ClassPath>(libraryClassPathIds.size());
+                    for (String id : libraryClassPathIds) {
+                        ClassPath cp = ClassPath.getClassPath(rootFo, id);
+                        if (cp != null) {
+                            libraryPathToResolve.add(cp);
+                        }
+                    }
+
+                    for (ClassPath cp : libraryPathToResolve) {
+                        for (ClassPath.Entry entry : cp.entries()) {
+                            final URL sourceRoot = entry.getURL();
                             if (!sourceRoot.equals(rootURL) && !ctx.cycleDetector.contains(sourceRoot)) {
                                 deps.add(sourceRoot);
-                                findDependencies(sourceRoot, depGraph, ctx, binaryClassPathIds);
+                                findDependencies(sourceRoot, depGraph, ctx, libraryClassPathIds, binaryLibraryClassPathIds);
                             }
-                        }
-                    }
-                    else {
-                        //What does it mean?
-                        if (ctx.useInitialState) {
-                            if (!ctx.scannedBinaries.contains(url)) {
-                                ctx.newBinaries.add (url);
-                            }
-                            ctx.oldBinaries.remove(url);
                         }
                     }
                 }
-            }
-            depGraph.put(rootURL, deps);
-            ctx.cycleDetector.pop();
-        }
 
+                { // binary libraries
+                    final List<ClassPath> binaryLibraryPathToResolve = new ArrayList<ClassPath>(binaryLibraryClassPathIds.size());
+                    for (String id : binaryLibraryClassPathIds) {
+                        ClassPath cp = ClassPath.getClassPath(rootFo, id);
+                        if (cp != null) {
+                            binaryLibraryPathToResolve.add(cp);
+                        }
+                    }
+
+                    for (ClassPath cp : binaryLibraryPathToResolve) {
+                        for (ClassPath.Entry entry : cp.entries()) {
+                            final URL url = entry.getURL();
+                            final URL[] sourceRoots = regs.sourceForBinaryQuery(url, cp, false);
+                            if (sourceRoots != null) {
+                                for (URL sourceRoot : sourceRoots) {
+                                    if (!sourceRoot.equals(rootURL) && !ctx.cycleDetector.contains(sourceRoot)) {
+                                        deps.add(sourceRoot);
+                                        findDependencies(sourceRoot, depGraph, ctx, libraryClassPathIds, binaryLibraryClassPathIds);
+                                    }
+                                }
+                            }
+                            else {
+                                //What does it mean?
+                                if (ctx.useInitialState) {
+                                    if (!ctx.scannedBinaries.contains(url)) {
+                                        ctx.newBinaries.add (url);
+                                    }
+                                    ctx.oldBinaries.remove(url);
+                                }
+                            }
+                        }
+                    }
+                }
+            } finally {
+                ctx.cycleDetector.pop();
+            }
+            
+            depGraph.put(rootURL, deps);
+        }
     }
 
     private static class DependenciesContext {
