@@ -1,4 +1,4 @@
 Code completion result for source line:
-$v3 = new CLS136188|();
+A135618::|AAA;
 (QueryType=COMPLETION, prefixSearch=true, caseSensitive=true)
-CONSTRUCTO Cls136188()                     [PUBLIC]   Cls136188
+CONSTANT   ? AAA                                      A135618

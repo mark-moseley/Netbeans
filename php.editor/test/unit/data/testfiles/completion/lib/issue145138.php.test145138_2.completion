@@ -1,4 +1,4 @@
 Code completion result for source line:
-$v3 = new CLS136188|();
+print $param|1;
 (QueryType=COMPLETION, prefixSearch=true, caseSensitive=true)
-CONSTRUCTO Cls136188()                     [PUBLIC]   Cls136188
+VARIABLE   ? $param1                                  issue145138.php

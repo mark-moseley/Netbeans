@@ -1,4 +1,4 @@
 Code completion result for source line:
-$v3 = new CLS136188|();
+* @var TypesinPHPDo|c tst
 (QueryType=COMPLETION, prefixSearch=true, caseSensitive=true)
-CONSTRUCTO Cls136188()                     [PUBLIC]   Cls136188
+CLASS      TypesinPHPDoc                              types_in_phpdoc.php

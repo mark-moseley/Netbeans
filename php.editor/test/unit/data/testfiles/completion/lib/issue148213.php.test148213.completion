@@ -1,4 +1,4 @@
 Code completion result for source line:
-$v3 = new CLS136188|();
+$oldguy148213 = $newguy|148213;
 (QueryType=COMPLETION, prefixSearch=true, caseSensitive=true)
-CONSTRUCTO Cls136188()                     [PUBLIC]   Cls136188
+VARIABLE   Person148213 $newguy148213                 issue148213.php
