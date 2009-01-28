@@ -41,11 +41,14 @@
 package org.netbeans.modules.ruby.rubyproject;
 
 import java.io.File;
+import java.util.Collection;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.ruby.platform.RubyPlatform;
-import org.netbeans.modules.ruby.platform.RubyExecution;
-import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
-import org.netbeans.modules.ruby.platform.gems.GemManager;
+import org.netbeans.api.extexecution.ExecutionService;
+import org.netbeans.api.extexecution.print.LineConvertor;
+import org.netbeans.modules.ruby.platform.execution.RubyExecutionDescriptor;
+import org.netbeans.modules.ruby.platform.execution.RubyProcessCreator;
+import org.netbeans.modules.ruby.rubyproject.spi.TestRunner;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -74,14 +77,20 @@ public class AutoTestSupport {
     }
     
     public static boolean isInstalled(final Project project) {
-        GemManager gemManager = RubyPlatform.gemManagerFor(project);
-        return gemManager == null ? false : gemManager.isValidAutoTest(false);
+        return RubyPlatform.platformFor(project).hasValidAutoTest(false);
     }
 
     public void start() {
+
+        // use the ui test runner if available
+        TestRunner autotestRunner = Util.getTestRunner(TestRunner.TestType.AUTOTEST);
+        if (autotestRunner != null) {
+            autotestRunner.runAllTests(project, false);
+            return;
+        }
+
         RubyPlatform platform = RubyPlatform.platformFor(project);
-        GemManager gemManager = platform.getGemManager();
-        if (!gemManager.isValidAutoTest(true)) {
+        if (!platform.hasValidAutoTest(true)) {
             return;
         }
 
@@ -96,13 +105,17 @@ public class AutoTestSupport {
 
         RubyFileLocator fileLocator = new RubyFileLocator(context, project);
         String displayName = NbBundle.getMessage(AutoTestSupport.class, "AutoTest");
-        ExecutionDescriptor desc = new ExecutionDescriptor(platform, displayName, pwd, gemManager.getAutoTest());
+        RubyExecutionDescriptor desc = new RubyExecutionDescriptor(platform, displayName, pwd, platform.getAutoTest());
         desc.additionalArgs("-v"); // NOI18N
         desc.fileLocator(fileLocator);
         desc.classPath(classPath); // Applies only to JRuby
         desc.showProgress(false);
-        desc.addOutputRecognizer(new TestNotifier(false, false));
         desc.addStandardRecognizers();
-        new RubyExecution(desc, charsetName).run();
+        LineConvertor testNotifier = new TestNotifierLineConvertor(false, false);
+        desc.addOutConvertor(testNotifier);
+        desc.addErrConvertor(testNotifier);
+        RubyProcessCreator rpc = new RubyProcessCreator(desc, charsetName);
+        ExecutionService.newService(rpc, desc.toExecutionDescriptor(), displayName).run();
     }
+    
 }
