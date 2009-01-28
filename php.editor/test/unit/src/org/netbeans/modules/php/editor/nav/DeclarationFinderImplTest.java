@@ -42,10 +42,11 @@ package org.netbeans.modules.php.editor.nav;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import org.netbeans.modules.gsf.api.CancellableTask;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.DeclarationFinder.AlternativeLocation;
-import org.netbeans.modules.gsf.api.DeclarationFinder.DeclarationLocation;
+import org.netbeans.modules.csl.api.DeclarationFinder.AlternativeLocation;
+import org.netbeans.modules.csl.api.DeclarationFinder.DeclarationLocation;
+import org.netbeans.modules.csl.spi.ParserResult;
+import org.netbeans.modules.parsing.api.ResultIterator;
+import org.netbeans.modules.parsing.api.UserTask;
 
 /**
  *
@@ -60,10 +61,21 @@ public class DeclarationFinderImplTest extends TestBase {
     public void testParamVarPropInPhpDocTest() throws Exception {
         String markTest = prepareTestFile(
                 "testfiles/markphpdocTest.php",
-                "function test($hello) {",
-                "function test($^hello) {",
+                "function test($hello) {//function",
+                "function test($^hello) {//function",
                 "* @param Book $hello",
                 "* @param Book $he|llo"
+                );
+        performTestSimpleFindDeclaration(-1, markTest);
+    }
+
+    public void testParamVarPropInPhpDocTest2() throws Exception {
+        String markTest = prepareTestFile(
+                "testfiles/markphpdocTest.php",
+                "function test($hello) {//method",
+                "function test($^hello) {//method",
+                "$tmp = $hello;",
+                "$tmp = $hel|lo;"
                 );
         performTestSimpleFindDeclaration(-1, markTest);
     }
@@ -75,6 +87,17 @@ public class DeclarationFinderImplTest extends TestBase {
                 "class ^Author^ {",
                 " * @property Author $author hello this is doc",
                 " * @property Au|thor $author hello this is doc"
+                );
+        performTestSimpleFindDeclaration(-1, markTest);
+    }
+
+    public void testClsVarPropInPhpDocTest2() throws Exception {
+        String markTest = prepareTestFile(
+                "testfiles/markphpdocTest.php",
+                " * @property Author $author hello this is doc",
+                " * @property Author $^author hello this is doc",
+                "$this->author;",
+                "$this->auth|or;"
                 );
         performTestSimpleFindDeclaration(-1, markTest);
     }
@@ -2084,6 +2107,18 @@ public class DeclarationFinderImplTest extends TestBase {
                                          "?>\n");
     }
 
+    public void testPHPDocParamName() throws Exception {
+        performTestSimpleFindDeclaration(-1,
+                                         "<?php\n" +
+                                         "/**\n" +
+                                         " *\n" +
+                                         " * @param  string $he|llo\n" +
+                                         " */\n" +
+                                        "function test($^hello) {\n" +
+                                         "}\n" +
+                                         "?> ");
+    }
+
     private void performTestSimpleFindDeclaration(int declarationFile, String... code) throws Exception {
         assertTrue(code.length > 0);
 
@@ -2128,9 +2163,14 @@ public class DeclarationFinderImplTest extends TestBase {
     }
 
     private void performTestSimpleFindDeclaration(String[] code, final int caretOffset, final Set<Golden> golden) throws Exception {
-        performTest(code, new CancellableTask<CompilationInfo>() {
+        performTest(code, new UserTask() {
             public void cancel() {}
-            public void run(CompilationInfo parameter) throws Exception {
+
+            @Override
+            public void run(ResultIterator resultIterator) throws Exception {
+
+                ParserResult parameter = (ParserResult) resultIterator.getParserResult();
+
                 DeclarationLocation found = DeclarationFinderImpl.findDeclarationImpl(parameter, caretOffset);
 
                 assertNotNull(found.getFileObject());
