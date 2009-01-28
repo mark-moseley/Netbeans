@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -49,13 +49,10 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.swing.Icon;
-import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.java.classpath.GlobalPathRegistry;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.ruby.platform.RubyPlatform;
-import org.netbeans.modules.ruby.RubyLanguage;
 import org.netbeans.modules.ruby.spi.project.support.rake.EditableProperties;
 import org.netbeans.modules.ruby.codecoverage.RubyCoverageProvider;
 import org.netbeans.modules.ruby.spi.project.support.rake.FilterPropertyProvider;
@@ -67,7 +64,6 @@ import org.netbeans.modules.ruby.spi.project.support.rake.RakeProjectEvent;
 import org.netbeans.modules.ruby.spi.project.support.rake.RakeProjectHelper;
 import org.netbeans.modules.ruby.spi.project.support.rake.RakeProjectListener;
 import org.netbeans.modules.ruby.spi.project.support.rake.ReferenceHelper;
-import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.AuxiliaryProperties;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
@@ -92,7 +88,6 @@ public abstract class RubyBaseProject implements Project, RakeProjectListener {
         // initialize the logging levels -- see #151976
         RubyLoggingOption.initLoggers();
     }
-
 
     /**
      * Ruby package root sources type.
@@ -281,16 +276,9 @@ public abstract class RubyBaseProject implements Project, RakeProjectListener {
         platformCLs.remove(platformChangeListener);
     }
 
-    private ClassPath[] getRubyStubsCP() {
-        ClassPath rubyStubsCP = ClassPathSupport.createClassPath(RubyPlatform.getRubyStubs());
-        return new ClassPath[]{rubyStubsCP};
-    }
-
     /** Mainly for unit tests. */
     protected void open() {
         registerClassPath();
-        GlobalPathRegistry.getDefault().register(RubyLanguage.BOOT, getRubyStubsCP());
-
         FileObject rakeFile = getRakeFile();
         if (rakeFile != null) {
             rakeFile.addFileChangeListener(new FileChangeAdapter() {
@@ -392,7 +380,7 @@ public abstract class RubyBaseProject implements Project, RakeProjectListener {
     }
 
     private final class ProjectOpenedHookImpl extends ProjectOpenedHook {
-        
+
         ProjectOpenedHookImpl() {}
         
         protected void projectOpened() {
@@ -412,8 +400,6 @@ public abstract class RubyBaseProject implements Project, RakeProjectListener {
             } catch (IOException e) {
                 ErrorManager.getDefault().notify(e);
             }
-            
-            GlobalPathRegistry.getDefault().unregister(RubyLanguage.BOOT, getRubyStubsCP());
             unregisterClassPath();
         }
     }
