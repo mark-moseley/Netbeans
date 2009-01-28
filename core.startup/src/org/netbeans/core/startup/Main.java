@@ -44,8 +44,11 @@ package org.netbeans.core.startup;
 import java.beans.Introspector;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.netbeans.ProxyURLStreamHandlerFactory;
@@ -53,19 +56,22 @@ import org.netbeans.Stamps;
 import org.netbeans.Util;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.Repository;
-import org.openide.modules.Dependency;
 import org.openide.modules.InstalledFileLocator;
-import org.openide.modules.SpecificationVersion;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
+import org.openide.util.UserCancelException;
 import org.openide.util.Utilities;
 
 /**
  * Main class for NetBeans when run in GUI mode.
  */
 public final class Main extends Object {
+
+    private static final Logger LOG = Logger.getLogger(Main.class.getName());
+
     /** module subsystem */
     private static ModuleSystem moduleSystem;
     /** module subsystem is fully ready */
@@ -76,7 +82,7 @@ public final class Main extends Object {
   public static void setStatusText (String msg) {
         Splash.getInstance().print (msg);
         if (moduleSystemInitialized) {
-            org.netbeans.core.startup.CoreBridge.conditionallyPrintStatus (msg);
+            CoreBridge.getDefault().setStatusText(msg);
         }
   }
   
@@ -112,8 +118,7 @@ public final class Main extends Object {
       try {
           if (wantTheme) {
               //Put a couple things into UIDefaults for the plaf library to process if it wants
-               FileObject fo =
-                    Repository.getDefault().getDefaultFileSystem().findResource("themes.xml"); //NOI18N
+               FileObject fo = FileUtil.getConfigFile("themes.xml"); //NOI18N
                if (fo == null) {            
                     // File on SFS failed --> try to load from a jar from path
                     // /org/netbeans/core/startup/resources/themes.xml
@@ -150,7 +155,7 @@ public final class Main extends Object {
 
             StartLog.logStart ("Modules initialization"); // NOI18N
             try {
-                moduleSystem = new ModuleSystem(Repository.getDefault().getDefaultFileSystem());
+                moduleSystem = new ModuleSystem(FileUtil.getConfigRoot().getFileSystem());
             } catch (IOException ioe) {
                 // System will be screwed up.
                 throw (IllegalStateException) new IllegalStateException("Module system cannot be created").initCause(ioe); // NOI18N
@@ -191,12 +196,6 @@ public final class Main extends Object {
     System.setProperty ("org.openide.specification.version", "6.2"); // NOI18N
     System.setProperty ("org.openide.version", "deprecated"); // NOI18N
     System.setProperty ("org.openide.major.version", "IDE/1"); // NOI18N
-
-    // Enforce JDK 1.5+ since we would not work without it.
-    if (Dependency.JAVA_SPEC.compareTo(new SpecificationVersion("1.5")) < 0) { // NOI18N
-        System.err.println("The IDE requires JDK 5 or higher to run."); // XXX I18N?
-        TopLogging.exit(1);
-    }
 
     // In the past we derived ${jdk.home} from ${java.home} by appending
     // "/.." to the end of ${java.home} assuming that JRE is under JDK
@@ -240,10 +239,6 @@ public final class Main extends Object {
 
 
 // 5. initialize GUI 
-    StartLog.logStart ("XML Factories"); //NOI18N
-    
-    org.netbeans.core.startup.SAXFactoryImpl.install();
-    org.netbeans.core.startup.DOMFactoryImpl.install();
     //Bugfix #35919: Log message to console when initialization of local
     //graphics environment fails eg. due to incorrect value of $DISPLAY
     //on X Windows (Linux, Solaris). In such case IDE will not start
@@ -260,7 +255,6 @@ public final class Main extends Object {
             throw exc;
         }
     }
-    StartLog.logEnd ("XML Factories"); //NOI18N
     
     
 
@@ -283,6 +277,7 @@ public final class Main extends Object {
 	    // -----------------------------------------------------------------------------------------------------
 	    // License check
             if (!handleLicenseCheck()) {
+                deleteRec(new File(CLIOptions.getUserDir())); // #145936
                 TopLogging.exit(0);
             }
 	    // -----------------------------------------------------------------------------------------------------
@@ -338,6 +333,20 @@ public final class Main extends Object {
     // start to store all caches after 15s
     Stamps.getModulesJARs().flush(15000);
   }
+    private static void deleteRec(File f) throws IOException {
+        if (f.isDirectory()) {
+            File[] kids = f.listFiles();
+            if (kids == null) {
+                throw new IOException("Could not list: " + f);
+            }
+            for (File kid : kids) {
+                deleteRec(kid);
+            }
+        }
+        if (!f.delete()) {
+            Logger.getLogger(Main.class.getName()).log(Level.WARNING, "Failed to delete " + f);
+        }
+    }
   
     /** Loads a class from available class loaders. */
     private static final Class getKlass(String cls) {
@@ -386,19 +395,19 @@ public final class Main extends Object {
                         new String[0]
                     });
                     executedOk = true;
-                } catch (java.lang.reflect.InvocationTargetException ex) {
+                } catch (InvocationTargetException ex) {
                     // canceled by user, all is fine
-                    if (ex.getTargetException () instanceof org.openide.util.UserCancelException) {
+                    if (ex.getTargetException() instanceof UserCancelException) {
                         executedOk = true;
                     } else {
-                        ex.printStackTrace();
+                        LOG.log(Level.WARNING, null, ex);
                     }
                 } catch (Exception e) {
                     // If exceptions are thrown, notify them - something is broken.
-                    e.printStackTrace();
+                    LOG.log(Level.WARNING, null, e);
                 } catch (LinkageError e) {
                     // These too...
-                    e.printStackTrace();
+                    LOG.log(Level.WARNING, null, e);
                 }
             }
             
@@ -418,12 +427,12 @@ public final class Main extends Object {
                         }
                     } catch (IOException ex) {
                         // file was not created a bit of problem but go on
-                        ex.printStackTrace();
+                        LOG.log(Level.WARNING, null, ex);
                         return true;
                     } catch (java.lang.reflect.InvocationTargetException ex) {
                         return false;
                     } catch (InterruptedException ex) {
-                        ex.printStackTrace();
+                        LOG.log(Level.WARNING, null, ex);
                         return false;
                     }
                 } else {
@@ -475,22 +484,22 @@ public final class Main extends Object {
                         try {
                             f.createNewFile();
                         } catch (IOException exc) {
-                            exc.printStackTrace();
+                            LOG.log(Level.WARNING, null, exc);
                         }
                     }
-                } catch (java.lang.reflect.InvocationTargetException ex) {
+                } catch (InvocationTargetException ex) {
                     // canceled by user, all is fine
-                    if (ex.getTargetException() instanceof org.openide.util.UserCancelException) {
+                    if (ex.getTargetException() instanceof UserCancelException) {
                         executedOk = false;
                     } else {
-                        ex.printStackTrace();
+                        LOG.log(Level.WARNING, null, ex);
                     }
                 } catch (Exception ex) {
                     // If exceptions are thrown, notify them - something is broken.
-                    ex.printStackTrace();
+                    LOG.log(Level.WARNING, null, ex);
                 } catch (LinkageError ex) {
                     // These too...
-                    ex.printStackTrace();
+                    LOG.log(Level.WARNING, null, ex);
                 }
             }
             
@@ -506,7 +515,7 @@ public final class Main extends Object {
                     } catch (java.lang.reflect.InvocationTargetException ex) {
                         return false;
                     } catch (InterruptedException ex) {
-                        ex.printStackTrace();
+                        LOG.log(Level.WARNING, null, ex);
                         return false;
                     }
                 } else {
