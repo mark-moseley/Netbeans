@@ -41,6 +41,7 @@ package org.netbeans.modules.maven.profiler;
 
 import java.io.File;
 import java.util.Properties;
+import java.util.Set;
 import org.netbeans.modules.maven.api.execute.RunConfig;
 import org.netbeans.api.project.Project;
 import org.netbeans.lib.profiler.common.Profiler;
@@ -59,8 +60,8 @@ import org.openide.util.RequestProcessor;
 public class RunCheckerImpl implements LateBoundPrerequisitesChecker {
     
     private static final String ACTION_PROFILE = "profile"; // NOI18N
-//    private static final String ACTION_PROFILE_SINGLE = "profile-single"; // NOI18N
-//    private static final String ACTION_PROFILE_TESTS = "profile-tests"; // NOI18N
+    private static final String ACTION_PROFILE_SINGLE = "profile-single"; // NOI18N
+        private static final String ACTION_PROFILE_TESTS = "profile-tests"; // NOI18N
     
 //    private static final String EXEC_ARGS = "exec.args"; // NOI18N
     private static final String PROFILER_ARGS = "${profiler.args}"; // NOI18N
@@ -77,7 +78,7 @@ public class RunCheckerImpl implements LateBoundPrerequisitesChecker {
     public boolean checkRunConfig(RunConfig config, ExecutionContext context) {
         Properties configProperties = config.getProperties();
 
-        if (ACTION_PROFILE.equals(config.getActionName())) { // action "profile"
+        if (ACTION_PROFILE.equals(config.getActionName()) || ACTION_PROFILE_SINGLE.equals(config.getActionName()) || ACTION_PROFILE_TESTS.equals(config.getActionName())) { // action "profile"
             // Get the ProjectTypeProfiler for Maven project
             final MavenProjectTypeProfiler ptp = (MavenProjectTypeProfiler)ProjectUtilities.getProjectTypeProfiler(project);
             
@@ -85,6 +86,7 @@ public class RunCheckerImpl implements LateBoundPrerequisitesChecker {
             Properties sessionProperties = ptp.getLastSessionProperties();
             for (Object k : configProperties.keySet()) {
                 String key = (String)k;
+                
                 String value = configProperties.getProperty(key);
                 if (value.contains(PROFILER_ARGS)) {
                     value = value.replace(PROFILER_ARGS, sessionProperties.getProperty("profiler.info.jvmargs") // NOI18N
