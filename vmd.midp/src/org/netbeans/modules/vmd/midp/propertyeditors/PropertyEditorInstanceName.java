@@ -51,7 +51,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import org.netbeans.modules.vmd.api.model.DesignComponent;
-import org.netbeans.modules.vmd.api.model.DesignDocument;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.api.model.TypeID;
 import org.netbeans.modules.vmd.api.properties.DesignPropertyEditor;
@@ -60,6 +59,7 @@ import org.netbeans.modules.vmd.midp.components.MidpTypes;
 import org.netbeans.modules.vmd.midp.components.points.MethodPointCD;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorUserCode;
 import org.openide.util.NbBundle;
+import org.openide.awt.Mnemonics;
 
 /**
  *
@@ -72,12 +72,11 @@ public final class PropertyEditorInstanceName extends DesignPropertyEditor {
     private static final String INSTANCE_NAME_TEXT = NbBundle.getMessage(PropertyEditorInstanceName.class, "LBL_INSTANCE_NAME"); // NOI18N
 
     private TypeID typeID;
-    private final CustomEditor customEditor;
+    private CustomEditor customEditor;
     private WeakReference<DesignComponent> component;
 
     private PropertyEditorInstanceName(TypeID typeID) {
         this.typeID = typeID;
-        customEditor = new CustomEditor();
     }
 
     public static final DesignPropertyEditor createInstance(TypeID typeID) {
@@ -86,11 +85,24 @@ public final class PropertyEditorInstanceName extends DesignPropertyEditor {
 
     @Override
     public Component getCustomEditor() {
+        if (customEditor == null) {
+            customEditor = new CustomEditor();
+        }
         PropertyValue value = (PropertyValue) super.getValue();
         if (value != null) {
             customEditor.setText(MidpTypes.getString(value));
         }
         return customEditor;
+    }
+
+    @Override
+    public void cleanUp(DesignComponent component) {
+        super.cleanUp(component);
+        if (customEditor != null) {
+            customEditor.cleanUp();
+            customEditor = null;
+        }
+        typeID = null;
     }
 
     @Override
@@ -116,11 +128,24 @@ public final class PropertyEditorInstanceName extends DesignPropertyEditor {
     private void saveValue(final String text) {
         if (component != null && component.get() != null) {
             final DesignComponent _component = component.get();
+            //final PropertyValue[] newValue = new PropertyValue[1];
+
             _component.getDocument().getTransactionManager().readAccess(new Runnable() {
 
                 public void run() {
                     PropertyValue newInstanceName = InstanceNameResolver.createFromSuggested(_component, text);
-                    PropertyEditorInstanceName.super.setValue(newInstanceName);
+                    /*newValue[0] = newInstanceName;
+                }
+            });
+            if (PropertyEditorInstanceName.super.getValue() != null) {
+                MidpCodeSupport.refactorInstanceName(getAsText(),
+                        newValue[0].getPrimitiveValue().toString(),
+                        _component);
+            }
+            _component.getDocument().getTransactionManager().readAccess(new Runnable() {
+
+                public void run() {*/
+                    PropertyEditorInstanceName.super.setValue(newInstanceName);//newValue[0]);
                 }
             });
         }
@@ -146,7 +171,7 @@ public final class PropertyEditorInstanceName extends DesignPropertyEditor {
 
     @Override
     public boolean canWrite() {
-        if (component == null || component.get() == null) {
+        /*if (component == null || component.get() == null) {
             return false;
         }
         
@@ -159,7 +184,18 @@ public final class PropertyEditorInstanceName extends DesignPropertyEditor {
             }
         });
 
-        return canWrite[0];
+        return canWrite[0];*/
+        return false;
+    }
+
+    @Override
+    public Boolean canEditAsText() {
+        return false;
+    }
+
+    @Override
+    public boolean supportsCustomEditor() {
+        return false;
     }
 
     private String getLabelName() {
@@ -174,10 +210,16 @@ public final class PropertyEditorInstanceName extends DesignPropertyEditor {
             initComponents();
         }
 
+        void cleanUp() {
+            textField = null;
+            this.removeAll();
+        }
+
         private void initComponents() {
             setLayout(new GridBagLayout());
             GridBagConstraints constraints = new GridBagConstraints();
-            JLabel label = new JLabel(getLabelName());
+            JLabel label = new JLabel();
+            Mnemonics.setLocalizedText( label, getLabelName() );
             constraints.insets = new Insets(12, 12, 3, 12);
             constraints.anchor = GridBagConstraints.NORTHWEST;
             constraints.gridx = 0;
@@ -188,6 +230,7 @@ public final class PropertyEditorInstanceName extends DesignPropertyEditor {
             add(label, constraints);
 
             textField = new JTextField();
+            label.setLabelFor( textField );
             constraints.insets = new Insets(0, 12, 12, 12);
             constraints.anchor = GridBagConstraints.NORTHWEST;
             constraints.gridx = 0;
@@ -196,6 +239,10 @@ public final class PropertyEditorInstanceName extends DesignPropertyEditor {
             constraints.weighty = 0.0;
             constraints.fill = GridBagConstraints.HORIZONTAL;
             add(textField, constraints);
+            
+            textField.getAccessibleContext().setAccessibleName( label.getText() );
+            textField.getAccessibleContext().setAccessibleDescription( 
+                    label.getText() );
 
             JPanel spacer = new JPanel();
             constraints.insets = new Insets(0, 0, 0, 0);
