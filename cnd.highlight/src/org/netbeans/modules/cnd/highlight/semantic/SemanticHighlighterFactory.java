@@ -41,8 +41,12 @@
 
 package org.netbeans.modules.cnd.highlight.semantic;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import javax.swing.text.Document;
+import org.netbeans.modules.cnd.highlight.semantic.options.SemanticHighlightingOptions;
 import org.netbeans.modules.cnd.model.tasks.EditorAwareCsmFileTaskFactory;
+import org.netbeans.modules.cnd.model.tasks.OpenedEditors;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
@@ -52,7 +56,19 @@ import org.openide.loaders.DataObjectNotFoundException;
  *
  * @author Sergey Grinev
  */
-public class SemanticHighlighterFactory extends EditorAwareCsmFileTaskFactory {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.model.tasks.CsmFileTaskFactory.class, position=20)
+public final class SemanticHighlighterFactory extends EditorAwareCsmFileTaskFactory implements PropertyChangeListener {
+
+    public SemanticHighlighterFactory(){
+        super();
+        SemanticHighlightingOptions.instance().addPropertyChangeListener(this);
+    }
+
+    public void propertyChange(PropertyChangeEvent evt) {
+        for (FileObject file : OpenedEditors.getDefault().getVisibleEditorsFiles()){
+            reschedule(file);
+        }
+    }
 
     @Override
     protected PhaseRunner createTask(final FileObject fo) {
@@ -68,5 +84,15 @@ public class SemanticHighlighterFactory extends EditorAwareCsmFileTaskFactory {
             ex.printStackTrace();
         }
         return pr != null ? pr : lazyRunner();
+    }
+
+    @Override
+    protected int taskDelay() {
+        return ModelUtils.SEMANTIC_DELAY;
+    }
+
+    @Override
+    protected int rescheduleDelay() {
+        return ModelUtils.RESCHEDULE_SEMANTIC_DELAY;
     }
 }
