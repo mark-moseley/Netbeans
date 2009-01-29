@@ -48,6 +48,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -90,6 +91,10 @@ public class ModuleDependencies extends Task {
         Input input = new Input ();
         inputs.add (input);
         return input;
+    }
+
+    public void addConfiguredInputPattern(InputPattern pattern) throws BuildException {
+        inputs.addAll(pattern.inputs());
     }
     
     public Output createOutput() throws BuildException {
@@ -232,10 +237,7 @@ public class ModuleDependencies extends Task {
                 {
                     String ideDeps = file.getManifest ().getMainAttributes ().getValue ("OpenIDE-Module-IDE-Dependencies"); // IDE/1 > 4.25
                     if (ideDeps != null) {
-                        StringTokenizer tok = new StringTokenizer (ideDeps, "> ");
-                        if (tok.countTokens () != 2 || !tok.nextToken ().equals ("IDE/1")) {
-                            throw new BuildException ("Wrong OpenIDE-Module-IDE-Dependencies: " + ideDeps);
-                        }
+                        throw new BuildException("OpenIDE-Module-IDE-Dependencies is obsolete in " + f);
                     }
                 }
                 addDependencies (depends, file.getManifest (), Dependency.REQUIRES, "OpenIDE-Module-Module-Dependencies");
@@ -929,6 +931,30 @@ public class ModuleDependencies extends Task {
         
         public void setName (String name) {
             this.name = name;
+        }
+    }
+
+    public static class InputPattern {
+        private File dir;
+        public void setDir(File dir) {
+            this.dir = dir;
+        }
+        Collection<Input> inputs() {
+            List<Input> inputs = new ArrayList<Input>();
+            for (File cluster : dir.listFiles()) {
+                if (!new File(cluster, "update_tracking").isDirectory()) {
+                    continue;
+                }
+                Input i = new Input();
+                i.name = cluster.getName().replaceFirst("[0-9.]+$", "");
+                i.jars = new FileSet();
+                i.jars.setDir(cluster);
+                i.jars.createInclude().setName("modules/*.jar");
+                i.jars.createInclude().setName("lib/*.jar");
+                i.jars.createInclude().setName("core/*.jar");
+                inputs.add(i);
+            }
+            return inputs;
         }
     }
     
