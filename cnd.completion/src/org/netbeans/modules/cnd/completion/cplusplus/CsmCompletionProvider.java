@@ -81,7 +81,7 @@ public class CsmCompletionProvider implements CompletionProvider {
             return 0;
         }
         final int dot = component.getCaret().getDot();
-        if (CsmCompletionQuery.checkCondition(component.getDocument(), dot)) {
+        if (CsmCompletionQuery.checkCondition(component.getDocument(), dot, false)) {
             try {
                 if (CompletionSupport.needShowCompletionOnText(component, typedText)) {
                     return COMPLETION_QUERY_TYPE;
@@ -94,6 +94,10 @@ public class CsmCompletionProvider implements CompletionProvider {
     }
 
     public CompletionTask createTask(int queryType, JTextComponent component) {
+        CompletionSupport sup = CompletionSupport.get(component);
+        if (sup == null) {
+            return null;
+        }
         final int dot = component.getCaret().getDot();
         // disable code templates for smart mode of completion
         //CsmCodeTemplateFilter.enableAbbreviations(((queryType & COMPLETION_ALL_QUERY_TYPE) == COMPLETION_ALL_QUERY_TYPE));
@@ -102,7 +106,7 @@ public class CsmCompletionProvider implements CompletionProvider {
             System.err.println("createTask called on " + dot); // NOI18N
         }
         // do not work together with include completion
-        if (CsmCompletionQuery.checkCondition(component.getDocument(), dot)) {
+        if (CsmCompletionQuery.checkCondition(component.getDocument(), dot, false)) {
             if ((queryType & COMPLETION_QUERY_TYPE) == COMPLETION_QUERY_TYPE) {
                 return new AsyncCompletionTask(new Query(dot, queryType), component);
             } else if (queryType == DOCUMENTATION_QUERY_TYPE) {
