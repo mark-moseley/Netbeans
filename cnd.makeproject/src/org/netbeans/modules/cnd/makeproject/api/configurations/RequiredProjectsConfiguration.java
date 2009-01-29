@@ -38,30 +38,21 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-import java.util.Vector;
+import java.util.ArrayList;
 
-public class RequiredProjectsConfiguration extends VectorConfiguration {
+public class RequiredProjectsConfiguration extends VectorConfiguration<LibraryItem.ProjectItem> {
+
     public RequiredProjectsConfiguration() {
-	super(null);
-    }
-
-    public LibraryItem.ProjectItem[] getRequiredProjectItemsAsArray() {
-        return (LibraryItem.ProjectItem[])getValue().toArray(new LibraryItem.ProjectItem[getValue().size()]);
-    }
-
-    // Clone and Assign
-    @Override
-    public void assign(VectorConfiguration conf) {
-	super.assign(conf);
+        super(null);
     }
 
     @Override
-    public Object clone() {
-	RequiredProjectsConfiguration clone = new RequiredProjectsConfiguration();
-	clone.setValue((Vector)getValue().clone());
-	return clone;
+    public RequiredProjectsConfiguration clone() {
+        RequiredProjectsConfiguration clone = new RequiredProjectsConfiguration();
+        clone.setValue(new ArrayList<LibraryItem.ProjectItem>(getValue()));
+        return clone;
     }
+
 }

@@ -38,45 +38,20 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-import java.util.Vector;
+import java.util.ArrayList;
 
-public class LibrariesConfiguration extends VectorConfiguration {
+public class LibrariesConfiguration extends VectorConfiguration<LibraryItem> {
+
     public LibrariesConfiguration() {
-	super(null);
-    }
-
-    public LibraryItem[] getLibraryItemsAsArray() {
-        return (LibraryItem[])getValue().toArray(new LibraryItem[getValue().size()]);
-    }
-
-    public String getOptions(MakeConfiguration conf) {
-	StringBuilder options = new StringBuilder();
-	
-	LibraryItem[] items = getLibraryItemsAsArray();
-	for (int i = 0; i < items.length; i++) {
-	    options.append(items[i].getOption(conf));
-            options.append(" "); // NOI18N
-	}
-
-	return options.toString();
-    }
-    // Clone and Assign
-    @Override
-    public void assign(VectorConfiguration conf) {
-	// From VectorConfiguration
-	super.assign(conf);
-	// From LibrariesConfiguration
+        super(null);
     }
 
     @Override
-    public Object clone() {
-	LibrariesConfiguration clone = new LibrariesConfiguration();
-	// From VectorConfiguration
-	clone.setValue((Vector)getValue().clone());
-	// From LibrariesConfiguration
-	return clone;
+    public LibrariesConfiguration clone() {
+        LibrariesConfiguration clone = new LibrariesConfiguration();
+        clone.setValue(new ArrayList<LibraryItem>(getValue()));
+        return clone;
     }
 }

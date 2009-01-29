@@ -45,24 +45,24 @@ import java.beans.PropertyEditorSupport;
 import java.util.List;
 import java.util.ArrayList;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.cnd.makeproject.api.configurations.LibrariesConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.LibraryItem;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.RequiredProjectsConfiguration;
 import org.openide.explorer.propertysheet.ExPropertyEditor;
 import org.openide.explorer.propertysheet.PropertyEnv;
 import org.openide.nodes.PropertySupport;
 
-public class LibrariesNodeProp extends PropertySupport<List> {
+public class RequiredProjectsNodeProp extends PropertySupport<List> {
 
-    private LibrariesConfiguration configuration;
+    private RequiredProjectsConfiguration vectorConfiguration;
     Project project;
     MakeConfiguration conf;
     String baseDir;
     String[] texts;
 
-    public LibrariesNodeProp(LibrariesConfiguration configuration, Project project, MakeConfiguration conf, String baseDir, String[] texts) {
+    public RequiredProjectsNodeProp(RequiredProjectsConfiguration vectorConfiguration, Project project, MakeConfiguration conf, String baseDir, String[] texts) {
         super(texts[0], List.class, texts[1], texts[2], true, true);
-        this.configuration = configuration;
+        this.vectorConfiguration = vectorConfiguration;
         this.project = project;
         this.conf = conf;
         this.baseDir = baseDir;
@@ -71,7 +71,7 @@ public class LibrariesNodeProp extends PropertySupport<List> {
 
     @Override
     public String getHtmlDisplayName() {
-        if (configuration.getModified()) {
+        if (vectorConfiguration.getModified()) {
             return "<b>" + getDisplayName(); // NOI18N
         } else {
             return null;
@@ -79,17 +79,17 @@ public class LibrariesNodeProp extends PropertySupport<List> {
     }
 
     public List getValue() {
-        return configuration.getValue();
+        return vectorConfiguration.getValue();
     }
 
     @SuppressWarnings("unchecked")
     public void setValue(List v) {
-        configuration.setValue(v);
+        vectorConfiguration.setValue(v);
     }
 
     @Override
     public void restoreDefaultValue() {
-        configuration.reset();
+        vectorConfiguration.reset();
     }
 
     @Override
@@ -99,13 +99,13 @@ public class LibrariesNodeProp extends PropertySupport<List> {
 
     @Override
     public boolean isDefaultValue() {
-        return configuration.getValue().size() == 0;
+        return vectorConfiguration.getValue().size() == 0;
     }
 
     @Override
     public PropertyEditor getPropertyEditor() {
         ArrayList<LibraryItem> clone = new ArrayList<LibraryItem>();
-        clone.addAll(configuration.getValue());
+        clone.addAll(vectorConfiguration.getValue());
         return new DirectoriesEditor(clone);
     }
 
@@ -147,7 +147,7 @@ public class LibrariesNodeProp extends PropertySupport<List> {
 
         @Override
         public java.awt.Component getCustomEditor() {
-            return new LibrariesPanel(project, conf, baseDir, value, this, env);
+            return new RequiredProjectsPanel(project, conf, baseDir, value, this, env);
         }
 
         @Override
