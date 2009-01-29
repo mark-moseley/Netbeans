@@ -49,9 +49,19 @@ import org.netbeans.modules.php.editor.parser.api.Utils;
 public final class Model {
     private ModelVisitor modelVisitor;
     private CompilationInfo info;
+    private int offset;
 
     Model(CompilationInfo info) {
         this.info = info;
+        this.offset = -1;
+    }
+
+    public PhpFileScope getFileScope() {
+        return getModelVisitor(-1).getModelScope();
+    }
+
+    public IndexScope getIndexScope() {
+        return ModelVisitor.getIndexScope(info);
     }
 
     public OccurencesSupport getOccurencesSupport(final int offset) {
@@ -62,16 +72,15 @@ public final class Model {
         return new ParameterInfoSupport(getModelVisitor(-1), info.getDocument(), offset);
     }
 
-
-    /*private ModelVisitor getModelVisitor() {
-        return getModelVisitor(-1);
-    }*/
+    public VariableScope getVariableScope(final int offset) {
+        return getModelVisitor(-1).getVariableScope(offset);
+    }
 
     /**
      * @return the modelVisitor
      */
     private ModelVisitor getModelVisitor(int offset) {
-        if (modelVisitor == null) {
+        if (modelVisitor == null || (offset >= 0 && this.offset != offset)) {
             if (offset < 0) {
                 modelVisitor = new ModelVisitor(info);
             } else {

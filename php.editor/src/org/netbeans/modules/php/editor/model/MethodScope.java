@@ -36,30 +36,21 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.model;
 
-import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+package org.netbeans.modules.php.editor.model;
 
 /**
  * @author Radek Matous
  */
-public interface ClassScope extends TypeScope {
-    List<? extends InterfaceScope> getSuperInterfaces();
-    List<? extends ClassScope> getSuperClasses();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends FieldElement> getDeclaredFields();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends MethodScope> getMethods();
-    List<? extends FieldElement> getFields();
-
-    
-    List<? extends FieldElement> findDeclaredFields(final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final String queryName, final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends FieldElement> findInheritedFields(String fieldName);
-
-    //TODO: add getAllInheritedSuperClasses()
-    //TODO: add getAllInheritedInterfaces()
-    //TODO: ...
+public interface MethodScope extends FunctionScope, VariableScope, ClassMemberElement {
+    PhpModifiers getPhpModifiers();
+    boolean isMagic();
+    boolean isConstructor();
+    ClassScope getClassScope();
+    String getClassSkeleton();
+    String getInterfaceSkeleton();
+    //TODO:
+    //boolean implementedMethod();
+    //boolean overridenMethod();
+    //List<? extends MethodScope> getMethodChain();
 }

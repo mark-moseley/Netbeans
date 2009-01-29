@@ -38,10 +38,18 @@
  */
 package org.netbeans.modules.php.editor.model.impl;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import org.netbeans.modules.php.editor.index.IndexedInterface;
 import org.netbeans.modules.php.editor.model.*;
 import java.util.List;
+import java.util.Set;
+import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.php.editor.index.IndexedFunction;
+import org.netbeans.modules.php.editor.index.PHPIndex;
 import org.netbeans.modules.php.editor.model.nodes.InterfaceDeclarationInfo;
+import org.netbeans.modules.php.editor.parser.astnodes.BodyDeclaration.Modifier;
 
 /**
  *
@@ -74,18 +82,29 @@ final class InterfaceScopeImpl extends TypeScopeImpl implements InterfaceScope {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append(super.toString());
-        List<? extends InterfaceScopeImpl> implementedInterfaces = getInterfaces();
+        List<? extends InterfaceScope> implementedInterfaces = getSuperInterfaces();
         if (implementedInterfaces.size() > 0) {
             sb.append(" implements ");
-            for (InterfaceScopeImpl interfaceScope : implementedInterfaces) {
+            for (InterfaceScope interfaceScope : implementedInterfaces) {
                 sb.append(interfaceScope.getName()).append(" ");
             }
         }
         return sb.toString();
     }
 
-    public List<? extends MethodScope> getAllInheritedMethods() {
-        throw new UnsupportedOperationException("Not supported yet.");
+    public List<? extends MethodScope> getMethods() {
+        List<MethodScope> allMethods = new ArrayList<MethodScope>();
+        allMethods.addAll(getDeclaredMethods());
+        IndexScope indexScope = ModelUtils.getIndexScope(this);
+        PHPIndex index = indexScope.getIndex();
+        Set<InterfaceScope> interfaceScopes = new HashSet<InterfaceScope>();
+        interfaceScopes.addAll(getSuperInterfaces());
+        for (InterfaceScope iface : interfaceScopes) {
+            Collection<IndexedFunction> indexedFunctions = index.getAllMethods(null, iface.getName(), "", NameKind.PREFIX, Modifier.PUBLIC | Modifier.PROTECTED);
+            for (IndexedFunction indexedFunction : indexedFunctions) {
+                allMethods.add(new MethodScopeImpl((InterfaceScopeImpl) iface, indexedFunction, PhpKind.METHOD));
+            }
+        }
+        return allMethods;
     }
-
 }

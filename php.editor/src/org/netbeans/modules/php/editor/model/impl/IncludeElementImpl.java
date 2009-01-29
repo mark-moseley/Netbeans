@@ -36,30 +36,24 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.model;
 
-import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+package org.netbeans.modules.php.editor.model.impl;
+
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.php.editor.model.IncludeElement;
+import org.netbeans.modules.php.editor.model.PhpModifiers;
+import org.netbeans.modules.php.editor.model.nodes.IncludeInfo;
+import org.openide.filesystems.FileObject;
+import org.openide.util.Union2;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface ClassScope extends TypeScope {
-    List<? extends InterfaceScope> getSuperInterfaces();
-    List<? extends ClassScope> getSuperClasses();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends FieldElement> getDeclaredFields();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends MethodScope> getMethods();
-    List<? extends FieldElement> getFields();
+class IncludeElementImpl extends ModelElementImpl implements IncludeElement {
+    IncludeElementImpl(ScopeImpl inScope, FileObject fo, IncludeInfo info) {
+        super(inScope, "include", Union2.<String, FileObject>createSecond(fo),
+                new OffsetRange(0, 0), info.getPhpKind(), PhpModifiers.EMPTY);
+    }
 
-    
-    List<? extends FieldElement> findDeclaredFields(final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final String queryName, final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends FieldElement> findInheritedFields(String fieldName);
-
-    //TODO: add getAllInheritedSuperClasses()
-    //TODO: add getAllInheritedInterfaces()
-    //TODO: ...
 }

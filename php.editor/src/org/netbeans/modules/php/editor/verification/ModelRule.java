@@ -36,30 +36,40 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.model;
 
+package org.netbeans.modules.php.editor.verification;
+
+import java.util.Collections;
 import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+import java.util.Set;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.HintSeverity;
+import org.netbeans.modules.gsf.api.Rule.AstRule;
+import org.netbeans.modules.gsf.api.RuleContext;
+import org.netbeans.modules.php.editor.model.PhpFileScope;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface ClassScope extends TypeScope {
-    List<? extends InterfaceScope> getSuperInterfaces();
-    List<? extends ClassScope> getSuperClasses();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends FieldElement> getDeclaredFields();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends MethodScope> getMethods();
-    List<? extends FieldElement> getFields();
+abstract class ModelRule implements AstRule {
+    private PhpFileScope modelScope;
+    abstract void check (PhpFileScope modelScope, RuleContext context, List<Hint> hints);
 
-    
-    List<? extends FieldElement> findDeclaredFields(final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final String queryName, final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends FieldElement> findInheritedFields(String fieldName);
+    @Override
+    public Set<? extends Object> getKinds() {
+        return Collections.singleton(PHPHintsProvider.MODEL_HINTS);
+    }
 
-    //TODO: add getAllInheritedSuperClasses()
-    //TODO: add getAllInheritedInterfaces()
-    //TODO: ...
+    public boolean getDefaultEnabled() {
+        return true;
+    }
+
+    public boolean appliesTo(RuleContext context) {
+        return true;
+    }
+
+    public HintSeverity getDefaultSeverity() {
+        return HintSeverity.WARNING;
+    }
 }

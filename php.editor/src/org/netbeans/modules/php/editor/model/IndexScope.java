@@ -36,30 +36,32 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+
 package org.netbeans.modules.php.editor.model;
 
 import java.util.List;
 import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.php.editor.index.PHPIndex;
 
 /**
  * @author Radek Matous
  */
-public interface ClassScope extends TypeScope {
-    List<? extends InterfaceScope> getSuperInterfaces();
-    List<? extends ClassScope> getSuperClasses();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends FieldElement> getDeclaredFields();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends MethodScope> getMethods();
-    List<? extends FieldElement> getFields();
+public interface IndexScope {
+    PHPIndex getIndex();
+    List<? extends MethodScope> findMethods(TypeScope type, final String queryName, final int... modifiers);
+    List<? extends MethodScope> findMethods(TypeScope type, final NameKind nameKind, final String... queryName);
+    List<? extends MethodScope> findMethods(TypeScope type, final NameKind nameKind, final String queryName, final int... modifiers);
+    List<? extends TypeScope> findTypes(final String... queryName);
+    List<? extends TypeScope> findTypes(final NameKind nameKind, final String... queryName);
+    List<? extends ConstantElement> findConstants(final String... queryName);
+    List<? extends ConstantElement> findConstants(final NameKind nameKind, final String... queryName);
+    List<? extends ClassScope> findClasses(final String... queryName);
+    List<? extends ClassScope> findClasses(final NameKind nameKind, final String... queryName);
+    List<? extends InterfaceScope> findInterfaces(final String... queryName);
+    List<? extends InterfaceScope> findInterfaces(final NameKind nameKind, final String... queryName);
+    List<? extends FunctionScope> findFunctions(final String... queryName);
+    List<? extends FunctionScope> findFunctions(final NameKind nameKind, final String... queryName);
+    List<? extends VariableName> findVariables(final String... queryName);
+    List<? extends VariableName> findVariables(final NameKind nameKind, final String... queryName);
 
-    
-    List<? extends FieldElement> findDeclaredFields(final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final String queryName, final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends FieldElement> findInheritedFields(String fieldName);
-
-    //TODO: add getAllInheritedSuperClasses()
-    //TODO: add getAllInheritedInterfaces()
-    //TODO: ...
 }

@@ -36,30 +36,22 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.model;
+
+package org.netbeans.modules.php.editor.model.impl;
 
 import java.util.List;
 import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.php.editor.model.VariableName;
+import org.netbeans.modules.php.editor.parser.astnodes.Program;
+import org.netbeans.modules.php.editor.parser.astnodes.Variable;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface ClassScope extends TypeScope {
-    List<? extends InterfaceScope> getSuperInterfaces();
-    List<? extends ClassScope> getSuperClasses();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends FieldElement> getDeclaredFields();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends MethodScope> getMethods();
-    List<? extends FieldElement> getFields();
-
-    
-    List<? extends FieldElement> findDeclaredFields(final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final String queryName, final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends FieldElement> findInheritedFields(String fieldName);
-
-    //TODO: add getAllInheritedSuperClasses()
-    //TODO: add getAllInheritedInterfaces()
-    //TODO: ...
+interface VariableContainerImpl  {
+    VariableNameImpl createElement(Program program, Variable node);
+    public List<? extends VariableName> getAllVariablesImpl();
+    public List<? extends VariableName> getVariablesImpl(final String... queryName);
+    public List<? extends VariableName> getVariablesImpl(final NameKind nameKind, final String... queryName);
 }

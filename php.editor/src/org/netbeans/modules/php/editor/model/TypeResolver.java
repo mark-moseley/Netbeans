@@ -38,28 +38,47 @@
  */
 package org.netbeans.modules.php.editor.model;
 
+import java.util.Collections;
 import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+import javax.swing.text.Document;
+import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface ClassScope extends TypeScope {
-    List<? extends InterfaceScope> getSuperInterfaces();
-    List<? extends ClassScope> getSuperClasses();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends FieldElement> getDeclaredFields();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends MethodScope> getMethods();
-    List<? extends FieldElement> getFields();
+public final class TypeResolver {
 
-    
-    List<? extends FieldElement> findDeclaredFields(final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final String queryName, final int... modifiers);
-    List<? extends FieldElement> findDeclaredFields(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends FieldElement> findInheritedFields(String fieldName);
+    private ModelVisitor modelVisitor;
 
-    //TODO: add getAllInheritedSuperClasses()
-    //TODO: add getAllInheritedInterfaces()
-    //TODO: ...
+    TypeResolver(ModelVisitor modelVisitor) {
+        this.modelVisitor = modelVisitor;
+    }
+    //TODO: add getFieldType
+
+    public List<? extends TypeScope> getVariableType(String varName, final int offset) {
+        TypeScope type = null;
+        VariableScope varScope = modelVisitor.getNearestVariableScope(offset);
+        while (varScope != null && varName != null) {
+            //TODO: impl. doesn't count with more types
+            VariableName var = ModelUtils.getFirst(ModelUtils.filter(varScope.getDeclaredVariables(), varName));
+            if (var != null) {
+                //TODO: impl. doesn't count with more types
+                type = ModelUtils.getFirst(var.getTypes(offset));
+            }
+            if (varScope instanceof PhpFileScope) {
+                varScope = null;
+            } else {
+                varScope = ModelUtils.getFileScope(varScope);
+            }
+        }
+        //TODO: impl. doesn't count with more types
+        List<? extends TypeScope> retval = Collections.emptyList();
+        if (type != null) {
+            retval = Collections.singletonList(type);
+        }
+
+        return retval;
+    }
+
 }
