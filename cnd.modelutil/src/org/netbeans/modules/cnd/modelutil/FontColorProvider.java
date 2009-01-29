@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,31 +31,47 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.apt.support;
+package org.netbeans.modules.cnd.modelutil;
 
-import java.util.Collection;
-import java.util.List;
-import org.netbeans.modules.cnd.apt.support.APTMacro.MacroType;
+import javax.swing.text.AttributeSet;
 
 /**
- * interface to support contextual macro definitions map
- * @author Vladimir Voskresensky
+ *
+ * @author Sergey Grinev
  */
-public interface APTMacroMap extends APTMacroCallback {
-    /*
-     * save/restore state of map
-     */
-    public State getState();
-    public void setState(State state);
-    public interface State {
-    };    
+public interface FontColorProvider {
+    AttributeSet getColor(Entity color);
+
+    public enum Entity {
+
+        PREPROCESSOR_DIRECTIVE("preprocessor"), // NOI18N
+        INACTIVE_CODE("cc-highlighting-inactive"), // NOI18N
+        //Macro Defined in Code
+        DEFINED_MACRO("cc-highlighting-macros"), // NOI18N
+        //Predefined Macros (compiler and compile time)
+        SYSTEM_MACRO("cc-highlighting-macros-system"), // NOI18N
+        //Macro Defined in Project (in comand line -D)
+        USER_MACRO("cc-highlighting-macros-user"), // NOI18N
+        CLASS_FIELD("cc-highlighting-class-fields"), // NOI18N
+        MARK_OCCURENCES("cc-highlighting-mark-occurrences"), // NOI18N
+        TYPEDEF("cc-highlighting-typedefs"), // NOI18N
+        UNUSED_VARIABLES("cc-highlighting-unused-variables"); // NOI18N
+
+        private final String resourceName;
+
+        Entity(String resourceName) {
+            this.resourceName = resourceName;
+        }
+
+        public String getResourceName() {
+            return resourceName;
+        }
+    }
     
-    /** 
-     * APTWalker context methods to (un)define macros 
-     */    
-    public void define(APTToken name, List<APTToken> value, MacroType macroType);
-    public void define(APTToken name, Collection<APTToken> params, List<APTToken> value, MacroType macroType);
-    public void undef(APTToken name);
 }

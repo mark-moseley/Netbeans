@@ -61,8 +61,6 @@ import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JPanel;
 
-import org.netbeans.modules.cnd.api.model.CsmNamespace;
-import org.netbeans.modules.cnd.api.model.CsmNamespaceAlias;
 
 /**
  *
@@ -72,7 +70,7 @@ import org.netbeans.modules.cnd.api.model.CsmNamespaceAlias;
 
 public abstract class CsmPaintComponent extends JPanel {
             
-    protected DrawState drawState = new DrawState();
+    DrawState drawState = new DrawState();
     
     protected Font drawFont;
            
@@ -124,6 +122,7 @@ public abstract class CsmPaintComponent extends JPanel {
         return isSelected;
     }
     
+    @Override
     public void paintComponent(Graphics g) {
         // clear background
         g.setColor(getBackground());
@@ -165,6 +164,7 @@ public abstract class CsmPaintComponent extends JPanel {
      * returns string representation of paint item
      * IMPORTANT: have to be in sync with draw() method
      */   
+    @Override
     abstract public String toString();
     
     protected void setIcon(Icon icon){
@@ -289,7 +289,9 @@ public abstract class CsmPaintComponent extends JPanel {
     }
     
     protected int getWidth(String s, Font font) {
-        if (font == null) return getWidth(s);
+        if (font == null) {
+            return getWidth(s);
+        }
         return getFontMetrics(font).stringWidth(s);
     }
     
@@ -302,6 +304,7 @@ public abstract class CsmPaintComponent extends JPanel {
         fontMetrics.stringWidth(s);
     }
     
+    @Override
     public void setFont(Font font) {
         super.setFont(font);
         
@@ -323,19 +326,16 @@ public abstract class CsmPaintComponent extends JPanel {
         return drawFont;
     }
     
-    protected Color getTypeColor(String s) {
-        return (CsmUtilities.isPrimitiveClassName(s))
-        ? KEYWORD_COLOR : TYPE_COLOR;
-    }
-    
+    @Override
     public Dimension getPreferredSize() {
         draw(null);
         Insets i = getInsets();
         if (i != null) {
             drawState.drawX += i.right;
         }
-        if (drawState.drawX > getMaximumSize().width)
+        if (drawState.drawX > getMaximumSize().width) {
             drawState.drawX = getMaximumSize().width;
+        }
         return new Dimension(drawState.drawX, drawState.drawHeight);
     }
     
@@ -369,7 +369,7 @@ public abstract class CsmPaintComponent extends JPanel {
         }
         
         public PostfixString(String text, int fontStyle) {
-            this(text, CsmPaintComponent.this.POSTFIX_COLOR, fontStyle);            
+            this(text, CsmPaintComponent.POSTFIX_COLOR, fontStyle);            
         }
         
         void Draw(Graphics g) {            
@@ -381,7 +381,7 @@ public abstract class CsmPaintComponent extends JPanel {
         }        
     }
     
-    private class DrawState {
+    private static class DrawState {
         int drawX, drawY;
         int drawHeight;    
                
@@ -563,11 +563,12 @@ public abstract class CsmPaintComponent extends JPanel {
     public static class TypedefPaintComponent extends CsmPaintComponent{
         
         String formatTypedefName;
-        private Color TYPEDEF_COLOR = Color.blue.darker().darker().darker();
-        private boolean displayFQN;
+        private final Color TYPEDEF_COLOR = CsmFontColorManager.instance().getColor(FontColorProvider.Entity.TYPEDEF); //Color.blue.darker().darker().darker();
+        //private boolean displayFQN;
         
         public void setFormatTypedefName(String formatTypedefName){
             this.formatTypedefName = formatTypedefName;
+            
         }
         
         protected Color getColor(){
@@ -595,6 +596,7 @@ public abstract class CsmPaintComponent extends JPanel {
         
         private Color STRUCT_COLOR = Color.red.darker().darker();
         
+        @Override
         protected Color getColor(){
             return STRUCT_COLOR;
         }
@@ -608,6 +610,7 @@ public abstract class CsmPaintComponent extends JPanel {
         
         private Color UNION_COLOR = Color.red.darker();
         
+        @Override
         protected Color getColor(){
             return UNION_COLOR;
         }
@@ -618,7 +621,7 @@ public abstract class CsmPaintComponent extends JPanel {
     }
     
     public static class FieldPaintComponent extends CsmPaintComponent{
-        private Color FIELD_COLOR = Color.blue.darker();
+        private Color FIELD_COLOR = CsmFontColorManager.instance().getColor(FontColorProvider.Entity.CLASS_FIELD);//Color.blue.darker();
         protected String typeName;
         protected Color typeColor;
         protected String fldName;
@@ -633,6 +636,7 @@ public abstract class CsmPaintComponent extends JPanel {
             return FIELD_COLOR;
         }
         
+        @Override
         public void setName(String fldName){
             this.fldName= fldName;
         }
@@ -706,10 +710,12 @@ public abstract class CsmPaintComponent extends JPanel {
             this.modifiers |= CsmUtilities.LOCAL_MEMBER_BIT | this.modifiers;
         }
         
+        @Override
         public Color getNameColor() {
             return VARIABLE_COLOR;
         }
 
+        @Override
         public void setModifiers(int modifiers) {
             super.setModifiers(modifiers | CsmUtilities.LOCAL_MEMBER_BIT);
         }
@@ -722,6 +728,7 @@ public abstract class CsmPaintComponent extends JPanel {
             super();
         }
         
+        @Override
         public Color getNameColor() {
             return VARIABLE_COLOR;
         }
@@ -734,14 +741,15 @@ public abstract class CsmPaintComponent extends JPanel {
             super();
         }
         
+        @Override
         public Color getNameColor() {
             return VARIABLE_COLOR;
         }
     }
     
     public static class MacroPaintComponent extends CsmPaintComponent{
-        private Color MACRO_NAME_COLOR = Color.green.darker().darker();
-        private Color MACRO_PARAMETER_NAME_COLOR = Color.magenta.darker();
+        private Color MACRO_NAME_COLOR = CsmFontColorManager.instance().getColor(FontColorProvider.Entity.DEFINED_MACRO);//Color.green.darker().darker();
+        private Color MACRO_PARAMETER_NAME_COLOR = new Color(163, 102, 10);//Color.magenta.darker();
         private List params = null;
         private String name;
 
@@ -749,10 +757,12 @@ public abstract class CsmPaintComponent extends JPanel {
             super();
         }
 
+        @Override
         public String getName(){
             return name;
         }
         
+        @Override
         public void setName(String name){
             this.name = name;
         }
@@ -818,11 +828,104 @@ public abstract class CsmPaintComponent extends JPanel {
         }    
     }
     
+    public static class TemplateParameterPaintComponent extends CsmPaintComponent{
+        private Color PARAMETER_NAME_COLOR = Color.BLACK.darker().darker();
+        private List params = null;
+        private String name;
+
+        public TemplateParameterPaintComponent(){
+            super();
+        }
+
+        @Override
+        public String getName(){
+            return name;
+        }
+        
+        @Override
+        public void setName(String name){
+            this.name = name;
+        }
+        
+        public void setParams(List params){
+            this.params = params;
+        }
+        
+        protected List getParamList(){
+            return params;
+        }
+
+        protected void draw(Graphics g){
+            // IMPORTANT:
+            // when updated => have to update toString!
+            boolean strike = false;
+            drawIcon(g, getIcon());
+            drawString(g, getName(), PARAMETER_NAME_COLOR, null, strike);
+        }
+
+        /**
+         * returns string representation of paint item
+         * IMPORTANT: have to be in sync with draw() method
+         */
+        public String toString() {
+            StringBuilder buf = new StringBuilder();
+            //macro name
+            buf.append(getName());
+            return buf.toString();
+        }    
+    }
+
+    public static class LabelPaintComponent extends  CsmPaintComponent {
+        private Color LABEL_NAME_COLOR = Color.BLACK.darker().darker();
+        private List params = null;
+        private String name;
+
+        public LabelPaintComponent(){
+            super();
+        }
+
+        @Override
+        public String getName(){
+            return name;
+        }
+        
+        @Override
+        public void setName(String name){
+            this.name = name;
+        }
+        
+        public void setParams(List params){
+            this.params = params;
+        }
+        
+        protected List getParamList(){
+            return params;
+        }
+
+        protected void draw(Graphics g){
+            // IMPORTANT:
+            // when updated => have to update toString!
+            boolean strike = false;
+            drawIcon(g, getIcon());
+            drawString(g, getName(), LABEL_NAME_COLOR, null, strike);
+        }
+
+        /**
+         * returns string representation of paint item
+         * IMPORTANT: have to be in sync with draw() method
+         */
+        public String toString() {
+            StringBuilder buf = new StringBuilder();
+            //macro name
+            buf.append(getName());
+            return buf.toString();
+        }    
+    }
     
     public static class ConstructorPaintComponent extends CsmPaintComponent{
         
         private Color CONSTRUCTOR_COLOR = Color.orange.darker().darker();
-        private Color PARAMETER_NAME_COLOR = Color.magenta.darker();
+        private Color PARAMETER_NAME_COLOR = new Color(163, 102, 10);//Color.magenta.darker();
         private List params = new ArrayList();
         private List excs = new ArrayList();
         private String name;
@@ -835,10 +938,12 @@ public abstract class CsmPaintComponent extends JPanel {
             return modifiers;
         }
         
+        @Override
         public String getName(){
             return name;
         }
         
+        @Override
         public void setName(String name){
             this.name = name;
         }
@@ -868,8 +973,8 @@ public abstract class CsmPaintComponent extends JPanel {
             //drawType
             drawString(g, prm.getSimpleTypeName(), prm.getTypeColor(), null, strike);
             
-            String name = prm.getName();
-            if (name != null && name.length() > 0) {
+            String parmName = prm.getName();
+            if (parmName != null && parmName.length() > 0) {
                 drawString(g, " ", strike); // NOI18N
                 drawString(g, prm.getName(), PARAMETER_NAME_COLOR, null, strike);
             }
@@ -935,8 +1040,8 @@ public abstract class CsmPaintComponent extends JPanel {
             //type
             buf.append(prm.getSimpleTypeName());
             //name
-            String name = prm.getName();
-            if (name != null && name.length() > 0) {
+            String parmName = prm.getName();
+            if (parmName != null && parmName.length() > 0) {
                 buf.append(' '); // NOI18N
                 buf.append(prm.getName());
             }
@@ -975,8 +1080,8 @@ public abstract class CsmPaintComponent extends JPanel {
     
     public static class MethodPaintComponent extends ConstructorPaintComponent {
         
-        private Color PARAMETER_NAME_COLOR = Color.magenta.darker();
-        private Color METHOD_COLOR = Color.red.darker().darker();
+        //private Color PARAMETER_NAME_COLOR = Color.magenta.darker();
+        private Color METHOD_COLOR = Color.black;//red.darker().darker();
         private String typeName;
         private Color typeColor;
         private boolean drawTypeAsPrefix = false;
@@ -1009,6 +1114,7 @@ public abstract class CsmPaintComponent extends JPanel {
             this.drawTypeAsPrefix = asPrefix;
         }
         
+        @Override
         protected void draw(Graphics g){
             // IMPORTANT:
             // when updated => have to update toString!
@@ -1036,6 +1142,7 @@ public abstract class CsmPaintComponent extends JPanel {
          * returns string representation of paint item
          * IMPORTANT: have to be in sync with draw() method
          */
+        @Override
         public String toString() {
             StringBuilder buf = new StringBuilder();
             if (drawTypeAsPrefix) {
@@ -1057,14 +1164,28 @@ public abstract class CsmPaintComponent extends JPanel {
             return buf.toString();            
         }        
     }
+
+    public static class FileLocalFunctionPaintComponent extends MethodPaintComponent {
+        private Color FUN_COLOR = Color.black;//red.darker().darker();
+        
+        public FileLocalFunctionPaintComponent(){
+            super();
+        }
+        
+        @Override
+        public Color getNameColor() {
+            return FUN_COLOR;
+        }
+    }
     
     public static class GlobalFunctionPaintComponent extends MethodPaintComponent {
-        private Color FUN_COLOR = Color.red.darker().darker();
+        private Color FUN_COLOR = Color.black;//.red.darker().darker();
         
         public GlobalFunctionPaintComponent(){
             super();
         }
         
+        @Override
         public Color getNameColor() {
             return FUN_COLOR;
         }
@@ -1103,15 +1224,18 @@ public abstract class CsmPaintComponent extends JPanel {
             }
         }
         
+        @Override
         public void setFont(Font font) {
             super.setFont(font);
-            if (comp != null)
-                 comp.setFont(font);
+            if (comp != null) {
+                comp.setFont(font);
+            }
         }
         
         public String toString() {
-            if (comp != null)
+            if (comp != null) {
                 return comp.toString();
+            }
             return "";
         }    
     } 
