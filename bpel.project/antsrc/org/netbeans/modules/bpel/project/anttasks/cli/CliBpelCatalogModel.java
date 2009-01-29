@@ -1,25 +1,48 @@
 /*
- * The contents of this file are subject to the terms of the Common Development
- * and Distribution License (the License). You may not use this file except in
- * compliance with the License.
- * 
- * You can obtain a copy of the License at http://www.netbeans.org/cddl.html
- * or http://www.netbeans.org/cddl.txt.
- * 
- * When distributing Covered Code, include this CDDL Header Notice in each file
- * and include the License file at http://www.netbeans.org/cddl.txt.
- * If applicable, add the following below the CDDL Header, with the fields
- * enclosed by brackets [] replaced by your own identifying information:
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ *
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ *
+ * The contents of this file are subject to the terms of either the GNU
+ * General Public License Version 2 only ("GPL") or the Common
+ * Development and Distribution License("CDDL") (collectively, the
+ * "License"). You may not use this file except in compliance with the
+ * License. You can obtain a copy of the License at
+ * http://www.netbeans.org/cddl-gplv2.html
+ * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
+ * specific language governing permissions and limitations under the
+ * License.  When distributing the software, include this License Header
+ * Notice in each file and include the License file at
+ * nbbuild/licenses/CDDL-GPL-2-CP.  Sun designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Sun in the GPL Version 2 section of the License file that
+ * accompanied this code. If applicable, add the following below the
+ * License Header, with the fields enclosed by brackets [] replaced by
+ * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
+ * Contributor(s):
+ *
  * The Original Software is NetBeans. The Initial Developer of the Original
  * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
+ *
+ * If you wish your version of this file to be governed by only the CDDL
+ * or only the GPL Version 2, indicate your decision by adding
+ * "[Contributor] elects to include this software in this distribution
+ * under the [CDDL or GPL Version 2] license." If you do not indicate a
+ * single choice of license, a recipient has the option to distribute
+ * your version of this file under either the CDDL, the GPL Version 2 or
+ * to extend the choice of license to its licensees as provided above.
+ * However, if you add GPL Version 2 code and therefore, elected the GPL
+ * Version 2 license, then the option applies only if the new code is
+ * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.xslt.project;
+package org.netbeans.modules.bpel.project.anttasks.cli;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import java.net.MalformedURLException;
@@ -29,58 +52,55 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
-
+import java.util.Properties;
 import javax.swing.text.Document;
 
 import org.apache.xml.resolver.Catalog;
-
 import org.apache.xml.resolver.NbCatalogManager;
 import org.apache.xml.resolver.tools.NbCatalogResolver;
+
 import org.w3c.dom.ls.LSInput;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
+import org.netbeans.modules.bpel.model.api.BpelModel;
+import org.netbeans.modules.bpel.model.spi.BpelModelFactory;
+import org.netbeans.modules.bpel.project.CommandlineBpelProjectXmlCatalogProvider;
 import org.netbeans.modules.xml.retriever.catalog.Utilities;
-import org.netbeans.modules.xml.wsdl.model.WSDLModel;
-import org.netbeans.modules.xml.wsdl.model.WSDLModelFactory;
 import org.netbeans.modules.xml.xam.ModelSource;
 import org.netbeans.modules.xml.xam.locator.CatalogModel;
 import org.netbeans.modules.xml.xam.locator.CatalogModelException;
-import org.netbeans.modules.xslt.tmap.model.api.TMapModel;
-import org.netbeans.modules.xslt.tmap.model.spi.TMapModelFactory;
 
 import org.openide.util.lookup.Lookups;
 import org.openide.util.Lookup;
 
-/**
- *
- * This class helps to obtain TMapModel from transformmap file URI
- * @author Vitaly Bychkov
- * @version 1.0
- */
-public class CommandlineTransformmapCatalogModel  implements CatalogModel {
-
-    static CommandlineTransformmapCatalogModel singletonCatMod = null;
+public class CliBpelCatalogModel implements CatalogModel {
+    
+    static CliBpelCatalogModel singletonCatMod = null;
     static File projectCatalogFileLocation = null;
-
-    public CommandlineTransformmapCatalogModel() {
-      URI catalogFileLocPath= CommandlineXsltProjectXmlCatalogProvider.getInstance().getProjectWideCatalogForWizard();
+        
+    /**
+     * Constructor
+     */
+    public CliBpelCatalogModel() {
+      URI catalogFileLocPath= CommandlineBpelProjectXmlCatalogProvider.getInstance().getProjectCatalogUri();
       if (catalogFileLocPath != null) {
           projectCatalogFileLocation = new File(catalogFileLocPath);
       }
     }
-
+    
     /**
      * Gets the instance of this class internal API
      * @return current class instance
      */
-    public static CommandlineTransformmapCatalogModel getDefault(){
+    public static CliBpelCatalogModel getDefault(){
         if (singletonCatMod == null){
-            singletonCatMod = new CommandlineTransformmapCatalogModel();
+            singletonCatMod = new CliBpelCatalogModel();
         }
         return singletonCatMod;
     }
-
+    
+    
     private File getProjectCatalogXML() {
         if (projectCatalogFileLocation != null && projectCatalogFileLocation.exists()) {
             return projectCatalogFileLocation;
@@ -89,12 +109,6 @@ public class CommandlineTransformmapCatalogModel  implements CatalogModel {
         }
     }    
     
-    /**
-     * Gets the  Model source for Transformmap URI
-     * @param locationURI URI location of the Transformmap File
-     * @return ModelSource return ModelSource
-     * @throws org.netbeans.modules.xml.xam.locator.CatalogModelException 
-     */
     public ModelSource getModelSource(URI locationURI) throws CatalogModelException {
        List<File> catalogFileList = new ArrayList<File>();
        File file = null;
@@ -129,20 +143,11 @@ public class CommandlineTransformmapCatalogModel  implements CatalogModel {
        }
         return createModelSource(file, true);
     }
-
-    /**
-     * Implementation of CatalogModel
-     * @param locationURI 
-     * @param modelSourceOfSourceDocument 
-     * @throws org.netbeans.modules.xml.xam.locator.CatalogModelException 
-     * @return 
-     */
-    public ModelSource getModelSource(URI locationURI,
-                                      ModelSource modelSourceOfSourceDocument) throws CatalogModelException {
+    
+    public ModelSource getModelSource(URI locationURI, ModelSource modelSourceOfSourceDocument) throws CatalogModelException {
         if(locationURI == null) {
             return null;
         }
-        
         URI resolvedURI = locationURI;
         
         if(modelSourceOfSourceDocument != null) {
@@ -162,11 +167,6 @@ public class CommandlineTransformmapCatalogModel  implements CatalogModel {
         return null;
     }
 
-    /**
-     * Implementation of CatalogModel
-     * @param file 
-     * @return 
-     */
      protected Document getDocument(File file) throws CatalogModelException{
         Document result = null;
 
@@ -176,8 +176,6 @@ public class CommandlineTransformmapCatalogModel  implements CatalogModel {
 
             FileInputStream fis = new FileInputStream(file);
             byte buffer[] = new byte[fis.available()];
-//                result = new org.netbeans.editor.BaseDocument(
-//                        org.netbeans.modules.xml.text.syntax.XMLKit.class, false);
             result = new javax.swing.text.PlainDocument();
             result.remove(0, result.getLength());
             fis.read(buffer);
@@ -191,64 +189,36 @@ public class CommandlineTransformmapCatalogModel  implements CatalogModel {
 
         return result;
     }   
-
-    private TMapModelFactory getModelFactory() {
-        TMapModelFactory factory =null;
+    
+    private BpelModelFactory getModelFactory() {
+        BpelModelFactory factory =null;
         try {
-            factory = TMapModelFactory.TMapModelFactoryAccess.getFactory();
-        } catch (Exception cnfe) {
+            factory = (BpelModelFactory) Lookup.getDefault().lookup(BpelModelFactory.class);
+        }catch (Exception cnfe) {
             throw new RuntimeException(cnfe);
         }
         return factory;
     }
     
-    /**
-     * Implementation of CatalogModel
-     * @param file 
-     * @param readOnly 
-     * @throws org.netbeans.modules.xml.xam.locator.CatalogModelException 
-     * @return 
-     */
      public ModelSource createModelSource(File file, boolean readOnly) throws CatalogModelException{
          
          Lookup lookup = Lookups.fixed(new Object[]{
                 file,
                 getDocument(file),
                 getDefault(),
-              //  new StreamSource(file)
                 file
             });
             
          return new ModelSource(lookup, readOnly);
      }
     
-    /**
-     * Creates Transformmap Model from file URI
-     * @param locationURI 
-     * @throws java.lang.Exception 
-     * @return 
-     */
-    public TMapModel getTMapModel(URI locationURI) throws Exception {
+    public BpelModel getBPELModel(URI locationURI) throws Exception {
         ModelSource source = getDefault().getModelSource(locationURI);
-        TMapModel model = getModelFactory().getModel (source);
+        BpelModel model = getModelFactory().getModel (source);
         model.sync();
         return model;
     }
     
-    /**
-     * Creates WSDL Model from file URI
-     * @param locationURI 
-     * @throws java.lang.Exception 
-     * @return 
-     */
-    public WSDLModel getWsdlModel(URI locationURI) throws Exception {
-        ModelSource source = getDefault().getModelSource(locationURI);
-        if (source == null) {
-            return null;
-        }
-        WSDLModel model = WSDLModelFactory.getDefault().getModel (source);
-        return model;
-    }    
     protected URI resolveUsingApacheCatalog(List<File> catalogFileList, String locationURI) throws CatalogModelException, IOException  {
         NbCatalogResolver catalogResolver;
         Catalog apacheCatalogResolverObj;    
@@ -306,14 +276,12 @@ public class CommandlineTransformmapCatalogModel  implements CatalogModel {
         }
         return null;
     }    
-
+    
      public InputSource resolveEntity(String publicId, String systemId) throws SAXException, IOException {
-         //TODO implement this method.
          return null;
      }
      
      public LSInput resolveResource(String type, String namespaceURI, String publicId, String systemId, String baseURI) {
-         //TODO implement this method.
          return null;
      }    
 }

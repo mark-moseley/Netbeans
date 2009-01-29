@@ -66,14 +66,13 @@ import javax.swing.text.Document;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import org.apache.xml.resolver.Catalog;
-import org.apache.xml.resolver.CatalogManager;
+import org.apache.xml.resolver.NbCatalogManager;
 import org.apache.xml.resolver.helpers.Debug;
-import org.apache.xml.resolver.tools.CatalogResolver;
+import org.apache.xml.resolver.tools.NbCatalogResolver;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.xml.retriever.XMLCatalogProvider;
-import org.netbeans.modules.xml.retriever.catalog.ProjectCatalogSupport;
 import org.netbeans.modules.xml.retriever.catalog.Utilities;
 import org.netbeans.modules.xml.xam.locator.CatalogModel;
 import org.netbeans.modules.xml.xam.locator.CatalogModelException;
@@ -131,15 +130,37 @@ public class CatalogModelImpl implements CatalogModel {
         this.catalogFileObject = FileUtil.createData(fo, fileName);
     }
     
+    /**
+     * This method is used by code completion only.
+     * Check if the URI conveys control information.
+     * CC adds special query strings into the URI that must be cleared.
+     */
+    private URI extractRealURI(URI locationURI) throws URISyntaxException {
+        URI realURI = locationURI;
+        String queryString = locationURI.getQuery();
+        if(queryString != null &&
+           queryString.indexOf("fetch=") != -1 && //NOI18N
+           queryString.indexOf("sync=") != -1) { //NOI18N
+            int index = queryString.indexOf("fetch="); //NOI18N
+            String temp = queryString.substring(index);
+            String queries[] = temp.split("&&"); //NOI18N
+            doFetch = Boolean.valueOf(queries[0].split("=")[1]); //NOI18N
+            fetchSynchronous = Boolean.valueOf(queries[1].split("=")[1]); //NOI18N
+            realURI = new URI(locationURI.toString().substring(
+                    0, locationURI.toString().lastIndexOf("fetch=")-1)); //NOI18N
+        }
+        return realURI;
+    }
+    
     private boolean doFetch = true;
     private boolean fetchSynchronous = false;
-    public synchronized ModelSource getModelSourceSynchronous(URI locationURI,
-        ModelSource modelSourceOfSourceDocument, boolean fetch) throws CatalogModelException {
+    public synchronized ModelSource getModelSource(URI locationURI,
+        ModelSource modelSourceOfSourceDocument) throws CatalogModelException {
         ModelSource ms = null;
-        doFetch = fetch;
-        fetchSynchronous = true;
         try {
-            ms = getModelSource(locationURI, modelSourceOfSourceDocument);
+            ms = doGetModelSource(extractRealURI(locationURI), modelSourceOfSourceDocument);
+        } catch (URISyntaxException ex) {
+            throw new CatalogModelException(ex);
         } catch (CatalogModelException ex) {
             throw ex;
         } finally {
@@ -149,9 +170,8 @@ public class CatalogModelImpl implements CatalogModel {
         }
         return ms;
     }
-
-    
-    public synchronized ModelSource getModelSource(URI locationURI,
+        
+    private synchronized ModelSource doGetModelSource(URI locationURI,
             ModelSource modelSourceOfSourceDocument) throws CatalogModelException {
         logger.entering("CatalogModelImpl", "getModelSource", locationURI);
         Exception exn = null;
@@ -453,18 +473,18 @@ public class CatalogModelImpl implements CatalogModel {
     }
     
     
-    CatalogResolver catalogResolver;
+    NbCatalogResolver catalogResolver;
     Catalog apacheCatalogResolverObj;
     protected URI resolveUsingApacheCatalog(List<File> catalogFileList, String locationURI) throws CatalogModelException, IOException  {
         if((logger.getLevel() != null) && (logger.getLevel().intValue() <= Level.FINER.intValue())){
-            Debug debug = CatalogManager.getStaticManager().debug;
+            Debug debug = NbCatalogManager.getStaticManager().debug;
             debug.setDebug(logger.getLevel().intValue());
         }
         
-        CatalogManager manager = new CatalogManager(null);
+        NbCatalogManager manager = new NbCatalogManager(null);
         manager.setUseStaticCatalog(false);
         manager.setPreferPublic(false);
-        catalogResolver = new CatalogResolver(manager);
+        catalogResolver = new NbCatalogResolver(manager);
         apacheCatalogResolverObj = catalogResolver.getCatalog();
         for(File catFile : catalogFileList){
             apacheCatalogResolverObj.parseCatalog(catFile.toURL());
