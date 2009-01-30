@@ -43,41 +43,47 @@ made subject to such option by the copyright holder.
 
 <!DOCTYPE MIME-resolver PUBLIC "-//NetBeans//DTD MIME Resolver 1.0//EN" "http://www.netbeans.org/dtds/mime-resolver-1_0.dtd">
 
-
-
 <MIME-resolver>
-    <!-- Resolve according to root element: -->
+
+    <!-- mime type definitions for Sun AppServer & GlassFish descriptor files -->
+    <!-- sun-web.xml -->
     <file>
         <ext name="xml"/>
-        <resolver mime="text/x-struts+xml">
+        <resolver mime="text/x-dd-sun-web+xml">
             <xml-rule>
-            	<doctype public-id="-//Apache Software Foundation//DTD Struts Configuration 1.0//EN"/>
+                <element name="sun-web-app"/>
             </xml-rule>
         </resolver>
     </file>
-    <file>
-        <ext name="xml"/>
-            <resolver mime="text/x-struts+xml">
-            <xml-rule>
-                <doctype public-id="-//Apache Software Foundation//DTD Struts Configuration 1.1//EN"/>
-            </xml-rule>
-        </resolver>       
-    </file>    
-    <file>
-        <ext name="xml"/>
-            <resolver mime="text/x-struts+xml">
-            <xml-rule>
-                <doctype public-id="-//Apache Software Foundation//DTD Struts Configuration 1.2//EN"/>
-            </xml-rule>
-        </resolver>       
-    </file>    
-    <file>
-        <ext name="xml"/>
-            <resolver mime="text/x-struts+xml">
-            <xml-rule>
-                <doctype public-id="-//Apache Software Foundation//DTD Struts Configuration 1.3//EN"/>
-            </xml-rule>
-        </resolver>       
-    </file>
 
+    <!-- sun-ejb-jar.xml -->
+    <file>
+        <ext name="xml"/>
+        <resolver mime="text/x-dd-sun-ejb-jar+xml">
+            <xml-rule>
+                <element name="sun-ejb-jar"/>
+            </xml-rule>
+        </resolver>
+    </file>
+    
+    <!-- sun-application.xml -->
+    <file>
+        <ext name="xml"/>
+        <resolver mime="text/x-dd-sun-application+xml">
+            <xml-rule>
+                <element name="sun-application"/>
+            </xml-rule>
+        </resolver>
+    </file>
+    
+    <!-- sun-application-client.xml -->
+    <file>
+        <ext name="xml"/>
+        <resolver mime="text/x-dd-sun-app-client+xml">
+            <xml-rule>
+                <element name="sun-application-client"/>
+            </xml-rule>
+        </resolver>
+    </file>
+    
 </MIME-resolver>
