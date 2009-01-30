@@ -50,6 +50,12 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         super(testName);
     }
 
+    public void testClassNameCollision() throws Exception {
+        // IZ#156123: Resolve class from current namespace at first
+        performTest("iz156123.cc", 21, 20, "iz156123.cc", 12, 9); // Field in "Database::Field fld;"
+        performTest("iz156123.cc", 22, 15, "iz156123.cc", 14, 13); // name in "fld.name = 1;"
+    }
+
     public void testDerefArrayByArrow() throws Exception {
         //IZ#149783: IDE does not recognize array as pointer
         performTest("iz149783.c", 9, 10, "iz149783.c", 2, 5);
@@ -682,6 +688,43 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
     public void testIZ151955() throws Exception {
         // IZ#151955: java.lang.StackOverflowError in boost 1.36
         performTest("iz151955.cc", 13, 35, "iz151955.cc", 10, 5);
+    }
+
+    public void testIZ154112() throws Exception {
+        // IZ#154112: Unresolved instantiations of template
+        performTest("iz154112.cc", 17, 13, "iz154112.cc", 7, 5);
+        performTest("iz154112.cc", 18, 13, "iz154112.cc", 7, 5);
+        performTest("iz154112.cc", 19, 19, "iz154112.cc", 13, 5);
+        performTest("iz154112.cc", 20, 19, "iz154112.cc", 13, 5);
+    }
+
+    public void testIZ154594() throws Exception {
+        // IZ#154594: completion fails on expressions with keyword template
+        performTest("iz154594.cc", 15, 32, "iz154594.cc", 12, 5);
+    }
+
+    public void testIZ154775() throws Exception {
+        // IZ#154775: Unresolved inner type of instantiation
+        performTest("iz154775.cc", 14, 20, "iz154775.cc", 9, 5);
+
+        performTest("iz154775.cc", 31, 24, "iz154775.cc", 23, 5);
+        performTest("iz154775.cc", 32, 24, "iz154775.cc", 27, 5);
+    }
+
+    public void testIZ154778() throws Exception {
+        //IZ#154778: Completion fails on gt operator
+        performTest("iz154778.cc", 9, 18, "iz154778.cc", 5, 5);
+    }
+
+    public void testIZ154789() throws Exception {
+        //IZ#154789: Completion fails on macros
+        performTest("iz154789.cc", 15, 22, "iz154789.cc", 5, 5);
+    }
+
+    public void testIZ154781() throws Exception {
+        //IZ#154781: Completion fails on const
+        performTest("iz154781.cc", 14, 20, "iz154781.cc", 5, 5);
+        performTest("iz154781.cc", 15, 20, "iz154781.cc", 5, 5);
     }
 
     public static class Failed extends HyperlinkBaseTestCase {

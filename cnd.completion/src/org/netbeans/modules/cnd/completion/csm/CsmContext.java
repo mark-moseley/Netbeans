@@ -48,7 +48,7 @@ import org.netbeans.modules.cnd.api.model.CsmScope;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
+import java.util.ListIterator;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
 
 /**
@@ -57,10 +57,10 @@ import org.netbeans.modules.cnd.modelutil.CsmUtilities;
  */
 public class CsmContext {
     // offset for which the context is looking for or last off
-    private int offset;
+    private final int offset;
     
     // path of context as ordered list of context entries
-    private List/*<CsmContextEntry>*/ context;
+    private ArrayList<CsmContextEntry> context;
     
     // possible not null 
     // when context was found for exact inner object under offset
@@ -70,11 +70,11 @@ public class CsmContext {
     /** Creates a new instance of CsmContext */
     public CsmContext(int offset) {
         this.offset = offset;
-        context = new ArrayList();
+        context = new ArrayList<CsmContextEntry>();
     }
 
     public CsmContextEntry get(int index) {
-        return (CsmContextEntry)context.get(index);
+        return context.get(index);
     }
 
     public CsmContextEntry create(CsmScope scope) {
@@ -133,8 +133,12 @@ public class CsmContext {
         return context.size();
     }
 
-    public Iterator iterator() {
+    public Iterator<CsmContextEntry> iterator() {
         return context.iterator();
+    }
+
+    public ListIterator<CsmContextEntry> reverseIterator() {
+        return context.listIterator(context.size());
     }
 
     public int getOffset() {
