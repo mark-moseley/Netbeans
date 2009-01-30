@@ -148,9 +148,6 @@ public abstract class PresentableFileEntry extends FileEntry
      * Sets value of attribute &quot;is template?&quot; for this entry's file.
      *
      * @param  newValue  new value of the attribute
-     * @return  <code>true</code> if the value was changed;
-     *          <code>false</code> if the new value was the same
-     *              as the old value
      * @exception  java.io.IOException  if setting the template state fails
      */
     public final void setTemplate(boolean newValue) throws IOException {
@@ -333,7 +330,7 @@ public abstract class PresentableFileEntry extends FileEntry
         }
         return changeSupport;
     }
-    
+
     /** Set the set of cookies.
      * To the provided cookie set a listener is attached,
      * and any change to the set is propagated by
@@ -345,11 +342,11 @@ public abstract class PresentableFileEntry extends FileEntry
     protected final synchronized void setCookieSet (CookieSet s) {
         if (cookieSet != null) {
             cookieSet.removeChangeListener (cookieL);
-        }
-        
+    }
+
         s.addChangeListener (cookieL);
         cookieSet = s;
-        
+
         firePropertyChange (Node.PROP_COOKIE, null, null);
     }
     
@@ -371,7 +368,8 @@ public abstract class PresentableFileEntry extends FileEntry
                 return cookieSet;
             }
             // sets an empty sheet and adds a listener to it
-            setCookieSet (new CookieSet ());
+            setCookieSet (CookieSet.createGeneric(null));
+            cookieSet.assign(FileObject.class, getFile());
             return cookieSet;
         }
     }

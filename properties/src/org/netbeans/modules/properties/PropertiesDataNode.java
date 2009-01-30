@@ -60,7 +60,6 @@ import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataNode;
 import org.openide.loaders.DataObject;
-import org.openide.loaders.FileEntry;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.nodes.NodeTransfer;
@@ -74,7 +73,7 @@ import org.openide.util.NbBundle;
 /** 
  * Node representing a <code>PropertiesDataObject</code>.
  * Its children ({@link PropertiesLocaleNode}s) represent
- * the {@link PropertyFileEntry PropertyFileEntries}.
+ * the {@link PropertiesFileEntry} PropertyFileEntries.
  *
  * @author Petr Jiricka, Peter Zavadsky
  * @see PropertiesDataObject
@@ -88,18 +87,32 @@ public class PropertiesDataNode extends DataNode {
      */
     private final transient PropertyChangeListener dataObjectListener;
     
+    private boolean multiLocale;
+
+    PropertiesDataNode(PropertiesDataObject propDO) {
+        this(propDO, createChildren(propDO));
+        multiLocale = propDO.isMultiLocale();
+    }
+
     /** Creates data node for a given data object.
      * The provided children object will be used to hold all child nodes.
-     * @param obj object to work with
-     * @param ch children container for the node
+     * @param dataObject  object to work with
+     * @param children container for the node
      */
     public PropertiesDataNode(DataObject dataObject, Children children) {
         super(dataObject, children);
         setIconBaseWithExtension("org/netbeans/modules/properties/propertiesObject.png"); // NOI18N
-        
         dataObjectListener = new NameUpdater();
         dataObject.addPropertyChangeListener(
                 WeakListeners.propertyChange(dataObjectListener, dataObject));
+    }
+
+    private static Children createChildren(PropertiesDataObject propDO) {
+        if (propDO.isMultiLocale()) {
+            return propDO.getChildren();
+        } else {
+            return ((PropertiesFileEntry)propDO.getPrimaryEntry()).getChildren();
+        }
     }
 
     /**
@@ -116,8 +129,17 @@ public class PropertiesDataNode extends DataNode {
          */
         public void propertyChange(PropertyChangeEvent e) {
             if (DataObject.PROP_FILES.equals(e.getPropertyName())) {
-                ((PropertiesDataObject) getDataObject()).fireNameChange();
+                PropertiesDataObject propDO = (PropertiesDataObject) getDataObject();
+                propDO.fireNameChange();
+
+                // If the number of locales changes to more than one or down to
+                // one, we must exchange the children.
+                boolean newMultiLocale = propDO.isMultiLocale();
+                if (newMultiLocale != multiLocale) {
+                    multiLocale = newMultiLocale;
+                    setChildren(createChildren(propDO));
             }
+        }
         }
         
     }
@@ -126,7 +148,14 @@ public class PropertiesDataNode extends DataNode {
      * @return array with <code>NewLocaleType</code> */
     @Override
     public NewType[] getNewTypes() {
+        PropertiesDataObject propDO = (PropertiesDataObject) getDataObject();
+        if (propDO.isMultiLocale()) {
         return new NewType[] {new NewLocaleType()};
+        } else {
+            PropertiesFileEntry pfEntry = (PropertiesFileEntry) propDO.getPrimaryEntry();
+            return new NewType[] { new NewLocaleType(),
+                                   new PropertiesLocaleNode.NewPropertyType(pfEntry) };
+    }
     }
     
     /** Indicates whether this node has customizer. Overrides superclass method.
@@ -290,14 +319,15 @@ public class PropertiesDataNode extends DataNode {
     } // End of NewLocaleType class.
 
     private static boolean containsLocale(PropertiesDataObject propertiesDataObject, Locale locale) {
-        FileObject file = propertiesDataObject.getPrimaryFile();
+        FileObject file = propertiesDataObject.getBundleStructure().getNthEntry(0).getFile();
+//        FileObject file = propertiesDataObject.getPrimaryFile();
         String newName = file.getName() + PropertiesDataLoader.PRB_SEPARATOR_CHAR + locale;
-        Iterator it = propertiesDataObject.secondaryEntries().iterator();
-        while (it.hasNext()) {
-            FileObject f = ((FileEntry)it.next()).getFile();
+        BundleStructure structure = propertiesDataObject.getBundleStructure();
+        for (int i = 0; i<structure.getEntryCount();i++) {
+            FileObject f = structure.getNthEntry(i).getFile();
             if (newName.startsWith(f.getName()) && f.getName().length() > file.getName().length())
                 file = f;
-        }        
+        }
         return file.getName().equals(newName);
     }
 }

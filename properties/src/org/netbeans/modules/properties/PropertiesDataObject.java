@@ -38,10 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-
 package org.netbeans.modules.properties;
-
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -60,14 +57,14 @@ import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataNode;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectExistsException;
+import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.loaders.MultiDataObject;
 import org.openide.nodes.Children;
 import org.openide.nodes.CookieSet;
 import org.openide.nodes.Node;
+import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.WeakListeners;
-import org.openide.util.lookup.Lookups;
-import org.openide.util.lookup.ProxyLookup;
 import static java.util.logging.Level.FINER;
 
 
@@ -81,12 +78,12 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
 
     /** Generated Serialized Version UID. */
     static final long serialVersionUID = 4795737295255253334L;
-    
+
     static final Logger LOG = Logger.getLogger(PropertiesDataObject.class.getName());
 
     /** Structural view of the dataobject */
     private transient BundleStructure bundleStructure;
-    
+
     /** Open support for this data object. Provides editable table view on bundle. */
     private transient PropertiesOpen openSupport;
 
@@ -96,7 +93,7 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
     // Hack due having lock on secondaries, can't override handleCopy, handleMove at all.
     /** Suffix used by copying/moving dataObject. */
     private transient String pasteSuffix;
-    
+
     /** */
     private Lookup lookup;
 
@@ -112,7 +109,7 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
      *              for the specified file
      */
     public PropertiesDataObject(final FileObject primaryFile,
-                                final PropertiesDataLoader loader)
+            final PropertiesDataLoader loader)
             throws DataObjectExistsException {
         super(primaryFile, loader);
         // use editor support
@@ -124,26 +121,12 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
     PropertiesEncoding getEncoding() {
         return ((PropertiesDataLoader) getLoader()).getEncoding();
     }
-    
-    private Lookup getSuperLookup() {
-        return super.getLookup();
-    }
-    
+
     @Override
     public Lookup getLookup() {
-        if (lookup == null) {
-            lookup = new ProxyLookup(
-                    Lookups.singleton(getEncoding()),
-                    Lookups.proxy(
-                            new Lookup.Provider() {
-                                    public Lookup getLookup() {
-                                        return getSuperLookup();
-                                    }
-                    }));
-        }
-        return lookup;
+        return getCookieSet().getLookup();
     }
-    
+
     /** Initializes the object. Used by construction and deserialized. */
     private void initialize() {
         bundleStructure = null;
@@ -151,6 +134,7 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
         arr[0] = PropertiesOpen.class;
         arr[1] = PropertiesEditorSupport.class;
         getCookieSet().add(arr, this);
+        getCookieSet().assign(PropertiesEncoding.class, getEncoding());
     }
 
     /** Implements <code>CookieSet.Factory</code> interface method. */
@@ -169,7 +153,7 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
     CookieSet getCookieSet0() {
         return getCookieSet();
     }
-    
+
     /** Copies primary and secondary files to new folder.
      * Overrides superclass method.
      * @param df the new folder
@@ -183,14 +167,15 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
                     + FileUtil.getFileDisplayName(df.getPrimaryFile()) + ')');
         }
         try {
-            pasteSuffix = createPasteSuffix(df);
+//            pasteSuffix = createPasteSuffix(df);
 
             return super.handleCopy(df);
         } finally {
             pasteSuffix = null;
+            bundleStructure = null;
         }
     }
-    
+
     /** Moves primary and secondary files to a new folder.
      * Overrides superclass method.
      * @param df the new folder
@@ -211,14 +196,16 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
         }
 
         try {
-            pasteSuffix = createPasteSuffix(df);
-        
+//            pasteSuffix = createPasteSuffix(df);
+
             return super.handleMove(df);
         } finally {
             pasteSuffix = null;
+            bundleStructure = null;
+            openSupport = null;
         }
     }
-    
+
     /** Gets suffix used by entries by copying/moving. */
     String getPasteSuffix() {
         return pasteSuffix;
@@ -230,7 +217,7 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
     void removeSecondaryEntry2(Entry fe) {
         if (LOG.isLoggable(FINER)) {
             LOG.finer("removeSecondaryEntry2(Entry "                    //NOI18N
-                      + FileUtil.getFileDisplayName(fe.getFile()) + ')');
+                    + FileUtil.getFileDisplayName(fe.getFile()) + ')');
         }
         removeSecondaryEntry (fe);
     }
@@ -241,26 +228,26 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
         String basicName = getPrimaryFile().getName();
 
         DataObject[] children = folder.getChildren();
-        
-        
+
+
         // Repeat until there is not such file name.
         for(int i = 0; ; i++) {
             String newName;
-            
+
             if (i == 0) {
                 newName = basicName;
             } else {
                 newName = basicName + i;
             }
             boolean exist = false;
-            
+
             for(int j = 0; j < children.length; j++) {
                 if(children[j] instanceof PropertiesDataObject && newName.equals(children[j].getName())) {
                     exist = true;
                     break;
                 }
             }
-                
+
             if(!exist) {
                 if (i == 0) {
                     return ""; // NOI18N
@@ -273,13 +260,10 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
 
     /** Returns open support. It's used by all subentries as open support too. */
     public PropertiesOpen getOpenSupport() {
-        synchronized(OPEN_SUPPORT_LOCK) {
-            if(openSupport == null) {
-                openSupport = new PropertiesOpen(this);
-            }
-
-            return openSupport;
+        if (openSupport == null) {
+            openSupport = ((MultiBundleStructure)getBundleStructure()).getOpenSupport();
         }
+        return openSupport;
     }
 
     /** Updates modification status of this dataobject from its entries. */
@@ -309,21 +293,46 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
      *
      * @return the node representation for this data object
      * @see DataNode
-     */                                                           
+     */
     @Override
     protected Node createNodeDelegate () {
-        PropertiesChildren pc = new PropertiesChildren();
+        return new PropertiesDataNode(this);
+    }
 
-        // properties node - creates new types
-        DataNode dn = new PropertiesDataNode(this, pc);
-        return dn;
+    Children getChildren() {
+        return new PropertiesChildren();
+    }
+
+    //TODO XXX Now it is always false
+    boolean isMultiLocale() {
+        return secondaryEntries().size() > 0;
     }
 
     /** Returns a structural view of this data object */
     public BundleStructure getBundleStructure() {
-        if (bundleStructure == null)
-            bundleStructure = new BundleStructure(this);
-        return bundleStructure;
+        if (bundleStructure != null)
+            return bundleStructure;
+        PropertiesDataObject dataObject = null;
+        try {
+            dataObject = Util.findPrimaryDataObject(this);
+        } catch (DataObjectNotFoundException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+        if (this == dataObject) {
+            if (bundleStructure == null) {
+                bundleStructure = new MultiBundleStructure(this);
+                ((MultiBundleStructure)bundleStructure).updateEntries();
+            }
+            return bundleStructure;
+        } else {
+            return dataObject.getBundleStructure();
+        }
+    }
+
+    protected void setBundleStructure(BundleStructure structure) {
+        if (bundleStructure != structure) {
+            bundleStructure = structure;
+        }
     }
 
     /** Comparator used for ordering secondary files, works over file names */
@@ -337,27 +346,28 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
         LOG.finer("fireNameChange()");                                  //NOI18N
         firePropertyChange(PROP_NAME, null, null);
     }
-    
+
     /** Deserialization. */
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         in.defaultReadObject();
         initialize();
     }
 
-    
+
     /** Children of this <code>PropertiesDataObject</code>. */
     private class PropertiesChildren extends Children.Keys<String> {
 
         /** Listens to changes on the dataobject */
         private PropertyChangeListener propertyListener = null;
+        private PropertyChangeListener weakPropListener = null;
 
-        
+
         /** Constructor.*/
         PropertiesChildren() {
             super();
         }
 
-        
+
         /** Sets all keys in the correct order */
         protected void mySetKeys() {
             TreeSet<String> newKeys = new TreeSet<String>(new Comparator<String>() {
@@ -376,7 +386,7 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
             });
 
             newKeys.add(getPrimaryEntry().getFile().getName());
-            
+
             for (Entry entry : secondaryEntries()) {
                 newKeys.add(entry.getFile().getName());
             }
@@ -389,19 +399,29 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
         @Override
         protected void addNotify () {
             mySetKeys();
-            
+
             // listener
             if(propertyListener == null) {
                 propertyListener = new PropertyChangeListener () {
                     public void propertyChange(PropertyChangeEvent evt) {
                         if(PROP_FILES.equals(evt.getPropertyName())) {
-                            mySetKeys();
+                            if (isMultiLocale()) {
+                                mySetKeys();
+                            } else {
+                                // These children are only used for two or more locales.
+                                // If only default locale is left, disconnect the listener.
+                                // This children object is going to be removed, but
+                                // for some reason it causes problems setting new keys here.
+                                if (propertyListener != null) {
+                                    PropertiesDataObject.this.removePropertyChangeListener(weakPropListener);
+                                    propertyListener = null;
+                                }
+                            }
                         }
                     }
-                }; 
-
-                PropertiesDataObject.this.addPropertyChangeListener(
-                    WeakListeners.propertyChange(propertyListener, PropertiesDataObject.this));
+                };
+                weakPropListener = WeakListeners.propertyChange(propertyListener, PropertiesDataObject.this);
+                PropertiesDataObject.this.addPropertyChangeListener(weakPropListener);
             }
         }
 
@@ -419,20 +439,20 @@ public final class PropertiesDataObject extends MultiDataObject implements Cooki
             if (entryName == null) {
                 return null;
             }
-            
+
             PropertiesFileEntry entry = (PropertiesFileEntry)getPrimaryEntry();
-            
+
             if(entryName.equals(entry.getFile().getName())) {
                 return new Node[] {entry.getNodeDelegate()};
             }
             for(Iterator<Entry> it = secondaryEntries().iterator();it.hasNext();) {
                 entry = (PropertiesFileEntry)it.next();
-                
+
                 if (entryName.equals(entry.getFile().getName())) {
                     return new Node[] {entry.getNodeDelegate()};
                 }
             }
-                
+
             return null;
         }
 

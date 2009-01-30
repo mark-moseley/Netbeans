@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,8 +44,6 @@ package org.netbeans.modules.properties;
 
 
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
@@ -60,6 +58,7 @@ import javax.swing.table.*;
 import org.openide.DialogDescriptor;
 import org.openide.NotifyDescriptor;
 import org.openide.DialogDisplayer;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.WeakListeners;
 import org.openide.windows.TopComponent;
@@ -69,12 +68,16 @@ import org.openide.windows.TopComponent;
  * Panel which shows bundle of .properties files encapsulated by <code>PropertiesDataObject</code> in one table view.
  *
  * @author  Petr Jiricka
+ * @author  Marian Petras
  */
 public class BundleEditPanel extends JPanel implements PropertyChangeListener {
     
     /** PropertiesDataObject this panel presents. */
-    private PropertiesDataObject obj;
-    
+//    private PropertiesDataObject obj;
+
+    /** */
+    private BundleStructure structure;
+
     /** Document listener for value and comment textareas. */
     private DocumentListener listener;
     
@@ -88,8 +91,10 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
     private int lastSelectedColumn;
     
     /** Creates new form BundleEditPanel */
+    @Deprecated
     public BundleEditPanel(final PropertiesDataObject obj, PropertiesTableModel propTableModel) {
-        this.obj = obj;
+//        this.obj = obj;
+        this.structure = obj.getBundleStructure();
         
         initComponents();
         initAccessibility();
@@ -131,6 +136,10 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
                     updateEnabled();
                 } else if (evt.getPropertyName().equals("model")) { // NOI18N
                     updateAddButton();
+                } else if (evt.getPropertyName().equals("marginChanged")||
+                            evt.getPropertyName().equals("columnMoved") ||
+                            evt.getPropertyName().equals("componentHidden")) {
+                    saveEditorValue(false);
                 }
             }
         });
@@ -153,13 +162,14 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
                 obj.getBundleStructure().sort(modelIndex);
             }
         });
-        
+
         
         table.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             public void valueChanged(ListSelectionEvent evt) {
+                final boolean correctCellSelection = !selectionUpdateDisabled;
                 SwingUtilities.invokeLater(new Runnable() {
                     public void run() {
-                        updateSelection();
+                        updateSelection(correctCellSelection);
                     }
                 });
             }
@@ -167,15 +177,116 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         
     } // End of constructor.
     
+    /** Creates new form BundleEditPanel */
+    public BundleEditPanel(final BundleStructure structure, PropertiesTableModel propTableModel) {
+        this.structure = structure;
+
+        initComponents();
+        initAccessibility();
+        initSettings();
+
+        // Sets table column model.
+        table.setColumnModel(new TableViewColumnModel());
+
+        // Sets custom table header renderer (with sorting indicators).
+        JTableHeader header = table.getTableHeader();
+        header.setDefaultRenderer(
+                new TableViewHeaderRenderer(structure, header.getDefaultRenderer()));
+
+        // Sets table model.
+        table.setModel(propTableModel);
+
+        // Sets table cell editor.
+        JTextField textField = new JTextField();
+        // Force the document to accept newlines. The textField doesn't like
+        // it, but the same document is used by the <code>textValue</code> text
+        // area that must accept newlines.
+        textField.getDocument().putProperty("filterNewlines",  Boolean.FALSE); // NOI18N
+        textField.setBorder(new LineBorder(Color.black));
+        textField.getAccessibleContext().setAccessibleName(NbBundle.getBundle(BundleEditPanel.class).getString("ACSN_CellEditor"));
+        textField.getAccessibleContext().setAccessibleDescription(NbBundle.getBundle(BundleEditPanel.class).getString("ACSD_CellEditor"));
+        listener = new ModifiedListener();
+        table.setDefaultEditor(PropertiesTableModel.StringPair.class,
+            new PropertiesTableCellEditor(textField, textComment, textValue, valueLabel, listener));
+
+        // Sets renderer.
+        table.setDefaultRenderer(PropertiesTableModel.StringPair.class, new TableViewRenderer());
+
+        updateAddButton();
+
+        // property change listener - listens to editing state of the table
+        table.addPropertyChangeListener(new PropertyChangeListener() {
+            public void propertyChange(PropertyChangeEvent evt) {
+                if (evt.getPropertyName().equals("tableCellEditor")) { // NOI18N
+                    updateEnabled();
+                } else if (evt.getPropertyName().equals("model")) { // NOI18N
+                    updateAddButton();
+                } else if (evt.getPropertyName().equals("marginChanged")||
+                            evt.getPropertyName().equals("columnMoved") ||
+                            evt.getPropertyName().equals("componentHidden")) {
+                    saveEditorValue(false);
+                }
+            }
+        });
+
+        // listens on clikcs on table header, detects column and sort accordingly to chosen one
+        table.getTableHeader().addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                TableColumnModel colModel = table.getColumnModel();
+                int columnModelIndex = colModel.getColumnIndexAtX(e.getX());
+                // No column was clicked.
+                if (columnModelIndex < 0) {
+                    return;
+                }
+                int modelIndex = colModel.getColumn(columnModelIndex).getModelIndex();
+                // not detected column
+                if (modelIndex < 0) {
+                    return;
+                }
+                structure.sort(modelIndex);
+            }
+        });
+
+        ListSelectionListener listSelectionListener = new ListSelectionListener() {
+
+            public void valueChanged(ListSelectionEvent evt) {
+                final boolean correctCellSelection = !selectionUpdateDisabled;
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        updateSelection(correctCellSelection);
+                    }
+                });
+            }
+        };
+
+        table.getColumnModel().getSelectionModel().addListSelectionListener(listSelectionListener);
+        table.getSelectionModel().addListSelectionListener(listSelectionListener);
+
+    } // End of constructor.
     
     /** Stops editing if editing is in run. */
     protected void stopEditing() {
+        saveEditorValue(true);
+    }
+
+    /**
+     */
+    protected void saveEditorValue(boolean stopEditing) {
         if (!table.isEditing()) {
             return;
         }
         TableCellEditor cellEdit = table.getCellEditor();
         if (cellEdit != null) {
-            cellEdit.stopCellEditing();
+            if (stopEditing) {
+                cellEdit.stopCellEditing();
+            } else {
+                int row = table.getEditingRow();
+                int col = table.getEditingColumn();
+                if ((row != -1) && (col != -1)) {
+                    table.setValueAt(cellEdit.getCellEditorValue(), row, col);
+                }
+            }
         }
     }
     
@@ -195,18 +306,26 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         }
     }
     
-    private void updateSelection() {
+    /**
+     * Checks the currently selected column. If no row is selected
+     * and cell selection changes are permitted, it attempts to select
+     * the row corresponding to the last selected bundle key.
+     * 
+     * @param  correctCellSelection  whether change of cell selection
+     *                               in the table is permitted
+     */
+    private void updateSelection(final boolean correctCellSelection) {
         int row = table.getSelectedRow();
         int column = table.getSelectedColumn();
         
-        if (row == -1) {
+        if ((row == -1) && correctCellSelection) {
             final Element.ItemElem ex = lastSelectedBundleKey;
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
                     if (ex == null) {
                         return;
                     } 
-                    String [] keys = obj.getBundleStructure().getKeys();
+                    String [] keys = structure.getKeys();
                     int idx;
                     for (idx = 0; idx < keys.length; idx++) {
                         String key = keys[idx];
@@ -225,7 +344,7 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         }
         
         lastSelectedColumn = column;
-        BundleStructure structure = obj.getBundleStructure();
+//        BundleStructure structure = obj.getBundleStructure();
         removeButton.setEnabled((row >= 0) && (!structure.isReadOnly()));
         String value;
         String comment;
@@ -258,14 +377,13 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
     }
     
     private void updateAddButton() {
-        addButton.setEnabled(!obj.getBundleStructure().isReadOnly());
+        addButton.setEnabled(!structure.isReadOnly());
     }
     
     /** Returns the main table with all values */
     public JTable getTable() {
         return table;
     }
-    
     
     /** Initializes <code>settings</code> variable. */
     private void initSettings() {
@@ -307,7 +425,7 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the FormEditor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
@@ -488,10 +606,11 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         if (DialogDisplayer.getDefault().notify(msg).equals(NotifyDescriptor.OK_OPTION)) {
             try {
                 // Starts "atomic" acion for special undo redo manager of open support.
-                obj.getOpenSupport().atomicUndoRedoFlag = new Object();
+//                obj.getOpenSupport().atomicUndoRedoFlag = new Object();
+                structure.getOpenSupport().atomicUndoRedoFlag = new Object();
                 
-                for (int i=0; i < obj.getBundleStructure().getEntryCount(); i++) {
-                    PropertiesFileEntry entry = obj.getBundleStructure().getNthEntry(i);
+                for (int i=0; i < structure.getEntryCount(); i++) {
+                    PropertiesFileEntry entry = structure.getNthEntry(i);
                     if (entry != null) {
                         PropertiesStructure ps = entry.getHandler().getStructure();
                         if (ps != null) {
@@ -501,122 +620,126 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
                 }
             } finally {
                 // finishes "atomic" undo redo action for special undo redo manager of open support
-                obj.getOpenSupport().atomicUndoRedoFlag = null;
+//                obj.getOpenSupport().atomicUndoRedoFlag = null;
+                structure.getOpenSupport().atomicUndoRedoFlag = null;
             }
         }
     }//GEN-LAST:event_removeButtonActionPerformed
     
+    /**
+     * when this flag is set to {@code true}, method {@link #updateSelection}
+     * does not actually change cell selection in the table.
+     * <p>
+     * This flag was added as a prevention from symptoms of bug #122347
+     * ("value of new property is taken from the currently selected entry").
+     * </p>
+     */
+    private boolean selectionUpdateDisabled = false;
+
     private void addButtonActionPerformed (java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addButtonActionPerformed
         stopEditing();
         
-        final Dialog[] dialog = new Dialog[1];
-        final Element.ItemElem item = new Element.ItemElem(
-        null,
-        new Element.KeyElem(null, ""), // NOI18N
-        new Element.ValueElem(null, ""), // NOI18N
-        new Element.CommentElem(null, "") // NOI18N
-        );
-        final JPanel panel = new PropertyPanel(item);
+        final PropertyPanel panel = new PropertyPanel();
         
-        DialogDescriptor dd = new DialogDescriptor(
-        panel,
-        NbBundle.getBundle(BundleEditPanel.class).getString("CTL_NewPropertyTitle"),
-        true,
-        DialogDescriptor.OK_CANCEL_OPTION,
-        DialogDescriptor.OK_OPTION,
-        new ActionListener() {
-            public void actionPerformed(ActionEvent evt2) {
-                // OK pressed
-                if(evt2.getSource() == DialogDescriptor.OK_OPTION) {
-                    dialog[0].setVisible(false);
-                    dialog[0].dispose();
-                    
-                    final String key = item.getKey();
-                    String value = item.getValue();
-                    String comment = item.getComment();
-                    
-                    boolean keyAdded = false;
-                    
-                    try {
-                        // Starts "atomic" acion for special undo redo manager of open support.
-                        obj.getOpenSupport().atomicUndoRedoFlag = new Object();
-                        
-                        // add key to all entries
-                        for (int i=0; i < obj.getBundleStructure().getEntryCount(); i++) {
-                            PropertiesFileEntry entry = obj.getBundleStructure().getNthEntry(i);
-                            
-                            if (entry != null && !entry.getHandler().getStructure().addItem(key, value, comment)) {
-                                NotifyDescriptor.Message msg = new NotifyDescriptor.Message(
-                                MessageFormat.format(
-                                NbBundle.getBundle(BundleEditPanel.class).getString("MSG_KeyExists"),
-                                new Object[] {
-                                    item.getKey(),
-                                    Util.getLocaleLabel(entry)
-                                }
-                                ),
-                                NotifyDescriptor.ERROR_MESSAGE);
-                                DialogDisplayer.getDefault().notify(msg);
-                            } else {
-                                keyAdded = true;
-                            }
-                        }
-                    } finally {
-                        // Finishes "atomic" undo redo action for special undo redo manager of open support.
-                        obj.getOpenSupport().atomicUndoRedoFlag = null;
+        Object selectedOption = DialogDisplayer.getDefault().notify(
+                new DialogDescriptor(
+                        panel,
+                        NbBundle.getMessage(BundleEditPanel.class,
+                                            "CTL_NewPropertyTitle")));  //NOI18N
+        if (selectedOption != NotifyDescriptor.OK_OPTION) {
+            return;
+        }
+
+        final String key = panel.getKey();
+        String value = panel.getValue();
+        String comment = panel.getComment();
+        
+        boolean keyAdded = false;
+        
+        try {
+            selectionUpdateDisabled = true;
+
+            // Starts "atomic" acion for special undo redo manager of open support.
+//            obj.getOpenSupport().atomicUndoRedoFlag = new Object();
+            structure.getOpenSupport().atomicUndoRedoFlag = new Object();
+            String existingLocales = "";
+            String comma =",\r\n";
+            // add key to all entries
+            for (int i=0; i < structure.getEntryCount(); i++) {
+                PropertiesFileEntry entry = structure.getNthEntry(i);
+                
+                if (entry != null && !entry.getHandler().getStructure().addItem(key, value, comment)) {
+                    existingLocales += Util.getLocaleLabel(entry) + comma;
+                } else {
+                    keyAdded = true;
+                }
+            }
+            if (!existingLocales.equals("")) {
+                    existingLocales = existingLocales.substring(0,existingLocales.length()-comma.length());
+                    NotifyDescriptor.Message msg = new NotifyDescriptor.Message(
+                    MessageFormat.format(
+                    NbBundle.getBundle(BundleEditPanel.class).getString("MSG_KeyExists"),
+                    new Object[] {
+                        key,
+                        existingLocales
                     }
+                    ),
+                    NotifyDescriptor.ERROR_MESSAGE);
+                    DialogDisplayer.getDefault().notify(msg);
+            }
+        } finally {
+            // Finishes "atomic" undo redo action for special undo redo manager of open support.
+//            obj.getOpenSupport().atomicUndoRedoFlag = null;
+            structure.getOpenSupport().atomicUndoRedoFlag = null;
+
+            selectionUpdateDisabled = false;
+        }
+        
+        if(keyAdded) {
+            // Item was added succesfully, go to edit it.
+            // PENDING: this is in request processor queue only
+            // due to reason that properties structure has just after
+            // adding new item inconsistence gap until it's reparsed anew.
+            // This should be removed when the parsing will be redsigned.
+            PropertiesRequestProcessor.getInstance().post(new Runnable() {
+                public void run() {
+                    // Find indexes.
+                    int rowIndex = structure.getKeyIndexByName(key);
                     
-                    if(keyAdded) {
-                        // Item was added succesfully, go to edit it.
-                        // PENDING: this is in request processor queue only
-                        // due to reason that properties structure has just after
-                        // adding new item inconsistence gap until it's reparsed anew.
-                        // This should be removed when the parsing will be redsigned.
-                        PropertiesRequestProcessor.getInstance().post(new Runnable() {
+                    if((rowIndex != -1)) {
+                        final int row = rowIndex;
+                        final int column = 1; // Default locale.
+                        
+                        SwingUtilities.invokeLater(new Runnable() {
                             public void run() {
-                                // Find indexes.
-                                int rowIndex = obj.getBundleStructure().getKeyIndexByName(key);
-                                
-                                if((rowIndex != -1)) {
-                                    final int row = rowIndex;
-                                    final int column = 1; // Default locale.
-                                    
-                                    SwingUtilities.invokeLater(new Runnable() {
-                                        public void run() {
-                                            // Autoscroll to cell if possible and necessary.
-                                            if(table.getAutoscrolls()) {
-                                                Rectangle cellRect = table.getCellRect(row, column, false);
-                                                if (cellRect != null) {
-                                                    table.scrollRectToVisible(cellRect);
-                                                }
-                                            }
-                                            
-                                            // Update selection & edit.
-                                            table.getColumnModel().getSelectionModel().setSelectionInterval(column, column);
-                                            table.getSelectionModel().setSelectionInterval(row, row);
-                                            
-                                            table.requestFocusInWindow();
-                                            table.editCellAt(row, column);
+                                try {
+                                    selectionUpdateDisabled = true;
+
+                                    // Autoscroll to cell if possible and necessary.
+                                    if(table.getAutoscrolls()) {
+                                        Rectangle cellRect = table.getCellRect(row, column, false);
+                                        if (cellRect != null) {
+                                            table.scrollRectToVisible(cellRect);
                                         }
-                                    });
+                                    }
+                                    
+                                    // Update selection & edit.
+                                    table.getColumnModel().getSelectionModel().setSelectionInterval(column, column);
+                                    table.getSelectionModel().setSelectionInterval(row, row);
+                                    
+                                    table.requestFocusInWindow();
+                                    table.editCellAt(row, column);
+                                } finally {
+                                    selectionUpdateDisabled = false;
                                 }
                             }
                         });
                     }
-                    
-                    // Cancel pressed
-                } else if (evt2.getSource() == DialogDescriptor.CANCEL_OPTION) {
-                    dialog[0].setVisible(false);
-                    dialog[0].dispose();
                 }
-            }
+            });
         }
-        );
-        
-        dialog[0] = DialogDisplayer.getDefault().createDialog(dd);
-        dialog[0].setVisible(true);
     }//GEN-LAST:event_addButtonActionPerformed
-    
-    
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton addButton;
     private javax.swing.JCheckBox autoResizeCheck;
@@ -649,13 +772,20 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         private static final String SORT_ASC_ICON = ICON_PKG + "columnSortedAsc.gif";   //NOI18N
         private static final String SORT_DESC_ICON = ICON_PKG + "columnSortedDesc.gif"; //NOI18N
 
-        private final PropertiesDataObject propDataObj;
+        private final BundleStructure bundleStructure;
         private final TableCellRenderer origRenderer;
         private ImageIcon iconSortAsc, iconSortDesc;
-        
+
+        @Deprecated
         TableViewHeaderRenderer(PropertiesDataObject propDataObj,
                                 TableCellRenderer origRenderer) {
-            this.propDataObj = propDataObj;
+            bundleStructure = propDataObj.getBundleStructure();
+            this.origRenderer = origRenderer;
+        }
+
+        TableViewHeaderRenderer(BundleStructure bundleStructure,
+                                TableCellRenderer origRenderer) {
+            this.bundleStructure = bundleStructure;
             this.origRenderer = origRenderer;
         }
 
@@ -670,7 +800,7 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
 
             if (comp instanceof JLabel) {
                 JLabel label = (JLabel) comp;
-                BundleStructure bundleStruct = propDataObj.getBundleStructure();
+                BundleStructure bundleStruct = bundleStructure;
                 int sortIndex = table.convertColumnIndexToView(
                                         bundleStruct.getSortIndex());
                 if (column == sortIndex) {
@@ -689,13 +819,13 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
             if (ascending) {
                 if (iconSortAsc == null) {
                     iconSortAsc = new ImageIcon(
-                            org.openide.util.Utilities.loadImage(SORT_ASC_ICON));
+                            ImageUtilities.loadImage(SORT_ASC_ICON));
                 }
                 return iconSortAsc;
             } else {
                 if (iconSortDesc == null) {
                     iconSortDesc = new ImageIcon(
-                            org.openide.util.Utilities.loadImage(SORT_DESC_ICON));
+                            ImageUtilities.loadImage(SORT_DESC_ICON));
                 }
                 return iconSortDesc;
             }
@@ -712,7 +842,7 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
     private class TableViewColumnModel extends DefaultTableColumnModel {
         /** Helper listener. */
         private AncestorListener ancestorListener;
-        
+
         /** Overrides superclass method. */
         @Override
         public void addColumn(TableColumn aColumn) {
@@ -811,7 +941,7 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         }
     } // End of inner class TableViewColumnModel.
     
-    
+
     /** Renderer which renders cells in table view. */
     @SuppressWarnings("serial")
     private class TableViewRenderer extends DefaultTableCellRenderer {
@@ -909,16 +1039,30 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         }
     } // End of inner class TableViewRenderer.
     
-    
-    
+
+
     /** <code>JTable</code> with one bug fix.
      * @see #removeEditorSilent */
     @SuppressWarnings("serial")
     static class BundleTable extends JTable {
-        
+
         public BundleTable(){
             super();
             this.setRowHeight(getCellFontHeight() + 1);
+        }
+
+        @Override
+        public void columnMoved(TableColumnModelEvent arg0) {
+            firePropertyChange("columnMoved", null, null); //NOI18N
+            super.columnMoved(arg0);
+        }
+        @Override
+        public void columnMarginChanged(ChangeEvent evt) {
+            if (this.isEditing()) {
+            //Need to notify table's PropertyChangeListener to save editing values
+                firePropertyChange("marginChanged", null, null); //NOI18N
+            }
+            super.columnMarginChanged(evt);
         }
         
         /**
@@ -959,7 +1103,7 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         }        
         
     } // End of BundleTable class.
-    
+
     private class ModifiedListener implements DocumentListener {
         
         public void changedUpdate(DocumentEvent e) {
@@ -975,9 +1119,10 @@ public class BundleEditPanel extends JPanel implements PropertyChangeListener {
         }
         
         private void documentModified() {
-            obj.setModified(true);
+            ((PropertiesTableModel)table.getModel()).getFileEntry(table.getEditingColumn()).getDataObject().setModified(true);
+//            obj.setModified(true);
         }
         
     }
-    
+
 }
