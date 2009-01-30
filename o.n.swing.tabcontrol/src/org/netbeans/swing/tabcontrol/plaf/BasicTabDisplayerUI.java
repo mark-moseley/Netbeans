@@ -68,6 +68,7 @@ import javax.swing.event.ListDataEvent;
 import org.netbeans.swing.tabcontrol.TabData;
 import org.netbeans.swing.tabcontrol.TabDisplayer;
 import org.netbeans.swing.tabcontrol.event.ComplexListDataEvent;
+import org.openide.windows.TopComponent;
 
 /**
  * Base class for tab displayer UIs which use cell renderers to display tabs.
@@ -141,6 +142,9 @@ public abstract class BasicTabDisplayerUI extends AbstractTabDisplayerUI {
         super.install();
         tabState = createTabState();
         defaultRenderer = createDefaultRenderer();
+        if( null != displayer.getContainerWinsysInfo() ) {
+            defaultRenderer.setShowCloseButton( displayer.getContainerWinsysInfo().isTopComponentClosingEnabled() );
+        }
         layoutModel.setPadding (defaultRenderer.getPadding());
         pixelsToAdd = defaultRenderer.getPixelsToAddToSelection();
         repaintPolicy = createRepaintPolicy();
@@ -394,10 +398,14 @@ public abstract class BasicTabDisplayerUI extends AbstractTabDisplayerUI {
                         
                         if ((state & TabState.NOT_ONSCREEN) == 0) {
                             TabCellRenderer ren = getTabCellRenderer(i);
-                            ren.setShowCloseButton(showClose);
                             
                             TabData data = displayer.getModel().getTab(i);
+                            boolean closingEnabled = true;
+                            if( data.getComponent() instanceof TopComponent ) {
+                                closingEnabled = displayer.getContainerWinsysInfo().isTopComponentClosingEnabled( (TopComponent)data.getComponent() );
+                            }
                             
+                            ren.setShowCloseButton(showClose && closingEnabled);
                             
                             JComponent renderer = ren.getRendererComponent(
                                     data, scratch, state);

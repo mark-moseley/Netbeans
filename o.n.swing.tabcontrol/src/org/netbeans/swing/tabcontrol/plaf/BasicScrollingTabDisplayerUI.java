@@ -46,6 +46,7 @@
 
 package org.netbeans.swing.tabcontrol.plaf;
 
+import javax.swing.event.ChangeEvent;
 import org.netbeans.swing.tabcontrol.TabDisplayer;
 
 import javax.swing.*;
@@ -53,6 +54,10 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.lang.ref.SoftReference;
+import javax.swing.event.ChangeListener;
+import org.netbeans.swing.tabcontrol.TabData;
+import org.netbeans.swing.tabcontrol.TabDataModel;
+import org.openide.windows.TopComponent;
 
 /**
  * Base class for tab displayers that have scrollable tabs.
@@ -97,6 +102,15 @@ public abstract class BasicScrollingTabDisplayerUI extends BasicTabDisplayerUI {
             getTabsVisibleArea(scratch);
             displayer.repaint(scratch.x, scratch.y, scratch.width, scratch.height);
         }
+
+        if( null == btnMaximizeRestore )
+            return;
+        TabData td = displayer.getModel().getTab(tab);
+        Component c = td.getComponent();
+        if( !(c instanceof TopComponent) )
+            return;
+        boolean maximizeEnabled = displayer.getContainerWinsysInfo().isTopComponentMaximizationEnabled((TopComponent)c);
+        btnMaximizeRestore.setEnabled(maximizeEnabled);
     }
 
     /**
@@ -142,7 +156,7 @@ public abstract class BasicScrollingTabDisplayerUI extends BasicTabDisplayerUI {
     protected LayoutManager createLayout() {
         return new WCLayout();
     }
-    
+
     /**
      * @return A component that holds control buttons (scroll left/right, drop down menu)
      * that are displayed to right of the tab area.
@@ -188,7 +202,8 @@ public abstract class BasicScrollingTabDisplayerUI extends BasicTabDisplayerUI {
             height = Math.max ( height, prefDim.height );
             
             //maximize / restore button
-            if( null != displayer.getWinsysInfo() ) {
+            if( null != displayer.getContainerWinsysInfo() 
+                    && displayer.getContainerWinsysInfo().isTopComponentMaximizationEnabled()) {
                 width += 3;
                 btnMaximizeRestore = TabControlButtonFactory.createMaximizeRestoreButton( displayer, isGTK );
                 buttonsPanel.add( btnMaximizeRestore );
@@ -242,10 +257,6 @@ public abstract class BasicScrollingTabDisplayerUI extends BasicTabDisplayerUI {
     protected void installControlButtons() {
         displayer.setLayout(createLayout());
         displayer.add(getControlButtons());
-    }
-
-    public Dimension getMinimumSize(JComponent c) {
-        return getPreferredSize(c);
     }
 
     /**
@@ -375,6 +386,22 @@ public abstract class BasicScrollingTabDisplayerUI extends BasicTabDisplayerUI {
         return new Rectangle( parent.getWidth()-c.getWidth(), 0, c.getWidth(), c.getHeight() );
     }
     
+    @Override
+    public Dimension getMinimumSize(JComponent c) {
+        int index = displayer.getSelectionModel().getSelectedIndex();
+        TabDataModel model = displayer.getModel();
+        if( index < 0 || index >= model.size() )
+            index = 0;
+        Dimension minSize = null;
+        if( index >= model.size() )
+            minSize = new Dimension( 100, 10 );
+        else
+            minSize = model.getTab(index).getComponent().getMinimumSize();
+        minSize.width = Math.max(minSize.width, 100);
+        minSize.height = Math.max(minSize.height, 10);
+        return minSize;
+    }
+    
     /**
      * Layout manager for the tab displayer to make sure that control buttons
      * are always displayed at the end of the tab list.
@@ -392,7 +419,7 @@ public abstract class BasicScrollingTabDisplayerUI extends BasicTabDisplayerUI {
         }
 
         public Dimension minimumLayoutSize(Container parent) {
-            return getPreferredSize((JComponent) parent);
+            return getMinimumSize((JComponent) parent);
         }
 
         public Dimension preferredLayoutSize(Container parent) {

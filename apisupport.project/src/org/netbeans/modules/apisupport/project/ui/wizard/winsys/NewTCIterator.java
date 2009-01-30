@@ -47,6 +47,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.apisupport.project.CreatedModifiedFiles;
 import org.netbeans.modules.apisupport.project.Util;
@@ -56,6 +58,7 @@ import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
+import org.openide.modules.SpecificationVersion;
 import org.openide.util.NbBundle;
 
 /**
@@ -98,6 +101,12 @@ final class NewTCIterator extends BasicWizardIterator {
         private String icon;
         private String mode;
         private boolean opened = false;
+        private boolean keepPrefSize = false;
+        private boolean slidingNotAllowed = false;
+        private boolean closingNotAllowed = false;
+        private boolean draggingNotAllowed = false;
+        private boolean undockingNotAllowed = false;
+        private boolean maximizationNotAllowed = false;
         
         private CreatedModifiedFiles files;
         
@@ -153,6 +162,53 @@ final class NewTCIterator extends BasicWizardIterator {
             this.opened = opened;
         }
         
+        public boolean isKeepPrefSize() {
+            return keepPrefSize;
+        }
+
+        public void setKeepPrefSize(boolean keepPrefSize) {
+            this.keepPrefSize = keepPrefSize;
+        }
+
+        public boolean isClosingNotAllowed() {
+            return closingNotAllowed;
+        }
+
+        public void setClosingNotAllowed(boolean closingNotAllowed) {
+            this.closingNotAllowed = closingNotAllowed;
+        }
+
+        public boolean isDraggingNotAllowed() {
+            return draggingNotAllowed;
+        }
+
+        public void setDraggingNotAllowed(boolean draggingNotAllowed) {
+            this.draggingNotAllowed = draggingNotAllowed;
+        }
+
+        public boolean isMaximizationNotAllowed() {
+            return maximizationNotAllowed;
+        }
+
+        public void setMaximizationNotAllowed(boolean maximizationNotAllowed) {
+            this.maximizationNotAllowed = maximizationNotAllowed;
+        }
+
+        public boolean isSlidingNotAllowed() {
+            return slidingNotAllowed;
+        }
+
+        public void setSlidingNotAllowed(boolean slidingNotAllowed) {
+            this.slidingNotAllowed = slidingNotAllowed;
+        }
+
+        public boolean isUndockingNotAllowed() {
+            return undockingNotAllowed;
+        }
+
+        public void setUndockingNotAllowed(boolean undockingNotAllowed) {
+            this.undockingNotAllowed = undockingNotAllowed;
+        }
     }
     
     public static void generateFileChanges(DataModel model) {
@@ -162,12 +218,31 @@ final class NewTCIterator extends BasicWizardIterator {
         final String name = model.getName();
         final String packageName = model.getPackageName();
         final String mode = model.getMode();
+
+        boolean actionLessTC;
+        try {
+            SpecificationVersion current = model.getModuleInfo().getDependencyVersion("org.openide.windows");
+            actionLessTC = current.compareTo(new SpecificationVersion("6.24")) >= 0; // NOI18N
+        } catch (IOException ex) {
+            Logger.getLogger(NewTCIterator.class.getName()).log(Level.INFO, null, ex);
+            actionLessTC = false;
+        }
+        boolean propertiesPersistence;
+        try {
+            SpecificationVersion current = model.getModuleInfo().getDependencyVersion("org.netbeans.modules.settings");
+            propertiesPersistence = current.compareTo(new SpecificationVersion("1.18")) >= 0; // NOI18N
+        } catch (IOException ex) {
+            Logger.getLogger(NewTCIterator.class.getName()).log(Level.INFO, null, ex);
+            propertiesPersistence = false;
+        }
+
         
         Map<String,String> replaceTokens = new HashMap<String,String>();
         replaceTokens.put("TEMPLATENAME", name);//NOI18N
         replaceTokens.put("PACKAGENAME", packageName);//NOI18N
         replaceTokens.put("MODE", mode); //NOI18N
         replaceTokens.put("OPENED", model.isOpened() ? "true" : "false"); //NOI18N
+        replaceTokens.put("WINSYSBEHAVIOR", defineWinSysBehavior( model ) ); //NOI18N
 
         // 0. move icon file if necessary
         String icon = model.getIcon();
@@ -178,9 +253,9 @@ final class NewTCIterator extends BasicWizardIterator {
                 fil = null;
             }
         }
+        String relativeIconPath = null;
         if (fil != null) {
             FileObject fo = FileUtil.toFileObject(fil);
-            String relativeIconPath = null;
             if (!FileUtil.isParentOf(Util.getResourceDirectory(project), fo)) {
                 String iconPath = getRelativePath(moduleInfo.getResourceDirectoryPath(false), packageName, 
                                                 "", fo.getNameExt()); //NOI18N
@@ -206,22 +281,29 @@ final class NewTCIterator extends BasicWizardIterator {
         fileChanges.add(fileChanges.addModuleDependency("org.openide.util")); //NOI18N
         fileChanges.add(fileChanges.addModuleDependency("org.openide.awt")); //NOI18N
         fileChanges.add(fileChanges.addModuleDependency("org.jdesktop.layout")); //NOI18N
+        if (propertiesPersistence) {
+            fileChanges.add(fileChanges.addModuleDependency("org.netbeans.modules.settings")); //NOI18N
+        }
         
         // x. generate java classes
         final String tcName = getRelativePath(moduleInfo.getSourceDirectoryPath(), packageName,
                 name, "TopComponent.java"); //NOI18N
-        FileObject template = CreatedModifiedFiles.getTemplate("templateTopComponent.java");//NOI18N
+        FileObject template = CreatedModifiedFiles.getTemplate(
+            propertiesPersistence ? "templateTopComponentAnno.java" : "templateTopComponent.java" //NOI18N
+        );
         fileChanges.add(fileChanges.createFileWithSubstitutions(tcName, template, replaceTokens));
         // x. generate java classes
         final String tcFormName = getRelativePath(moduleInfo.getSourceDirectoryPath(), packageName,
                 name, "TopComponent.form"); //NOI18N
         template = CreatedModifiedFiles.getTemplate("templateTopComponent.form");//NOI18N
         fileChanges.add(fileChanges.createFileWithSubstitutions(tcFormName, template, replaceTokens));
-        
-        final String actionName = getRelativePath(moduleInfo.getSourceDirectoryPath(), packageName,
-                name, "Action.java"); //NOI18N
-        template = CreatedModifiedFiles.getTemplate("templateAction.java");//NOI18N
-        fileChanges.add(fileChanges.createFileWithSubstitutions(actionName, template, replaceTokens));
+
+        if (!actionLessTC) {
+            final String actionName = getRelativePath(moduleInfo.getSourceDirectoryPath(), packageName,
+                    name, "Action.java"); //NOI18N
+            template = CreatedModifiedFiles.getTemplate("templateAction.java");//NOI18N
+            fileChanges.add(fileChanges.createFileWithSubstitutions(actionName, template, replaceTokens));
+        }
         
         final String settingsName = name + "TopComponent.settings"; //NOI18N
         template = CreatedModifiedFiles.getTemplate("templateSettings.xml");//NOI18N
@@ -231,10 +313,46 @@ final class NewTCIterator extends BasicWizardIterator {
         template = CreatedModifiedFiles.getTemplate("templateWstcref.xml");//NOI18N
         fileChanges.add(fileChanges.createLayerEntry("Windows2/Modes/" + mode + "/" + wstcrefName, // NOI18N
                              template, replaceTokens, null, null));
-        
-        fileChanges.add(fileChanges.layerModifications(new CreateActionEntryOperation(name + "Action", packageName), // NOI18N
-                                                       Collections.<String>emptySet()));
+
         String bundlePath = getRelativePath(moduleInfo.getResourceDirectoryPath(false), packageName, "", "Bundle.properties"); //NOI18N
+        if (actionLessTC) {
+            String path = "Actions/Window/" + packageName.replace('.','-') + "-" + name + "Action.instance"; // NOI18N
+            {
+                Map<String,Object> attrs = new HashMap<String,Object>();
+                attrs.put("instanceCreate", "methodvalue:org.openide.windows.TopComponent.openAction"); // NOI18N
+                attrs.put("component", "methodvalue:" + packageName + '.' + name + "TopComponent.findInstance"); // NOI18N
+                if (relativeIconPath != null) {
+                    attrs.put("iconBase", relativeIconPath); // NOI18N
+                }
+                attrs.put("displayName", "bundlevalue:" + packageName + ".Bundle#CTL_" + name + "Action"); // NOI18N
+                fileChanges.add(
+                    fileChanges.createLayerEntry(
+                        path,
+                        null,
+                        null,
+                        NbBundle.getMessage(NewTCIterator.class, "LBL_TemplateActionName", name), // NOI18N
+                        attrs
+                    )
+                );
+            }
+
+            {
+                Map<String,Object> attrs = new HashMap<String,Object>();
+                attrs.put("originalFile", path); // NOI18N
+                fileChanges.add(
+                    fileChanges.createLayerEntry(
+                        "Menu/Window/" + name + "Action.shadow", // NOI18N
+                        null,
+                        null,
+                        null,
+                        attrs
+                    )
+                );
+            }
+        } else {
+            fileChanges.add(fileChanges.layerModifications(new CreateActionEntryOperation(name + "Action", packageName), // NOI18N
+                                                       Collections.<String>emptySet()));
+        }
         fileChanges.add(fileChanges.bundleKey(bundlePath, "CTL_" + name + "Action",  // NOI18N
                                 NbBundle.getMessage(NewTCIterator.class, "LBL_TemplateActionName", name))); //NOI18N
         
@@ -244,6 +362,29 @@ final class NewTCIterator extends BasicWizardIterator {
                                 NbBundle.getMessage(NewTCIterator.class, "HINT_TemplateTCName", name))); //NOI18N
         
         model.setCreatedModifiedFiles(fileChanges);
+    }
+
+    private static String defineWinSysBehavior( DataModel model ) {
+        StringBuffer res = new StringBuffer();
+        if( model.isClosingNotAllowed() ) {
+            res.append("\tputClientProperty(TopComponent.PROP_CLOSING_DISABLED, Boolean.TRUE);\n");
+        }
+        if( model.isDraggingNotAllowed() ) {
+            res.append("\tputClientProperty(TopComponent.PROP_DRAGGING_DISABLED, Boolean.TRUE);\n");
+        }
+        if( model.isMaximizationNotAllowed() ) {
+            res.append("\tputClientProperty(TopComponent.PROP_MAXIMIZATION_DISABLED, Boolean.TRUE);\n");
+        }
+        if( model.isSlidingNotAllowed() ) {
+            res.append("\tputClientProperty(TopComponent.PROP_SLIDING_DISABLED, Boolean.TRUE);\n");
+        }
+        if( model.isUndockingNotAllowed() ) {
+            res.append("\tputClientProperty(TopComponent.PROP_UNDOCKING_DISABLED, Boolean.TRUE);\n");
+        }
+        if( model.isKeepPrefSize() ) {
+            res.append("\tputClientProperty(TopComponent.PROP_KEEP_PREFERRED_SIZE_WHEN_SLIDED_IN, Boolean.TRUE);\n");
+        }
+        return res.toString();
     }
     
     private static String getRelativePath(String rootpath, String fullyQualifiedPackageName,
