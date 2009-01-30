@@ -66,6 +66,7 @@ import org.openide.util.WeakListeners;
 public final class ClassPathProviderImpl implements ClassPathProvider {
 
     private String buildClassesDir = "build.classes.dir"; // NOI18N
+    private static final String buildGeneratedDir = "build.generated.dir"; // NOI18N
     private String distJar = "dist.jar"; // NOI18N
     private String buildTestClassesDir = "build.test.classes.dir"; // NOI18N
     private String[] javacClasspath = new String[]{"javac.classpath"};    //NOI18N
@@ -79,6 +80,7 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
     private final SourceRoots sourceRoots;
     private final SourceRoots testSourceRoots;
     private final ClassPath[] cache = new ClassPath[8];
+    private boolean canHaveWebServices;
 
     private final Map<String,FileObject> dirCache = new HashMap<String,FileObject>();
 
@@ -92,6 +94,7 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
         this.evaluator = evaluator;
         this.sourceRoots = sourceRoots;
         this.testSourceRoots = testSourceRoots;
+        this.canHaveWebServices = false;
         listener = new PropertyChangeListener() {
                 public synchronized void propertyChange(PropertyChangeEvent evt) {
                     dirCache.remove(evt.getPropertyName());
@@ -104,7 +107,7 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
             SourceRoots sourceRoots, SourceRoots testSourceRoots,
             String buildClassesDir, String distJar, String buildTestClassesDir,
             String[] javacClasspath, String[] javacTestClasspath, String[] runClasspath,
-            String[] runTestClasspath) {
+            String[] runTestClasspath, boolean canHaveWebServices) {
         this(helper, evaluator, sourceRoots, testSourceRoots);
         this.buildClassesDir = buildClassesDir;
         this.distJar = distJar;
@@ -113,6 +116,7 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
         this.javacTestClasspath = javacTestClasspath;
         this.runClasspath = runClasspath;
         this.runTestClasspath = runTestClasspath;
+        this.canHaveWebServices = canHaveWebServices;
     }
 
     
@@ -144,7 +148,11 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
     private FileObject getBuildClassesDir() {
         return getDir(buildClassesDir);
     }
-    
+
+    private FileObject getBuildGeneratedDir() {
+        return getDir(buildGeneratedDir);
+    }
+
     private FileObject getDistJar() {
         return getDir(distJar);
     }
@@ -192,6 +200,10 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
         dir = getBuildTestClassesDir();
         if (dir != null && (dir.equals(file) || FileUtil.isParentOf(dir,file))) {
             return 3;
+        }
+        dir = getBuildGeneratedDir();
+        if (dir != null && FileUtil.isParentOf(dir, file) /* but dir != file */) { // #105645
+            return 0;
         }
         return -1;
     }
@@ -277,10 +289,10 @@ public final class ClassPathProviderImpl implements ClassPathProvider {
         if (cp == null) {
             switch (type) {
                 case 0:
-                    cp = ClassPathFactory.createClassPath(ClassPathSupportFactory.createSourcePathImplementation (this.sourceRoots, helper, evaluator));
+                    cp = ClassPathFactory.createClassPath(ClassPathSupportFactory.createSourcePathImplementation (this.sourceRoots, helper, evaluator, canHaveWebServices));
                     break;
                 case 1:
-                    cp = ClassPathFactory.createClassPath(ClassPathSupportFactory.createSourcePathImplementation (this.testSourceRoots, helper, evaluator));
+                    cp = ClassPathFactory.createClassPath(ClassPathSupportFactory.createSourcePathImplementation (this.testSourceRoots, helper, evaluator, canHaveWebServices));
                     break;
             }
         }
