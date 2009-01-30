@@ -54,12 +54,8 @@ import org.openide.text.DataEditorSupport;
 import org.openide.text.Line;
 import org.openide.text.NbDocument;
 import org.openide.text.Line.Part;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.util.RequestProcessor;
-import org.netbeans.api.debugger.DebuggerEngine;
-import org.netbeans.api.debugger.DebuggerManager;
-import org.openide.nodes.Node;
-import org.openide.util.NbBundle;
-import org.openide.windows.TopComponent;
 
 /*
  * ToolTipAnnotation.java
@@ -67,16 +63,13 @@ import org.openide.windows.TopComponent;
  *
  * @author Nik Molchanov (copied from JPDA implementation)
  */
-public class ToolTipAnnotation extends Annotation {
+public class ToolTipAnnotation extends Annotation implements Runnable {
     
-    private String expression;
-
+    private Part lp;
+    private EditorCookie ec;
+    
     public String getShortDescription() {
-        DebuggerEngine currentEngine = DebuggerManager.getDebuggerManager().getCurrentEngine();
-        if (currentEngine == null) {
-            return null;
-        }
-        GdbDebugger debugger = (GdbDebugger) currentEngine.lookupFirst(null, GdbDebugger.class);
+        GdbDebugger debugger = GdbDebugger.getGdbDebugger();
         if (debugger == null) {
             return null;
         }
@@ -89,54 +82,51 @@ public class ToolTipAnnotation extends Annotation {
         if (dob == null) {
             return null;
         }
-        EditorCookie ec = (EditorCookie) dob.getCookie(EditorCookie.class);
+        EditorCookie ec = dob.getCookie(EditorCookie.class);
         if (ec == null) {
             return null;
         }
-
-        try {
-            StyledDocument doc = ec.openDocument();
-            JEditorPane ep = getCurrentEditor();
-            if (ep == null) {
-                return null;
-            }
-            synchronized (this) {
-                expression = getIdentifier(doc, ep, NbDocument.findLineOffset(doc,
-                        lp.getLine().getLineNumber()) + lp.getColumn());
-                if (expression == null) {
-                    return null;
-                }
-            }
-            try {
-                // There is a small window during debugger startup when getGdbProxy() returns null
-                int token = debugger.evaluate(expression);
-                debugger.completeToolTip(token, this);
-            } catch (NullPointerException npe) {
-            }
-        } catch (IOException e) {
-        }
+        
+        this.lp = lp;
+        this.ec = ec;
+        RequestProcessor.getDefault ().post (this);
         return null;
     }
-
-    public void postToolTip(String value) {
+        
+    public void run() {
+        if (lp == null || ec == null) {
+            return;
+        }
+        StyledDocument doc;
+        try {
+            doc = ec.openDocument();
+        } catch (IOException ex) {
+            return;
+        }                    
+        JEditorPane ep = EditorContextDispatcher.getDefault().getCurrentEditor();
+        if (ep == null) {
+            return;
+        }
+        
+        String expression = getIdentifier(doc, ep, NbDocument.findLineOffset(doc, 
+                lp.getLine().getLineNumber()) + lp.getColumn());
+        
         if (expression == null) {
             return;
         }
-        int i = expression.indexOf('\n');
-        if (i >= 0) {
-            expression = expression.substring(0, i);
-        }
-        if (value.startsWith(">The program being debugged was signaled while in a function called from GDB.")) { // NOI18N
-           value = NbBundle.getMessage(GdbDebugger.class, "ERR_WatchedFunctionAborted"); // NOI18N
-           value = '>' + value + '<';
+        
+        GdbDebugger debugger = GdbDebugger.getGdbDebugger();
+        if (debugger == null) {
+            return;
         }
         
-        final String toolTipText = expression + " = " + value; // NOI18N
-        RequestProcessor.getDefault().post(new Runnable() {
-            public void run() {
-                firePropertyChange(PROP_SHORT_DESCRIPTION, null, toolTipText);
-            }
-        });
+        if (debugger.getState() != GdbDebugger.State.STOPPED) {
+            return;
+        }
+        
+        String toolTipText = debugger.evaluate(expression);
+        
+        firePropertyChange (PROP_SHORT_DESCRIPTION, null, toolTipText);
     }
 
     public String getAnnotationType () {
@@ -182,35 +172,5 @@ public class ToolTipAnnotation extends Annotation {
         }
     }
     
-    /** 
-     * Returns current editor component instance.
-     *
-     * Used in: ToolTipAnnotation
-     */
-    private static JEditorPane getCurrentEditor() {
-        EditorCookie e = getCurrentEditorCookie();
-        if (e == null) {
-            return null;
-        }
-        JEditorPane[] op = EditorContextImpl.getOpenedPanes(e);
-        if ((op == null) || (op.length < 1)) {
-            return null;
-        }
-        return op[0];
-    }
-    
-    /** 
-     * Returns current editor component instance.
-     *
-     * @return current editor component instance
-     */
-    private static EditorCookie getCurrentEditorCookie() {
-        Node[] nodes = TopComponent.getRegistry().getActivatedNodes();
-        if (nodes == null || nodes.length != 1) {
-            return null;
-        }
-        Node n = nodes[0];
-        return (EditorCookie) n.getCookie(EditorCookie.class);
-    }
 }
 
