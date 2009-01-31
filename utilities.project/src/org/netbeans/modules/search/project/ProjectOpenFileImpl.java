@@ -55,6 +55,7 @@ import org.openide.filesystems.FileObject;
  *
  * @author Jaroslav Tulach, Jesse Glick
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.openfile.OpenFileImpl.class, position=50)
 public class ProjectOpenFileImpl implements OpenFileImpl {
 
     public boolean open(FileObject fileObject, int line) {
@@ -63,7 +64,6 @@ public class ProjectOpenFileImpl implements OpenFileImpl {
                 Project p = ProjectManager.getDefault().findProject(fileObject);
                 if (p != null) {
                     OpenProjects.getDefault().open(new Project[] {p}, false);
-                    OpenProjects.getDefault().setMainProject(p);
                     return true;
                 }
             } catch (IOException ex) {
