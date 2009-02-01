@@ -116,6 +116,7 @@ import org.netbeans.modules.maven.debug.MavenDebuggerImpl;
 import org.netbeans.modules.maven.execute.BackwardCompatibilityWithMevenideChecker;
 import org.netbeans.modules.maven.execute.DefaultReplaceTokenProvider;
 import org.netbeans.modules.maven.execute.PrereqCheckerMerger;
+import org.netbeans.modules.maven.execute.ReactorChecker;
 import org.netbeans.modules.maven.queries.MavenBinaryForSourceQueryImpl;
 import org.netbeans.modules.maven.queries.MavenFileEncodingQueryImpl;
 import org.netbeans.spi.project.LookupMerger;
@@ -223,25 +224,41 @@ public final class NbMavenProjectImpl implements Project {
 
     /**
      * load a project with properties and profiles other than the current ones.
+     * uses default project embedder
      * @param activeProfiles
      * @param properties
      * @return
      */
     public synchronized MavenProject loadMavenProject(List<String> activeProfiles, Properties properties) {
+        return loadMavenProject(getEmbedder(), activeProfiles, properties);
+    }
+    /**
+     * load a project with properties and profiles other than the current ones.
+     * @param embedder embedder to use
+     * @param activeProfiles
+     * @param properties
+     * @return
+     */
+    public synchronized MavenProject loadMavenProject(MavenEmbedder embedder, List<String> activeProfiles, Properties properties) {
         try {
             MavenExecutionRequest req = new DefaultMavenExecutionRequest();
             req.addActiveProfiles(activeProfiles);
             req.setPomFile(projectFile.getAbsolutePath());
             req.setNoSnapshotUpdates(true);
             req.setUpdateSnapshots(false);
-            req.setUserProperties(properties);
+            Properties props = new Properties();
+            if (properties != null) {
+                props.putAll(properties);
+                req.setUserProperties(props);
+            }
             //MEVENIDE-634 i'm wondering if this fixes the issue
             req.setInteractiveMode(false);
             // recursive == false is important to avoid checking all submodules for extensions
             // that will not be used in current pom anyway..
             // #135070
             req.setRecursive(false);
-            MavenExecutionResult res = getEmbedder().readProjectWithDependencies(req);
+            req.setProperty("netbeans.execution", "true"); //NOI18N
+            MavenExecutionResult res = embedder.readProjectWithDependencies(req);
             if (!res.hasExceptions()) {
                 return res.getProject();
             } else {
@@ -259,7 +276,7 @@ public final class NbMavenProjectImpl implements Project {
         } 
         File fallback = InstalledFileLocator.getDefault().locate("maven2/fallback_pom.xml", null, false); //NOI18N
         try {
-            return getEmbedder().readProject(fallback);
+            return embedder.readProject(fallback);
         } catch (Exception x) {
             // oh well..
             //NOPMD
@@ -770,6 +787,7 @@ public final class NbMavenProjectImpl implements Project {
                     new DebuggerChecker(),
                     new CosChecker(),
                     CosChecker.createResultChecker(),
+                    new ReactorChecker(),
                     new PrereqCheckerMerger()
                 });
         return staticLookup;
@@ -927,7 +945,7 @@ public final class NbMavenProjectImpl implements Project {
             "java-beans", // NOI18N
             "oasis-XML-catalogs", // NOI18N
             "XML", // NOI18N
-            //            "web-service-clients",  // NOI18N
+            "web-service-clients",  // NOI18N
             "wsdl", // NOI18N
             // "servlet-types",     // NOI18N
             // "web-types",         // NOI18N
