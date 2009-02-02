@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.websvc.jaxwsmodel.project;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -58,6 +60,7 @@ import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 
@@ -65,6 +68,7 @@ import org.openide.util.lookup.Lookups;
  *
  * @author mkuchtiak
  */
+@LookupProvider.Registration(projectType="org-netbeans-modules-j2ee-clientproject")
 public class AppClientJaxWsLookupProvider implements LookupProvider {
     
     private String JAX_WS_XML_RESOURCE="/org/netbeans/modules/websvc/jaxwsmodel/resources/jax-ws.xml"; //NOI18N
@@ -89,14 +93,20 @@ public class AppClientJaxWsLookupProvider implements LookupProvider {
                     if (ext != null) {
                         FileObject jaxws_build = prj.getProjectDirectory().getFileObject(TransformerUtils.JAXWS_BUILD_XML_PATH);
                         try {
-                            if (jaxws_build==null && jaxWsModel.getClients().length>0) {
-                                // generate nbproject/jaxws-build.xml
-                                // add jaxws extension
-                                addJaxWsExtension(prj, JAX_WS_STYLESHEET_RESOURCE, ext);
+                            AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
+                            if (jaxws_build==null || extension == null) {
+                                if (jaxWsModel.getClients().length > 0) {
+                                    // generate nbproject/jaxws-build.xml
+                                    // add jaxws extension
+                                    addJaxWsExtension(prj, JAX_WS_STYLESHEET_RESOURCE, ext);
+                                }
                             } else if (jaxWsModel.getClients().length==0) {
                                 // remove nbproject/jaxws-build.xml
                                 // remove the jaxws extension
                                 removeJaxWsExtension(prj, jaxws_build, ext);
+                            } else {
+                                // remove compile dependencies, and re-generate build-script if needed
+                                removeCompileDependencies(prj, jaxws_build, ext);
                             }
                         } catch (IOException ex) {
                             ex.printStackTrace();
@@ -190,7 +200,7 @@ public class AppClientJaxWsLookupProvider implements LookupProvider {
                         final String styleSheetResource,
                         AntBuildExtender ext) throws IOException {
         
-        TransformerUtils.transformClients(prj.getProjectDirectory(), styleSheetResource);
+        TransformerUtils.transformClients(prj.getProjectDirectory(), styleSheetResource, true);
         FileObject jaxws_build = prj.getProjectDirectory().getFileObject(TransformerUtils.JAXWS_BUILD_XML_PATH);
         assert jaxws_build!=null;
         AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
@@ -198,8 +208,6 @@ public class AppClientJaxWsLookupProvider implements LookupProvider {
             extension = ext.addExtension(JAXWS_EXTENSION, jaxws_build);
             //adding dependencies
             extension.addDependency("-pre-pre-compile", "wsimport-client-generate"); //NOI18N
-            extension.addDependency("-do-compile", "wsimport-client-compile"); //NOI18N
-            extension.addDependency("-do-compile-single", "wsimport-client-compile"); //NOI18N
             ProjectManager.getDefault().saveProject(prj);
         }
     }
@@ -207,10 +215,14 @@ public class AppClientJaxWsLookupProvider implements LookupProvider {
     private void removeJaxWsExtension(
                         Project prj,
                         FileObject jaxws_build, 
-                        AntBuildExtender ext) throws IOException {
+                        final AntBuildExtender ext) throws IOException {
         AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
         if (extension!=null) {
-            ext.removeExtension(JAXWS_EXTENSION);
+            ProjectManager.mutex().writeAccess(new Runnable() {
+                public void run() {
+                    ext.removeExtension(JAXWS_EXTENSION);
+                }
+            });
             ProjectManager.getDefault().saveProject(prj);
         }
         if (jaxws_build!=null) {
@@ -221,6 +233,34 @@ public class AppClientJaxWsLookupProvider implements LookupProvider {
                 } finally {
                     fileLock.releaseLock();
                 }
+            }
+        }
+    }
+    /** make old project backward compatible with new projects
+     *
+     */
+    private void removeCompileDependencies (
+                        Project prj,
+                        FileObject jaxws_build,
+                        final AntBuildExtender ext) throws IOException {
+
+        BufferedReader br = new BufferedReader(new FileReader(FileUtil.toFile(jaxws_build)));
+        String line = null;
+        boolean isOldVersion = false;
+        while ((line = br.readLine()) != null) {
+            if (line.contains("wsimport-client-compile")) { //NOI18N
+                isOldVersion = true;
+                break;
+            }
+        }
+        br.close();
+        if (isOldVersion) {
+            TransformerUtils.transformClients(prj.getProjectDirectory(), JAX_WS_STYLESHEET_RESOURCE);
+            AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
+            if (extension!=null) {
+                extension.removeDependency("-do-compile", "wsimport-client-compile"); //NOI18N
+                extension.removeDependency("-do-compile-single", "wsimport-client-compile"); //NOI18N
+                ProjectManager.getDefault().saveProject(prj);
             }
         }
 
