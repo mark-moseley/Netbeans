@@ -120,9 +120,9 @@ public final class DiscoveryWizardAction extends NodeAction {
         dialog.dispose();
     }
     
-    private String findBuildResult(Project project) {
+    /*package-local*/ static String findBuildResult(Project project) {
         ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class);
-        if (pdp==null){
+        if (pdp == null || !pdp.gotDescriptor()){
             return null;
         }
         MakeConfigurationDescriptor make = (MakeConfigurationDescriptor)pdp.getConfigurationDescriptor();
@@ -143,7 +143,7 @@ public final class DiscoveryWizardAction extends NodeAction {
     }
     
     
-    private String getProjectDirectoryPath(Project project) {
+    /*package-local*/ static String getProjectDirectoryPath(Project project) {
         String base = project.getProjectDirectory().getPath();
         if (Utilities.isWindows()){
             base = base.replace('\\', '/');
@@ -153,14 +153,15 @@ public final class DiscoveryWizardAction extends NodeAction {
 	return base;
     }
     
-    private String findSourceRoot(Project project) {
+    /*package-local*/ static String findSourceRoot(Project project) {
         String base = getProjectDirectoryPath(project);
         ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class);
-        if (pdp!=null){
+        if (pdp != null && pdp.gotDescriptor()){
             MakeConfigurationDescriptor make = (MakeConfigurationDescriptor)pdp.getConfigurationDescriptor();
             Folder folder = make.getLogicalFolders();
             Vector sources = folder.getFolders();
-            List<String> roots = new ArrayList<String>();
+            List<String> roots = make.getAbsoluteSourceRoots();
+            //List<String> roots = new ArrayList<String>();
             for (Object o : sources){
                 Folder sub = (Folder)o;
                 if (sub.isProjectFiles()) {
@@ -184,7 +185,7 @@ public final class DiscoveryWizardAction extends NodeAction {
                 String rootName = roots.get(0);
                 Item[] items = make.getProjectItems();
                 if (items.length>0){
-                    String path =items[0].getPath();
+                    String path =items[0].getAbsPath();
                     StringBuilder newBase = null;
                     if (path.startsWith("..")){ // NOI18N
                         newBase = new StringBuilder(base);
@@ -223,7 +224,7 @@ public final class DiscoveryWizardAction extends NodeAction {
                 return null;
             }
             ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class);
-            if( pdp == null ) {
+            if( pdp == null || !pdp.gotDescriptor()) {
                 return null;
             }
             MakeConfigurationDescriptor make = (MakeConfigurationDescriptor)pdp.getConfigurationDescriptor();
@@ -282,23 +283,23 @@ public final class DiscoveryWizardAction extends NodeAction {
         return new DiscoveryWizardIterator(panels,simplepanels);
     }
     
-    private void setupComponent(final String[] steps, final String[] advanced, final int i, final Component c) {
+    /*package-local*/ static void setupComponent(final String[] steps, final String[] advanced, final int i, final Component c) {
         if (c instanceof JComponent) { // assume Swing components
             JComponent jc = (JComponent) c;
             // Sets step number of a component
-            jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, i); // NOI18N
             // Sets steps names for a panel
             if (i == 0) {
-                jc.putClientProperty("WizardPanel_contentData", advanced); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, advanced); // NOI18N
             } else {
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
             // Turn on subtitle creation on each step
-            jc.putClientProperty("WizardPanel_autoWizardStyle", Boolean.TRUE); // NOI18N
+            jc.putClientProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE); // NOI18N
             // Show steps on the left side with the image on the background
-            jc.putClientProperty("WizardPanel_contentDisplayed", Boolean.TRUE); // NOI18N
+            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE); // NOI18N
             // Turn on numbering of all steps
-            jc.putClientProperty("WizardPanel_contentNumbered", Boolean.TRUE); // NOI18N
+            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE); // NOI18N
         }
     }
     
