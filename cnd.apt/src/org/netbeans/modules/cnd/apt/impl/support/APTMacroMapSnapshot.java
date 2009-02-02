@@ -41,13 +41,14 @@
 
 package org.netbeans.modules.cnd.apt.impl.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
+import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTSerializeUtils;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 
@@ -56,15 +57,18 @@ import org.netbeans.modules.cnd.apt.utils.APTUtils;
  * @author gorrus
  */
 public final class APTMacroMapSnapshot {
-    protected final Map<String/*getTokenTextKey(token)*/, APTMacro> macros = new HashMap<String, APTMacro>();
-    protected final APTMacroMapSnapshot parent;
+    /*package*/ final Map<String/*getTokenTextKey(token)*/, APTMacro> macros = new HashMap<String, APTMacro>();
+    /*package*/ final APTMacroMapSnapshot parent;
 
     public APTMacroMapSnapshot(APTMacroMapSnapshot parent) {
         this.parent = parent;
     }
     
-    public final APTMacro getMacro(Token token) {
-        Object key = APTUtils.getTokenTextKey(token);
+    public final APTMacro getMacro(APTToken token) {
+        return getMacro(token.getText());
+    }
+    
+    public final APTMacro getMacro(String key) {
         APTMacroMapSnapshot currentSnap = this;
         while (currentSnap != null) {
             APTMacro macro = currentSnap.macros.get(key);
@@ -76,6 +80,7 @@ public final class APTMacroMapSnapshot {
         return null;
     }
     
+    @Override
     public String toString() {
         Map<String, APTMacro> tmpMap = new HashMap<String, APTMacro>();
         addAllMacros(this, tmpMap);
@@ -114,30 +119,36 @@ public final class APTMacroMapSnapshot {
         
     //This is a single instance of a class to indicate that macro is undefined,
     //not a child of APTMacro to track errors more easily
-    public static final UndefinedMacro UNDEFINED_MACRO = new UndefinedMacro();
-    private static class UndefinedMacro implements APTMacro {
+    public static final APTMacro UNDEFINED_MACRO = new UndefinedMacro();
+    private static final class UndefinedMacro implements APTMacro {
+        @Override
         public String toString() {
             return "Macro undefined"; // NOI18N
         }
 
-        public boolean isSystem() {
-            throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
+        public APTFile getFile() {
+            return null;
+        }
+        
+        public Kind getKind() {
+            return Kind.USER_SPECIFIED;
         }
 
         public boolean isFunctionLike() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
-        public Token getName() {
+        public APTToken getName() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
-        public Collection<Token> getParams() {
+        public Collection<APTToken> getParams() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
         public TokenStream getBody() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
+
     }
 }
