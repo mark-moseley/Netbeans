@@ -41,7 +41,11 @@
 
 package org.netbeans.modules.websvc.jaxwsmodel.project;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntBuildExtender;
@@ -49,6 +53,8 @@ import org.netbeans.modules.websvc.api.jaxws.project.WSUtils;
 import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;
 import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModelProvider;
 import org.netbeans.spi.project.LookupProvider;
+import org.netbeans.spi.project.support.ant.AntProjectHelper;
+import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileChangeAdapter;
@@ -56,6 +62,7 @@ import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 
@@ -63,11 +70,13 @@ import org.openide.util.lookup.Lookups;
  *
  * @author mkuchtiak
  */
+@LookupProvider.Registration(projectType="org-netbeans-modules-java-j2seproject")
 public class J2seJaxWsLookupProvider implements LookupProvider {
     
     private String JAX_WS_XML_RESOURCE="/org/netbeans/modules/websvc/jaxwsmodel/resources/jax-ws.xml"; //NOI18N
     private String JAX_WS_STYLESHEET_RESOURCE="/org/netbeans/modules/websvc/jaxwsmodel/resources/jaxws-j2se.xsl"; //NOI18N
     private String JAXWS_EXTENSION = "jaxws"; //NOI18N
+    private String COMPILE_ON_SAVE_UNSUPPORTED = "compile.on.save.unsupported.jaxws"; //NOI18N
     
     /** Creates a new instance of JaxWSLookupProvider */
     public J2seJaxWsLookupProvider() {
@@ -79,7 +88,7 @@ public class J2seJaxWsLookupProvider implements LookupProvider {
         final JaxWsModel jaxWsModel = getJaxWsModel(prj);
         ProjectOpenedHook openhook = new ProjectOpenedHook() {
             private FileChangeListener jaxWsListener;
-            private FileChangeListener jaxWsCreationListener;
+            private ChangeListener jaxWsCreationListener;
             
             protected void projectOpened() {
                 if (jaxWsModel!=null) { 
@@ -87,19 +96,25 @@ public class J2seJaxWsLookupProvider implements LookupProvider {
                     if (ext != null) {
                         FileObject jaxws_build = prj.getProjectDirectory().getFileObject(TransformerUtils.JAXWS_BUILD_XML_PATH);
                         try {
-                            if (jaxws_build==null && jaxWsModel.getClients().length>0) {
-                                // generate nbproject/jaxws-build.xml
-                                // add jaxws extension
-                                addJaxWsExtension(prj, JAX_WS_STYLESHEET_RESOURCE, ext);
+                            AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
+                            if (jaxws_build==null || extension == null) {
+                                if (jaxWsModel.getClients().length > 0) {
+                                    // generate nbproject/jaxws-build.xml
+                                    // add jaxws extension
+                                    addJaxWsExtension(prj, JAX_WS_STYLESHEET_RESOURCE, ext);
+                                }
                             } else if (jaxWsModel.getClients().length==0) {
                                 // remove nbproject/jaxws-build.xml
                                 // remove the jaxws extension
                                 removeJaxWsExtension(prj, jaxws_build, ext);
+                            } else {
+                                // remove compile dependencies, and re-generate build-script if needed
+                                removeCompileDependencies(prj, jaxws_build, ext);
                             }
                         } catch (IOException ex) {
                             ex.printStackTrace();
                         }
-                        FileObject jaxws_fo = getJaxWsFileObject(prj);
+                        FileObject jaxws_fo = jaxWsModel.getJaxWsFile();
                         if (jaxws_fo!=null) {                     
                             jaxWsListener = new FileChangeAdapter() {
                                 public void fileChanged(FileEvent fe) {
@@ -108,38 +123,33 @@ public class J2seJaxWsLookupProvider implements LookupProvider {
                             };  
                             jaxws_fo.addFileChangeListener(jaxWsListener);
                         } else {
-                            FileObject nbprojectDir = prj.getProjectDirectory().getFileObject("nbproject"); //NOI18N
-                            if (nbprojectDir!=null) {
-                                jaxWsCreationListener = new FileChangeAdapter() {
-                                    public void fileDataCreated(FileEvent fe) {
-                                        if ("jax-ws.xml".equals(fe.getFile().getNameExt())) { //NOI18N
-                                            FileObject jaxws_fo = getJaxWsFileObject(prj);
-                                            if (jaxws_fo!=null) {
-                                                jaxWsListener = new FileChangeAdapter() {
-                                                    public void fileChanged(FileEvent fe) {
-                                                        handleJaxsClientBuildScript();
-                                                    }
-                                                };  
-                                                jaxws_fo.addFileChangeListener(jaxWsListener);                                           
+                            jaxWsCreationListener = new ChangeListener() {
+                                public void stateChanged(ChangeEvent e) {
+                                    FileObject jaxws_fo = jaxWsModel.getJaxWsFile();
+                                    if (jaxws_fo!=null) {
+                                        jaxWsListener = new FileChangeAdapter() {
+                                            public void fileChanged(FileEvent fe) {
+                                                handleJaxsClientBuildScript();
                                             }
-                                        }
-                                    }
-                                };
-                                nbprojectDir.addFileChangeListener(jaxWsCreationListener);
-                            }
+                                        };  
+                                        jaxws_fo.addFileChangeListener(jaxWsListener);                                           
+                                    }                                   
+                                }
+                                
+                            };
+                            jaxWsModel.addChangeListener(jaxWsCreationListener);
                         }
                     }
                 }
             }
             protected void projectClosed() {
-                FileObject nbprojectDir = prj.getProjectDirectory().getFileObject("nbproject"); //NOI18N
-                if (nbprojectDir!=null) {
-                    nbprojectDir.removeFileChangeListener(jaxWsCreationListener);
-                    FileObject jaxws_fo = getJaxWsFileObject(prj);
-                    if (jaxws_fo!=null)
+                if (jaxWsModel != null) {
+                    jaxWsModel.removeChangeListener(jaxWsCreationListener);
+                    FileObject jaxws_fo = jaxWsModel.getJaxWsFile();
+                    if (jaxws_fo!=null) {
                         jaxws_fo.removeFileChangeListener(jaxWsListener);
-                }
-                
+                    }
+                }                
             }
             
             private void handleJaxsClientBuildScript() {
@@ -170,7 +180,7 @@ public class J2seJaxWsLookupProvider implements LookupProvider {
     
     private JaxWsModel getJaxWsModel(Project prj) {
         try {
-            FileObject fo = getJaxWsFileObject(prj);
+            FileObject fo = findJaxWsFileObject(prj);
             if (fo==null)
                 return JaxWsModelProvider.getDefault().getJaxWsModel(
                         WSUtils.class.getResourceAsStream(JAX_WS_XML_RESOURCE));
@@ -182,11 +192,6 @@ public class J2seJaxWsLookupProvider implements LookupProvider {
             ErrorManager.getDefault().notify(ex);
             return null;
         }
-    }
-    
-    private FileObject getJaxWsFileObject(Project prj) {
-        FileObject jaxWsFo = findJaxWsFileObject(prj);
-        return jaxWsFo;
     }
     
     public FileObject findJaxWsFileObject(Project prj) {
@@ -206,8 +211,9 @@ public class J2seJaxWsLookupProvider implements LookupProvider {
             extension = ext.addExtension(JAXWS_EXTENSION, jaxws_build);
             //adding dependencies
             extension.addDependency("-pre-pre-compile", "wsimport-client-generate"); //NOI18N
-            extension.addDependency("-do-compile", "wsimport-client-compile"); //NOI18N
-            extension.addDependency("-do-compile-single", "wsimport-client-compile"); //NOI18N
+            
+            // disable Compile On Save feature
+            disableCompileOnSave(prj);
             ProjectManager.getDefault().saveProject(prj);
         }
     }
@@ -215,10 +221,16 @@ public class J2seJaxWsLookupProvider implements LookupProvider {
     private void removeJaxWsExtension(
                         Project prj,
                         FileObject jaxws_build, 
-                        AntBuildExtender ext) throws IOException {
+                        final AntBuildExtender ext) throws IOException {
         AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
         if (extension!=null) {
-            ext.removeExtension(JAXWS_EXTENSION);
+            ProjectManager.mutex().writeAccess(new Runnable() {
+                public void run() {
+                    ext.removeExtension(JAXWS_EXTENSION);
+                }
+            });
+            // enable Compile on Save feature
+            enableCompileOnSave(prj);
             ProjectManager.getDefault().saveProject(prj);
         }
         if (jaxws_build!=null) {
@@ -232,5 +244,56 @@ public class J2seJaxWsLookupProvider implements LookupProvider {
             }
         }
 
+    }
+    /** make old project backward compatible with new projects
+     *
+     */
+    private void removeCompileDependencies (
+                        Project prj,
+                        FileObject jaxws_build,
+                        final AntBuildExtender ext) throws IOException {
+
+        BufferedReader br = new BufferedReader(new FileReader(FileUtil.toFile(jaxws_build)));
+        String line = null;
+        boolean isOldVersion = false;
+        while ((line = br.readLine()) != null) {
+            if (line.contains("wsimport-client-compile")) { //NOI18N
+                isOldVersion = true;
+                break;
+            }
+        }
+        br.close();
+        if (isOldVersion) {
+            TransformerUtils.transformClients(prj.getProjectDirectory(), JAX_WS_STYLESHEET_RESOURCE);
+            AntBuildExtender.Extension extension = ext.getExtension(JAXWS_EXTENSION);
+            if (extension!=null) {
+                extension.removeDependency("-do-compile", "wsimport-client-compile"); //NOI18N
+                extension.removeDependency("-do-compile-single", "wsimport-client-compile"); //NOI18N
+                ProjectManager.getDefault().saveProject(prj);
+            }
+        }
+
+    }
+    
+    /**  disable Compile on Save feature
+     * 
+     * @param prj Project
+     * @throws java.io.IOException
+     */
+    private void disableCompileOnSave(Project prj) throws IOException {
+        EditableProperties props = WSUtils.getEditableProperties(prj, AntProjectHelper.PROJECT_PROPERTIES_PATH);
+        props.put(COMPILE_ON_SAVE_UNSUPPORTED, "true"); //NOI18N
+        WSUtils.storeEditableProperties(prj,  AntProjectHelper.PROJECT_PROPERTIES_PATH, props);       
+    }
+    
+    /**  enable Compile on Save feature
+     * 
+     * @param prj Project
+     * @throws java.io.IOException
+     */
+    private void enableCompileOnSave(Project prj) throws IOException {
+        EditableProperties props = WSUtils.getEditableProperties(prj, AntProjectHelper.PROJECT_PROPERTIES_PATH);
+        props.remove(COMPILE_ON_SAVE_UNSUPPORTED);
+        WSUtils.storeEditableProperties(prj,  AntProjectHelper.PROJECT_PROPERTIES_PATH, props);
     }
 }
