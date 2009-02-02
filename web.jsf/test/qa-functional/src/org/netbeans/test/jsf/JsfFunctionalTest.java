@@ -70,12 +70,16 @@ import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JComboBoxOperator;
 import org.netbeans.jemmy.operators.JLabelOperator;
 import org.netbeans.jemmy.operators.JListOperator;
+import org.netbeans.jemmy.operators.JRadioButtonOperator;
+import org.netbeans.jemmy.operators.JTabbedPaneOperator;
 import org.netbeans.jemmy.operators.JToggleButtonOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.jemmy.operators.Operator.DefaultStringComparator;
 import org.netbeans.junit.Manager;
 import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.modules.db.runtime.DatabaseRuntimeManager;
+import org.netbeans.spi.db.explorer.DatabaseRuntime;
 import org.openide.util.Exceptions;
 
 /** Test JSF support.
@@ -120,7 +124,7 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
         conf = addServerTests(Server.GLASSFISH, conf,
                 "testPreconditions",
                 "testNewJSFWebProject",
-                "testRedeployProject", 
+                "testRedeployProject",
                 "testCleanAndBuildProject",
                 "testCompileAllJSP",
                 "testCleanAndBuildProject",
@@ -134,7 +138,8 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
                 "testAddNavigationCaseWithNewRule",
                 "testAddJSFToProject",
                 "testJSFPalette",
-                "testCreateEntityClassAndPU"
+                "testCreateEntityClassAndPU",
+                "testShutdownDb"
                 );
         conf = conf.enableModules(".*").clusters(".*");
         return NbModuleSuite.create(conf);
@@ -150,6 +155,7 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
      * - check index.jsp is opened
      */
     public void testNewJSFWebProject() throws IOException {
+        final String serverNodeName = getServerNode(Server.ANY).getText();
         NewProjectWizardOperator projectWizard = NewProjectWizardOperator.invoke();
         String category = Bundle.getStringTrimmed(
                 "org.netbeans.modules.web.core.Bundle",
@@ -164,7 +170,7 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
         nameStep.txtProjectLocation().typeText(sFolder);
         nameStep.next();
         NewWebProjectServerSettingsStepOperator serverStep = new NewWebProjectServerSettingsStepOperator();
-        serverStep.selectServer(getServerNode(Server.ANY).getText());
+        serverStep.selectServer(serverNodeName);
         serverStep.selectJavaEEVersion(org.netbeans.jellytools.Bundle.getString("org.netbeans.modules.j2ee.common.project.ui.Bundle", "JavaEESpecLevel_50"));
         serverStep.next();
 
@@ -179,7 +185,8 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
         frameworkStep.selectPageLibraries();
         frameworkStep.rbCreateNewLibrary().push();
         assertEquals("\"\" is not valid path for a folder.", frameworkStep.lblIsNotValidPathForAFolder().getText());
-        frameworkStep.rbRegisteredLibraries().push();
+        // Can be uncommented after fixing Issue 157766
+        //frameworkStep.rbRegisteredLibraries().push();
         frameworkStep.rbDoNotAppendAnyLibrary().push();
 
         frameworkStep.finish();
@@ -395,6 +402,9 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
         addFrameworkOper.ok();
         new JCheckBoxOperator(propertiesDialogOper, "Validate XML").setSelected(false);
         new JCheckBoxOperator(propertiesDialogOper, "Verify Objects").setSelected(true);
+        // do not append any library
+        new JTabbedPaneOperator(propertiesDialogOper).setSelectedIndex(1);
+        new JRadioButtonOperator(propertiesDialogOper, "Do not append any library.").doClick();
         // confirm properties dialog
         propertiesDialogOper.ok();
         
@@ -416,6 +426,7 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
     /** Test JSF Palette. */
     public void testJSFPalette() {
         EditorOperator editorOper = new EditorOperator(INDEX_JSP);
+        editorOper.select(17);
         ComponentPaletteOperator paletteOper = new ComponentPaletteOperator();
         // collapse HTML category
         JCheckBoxOperator htmlCategoryOper = new JCheckBoxOperator(paletteOper, "HTML");
@@ -444,7 +455,7 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
         paletteOper.selectComponent("JSF Data Table");
         paletteOper.pushKey(KeyEvent.VK_ENTER);
         new NbDialogOperator("Insert JSF Data Table").ok();
-        expected = "<h:dataTable value=\"#{arrayOrCollectionOf}\" var=\"item\">";
+        expected = "<h:dataTable value=\"#{}\" var=\"item\">";
         assertTrue("index.jsp should contain "+expected+".", editorOper.contains(expected));
         expected = "</h:dataTable>";
         assertTrue("index.jsp should contain "+expected+".", editorOper.contains(expected));
@@ -467,6 +478,16 @@ public class JsfFunctionalTest extends WebProjectValidationEE5 {
         new JButtonOperator(persistenceDialog, "Create").push();
         
         locationOper.finish();
+    }
+
+    /** Shutdown databases */
+    public void testShutdownDb(){
+        DatabaseRuntime[] runtimes = DatabaseRuntimeManager.getDefault().getRuntimes();
+        for (DatabaseRuntime runtime : runtimes) {
+            if (runtime.isRunning()) {
+                runtime.stop();
+            }
+        }
     }
 
     /** If installed visualweb cluster in IDE, switch from PageFlow to XML view of faces-config.xml. 
