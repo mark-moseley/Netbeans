@@ -41,29 +41,23 @@
 
 package org.netbeans.core.startup;
 
+import org.netbeans.MockEvents;
 import java.io.File;
 import java.util.Collections;
 import org.netbeans.Module;
 import org.netbeans.ModuleManager;
-import org.netbeans.junit.*;
-import junit.textui.TestRunner;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /** Test the NetBeans module installer implementation.
  * Broken into pieces to ensure each runs in its own VM.
  * @author Jesse Glick
  */
-public class NbInstallerTest5 extends SetupHid {
+public class NbInstallerTest5 extends NbInstallerTestBase {
 
     public NbInstallerTest5(String name) {
         super(name);
     }
 
-    public static void main(String[] args) {
-        //System.setProperty("mlfs.DEBUG", "true");
-        TestRunner.run(new NbTestSuite(NbInstallerTest5.class));
-    }
-    
     /** Test #21173/#23609: overriding layers by module dependencies.
      * Version 2: modules loaded piece by piece.
      * Exercises different logic in XMLFileSystem as well as ModuleLayeredFileSystem.
@@ -72,8 +66,8 @@ public class NbInstallerTest5 extends SetupHid {
         Main.getModuleSystem (); // init module system
         System.err.println("Module Info->"+org.openide.util.Lookup.getDefault()
                 .lookup(org.openide.modules.ModuleInfo.class)); // TEMP
-        final FakeEvents ev = new FakeEvents();
-        org.netbeans.core.startup.NbInstaller installer = new org.netbeans.core.startup.NbInstaller(ev);
+        final MockEvents ev = new MockEvents();
+        NbInstaller installer = new NbInstaller(ev);
         ModuleManager mgr = new ModuleManager(installer, ev);
         installer.registerManager(mgr);
         mgr.mutexPrivileged().enterWriteAccess();
@@ -89,12 +83,12 @@ public class NbInstallerTest5 extends SetupHid {
             assertEquals("base contents", slurp("foo/file1.txt"));
             assertEquals("base contents", slurp("foo/file3.txt"));
             assertEquals("base contents", slurp("foo/file4.txt"));
-            assertEquals("someval", Repository.getDefault().getDefaultFileSystem().findResource("foo/file5.txt").getAttribute("myattr"));
+            assertEquals("someval", FileUtil.getConfigFile("foo/file5.txt").getAttribute("myattr"));
             mgr.enable(m2);
             assertEquals("base contents", slurp("foo/file1.txt"));
             assertEquals(null, slurp("foo/file4.txt"));
             assertEquals("customized contents", slurp("foo/file3.txt"));
-            assertEquals("someotherval", Repository.getDefault().getDefaultFileSystem().findResource("foo/file5.txt").getAttribute("myattr"));
+            assertEquals("someotherval", FileUtil.getConfigFile("foo/file5.txt").getAttribute("myattr"));
             mgr.disable(m2);
             assertEquals("base contents", slurp("foo/file3.txt"));
             mgr.disable(m1);
