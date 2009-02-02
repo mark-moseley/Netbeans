@@ -1,3 +1,5 @@
+package org.netbeans.modules.php.editor.model;
+
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
@@ -36,24 +38,18 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.model.impl;
 
-import java.util.Map;
+
+
+import java.util.List;
 import org.netbeans.modules.gsf.api.OffsetRange;
-import org.netbeans.modules.php.editor.model.Scope;
-import org.netbeans.modules.php.editor.parser.astnodes.Assignment;
 
 /**
- *
  * @author Radek Matous
  */
-class VarAssignmentImpl extends AssignmentImpl<VariableNameImpl> {
-    VarAssignmentImpl(VariableNameImpl var, Scope scope, OffsetRange scopeRange,OffsetRange nameRange, Assignment assignment,
-            Map<String, AssignmentImpl> allAssignments) {
-        super(var, scope, scopeRange, nameRange, assignment, allAssignments);
-    }
-
-    VarAssignmentImpl(VariableNameImpl var, Scope scope, OffsetRange scopeRange, OffsetRange nameRange, String typeName) {
-        super(var, scope, scopeRange, nameRange, typeName);
-    }
+public interface Scope extends ModelElement {
+    /** TODO: remove*/
+    public String getNormalizedName();
+    List<? extends ModelElement> getElements();
+    OffsetRange getBlockRange();
 }

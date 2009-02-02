@@ -36,24 +36,28 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.model.impl;
 
-import java.util.Map;
+package org.netbeans.modules.php.editor.model;
+
 import org.netbeans.modules.gsf.api.OffsetRange;
-import org.netbeans.modules.php.editor.model.Scope;
-import org.netbeans.modules.php.editor.parser.astnodes.Assignment;
+import org.netbeans.modules.php.editor.index.PHPElement;
+import org.openide.filesystems.FileObject;
+import org.openide.util.Union2;
 
 /**
- *
  * @author Radek Matous
  */
-class VarAssignmentImpl extends AssignmentImpl<VariableNameImpl> {
-    VarAssignmentImpl(VariableNameImpl var, Scope scope, OffsetRange scopeRange,OffsetRange nameRange, Assignment assignment,
-            Map<String, AssignmentImpl> allAssignments) {
-        super(var, scope, scopeRange, nameRange, assignment, allAssignments);
-    }
-
-    VarAssignmentImpl(VariableNameImpl var, Scope scope, OffsetRange scopeRange, OffsetRange nameRange, String typeName) {
-        super(var, scope, scopeRange, nameRange, typeName);
-    }
+public interface ModelElement {
+    String getName();
+    String getCamelCaseName();
+    PhpKind getPhpKind();
+    public Union2<String, FileObject> getFile();
+    FileObject getFileObject();
+    int getOffset();
+    Scope getInScope();
+    PHPElement getPHPElement();
+    OffsetRange getNameRange();
+    PhpModifiers getPhpModifiers();
+    //PhpFileScope getFileScope();
+    //IndexScope getIndexScope();
 }
