@@ -54,6 +54,7 @@ import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.api.project.NativeFileItemSet;
+import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.loaders.CndDataObject;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
@@ -68,10 +69,11 @@ public class Folder {
     private String displayName;
     private String sortName;
     private final Folder parent;
-    private Vector items = null; // Folder or Item
+    private Vector<Object> items = null; // Folder or Item
     private Set<ChangeListener> changeListenerList = new HashSet<ChangeListener>();
     private final boolean projectFiles;
     private String id = null;
+    private String root;
     
     public Folder(ConfigurationDescriptor configurationDescriptor, Folder parent, String name, String displayName, boolean projectFiles) {
         this.configurationDescriptor = configurationDescriptor;
@@ -79,8 +81,16 @@ public class Folder {
         this.name = name;
         this.displayName = displayName;
         this.projectFiles = projectFiles;
-        this.items = new Vector();
+        this.items = new Vector<Object>();
         this.sortName = displayName.toLowerCase();
+    }
+
+    public void setRoot(String root) {
+        this.root = root;
+    }
+
+    public String getRoot() {
+        return root;
     }
     
     public int size() {
@@ -104,28 +114,33 @@ public class Folder {
     }
     
     public String getPath() {
-//        StringBuilder builder = new StringBuilder(getName());
-//        Folder parent = getParent();
-//        while (parent != null) {
-//            if (parent.getParent() != null) {
-//                builder.insert(0, '/'); // NOI18N
-//                builder.insert(0, parent.getName());
-//            }
-//            parent = parent.getParent();
-//        };
-//        return builder.toString();
         StringBuilder builder2 = new StringBuilder(32);
-        reversePath(this, builder2);
+        reversePath(this, builder2, false);
         return builder2.toString();
     }
+
+    public String getRootPath() {
+        StringBuilder builder2 = new StringBuilder(32);
+        reversePath(this, builder2, true);
+        String path =  builder2.toString();
+        if (path.startsWith("./")) {
+            path = path.substring(2);
+        }
+        return path;
+    }
     
-    private void reversePath(Folder folder, StringBuilder builder){
+    private void reversePath(Folder folder, StringBuilder builder, boolean fromRoot){
         Folder parent = folder.getParent();
         if (parent != null && parent.getParent() != null) {
-            reversePath(parent, builder);
+            reversePath(parent, builder, fromRoot);
             builder.append('/'); // NOI18N
         }
-        builder.append(folder.getName());
+        if (fromRoot && folder.getRoot() != null) {
+            builder.append(folder.getRoot());
+        }
+        else {
+            builder.append(folder.getName());
+        }
     }
     
     public String getDisplayName() {
@@ -150,8 +165,22 @@ public class Folder {
     public boolean isProjectFiles() {
         return projectFiles;
     }
-    
-    public Vector getElements() {
+
+    public boolean isDiskFolder() {
+        Folder f = this;
+        while (true) {
+            if (f.getRoot() != null) {
+                return true;
+            }
+            f = f.getParent();
+            if (f == null) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    public Collection<Object> getElements() {
         return items;
     }
     
@@ -185,7 +214,7 @@ public class Folder {
             }
             if (!((Folder)o).isProjectFiles()) {
                 indexAt--;
-                break;
+                continue;
             }
             String name2 = ((Folder)o).getSortName();
             int compareRes = name1.compareTo(name2);
@@ -199,7 +228,7 @@ public class Folder {
     }
     
     private void insertItemElement(Item element) {
-        String name1 = ((Item)element).getSortName();
+        String name1 = (element).getSortName();
         int indexAt = items.size() - 1;
         while (indexAt >= 0) {
             Object o = items.elementAt(indexAt);
@@ -235,13 +264,16 @@ public class Folder {
         if (addItem(item) == null) {
             return null; // Nothing added
         }
-        ArrayList list = new ArrayList(1);
+        ArrayList<NativeFileItem> list = new ArrayList<NativeFileItem>(1);
         list.add(item);
         ((MakeConfigurationDescriptor)configurationDescriptor).fireFilesAdded(list);
         return item;
     }
-    
     public Item addItem(Item item) {
+        return addItem(item, true);
+    }
+    
+    public Item addItem(Item item, boolean notify) {
         if (item == null)
             return null;
         // Check if already in project. Refresh if it's there.
@@ -256,11 +288,11 @@ public class Folder {
         addElement(item);
         
         // Add item to the dataObject's lookup
-        if (isProjectFiles()) {
-            // item.getLastDataObject() should be inited in method item.setFolder(this);
-            if (item.getLastDataObject() instanceof CndDataObject) {
-                CndDataObject dataObject = (CndDataObject)item.getLastDataObject();
-                MyNativeFileItemSet myNativeFileItemSet = (MyNativeFileItemSet)dataObject.getCookie(MyNativeFileItemSet.class);
+        if (isProjectFiles() && notify) {
+            DataObject dao = item.getDataObject();
+            if (dao instanceof CndDataObject) {
+                CndDataObject dataObject = (CndDataObject) dao;
+                MyNativeFileItemSet myNativeFileItemSet = dataObject.getCookie(MyNativeFileItemSet.class);
                 if (myNativeFileItemSet == null) {
                     myNativeFileItemSet = new MyNativeFileItemSet();
                     dataObject.addCookie(myNativeFileItemSet);
@@ -296,7 +328,7 @@ public class Folder {
                 folder.getFolderConfiguration(configurations[i]);
             }
         }
-    }
+        }
     
     /**
      * Returns an unique id (String) used to retrive this object from the
@@ -312,7 +344,6 @@ public class Folder {
     public FolderConfiguration getFolderConfiguration(Configuration configuration) {
         FolderConfiguration folderConfiguration = null;
         if (isProjectFiles()) {
-            String id = getId();
             folderConfiguration = (FolderConfiguration)configuration.getAuxObject(getId());
             if (folderConfiguration == null) {
                 CCompilerConfiguration parentCCompilerConfiguration;
@@ -353,7 +384,7 @@ public class Folder {
     }
     
     public boolean removeItemAction(Item item) {
-        ArrayList list = new ArrayList(1);
+        ArrayList<NativeFileItem> list = new ArrayList<NativeFileItem>(1);
         list.add(item);
         if (isProjectFiles())
             ((MakeConfigurationDescriptor)configurationDescriptor).fireFilesRemoved(list);
@@ -382,7 +413,7 @@ public class Folder {
             }
             if (dataObject instanceof CndDataObject) {
                 CndDataObject cndDataObject = (CndDataObject)dataObject;
-                MyNativeFileItemSet myNativeFileItemSet = (MyNativeFileItemSet)cndDataObject.getCookie(MyNativeFileItemSet.class);
+                MyNativeFileItemSet myNativeFileItemSet = cndDataObject.getCookie(MyNativeFileItemSet.class);
                 if (myNativeFileItemSet != null) {
                     myNativeFileItemSet.remove(item);
                     if (myNativeFileItemSet.isEmpty())
@@ -400,7 +431,6 @@ public class Folder {
             for (int i = 0; i < configurations.length; i++)
                 configurations[i].removeAuxObject(item.getId()/*ItemConfiguration.getId(item.getPath())*/);
         }
-        item.removePropertyChangeListener();
         item.setFolder(null);
         fireChangeEvent();
         return ret;
@@ -447,7 +477,7 @@ public class Folder {
     }
     
     public void reset() {
-        items = new Vector();
+        items = new Vector<Object>();
         fireChangeEvent();
     }
     
@@ -497,25 +527,25 @@ public class Folder {
     }
     
     public Item[] getItemsAsArray() {
-        Vector found = new Vector();
-        Iterator iter = new ArrayList(getElements()).iterator();
+        Vector<Item> found = new Vector<Item>();
+        Iterator iter = new ArrayList<Object>(getElements()).iterator();
         while (iter.hasNext()) {
             Object o = iter.next();
             if (o instanceof Item)
-                found.add(o);
+                found.add((Item)o);
         }
-        return (Item[])found.toArray(new Item[found.size()]);
+        return found.toArray(new Item[found.size()]);
     }
     
-    public List getAllItemsAsList() {
-        ArrayList found = new ArrayList();
-        Iterator iter = new ArrayList(getElements()).iterator();
+    public List<NativeFileItem> getAllItemsAsList() {
+        ArrayList<NativeFileItem> found = new ArrayList<NativeFileItem>();
+        Iterator iter = new ArrayList<Object>(getElements()).iterator();
         while (iter.hasNext()) {
             Object o = iter.next();
             if (o instanceof Item)
-                found.add(o);
+                found.add((Item)o);
             if (o instanceof Folder) {
-                List items = ((Folder)o).getAllItemsAsList();
+                List<NativeFileItem> items = ((Folder)o).getAllItemsAsList();
                 found.addAll(items);
             }
         }
@@ -524,41 +554,41 @@ public class Folder {
     
     
     public Item[] getAllItemsAsArray() {
-        List list = getAllItemsAsList();
-        return (Item[])list.toArray(new Item[list.size()]);
+        List<NativeFileItem> list = getAllItemsAsList();
+        return list.toArray(new Item[list.size()]);
     }
     
     /*
      * Returns a set of all files in this logical folder as FileObjetc's
      */
-    public Set/*<FileObject>*/ getItemsAsFileObjectSet() {
-        Vector files = new Vector();
-        Iterator iter = new ArrayList(getElements()).iterator();
+    public Set<FileObject> getItemsAsFileObjectSet() {
+        ArrayList<FileObject> files = new ArrayList<FileObject>();
+        Iterator iter = new ArrayList<Object>(getElements()).iterator();
         while (iter.hasNext()) {
             Item item = (Item)iter.next();
-            if (item instanceof Item) {
-                FileObject fo  = item.getFileObject();
-                if (fo != null)
-                    files.add(fo);
+            FileObject fo  = item.getFileObject();
+            if (fo != null) {
+                files.add(fo);
             }
         }
-        return new LinkedHashSet(files);
+        return new LinkedHashSet<FileObject>(files);
     }
     
     /*
      * Returns a set of all files in this logical folder and subfolders as FileObjetc's
      */
-    public Set/*<FileObject>*/ getAllItemsAsFileObjectSet(boolean projectFilesOnly) {
-        Vector files = new Vector();
+    public Set<FileObject> getAllItemsAsFileObjectSet(boolean projectFilesOnly) {
+        ArrayList<FileObject> files = new ArrayList<FileObject>();
         
         if (!projectFilesOnly || isProjectFiles()) {
-            Iterator iter = new ArrayList(getElements()).iterator();
+            Iterator iter = new ArrayList<Object>(getElements()).iterator();
             while (iter.hasNext()) {
                 Object item = iter.next();
                 if (item instanceof Item) {
                     FileObject fo  = ((Item)item).getFileObject();
-                    if (fo != null)
+                    if (fo != null) {
                         files.add(fo);
+                    }
                 }
                 if (item instanceof Folder) {
                     files.addAll(((Folder)item).getAllItemsAsFileObjectSet(projectFilesOnly));
@@ -566,34 +596,33 @@ public class Folder {
             }
         }
         
-        return new LinkedHashSet(files);
+        return new LinkedHashSet<FileObject>(files);
     }
     
     /*
      * Returns a set of all files in this logical folder as FileObjetc's
      */
-    public Set/*<DataObject>*/ getItemsAsDataObjectSet(String MIMETypeFilter) {
-        Vector files = new Vector();
-        Iterator iter = new ArrayList(getElements()).iterator();
+    public Set<DataObject> getItemsAsDataObjectSet(String MIMETypeFilter) {
+        ArrayList<DataObject> files = new ArrayList<DataObject>();
+        Iterator iter = new ArrayList<Object>(getElements()).iterator();
         while (iter.hasNext()) {
             Item item = (Item)iter.next();
-            if (item instanceof Item) {
-                DataObject da  = item.getDataObject();
-                if (da != null && (MIMETypeFilter == null || da.getPrimaryFile().getMIMEType().contains(MIMETypeFilter)))
-                    files.add(da);
+            DataObject da  = item.getDataObject();
+            if (da != null && (MIMETypeFilter == null || da.getPrimaryFile().getMIMEType().contains(MIMETypeFilter))) {
+                files.add(da);
             }
         }
-        return new LinkedHashSet(files);
+        return new LinkedHashSet<DataObject>(files);
     }
     
     /*
      * Returns a set of all files in this logical folder and subfolders as FileObjetc's
      */
-    public Set/*<DataObject>*/ getAllItemsAsDataObjectSet(boolean projectFilesOnly, String MIMETypeFilter) {
-        Vector files = new Vector();
+    public Set<DataObject> getAllItemsAsDataObjectSet(boolean projectFilesOnly, String MIMETypeFilter) {
+        ArrayList<DataObject> files = new ArrayList<DataObject>();
         
         if (!projectFilesOnly || isProjectFiles()) {
-            Iterator iter = new ArrayList(getElements()).iterator();
+            Iterator iter = new ArrayList<Object>(getElements()).iterator();
             while (iter.hasNext()) {
                 Object item = iter.next();
                 if (item instanceof Item) {
@@ -607,7 +636,7 @@ public class Folder {
             }
         }
         
-        return new LinkedHashSet(files);
+        return new LinkedHashSet<DataObject>(files);
     }
     
     public String[] getItemNamesAsArray() {
@@ -622,20 +651,20 @@ public class Folder {
      * Returns a set of all logical folder in this folder as an array
      */
     public Folder[] getFoldersAsArray() {
-        Vector folders = getFolders();
-        return (Folder[])folders.toArray(new Folder[folders.size()]);
+        Vector<Folder> folders = getFolders();
+        return folders.toArray(new Folder[folders.size()]);
     }
     
     /*
      * Returns a set of all logical folder in this folder
      */
-    public Vector getFolders() {
-        Vector folders = new Vector();
-        Iterator iter = new ArrayList(getElements()).iterator();
+    public Vector<Folder> getFolders() {
+        Vector<Folder> folders = new Vector<Folder>();
+        Iterator iter = new ArrayList<Object>(getElements()).iterator();
         while (iter.hasNext()) {
             Object item = iter.next();
             if (item instanceof Folder) {
-                folders.add(item);
+                folders.add((Folder)item);
             }
         }
         return folders;
@@ -644,16 +673,16 @@ public class Folder {
     /*
      * Returns a set of all logical folder and subfolders in this folder
      */
-    public Vector getAllFolders(boolean projectFilesOnly) {
-        Vector folders = new Vector();
+    public Vector<Folder> getAllFolders(boolean projectFilesOnly) {
+        Vector<Folder> folders = new Vector<Folder>();
         
         if (!projectFilesOnly || isProjectFiles()) {
-            Iterator iter = new ArrayList(getElements()).iterator();
+            Iterator iter = new ArrayList<Object>(getElements()).iterator();
             while (iter.hasNext()) {
                 Object item = iter.next();
                 if (item instanceof Folder) {
                     if (!projectFilesOnly || ((Folder)item).isProjectFiles()) {
-                        folders.add(item);
+                        folders.add((Folder)item);
                         folders.addAll(((Folder)item).getAllFolders(projectFilesOnly));
                     }
                 }
@@ -700,7 +729,7 @@ public class Folder {
         Iterator it;
         
         synchronized (changeListenerList) {
-            it = new HashSet(changeListenerList).iterator();
+            it = new HashSet<ChangeListener>(changeListenerList).iterator();
         }
         ChangeEvent ev = new ChangeEvent(source);
         while (it.hasNext()) {
@@ -731,5 +760,10 @@ public class Folder {
     /** Look up i18n strings here */
     private static String getString(String s) {
         return NbBundle.getMessage(Folder.class, s);
+    }
+
+    @Override
+    public String toString() {
+        return name;
     }
 }
