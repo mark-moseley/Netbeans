@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.cnd.apt.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import antlr.TokenStreamException;
 import java.util.LinkedList;
@@ -49,6 +48,7 @@ import java.util.Stack;
 import java.util.logging.Level;
 import org.netbeans.modules.cnd.apt.debug.APTTraceFlags;
 import org.netbeans.modules.cnd.apt.structure.APT;
+import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.structure.APTStream;
 import org.netbeans.modules.cnd.apt.utils.APTTraceUtils;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
@@ -58,15 +58,15 @@ import org.netbeans.modules.cnd.apt.utils.APTUtils;
  * @author Vladimir Voskresensky
  */
 public abstract class APTWalker {
-    private APTMacroMap macros;
-    private APT root;  
+    private final APTMacroMap macros;
+    private final APTFile root;
     private boolean walkerInUse = false;
     private boolean stopped = false;
     
     /**
      * Creates a new instance of APTWalker
      */
-    public APTWalker(APT apt, APTMacroMap macros) {
+    public APTWalker(APTFile apt, APTMacroMap macros) {
         assert (apt != null) : "how can we work on null tree?"; // NOI18N
         this.root = apt;
         this.macros = macros;
@@ -99,18 +99,23 @@ public abstract class APTWalker {
         return new WalkerTokenStream();
     }
     
-    private class WalkerTokenStream implements TokenStream {
+    private class WalkerTokenStream implements TokenStream, APTTokenStream {
         public WalkerTokenStream() {
             init(true);
         }
         
-        public Token nextToken() throws TokenStreamException {
-            //Token token = null;
-            //do {
+        public APTToken nextToken() {
+            try {
+                //do {
+                //do {
                 //token = nextTokenImpl();
                 //token = onToken(token); not used anywhere
-            //} while (token == null); 
-            return nextTokenImpl();
+                //} while (token == null);
+                return nextTokenImpl();
+            } catch (TokenStreamException ex) {
+                APTUtils.LOG.log(Level.SEVERE, null, ex);
+                return APTUtils.EOF_TOKEN;
+            }
         }
     }
     
@@ -320,13 +325,13 @@ public abstract class APTWalker {
         walkerInUse = true;
     }    
     
-    private Token nextTokenImpl() throws TokenStreamException {
-        Token theRetToken=null;
+    private APTToken nextTokenImpl() throws TokenStreamException {
+        APTToken theRetToken;
         tokenLoop:
         for (;;) {           
             while (!tokens.isEmpty()) {
                 TokenStream ts = tokens.peek();
-                theRetToken = ts.nextToken();
+                theRetToken = (APTToken) ts.nextToken();
                 if (!APTUtils.isEOF(theRetToken)) {
                     return theRetToken;
                 } else {
@@ -436,8 +441,12 @@ public abstract class APTWalker {
     
     protected APT getCurNode() {
         return curAPT;
-    }  
-    
+    }
+
+    public APTFile getFile() {
+        return root;
+    }
+
     // fields to be used when generating token stream
     private APT curAPT;
     private boolean curWasInChild;
