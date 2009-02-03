@@ -51,6 +51,7 @@ import junit.framework.Test;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.spi.queries.FileEncodingQueryImplementation;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -60,7 +61,6 @@ import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.LocalFileSystem;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataLoader;
 import org.openide.loaders.DataLoaderPool;
@@ -293,7 +293,7 @@ public class SCFTHandlerTest extends NbTestCase {
     }
 
      public void testUTF8() throws Exception {
-         FileObject root = Repository.getDefault().getDefaultFileSystem().getRoot();
+         FileObject root = FileUtil.getConfigRoot();
          FileObject xmldir = FileUtil.createFolder(root, "xml");
          FileObject xml = FileUtil.createData(xmldir, "class.txt");
          OutputStream os = xml.getOutputStream();
@@ -327,7 +327,8 @@ public class SCFTHandlerTest extends NbTestCase {
          assertEquals(exp, read);
          
      }
-    
+
+    @RandomlyFails
     public void testTemplateWizardCopiesItsPropertiesToMapForOverridenEntryOnMoreEntries() throws Exception {
         LocalFileSystem fs = new LocalFileSystem();
         fs.setRootDirectory(getWorkDir());
