@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,20 +44,15 @@ package org.netbeans.core.startup;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.CharArrayWriter;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
@@ -242,17 +237,20 @@ final class ModuleList implements Stamps.Updater {
                     }
                 }
                 if (! name.equals(props.get("name"))) throw new IOException("Code name mismatch: " /* #25011 */ + name + " vs. " + props.get("name")); // NOI18N
+                Boolean enabledB = (Boolean)props.get("enabled"); // NOI18N
                 String jar = (String)props.get("jar"); // NOI18N
                 File jarFile;
                 try {
                     jarFile = findJarByName(jar, name);
                 } catch (FileNotFoundException fnfe) {
                     //LOG.fine("Cannot find: " + fnfe.getMessage());
-                    ev.log(Events.MISSING_JAR_FILE, new File(fnfe.getMessage()));
-                    try {
-                        f.delete();
-                    } catch (IOException ioe) {
-                        LOG.log(Level.WARNING, null, ioe);
+                    ev.log(Events.MISSING_JAR_FILE, new File(fnfe.getMessage()), enabledB);
+                    if (!Boolean.FALSE.equals(enabledB)) {
+                        try {
+                            f.delete();
+                        } catch (IOException ioe) {
+                            LOG.log(Level.WARNING, null, ioe);
+                        }
                     }
                     continue;
                 }
@@ -264,7 +262,6 @@ final class ModuleList implements Stamps.Updater {
                 history.upgrade(prevRelease, prevSpec);
                 Boolean reloadableB = (Boolean)props.get("reloadable"); // NOI18N
                 boolean reloadable = (reloadableB != null ? reloadableB.booleanValue() : false);
-                Boolean enabledB = (Boolean)props.get("enabled"); // NOI18N
                 boolean enabled = (enabledB != null ? enabledB.booleanValue() : false);
                 Boolean autoloadB = (Boolean)props.get("autoload"); // NOI18N
                 boolean autoload = (autoloadB != null ? autoloadB.booleanValue() : false);
@@ -432,11 +429,12 @@ final class ModuleList implements Stamps.Updater {
         try {
             mgr.enable(modules);
         } catch (InvalidException ie) {
-            LOG.log(Level.WARNING, null, ie);
+            LOG.log(Level.INFO, null, ie);
             Module bad = ie.getModule();
             if (bad == null) throw new IllegalStateException();
-            ev.log(Events.FAILED_INSTALL_NEW_UNEXPECTED, bad, ie);
-            modules.remove(bad);
+            Set<Module> affectedModules = mgr.getModuleInterdependencies (bad, true, true);
+            ev.log(Events.FAILED_INSTALL_NEW_UNEXPECTED, bad, affectedModules, ie);
+            modules.removeAll (affectedModules);
             // Try again without it. Note that some other dependent modules might
             // then be in the missing list for the second round.
             installNew(modules);
@@ -1274,7 +1272,6 @@ final class ModuleList implements Stamps.Updater {
      */
     private Map<String,Object> computeProperties(Module m) {
         if (m.isFixed() || ! m.isValid()) throw new IllegalArgumentException("fixed or invalid: " + m); // NOI18N
-        if (! (m.getHistory() instanceof ModuleHistory)) throw new IllegalArgumentException("weird history: " + m); // NOI18N
         Map<String,Object> p = new HashMap<String,Object>();
         p.put("name", m.getCodeNameBase()); // NOI18N
         int rel = m.getCodeNameRelease();
@@ -1286,16 +1283,18 @@ final class ModuleList implements Stamps.Updater {
             p.put("specversion", spec); // NOI18N
         }
         if (!m.isAutoload() && !m.isEager()) {
-            p.put("enabled", m.isEnabled() ? Boolean.TRUE : Boolean.FALSE); // NOI18N
+            p.put("enabled", m.isEnabled()); // NOI18N
         }
-        p.put("autoload", m.isAutoload() ? Boolean.TRUE : Boolean.FALSE); // NOI18N
-        p.put("eager", m.isEager() ? Boolean.TRUE : Boolean.FALSE); // NOI18N
-        p.put("reloadable", m.isReloadable() ? Boolean.TRUE : Boolean.FALSE); // NOI18N
-        ModuleHistory hist = (ModuleHistory)m.getHistory();
-        p.put("jar", hist.getJar()); // NOI18N
-        if (hist.getInstallerStateChanged()) {
-            p.put("installer", m.getCodeNameBase().replace('.', '-') + ".ser"); // NOI18N
-            p.put("installerState", hist.getInstallerState()); // NOI18N
+        p.put("autoload", m.isAutoload()); // NOI18N
+        p.put("eager", m.isEager()); // NOI18N
+        p.put("reloadable", m.isReloadable()); // NOI18N
+        if (m.getHistory() instanceof ModuleHistory) {
+            ModuleHistory hist = (ModuleHistory) m.getHistory();
+            p.put("jar", hist.getJar()); // NOI18N
+            if (hist.getInstallerStateChanged()) {
+                p.put("installer", m.getCodeNameBase().replace('.', '-') + ".ser"); // NOI18N
+                p.put("installerState", hist.getInstallerState()); // NOI18N
+            }
         }
         return p;
     }
