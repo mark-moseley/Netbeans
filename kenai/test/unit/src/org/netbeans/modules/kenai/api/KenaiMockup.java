@@ -40,12 +40,14 @@
 package org.netbeans.modules.kenai.api;
 
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import org.netbeans.modules.kenai.FeatureData;
 import org.netbeans.modules.kenai.KenaiImpl;
+import org.netbeans.modules.kenai.LicensesListData.LicensesListItem;
 import org.netbeans.modules.kenai.ProjectData;
+import org.netbeans.modules.kenai.ServicesListData.ServicesListItem;
 
 /**
  * Mockup kenai server.
@@ -86,13 +88,14 @@ public class KenaiMockup extends KenaiImpl {
         users.add(u);
     }
 
+
     @Override
-    public ProjectData createProject(String name, String displayName, String username, char[] password) throws KenaiException {
+    public ProjectData createProject(String name, String displayName, String description, String[] licenses, String tags) throws KenaiException {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
     @Override
-    public Iterator<ProjectData> searchProjects(String pattern, String username, char[] password) throws KenaiException {
+    public Iterator<ProjectData> searchProjects(String pattern) throws KenaiException {
         List<ProjectData> result = new ArrayList<ProjectData>();
         for (ProjectData p : projects) {
             if (p.name.startsWith(pattern)) {
@@ -103,7 +106,7 @@ public class KenaiMockup extends KenaiImpl {
     }
     
     @Override
-    public ProjectData getProject(String name, String username, char[] password) throws KenaiException {
+    public ProjectData getProject(String name) throws KenaiException {
         for (ProjectData p : projects) {
             if (p.name.equals(name)) {
                 return p;
@@ -113,8 +116,8 @@ public class KenaiMockup extends KenaiImpl {
     }
 
     @Override
-    public boolean isAuthorized(String projectName, String feature, String activity, String username, char[] password) throws KenaiException {
-        User user = getUser(username);
+    public boolean isAuthorized(String projectName, String feature, String activity) throws KenaiException {
+        User user = getUser(Kenai.getDefault().getPasswordAuthentication().getUserName());
         if (user == null) {
             return false;
         }
@@ -174,6 +177,31 @@ public class KenaiMockup extends KenaiImpl {
         } catch (Exception e) {
             throw new KenaiException(e);
         }
+    }
+
+
+    @Override
+    public FeatureData createProjectFeature(
+            String projectName,
+            String name,
+            String display_name,
+            String description,
+            String url,
+            String repository_url,
+            String browse_url,
+            String service
+            ) throws KenaiException {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public Iterator<LicensesListItem> getLicenses() throws KenaiException {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    @Override
+    public Iterator<ServicesListItem> getServices() throws KenaiException {
+        throw new UnsupportedOperationException("Not supported yet.");
     }
 
     static class User {
