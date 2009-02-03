@@ -56,13 +56,11 @@ import com.sun.source.util.TreePathScanner;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.EnumSet;
-import java.util.EnumSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
@@ -71,6 +69,7 @@ import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.TreeMaker;
+import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.api.java.source.TypeMirrorHandle;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.spi.editor.hints.ChangeInfo;
@@ -91,7 +90,7 @@ public class AddParameterOrLocalFix implements Fix {
     private String name;
     private boolean parameter;
     
-    private int /*!!!Position*/ unresolvedVariable;
+    private TreePathHandle[] tpHandle;
     
     public AddParameterOrLocalFix(CompilationInfo info,
                                   TypeMirror type, String name,
@@ -104,7 +103,10 @@ public class AddParameterOrLocalFix implements Fix {
         this.type = TypeMirrorHandle.create(type);
         this.name = name;
         this.parameter = parameter;
-        this.unresolvedVariable = unresolvedVariable;
+
+        TreePath treePath = info.getTreeUtilities().pathFor(unresolvedVariable + 1);
+        tpHandle = new TreePathHandle[1];
+        tpHandle[0] = TreePathHandle.create(treePath, info);
     }
 
     public String getText() {
@@ -129,9 +131,12 @@ public class AddParameterOrLocalFix implements Fix {
                 }
 
                 TreeMaker make = working.getTreeMaker();
-                TreePath tp = working.getTreeUtilities().pathFor(unresolvedVariable + 1);
 
-                assert tp.getLeaf().getKind() == Kind.IDENTIFIER;
+                //TreePath tp = working.getTreeUtilities().pathFor(unresolvedVariable + 1);
+                //Use TreePathHandle instead of position supplied as field (#143318)
+                TreePath tp = tpHandle[0].resolve(working);
+                if (tp.getLeaf().getKind() != Kind.IDENTIFIER)
+                    return;
 
                 TreePath targetPath = findMethod(tp);
                 
@@ -172,6 +177,20 @@ public class AddParameterOrLocalFix implements Fix {
         }).commit();
         
         return null;
+    }
+
+    /** In case statement is an Assignment, replace it with variable declaration */
+    private boolean initExpression(StatementTree statement, TreeMaker make, final String name, TypeMirror proposedType, final WorkingCopy wc, TreePath tp) {
+        ExpressionTree exp = ((ExpressionStatementTree) statement).getExpression();
+        if (exp.getKind() == Kind.ASSIGNMENT) {
+            //replace the expression statement with a variable declaration:
+            AssignmentTree at = (AssignmentTree) exp;
+            VariableTree vt = make.Variable(make.Modifiers(EnumSet.noneOf(Modifier.class)), name, make.Type(proposedType), at.getExpression());
+            vt = Utilities.copyComments(wc, statement, vt);
+            wc.rewrite(statement, vt);
+            return true;
+        }
+        return false;
     }
 
     private void resolveLocalVariable55(final WorkingCopy wc, TreePath tp, TreeMaker make, TypeMirror proposedType) {
@@ -269,30 +288,47 @@ public class AddParameterOrLocalFix implements Fix {
         }
         
         StatementTree statement = (StatementTree) firstUse.getLeaf();
-        
+
         if (statement.getKind() == Kind.EXPRESSION_STATEMENT) {
-            ExpressionTree exp = ((ExpressionStatementTree) statement).getExpression();
-            
-            if (exp.getKind() == Kind.ASSIGNMENT) {
-                //replace the expression statement with a variable declaration:
-                AssignmentTree at = (AssignmentTree) exp;
-                VariableTree vt = make.Variable(make.Modifiers(EnumSet.noneOf(Modifier.class)), name, make.Type(proposedType), at.getExpression());
-                
-                vt = Utilities.copyComments(wc, statement, vt);
-                        
-                wc.rewrite(statement, vt);
-                
+            if (initExpression(statement, make, name, proposedType, wc, tp)) {
                 return;
             }
         }
-        
+
         Tree statementParent = firstUse.getParentPath().getLeaf();
         VariableTree vt = make.Variable(make.Modifiers(EnumSet.noneOf(Modifier.class)), name, make.Type(proposedType), null);
-        
+
         if (statementParent.getKind() == Kind.BLOCK) {
             BlockTree block = (BlockTree) statementParent;
+
+            FirstUsage fu = new FirstUsage();
+            TreePath result = fu.scan(firstUse, null);
+            if (result == null|| !isStatement(result.getLeaf())) {
+                Logger.getLogger("global").log(Level.WARNING, "Add local variable - cannot find a statement inside nested block"); // NOI18N
+                return;
+            }
+            Tree resultLeaf = result.getLeaf();
+            //if resultLeaf is an Expression && Parent is a block (not an unperenthisized if, while... treee
+            if (resultLeaf.getKind() == Kind.EXPRESSION_STATEMENT && result.getParentPath().getLeaf().getKind() == Kind.BLOCK) {
+                //init the expression if first use and the error where hint was
+                //invoked from the same block
+                if (findBlock(result).getLeaf().equals(findBlock(tp).getLeaf())) {
+                    if (initExpression((StatementTree) result.getLeaf(), make, name, proposedType, wc, tp)) {
+                        return;
+                    }
+                }
+
+                //not first use, but result is not a parent and vice versa
+                if (!isParent(result, tp) && !isParent(tp, result)) {
+                    if (initExpression((StatementTree) tp.getParentPath().getParentPath().getLeaf(), make, name, proposedType, wc, tp)) {
+                        return;
+                    }
+                }
+
+            }
+
             BlockTree nueBlock = make.insertBlockStatement(block, block.getStatements().indexOf(statement), vt);
-            
+
             wc.rewrite(block, nueBlock);
         } else {
             BlockTree block = make.Block(Arrays.asList(vt, statement), false);
@@ -328,7 +364,37 @@ public class AddParameterOrLocalFix implements Fix {
         
         return null;
     }
-    
+
+    private boolean isParent(TreePath parent, TreePath son) {
+        TreePath parentBlock = findBlock(parent);
+        TreePath block = son;
+
+        while (block != null) {
+            if (block.getLeaf().getKind() == Kind.BLOCK) {
+                if (block.getLeaf().equals(parentBlock.getLeaf())) {
+                    return true;
+                }
+            }
+            block = block.getParentPath();
+        }
+
+        return false;
+    }
+
+    private TreePath findBlock(TreePath tp) {
+        TreePath block = tp;
+
+        while (block != null) {
+            if (block.getLeaf().getKind() == Kind.BLOCK) {
+                return block;
+            }
+
+            block = block.getParentPath();
+        }
+
+        return null;
+    }
+
     private boolean isStatement(Tree t) {
         Class intClass = t.getKind().asInterface();
         
