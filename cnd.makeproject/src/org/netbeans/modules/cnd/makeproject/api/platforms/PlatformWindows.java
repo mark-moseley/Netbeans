@@ -42,6 +42,7 @@
 package org.netbeans.modules.cnd.makeproject.api.platforms;
 
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.api.configurations.LibraryItem;
 
 public class PlatformWindows extends Platform {
@@ -64,7 +65,14 @@ public class PlatformWindows extends Platform {
     public String getLibraryName(String baseName) {
         return "lib" + baseName + ".dll"; // NOI18N
     }
-    
+
+    @Override
+    public String getQtLibraryName(String baseName, String version) {
+        int dot = version.indexOf('.'); // NOI18N
+        String majorVersion = 0 <= dot? version.substring(0, dot) : version;
+        return baseName + majorVersion + ".dll"; // NOI18N
+    }
+
     public String getLibraryLinkOption(String libName, String libDir, String libPath, CompilerSet compilerSet) {
         if (libName.endsWith(".dll")) { // NOI18N
             int i = libName.indexOf(".dll"); // NOI18N
@@ -72,9 +80,10 @@ public class PlatformWindows extends Platform {
                 libName = libName.substring(0, i);
             if (libName.startsWith("lib") || libName.startsWith("cyg")) // NOI18N
                 libName = libName.substring(3);
-            return compilerSet.getLibrarySearchOption() + libDir + " " + "-l" + libName; // NOI18N
+            return compilerSet.getLibrarySearchOption() + IpeUtils.escapeOddCharacters(libDir)
+                    + " " + compilerSet.getLibraryOption() + IpeUtils.escapeOddCharacters(libName); // NOI18N
         } else {
-            return libPath;
+            return IpeUtils.escapeOddCharacters(libPath);
         }
     }
 }

@@ -42,19 +42,10 @@
 package org.netbeans.modules.cnd.makeproject.api.platforms;
 
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.netbeans.modules.cnd.makeproject.api.configurations.LibraryItem;
-import org.openide.util.Utilities;
 
-public abstract class Platform {
-    // Platform id's
-    public static final int PLATFORM_SOLARIS_SPARC = 0;
-    public static final int PLATFORM_SOLARIS_INTEL = 1;
-    public static final int PLATFORM_LINUX = 2;
-    public static final int PLATFORM_WINDOWS = 3;
-    public static final int PLATFORM_MACOSX = 4;
-    public static final int PLATFORM_GENERIC = 5;
-    
-    private static int defaultPlatform = -1;
+public abstract class Platform extends PlatformTypes {
     
     private String name;
     private String displayName;
@@ -81,33 +72,27 @@ public abstract class Platform {
     public abstract LibraryItem.StdLibItem[] getStandardLibraries();
     
     public abstract String getLibraryName(String baseName);
-    
+
+    /**
+     * File name that qmake would generate on current platform
+     * given <code>TARGET=baseName</code> and <code>VERSION=version</code>.
+     *
+     * @param baseName
+     * @param version
+     * @return
+     */
+    public String getQtLibraryName(String baseName, String version) {
+        return getLibraryName(baseName) + "." + version; // NOI18N
+    }
+
     public abstract String getLibraryLinkOption(String libName, String libDir, String libPath, CompilerSet compilerSet);
     
     public LibraryItem.StdLibItem getStandardLibrarie(String name) {
-	for (int i = 0; i < getStandardLibraries().length; i++) {
-	    if (getStandardLibraries()[i].getName().equals(name))
-		return getStandardLibraries()[i];
-	}
-	return null;
-    }
-    
-    public static int getDefaultPlatform() {
-        if (defaultPlatform <= 0) {
-            String arch = System.getProperty("os.arch"); // NOI18N
-            if (Utilities.isWindows())
-                defaultPlatform = Platform.PLATFORM_WINDOWS;
-            else if (Utilities.getOperatingSystem() == Utilities.OS_LINUX)
-                defaultPlatform = Platform.PLATFORM_LINUX;
-            else if (Utilities.getOperatingSystem() == Utilities.OS_SOLARIS && arch.indexOf("86") >= 0) // NOI18N
-                defaultPlatform = Platform.PLATFORM_SOLARIS_INTEL;
-            else if (Utilities.getOperatingSystem() == Utilities.OS_SOLARIS)
-                defaultPlatform = Platform.PLATFORM_SOLARIS_SPARC;
-            else if (Utilities.getOperatingSystem() == Utilities.OS_MAC)
-                defaultPlatform = Platform.PLATFORM_MACOSX;
-            else 
-                defaultPlatform = Platform.PLATFORM_GENERIC;
+        for (int i = 0; i < getStandardLibraries().length; i++) {
+            if (getStandardLibraries()[i].getName().equals(name)) {
+                return getStandardLibraries()[i];
+            }
         }
-        return defaultPlatform;
+        return null;
     }
 }
