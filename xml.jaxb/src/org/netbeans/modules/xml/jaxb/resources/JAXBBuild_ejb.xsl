@@ -50,7 +50,7 @@ made subject to such option by the copyright holder.
         <xsl:element name="project">
             <xsl:attribute name="name"><xsl:value-of select="s:schemas/@projectName"/>_jaxb</xsl:attribute>
             <xsl:attribute name="default">default</xsl:attribute>
-            <xsl:attribute name="basedir">.</xsl:attribute>            
+            <xsl:attribute name="basedir">.</xsl:attribute>
             <xsl:element name="target">
                 <xsl:attribute name="name">xjc-typedef-target</xsl:attribute>
                 <xsl:attribute name="depends">-init-project</xsl:attribute>
@@ -60,43 +60,44 @@ made subject to such option by the copyright holder.
             </xsl:element>
             <xsl:element name="target">
                 <xsl:attribute name="name">jaxb-clean-code-generation</xsl:attribute>
-                <xsl:attribute name="depends">clean,jaxb-code-generation</xsl:attribute>            
+                <xsl:attribute name="depends">clean,jaxb-code-generation</xsl:attribute>
             </xsl:element>
             <xsl:element name="target">
                 <xsl:attribute name="name">jaxb-code-generation</xsl:attribute>
-                <xsl:attribute name="depends">xjc-typedef-target,-do-init,-init-macrodef-javac</xsl:attribute>            
+                <xsl:attribute name="depends">xjc-typedef-target,-do-init,-init-macrodef-javac</xsl:attribute>
                 <mkdir dir="${{build.generated.sources.dir}}/jaxb"/>
                 <mkdir dir="build/generated/jaxbCache"/>
                 <xsl:apply-templates select="s:schemas/s:schema"/>
-            </xsl:element>             
+                <xsl:comment>*** EJB project javac macro does not support sourcepath attribute, so do not pass "sourcepath=${src.dir}"</xsl:comment>
+            </xsl:element>
         </xsl:element>
     </xsl:template>
     <xsl:template match="s:schema">
         <xsl:element name="mkdir">
             <xsl:attribute name="dir">build/generated/jaxbCache/<xsl:value-of select="./@name"/></xsl:attribute>
         </xsl:element>
-        
+
         <xsl:element name="xjc">
             <xsl:if test="string-length(@package) &gt; 0">
                 <xsl:attribute name="package"><xsl:value-of select="./@package"/></xsl:attribute>
             </xsl:if>
-            <xsl:attribute name="destdir">build/generated/jaxbCache/<xsl:value-of select="./@name"/></xsl:attribute>            
+            <xsl:attribute name="destdir">build/generated/jaxbCache/<xsl:value-of select="./@name"/></xsl:attribute>
 
             <xsl:choose>
                 <xsl:when test="count(s:catalog) &gt; 0">
                     <xsl:for-each select="s:catalog">
                         <xsl:choose>
                             <xsl:when test="string-length(./@location) &gt; 0">
-                                <xsl:apply-templates select="."/>    
+                                <xsl:apply-templates select="."/>
                             </xsl:when>
                             <xsl:otherwise>
                                 <xsl:attribute name="catalog"><xsl:text>catalog.xml</xsl:text></xsl:attribute>
-                            </xsl:otherwise>                    
+                            </xsl:otherwise>
                         </xsl:choose>
-                    </xsl:for-each>                                
+                    </xsl:for-each>
                 </xsl:when>
                 <xsl:otherwise>
-                    <xsl:attribute name="catalog"><xsl:text>catalog.xml</xsl:text></xsl:attribute>                    
+                    <xsl:attribute name="catalog"><xsl:text>catalog.xml</xsl:text></xsl:attribute>
                 </xsl:otherwise>
             </xsl:choose>
             <xsl:element name="classpath">
@@ -112,14 +113,14 @@ made subject to such option by the copyright holder.
             </xsl:element>
             <xsl:for-each select="s:xjc-options/s:xjc-option">
                 <xsl:if test="./@value='true'">
-                    <xsl:apply-templates select="."/>    
+                    <xsl:apply-templates select="."/>
                 </xsl:if>
             </xsl:for-each>
-            
+
             <xsl:apply-templates select="s:schema-sources/s:schema-source"/>
-            
-            <xsl:apply-templates select="s:bindings"/>             
-            
+
+            <xsl:apply-templates select="s:bindings"/>
+
             <xsl:element name="depends">
                 <xsl:attribute name="file"><xsl:value-of select="s:schema-sources/s:schema-source/@location"/></xsl:attribute>
             </xsl:element>
@@ -128,14 +129,14 @@ made subject to such option by the copyright holder.
                 <xsl:attribute name="dir">build/generated/jaxbCache/<xsl:value-of select="./@name"/></xsl:attribute>
             </xsl:element>
         </xsl:element>
-        
+
         <xsl:element name="copy">
             <xsl:attribute name="todir">${build.generated.sources.dir}/jaxb</xsl:attribute>
             <xsl:element name="fileset">
                 <xsl:attribute name="dir">build/generated/jaxbCache/<xsl:value-of select="./@name"/></xsl:attribute>
             </xsl:element>
         </xsl:element>
-        
+
     </xsl:template>
     <xsl:template match="s:schema-source">
         <xsl:element name="schema">
@@ -148,17 +149,17 @@ made subject to such option by the copyright holder.
             <xsl:for-each select="s:binding">
                 <xsl:element name="binding">
                     <xsl:attribute name="file"><xsl:value-of select="./@location"/></xsl:attribute>
-                </xsl:element>                
+                </xsl:element>
             </xsl:for-each>
-        </xsl:if>            
-    </xsl:template>    
-    
+        </xsl:if>
+    </xsl:template>
+
     <xsl:template match="s:xjc-option">
         <xsl:element name="arg">
             <xsl:attribute name="value"><xsl:value-of select="./@name"/></xsl:attribute>
-        </xsl:element>                        
+        </xsl:element>
     </xsl:template>
     <xsl:template match="s:catalog">
-            <xsl:attribute name="catalog"><xsl:value-of select="./@location"/></xsl:attribute>          
-    </xsl:template>    
+            <xsl:attribute name="catalog"><xsl:value-of select="./@location"/></xsl:attribute>
+    </xsl:template>
 </xsl:stylesheet>
