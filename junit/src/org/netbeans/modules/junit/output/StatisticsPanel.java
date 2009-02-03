@@ -44,7 +44,7 @@ package org.netbeans.modules.junit.output;
 import java.awt.BorderLayout;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
-import java.util.List;
+//import java.util.List;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
@@ -53,8 +53,10 @@ import javax.swing.JPanel;
 import javax.swing.JToggleButton;
 import javax.swing.JToolBar;
 import javax.swing.SwingConstants;
+import javax.swing.UIManager;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
+//import org.openide.util.Utilities;
 
 /**
  * Panel containing the toolbar and the tree of test results.
@@ -98,6 +100,9 @@ public final class StatisticsPanel extends JPanel implements ItemListener {
         toolbar.setFocusable(false);
         toolbar.setFloatable(false);
         toolbar.setBorderPainted(false);
+        if( "Aqua".equals(UIManager.getLookAndFeel().getID()) ) { //NOI18N
+            toolbar.setBackground(UIManager.getColor("NbExplorerView.background")); //NOI18N
+        }
         
         return toolbar;
     }
@@ -106,7 +111,7 @@ public final class StatisticsPanel extends JPanel implements ItemListener {
      */
     private void createFilterButton() {
         btnFilter = new JToggleButton(new ImageIcon(
-                Utilities.loadImage(
+                ImageUtilities.loadImage(
                     "org/netbeans/modules/junit/output/res/filter.png", //NOI18N
                     true)));
         btnFilter.getAccessibleContext().setAccessibleName(
@@ -141,25 +146,25 @@ public final class StatisticsPanel extends JPanel implements ItemListener {
     
     /**
      */
-    void displayReport(final Report report) {
-        treePanel.displayReport(report);
-        
-        btnFilter.setEnabled(
-            treePanel.getSuccessDisplayedLevel() != RootNode.ALL_PASSED_ABSENT);
-    }
+//    void displayReport(final Report report) {
+//        treePanel.displayReport(report);
+//
+//        btnFilter.setEnabled(
+//            treePanel.getSuccessDisplayedLevel() != RootNode.ALL_PASSED_ABSENT);
+//    }
     
     /**
      */
-    void displayReports(final List<Report> reports) {
-        if (reports.isEmpty()) {
-            return;
-        }
-        
-        treePanel.displayReports(reports);
-        
-        btnFilter.setEnabled(
-            treePanel.getSuccessDisplayedLevel() != RootNode.ALL_PASSED_ABSENT);
-    }
+//    void displayReports(final List<Report> reports) {
+//        if (reports.isEmpty()) {
+//            return;
+//        }
+//
+//        treePanel.displayReports(reports);
+//
+//        btnFilter.setEnabled(
+//            treePanel.getSuccessDisplayedLevel() != RootNode.ALL_PASSED_ABSENT);
+//    }
     
     /**
      * Displays a message about a running suite.
@@ -168,14 +173,14 @@ public final class StatisticsPanel extends JPanel implements ItemListener {
      *                    or {@code ANONYMOUS_SUITE} for anonymous suites
      * @see  ResultDisplayHandler#ANONYMOUS_SUITE
      */
-    void displaySuiteRunning(final String suiteName) {
-        treePanel.displaySuiteRunning(suiteName);
-    }
+//    void displaySuiteRunning(final String suiteName) {
+//        treePanel.displaySuiteRunning(suiteName);
+//    }
     
     /**
      */
-    void displayMsg(final String msg) {
-        treePanel.displayMsg(msg);
-    }
+//    void displayMsg(final String msg) {
+//        treePanel.displayMsg(msg);
+//    }
     
 }

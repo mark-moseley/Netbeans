@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import org.openide.ErrorManager;
 import org.netbeans.modules.junit.JUnitSettings;
 
@@ -114,6 +115,9 @@ final class ResultDisplayHandler {
         };
         splitPane.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_ResultPanelTree"));
         splitPane.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_ResultPanelTree"));
+        if( "Aqua".equals(UIManager.getLookAndFeel().getID()) ) { //NOI18N
+            splitPane.setBackground(UIManager.getColor("NbExplorerView.background")); //NOI18N
+        }
         return splitPane;
     }
     
@@ -235,13 +239,12 @@ final class ResultDisplayHandler {
                 return;
             }
         }
-        
-        displayInDispatchThread("displaySuiteRunning", suiteName);      //NOI18N
+        displayInDispatchThread("displaySuiteRunning", new Object[] {suiteName});      //NOI18N
     }
 
     /**
      */
-    void displayReport(final Report report) {
+    void displayReport(final Report report, final int[] statistics) {
         
         /* Called from the AntLogger's thread */
         
@@ -255,8 +258,7 @@ final class ResultDisplayHandler {
                 return;
             }
         }
-        
-        displayInDispatchThread("displayReport", report);               //NOI18N
+        displayInDispatchThread("displayReport", new Object[] {report, statistics});               //NOI18N
         
         assert runningSuite == null;
     }
@@ -273,8 +275,7 @@ final class ResultDisplayHandler {
                 return;
             }
         }
-        
-        displayInDispatchThread("displayMsg", msg);                     //NOI18N
+        displayInDispatchThread("displayMsg", new Object[] {msg});                     //NOI18N
     }
     
     /**
@@ -290,8 +291,7 @@ final class ResultDisplayHandler {
                 return;
             }
         }
-        
-        displayInDispatchThread("displayMsgSessionFinished", msg);        //NOI18N
+        displayInDispatchThread("displayMsgSessionFinished", new Object[] {msg});        //NOI18N
     }
     
     /** */
@@ -305,7 +305,7 @@ final class ResultDisplayHandler {
      * @param  param  argument to be passed to the method
      */
     private void displayInDispatchThread(final String methodName,
-                                         final Object param) {
+                                         final Object[] params) {
         assert methodName != null;
         assert treePanel != null;
         
@@ -313,11 +313,10 @@ final class ResultDisplayHandler {
         if (method == null) {
             return;
         }
-        
         EventQueue.invokeLater(new Runnable() {
             public void run() {
                 try {
-                    method.invoke(treePanel, new Object[] {param});
+                    method.invoke(treePanel, params);
                 } catch (InvocationTargetException ex) {
                     ErrorManager.getDefault().notify(ex.getTargetException());
                 } catch (Exception ex) {
@@ -340,18 +339,20 @@ final class ResultDisplayHandler {
         }
         
         if ((method == null) && !methodsMap.containsKey(methodName)) {
-            final Class paramType;
+            final Class[] paramType = new Class[2];
             if (methodName.equals("displayReport")) {                   //NOI18N
-                paramType = Report.class;
+                paramType[0] = Report.class;
+                paramType[1] = int[].class;
             } else {
                 assert methodName.equals("displayMsg")                  //NOI18N
                        || methodName.equals("displayMsgSessionFinished")//NOI18N
                        || methodName.equals("displaySuiteRunning");     //NOI18N
-                paramType = String.class;
+                paramType[0] = String.class;
             }
             try {
                 method = ResultPanelTree.class
-                         .getDeclaredMethod(methodName, new Class[] {paramType});
+                         .getDeclaredMethod(methodName, (paramType[1] == null) ?
+                                            new Class[] {paramType[0]} : paramType);
             } catch (Exception ex) {
                 method = null;
                 ErrorManager.getDefault().notify(ErrorManager.ERROR, ex);
@@ -387,7 +388,7 @@ final class ResultDisplayHandler {
             reports = null;
         }
         if (runningSuite != null) {
-            treePanel.displaySuiteRunning(runningSuite != ANONYMOUS_SUITE
+            treePanel.displaySuiteRunning(runningSuite.equals(ANONYMOUS_SUITE)
                                           ? runningSuite
                                           : null);
             runningSuite = null;
