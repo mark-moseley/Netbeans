@@ -51,7 +51,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import org.netbeans.CLIHandler;
 import org.netbeans.Module;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 
@@ -59,6 +59,7 @@ import org.openide.util.Lookup;
  * Handler for core.jar options.
  * @author Jaroslav Tulach
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.CLIHandler.class)
 public class CLICoreBridge extends CLIHandler {
     /**
      * Create a default handler.
@@ -69,7 +70,7 @@ public class CLICoreBridge extends CLIHandler {
     
     protected int cli(Args arguments) {
         Lookup clis = Lookup.getDefault();
-        Collection handlers = clis.lookupAll(CLIHandler.class);
+        Collection<? extends CLIHandler> handlers = clis.lookupAll(CLIHandler.class);
         int h = notifyHandlers(arguments, handlers, WHEN_EXTRA, true, true);
         if (h == 0) {
             h = CoreBridge.getDefault().cli(
@@ -86,7 +87,7 @@ public class CLICoreBridge extends CLIHandler {
     protected void usage(PrintWriter w) {
         if (MainLookup.isStarted()) {
             Lookup clis = Lookup.getDefault();
-            Collection handlers = clis.lookupAll(CLIHandler.class);
+            Collection<? extends CLIHandler> handlers = clis.lookupAll(CLIHandler.class);
             showHelp(w, handlers, WHEN_EXTRA);
             w.flush();
             return;
@@ -94,7 +95,7 @@ public class CLICoreBridge extends CLIHandler {
         
         ModuleSystem moduleSystem;
         try {
-            moduleSystem = new ModuleSystem(Repository.getDefault().getDefaultFileSystem());
+            moduleSystem = new ModuleSystem(FileUtil.getConfigRoot().getFileSystem());
         } catch (IOException ioe) {
             // System will be screwed up.
             throw (IllegalStateException) new IllegalStateException("Module system cannot be created").initCause(ioe); // NOI18N
@@ -119,7 +120,7 @@ public class CLICoreBridge extends CLIHandler {
         URLClassLoader loader = new URLClassLoader(urls.toArray(new URL[0]), getClass().getClassLoader());
         MainLookup.systemClassLoaderChanged(loader);
         Lookup clis = Lookup.getDefault();
-        Collection handlers = clis.lookupAll(CLIHandler.class);
+        Collection<? extends CLIHandler> handlers = clis.lookupAll(CLIHandler.class);
         showHelp(w, handlers, WHEN_EXTRA);
         w.flush();
     }
