@@ -37,7 +37,7 @@
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb.attach;
+package org.netbeans.modules.web.client.javascript.debugger.attach;
 
 import javax.swing.JComponent;
 import org.netbeans.spi.debugger.ui.AttachType;
@@ -46,10 +46,10 @@ import org.netbeans.spi.debugger.ui.AttachType;
  *
  * @author gordonp
  */
-@AttachType.Registration(displayName="#CTL_GdbAttachPanel_name")
-public class GdbAttachType extends AttachType  {
+@AttachType.Registration(displayName="#CTL_URLAttachPanel_name")
+public class URLAttachType extends AttachType  {
 
     public JComponent getCustomizer() {
-        return new GdbAttachPanel();
+        return new URLAttachPanel();
     }
 }
