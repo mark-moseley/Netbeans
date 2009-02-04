@@ -270,19 +270,23 @@
 
     <!-- prepare SJSAS package -->
     <target name="-pre-package">
+        <if property="i" value="1">
 	<delete includeemptydirs="true">
             <fileset dir="${data.directory}">
 		<include name="addons/**"/>
                 <exclude name="addons"/>
                 <include name="lib/addons/*.*"/>
-                <include name="Sun_Java_System_Application_Server_install.*"/>
+                <include name="Sun_GlassFish_Enterprise_Server_install.*"/>
 		<include name="Install_Application_Server*"/>
                 <include name="appserv_uninstall.class"/>
+                <include name="derby.log"/>
 		<include name="uninstall*"/>
+		<include name="License_Notice_Translated.pdf"/>
                 <exclude name="icons/**/"/>                
             </fileset>
         </delete>
 	<antcall target="replace-platform-tokens"/>
+        </if>
     </target>
 
     <!--============================================================================
