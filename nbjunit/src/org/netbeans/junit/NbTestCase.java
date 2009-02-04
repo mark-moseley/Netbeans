@@ -128,10 +128,12 @@ public abstract class NbTestCase extends TestCase implements NbTest {
     public boolean canRun() {
         if (NbTestSuite.ignoreRandomFailures()) {
             if (getClass().isAnnotationPresent(RandomlyFails.class)) {
+                System.err.println("Skipping " + getClass().getName());
                 return false;
             }
             try {
                 if (getClass().getMethod(getName()).isAnnotationPresent(RandomlyFails.class)) {
+                    System.err.println("Skipping " + getClass().getName() + "." + getName());
                     return false;
                 }
             } catch (NoSuchMethodException x) {
@@ -158,8 +160,10 @@ public abstract class NbTestCase extends TestCase implements NbTest {
     
     /** Provides support for tests that can have problems with terminating.
      * Runs the test in a "watchdog" that measures the time the test shall
-     * take and if it does not terminate it reports a failure.
-     *
+     * take and if it does not terminate it reports a failure including a thread dump.
+     * <p>Best to specify a duration less than 600000, which is the default timeout
+     * for any JUnit test in an NBM project specified in {@code common.xml},
+     * as these "hard" timeouts (covering even VM crashes) do not capture a thread dump.
      * @return amount ms to give one test to finish or 0 (default) to disable time outs
      * @since 1.20
      */
@@ -210,8 +214,8 @@ public abstract class NbTestCase extends TestCase implements NbTest {
         sb.append(indent).append("Thread ").append(t.getName()).append('\n');
         indent = indent.concat("  ");
         for (StackTraceElement e : data.get(t)) {
-            sb.append(indent).append(e.getClassName()).append('.').append(e.getMethodName())
-                    .append(':').append(e.getLineNumber()).append('\n');
+            sb.append("\tat ").append(e.getClassName()).append('.').append(e.getMethodName())
+                    .append('(').append(e.getFileName()).append(':').append(e.getLineNumber()).append(")\n");
         }
     }
     
