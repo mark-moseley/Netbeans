@@ -51,6 +51,15 @@ public class BasicHyperlinkTestCase extends HyperlinkBaseTestCase {
         super(testName);
     }
 
+    public void testIZ157907() throws Exception {
+        // IZ#157907: False positive recognition of macro
+        performTest("fun_macro_and_name.c", 6, 5, "fun_macro_and_name.c", 6, 3); // PREFIX as name of typedef
+        performTest("fun_macro_and_name.c", 10, 10, "fun_macro_and_name.c", 6, 3); // PREFIX as name of typedef
+
+        performTest("fun_macro_and_name.c", 1, 10, "fun_macro_and_name.c", 1, 1); // PREFIX as name of macro with params
+        performTest("fun_macro_and_name.c", 8, 15, "fun_macro_and_name.c", 1, 1); // PREFIX as name of macro with params
+    }
+
     public void testIZ151061() throws Exception {
         // IZ#151061: code model inaccuracy on VLC's is above boundary
         performTest("iz151061.c", 6, 10, "iz151061.c", 2, 5);
@@ -523,6 +532,34 @@ public class BasicHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("IZ152875.cc", 12, 53, "IZ152875.cc", 10, 5);
     }
 
+    public void testIZ153761() throws Exception {
+        // IZ#153761 : regression in python
+        performTest("IZ153761.cc", 16, 18, "IZ153761.cc", 16, 13);
+        performTest("IZ153761.cc", 19, 18, "IZ153761.cc", 19, 13);
+        performTest("IZ153761.cc", 22, 18, "IZ153761.cc", 22, 13);
+        performTest("IZ153761.cc", 25, 18, "IZ153761.cc", 25, 13);
+        performTest("IZ153761.cc", 28, 18, "IZ153761.cc", 28, 13);
+        performTest("IZ153761.cc", 31, 18, "IZ153761.cc", 31, 13);
+        performTest("IZ153761.cc", 35, 18, "IZ153761.cc", 35, 13);
+        performTest("IZ153761.cc", 38, 18, "IZ153761.cc", 38, 13);
+        performTest("IZ153761.cc", 41, 18, "IZ153761.cc", 41, 13);
+        performTest("IZ153761.cc", 44, 14, "IZ153761.cc", 43, 9);
+    }
+
+    public void testKRFuncParamDecl() throws Exception {
+        performTest("kr.c", 9, 10, "kr.c", 10, 1); // index in 'int foo(index)'
+        performTest("kr.c", 21, 13, "kr.c", 22, 8); // index in 'int foo(index)'
+        performTest("kr.c", 21, 17, "kr.c", 22, 12); // index in 'int foo(index)'
+    }
+
+    public void testKRFooDeclDefUsage() throws Exception {
+        // See IZ116715
+        performTest("kr.c", 2, 6, "kr.c", 9, 1); // int foo(); -> int foo(index)
+        performTest("kr.c", 9, 6, "kr.c", 2, 1); // int foo(index) -> int foo();
+        performTest("kr.c", 15, 6, "kr.c", 17, 1); // int boo(); -> int boo(int i)
+        performTest("kr.c", 17, 6, "kr.c", 15, 1); // int boo(int i) -> int boo();
+    }
+    
     public static class Failed extends HyperlinkBaseTestCase {
 
         @Override
@@ -532,18 +569,6 @@ public class BasicHyperlinkTestCase extends HyperlinkBaseTestCase {
 
         public Failed(String testName) {
             super(testName, true);
-        }
-
-        public void testKRFuncParamDecl() throws Exception {
-            performTest("kr.c", 9, 10, "kr.c", 10, 1); // index in 'int foo(index)'
-        }
-
-        public void testKRFooDeclDefUsage() throws Exception {
-            // See IZ116715
-            performTest("kr.c", 2, 6, "kr.c", 9, 1); // int foo(); -> int foo(index)
-            performTest("kr.c", 9, 6, "kr.c", 2, 1); // int foo(index) -> int foo();
-            performTest("kr.c", 15, 6, "kr.c", 17, 1); // int boo(); -> int boo(int i)
-            performTest("kr.c", 17, 6, "kr.c", 15, 1); // int boo(int i) -> int boo();
         }
     }
 }
