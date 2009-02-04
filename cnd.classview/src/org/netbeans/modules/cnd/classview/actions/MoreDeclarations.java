@@ -117,11 +117,11 @@ public class MoreDeclarations extends AbstractAction implements Presenter.Popup 
     public void actionPerformed(ActionEvent ae) {
         JMenuItem item = (JMenuItem) ae.getSource();
         CsmOffsetableDeclaration decl = (CsmOffsetableDeclaration) item.getClientProperty(PROP_DECLARATION);
-        GoToDeclarationAction action = new GoToDeclarationAction(decl);
+        GoToDeclarationAction action = new GoToDeclarationAction(decl, true);
         action.actionPerformed(null);
     }
     
-    private class ItemWrapper implements Comparable<ItemWrapper>{
+    private static class ItemWrapper implements Comparable<ItemWrapper>{
         private CharSequence name;
         private CsmOffsetableDeclaration decl;
         private ItemWrapper(CsmOffsetableDeclaration decl){
