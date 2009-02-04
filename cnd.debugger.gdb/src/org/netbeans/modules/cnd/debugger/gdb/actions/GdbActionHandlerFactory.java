@@ -39,8 +39,28 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.makeproject.api;
+package org.netbeans.modules.cnd.debugger.gdb.actions;
 
-public interface CustomProjectActionHandlerProvider {
-    public CustomProjectActionHandler factoryCreate();
+import org.netbeans.modules.cnd.makeproject.api.ProjectActionEvent;
+import org.netbeans.modules.cnd.makeproject.api.ProjectActionHandler;
+import org.netbeans.modules.cnd.makeproject.api.ProjectActionHandlerFactory;
+import org.openide.util.lookup.ServiceProvider;
+
+@ServiceProvider(service=ProjectActionHandlerFactory.class, position=5000)
+public class GdbActionHandlerFactory implements ProjectActionHandlerFactory {
+
+    public boolean canHandle(ProjectActionEvent.Type type) {
+        switch (type) {
+            case DEBUG:
+            case DEBUG_LOAD_ONLY:
+            case DEBUG_STEPINTO:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public ProjectActionHandler createHandler() {
+        return new GdbActionHandler();
+    }
 }
