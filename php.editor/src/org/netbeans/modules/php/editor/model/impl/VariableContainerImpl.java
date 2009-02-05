@@ -37,26 +37,21 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.model.impl;
 
 import java.util.Collection;
 import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.php.editor.model.VariableName;
+import org.netbeans.modules.php.editor.parser.astnodes.Program;
+import org.netbeans.modules.php.editor.parser.astnodes.Variable;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    Collection<? extends MethodScope> getDeclaredMethods();
-    Collection<? extends MethodScope> getMethods();
-    Collection<? extends ClassConstantElement> getDeclaredConstants();
-    Collection<? extends ClassConstantElement> getInheritedConstants();
-    Collection<? extends InterfaceScope> getSuperInterfaces();
-
-    Collection<? extends ClassConstantElement> findInheritedConstants(String constName);
-    Collection<? extends MethodScope> findInheritedMethods(final String queryName);
-    Collection<? extends MethodScope> findDeclaredMethods(final String queryName, final int... modifiers);
-    Collection<? extends MethodScope> findDeclaredMethods(final NameKind nameKind, final String queryName, final int... modifiers);
-    Collection<? extends ClassConstantElement> findDeclaredConstants(final String... queryName);
-    Collection<? extends ClassConstantElement> findDeclaredConstants(final NameKind nameKind, final String... queryName);
+interface VariableContainerImpl  {
+    VariableNameImpl createElement(Program program, Variable node);
+    public Collection<? extends VariableName> getAllVariablesImpl();
+    public Collection<? extends VariableName> getVariablesImpl(final String... queryName);
+    public Collection<? extends VariableName> getVariablesImpl(final NameKind nameKind, final String... queryName);
 }
