@@ -42,6 +42,8 @@
 package org.netbeans.core.windows;
 
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.beans.*;
 import java.net.URL;
 import java.util.*;
@@ -62,6 +64,7 @@ import org.openide.windows.*;
  *
  * @author Peter Zavadsky
  */
+@org.openide.util.lookup.ServiceProvider(service=org.openide.windows.WindowManager.class)
 public final class WindowManagerImpl extends WindowManager implements Workspace {
 // XXX Implements Workspace for backward compatibility of old API only,
 // there are no workspaces any more.
@@ -98,6 +101,13 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     
     /** exclusive invocation of runnables */
     private Exclusive exclusive = new Exclusive();
+
+    /** timer to ensure exclusive runnables are really invoked in all circumstances */
+    private javax.swing.Timer paintedTimer = new javax.swing.Timer(5000, exclusive);
+
+    /** flag that prevents calling Exclusive.run on each main window repaint */
+    private boolean exclusivesCompleted = false;
+
     /** Default constructor. Don't use directly, use getDefault()
      * instead.
      */
@@ -109,6 +119,7 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
             }
             defaultInstance = this;
         }
+        paintedTimer.setRepeats(false);
     }
     
     /** Singleton accessor, returns instance of window manager implementation */
@@ -758,12 +769,23 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
 
     /** Sets visible or invisible window system GUI. */
     public void setVisible(boolean visible) {
-        if( visible ) {
-            FloatingWindowTransparencyManager.getDefault().start();
-        } else {
+        if( !visible ) {
             FloatingWindowTransparencyManager.getDefault().stop();
         }
         central.setVisible(visible);
+
+        // handle timer that assures runnign of exclusives when somehow
+        // mainWindow.paint is not called during startup
+        if (visible) {
+            if (!exclusivesCompleted) {
+                paintedTimer.restart();
+            } else {
+                FloatingWindowTransparencyManager.getDefault().start();
+            }
+        } else {
+            paintedTimer.stop();
+            exclusivesCompleted = false;
+        }
     }
     
     /** Indicates whether windows system shows GUI. */
@@ -1269,12 +1291,24 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
     }
 
     public final void mainWindowPainted () {
-        SwingUtilities.invokeLater(exclusive);
+        if (!exclusivesCompleted) {
+            exclusivesCompleted = true;
+            paintedTimer.stop();
+
+            exclusive.register(new Runnable() {
+                public void run() {
+                    FloatingWindowTransparencyManager.getDefault().start();
+                }
+            });
+
+            SwingUtilities.invokeLater(exclusive);
+        }
     }
+
 
     /** Handles exclusive invocation of Runnables.
      */
-    private static final class Exclusive implements Runnable {
+    private static final class Exclusive implements Runnable, ActionListener {
         /** lists of runnables to run */
         private ArrayList<Runnable> arr = new ArrayList<Runnable>();
 
@@ -1313,8 +1347,18 @@ public final class WindowManagerImpl extends WindowManager implements Workspace 
                 }
             }
         }
+
+        /** ActionListener implementation - reacts to Timer which ensures
+         * invocation of registered exclusive runnables
+         */
+        public void actionPerformed(ActionEvent e) {
+            Logger.getLogger(WindowManagerImpl.class.getName()).log(Level.FINE, 
+                    "Painted timer action invoked, which probably means that MainWindow.paint was not called!"); //NOI18N
+            WindowManagerImpl.getInstance().mainWindowPainted();
+        }
+
     } // end of Exclusive class
-    
+
     public void resetModel() {
         central.resetModel();
         RegistryImpl rimpl = (RegistryImpl)componentRegistry();
