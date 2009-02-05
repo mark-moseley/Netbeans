@@ -46,15 +46,15 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.Authenticator;
 import java.net.HttpURLConnection;
+import java.net.PasswordAuthentication;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
+import org.netbeans.modules.kenai.api.Kenai;
 
 /**
  * RestConnection
@@ -67,7 +67,6 @@ public class RestConnection {
         //set the identification of the client
         System.setProperty("http.agent", System.getProperty("user.name") + " (from NetBeans IDE)");
     }
-
     private HttpURLConnection conn;
     private String date;
 
@@ -83,29 +82,38 @@ public class RestConnection {
 
     /** Creates a new instance of RestConnection */
     public RestConnection(String baseUrl, String[][] pathParams, String[][] params) {
-        try {
-            String urlStr = baseUrl;
-            if (pathParams != null && pathParams.length > 0) {
-                urlStr = replaceTemplateParameters(baseUrl, pathParams);
+        //T9Y
+        String testUrl = System.getProperty("netbeans.t9y.kenai.testUrl");
+        if (testUrl != null && testUrl.length() > 0) {
+        } else {
+            try {
+                String urlStr = baseUrl;
+                if (pathParams != null && pathParams.length > 0) {
+                    urlStr = replaceTemplateParameters(baseUrl, pathParams);
+                }
+                URL url = new URL(encodeUrl(urlStr, params));
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setDoInput(true);
+                conn.setDoOutput(true);
+                conn.setUseCaches(false);
+                conn.setDefaultUseCaches(false);
+                conn.setAllowUserInteraction(true);
+                //KenaiAuthenticator not working. Why?
+                PasswordAuthentication a = Kenai.getDefault().getPasswordAuthentication();
+                if (a!= null && a.getUserName()!=null) {
+                    assert a.getPassword()!=null;
+                    String userPassword = a.getUserName() + ":" + String.valueOf(a.getPassword());
+                    String encoding = new sun.misc.BASE64Encoder().encode(userPassword.getBytes());  
+                    conn.setRequestProperty("Authorization", "Basic " + encoding);
+                }
+
+                SimpleDateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
+                date = format.format(new Date());
+                conn.setRequestProperty("Date", date);
+            } catch (Exception ex) {
+                Logger.getLogger(RestConnection.class.getName()).log(Level.SEVERE, null, ex);
             }
-            URL url = new URL(encodeUrl(urlStr, params));
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setDoInput(true);
-            conn.setDoOutput(true);
-            conn.setUseCaches(false);
-            conn.setDefaultUseCaches(false);
-            conn.setAllowUserInteraction(true);
-
-            SimpleDateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
-            date = format.format(new Date());
-            conn.setRequestProperty("Date", date);
-        } catch (Exception ex) {
-            Logger.getLogger(RestConnection.class.getName()).log(Level.SEVERE, null, ex);
         }
-    }
-
-    public void setAuthenticator(Authenticator authenticator) {
-        Authenticator.setDefault(authenticator);
     }
 
     public String getDate() {
@@ -117,8 +125,13 @@ public class RestConnection {
     }
 
     public RestResponse get(String[][] headers) throws IOException {
-        conn.setRequestMethod("GET");
-        return connect(headers, null);
+        String testUrl = System.getProperty("netbeans.t9y.kenai.testUrl");
+        if (testUrl != null && testUrl.length() > 0) {
+            return new RestResponse();
+        } else {
+            conn.setRequestMethod("GET");
+            return connect(headers, null);
+        }
     }
 
     public RestResponse head() throws IOException {
@@ -136,8 +149,9 @@ public class RestConnection {
 
     public RestResponse put(String[][] headers, String data) throws IOException {
         InputStream is = null;
-        if(data != null)
+        if (data != null) {
             is = new ByteArrayInputStream(data.getBytes("UTF-8"));
+        }
         return put(headers, is);
     }
 
@@ -145,20 +159,22 @@ public class RestConnection {
         conn.setRequestMethod("PUT");
         return connect(headers, is);
     }
-    
+
     public RestResponse post(String[][] headers) throws IOException {
         return post(headers, (InputStream) null);
     }
 
     public RestResponse post(String[][] headers, String data) throws IOException {
         InputStream is = null;
-        if(data != null)
+        if (data != null) {
             is = new ByteArrayInputStream(data.getBytes("UTF-8"));
+        }
         return post(headers, is);
     }
-    
+
     public RestResponse post(String[][] headers, InputStream is) throws IOException {
         conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
         return connect(headers, is);
     }
 
@@ -167,7 +183,7 @@ public class RestConnection {
      */
     public RestResponse post(String[][] headers, String[][] params) throws IOException {
         conn.setRequestMethod("POST");
-        conn.setRequestProperty("ContentType", "application/x-www-form-urlencoded");
+        conn.setRequestProperty("Content-Type", "application/json");
         String data = encodeParams(params);
         return connect(headers, new ByteArrayInputStream(data.getBytes("UTF-8")));
     }
@@ -189,15 +205,15 @@ public class RestConnection {
             setHeaders(headers);
 
             String method = conn.getRequestMethod();
-            
+
             byte[] buffer = new byte[1024];
             int count = 0;
-            
+
             if (method.equals("PUT") || method.equals("POST")) {
                 if (data != null) {
                     conn.setDoOutput(true);
                     OutputStream os = conn.getOutputStream();
-                    
+
                     while ((count = data.read(buffer)) != -1) {
                         os.write(buffer, 0, count);
                     }
@@ -212,14 +228,15 @@ public class RestConnection {
             response.setLastModified(conn.getLastModified());
 
             try {
-                InputStream is = conn.getInputStream();
+            InputStream is = conn.getInputStream();
                 while ((count = is.read(buffer)) != -1) {
                     response.write(buffer, 0, count);
                 }
             } catch (IOException e) {
-                // sometimes there is no input available
+                while ((count = conn.getErrorStream().read(buffer)) != -1) {
+                    response.write(buffer, 0, count);
+                }
             }
-            
             return response;
         } catch (Exception e) {
             String errMsg = "Cannot connect to :" + conn.getURL();
@@ -256,7 +273,7 @@ public class RestConnection {
     private String encodeUrl(String baseUrl, String[][] params) {
         String encodedParams = encodeParams(params);
         if (encodedParams.length() > 0) {
-            encodedParams = "?"+ encodedParams;
+            encodedParams = "?" + encodedParams;
         }
         return baseUrl + encodedParams;
     }
