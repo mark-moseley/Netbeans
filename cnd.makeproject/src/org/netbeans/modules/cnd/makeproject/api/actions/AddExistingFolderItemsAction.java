@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.makeproject.api.actions;
 
+import java.awt.Dimension;
 import java.util.ResourceBundle;
 import javax.swing.JButton;
 import javax.swing.JPanel;
@@ -83,9 +84,12 @@ public class AddExistingFolderItemsAction extends NodeAction {
         Folder folder = (Folder)n.getValue("Folder"); // NOI18N
         assert folder != null;
         
-        ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider)project.getLookup().lookup(ConfigurationDescriptorProvider.class );
+        ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class );
         MakeConfigurationDescriptor makeConfigurationDescriptor = (MakeConfigurationDescriptor)pdp.getConfigurationDescriptor();
         
+        if (!makeConfigurationDescriptor.okToChange()) {
+            return;
+        }
         String seed = null;
         if (FileChooser.getCurrectChooserFile() != null) {
             seed = FileChooser.getCurrectChooserFile().getPath();
@@ -102,6 +106,7 @@ public class AddExistingFolderItemsAction extends NodeAction {
         };
         SourceFilesPanel sourceFilesPanel = new SourceFilesPanel();
         JPanel panel = new JPanel();
+        panel.setPreferredSize(new Dimension(700, 380));
         panel.setLayout(new java.awt.GridBagLayout());
         java.awt.GridBagConstraints gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
@@ -113,7 +118,7 @@ public class AddExistingFolderItemsAction extends NodeAction {
         JTextArea instructionsTextArea = new JTextArea();
         instructionsTextArea.setEditable(false);
         instructionsTextArea.setLineWrap(true);
-        instructionsTextArea.setText(getString("AddExistingFolderItemsTxt")); // NOI8N
+        instructionsTextArea.setText(getString("AddExistingFolderItemsTxt")); // NOI18N
         instructionsTextArea.setWrapStyleWord(true);
         instructionsTextArea.setBackground(panel.getBackground());
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -140,7 +145,7 @@ public class AddExistingFolderItemsAction extends NodeAction {
                 null);
         Object ret = DialogDisplayer.getDefault().notify(dialogDescriptor);
         if (ret == addButton) {
-            makeConfigurationDescriptor.addSourceFilesFromFolders(folder, sourceFilesPanel.getListData().iterator(), true);
+            makeConfigurationDescriptor.addSourceFilesFromFolders(folder, sourceFilesPanel.getListData().iterator(), true, true, false);
         }
     }
     

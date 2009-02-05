@@ -50,6 +50,7 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.WeakHashMap;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -85,7 +86,7 @@ public class MakeCustomizerProvider implements CustomizerProvider {
     private static final String COMMAND_CANCEL = "CANCEL";  // NOI18N
     private static final String COMMAND_APPLY = "APPLY";  // NOI18N
     private DialogDescriptor dialogDescriptor;
-    private Map customizerPerProject = new WeakHashMap(); // Is is weak needed here?
+    private Map<Project, Dialog> customizerPerProject = new WeakHashMap<Project, Dialog>(); // Is is weak needed here?
     private ConfigurationDescriptorProvider projectDescriptorProvider;
     private final Set<ActionListener> actionListenerList = new HashSet<ActionListener>();
 
@@ -126,7 +127,7 @@ public class MakeCustomizerProvider implements CustomizerProvider {
     private void showCustomizerWorker(String preselectedNodeName, Item item, Folder folder) {
 
         if (customizerPerProject.containsKey(project)) {
-            Dialog dlg = (Dialog) customizerPerProject.get(project);
+            Dialog dlg = customizerPerProject.get(project);
 
             // check if the project is being customized
             if (dlg.isShowing()) {
@@ -250,12 +251,17 @@ public class MakeCustomizerProvider implements CustomizerProvider {
 
                 //projectDescriptor.copyFromProjectDescriptor(clonedProjectdescriptor);
                 makeCustomizer.save();
+
+                List<String> oldSourceRoots = ((MakeConfigurationDescriptor)projectDescriptor).getSourceRoots();
+                List<String> newSourceRoots = ((MakeConfigurationDescriptor)clonedProjectdescriptor).getSourceRoots();
+
                 projectDescriptor.assign(clonedProjectdescriptor);
                 projectDescriptor.setModified();
                 projectDescriptor.save(); // IZ 133606
                 ((MakeConfigurationDescriptor) projectDescriptor).checkForChangedItems(project, folder, item);
+                ((MakeConfigurationDescriptor) projectDescriptor).checkForChangedSourceRoots(oldSourceRoots, newSourceRoots);
 
-                ((MakeSources) ProjectUtils.getSources(project)).descriptorChanged();// FIXUP: should be moved into ProjectDescriptorHelper...
+//                ((MakeSources) ProjectUtils.getSources(project)).descriptorChanged();// FIXUP: should be moved into ProjectDescriptorHelper...
 
                 fireActionEvent(e);
 
