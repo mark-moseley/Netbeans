@@ -2,7 +2,7 @@
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
-Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+Copyright 2008 Sun Microsystems, Inc. All rights reserved.
 
 
 The contents of this file are subject to the terms of either the GNU
@@ -26,7 +26,7 @@ your own identifying information:
 Contributor(s):
 
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 2008 Sun
 Microsystems, Inc. All Rights Reserved.
 
 If you wish your version of this file to be governed by only the CDDL
@@ -44,24 +44,15 @@ made subject to such option by the copyright holder.
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
-            <code-name-base>org.netbeans.modules.j2ee.ejbcore</code-name-base>
+            <code-name-base>org.netbeans.modules.maven</code-name-base>
             <module-dependencies>
-                <dependency>
-                    <code-name-base>org.apache.tools.ant.module</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>3</release-version>
-                        <specification-version>3.9</specification-version>
-                    </run-dependency>
-                </dependency>
                 <dependency>
                     <code-name-base>org.jdesktop.layout</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.3.1</specification-version>
+                        <specification-version>1.6</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -70,6 +61,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.14</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -78,6 +70,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>2</release-version>
+                        <specification-version>2.16</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -95,7 +88,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.0</specification-version>
+                        <specification-version>1.18</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -104,14 +97,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.api.web.webmodule</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>1.8</specification-version>
+                        <specification-version>1.12</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -119,134 +105,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>0.5</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.db</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.24</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.dbschema</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.editor</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>3</release-version>
-                        <specification-version>1.41</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.editor.completion</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.editor.lib</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.27</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.editor.lib2</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.8</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.j2ee.api.ejbmodule</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency/>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.j2ee.common</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.16</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.j2ee.core.utilities</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>0-1</release-version>
-                        <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.j2ee.dd</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.3</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.j2ee.dd.webservice</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency/>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.j2ee.metadata</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>0</release-version>
-                        <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.j2ee.persistence</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>1.3</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.j2eeserver</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>4</release-version>
-                        <specification-version>1.29</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.java.editor.lib</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.9</specification-version>
+                        <specification-version>0.7</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -255,6 +114,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.11</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -271,22 +131,34 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>0.1</specification-version>
+                        <specification-version>0.36</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.java.sourceui</code-name-base>
+                    <code-name-base>org.netbeans.modules.maven.embedder</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.2</specification-version>
+                        <specification-version>1.1.1</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.junit</code-name-base>
+                    <code-name-base>org.netbeans.modules.maven.indexer</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
                     <run-dependency>
-                        <release-version>2</release-version>
+                        <release-version>1</release-version>
+                        <specification-version>1.1.1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.maven.model</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.1.1</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -295,7 +167,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.4</specification-version>
+                        <specification-version>1.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -304,6 +176,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.23</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -312,6 +185,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.19</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -320,6 +194,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.22</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -328,6 +203,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.32</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -336,14 +212,16 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.13</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.schema2beans</code-name-base>
+                    <code-name-base>org.netbeans.modules.xml.xam</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.4</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -351,7 +229,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.2</specification-version>
+                        <specification-version>6.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -359,7 +237,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.2</specification-version>
+                        <specification-version>7.2</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -367,7 +245,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.8</specification-version>
+                        <specification-version>7.10</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -375,7 +253,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>1.3</specification-version>
+                        <specification-version>1.12</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -383,7 +261,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.8</specification-version>
+                        <specification-version>6.15</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -395,17 +273,27 @@ made subject to such option by the copyright holder.
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.openide.io</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>1.13</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.openide.loaders</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
-                    <run-dependency/>
+                    <run-dependency>
+                        <specification-version>7.1</specification-version>
+                    </run-dependency>
                 </dependency>
                 <dependency>
                     <code-name-base>org.openide.modules</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.2</specification-version>
+                        <specification-version>7.7</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -413,7 +301,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.2</specification-version>
+                        <specification-version>7.5</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -421,7 +309,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.16</specification-version>
+                        <specification-version>6.20</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -433,54 +321,52 @@ made subject to such option by the copyright holder.
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.openide.windows</code-name-base>
+                    <code-name-base>org.openidex.util</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.2</specification-version>
+                        <release-version>3</release-version>
+                        <specification-version>3.15</specification-version>
                     </run-dependency>
                 </dependency>
             </module-dependencies>
-            <test-dependencies>
-                <test-type>
-                    <name>unit</name>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.j2ee.ejbcore</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.openide.util</code-name-base>
-                        <compile-dependency/>
-                        <test/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.masterfs</code-name-base>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.templates</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.libs.freemarker</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                    </test-dependency>
-                    <test-dependency>
-                        <code-name-base>org.netbeans.modules.projectui</code-name-base>
-                        <recursive/>
-                        <compile-dependency/>
-                    </test-dependency>
-                </test-type>
-            </test-dependencies>
             <friend-packages>
-                <friend>org.netbeans.modules.j2ee.ddloaders</friend>
-                <friend>org.netbeans.modules.j2ee.ejbjarproject</friend>
-                <package>org.netbeans.modules.j2ee.ejbcore.api.codegeneration</package>
-                <package>org.netbeans.modules.j2ee.ejbcore.api.methodcontroller</package>
-                <package>org.netbeans.modules.j2ee.ejbcore.api.ui</package>
-                <package>org.netbeans.modules.j2ee.ejbcore.spi</package>
+                <friend>org.nbheaven.sqe.core.maven</friend>
+                <friend>org.netbeans.modules.hudson.maven</friend>
+                <friend>org.netbeans.modules.jbi.fuji.support</friend>
+                <friend>org.netbeans.modules.maven.apisupport</friend>
+                <friend>org.netbeans.modules.maven.buildplan</friend>
+                <friend>org.netbeans.modules.maven.grammar</friend>
+                <friend>org.netbeans.modules.maven.graph</friend>
+                <friend>org.netbeans.modules.maven.gsf</friend>
+                <friend>org.netbeans.modules.maven.hints</friend>
+                <friend>org.netbeans.modules.maven.j2ee</friend>
+                <friend>org.netbeans.modules.maven.jaxws</friend>
+                <friend>org.netbeans.modules.maven.junit</friend>
+                <friend>org.netbeans.modules.maven.kit</friend>
+                <friend>org.netbeans.modules.maven.persistence</friend>
+                <friend>org.netbeans.modules.maven.profiler</friend>
+                <friend>org.netbeans.modules.maven.repository</friend>
+                <friend>org.netbeans.modules.maven.spring</friend>
+                <friend>org.netbeans.modules.testng.maven</friend>
+                <friend>org.netbeans.modules.selenium.maven</friend>
+                <package>org.netbeans.modules.maven.api</package>
+                <package>org.netbeans.modules.maven.api.archetype</package>
+                <package>org.netbeans.modules.maven.api.classpath</package>
+                <package>org.netbeans.modules.maven.api.customizer</package>
+                <package>org.netbeans.modules.maven.api.customizer.support</package>
+                <package>org.netbeans.modules.maven.api.execute</package>
+                <package>org.netbeans.modules.maven.api.output</package>
+                <package>org.netbeans.modules.maven.api.problem</package>
+                <package>org.netbeans.modules.maven.execute.model</package>
+                <package>org.netbeans.modules.maven.execute.model.io.jdom</package>
+                <package>org.netbeans.modules.maven.execute.model.io.xpp3</package>
+                <package>org.netbeans.modules.maven.spi.actions</package>
+                <package>org.netbeans.modules.maven.spi.customizer</package>
+                <package>org.netbeans.modules.maven.spi.debug</package>
+                <package>org.netbeans.modules.maven.spi.grammar</package>
+                <package>org.netbeans.modules.maven.spi.lifecycle</package>
+                <package>org.netbeans.modules.maven.spi.nodes</package>
             </friend-packages>
         </data>
     </configuration>

@@ -233,6 +233,8 @@ public class Utils {
         // TODO: HACK - this must be solved by freeform's own implementation of EnterpriseReferenceContainer, see issue 57003
         // call ejb should not make this check, all should be handled in EnterpriseReferenceContainer
         boolean isCallerFreeform = enterpriseProject.getClass().getName().equals("org.netbeans.modules.ant.freeform.FreeformProject");
+
+        boolean isCallerEE6WebProject = isEE6WebProject(enterpriseProject);
         
         List<Project> filteredResults = new ArrayList<Project>(allProjects.length);
         for (int i = 0; i < allProjects.length; i++) {
@@ -241,12 +243,27 @@ public class Utils {
             if (j2eeModuleProvider != null && j2eeModuleProvider.getJ2eeModule().getModuleType().equals(J2eeModule.EJB)) {
                 isEJBModule = true;
             }
+
+            // If the caller project is NOT a freeform project, include all EJB modules
+            // If the caller project is a freeform project, include caller itself only
+            // If the caller project is a Java EE 6 web project, include itself in the list
             if ((isEJBModule && !isCallerFreeform) ||
-                    (isCallerFreeform && enterpriseProject.equals(allProjects[i]))) {
+                    (enterpriseProject.equals(allProjects[i]) && (isCallerFreeform || isCallerEE6WebProject) ) ) {
                 filteredResults.add(allProjects[i]);
             }
         }
         return filteredResults.toArray(new Project[filteredResults.size()]);
+    }
+
+    // TODO: dongmei More check needed
+    public static boolean isEE6WebProject(Project enterpriseProject) {
+        /*J2eeModule module = enterpriseProject.getLookup().lookup(J2eeModuleProvider.class).getJ2eeModule();
+        if (module.getModuleType().equals(J2eeModule.WAR)) { // TODO: dongmei: check EE platform version too
+            return true;
+        } else {
+            return false;
+        }*/
+        return false; 
     }
     
 //TODO: this method should be removed and org.netbeans.modules.j2ee.common.Util.isJavaEE5orHigher(Project project)
@@ -289,6 +306,9 @@ public class Utils {
             return true;
         }
         JavaSource javaSource = JavaSource.forFileObject(fileObject);
+        if (javaSource == null) {
+            return false;
+        }
         final boolean[] result = new boolean[] { false };
         javaSource.runUserActionTask(new Task<CompilationController>() {
             public void run(CompilationController controller) throws IOException {
@@ -360,6 +380,19 @@ public class Utils {
 
     public static AntArtifact getAntArtifact(final EjbReference ejbReference) throws IOException {
         
+        Project project = getProject(ejbReference);
+        if (project == null) {
+            return null;
+        }
+        AntArtifact[] antArtifacts = AntArtifactQuery.findArtifactsByType(project, JavaProjectConstants.ARTIFACT_TYPE_JAR);
+        boolean hasArtifact = (antArtifacts != null && antArtifacts.length > 0);
+        
+        return hasArtifact ? antArtifacts[0] : null;
+        
+    }
+
+    public static Project getProject(final EjbReference ejbReference) throws IOException {
+
         MetadataModel<EjbJarMetadata> ejbReferenceMetadataModel = ejbReference.getEjbModule().getMetadataModel();
         FileObject ejbReferenceEjbClassFO = ejbReferenceMetadataModel.runReadAction(new MetadataModelAction<EjbJarMetadata, FileObject>() {
             public FileObject run(EjbJarMetadata metadata) throws Exception {
@@ -367,12 +400,10 @@ public class Utils {
             }
         });
 
-        Project project = FileOwnerQuery.getOwner(ejbReferenceEjbClassFO);
-        AntArtifact[] antArtifacts = AntArtifactQuery.findArtifactsByType(project, JavaProjectConstants.ARTIFACT_TYPE_JAR);
-        boolean hasArtifact = (antArtifacts != null && antArtifacts.length > 0);
-        
-        return hasArtifact ? antArtifacts[0] : null;
-        
+        if (ejbReferenceEjbClassFO == null) {
+            return null;
+        }
+        return FileOwnerQuery.getOwner(ejbReferenceEjbClassFO);
     }
  
     /**
