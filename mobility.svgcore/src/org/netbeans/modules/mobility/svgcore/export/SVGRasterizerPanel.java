@@ -52,7 +52,9 @@ import com.sun.perseus.model.ModelNode;
 import com.sun.perseus.util.SVGConstants;
 import java.awt.Dimension;
 import java.awt.Rectangle;
+import java.io.File;
 import java.io.IOException;
+import java.util.logging.Level;
 import javax.microedition.m2g.SVGImage;
 import javax.swing.ComboBoxModel;
 import javax.swing.DefaultComboBoxModel;
@@ -72,7 +74,11 @@ import org.netbeans.modules.mobility.svgcore.composer.PerseusController;
 import org.netbeans.modules.mobility.svgcore.composer.SVGObjectOutline;
 import org.netbeans.modules.mobility.svgcore.composer.SceneManager;
 import org.netbeans.modules.mobility.svgcore.export.ComponentGroup.ComponentWrapper;
+import org.openide.DialogDescriptor;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
+import org.openide.util.NbBundle;
 import org.w3c.dom.svg.SVGElement;
 import org.w3c.dom.svg.SVGLocatableElement;
 import org.w3c.dom.svg.SVGMatrix;
@@ -93,14 +99,25 @@ public abstract class SVGRasterizerPanel extends JPanel implements AnimationRast
     protected          int                 m_overrideHeight = -1;
     protected volatile boolean             m_updateInProgress = false;
     protected volatile SVGImage            m_svgImage;
-    private            SVGLocatableElement m_exportedElement = null;            
+    private            SVGLocatableElement m_exportedElement = null;
+    private            boolean             m_isDialogValid = true;
+    
+    private static final String CONFIRM_REWRITE_TITLE = "LBL_Confirm_Rewrite_Title"; // NOI18N
+    private static final String CONFIRM_REWRITE_MESSAGE = "LBL_Confirm_Rewrite_Msg"; // NOI18N
     
     protected class SVGRasterizerComponentGroup extends ComponentGroup {
         public SVGRasterizerComponentGroup( Object ... comps) {
             super(comps);
         }
+        @Override
         public void refresh(JComponent source) {
-            updateImage(source, true);
+            if ( !componentIsAdjustingSlider(source) ) {
+                updateImage(source, true);
+            }
+        }
+
+        private boolean componentIsAdjustingSlider(JComponent comp) {
+            return ((comp instanceof JSlider) && ((JSlider) comp).getValueIsAdjusting());
         }
     };
     
@@ -120,25 +137,54 @@ public abstract class SVGRasterizerPanel extends JPanel implements AnimationRast
         if (m_elementId == null && isInProject()) {
             m_dim = ScreenSizeHelper.getCurrentDeviceScreenSize(primaryFile, null);
         } else {
-            getSVGImage();
-            m_dim = new Dimension( m_svgImage.getViewportWidth(), m_svgImage.getViewportHeight());
+            SVGImage svgImage = getSVGImage();
+            if (svgImage != null){
+                m_dim = new Dimension( m_svgImage.getViewportWidth(), m_svgImage.getViewportHeight());
+            } else {
+                m_dim = new Dimension();
+            }
         }
     }
     
-    protected ComponentGroup createTimeGroup( JSpinner spinner, final JSlider slider, boolean isStart) {
-        final float duration = m_dObj.getSceneManager().getAnimationDuration();
+    /**
+     * creates ComponentGroup from provided spinner and slider for adjusting time limits
+     * @param spinner JSpinner for time limit adjusting
+     * @param slider JSlider for time limit adjusting
+     * @param isStart true if this group is for starty time adjusting. false otherwise.
+     * @return ComponentGroup object
+     */
+    protected ComponentGroup createTimeGroup( JSpinner spinner, JSlider slider, boolean isStart) {
+        float duration = m_dObj.getSceneManager().getAnimationDuration();
+        return createTimeGroup(spinner, slider, duration, isStart);
+    }
+        
+    /**
+     * creates ComponentGroup from provided spinner and slider for adjusting time limits.
+     * Use this method if you create several groups that should have the same maximum value.
+     * @param spinner JSpinner for time limit adjusting
+     * @param slider JSlider for time limit adjusting
+     * @param duration Current animation duration. Will be used to set maximum value
+     * @param isStart true if this group is for starty time adjusting. false otherwise.
+     * @return ComponentGroup object
+     */
+    protected ComponentGroup createTimeGroup( JSpinner spinner, final JSlider slider, 
+            final float duration, boolean isStart) {
+        
         int p = Math.round(duration * 100);
         slider.setMinimum( 0);
         slider.setMaximum( p);
+        slider.setValue(0);
         ComponentWrapper sliderWrapper;
         
         if (!isStart) {
             slider.setInverted(true);
             sliderWrapper = new ComponentGroup.SliderWrapper(slider) {
+                @Override
                 public float getValue() {
                     return duration - super.getValue();
                 }
 
+                @Override
                 public void setValue(float value) {
                     super.setValue(duration - value);
                 }
@@ -146,12 +192,24 @@ public abstract class SVGRasterizerPanel extends JPanel implements AnimationRast
         } else {
             sliderWrapper = ComponentWrapper.wrap(slider);
         }
-       
+
         final SpinnerNumberModel model = new SpinnerNumberModel( (double) (isStart ? 0 : duration), 0.0, duration, 1.0);
         spinner.setModel( model);
         return new SVGRasterizerComponentGroup( spinner, sliderWrapper);
     }
-    
+
+    protected boolean isDialogValid(){
+        return m_isDialogValid;
+    }
+
+    private void setDialogValid(boolean valid){
+        if (m_isDialogValid != valid){
+            boolean oldValid = m_isDialogValid;
+            m_isDialogValid = valid;
+            firePropertyChange(DialogDescriptor.PROP_VALID, oldValid, valid);
+        }
+    }
+
     protected ComponentGroup createCompressionGroup(JComboBox combo, JSpinner spinner) {
         spinner.setModel( new SpinnerNumberModel( 0, 0, 99, 1));
         AnimationRasterizer.CompressionLevel defLevel = AnimationRasterizer.CompressionLevel.HIGH;
@@ -207,7 +265,8 @@ public abstract class SVGRasterizerPanel extends JPanel implements AnimationRast
         try {
             m_svgImage = m_dObj.getModel().parseSVGImage();
         } catch (Exception ex) {
-            SceneManager.error("Load of SVG image failed", ex); //NOI18N
+            setDialogValid(false);
+            SceneManager.log(Level.INFO, "Load of SVG image failed", ex); //NOI18N
         }
     }
     
@@ -216,6 +275,7 @@ public abstract class SVGRasterizerPanel extends JPanel implements AnimationRast
             //TODO Revisit, update of the model will probably cause deadlock
             if ( SwingUtilities.isEventDispatchThread()) {
                 Thread th = new Thread() {
+                    @Override
                     public void run() {
                         loadSVGImage();
                     }
@@ -227,9 +287,9 @@ public abstract class SVGRasterizerPanel extends JPanel implements AnimationRast
             } else {
                 loadSVGImage();
             }
-            assert m_svgImage != null;
+            //assert m_svgImage != null;
             
-            if ( m_elementId != null) {
+            if ( m_svgImage != null && m_elementId != null) {
                 SVGSVGElement svg = (SVGSVGElement) m_svgImage.getDocument().getDocumentElement();
                 SVGElement elem = PerseusController.hideAllButSubtree((ModelNode) svg, m_elementId);
                 if (elem != null && elem instanceof SVGLocatableElement) {
@@ -279,7 +339,25 @@ public abstract class SVGRasterizerPanel extends JPanel implements AnimationRast
         return model;
     }    
     
+    protected boolean isExportConfirmed(){
+        String fileName = getPreviewFileName();
+        File file = new File(fileName);
+        if (!file.exists()){
+            return true;
+        } else {
+            return userConfirmRewrite(fileName);
+        }
+    }
+    
+    private static boolean userConfirmRewrite(String file) {
+        String title = NbBundle.getMessage(SVGRasterizerPanel.class, CONFIRM_REWRITE_TITLE, file);
+        String msg = NbBundle.getMessage(SVGRasterizerPanel.class, CONFIRM_REWRITE_MESSAGE, file);
+        
+        NotifyDescriptor d = new NotifyDescriptor.Confirmation(msg, title, 
+                NotifyDescriptor.OK_CANCEL_OPTION);
+        return DialogDisplayer.getDefault().notify(d) == NotifyDescriptor.OK_OPTION;
+    }
+    
     protected abstract void updateImage(JComponent source, boolean isOutputChanged);
+    protected abstract String getPreviewFileName();
 }
-    
-    

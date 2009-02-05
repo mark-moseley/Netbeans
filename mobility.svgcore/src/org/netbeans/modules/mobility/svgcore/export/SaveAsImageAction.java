@@ -50,6 +50,8 @@
 package org.netbeans.modules.mobility.svgcore.export;
 
 import java.awt.Dialog;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import org.netbeans.modules.mobility.svgcore.SVGDataObject;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -61,9 +63,9 @@ import org.openide.util.actions.CookieAction;
 
 /**
  *
- * @author Pavel Benes, suchys
+ * @author Pavel Benes, suchys, akorostelev
  */
-public final class SaveAsImageAction extends CookieAction{
+public final class SaveAsImageAction extends AbstractSaveAction{
     
     /** Creates a new instance of SaveAsImage */
     public SaveAsImageAction() {
@@ -78,20 +80,34 @@ public final class SaveAsImageAction extends CookieAction{
     protected void performAction(Node[] n) {
         SVGDataObject doj = n[0].getLookup().lookup(SVGDataObject.class);
         if (doj != null){       
+            int state = getAnimatorState(doj);
+            float time = stopAnimator(doj);
             try {
-                SVGImageRasterizerPanel panel = new SVGImageRasterizerPanel(doj, null);
-                DialogDescriptor        dd    = new DialogDescriptor(panel, NbBundle.getMessage(SaveAnimationAsImageAction.class, "TITLE_ImageExport"));
+                final SVGImageRasterizerPanel panel = new SVGImageRasterizerPanel(doj, null);
+                final DialogDescriptor  dd    = new DialogDescriptor(panel,
+                        NbBundle.getMessage(SaveAnimationAsImageAction.class, "TITLE_ImageExport"));
+
+                panel.addPropertyChangeListener(
+                        new PropertyChangeListener() {
+                            public void propertyChange(PropertyChangeEvent evt) {
+                                dd.setValid(panel.isDialogValid());
+                            }
+                        });
 
                 Dialog dlg = DialogDisplayer.getDefault().createDialog(dd);
                 SaveAnimationAsImageAction.setDialogMinimumSize(dlg);
+                dd.setValid(panel.isDialogValid());
                 dlg.setVisible(true);
 
-                if (dd.getValue() == DialogDescriptor.OK_OPTION){
+                if (dd.getValue() == DialogDescriptor.OK_OPTION
+                        && panel.isExportConfirmed())
+                {
                     AnimationRasterizer.export(doj, (AnimationRasterizer.Params) panel);
                 }
             } catch( Exception e) {
                 Exceptions.printStackTrace(e);
             }
+            resumeAnimatorState(doj, state, time);
         }
     }
 

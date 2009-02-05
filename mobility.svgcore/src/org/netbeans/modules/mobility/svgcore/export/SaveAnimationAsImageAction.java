@@ -53,25 +53,29 @@ import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import org.netbeans.modules.mobility.svgcore.SVGDataObject;
+import org.netbeans.modules.mobility.svgcore.composer.SceneManager;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.nodes.Node;
-import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.CookieAction;
 
 /**
  *
- * @author Pavel Benes, suchys
+ * @author Pavel Benes, suchys, akorostelev
  */
-public class SaveAnimationAsImageAction extends CookieAction {
+public class SaveAnimationAsImageAction extends AbstractSaveAction {
     
     /** Creates a new instance of SaveAnimationAsImage */
     public SaveAnimationAsImageAction() {
     }
 
+    @Override
     protected void initialize() {
         super.initialize();
         // see org.openide.util.actions.SystemAction.iconResource() javadoc for more details
@@ -83,6 +87,7 @@ public class SaveAnimationAsImageAction extends CookieAction {
         dlg.setSize( dlg.getPreferredSize());
         
         dlg.addComponentListener(new ComponentAdapter() {
+            @Override
             public void componentResized(ComponentEvent e) {
                 int w = dlg.getWidth();
                 int h = dlg.getHeight();
@@ -101,23 +106,42 @@ public class SaveAnimationAsImageAction extends CookieAction {
     protected void performAction(Node[] n) {
         SVGDataObject doj = (SVGDataObject) n[0].getLookup().lookup(SVGDataObject.class);
         if (doj != null){   
+            int state = getAnimatorState(doj);
+            float time = stopAnimator(doj);
             try {
-                SVGAnimationRasterizerPanel panel = new SVGAnimationRasterizerPanel(doj);
-                DialogDescriptor            dd    = new DialogDescriptor(panel, NbBundle.getMessage(SaveAnimationAsImageAction.class, "TITLE_AnimationExport"));
+                final SVGAnimationRasterizerPanel panel = new SVGAnimationRasterizerPanel(doj);
+                final DialogDescriptor      dd    = new DialogDescriptor(panel, NbBundle.getMessage(SaveAnimationAsImageAction.class, "TITLE_AnimationExport"));
+
+                panel.addPropertyChangeListener(DialogDescriptor.PROP_VALID,
+                        new PropertyChangeListener() {
+                            public void propertyChange(PropertyChangeEvent evt) {
+                                dd.setValid(panel.isDialogValid());
+                            }
+                        });
 
                 Dialog dlg = DialogDisplayer.getDefault().createDialog(dd);
                 setDialogMinimumSize( dlg);
+                dd.setValid(panel.isDialogValid());
                 dlg.setVisible(true);
 
-                if (dd.getValue() == DialogDescriptor.OK_OPTION){
+                panel.stopProcessing();
+                if (dd.getValue() == DialogDescriptor.OK_OPTION
+                        && panel.isExportConfirmed())
+                {
                     AnimationRasterizer.export(doj, panel);
                 }
+            } catch( javax.imageio.IIOException e) {
+                String msg = NbBundle.getMessage(SVGAnimationRasterizerPanel.class, "MSG_IMG_ENCODING_ERROR") + ": " +
+                             e.getLocalizedMessage();
+                DialogDisplayer.getDefault().notify(
+                        new NotifyDescriptor.Message( msg, NotifyDescriptor.ERROR_MESSAGE));
             } catch( Exception e) {
-                Exceptions.printStackTrace(e);
+                SceneManager.error("Animation export failed", e);
             }
+            resumeAnimatorState(doj, state, time);
         }
     }
-
+    
     public String getName() {
         return NbBundle.getMessage(SaveAnimationAsImageAction.class, "LBL_ExportAnimationAction"); //NOI18N
     }
@@ -136,7 +160,9 @@ public class SaveAnimationAsImageAction extends CookieAction {
         };
     }
 
+    @Override
     protected boolean asynchronous() {
         return false;
     }
+
 }
