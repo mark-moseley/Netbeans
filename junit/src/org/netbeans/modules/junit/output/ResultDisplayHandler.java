@@ -47,10 +47,12 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import org.openide.ErrorManager;
 import org.netbeans.modules.junit.JUnitSettings;
 
@@ -70,8 +72,9 @@ final class ResultDisplayHandler {
     private ResultPanelOutput outputListener;
     /** */
     private Component displayComp;
-    
-    
+
+    private int[] statistics = new int[6];
+
     /** Creates a new instance of ResultDisplayHandler */
     ResultDisplayHandler() {
     }
@@ -114,6 +117,9 @@ final class ResultDisplayHandler {
         };
         splitPane.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_ResultPanelTree"));
         splitPane.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_ResultPanelTree"));
+        if( "Aqua".equals(UIManager.getLookAndFeel().getID()) ) { //NOI18N
+            splitPane.setBackground(UIManager.getColor("NbExplorerView.background")); //NOI18N
+        }
         return splitPane;
     }
     
@@ -212,7 +218,7 @@ final class ResultDisplayHandler {
      * {@link #treePanel} once it is initialized
      */
     private String runningSuite;
-    private List<Report> reports;
+    private Set<Report> reports = new HashSet<Report>();
     private String message;
     private boolean sessionFinished;
     
@@ -235,8 +241,7 @@ final class ResultDisplayHandler {
                 return;
             }
         }
-        
-        displayInDispatchThread("displaySuiteRunning", suiteName);      //NOI18N
+        displayInDispatchThread("displaySuiteRunning", new Object[] {suiteName});      //NOI18N
     }
 
     /**
@@ -247,17 +252,13 @@ final class ResultDisplayHandler {
         
         synchronized (this) {
             if (treePanel == null) {
-                if (reports == null) {
-                    reports = new ArrayList<Report>(10);
-                }
                 reports.add(report);
                 runningSuite = null;
                 return;
             }
         }
-        
-        displayInDispatchThread("displayReport", report);               //NOI18N
-        
+        displayInDispatchThread("displayReport", new Object[] {report});               //NOI18N
+
         assert runningSuite == null;
     }
     
@@ -273,8 +274,7 @@ final class ResultDisplayHandler {
                 return;
             }
         }
-        
-        displayInDispatchThread("displayMsg", msg);                     //NOI18N
+        displayInDispatchThread("displayMsg", new Object[] {msg});                     //NOI18N
     }
     
     /**
@@ -290,8 +290,7 @@ final class ResultDisplayHandler {
                 return;
             }
         }
-        
-        displayInDispatchThread("displayMsgSessionFinished", msg);        //NOI18N
+        displayInDispatchThread("displayMsgSessionFinished", new Object[] {msg});        //NOI18N
     }
     
     /** */
@@ -305,7 +304,7 @@ final class ResultDisplayHandler {
      * @param  param  argument to be passed to the method
      */
     private void displayInDispatchThread(final String methodName,
-                                         final Object param) {
+                                         final Object[] params) {
         assert methodName != null;
         assert treePanel != null;
         
@@ -313,11 +312,10 @@ final class ResultDisplayHandler {
         if (method == null) {
             return;
         }
-        
         EventQueue.invokeLater(new Runnable() {
             public void run() {
                 try {
-                    method.invoke(treePanel, new Object[] {param});
+                    method.invoke(treePanel, params);
                 } catch (InvocationTargetException ex) {
                     ErrorManager.getDefault().notify(ex.getTargetException());
                 } catch (Exception ex) {
@@ -340,18 +338,19 @@ final class ResultDisplayHandler {
         }
         
         if ((method == null) && !methodsMap.containsKey(methodName)) {
-            final Class paramType;
+            final Class[] paramType = new Class[2];
             if (methodName.equals("displayReport")) {                   //NOI18N
-                paramType = Report.class;
+                paramType[0] = Report.class;
             } else {
                 assert methodName.equals("displayMsg")                  //NOI18N
                        || methodName.equals("displayMsgSessionFinished")//NOI18N
                        || methodName.equals("displaySuiteRunning");     //NOI18N
-                paramType = String.class;
+                paramType[0] = String.class;
             }
             try {
                 method = ResultPanelTree.class
-                         .getDeclaredMethod(methodName, new Class[] {paramType});
+                         .getDeclaredMethod(methodName, (paramType[1] == null) ?
+                                            new Class[] {paramType[0]} : paramType);
             } catch (Exception ex) {
                 method = null;
                 ErrorManager.getDefault().notify(ErrorManager.ERROR, ex);
@@ -376,21 +375,21 @@ final class ResultDisplayHandler {
             }
 
             this.treePanel = treePanel;
-        }
         
-        if (message != null) {
-            treePanel.displayMsg(message);
-            message = null;
-        }
-        if (reports != null) {
-            treePanel.displayReports(reports);
-            reports = null;
-        }
-        if (runningSuite != null) {
-            treePanel.displaySuiteRunning(runningSuite != ANONYMOUS_SUITE
-                                          ? runningSuite
-                                          : null);
-            runningSuite = null;
+            if (message != null) {
+                treePanel.displayMsg(message);
+                message = null;
+            }
+            if (!reports.isEmpty()) {
+                treePanel.displayReports(new ArrayList<Report>(reports));
+                reports.clear();
+            }
+            if (runningSuite != null) {
+                treePanel.displaySuiteRunning(runningSuite.equals(ANONYMOUS_SUITE)
+                                              ? runningSuite
+                                              : null);
+                runningSuite = null;
+            }
         }
         if (sessionFinished) {
             treePanel.displayMsgSessionFinished(message);

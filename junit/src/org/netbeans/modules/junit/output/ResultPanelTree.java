@@ -191,11 +191,7 @@ final class ResultPanelTree extends JPanel
         
         /* Called from the EventDispatch thread */
         
-        if (reports.size() == 1) {
-            displayReport(reports.get(0));
-        } else {
-            rootNode.displayReports(reports);
-        }
+        rootNode.displayReports(reports);
     }
     
     /**
