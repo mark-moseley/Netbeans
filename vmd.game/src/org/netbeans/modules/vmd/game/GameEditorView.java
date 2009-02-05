@@ -64,6 +64,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import org.netbeans.modules.vmd.api.io.providers.IOSupport;
+import org.openide.util.HelpCtx;
 
 /**
  *
@@ -144,7 +145,7 @@ public class GameEditorView implements DataEditorView, EditorManagerListener {
     }
 
     public org.openide.util.HelpCtx getHelpCtx() {
-        return null;
+        return new HelpCtx(GameEditorView.class);
     }
 
     public JComponent getVisualRepresentation() {
@@ -183,12 +184,15 @@ public class GameEditorView implements DataEditorView, EditorManagerListener {
             comboGlobal.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     Object item = comboGlobal.getSelectedItem();
+                    if (gameDesign == null) {
+                        return;
+                    }
                     if (item instanceof Editable) {
                         if (DEBUG) System.out.println("Request editing for: " + item); // NOI18N
                         gameDesign.getMainView().requestEditing((Editable) item);
                     }
-					else if (item instanceof String) {
-						gameDesign.getMainView().requestEditing(gameDesign);
+                    else if (item instanceof String) {
+                        gameDesign.getMainView().requestEditing(gameDesign);
                     }
                 }
             });
