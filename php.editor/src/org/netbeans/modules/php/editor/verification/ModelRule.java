@@ -37,26 +37,39 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.verification;
 
+import java.util.Collections;
 import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+import java.util.Set;
+import org.netbeans.modules.gsf.api.Hint;
+import org.netbeans.modules.gsf.api.HintSeverity;
+import org.netbeans.modules.gsf.api.Rule.AstRule;
+import org.netbeans.modules.gsf.api.RuleContext;
+import org.netbeans.modules.php.editor.model.FileScope;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends MethodScope> getInheritedMethods();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends ClassConstantElement> getInheritedConstants();
-    List<? extends InterfaceScope> getSuperInterfaces();
+abstract class ModelRule implements AstRule {
+    private FileScope modelScope;
+    abstract void check (FileScope modelScope, RuleContext context, List<Hint> hints);
 
-    List<? extends ClassConstantElement> findInheritedConstants(String constName);
-    List<? extends MethodScope> findInheritedMethods(final String queryName);
-    List<? extends MethodScope> findDeclaredMethods(final String queryName, final int... modifiers);
-    List<? extends MethodScope> findDeclaredMethods(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends ClassConstantElement> findDeclaredConstants(final String... queryName);
-    List<? extends ClassConstantElement> findDeclaredConstants(final NameKind nameKind, final String... queryName);     
+    @Override
+    public Set<? extends Object> getKinds() {
+        return Collections.singleton(PHPHintsProvider.MODEL_HINTS);
+    }
+
+    public boolean getDefaultEnabled() {
+        return true;
+    }
+
+    public boolean appliesTo(RuleContext context) {
+        return true;
+    }
+
+    public HintSeverity getDefaultSeverity() {
+        return HintSeverity.WARNING;
+    }
 }

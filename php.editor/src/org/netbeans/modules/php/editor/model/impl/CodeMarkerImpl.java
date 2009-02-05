@@ -37,26 +37,46 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.model.impl;
 
 import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.php.editor.model.CodeMarker;
+import org.netbeans.modules.php.editor.model.Scope;
+import org.netbeans.modules.php.editor.model.nodes.ASTNodeInfo;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends MethodScope> getInheritedMethods();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends ClassConstantElement> getInheritedConstants();
-    List<? extends InterfaceScope> getSuperInterfaces();
+class CodeMarkerImpl implements CodeMarker {
+    private OffsetRange range;
+    private Scope scope;
+    private FileScopeImpl fileScope;
+    public CodeMarkerImpl(Scope scope , ASTNodeInfo nodeInfo, FileScopeImpl fileScope) {
+        this(scope, nodeInfo.getRange(), fileScope);
+    }
 
-    List<? extends ClassConstantElement> findInheritedConstants(String constName);
-    List<? extends MethodScope> findInheritedMethods(final String queryName);
-    List<? extends MethodScope> findDeclaredMethods(final String queryName, final int... modifiers);
-    List<? extends MethodScope> findDeclaredMethods(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends ClassConstantElement> findDeclaredConstants(final String... queryName);
-    List<? extends ClassConstantElement> findDeclaredConstants(final NameKind nameKind, final String... queryName);     
+    public CodeMarkerImpl(Scope scope , OffsetRange  range, FileScopeImpl fileScope) {
+         this.range = range;
+         this.scope = scope;
+         this.fileScope = fileScope;
+    }
+
+    public List<? extends CodeMarker> getAllMarkers() {
+        return fileScope.getMarkers();
+    }
+
+    public OffsetRange getOffsetRange() {
+        return range;
+    }
+
+    /**
+     * @return the scopeName
+     */
+    Scope getScope() {
+        return scope;
+    }
+
+
 }

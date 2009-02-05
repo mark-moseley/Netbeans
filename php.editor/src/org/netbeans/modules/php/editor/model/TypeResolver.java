@@ -36,20 +36,49 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.php.editor.model;
 
+import java.util.Collections;
 import java.util.List;
+import javax.swing.text.Document;
+import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
 
 /**
+ *
  * @author Radek Matous
  */
-public interface PhpFileScope extends VariableScope {
-    List<? extends TypeScope> getDeclaredTypes();
-    List<? extends ClassScope> getDeclaredClasses();
-    List<? extends InterfaceScope> getDeclaredInterfaces();
-    List<? extends ConstantElement> getDeclaredConstants();
-    List<? extends FunctionScope> getDeclaredFunctions();
-    List<? extends VariableName> getDeclaredVariables();
-    IndexScope getIndexScope();
+public final class TypeResolver {
+
+    private ModelVisitor modelVisitor;
+
+    TypeResolver(ModelVisitor modelVisitor) {
+        this.modelVisitor = modelVisitor;
+    }
+    //TODO: add getFieldType
+
+    public List<? extends TypeScope> getVariableType(String varName, final int offset) {
+        TypeScope type = null;
+        VariableScope varScope = modelVisitor.getNearestVariableScope(offset);
+        while (varScope != null && varName != null) {
+            //TODO: impl. doesn't count with more types
+            VariableName var = ModelUtils.getFirst(ModelUtils.filter(varScope.getDeclaredVariables(), varName));
+            if (var != null) {
+                //TODO: impl. doesn't count with more types
+                type = ModelUtils.getFirst(var.getTypes(offset));
+            }
+            if (varScope instanceof FileScope) {
+                varScope = null;
+            } else {
+                varScope = ModelUtils.getFileScope(varScope);
+            }
+        }
+        //TODO: impl. doesn't count with more types
+        List<? extends TypeScope> retval = Collections.emptyList();
+        if (type != null) {
+            retval = Collections.singletonList(type);
+        }
+
+        return retval;
+    }
+
 }

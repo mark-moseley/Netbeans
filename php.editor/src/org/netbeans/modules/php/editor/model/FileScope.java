@@ -40,23 +40,16 @@
 package org.netbeans.modules.php.editor.model;
 
 import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
 
 /**
  * @author Radek Matous
  */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    List<? extends MethodScope> getDeclaredMethods();
-    List<? extends MethodScope> getInheritedMethods();
-    List<? extends ClassConstantElement> getDeclaredConstants();
-    List<? extends ClassConstantElement> getInheritedConstants();
-    List<? extends InterfaceScope> getSuperInterfaces();
-
-    List<? extends ClassConstantElement> findInheritedConstants(String constName);
-    List<? extends MethodScope> findInheritedMethods(final String queryName);
-    List<? extends MethodScope> findDeclaredMethods(final String queryName, final int... modifiers);
-    List<? extends MethodScope> findDeclaredMethods(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends ClassConstantElement> findDeclaredConstants(final String... queryName);
-    List<? extends ClassConstantElement> findDeclaredConstants(final NameKind nameKind, final String... queryName);     
+public interface FileScope extends VariableScope {
+    List<? extends TypeScope> getDeclaredTypes();
+    List<? extends ClassScope> getDeclaredClasses();
+    List<? extends InterfaceScope> getDeclaredInterfaces();
+    List<? extends ConstantElement> getDeclaredConstants();
+    List<? extends FunctionScope> getDeclaredFunctions();
+    List<? extends VariableName> getDeclaredVariables();
+    IndexScope getIndexScope();
 }
