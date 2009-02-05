@@ -55,6 +55,9 @@ made subject to such option by the copyright holder.
     <folder name="xml">
         <folder name="entities">
             <folder name="NetBeans">
+                <file name="DTD_Editor_Macros_settings_1_0" url="nbres:/org/netbeans/modules/editor/macros/storage/EditorMacros-1_0.dtd">
+                    <attr name="hint.originalPublicID" stringvalue="-//NetBeans//DTD Editor Macros settings 1.0//EN"/>
+                </file>
                 <file name="DTD_Editor_Macros_settings_1_1" url="nbres:/org/netbeans/modules/editor/macros/storage/EditorMacros-1_1.dtd">
                     <attr name="hint.originalPublicID" stringvalue="-//NetBeans//DTD Editor Macros settings 1.1//EN"/>
                 </file>
@@ -62,19 +65,26 @@ made subject to such option by the copyright holder.
         </folder>
     </folder>
     
-    <folder name="org-netbeans-modules-options-editor">
-        <folder name="OptionsDialogCategories">
-            <folder name="Editor">
-                <file name="MacrosPanel.instance">
-                    <attr name="instanceOf" stringvalue="org.netbeans.spi.options.OptionsPanelController"/>
-                    <attr name="instanceCreate" newvalue="org.netbeans.modules.editor.macros.storage.ui.MacrosPanelController"/>
-                    <attr name="position" intvalue="400"/>
-                </file>
-            </folder>
+    <folder name="OptionsDialog">
+        <folder name="Editor">
+            <file name="Macros.instance">
+                <attr name="instanceCreate" methodvalue="org.netbeans.spi.options.AdvancedOption.createSubCategory"/>
+                <attr name="controller" newvalue="org.netbeans.modules.editor.macros.storage.ui.MacrosPanelController"/>
+                <attr name="displayName" bundlevalue="org.netbeans.modules.editor.macros.storage.ui.Bundle#CTL_Macros_DisplayName"/>
+                <attr name="toolTip" bundlevalue="org.netbeans.modules.editor.macros.storage.ui.Bundle#CTL_Macros_ToolTip"/>
+                <attr name="keywords" bundlevalue="org.netbeans.modules.editor.macros.storage.ui.Bundle#KW_Macros"/>
+                <attr name="keywordsCategory" stringvalue="Editor/Macros"/>
+                <attr name="position" intvalue="700"/>
+            </file>
         </folder>
     </folder>
     
     <folder name="Editors">
+        <folder name="Actions">
+            <file name="org-netbeans-modules-editor-macros-MacroDialogSupport$StartMacroRecordingAction.instance"/>
+            <file name="org-netbeans-modules-editor-macros-MacroDialogSupport$StopMacroRecordingAction.instance"/>
+            <file name="org-netbeans-modules-editor-macros-MacroDialogSupport$RunMacroAction.instance"/>
+        </folder>
         <folder name="Toolbars">
             <folder name="Default">
                 <file name="start-macro-recording">
