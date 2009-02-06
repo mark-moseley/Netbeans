@@ -40,7 +40,6 @@
  */
 package org.netbeans.core.output2;
 
-import java.awt.Point;
 import java.awt.event.MouseEvent;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Segment;
@@ -51,13 +50,12 @@ import javax.swing.text.Document;
 import javax.swing.text.PlainDocument;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.awt.event.ComponentEvent;
-import java.awt.event.ComponentListener;
 import java.awt.event.KeyEvent;
 import org.openide.util.NbPreferences;
 
 
-class OutputPane extends AbstractOutputPane implements ComponentListener {
+class OutputPane extends AbstractOutputPane {
+    @Override
     protected void documentChanged() {
         super.documentChanged();
         findOutputTab().documentChanged();
@@ -84,7 +82,9 @@ class OutputPane extends AbstractOutputPane implements ComponentListener {
     }
 
     protected void postPopupMenu(Point p, Component src) {
-        findOutputTab().postPopupMenu(p, src);
+        if (src.isShowing()) {
+            findOutputTab().postPopupMenu(p, src);
+        }
     }
 
     public void setMouseLine (int line, Point p) {
@@ -215,11 +215,11 @@ class OutputPane extends AbstractOutputPane implements ComponentListener {
             } finally {
                 textView.setCursor (cursor);
             }
-            if (val) {
+            /*if (val) { #78191
                 getViewport().addChangeListener(this);
             } else {
                 getViewport().removeChangeListener(this);
-            }
+            }*/
             
             //Don't try to set the caret position until the view has
             //been fully readjusted to its new dimensions, scroll bounds, etc.
@@ -258,7 +258,6 @@ class OutputPane extends AbstractOutputPane implements ComponentListener {
     private static final boolean GTK = "GTK".equals(UIManager.getLookAndFeel().getID());
     protected JEditorPane createTextView() {
         JEditorPane result = GTK ? new GEP() : new JEditorPane();
-        result.addComponentListener(this);
         
         // we don't want the background to be gray even though the text there is not editable
         result.setDisabledTextColor(result.getBackground());
@@ -288,6 +287,11 @@ class OutputPane extends AbstractOutputPane implements ComponentListener {
         
         
         return result;
+    }
+
+    @Override
+    protected void changeFontSizeBy(int amt) {
+        findOutputTab().changeFontSizeBy(amt);
     }
     
     //#83118 - remove the "control shift 0" from editor pane to lt the Open Project action through
@@ -323,34 +327,6 @@ class OutputPane extends AbstractOutputPane implements ComponentListener {
             return retValue;
         }
         
-    }
-    
-
-    private int prevW = -1;
-    public void componentResized(ComponentEvent e) {
-        int w = textView.getWidth();
-        if (prevW != w) {
-            if (isWrapped()) {
-                WrappedTextView view = ((OutputEditorKit) getEditorKit()).view();
-                if (view != null) {
-                    view.setChanged();
-                    textView.repaint();
-                }
-            }
-        }
-        prevW = w;
-    }
-
-    public void componentMoved(ComponentEvent e) {
-        //do nothing
-    }
-
-    public void componentShown(ComponentEvent e) {
-        //do nothing
-    }
-
-    public void componentHidden(ComponentEvent e) {
-        //do nothing
     }
     
     private static final class GEP extends JEditorPane {

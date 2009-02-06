@@ -139,6 +139,10 @@ final class OutputTab extends AbstractOutputTab {
     }
 
     private long timestamp = 0;
+
+    void changeFontSizeBy(int amt) {
+        findOutputWindow().changeFontSizeBy(amt, this);
+    }
     void updateTimestamp() {
         timestamp = System.currentTimeMillis();
     }
@@ -177,7 +181,10 @@ final class OutputTab extends AbstractOutputTab {
     }
 
     public void caretEnteredLine(int line) {
-        findOutputWindow().caretEnteredLine(this, line);
+        OutputWindow ow = findOutputWindow();
+        if (ow != null) {
+            ow.caretEnteredLine(this, line);
+        }
     }
     
     private int firstNavigableListenerLine = -1;
