@@ -42,11 +42,10 @@
 package org.netbeans.modules.cnd.navigation.hierarchy;
 
 import java.awt.event.ActionEvent;
-import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
+import org.netbeans.modules.cnd.modelutil.CsmUtilities;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.CallableSystemAction;
-import org.openide.windows.TopComponent;
 
 /**
  * Action which shows Hierarchy component.
@@ -67,7 +66,8 @@ public class HierarchyAction extends CallableSystemAction {
     }
 
     public void performAction() {
-        TopComponent win = HierarchyTopComponent.findInstance();
+        HierarchyTopComponent win = HierarchyTopComponent.findInstance();
+        //Preferences ps = NbPreferences.forModule(HierarchyTopComponent.class);
         win.open();
         win.requestActive();
     }
@@ -82,7 +82,7 @@ public class HierarchyAction extends CallableSystemAction {
 
     @Override
     public boolean isEnabled() {
-        return CsmModelAccessor.getModel().projects().size()>0;
+        return CsmUtilities.isAnyNativeProjectOpened();
     }
     
     @Override
