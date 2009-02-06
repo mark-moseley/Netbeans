@@ -39,14 +39,25 @@
 
 package org.netbeans.modules.kenai.ui;
 
-import javax.swing.JComponent;
-import org.netbeans.modules.kenai.api.KenaiProject;
-import org.netbeans.modules.kenai.ui.UIQuery.Type;
+import org.netbeans.modules.kenai.ui.spi.LinkNode;
+import org.netbeans.modules.kenai.ui.spi.KenaiProjectUIQuery;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
 
 /**
  *
  * @author Jan Becicka
  */
-interface UIQueryImpl {
-    JComponent getComponent(Type t, KenaiProject k);
+public class KenaiProjectsTreeModel extends DefaultTreeModel {
+
+    public KenaiProjectsTreeModel() {
+        super(new DefaultMutableTreeNode("Root"));
+        DefaultMutableTreeNode project1 = new DefaultMutableTreeNode("My Kenai Project");
+        DefaultMutableTreeNode project1Builds = new DefaultMutableTreeNode("Builds");
+        project1.add(project1Builds);
+        for (LinkNode line :  KenaiProjectUIQuery.getNodes(null, null, null)) {
+            project1Builds.add(new DefaultMutableTreeNode(line));
+        }
+        ((DefaultMutableTreeNode) getRoot()).add(project1);
+    }
 }

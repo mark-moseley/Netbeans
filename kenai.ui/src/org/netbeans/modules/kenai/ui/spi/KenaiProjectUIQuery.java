@@ -37,33 +37,32 @@
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.kenai.ui.api;
+package org.netbeans.modules.kenai.ui.spi;
 
-import java.awt.Font;
-import javax.swing.JTextPane;
-import javax.swing.UIManager;
-import javax.swing.text.html.HTMLDocument;
-import javax.swing.text.html.StyleSheet;
+import java.util.Collection;
+import org.netbeans.modules.kenai.api.KenaiProject;
+import org.openide.util.Lookup;
 
 /**
- * not final
+ *
  * @author Jan Becicka
  */
-public final class UIUtils {
-    public static final JTextPane createHTMLPane() {
-        JTextPane textPane = new JTextPane();
-        textPane.setContentType("text/html");
-        Font font = UIManager.getFont("Label.font");
-        String bodyRule = "body { font-family: " + font.getFamily() + "; " +
-                "font-size: " + font.getSize() + "pt; }";
+public final class KenaiProjectUIQuery {
 
-        final StyleSheet styleSheet = ((HTMLDocument) textPane.getDocument()).getStyleSheet();
-
-        styleSheet.addRule(bodyRule);
-        styleSheet.addRule(".green {color: green;}");
-        styleSheet.addRule(".red {color: red;");
-        textPane.setEditable(false);
-        textPane.setBackground(UIManager.getColor("TextPane.background"));
-        return textPane;
+    /**
+     *
+     * @param t
+     * @param k
+     * @return
+     */
+    public static Collection<LinkNode> getNodes(KenaiProjectUI.Type t, KenaiProject k, LinkNode.RefreshCallback callback) {
+        Collection<LinkNode> result = null;
+        for (KenaiProjectUI ui : Lookup.getDefault().lookupAll(KenaiProjectUI.class)) {
+            result = ui.getNodes(t, k, callback);
+            if (result!=null) {
+                break;
+            }
+        }
+        return result;
     }
 }

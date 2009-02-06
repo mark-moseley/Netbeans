@@ -36,23 +36,23 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.kenai.ui;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import org.netbeans.modules.kenai.ui.spi.UIUtils;
+package org.netbeans.modules.kenai.ui.spi;
 
+import java.util.Collection;
+import org.netbeans.modules.kenai.api.KenaiProject;
 
 /**
+ *
  * @author Jan Becicka
  */
-public final class LoginAction implements ActionListener {
-
-    public void actionPerformed(ActionEvent e) {
-        if (!UIUtils.showLogin()) return;
-        final KenaiTopComponent kenaiTC = KenaiTopComponent.getDefault();
-        kenaiTC.open();
-        kenaiTC.requestActive();
+public interface KenaiProjectUI {
+    public enum Type {
+        BUILDS,
+        ISSUES,
+        REVIEWS,
+        SOURCES
     }
 
+    public Collection<LinkNode> getNodes(Type t, KenaiProject k, LinkNode.RefreshCallback refreshCallback);
 }
