@@ -39,10 +39,12 @@
 
 package org.netbeans.modules.hudson.ui.actions;
 
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
+import java.io.FileNotFoundException;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import org.netbeans.modules.hudson.api.HudsonJob;
+import org.netbeans.modules.hudson.impl.HudsonJobImpl;
 import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 import org.openide.windows.IOProvider;
@@ -59,10 +61,10 @@ import org.xml.sax.helpers.DefaultHandler;
  */
 public class ShowFailures extends AbstractAction implements Runnable {
 
-    private final HudsonJob job;
+    private final HudsonJobImpl job;
     private final int buildNumber;
 
-    public ShowFailures(HudsonJob job, int buildNumber) {
+    public ShowFailures(HudsonJobImpl job, int buildNumber) {
         this.job = job;
         this.buildNumber = buildNumber;
         putValue(NAME, "Show Test Failures"); // XXX I18N
@@ -73,17 +75,22 @@ public class ShowFailures extends AbstractAction implements Runnable {
     }
 
     public void run() {
-        String title = job.getDisplayName() + " #" + buildNumber + " Test Failures"; // XXX I18N
-        InputOutput io = IOProvider.getDefault().getIO(title, new Action[0]);
-        io.select();
-        final OutputWriter w = io.getOut();
         try {
             XMLReader parser = XMLUtil.createXMLReader();
             parser.setContentHandler(new DefaultHandler() {
+                InputOutput io;
                 StringBuilder buf;
-                // XXX could collect and display other info, e.g. <className>.<name>
+                Hyperlinker hyperlinker = new Hyperlinker(job);
+                private void prepareOutput() {
+                    if (io == null) {
+                        String title = job.getDisplayName() + " #" + buildNumber + " Test Failures"; // XXX I18N
+                        io = IOProvider.getDefault().getIO(title, new Action[0]);
+                        io.select();
+                    }
+                }
+                // XXX could collect and display other info, e.g. case/className or suite/name
                 public @Override void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
-                    if (qName.equals("errorStackTrace")) { // NOI18N
+                    if (qName.matches("errorStackTrace|stdout|stderr")) { // NOI18N
                         buf = new StringBuilder();
                     }
                 }
@@ -93,21 +100,29 @@ public class ShowFailures extends AbstractAction implements Runnable {
                     }
                 }
                 public @Override void endElement(String uri, String localName, String qName) throws SAXException {
-                    if (qName.equals("errorStackTrace")) { // NOI18N
-                        char[] cs = new char[buf.length()];
-                        buf.getChars(0, cs.length, cs, 0);
-                        // XXX would like to hyperlink the stack traces, but how? would need to know where source roots were
-                        w.write(cs);
+                    if (qName.matches("errorStackTrace|stdout|stderr")) { // NOI18N
+                        prepareOutput();
+                        OutputWriter w = qName.equals("stdout") ? io.getOut() : io.getErr();
+                        for (String line : buf.toString().split("\r\n?|\n")) {
+                            hyperlinker.handleLine(line, w);
+                        }
                         buf = null;
                     }
                 }
+                public @Override void endDocument() throws SAXException {
+                    if (io != null) {
+                        io.getOut().close();
+                        io.getErr().close();
+                    }
+                }
             });
-            parser.parse(job.getUrl() + buildNumber + "/testReport/api/xml"); // NOI18N
+            // Requires Hudson 1.281 or later:
+            parser.parse(job.getUrl() + buildNumber + "/testReport/api/xml?xpath=//suite[case/errorStackTrace]&wrapper=failures"); // NOI18N
+        } catch (FileNotFoundException x) {
+            Toolkit.getDefaultToolkit().beep();
         } catch (Exception x) {
             Exceptions.printStackTrace(x);
         }
-        w.close();
-        io.getErr().close();
     }
 
 }
