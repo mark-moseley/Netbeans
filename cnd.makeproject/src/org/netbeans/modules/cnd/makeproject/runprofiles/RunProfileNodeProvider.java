@@ -45,31 +45,53 @@ import java.util.ResourceBundle;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
+import org.netbeans.modules.cnd.makeproject.api.configurations.CustomizerNodeProvider;
+import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ui.CustomizerNode;
 import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
 import org.openide.nodes.Sheet;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
-public class RunProfileNodeProvider {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.makeproject.api.configurations.CustomizerNodeProvider.class)
+public class RunProfileNodeProvider implements CustomizerNodeProvider {
+    
+    /**
+     * Creates an instance of a customizer node
+     */
+    private CustomizerNode customizerNode = null;
+    
+    public CustomizerNode factoryCreate() {
+        if (customizerNode == null) {
+            customizerNode = createProfileNode();
+        }
+	return customizerNode;
+    }
+    
     public CustomizerNode createProfileNode() {
             return new RunProfileCustomizerNode(
-                "Running", // NOI18N
+                "Run", // NOI18N
                 getString("RUNNING"),
                 null);
     }
 
-    class RunProfileCustomizerNode extends CustomizerNode {
+    static class RunProfileCustomizerNode extends CustomizerNode {
 	public RunProfileCustomizerNode(String name, String displayName, CustomizerNode[] children) {
 	    super(name, displayName, children);
 	}
 
+        @Override
 	public Sheet getSheet(Project project, ConfigurationDescriptor configurationDescriptor, Configuration configuration) {
 	    RunProfile runProfile = (RunProfile) configuration.getAuxObject(RunProfile.PROFILE_ID);
-	    return runProfile != null ? runProfile.getSheet() : null;
+            boolean isRemote = false;
+            if (configuration instanceof MakeConfiguration) {
+                isRemote = !((MakeConfiguration) configuration).getDevelopmentHost().isLocalhost();
+            }
+	    return runProfile != null ? runProfile.getSheet(isRemote) : null;
 	    //return configurationDescriptor.getSheet(project, configuration);
 	}
         
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx("ProjectPropsRunning"); // NOI18N
         }
