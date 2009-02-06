@@ -36,8 +36,9 @@
 
 package org.netbeans.installer.utils.system;
 
+import java.io.IOException;
 import org.netbeans.installer.utils.SystemUtils;
-import static org.netbeans.installer.utils.helper.Platform.*;
+import org.netbeans.installer.utils.helper.Platform;
 /**
  *
  * @author Kirill Sorokin
@@ -63,6 +64,21 @@ public class SolarisNativeUtils extends UnixNativeUtils {
             NATIVE_JNILIB_RESOURCE_SUFFIX +
             "solaris-x86/" + //NOI18N
             "solaris-amd64.so"; // NOI18N
+
+    public static final String[] POSSIBLE_BROWSER_LOCATIONS_SOLARIS = new String[]{
+        "/usr/sfw/lib/firefox/firefox",
+        "/opt/csw/bin/firefox",
+        "/usr/sfw/lib/mozilla/mozilla",
+        "/opt/csw/bin/mozilla",
+        "/usr/dt/bin/sun_netscape",
+        "/usr/bin/firefox",
+        "/usr/bin/mozilla-firefox",
+        "/usr/local/firefox/firefox",
+        "/opt/bin/firefox",
+        "/usr/bin/mozilla",
+        "/usr/local/mozilla/mozilla",
+        "/opt/bin/mozilla"
+    };
     
     private static final String[] FORBIDDEN_DELETING_FILES_SOLARIS = {};
     
@@ -81,5 +97,16 @@ public class SolarisNativeUtils extends UnixNativeUtils {
         
         loadNativeLibrary(library);
         initializeForbiddenFiles(FORBIDDEN_DELETING_FILES_SOLARIS);
+    }
+    @Override
+    protected Platform getPlatform() {        
+        final String osArch = System.getProperty("os.arch");
+        return osArch.contains("sparc") ? 
+            Platform.SOLARIS_SPARC : 
+            Platform.SOLARIS_X86;
+    }
+    @Override
+    protected String [] getPossibleBrowserLocations() {
+        return POSSIBLE_BROWSER_LOCATIONS_SOLARIS;
     }
 }

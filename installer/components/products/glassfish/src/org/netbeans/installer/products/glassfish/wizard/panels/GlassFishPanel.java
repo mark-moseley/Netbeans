@@ -55,7 +55,9 @@ import org.netbeans.installer.product.components.Product;
 import org.netbeans.installer.product.filters.OrFilter;
 import org.netbeans.installer.product.filters.ProductFilter;
 import org.netbeans.installer.product.filters.RegistryFilter;
+import org.netbeans.installer.utils.BrowserUtils;
 import org.netbeans.installer.utils.ErrorManager;
+import org.netbeans.installer.utils.FileUtils;
 import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StringUtils;
 import org.netbeans.installer.utils.SystemUtils;
@@ -82,7 +84,8 @@ import org.netbeans.installer.wizard.components.panels.JdkLocationPanel;
 import org.netbeans.installer.wizard.containers.SwingContainer;
 import static java.lang.Integer.parseInt;
 import org.netbeans.installer.utils.helper.swing.NbiDirectoryChooser;
-import org.netbeans.installer.utils.helper.swing.NbiFileChooser;
+import org.netbeans.installer.utils.helper.swing.NbiTextPane;
+import org.netbeans.installer.wizard.components.actions.netbeans.NbRegistrationAction;
 
 /**
  *
@@ -92,7 +95,8 @@ public class GlassFishPanel extends DestinationPanel {
     /////////////////////////////////////////////////////////////////////////////////
     // Instance
     private JdkLocationPanel jdkLocationPanel;
-    
+    private static boolean allPortsOccupied;
+        
     public GlassFishPanel() {
         jdkLocationPanel = new JdkLocationPanel();
         
@@ -170,6 +174,8 @@ public class GlassFishPanel extends DestinationPanel {
                 DEFAULT_ERROR_HTTP_EQUALS_ADMIN);
         setProperty(ERROR_HTTPS_EQUALS_ADMIN_PROPERTY,
                 DEFAULT_ERROR_HTTPS_EQUALS_ADMIN);
+        setProperty(ERROR_UNC_PATH_UNSUPPORTED_PROPERTY,
+                DEFAULT_ERROR_UNC_PATH_UNSUPPORTED);
         
         setProperty(WARNING_PORT_IN_USE_PROPERTY,
                 DEFAULT_WARNING_PORT_IN_USE);
@@ -186,15 +192,6 @@ public class GlassFishPanel extends DestinationPanel {
                 DEFAULT_DEFAULT_HTTPS_PORT);
         setProperty(DEFAULT_ADMIN_PORT_PROPERTY,
                 DEFAULT_DEFAULT_ADMIN_PORT);
-        
-        setProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY,
-                DEFAULT_MINIMUM_JDK_VERSION);
-        setProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY,
-                DEFAULT_MAXIMUM_JDK_VERSION);
-        setProperty(JdkLocationPanel.VENDOR_JDK_ALLOWED_PROPERTY,
-                SystemUtils.isMacOS() ? 
-                    DEFAULT_VENDOR_JDK_ALLOWED_MACOSX : 
-                    DEFAULT_VENDOR_JDK_ALLOWED);        
     }
     
     @Override
@@ -214,21 +211,91 @@ public class GlassFishPanel extends DestinationPanel {
         
         jdkLocationPanel.setProperty(
                 JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY,
-                getProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY));
+                getWizard().getProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY));
         jdkLocationPanel.setProperty(
                 JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY,
-                getProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY));
+                getWizard().getProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY));
         jdkLocationPanel.setProperty(
                 JdkLocationPanel.VENDOR_JDK_ALLOWED_PROPERTY,
-                getProperty(JdkLocationPanel.VENDOR_JDK_ALLOWED_PROPERTY));
+                getWizard().getProperty(JdkLocationPanel.VENDOR_JDK_ALLOWED_PROPERTY));
         
-        if (getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY) != null) {
+        if (getWizard().getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY) != null) {
             jdkLocationPanel.setProperty(
                     JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY,
-                    getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY));
+                    getWizard().getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY));
         }
         
         jdkLocationPanel.initialize();
+
+        //This makes it possible to perform silent installation with emptry state files 
+        //that means that JDK_LOCATION_PROPERTY property is explicitely set to the first location
+        //that fits the requirements
+        //TODO: Investigate the prons&cons and side affects of moving
+        //this code to the end of JdkLocationPanel.initialize() method        
+        File jdkLocation = jdkLocationPanel.getSelectedLocation();        
+        if(jdkLocation!=null && !jdkLocation.getPath().equals(StringUtils.EMPTY_STRING)) {
+            jdkLocationPanel.setLocation(jdkLocation);
+        }
+        
+        final int defaultHttpPort = SystemUtils.getAvailablePort(
+                parseInt(
+                getProperty(DEFAULT_HTTP_PORT_PROPERTY)));
+        final int defaultHttpsPort = SystemUtils.getAvailablePort(
+                parseInt(getProperty(DEFAULT_HTTPS_PORT_PROPERTY)),
+                defaultHttpPort);
+        final int defaultAdminPort = SystemUtils.getAvailablePort(
+                parseInt(getProperty(DEFAULT_ADMIN_PORT_PROPERTY)),
+                defaultHttpPort,
+                defaultHttpsPort);
+        
+        String password = getWizard().getProperty(PASSWORD_PROPERTY);
+        if (password == null) {
+            password = getProperty(DEFAULT_PASSWORD_PROPERTY);
+        }
+        getWizard().setProperty(PASSWORD_PROPERTY, password);
+        
+        String username = getWizard().getProperty(USERNAME_PROPERTY);
+        if (username == null) {
+            username = getProperty(DEFAULT_USERNAME_PROPERTY);
+        }
+        getWizard().setProperty(USERNAME_PROPERTY, username);
+        
+        String httpPort = getWizard().getProperty(HTTP_PORT_PROPERTY);
+        if (httpPort == null) {
+            if (defaultHttpPort != -1) {
+                httpPort = Integer.toString(defaultHttpPort);
+                allPortsOccupied = false;
+            } else {
+                httpPort = StringUtils.EMPTY_STRING;
+                allPortsOccupied = true;
+            }
+        }
+        getWizard().setProperty(HTTP_PORT_PROPERTY, httpPort);
+        
+        String httpsPort = getWizard().getProperty(HTTPS_PORT_PROPERTY);
+        if (httpsPort == null) {
+            if (defaultHttpsPort != -1) {
+                httpsPort = Integer.toString(defaultHttpsPort);
+                allPortsOccupied = false;
+            } else {
+                httpsPort = StringUtils.EMPTY_STRING;
+                allPortsOccupied = true;
+            }
+        }
+        getWizard().setProperty(HTTPS_PORT_PROPERTY, httpsPort);
+        
+        
+        String adminPort = getWizard().getProperty(ADMIN_PORT_PROPERTY);
+        if (adminPort == null) {
+            if (defaultAdminPort != -1) {
+                adminPort = Integer.toString(defaultAdminPort);
+                allPortsOccupied = false;
+            } else {
+                adminPort = StringUtils.EMPTY_STRING;
+                allPortsOccupied = true;
+            }
+        }
+        getWizard().setProperty(ADMIN_PORT_PROPERTY,adminPort);
     }
     
     public JdkLocationPanel getJdkLocationPanel() {
@@ -239,13 +306,13 @@ public class GlassFishPanel extends DestinationPanel {
     // Inner Classes
     public static class GlassFishPanelUi extends DestinationPanelUi {
         protected GlassFishPanel component;
-        
+                
         public GlassFishPanelUi(GlassFishPanel component) {
             super(component);
             
             this.component = component;
         }
-        
+        @Override
         public SwingUi getSwingUi(SwingContainer container) {
             if (swingUi == null) {
                 swingUi = new GlassFishPanelSwingUi(component, container);
@@ -263,7 +330,7 @@ public class GlassFishPanel extends DestinationPanel {
         private NbiLabel jdkLocationLabel;
         private NbiComboBox jdkLocationComboBox;
         private NbiButton browseButton;
-        private NbiLabel statusLabel;
+        private NbiTextPane statusLabel;
         
         private NbiTextField jdkLocationField;
         
@@ -289,7 +356,6 @@ public class GlassFishPanel extends DestinationPanel {
         private NbiLabel adminPortLabel;
         private NbiTextField adminPortField;
         
-        private boolean allPortsOccupied;
         
         public GlassFishPanelSwingUi(
                 final GlassFishPanel panel,
@@ -314,11 +380,14 @@ public class GlassFishPanel extends DestinationPanel {
                         JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY));
                 final Version maxVersion = Version.getVersion(jdkLocationPanel.getProperty(
                         JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY));
-                
+                statusLabel.setContentType("text/html");
                 statusLabel.setText(StringUtils.format(
                         jdkLocationPanel.getProperty(JdkLocationPanel.ERROR_NOTHING_FOUND_PROPERTY),
                         minVersion.toJdkStyle(),
-                        minVersion.toJdkStyle()));
+                        maxVersion.toJdkStyle(),
+                        jdkLocationPanel.getProperty(JdkLocationPanel.JAVA_DOWNLOAD_PAGE_PROPERTY)));
+
+                statusLabel.addHyperlinkListener(BrowserUtils.createHyperlinkListener());
             } else {
                 statusLabel.clearText();
                 statusLabel.setVisible(false);
@@ -346,23 +415,8 @@ public class GlassFishPanel extends DestinationPanel {
             }  
             model.setSelectedItem(selectedItem);                                                       
             browseButton.setText(
-                    panel.getProperty(BROWSE_BUTTON_TEXT_PROPERTY));
+                    panel.getProperty(BROWSE_BUTTON_TEXT_PROPERTY));            
             
-            final String defaultUsername =
-                    panel.getProperty(DEFAULT_USERNAME_PROPERTY);
-            final String defaultPassword =
-                    panel.getProperty(DEFAULT_PASSWORD_PROPERTY);
-            
-            final int defaultHttpPort = SystemUtils.getAvailablePort(
-                    parseInt(
-                    panel.getProperty(DEFAULT_HTTP_PORT_PROPERTY)));
-            final int defaultHttpsPort = SystemUtils.getAvailablePort(
-                    parseInt(panel.getProperty(DEFAULT_HTTPS_PORT_PROPERTY)),
-                    defaultHttpPort);
-            final int defaultAdminPort = SystemUtils.getAvailablePort(
-                    parseInt(panel.getProperty(DEFAULT_ADMIN_PORT_PROPERTY)),
-                    defaultHttpPort,
-                    defaultHttpsPort);
             
             usernameLabel.setText(
                     panel.getProperty(USERNAME_LABEL_TEXT_PROPERTY));
@@ -377,64 +431,20 @@ public class GlassFishPanel extends DestinationPanel {
             adminPortLabel.setText(
                     panel.getProperty(ADMIN_LABEL_TEXT_PROPERTY));
             
-            String username = panel.getWizard().getProperty(
-                    USERNAME_PROPERTY);
-            if (username == null) {
-                username = defaultUsername;
-            }
-            usernameField.setText(username);
             
-            String password = panel.getWizard().getProperty(
-                    PASSWORD_PROPERTY);
-            if (password == null) {
-                password = defaultPassword;
-            }
-            passwordField.setText(password);
-            repeatPasswordField.setText(password);
+            usernameField.setText(panel.getWizard().getProperty(USERNAME_PROPERTY));
+            passwordField.setText(panel.getWizard().getProperty(PASSWORD_PROPERTY));
+            repeatPasswordField.setText(panel.getWizard().getProperty(PASSWORD_PROPERTY));
             
             defaultsLabel.setText(StringUtils.format(
                     panel.getProperty(DEFAULTS_LABEL_TEXT_PROPERTY),
-                    defaultUsername,
-                    defaultPassword));
+                    panel.getProperty(DEFAULT_USERNAME_PROPERTY),
+                    panel.getProperty(DEFAULT_PASSWORD_PROPERTY)));
             
-            String httpPort = panel.getWizard().getProperty(
-                    HTTP_PORT_PROPERTY);
-            if (httpPort == null) {
-                if (defaultHttpPort != -1) {
-                    httpPort = Integer.toString(defaultHttpPort);
-                    allPortsOccupied = false;
-                } else {
-                    httpPort = StringUtils.EMPTY_STRING;
-                    allPortsOccupied = true;
-                }
-            }
-            httpPortField.setText(httpPort);
             
-            String httpsPort = panel.getWizard().getProperty(
-                    HTTPS_PORT_PROPERTY);
-            if (httpsPort == null) {
-                if (defaultHttpsPort != -1) {
-                    httpsPort = Integer.toString(defaultHttpsPort);
-                    allPortsOccupied = false;
-                } else {
-                    httpsPort = StringUtils.EMPTY_STRING;
-                    allPortsOccupied = true;
-                }
-            }
-            httpsPortField.setText(httpsPort);
-            
-            String adminPort = panel.getWizard().getProperty(
-                    ADMIN_PORT_PROPERTY);
-            if (adminPort == null) {
-                if (defaultAdminPort != -1) {
-                    adminPort = Integer.toString(defaultAdminPort);
-                    allPortsOccupied = false;
-                } else {
-                    adminPort = StringUtils.EMPTY_STRING;
-                    allPortsOccupied = true;
-                }
-            }
-            adminPortField.setText(adminPort);
+            httpPortField.setText(panel.getWizard().getProperty(HTTP_PORT_PROPERTY));            
+            httpsPortField.setText(panel.getWizard().getProperty(HTTPS_PORT_PROPERTY));            
+            adminPortField.setText(panel.getWizard().getProperty(ADMIN_PORT_PROPERTY));
                         
             super.initialize();
         }
@@ -615,7 +625,23 @@ public class GlassFishPanel extends DestinationPanel {
                         panel.getProperty(ERROR_HTTPS_EQUALS_ADMIN_PROPERTY),
                         httpsPort, adminPort);
             }
-            
+
+            //#128991: Installation not recognized not empty dir for GF
+            File f = FileUtils.eliminateRelativity(getDestinationField().getText().trim());
+            if(FileUtils.exists(f)) {
+                File [] list = f.listFiles();
+                if (list!= null && list.length > 0) {
+                    return StringUtils.format(
+                            component.getProperty(ERROR_NOT_EMPTY_PROPERTY),
+                            f.getAbsolutePath());
+                }
+            }
+            //#137248: Glassfish installation failed while using UNC paths
+            if(SystemUtils.isWindows() && FileUtils.isUNCPath(f.getAbsolutePath())) {
+                return StringUtils.format(
+                        component.getProperty(ERROR_UNC_PATH_UNSUPPORTED_PROPERTY),
+                        f.getAbsolutePath());
+            }
             return null;
         }
         
@@ -748,7 +774,7 @@ public class GlassFishPanel extends DestinationPanel {
             });
             
             // statusLabel //////////////////////////////////////////////////////////
-            statusLabel = new NbiLabel();
+            statusLabel = new NbiTextPane();
             
             // fileChooser //////////////////////////////////////////////////////////
             fileChooser = new NbiDirectoryChooser();
@@ -1202,11 +1228,13 @@ public class GlassFishPanel extends DestinationPanel {
             "error.http.equals.admin"; // NOI18N
     public static final String ERROR_HTTPS_EQUALS_ADMIN_PROPERTY =
             "error.https.equals.admin"; // NOI18N
+    public static final String ERROR_UNC_PATH_UNSUPPORTED_PROPERTY =
+            "error.unc.path.unsupported"; // NOI18N
     
     public static final String WARNING_PORT_IN_USE_PROPERTY =
             "warning.port.in.use"; // NOI18N
     public static final String WARNING_ASADMIN_FILES_EXIST_PROPERTY =
-            "GFP.warning.asadmin.files.exist"; // NOI18N
+            "warning.asadmin.files.exist"; // NOI18N
     
     public static final String DEFAULT_ERROR_USERNAME_NULL =
             ResourceUtils.getString(GlassFishPanel.class,
@@ -1274,24 +1302,14 @@ public class GlassFishPanel extends DestinationPanel {
     public static final String DEFAULT_ERROR_HTTPS_EQUALS_ADMIN =
             ResourceUtils.getString(GlassFishPanel.class,
             "GFP.error.https.equals.admin"); // NOI18N
+    public static final String DEFAULT_ERROR_UNC_PATH_UNSUPPORTED =
+            ResourceUtils.getString(GlassFishPanel.class,
+            "GFP.error.unc.path.unsupported"); // NOI18N
             
     public static final String DEFAULT_WARNING_PORT_IN_USE =
             ResourceUtils.getString(GlassFishPanel.class,
             "GFP.warning.port.in.use"); // NOI18N
     public static final String DEFAULT_WARNING_ASADMIN_FILES_EXIST = 
             ResourceUtils.getString(GlassFishPanel.class,
-            "GFP.warning.asadmin.files.exist"); // NOI18N
-            
-    public static final String DEFAULT_MINIMUM_JDK_VERSION =
-            ResourceUtils.getString(GlassFishPanel.class,
-            "GFP.minimum.jdk.version"); // NOI18N
-    public static final String DEFAULT_MAXIMUM_JDK_VERSION =
-            ResourceUtils.getString(GlassFishPanel.class,
-            "GFP.maximum.jdk.version"); // NOI18N
-    public static final String DEFAULT_VENDOR_JDK_ALLOWED = 
-            ResourceUtils.getString(GlassFishPanel.class,
-            "GFP.vendor.jdk.allowed"); // NOI18N
-    public static final String DEFAULT_VENDOR_JDK_ALLOWED_MACOSX = 
-            ResourceUtils.getString(GlassFishPanel.class,
-            "GFP.vendor.jdk.allowed.macosx"); // NOI18N
+            "GFP.warning.asadmin.files.exist"); // NOI18N   
 }
