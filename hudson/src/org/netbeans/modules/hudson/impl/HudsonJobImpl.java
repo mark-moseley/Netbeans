@@ -147,6 +147,14 @@ public class HudsonJobImpl implements HudsonJob, OpenableInBrowser {
         }
     }
     
+    public int getLastCompletedBuild() {
+        try {
+            return properties.getProperty(JOB_LAST_COMPLETED_BUILD, Integer.class);
+        } catch (NullPointerException e) {
+            return 0;
+        }
+    }
+
     public synchronized Collection<HudsonView> getViews() {
         return views;
     }
@@ -191,7 +199,6 @@ public class HudsonJobImpl implements HudsonJob, OpenableInBrowser {
     }
 
     /**
-     * Obtains a filesystem representing the remote workspace as accessed by Hudson web services.
      * Requires Hudson 1.264 or later.
      */
     public FileSystem getRemoteWorkspace() {
