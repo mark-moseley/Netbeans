@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.mercurial.ui.commit;
 
+import java.awt.BorderLayout;
 import org.netbeans.modules.mercurial.HgModuleConfig;
 import org.netbeans.modules.versioning.util.ListenersSupport;
 import org.netbeans.modules.versioning.util.VersioningListener;
@@ -56,6 +57,14 @@ import java.util.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.Cursor;
+import javax.swing.Icon;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTree;
+import javax.swing.SwingUtilities;
+import javax.swing.plaf.basic.BasicTreeUI;
+import org.netbeans.modules.mercurial.hooks.spi.HgHook;
+import org.netbeans.modules.mercurial.hooks.spi.HgHookContext;
 
 /**
  *
@@ -66,10 +75,13 @@ public class CommitPanel extends javax.swing.JPanel implements PreferenceChangeL
     static final Object EVENT_SETTINGS_CHANGED = new Object();
 
     private CommitTable commitTable;
-    
+
+
     /** Creates new form CommitPanel */
     public CommitPanel() {
         initComponents();
+        hookSectionPanel.setVisible(false);
+        hooksSectionButton.setVisible(false);
     }
 
     void setCommitTable(CommitTable commitTable) {
@@ -85,6 +97,7 @@ public class CommitPanel extends javax.swing.JPanel implements PreferenceChangeL
         HgModuleConfig.getDefault().getPreferences().addPreferenceChangeListener(this);
         commitTable.getTableModel().addTableModelListener(this);
         listenerSupport.fireVersioningEvent(EVENT_SETTINGS_CHANGED);
+        jLabel3.setVisible(false);
 
         recentLink.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         recentLink.addMouseListener(new MouseAdapter() {
@@ -92,18 +105,70 @@ public class CommitPanel extends javax.swing.JPanel implements PreferenceChangeL
                 onBrowseRecentMessages();
             }
         });
+
+        JTree tv = new JTree();
+        BasicTreeUI tvui = (BasicTreeUI) tv.getUI();
+        final Icon ei = tvui.getExpandedIcon();
+        final Icon ci = tvui.getCollapsedIcon();
+        filesSectionButton.setIcon(ei);
+        hooksSectionButton.setIcon(ci);
+        hookSectionPanel.setVisible(false);
         
-        List<String> messages = Utils.getStringList(HgModuleConfig.getDefault().getPreferences(), CommitAction.RECENT_COMMIT_MESSAGES);
-        if (messages.size() > 0) {
-            messageTextArea.setText(messages.get(0));
-        }
-        messageTextArea.selectAll();
+        initSectionButton(filesSectionButton, filesSectionPanel2, ci, ei);
+        initSectionButton(hooksSectionButton, hookSectionPanel, ci, ei);
+        
+        final List<String> messages = Utils.getStringList(HgModuleConfig.getDefault().getPreferences(), CommitAction.RECENT_COMMIT_MESSAGES);
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                if (messages.size() > 0) {
+                    messageTextArea.setText(messages.get(0));
+                }
+                messageTextArea.selectAll();
+            }
+        });
     }
 
     public void removeNotify() {
         commitTable.getTableModel().removeTableModelListener(this);
         HgModuleConfig.getDefault().getPreferences().removePreferenceChangeListener(this);
         super.removeNotify();
+    }
+
+    void initHooks(List<HgHook> hooks, HgHookContext context) {
+        if(hooks.size() < 1) {
+            filesSectionButton.setVisible(false);
+            hooksSectionButton.setVisible(false);
+            hooksSectionButton.setVisible(false);
+            return;
+        }
+        if (hooks.size() == 1) {
+            HgHook hook = hooks.get(0);
+            hookSectionPanel.remove(hooksTabbedPane);
+            hookSectionPanel.add(hook.createComponent(context), BorderLayout.NORTH);
+            hooksSectionButton.setText(hook.getDisplayName());
+        } else {
+            hooksSectionButton.setText(NbBundle.getMessage(CommitPanel.class, "LBL_Advanced"));
+            for (HgHook hook : hooks) {
+                hooksTabbedPane.add(hook.createComponent(context), hook.getDisplayName());
+            }
+        }
+        hookSectionPanel.setVisible(true);
+        hooksSectionButton.setVisible(true);
+    }
+
+    private void initSectionButton(final JLabel label, final JPanel panel, final Icon ci, final Icon ei) {
+        label.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (panel.isVisible()) {
+                    panel.setVisible(false);
+                    label.setIcon(ci);
+                } else {
+                    panel.setVisible(true);
+                    label.setIcon(ei);
+                }
+            }
+        });
     }
     
     private void onBrowseRecentMessages() {
@@ -137,16 +202,7 @@ public class CommitPanel extends javax.swing.JPanel implements PreferenceChangeL
         setMinimumSize(new java.awt.Dimension(400, 300));
         setPreferredSize(new java.awt.Dimension(650, 400));
 
-        jLabel1.setLabelFor(messageTextArea);
-        org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(CommitPanel.class, "CTL_CommitForm_Message")); // NOI18N
-
-        messageTextArea.setColumns(30);
-        messageTextArea.setLineWrap(true);
-        messageTextArea.setRows(6);
-        messageTextArea.setTabSize(4);
-        messageTextArea.setWrapStyleWord(true);
-        messageTextArea.setMinimumSize(new java.awt.Dimension(100, 18));
-        jScrollPane1.setViewportView(messageTextArea);
+        filesSectionPanel2.setMinimumSize(new java.awt.Dimension(100, 200));
 
         org.openide.awt.Mnemonics.setLocalizedText(filesLabel, org.openide.util.NbBundle.getMessage(CommitPanel.class, "CTL_CommitForm_FilesToCommit")); // NOI18N
 
@@ -156,15 +212,71 @@ public class CommitPanel extends javax.swing.JPanel implements PreferenceChangeL
         filesPanel.setLayout(filesPanelLayout);
         filesPanelLayout.setHorizontalGroup(
             filesPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(0, 626, Short.MAX_VALUE)
+            .add(0, 651, Short.MAX_VALUE)
         );
         filesPanelLayout.setVerticalGroup(
             filesPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(0, 203, Short.MAX_VALUE)
+            .add(0, 46, Short.MAX_VALUE)
         );
+
+        org.jdesktop.layout.GroupLayout filesSectionPanel2Layout = new org.jdesktop.layout.GroupLayout(filesSectionPanel2);
+        filesSectionPanel2.setLayout(filesSectionPanel2Layout);
+        filesSectionPanel2Layout.setHorizontalGroup(
+            filesSectionPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(filesLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 651, Short.MAX_VALUE)
+            .add(filesPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 651, Short.MAX_VALUE)
+        );
+        filesSectionPanel2Layout.setVerticalGroup(
+            filesSectionPanel2Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(filesSectionPanel2Layout.createSequentialGroup()
+                .add(filesLabel)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(filesPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 46, Short.MAX_VALUE))
+        );
+
+        org.openide.awt.Mnemonics.setLocalizedText(filesSectionButton, "Files to Commit:");
+
+        messageTextArea.setColumns(30);
+        messageTextArea.setLineWrap(true);
+        messageTextArea.setRows(4);
+        messageTextArea.setTabSize(4);
+        messageTextArea.setWrapStyleWord(true);
+        messageTextArea.setMinimumSize(new java.awt.Dimension(80, 18));
+        jScrollPane1.setViewportView(messageTextArea);
+        messageTextArea.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(CommitPanel.class, "ACSN_CommitForm_Message")); // NOI18N
+        messageTextArea.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CommitPanel.class, "ACSD_CommitForm_Message")); // NOI18N
+
+        jLabel1.setLabelFor(messageTextArea);
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(CommitPanel.class, "CTL_CommitForm_Message")); // NOI18N
 
         recentLink.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/mercurial/resources/icons/recent_messages.png"))); // NOI18N
         recentLink.setToolTipText(org.openide.util.NbBundle.getMessage(CommitPanel.class, "CTL_CommitForm_RecentMessages")); // NOI18N
+
+        barPanel.setMaximumSize(new java.awt.Dimension(170, 10));
+        barPanel.setPreferredSize(new java.awt.Dimension(170, 10));
+        barPanel.setLayout(new java.awt.BorderLayout());
+
+        org.jdesktop.layout.GroupLayout progressPanelLayout = new org.jdesktop.layout.GroupLayout(progressPanel);
+        progressPanel.setLayout(progressPanelLayout);
+        progressPanelLayout.setHorizontalGroup(
+            progressPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(progressPanelLayout.createSequentialGroup()
+                .add(87, 87, 87)
+                .add(barPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 45, Short.MAX_VALUE))
+        );
+        progressPanelLayout.setVerticalGroup(
+            progressPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, barPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 14, Short.MAX_VALUE)
+        );
+
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel3, org.openide.util.NbBundle.getMessage(CommitPanel.class, "Progress_Preparing_Commit")); // NOI18N
+
+        org.openide.awt.Mnemonics.setLocalizedText(hooksSectionButton, "Advanced:");
+
+        hookSectionPanel.setLayout(new java.awt.BorderLayout());
+        hookSectionPanel.add(hooksTabbedPane, java.awt.BorderLayout.CENTER);
+
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel2, "jLabel2");
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -173,33 +285,52 @@ public class CommitPanel extends javax.swing.JPanel implements PreferenceChangeL
             .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, filesPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 626, Short.MAX_VALUE)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 626, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, hookSectionPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 651, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
+                        .add(jLabel2)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 341, Short.MAX_VALUE)
+                        .add(jLabel3)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(progressPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, filesSectionButton)
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, hooksSectionButton)
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, filesSectionPanel2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
                         .add(jLabel1)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 509, Short.MAX_VALUE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 516, Short.MAX_VALUE)
                         .add(recentLink))
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, filesLabel)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, jLabel2))
-                .addContainerGap())
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 651, Short.MAX_VALUE))
+                .add(15, 15, 15))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
-                .addContainerGap()
+                .add(26, 26, 26)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(jLabel1)
                     .add(recentLink))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .add(15, 15, 15)
-                .add(filesLabel)
+                .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 77, Short.MAX_VALUE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(filesPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 203, Short.MAX_VALUE)
+                .add(filesSectionButton)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jLabel2)
-                .addContainerGap())
+                .add(filesSectionPanel2, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 70, Short.MAX_VALUE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(hooksSectionButton)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(hookSectionPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 115, Short.MAX_VALUE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(layout.createSequentialGroup()
+                        .add(2, 2, 2)
+                        .add(progressPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                    .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                        .add(jLabel3)
+                        .add(jLabel2))))
         );
+
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(CommitPanel.class, "ACSN_CommitDialog")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CommitPanel.class, "ACSD_CommitDialog")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     
     ListenersSupport listenerSupport = new ListenersSupport(this);
@@ -212,12 +343,20 @@ public class CommitPanel extends javax.swing.JPanel implements PreferenceChangeL
     }    
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    final javax.swing.JPanel barPanel = new javax.swing.JPanel();
     final javax.swing.JLabel filesLabel = new javax.swing.JLabel();
     final javax.swing.JPanel filesPanel = new javax.swing.JPanel();
+    final javax.swing.JLabel filesSectionButton = new javax.swing.JLabel();
+    final javax.swing.JPanel filesSectionPanel2 = new javax.swing.JPanel();
+    final javax.swing.JPanel hookSectionPanel = new javax.swing.JPanel();
+    final javax.swing.JLabel hooksSectionButton = new javax.swing.JLabel();
+    final javax.swing.JTabbedPane hooksTabbedPane = new javax.swing.JTabbedPane();
     final javax.swing.JLabel jLabel1 = new javax.swing.JLabel();
     final javax.swing.JLabel jLabel2 = new javax.swing.JLabel();
+    final javax.swing.JLabel jLabel3 = new javax.swing.JLabel();
     final javax.swing.JScrollPane jScrollPane1 = new javax.swing.JScrollPane();
     final javax.swing.JTextArea messageTextArea = new javax.swing.JTextArea();
+    final javax.swing.JPanel progressPanel = new javax.swing.JPanel();
     final javax.swing.JLabel recentLink = new javax.swing.JLabel();
     // End of variables declaration//GEN-END:variables
     
