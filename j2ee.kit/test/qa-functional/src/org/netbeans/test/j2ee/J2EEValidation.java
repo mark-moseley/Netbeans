@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -69,7 +69,8 @@ import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
 
 import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.ide.ProjectSupport;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.test.ide.WatchProjects;
 
 /**
  * Overall validation suite for j2ee cluster.
@@ -77,18 +78,32 @@ import org.netbeans.junit.ide.ProjectSupport;
  * @author Jiri.Skrivanek@sun.com
  */
 public class J2EEValidation extends JellyTestCase {
+
+    static final String [] tests = {
+                "testWebApplication"
+    };
     
     /** Need to be defined because of JUnit */
     public J2EEValidation(String name) {
         super(name);
     }
 
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new J2EEValidation("testWebApplication"));
-        return suite;
+//    public static NbTestSuite suite() {
+//        NbTestSuite suite = new NbTestSuite();
+//        suite.addTest(new J2EEValidation("testWebApplication"));
+//        return suite;
+//    }
+    public static junit.framework.Test suite() {
+        return NbModuleSuite.create(
+                NbModuleSuite.createConfiguration(J2EEValidation.class)
+                .addTest(tests)
+                .clusters(".*")
+                .enableModules(".*")
+                .gui(true)
+                );
     }
-    
+
+
     /** Use for execution inside IDE */
     public static void main(java.lang.String[] args) {
         // run whole suite
@@ -97,15 +112,14 @@ public class J2EEValidation extends JellyTestCase {
         //junit.textui.TestRunner.run(new IDEValidation("testMainMenu"));
     }
     
+    @Override
     public void setUp() {
         System.out.println("########  "+getName()+"  #######");
     }
     
-    public void tearDown() {
-    }
-    
     // name of sample web application project
     private static final String SAMPLE_WEB_PROJECT_NAME = "SampleWebProject";  //NOI18N
+    private static final String HTTP_PORT= System.getProperty("http.port","8080"); //NOI18N
 
     /** Test Web Application
      * - create new Web Application project
@@ -119,6 +133,8 @@ public class J2EEValidation extends JellyTestCase {
      * - stop application server
      */
     public void testWebApplication() throws Exception {
+        // workaround for jelly issue
+        NewProjectWizardOperator.invoke().cancel();
         // create new web application project
         NewProjectWizardOperator npwo = NewProjectWizardOperator.invoke();
         // "Web"
@@ -131,6 +147,7 @@ public class J2EEValidation extends JellyTestCase {
         NewProjectNameLocationStepOperator npnlso = new NewProjectNameLocationStepOperator();
         npnlso.txtProjectName().setText(SAMPLE_WEB_PROJECT_NAME);
         npnlso.txtProjectLocation().setText(System.getProperty("netbeans.user")); // NOI18N
+        npnlso.next();
         npnlso.finish();
         // wait project appear in projects view
         // wait 30 second
@@ -139,7 +156,7 @@ public class J2EEValidation extends JellyTestCase {
         // wait index.jsp is opened in editor
         EditorOperator editor = new EditorOperator("index.jsp"); // NOI18N
         // wait classpath scanning finished
-        ProjectSupport.waitScanFinished();
+        WatchProjects.waitScanFinished();
         
         // not display browser on run
         
@@ -221,7 +238,7 @@ public class J2EEValidation extends JellyTestCase {
             public Object actionProduced(Object obj) {
                 InputStream is = null;
                 try {
-                    URLConnection connection = new URI("http://localhost:8080/"+urlSuffix).toURL().openConnection();
+                    URLConnection connection = new URI("http://localhost:"+HTTP_PORT+"/"+urlSuffix).toURL().openConnection();
                     connection.setReadTimeout(Long.valueOf(timeout).intValue());
                     is = connection.getInputStream();
                     BufferedReader br = new BufferedReader(new InputStreamReader(is));
@@ -248,7 +265,7 @@ public class J2EEValidation extends JellyTestCase {
                 return null;
             }
             public String getDescription() {
-                return("Text \""+text+"\" at http://localhost:8080/"+urlSuffix);
+                return("Text \""+text+"\" at http://localhost:"+HTTP_PORT+"/"+urlSuffix);
             }
         };
         Waiter waiter = new Waiter(waitable);
