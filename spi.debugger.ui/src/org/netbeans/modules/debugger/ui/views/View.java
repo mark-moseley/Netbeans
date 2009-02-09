@@ -42,17 +42,17 @@
 package org.netbeans.modules.debugger.ui.views;
 
 import java.awt.BorderLayout;
+import java.awt.GridBagLayout;
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import javax.swing.JComponent;
+import javax.swing.border.EmptyBorder;
 import org.netbeans.spi.viewmodel.Models;
 
-import org.netbeans.modules.debugger.ui.Utils;
-
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
 
 
@@ -69,8 +69,10 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
     public static final String SESSIONS_VIEW_NAME = "SessionsView";
     public static final String THREADS_VIEW_NAME = "ThreadsView";
     public static final String WATCHES_VIEW_NAME = "WatchesView";
+    public static final String SOURCES_VIEW_NAME = "SourcesView";
+    public static final String RESULTS_VIEW_NAME = "ResultsView";
     
-    private transient JComponent tree;
+    private transient JComponent contentComponent;
     private transient ViewModelListener viewModelListener;
     private String name; // Store just the name persistently, we'll create the component from that
     private transient String helpID;
@@ -80,7 +82,9 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
     
     private View (String icon, String name, String helpID, String propertiesHelpID,
                   String displayNameResource, String toolTipResource) {
-        setIcon (Utilities.loadImage (icon));
+        setIcon (ImageUtilities.loadImage (icon));
+        // Remember the location of the component when closed.
+        putClientProperty("KeepNonPersistentTCInModelWhenClosed", Boolean.TRUE); // NOI18N
         this.name = name;
         this.helpID = helpID;
         this.propertiesHelpID = propertiesHelpID;
@@ -98,11 +102,19 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
             viewModelListener.setUp();
             return ;
         }
-        if (tree == null) {
+        JComponent buttonsPane;
+        if (contentComponent == null) {
             setLayout (new BorderLayout ());
-            tree = Models.createView (Models.EMPTY_MODEL);
-            tree.setName (NbBundle.getMessage (View.class, toolTipResource));
-            add (tree, "Center");  //NOI18N
+            contentComponent = new javax.swing.JPanel(new BorderLayout ());
+            
+            //tree = Models.createView (Models.EMPTY_MODEL);
+            contentComponent.setName (NbBundle.getMessage (View.class, toolTipResource));
+            add (contentComponent, BorderLayout.CENTER);  //NOI18N
+            buttonsPane = new javax.swing.JPanel();
+            buttonsPane.setLayout(new GridBagLayout());
+            add(buttonsPane, BorderLayout.WEST);
+        } else {
+            buttonsPane = (JComponent) ((BorderLayout) getLayout()).getLayoutComponent(BorderLayout.WEST);
         }
         // <RAVE> CR 6207738 - fix debugger help IDs
         // Use the modified constructor that stores the propertiesHelpID
@@ -114,14 +126,17 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
         // ====
         viewModelListener = new ViewModelListener (
             name,
-            tree,
-            propertiesHelpID
+            contentComponent,
+            buttonsPane,
+            propertiesHelpID,
+            getIcon()
         );
         // </RAVE>
     }
     
     protected void componentHidden () {
         super.componentHidden ();
+        contentComponent.removeAll();
         if (viewModelListener != null) {
             viewModelListener.destroy ();
         }
@@ -140,14 +155,14 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
         
     public boolean requestFocusInWindow () {
         super.requestFocusInWindow ();
-        if (tree == null) return false;
-        return tree.requestFocusInWindow ();
+        if (contentComponent == null) return false;
+        return contentComponent.requestFocusInWindow ();
     }
 
     public void requestActive() {
         super.requestActive();
-        if (tree != null) {
-            tree.requestFocusInWindow ();
+        if (contentComponent != null) {
+            contentComponent.requestFocusInWindow ();
         }
     }
     
@@ -280,6 +295,34 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
         );
     }
     
+    /** Creates the view. Call from the module layer only!
+     * @deprecated Do not call.
+     */
+    public static synchronized TopComponent getSourcesView() {
+        return new View(
+            "org/netbeans/modules/debugger/resources/sourcesView/sources_16.png",
+            SOURCES_VIEW_NAME,
+            "NetbeansDebuggerSourcesNode",
+            null,
+            "CTL_Sources_view",
+            "CTL_Sources_view_tooltip"
+        );
+    }
+
+    /** Creates the view. Call from the module layer only!
+     * @deprecated Do not call.
+     */
+    public static synchronized TopComponent getResultsView() {
+        return new View(
+            "org/netbeans/modules/debugger/resources/sourcesView/sources_16.png",
+            RESULTS_VIEW_NAME,
+            "NetbeansDebuggerResultNode", // NOI18N
+            null,
+            "CTL_Result_view",
+            "CTL_Result_view_tooltip"
+        );
+    }
+
     private static TopComponent getView(String viewName) {
         if (viewName.equals(BREAKPOINTS_VIEW_NAME)) {
             return getBreakpointsView();
@@ -298,6 +341,12 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
         }
         if (viewName.equals(WATCHES_VIEW_NAME)) {
             return getWatchesView();
+        }
+        if (viewName.equals(SOURCES_VIEW_NAME)) {
+            return getSourcesView();
+        }
+        if (viewName.equals(RESULTS_VIEW_NAME)) {
+            return getResultsView();
         }
         throw new IllegalArgumentException(viewName);
     }
