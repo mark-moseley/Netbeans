@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.modules.gsf.api.EmbeddingModel;
 import org.netbeans.modules.gsf.api.GsfLanguage;
 import org.netbeans.modules.gsf.api.annotations.CheckForNull;
@@ -61,17 +62,25 @@ import org.netbeans.modules.gsf.api.annotations.NonNull;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.gsf.api.IncrementalEmbeddingModel;
+import org.netbeans.modules.gsf.api.IncrementalParser;
+import org.netbeans.modules.gsf.api.Parser;
 import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
 import org.netbeans.modules.gsfret.source.usages.ClassIndexManager;
 import org.netbeans.modules.gsfpath.spi.classpath.ClassPathFactory;
 import org.netbeans.modules.gsfpath.spi.classpath.ClassPathImplementation;
 import org.netbeans.modules.gsfpath.spi.classpath.PathResourceImplementation;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileRenameEvent;
+import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
+import org.openide.util.RequestProcessor;
 
 /**
  * Registry which locates and provides information about languages supported
@@ -82,8 +91,9 @@ import org.openide.util.Lookup;
  *
  * @author Tor Norbye
  */
-public class LanguageRegistry implements Iterable<Language> {
+public final class LanguageRegistry implements Iterable<Language> {
 
+    private static final Logger LOG = Logger.getLogger(LanguageRegistry.class.getName());
     private static LanguageRegistry instance;
 
     // Keep in sync with gsf.api/anttask/**/GsfJar.java!
@@ -105,30 +115,31 @@ public class LanguageRegistry implements Iterable<Language> {
 
     /** Location in the system file system where languages are registered */
     private static final String FOLDER = "GsfPlugins"; // NOI18N
-    private List<Language> languages;
-    private Map<String,Language> mimeToLanguage;
+    private boolean cacheDirty = true;
+    private Map<String, Language> languagesCache;
+    private FileChangeListener sfsTracker;
     private Collection<? extends EmbeddingModel> embeddingModels;
+    /** Set of applicable langauges for each mimetype */
+    private Map<String,List<Language>> applicableLanguages = new HashMap<String,List<Language>>();
+    private Map<String,Boolean> possiblyIncremental = new HashMap<String,Boolean>();
 
     /**
      * Creates a new instance of LanguageRegistry
      */
-    public LanguageRegistry() {
-        initialize();
+    private LanguageRegistry() {
     }
 
     /** For testing only! */
     public void addLanguages(List<Language> newLanguages) {
-        if (languages != null && languages.size() > 0) {
-            throw new RuntimeException("This is for testing purposes only!!!");
+        if (languagesCache != null) {
+            throw new RuntimeException("This is for testing purposes only!!!"); //NOI18N
         }
 
-        this.languages = newLanguages;
-        
-        mimeToLanguage = new HashMap<String,Language>(2*languages.size());
-        for (Language language : languages) {
+        cacheDirty = false;
+        languagesCache = new HashMap<String, Language>(2 * newLanguages.size());
+        for (Language language : newLanguages) {
             String mimeType = language.getMimeType();
-            assert mimeType.equals(mimeType.toLowerCase()) : mimeType;
-            mimeToLanguage.put( mimeType,language);
+            languagesCache.put(mimeType, language);
         }
     }
 
@@ -145,11 +156,8 @@ public class LanguageRegistry implements Iterable<Language> {
      * or null if no such language is supported
      */
     public Language getLanguageByMimeType(@NonNull String mimeType) {
-        if (mimeToLanguage == null) {
-            return null;
-        }
-
-        return mimeToLanguage.get(mimeType);
+        final Map<String, Language> map = getLanguages();
+        return map.get(mimeType);
     }
 
     @CheckForNull
@@ -212,30 +220,66 @@ public class LanguageRegistry implements Iterable<Language> {
         
         return result.booleanValue();
     }
-    
+
     @NonNull
     public List<Language> getApplicableLanguages(String mimeType) {
-        // TODO - cache the answer since this is called a lot (for example during
-        // task list scanning)
-        Collection<? extends EmbeddingModel> models = getEmbeddingModels();
-        
-        List<Language> result = new ArrayList<Language>(5);
+        List<Language> result = applicableLanguages.get(mimeType);
+        if (result == null) {
+            result = new ArrayList<Language>(5);
 
-        final Language origLanguage = getLanguageByMimeType(mimeType);
-        if (origLanguage != null) {
-            result.add(origLanguage);
-        }
-        
-        for (EmbeddingModel model : models) {
-            if (model.getSourceMimeTypes().contains(mimeType)) {
-                Language language = getLanguageByMimeType(model.getTargetMimeType());
-                if (language != null && !result.contains(language)) {
-                    result.add(language);
+            // TODO - cache the answer since this is called a lot (for example during
+            // task list scanning)
+            Collection<? extends EmbeddingModel> models = getEmbeddingModels();
+
+            final Language origLanguage = getLanguageByMimeType(mimeType);
+            if (origLanguage != null) {
+                result.add(origLanguage);
+            }
+
+            for (EmbeddingModel model : models) {
+                if (model.getSourceMimeTypes().contains(mimeType)) {
+                    Language language = getLanguageByMimeType(model.getTargetMimeType());
+                    if (language != null && !result.contains(language)) {
+                        result.add(language);
+                    }
                 }
             }
+
+            applicableLanguages.put(mimeType, result);
         }
         
         return result;
+    }
+
+    /**
+     * Return true iff the given mime has incremental support, either as
+     * embedding models or parser
+     */
+    public boolean isIncremental(String mimeType) {
+        Boolean b = possiblyIncremental.get(mimeType);
+        if (b == null) {
+            List<Language> applicable = getApplicableLanguages(mimeType);
+
+            boolean incremental = false;
+            for (Language language : applicable) {
+                Parser parser = language.getParser(); // Todo - call createParserTask here?
+                if (parser instanceof IncrementalParser) {
+                    incremental = true;
+                }
+                if (!language.getMimeType().equals(mimeType)) {
+                    EmbeddingModel model = getEmbedding(language.getMimeType(), mimeType);
+                    if (model instanceof IncrementalEmbeddingModel) {
+                        incremental = true;
+                        break;
+                    }
+                }
+            }
+
+            b = incremental ? Boolean.TRUE : Boolean.FALSE;
+            possiblyIncremental.put(mimeType, b);
+        }
+
+        return b == Boolean.TRUE;
     }
     
     private ClassPath libraryPath;
@@ -405,114 +449,104 @@ public class LanguageRegistry implements Iterable<Language> {
     }
 
     public Iterator<Language> iterator() {
-        if (languages == null) {
-            return new Iterator<Language>() {
-
-                public boolean hasNext() {
-                    return false;
-                }
-
-                public Language next() {
-                    return null;
-                }
-
-                public void remove() {
-                }
-            };
-        } else {
-            return languages.iterator();
-        }
+        Map<String, Language> map = getLanguages();
+        return map.values().iterator();
     }
 
-    private synchronized void initialize() {
-        if (languages == null) {
-            // Temporary
-            userdirCleanup();
-
-            readSfs();
+    private synchronized Map<String, Language> getLanguages() {
+        if (cacheDirty) {
+            cacheDirty = false;
+            FileSystem sfs;
+            try {
+                sfs = FileUtil.getConfigRoot().getFileSystem();
+            } catch (FileStateInvalidException ex) {
+                // ignore
+                sfs = null;
+            }
+            languagesCache = readSfs(sfs, languagesCache);
             
-            if (languages != null) {
-                mimeToLanguage = new HashMap<String,Language>(2*languages.size());
-                for (Language language : languages) {
-                    String mimeType = language.getMimeType();
-                    assert mimeType.equals(mimeType.toLowerCase()) : mimeType;
-                    mimeToLanguage.put( mimeType,language);
-                }
+            if (sfsTracker == null) {
+                // First time we run do the cleanup
+                userdirCleanup();
 
-                // Ensure that we don't clobber databases (if in dev builds)
-                // When languages.ejs subclassed the JsLanguage config class,
-                // it automatically picked up the getIndexer method - which meant
-                // that both languages would point to the same lucene repository
-                // (because the same indexer reported the same name and version).
-                // That causes fatal corruption errors. Make sure this can't happen.
-// Find a way to delay
-//                boolean assertionsEnabled = false;
-//                assert (assertionsEnabled = true);
-//                if (assertionsEnabled && Boolean.getBoolean("netbeans.logger.console")) { // NOI18N
-//                    Set<String> indexerNames = new HashSet<String>();
-//                    for (Language language : languages) {
-//                        Indexer indexer = language.getIndexer();
-//                        if (indexer != null) {
-//                            String name = indexer.getIndexerName();
-//                            if (indexerNames.contains(name)) {
-//                                StringBuilder sb = new StringBuilder();
-//                                sb.append("Warning: There are multiple indexers named \"");
-//                                sb.append(name);
-//                                sb.append("\" from ");
-//                                for (Language l : languages) {
-//                                    if (l.getIndexer() != null && l.getIndexer().getIndexerName().equals(name)) {
-//                                        sb.append(l.getDisplayName());
-//                                        sb.append(",");
-//                                    }
-//                                }
-//                                Logger.global.log(Level.SEVERE, sb.toString());
-//                            }
-//                            indexerNames.add(name);
-//                        }
-//                    }
-//                }
+                // start listening on SystemFileSystem
+                sfsTracker = new FsTracker(sfs);
+            } else {
+                GsfDataLoader.getLoader(GsfDataLoader.class).initExtensions();
             }
         }
+        return languagesCache;
+    }
+    
+    private static boolean isValidType(FileObject typeFile) {
+        if (!typeFile.isFolder()) {
+            return false;
+        }
+
+        String typeName = typeFile.getNameExt();
+        return MimePath.validate(typeName, null);
     }
 
-    private void readSfs() {
-        FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
-        FileObject f = sfs.findResource(FOLDER);
+    private static boolean isValidSubtype(FileObject subtypeFile) {
+        if (!subtypeFile.isFolder()) {
+            return false;
+        }
 
-        if (f == null) {
-            return;
+        String typeName = subtypeFile.getNameExt();
+        return MimePath.validate(null, typeName) && !typeName.equals("base"); //NOI18N
+    }
+    
+    private static Map<String, Language> readSfs(FileSystem sfs, Map<String, Language> existingMap) {
+        FileObject registryFolder = sfs == null ? null : sfs.findResource(FOLDER);
+
+        if (registryFolder == null) {
+            LOG.info("No " + FOLDER + " folder"); //NOI18N
+            return Collections.<String, Language>emptyMap();
         }
 
         // Read languages
-        FileObject[] children = f.getChildren();
-        languages = new ArrayList<Language>();
+        LOG.fine("Reading " + FOLDER + " registry..."); //NOI18N
+        Map<String, Language> newMap = new HashMap<String, Language>();
 
-        for (int i = 0; i < children.length; i++) {
-            FileObject mimePrefixFile = children[i];
+        // Go through mimetype types
+        FileObject[] types = registryFolder.getChildren();
+        for (int i = 0; i < types.length; i++) {
+            if (!isValidType(types[i])) {
+                continue;
+            }
 
-            // Read languages
-            FileObject[] innerChildren = mimePrefixFile.getChildren();
-
-            for (int j = 0; j < innerChildren.length; j++) {
-                FileObject mimeFile = innerChildren[j];
-                String mime = mimePrefixFile.getName() + "/" + mimeFile.getName(); // NOI18N
-
-                Integer attr = (Integer) mimeFile.getAttribute("genver");
-                if (attr == null) {
-                    Logger.getLogger("global").log(Level.SEVERE, "Language " + mime + " has not been preprocessed during jar module creation");
+            // Go through mimetype subtypes
+            FileObject[] subtypes = types[i].getChildren();
+            for (int j = 0; j < subtypes.length; j++) {
+                if (!isValidSubtype(subtypes[j])) {
+                    continue;
                 }
 
-                Language language = new Language(mime);
-                languages.add(language);
+                String mimeType = types[i].getNameExt() + "/" + subtypes[j].getNameExt(); // NOI18N
+                Language existingLanguage = existingMap != null ? existingMap.get(mimeType) : null;
+                if (existingLanguage != null) {
+                    LOG.fine("Reusing existing Language for '" + mimeType + "': " + existingLanguage); //NOI18N
+                    newMap.put(mimeType, existingLanguage);
+                    continue;
+                }
 
-                Boolean useCustomEditorKit = (Boolean)mimeFile.getAttribute("useCustomEditorKit"); // NOI18N
+                Integer attr = (Integer) subtypes[j].getAttribute("genver"); //NOI18N
+                if (attr == null) {
+                    LOG.log(Level.SEVERE, "Language " + mimeType + " has not been preprocessed during jar module creation"); //NOI18N
+                }
+
+                Language language = new Language(mimeType);
+                newMap.put(mimeType, language);
+                LOG.fine("Adding new Language for '" + mimeType + "': " + language); //NOI18N
+
+                Boolean useCustomEditorKit = (Boolean)subtypes[j].getAttribute("useCustomEditorKit"); // NOI18N
                 if (useCustomEditorKit != null && useCustomEditorKit.booleanValue()) {
                     language.setUseCustomEditorKit(true);
+                    LOG.fine("Language for '" + mimeType + "' is using custom editor kit."); //NOI18N
                 }
-                
-                // Try to obtain icon from (new) IDE location for icons per mime type:
-                FileObject loaderMimeFile = sfs.findResource("Loaders/" + mime); // NOI18N
 
+                // Try to obtain icon from (new) IDE location for icons per mime type:
+                FileObject loaderMimeFile = FileUtil.getConfigFile("Loaders/" + mimeType); // NOI18N
                 if (loaderMimeFile != null) {
                     String iconBase = (String)loaderMimeFile.getAttribute(ICON_BASE);
 
@@ -520,10 +554,12 @@ public class LanguageRegistry implements Iterable<Language> {
                         language.setIconBase(iconBase);
                     }
                 }
-                
+
                 boolean foundConfig = false;
-                for (FileObject fo : mimeFile.getChildren()) {
+                for (FileObject fo : subtypes[j].getChildren()) {
                     String name = fo.getNameExt();
+                    LOG.fine("Language for '" + mimeType + "' registers: " + name); //NOI18N
+
                     if (LANGUAGE.equals(name)) {
                         foundConfig = true;
                         language.setGsfLanguageFile(fo);
@@ -557,11 +593,13 @@ public class LanguageRegistry implements Iterable<Language> {
                 }
 
                 if (!foundConfig) {
-                    // Emit warning
-                    Logger.getLogger(getClass().getName()).log(Level.WARNING, "No GSF language registered for mime type " + mime);
+                    LOG.warning("No GsfLanguage instance registered in " + subtypes[j].getPath()); //NOI18N
                 }
             }
         }
+
+        LOG.fine("-- Finished reading " + FOLDER + " registry!"); //NOI18N
+        return newMap;
     }
 
     private void userdirCleanup() {
@@ -871,4 +909,61 @@ public class LanguageRegistry implements Iterable<Language> {
             Exceptions.printStackTrace(ioe);
         }
     }
+
+    private final class FsTracker implements FileChangeListener, Runnable {
+
+        private final FileSystem fs;
+        private RequestProcessor.Task slidingTask = RequestProcessor.getDefault().create(this);
+
+        public FsTracker(FileSystem fs) {
+            this.fs = fs;
+            if (this.fs != null) {
+                this.fs.addFileChangeListener(FileUtil.weakFileChangeListener(this, this.fs));
+            }
+        }
+
+        public void fileFolderCreated(FileEvent fe) {
+            process(fe);
+        }
+
+        public void fileDataCreated(FileEvent fe) {
+            process(fe);
+        }
+
+        public void fileChanged(FileEvent fe) {
+            process(fe);
+        }
+
+        public void fileDeleted(FileEvent fe) {
+            process(fe);
+        }
+
+        public void fileRenamed(FileRenameEvent fe) {
+            process(fe);
+        }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) {
+            process(fe);
+        }
+
+        private void process(FileEvent fe) {
+            if (fe.getFile().getPath().startsWith(FOLDER)) {
+                synchronized (LanguageRegistry.this) {
+                    cacheDirty = true;
+                    slidingTask.schedule(100);
+                }
+            }
+        }
+
+        public void run() {
+            synchronized (LanguageRegistry.this) {
+                if (cacheDirty) {
+                    cacheDirty = false;
+                    languagesCache = readSfs(fs, languagesCache);
+                    GsfDataLoader.getLoader(GsfDataLoader.class).initExtensions();
+                }
+            }
+        }
+    } // End of SfsTracker class
+
 }
