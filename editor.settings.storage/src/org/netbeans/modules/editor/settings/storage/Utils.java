@@ -55,7 +55,6 @@ import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.text.AttributeSet;
@@ -64,16 +63,11 @@ import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.settings.AttributesUtilities;
 import org.netbeans.modules.editor.settings.storage.spi.StorageReader;
 import org.netbeans.modules.editor.settings.storage.spi.StorageWriter;
-import org.openide.filesystems.FileAttributeEvent;
-import org.openide.filesystems.FileChangeAdapter;
-import org.openide.filesystems.FileChangeListener;
-import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
-import org.openide.util.WeakListeners;
 import org.openide.xml.EntityCatalog;
 import org.openide.xml.XMLUtil;
 import org.xml.sax.InputSource;
@@ -94,8 +88,8 @@ public class Utils {
         try {
             return fo.getFileSystem().getStatus().annotateName(defaultValue, Collections.singleton(fo));
         } catch (FileStateInvalidException ex) {
-            if (LOG.isLoggable(Level.INFO)) {
-                logOnce(LOG, Level.INFO, "Can't find localized name of " + fo, ex); //NOI18N
+            if (LOG.isLoggable(Level.FINE)) {
+                logOnce(LOG, Level.FINE, "Can't find localized name of " + fo, ex); //NOI18N
             }
             return defaultValue;
         }
@@ -113,8 +107,8 @@ public class Utils {
             try {
                 return ((ResourceBundle) bundleInfo[1]).getString(key);
             } catch (MissingResourceException ex) {
-                if (!silent && LOG.isLoggable(Level.INFO)) {
-                    logOnce(LOG, Level.INFO, "The bundle '" + bundleInfo[0] + "' is missing key '" + key + "'.", ex); //NOI18N
+                if (!silent && LOG.isLoggable(Level.FINE)) {
+                    logOnce(LOG, Level.FINE, "The bundle '" + bundleInfo[0] + "' is missing key '" + key + "'.", ex); //NOI18N
                 }
             }
         }
@@ -122,31 +116,32 @@ public class Utils {
         return defaultValue;
     }
 
-    private static final WeakHashMap<FileObject, Object []> bundleInfos = new WeakHashMap<FileObject, Object []>();
-    private static final FileChangeListener listener = new FileChangeAdapter() {
-        @Override
-        public void fileDeleted(FileEvent fe) {
-            synchronized (bundleInfos) {
-                bundleInfos.remove(fe.getFile());
-            }
-        }
-
-        @Override
-        public void fileAttributeChanged(FileAttributeEvent fe) {
-            if (fe.getName() != null && fe.getName().equals("SystemFileSystem.localizingBundle")) { //NOI18N
-                synchronized (bundleInfos) {
-                    bundleInfos.remove(fe.getFile());
-                }
-            }
-        }
-    };
-    private static final FileChangeListener weakListener = WeakListeners.create(FileChangeListener.class, listener, null);
+//    private static final WeakHashMap<FileObject, Object []> bundleInfos = new WeakHashMap<FileObject, Object []>();
+//    private static final FileChangeListener listener = new FileChangeAdapter() {
+//        @Override
+//        public void fileDeleted(FileEvent fe) {
+//            synchronized (bundleInfos) {
+//                bundleInfos.remove(fe.getFile());
+//            }
+//        }
+//
+//        @Override
+//        public void fileAttributeChanged(FileAttributeEvent fe) {
+//            if (fe.getName() != null && fe.getName().equals("SystemFileSystem.localizingBundle")) { //NOI18N
+//                synchronized (bundleInfos) {
+//                    bundleInfos.remove(fe.getFile());
+//                }
+//            }
+//        }
+//    };
+//    private static final FileChangeListener weakListener = WeakListeners.create(FileChangeListener.class, listener, null);
     private static Object [] findResourceBundle(FileObject fo, boolean silent) {
         assert fo != null : "FileObject can't be null"; //NOI18N
-        
-        synchronized (bundleInfos) {
-            Object [] bundleInfo = bundleInfos.get(fo);
-            if (bundleInfo == null) {
+
+        Object [] bundleInfo = null;
+//        synchronized (bundleInfos) {
+//            Object [] bundleInfo = bundleInfos.get(fo);
+//            if (bundleInfo == null) {
                 String bundleName = null;
                 Object attrValue = fo.getAttribute("SystemFileSystem.localizingBundle"); //NOI18N
                 if (attrValue instanceof String) {
@@ -157,8 +152,8 @@ public class Utils {
                     try {
                         bundleInfo = new Object [] { bundleName, NbBundle.getBundle(bundleName) };
                     } catch (MissingResourceException ex) {
-                        if (!silent && LOG.isLoggable(Level.INFO)) {
-                            logOnce(LOG, Level.INFO, "Can't find resource bundle for " + fo.getPath(), ex); //NOI18N
+                        if (!silent && LOG.isLoggable(Level.FINE)) {
+                            logOnce(LOG, Level.FINE, "Can't find resource bundle for " + fo.getPath(), ex); //NOI18N
                         }
                     }
                 } else {
@@ -171,13 +166,13 @@ public class Utils {
                    bundleInfo = new Object [] { bundleName, null }; 
                 }
 
-                bundleInfos.put(fo, bundleInfo);
-                fo.removeFileChangeListener(weakListener);
-                fo.addFileChangeListener(weakListener);
-            }
+//                bundleInfos.put(fo, bundleInfo);
+//                fo.removeFileChangeListener(weakListener);
+//                fo.addFileChangeListener(weakListener);
+//            }
 
             return bundleInfo;
-        }
+//        }
     }
     
     private static final Set<String> ALREADY_LOGGED = Collections.synchronizedSet(new HashSet<String>());
@@ -279,6 +274,26 @@ public class Utils {
         }
     }
 
+    public static <A, B> boolean quickDiff(Map<A, B> oldMap, Map<A, B> newMap) {
+        for(A key : oldMap.keySet()) {
+            if (!newMap.containsKey(key)) {
+                return true;
+            } else {
+                if (!Utilities.compareObjects(oldMap.get(key), newMap.get(key))) {
+                    return true;
+                }
+            }
+        }
+        
+        for(A key : newMap.keySet()) {
+            if (!oldMap.containsKey(key)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
     public static void save(FileObject fo, StorageWriter writer) {
         assert fo != null : "FileObject can't be null"; //NOI18N
         assert writer != null : "StorageWriter can't be null"; //NOI18N
@@ -300,12 +315,12 @@ public class Utils {
         }
     }
     
-    public static void load(FileObject fo, StorageReader handler) {
+    public static void load(FileObject fo, StorageReader handler, boolean validate) {
         assert fo != null : "Settings file must not be null"; //NOI18N
+        assert handler != null : "StorageReader can't be null"; //NOI18N
         
-        SpiPackageAccessor.get().storageReaderSetProcessedFile(handler, fo);
         try {
-            XMLReader reader = XMLUtil.createXMLReader(true);
+            XMLReader reader = XMLUtil.createXMLReader(validate);
             reader.setEntityResolver(EntityCatalog.getDefault());
             reader.setContentHandler(handler);
             reader.setErrorHandler(handler);
@@ -319,8 +334,6 @@ public class Utils {
             }
         } catch (Exception ex) {
             LOG.log(Level.WARNING, "Invalid or corrupted file: " + fo.getPath(), ex); //NOI18N
-        } finally {
-            SpiPackageAccessor.get().storageReaderSetProcessedFile(handler, null);
         }
     }
 }
