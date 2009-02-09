@@ -53,32 +53,32 @@ import javax.swing.event.DocumentListener;
 import org.openide.WizardDescriptor;
 import org.openide.util.HelpCtx;
 
-public class CloneDestinationDirectoryWizardPanel implements WizardDescriptor.Panel, DocumentListener {
+public class ClonePathsWizardPanel implements WizardDescriptor.Panel, DocumentListener {
     
     /**
      * The visual component that displays this panel. If you need to access the
      * component from this class, just use getComponent().
      */
-    private CloneDestinationDirectoryPanel component;
+    private ClonePathsPanel component;
     private boolean valid;
     private String errorMessage;
-    
+    private String repositoryOrig;
     // Get the visual component for the panel. In this template, the component
     // is kept separate. This can be more efficient: if the wizard is created
     // but never displayed, or not all panels are displayed, it is better to
     // create only those which really need to be visible.
     public Component getComponent() {
         if (component == null) {
-            component = new CloneDestinationDirectoryPanel();
-            component.directoryField.getDocument().addDocumentListener(this);
-            component.nameField.getDocument().addDocumentListener(this);
+            component = new ClonePathsPanel();
+            component.defaultPullPathField.getDocument().addDocumentListener(this);
+            component.defaultPushPathField.getDocument().addDocumentListener(this);
             valid();
         }
         return component;
     }
     
     public HelpCtx getHelp() {
-        return new HelpCtx(CloneDestinationDirectoryWizardPanel.class);
+        return new HelpCtx(ClonePathsWizardPanel.class);
     }
     
     //public boolean isValid() {
@@ -109,7 +109,8 @@ public class CloneDestinationDirectoryWizardPanel implements WizardDescriptor.Pa
         // synchronously access its content
         Runnable awt = new Runnable() {
             public void run() {
-                if (e.getDocument() == component.nameField.getDocument () || e.getDocument() == component.directoryField.getDocument()) {
+                if (e.getDocument() == component.defaultPullPathField.getDocument () || 
+                        e.getDocument() == component.defaultPushPathField.getDocument()) {
                     if (component.isInputValid()) {
                         valid(component.getMessage());
                     } else {
@@ -180,14 +181,19 @@ public class CloneDestinationDirectoryWizardPanel implements WizardDescriptor.Pa
     public void readSettings(Object settings) {
         if (settings instanceof WizardDescriptor) {
             String repository = (String) ((WizardDescriptor) settings).getProperty("repository"); // NOI18N
-
-            component.nameField.setText(new File(repository).getName());
+            boolean repoistoryChanged = repositoryOrig == null || !repository.equals(repositoryOrig);
+            repositoryOrig = repository;
+            
+            if(repoistoryChanged || component.defaultPullPathField.getText().equals(""))
+                component.defaultPullPathField.setText(repository);
+            if(repoistoryChanged || component.defaultPushPathField.getText().equals(""))
+                component.defaultPushPathField.setText(repository);
         }
     }
     public void storeSettings(Object settings) {
         if (settings instanceof WizardDescriptor) {
-            ((WizardDescriptor) settings).putProperty("directory", ((CloneDestinationDirectoryPanel) component).getDirectory()); // NOI18N
-            ((WizardDescriptor) settings).putProperty("cloneName", ((CloneDestinationDirectoryPanel) component).getCloneName()); // NOI18N
+            ((WizardDescriptor) settings).putProperty("defaultPullPath", ((ClonePathsPanel) component).getPullPath()); // NOI18N
+            ((WizardDescriptor) settings).putProperty("defaultPushPath", ((ClonePathsPanel) component).getPushPath()); // NOI18N
         }
     }
 }
