@@ -1,0 +1,45 @@
+
+
+/**CC TODO Changed because of Issue Nr. 158317, after fixing change "|" to "@|"
+|
+@media
+@media
+*/
+
+
+
+/**CC TODO Changed because of Issue Nr. 158317, after fixing change "|" to "@|"
+|
+@charset
+@charset
+*/
+
+@media page{
+
+    root {
+
+/** #135814
+c|
+color
+color
+*/
+
+    
+/** #135814
+background: |
+uri
+background: uri
+*/
+
+      
+/** #135814
+color: |
+green
+color: green
+*/
+
+      
+    }
+
+}
+
