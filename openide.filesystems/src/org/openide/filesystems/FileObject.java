@@ -49,6 +49,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -58,8 +59,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.StringTokenizer;
 import org.openide.util.Enumerations;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
+import org.openide.util.UserQuestionException;
 
 /** This is the base for all implementations of file objects on a filesystem.
 * Provides basic information about the object (its name, parent,
@@ -161,6 +162,7 @@ public abstract class FileObject extends Object implements Serializable {
      * </pre>
      * @return some representation of this file object
      */
+    @Override
     public String toString() {
         String cname = getClass().getName();
         String cnameShort = cname.substring(cname.lastIndexOf('.') + 1);
@@ -199,11 +201,11 @@ public abstract class FileObject extends Object implements Serializable {
     * @param separatorChar char to separate folders and files
     * @param extSepChar char to separate extension
     * @return the fully-qualified filename
-    * @deprecated Please use the <a href="@org-netbeans-api-java@/org/netbeans/api/java/classpath/ClassPath.html">ClassPath API</a> instead.
+    * @deprecated Please use the <a href="@org-netbeans-api-java-classpath@/org/netbeans/api/java/classpath/ClassPath.html">ClassPath API</a> instead.
     */
     @Deprecated
     public String getPackageNameExt(char separatorChar, char extSepChar) {
-        assert FileUtil.assertDeprecatedMethod();
+        assert false : "Deprecated.";
 
         StringBuilder sb = new StringBuilder();
 
@@ -228,11 +230,11 @@ public abstract class FileObject extends Object implements Serializable {
     * Like {@link #getPackageNameExt} but omits the extension.
     * @param separatorChar char to separate folders and files
     * @return the fully-qualified filename
-    * @deprecated Please use the <a href="@org-netbeans-api-java@/org/netbeans/api/java/classpath/ClassPath.html">ClassPath API</a> instead.
+    * @deprecated Please use the <a href="@org-netbeans-api-java-classpath@/org/netbeans/api/java/classpath/ClassPath.html">ClassPath API</a> instead.
     */
     @Deprecated
     public String getPackageName(char separatorChar) {
-        assert FileUtil.assertDeprecatedMethod();
+        assert false : "Deprecated.";
 
         StringBuilder sb = new StringBuilder();
 
@@ -486,7 +488,8 @@ public abstract class FileObject extends Object implements Serializable {
     * @return the MIME type textual representation, e.g. <code>"text/plain"</code>; never <code>null</code>
     */
     public String getMIMEType() {
-        return FileUtil.getMIMETypeOrDefault(this);
+        String mimeType = FileUtil.getMIMEType(this);
+        return  mimeType == null ? "content/unknown" : mimeType;  //NOI18N
     }
 
     /** Get the size of the file.
@@ -501,6 +504,101 @@ public abstract class FileObject extends Object implements Serializable {
     * rather than a regular file  or is invalid
     */
     public abstract InputStream getInputStream() throws FileNotFoundException;
+
+    /** Reads the full content of the file object and returns it as array of
+     * bytes.
+     * @return array of bytes
+     * @exception IOException in case the content cannot be fully read
+     * @since 7.21
+     */
+    public byte[] asBytes() throws IOException {
+        long len = getSize();
+        if (len > Integer.MAX_VALUE) {
+            throw new IOException("Too big file " + getPath()); // NOI18N
+        }
+        InputStream is = getInputStream();
+        try {
+            byte[] arr = new byte[(int)len];
+            int pos = 0;
+            while (pos < arr.length) {
+                int read = is.read(arr, pos, arr.length - pos);
+                if (read == -1) {
+                    break;
+                }
+                pos += read;
+            }
+            if (pos != arr.length) {
+                throw new IOException("Just " + pos + " bytes read from " + getPath()); // NOI18N
+            }
+            return arr;
+        } finally {
+            is.close();
+        }
+    }
+
+    /** Reads the full content of the file object and returns it as string.
+     * @param encoding the encoding to use
+     * @return string representing the content of the file
+     * @exception IOException in case the content cannot be fully read
+     * @since 7.21
+     */
+    public String asText(String encoding) throws IOException {
+        return new String(asBytes(), encoding);
+    }
+
+    /** Reads the full content of the file object and returns it as string.
+     * This is similar to calling {@link #asText(java.lang.String)} with
+     * default system encoding.
+     * 
+     * @return string representing the content of the file
+     * @exception IOException in case the content cannot be fully read
+     * @since 7.21
+     */
+    public String asText() throws IOException {
+        return asText(Charset.defaultCharset().name());
+    }
+
+    /** Reads the full content of the file line by line with default
+     * system encoding. Typical usage is
+     * in <code>for</code> loops:
+     * <pre>
+     * for (String line : fo.asLines()) {
+     *   // do something
+     * }
+     * </pre>
+     * <p>
+     * The list is optimized for iterating line by line, other operations,
+     * like accessing all the lines or counting the number of its lines may
+     * be suboptimal.
+     *
+     * @return list of strings representing the content of the file
+     * @exception IOException in case the content cannot be fully read
+     * @since 7.21
+     */
+    public List<String> asLines() throws IOException {
+        return asLines(Charset.defaultCharset().name());
+    }
+    
+    /** Reads the full content of the file line by line. Typical usage is
+     * in <code>for</code> loops:
+     * <pre>
+     * for (String line : fo.asLines("UTF-8")) {
+     *   // do something
+     * }
+     * </pre>
+     * <p>
+     * The list is optimized for iterating line by line, other operations,
+     * like accessing all the lines or counting the number of its lines may
+     * be suboptimal.
+     *
+     * @param encoding the encoding to use
+     * @return list of strings representing the content of the file
+     * @exception IOException in case the content cannot be fully read
+     * @since 7.21
+     */
+    public List<String> asLines(final String encoding) throws IOException {
+        return new FileObjectLines(encoding, this);
+    }
 
     /** Get output stream.
     * @param lock the lock that belongs to this file (obtained by a call to
@@ -523,6 +621,14 @@ public abstract class FileObject extends Object implements Serializable {
         try {
             os = getOutputStream(lock);
             return new FilterOutputStream(os) {
+                @Override
+                public void write(byte b[], int off, int len) throws IOException {
+                    // Delegate to real stream because it is more efficient if it is FileOutputStream.
+                    // Otherwise it is copied byte by byte.
+                    os.write(b, off, len);
+                }
+
+                @Override
                 public void close() throws IOException {
                     try {
                         super.close();
@@ -655,13 +761,17 @@ public abstract class FileObject extends Object implements Serializable {
     * @exception IllegalArgumentException if <code>this</code> is not a folder
     */
     public FileObject getFileObject(String relativePath) {
-        if (relativePath.startsWith("/")) {
+        if (relativePath.startsWith("/") && !relativePath.startsWith("//")) {
             relativePath = relativePath.substring(1);
         }
 
         FileObject myObj = this;
         StringTokenizer st = new StringTokenizer(relativePath, "/");
-
+        
+        if(relativePath.startsWith("//")) {
+            // if it is UNC absolute path, start with //ComputerName/sharedFolder
+            myObj = myObj.getFileObject("//"+st.nextToken()+"/"+st.nextToken(), null);
+        }
         while ((myObj != null) && st.hasMoreTokens()) {
             String nameExt = st.nextToken();
             myObj = myObj.getFileObject(nameExt, null);
@@ -737,8 +847,8 @@ public abstract class FileObject extends Object implements Serializable {
      * <li>Then:
      * <ul>
      * <li>If no exception is thrown, proceed with the operation.
-     * <li>If a <code>UserQuestionException</code> is thrown,
-     * call {@link org.openide.util.UserQuestionException#confirmed} on it
+     * <li>If a {@link UserQuestionException} is thrown,
+     * call {@link UserQuestionException#confirmed} on it
      * (asynchronously - do not block any important threads). If <code>true</code>,
      * proceed with the operation. If <code>false</code>, exit.
      * If an <code>IOException</code> is thrown, notify it and exit.
@@ -911,14 +1021,17 @@ public abstract class FileObject extends Object implements Serializable {
              * FileSystem and from Repository mustn`t be forked.
              */
             FileObject fo = fe.getFile();
-            boolean transmit = false;
+            boolean transmit = false;            
             if (fo != null) {
                 switch (op) {
                     case FILE_CHANGED:
                         transmit = fo.equals(fe.getSource());
                         break;
-                    default: 
+                    default:
                         transmit = !fo.equals(fe.getSource());
+                        if (!transmit && fe instanceof Enumeration && !((Enumeration) fe).hasMoreElements()) {
+                            transmit = true;
+                        } 
                 }
                 
             }                
@@ -935,14 +1048,14 @@ public abstract class FileObject extends Object implements Serializable {
                 }
                 if (fs != null && fsList != null) {
                     for (FileChangeListener fcl : fsList) {
-                        fs.getFCLSupport().dispatchEvent(fcl, fe, op);
+                        FCLSupport.dispatchEvent(fcl, fe, op);
                     }  
                 }
 
 
                 if (rep != null && repList != null) {
                     for (FileChangeListener fcl : repList) {
-                        rep.getFCLSupport().dispatchEvent(fcl, fe, op);
+                        FCLSupport.dispatchEvent(fcl, fe, op);
                     }                      
                 }
             }
