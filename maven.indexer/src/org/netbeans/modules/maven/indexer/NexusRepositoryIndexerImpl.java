@@ -129,7 +129,7 @@ import org.sonatype.nexus.index.updater.IndexUpdater;
  * @author Anuradha G
  */
 @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.maven.indexer.spi.RepositoryIndexerImplementation.class)
-public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementation,
+public class NexusRepositoryIndexerImpl implements RepositoryIndexerImplementation,
         BaseQueries, ChecksumQueries, ArchetypeQueries, DependencyInfoQueries,
         ClassesQuery, GenericFindQuery {
     private static final String MAVENINDEX_PATH = "mavenindex";
@@ -148,22 +148,30 @@ public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementat
     private static final Logger LOGGER =
             Logger.getLogger("org.netbeans.modules.maven.indexer.RepositoryIndexer");//NOI18N
     /*custom Index creators*/
-    public static final List<? extends IndexCreator> NB_INDEX = Arrays.asList(
-            new MinimalArtifactInfoIndexCreator(),
-            new JarFileContentsIndexCreator(),
-            new NbIndexCreator());
     /**
      * any reads, writes from/to index shal be done under mutex access.
      */
     static final Mutex MUTEX = new Mutex();
     private Lookup lookup;
 
+    //#158083 more caching to satisfy the classloading gods..
+    private List<? extends IndexCreator> CREATORS;
+    private List<? extends IndexCreator> getIndexCreators() {
+        if (CREATORS == null) {
+            CREATORS = Arrays.asList(
+                new MinimalArtifactInfoIndexCreator(),
+                new JarFileContentsIndexCreator(),
+                new NbIndexCreator());
+        }
+        return CREATORS;
+    }
+
     //#138102
     public static String createLocalRepositoryPath(FileObject fo) {
         return EmbedderFactory.getProjectEmbedder().getLocalRepository().getBasedir();
     }
 
-    public NexusRepositoryIndexserImpl() {
+    public NexusRepositoryIndexerImpl() {
         //to prevent MaxClauseCount exception (will investigate better way)
         BooleanQuery.setMaxClauseCount(Integer.MAX_VALUE);
 
@@ -186,8 +194,8 @@ public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementat
 	            //#154755 - start
 	            ClassWorld world = new ClassWorld();
 	            ClassRealm embedderRealm = world.newRealm("maven.embedder", MavenEmbedder.class.getClassLoader()); //NOI18N
-	            ClassRealm indexerRealm = world.newRealm("maven.indexer", NexusRepositoryIndexserImpl.class.getClassLoader()); //NOI18N
-	            ClassRealm plexusRealm = world.newRealm("plexus.core", NexusRepositoryIndexserImpl.class.getClassLoader()); //NOI18N
+	            ClassRealm indexerRealm = world.newRealm("maven.indexer", NexusRepositoryIndexerImpl.class.getClassLoader()); //NOI18N
+	            ClassRealm plexusRealm = world.newRealm("plexus.core", NexusRepositoryIndexerImpl.class.getClassLoader()); //NOI18N
 	            //need to import META-INF/plexus stuff, otherwise the items in META-INF will not be loaded,
 	            // and the Dependency Injection won't work.
 	            plexusRealm.importFrom(embedderRealm.getId(), "META-INF/plexus"); //NOI18N
@@ -259,12 +267,12 @@ public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementat
                             loc,
                             info.isRemoteDownloadable() ? info.getRepositoryUrl() : null, // repositoryUrl
                             info.isRemoteDownloadable() ? info.getIndexUpdateUrl() : null, // index update url
-                            NB_INDEX);
+                            getIndexCreators());
                 } catch (IOException ex) {
                     LOGGER.info("Found a broken index at " + loc.getAbsolutePath()); //NOI18N
                     LOGGER.log(Level.FINE, "Caused by ", ex); //NOI18N
                     FileUtils.deleteDirectory(loc);
-                    StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(NexusRepositoryIndexserImpl.class, "MSG_Reconstruct_Index"));
+                    StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(NexusRepositoryIndexerImpl.class, "MSG_Reconstruct_Index"));
                     indexer.addIndexingContextForced(
                             info.getId(), // context id
                             info.getId(), // repository id
@@ -272,7 +280,7 @@ public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementat
                             loc,
                             info.isRemoteDownloadable() ? info.getRepositoryUrl() : null, // repositoryUrl
                             info.isRemoteDownloadable() ? info.getIndexUpdateUrl() : null, // index update url
-                            NB_INDEX);
+                            getIndexCreators());
                 }
                 if (index) {
                     indexLoadedRepo(info, true);
@@ -357,7 +365,7 @@ public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementat
                 }
             } else {
                 LOGGER.finer("Indexing Local Repository :" + repo.getId());//NOI18N
-                indexer.scan(indexingContext, new RepositoryIndexerListener(indexer, indexingContext, false), updateLocal);
+                indexer.scan(indexingContext, new RepositoryIndexerListener(indexer, indexingContext), updateLocal);
             }
         } catch (IOException iOException) {
             LOGGER.warning(iOException.getMessage());//NOI18N
@@ -377,6 +385,7 @@ public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementat
             MUTEX.writeAccess(new Mutex.ExceptionAction<Object>() {
 
                 public Object run() throws Exception {
+                    initIndexer();
                     //need to delete the index and recreate? the scan(update) parameter doesn't work?
                     IndexingContext cntx = indexer.getIndexingContexts().get(repo.getId());
                     if (cntx != null) {
@@ -934,6 +943,8 @@ public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementat
             return ArtifactInfo.NAME;
         } else if (QueryField.FIELD_DESCRIPTION.equals(field)) {
             return ArtifactInfo.DESCRIPTION;
+        } else if (QueryField.FIELD_PACKAGING.equals(field)) {
+            return ArtifactInfo.PACKAGING;
         }
         return field;
     }
@@ -969,6 +980,9 @@ public class NexusRepositoryIndexserImpl implements RepositoryIndexerImplementat
             nbvi.setJavadocExists(ai.javadocExists == ArtifactAvailablility.PRESENT);
             nbvi.setSourcesExists(ai.sourcesExists == ArtifactAvailablility.PRESENT);
             nbvi.setSignatureExists(ai.signatureExists == ArtifactAvailablility.PRESENT);
+//            nbvi.setSha(ai.sha1);
+            nbvi.setLastModified(ai.lastModified);
+            nbvi.setSize(ai.size);
             bVersionInfos.add(nbvi);
         }
         return bVersionInfos;
