@@ -54,6 +54,7 @@ import org.netbeans.modules.vmd.midp.components.MidpDocumentSupport;
 import org.netbeans.modules.vmd.midp.components.categories.PointsCategoryCD;
 import org.netbeans.modules.vmd.midp.components.handlers.ExitMidletEventHandlerCD;
 import org.netbeans.modules.vmd.midp.components.points.MobileDeviceCD;
+import org.netbeans.modules.vmd.midp.propertyeditors.CleanUp;
 import org.netbeans.modules.vmd.midp.propertyeditors.element.PropertyEditorElementFactory;
 import org.netbeans.modules.vmd.midp.propertyeditors.element.PropertyEditorEventHandlerElement;
 import org.openide.awt.Mnemonics;
@@ -63,12 +64,18 @@ import org.openide.util.NbBundle;
  *
  * @author Anton Chechel
  */
-public class ExitMidletElement implements PropertyEditorEventHandlerElement {
+public class ExitMidletElement implements PropertyEditorEventHandlerElement, CleanUp {
+
     private JRadioButton radioButton;
     
     public ExitMidletElement() {
         radioButton = new JRadioButton();
         Mnemonics.setLocalizedText(radioButton, NbBundle.getMessage(ExitMidletElement.class, "LBL_EXIT_MIDLET")); // NOI18N
+        
+        radioButton.getAccessibleContext().setAccessibleName(
+                NbBundle.getMessage(ExitMidletElement.class, "ACSN_EXIT_MIDLET")); // NOI18N
+        radioButton.getAccessibleContext().setAccessibleDescription(
+                NbBundle.getMessage(ExitMidletElement.class, "ACSD_EXIT_MIDLET")); // NOI18N
     }
     
     public void createEventHandler(DesignComponent eventSource) {
@@ -127,7 +134,12 @@ public class ExitMidletElement implements PropertyEditorEventHandlerElement {
     public Collection<TypeID> getTypes() {
         return Collections.emptyList();
     }
+
+    public void clean(DesignComponent component) {
+        radioButton = null;
+    }
     
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.vmd.midp.propertyeditors.element.PropertyEditorElementFactory.class)
     public static class ExitMidletElementFactory implements PropertyEditorElementFactory {
         public PropertyEditorEventHandlerElement createElement() {
             return new ExitMidletElement();

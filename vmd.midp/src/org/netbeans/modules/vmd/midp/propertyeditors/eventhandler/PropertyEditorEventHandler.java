@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.vmd.midp.propertyeditors.eventhandler;
 
 import java.awt.Component;
@@ -68,6 +67,7 @@ import org.netbeans.modules.vmd.midp.components.points.CallPointCD;
 import org.netbeans.modules.vmd.midp.components.points.MethodPointCD;
 import org.netbeans.modules.vmd.midp.components.points.MobileDeviceCD;
 import org.netbeans.modules.vmd.midp.general.AcceptContextResolver;
+import org.netbeans.modules.vmd.midp.propertyeditors.CleanUp;
 import org.netbeans.modules.vmd.midp.propertyeditors.element.PropertyEditorEventHandlerElement;
 import org.netbeans.modules.vmd.midp.propertyeditors.element.PropertyEditorElementFactory;
 import org.openide.awt.Mnemonics;
@@ -81,19 +81,12 @@ import org.openide.util.NbBundle;
 public final class PropertyEditorEventHandler extends DesignPropertyEditor {
 
     private static final String DO_NOTHING = NbBundle.getMessage(PropertyEditorEventHandler.class, "LBL_NOTHING_ACTION"); // NOI18N
-    private final CustomEditor customEditor;
+    private CustomEditor customEditor = null;
     private WeakReference<DesignComponent> component;
     private boolean initialized;
 
     @SuppressWarnings(value = "unchecked") // NOI18N
     private PropertyEditorEventHandler() {
-        Collection<PropertyEditorElementFactory> factories = Lookup.getDefault().lookup(new Lookup.Template(PropertyEditorElementFactory.class)).allInstances();
-        Collection<PropertyEditorEventHandlerElement> elements = new ArrayList<PropertyEditorEventHandlerElement>(factories.size());
-        for (PropertyEditorElementFactory factory : factories) {
-            elements.add(factory.createElement());
-        }
-
-        customEditor = new CustomEditor(elements);
     }
 
     public static final PropertyEditorEventHandler createInstance() {
@@ -109,6 +102,15 @@ public final class PropertyEditorEventHandler extends DesignPropertyEditor {
 
     @Override
     public Component getCustomEditor() {
+        if (customEditor == null) {
+            Collection<PropertyEditorElementFactory> factories = Lookup.getDefault().lookup(new Lookup.Template(PropertyEditorElementFactory.class)).allInstances();
+            Collection<PropertyEditorEventHandlerElement> elements = new ArrayList<PropertyEditorEventHandlerElement>(factories.size());
+            for (PropertyEditorElementFactory factory : factories) {
+                elements.add(factory.createElement());
+            }
+
+            customEditor = new CustomEditor(elements);
+        }
         if (initialized) {
             initCustomEditor();
         }
@@ -197,7 +199,16 @@ public final class PropertyEditorEventHandler extends DesignPropertyEditor {
         return true;
     }
 
-    private class CustomEditor extends JPanel {
+    @Override
+    public void cleanUp(DesignComponent component) {
+        if (customEditor != null) {
+            customEditor.clean(component);
+        }
+        component = null;
+        super.cleanUp(component);
+    }
+
+    private class CustomEditor extends JPanel implements CleanUp {
 
         private Collection<PropertyEditorEventHandlerElement> elements;
         private JRadioButton doNothingRadioButton;
@@ -269,6 +280,13 @@ public final class PropertyEditorEventHandler extends DesignPropertyEditor {
             doNothingRadioButton.setSelected(!wasSelected);
             buttonGroup.add(doNothingRadioButton);
 
+            doNothingRadioButton.getAccessibleContext().setAccessibleName(
+                    NbBundle.getMessage(PropertyEditorEventHandler.class,
+                    "ACSN_NOTHING")); // NOI18N
+            doNothingRadioButton.getAccessibleContext().setAccessibleDescription(
+                    NbBundle.getMessage(PropertyEditorEventHandler.class,
+                    "ACSD_NOTHING")); // NOI18N
+
             constraints.insets = new Insets(12, 12, 6, 12);
             constraints.anchor = GridBagConstraints.NORTHWEST;
             constraints.gridx = GridBagConstraints.REMAINDER;
@@ -336,6 +354,18 @@ public final class PropertyEditorEventHandler extends DesignPropertyEditor {
                 initialized = true;
             }
             super.addNotify();
+        }
+
+        public void clean(DesignComponent component) {
+            if (elements != null && elements.size() > 0) {
+                for (PropertyEditorEventHandlerElement element : elements) {
+                    if (element instanceof CleanUp) {
+                        ((CleanUp) element).clean(component);
+                    }
+                }
+                elements = null;
+            }
+            doNothingRadioButton = null;
         }
     }
 }
