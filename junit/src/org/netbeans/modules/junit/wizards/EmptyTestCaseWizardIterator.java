@@ -51,8 +51,10 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.SourceGroupModifier;
 import org.netbeans.modules.junit.GuiUtils;
 import org.netbeans.modules.junit.JUnitPluginTrampoline;
 import org.netbeans.modules.junit.JUnitSettings;
@@ -182,6 +184,11 @@ public class EmptyTestCaseWizardIterator
         if (targetPanel == null || project != lastSelectedProject) {
             Collection<SourceGroup> sourceGroups = Utils.getTestTargets(project, true);
             if (sourceGroups.isEmpty()) {
+                if (SourceGroupModifier.createSourceGroup(project, JavaProjectConstants.SOURCES_TYPE_JAVA, JavaProjectConstants.SOURCES_HINT_TEST) != null) {
+                    sourceGroups = Utils.getTestTargets(project, true);
+                }
+            }
+            if (sourceGroups.isEmpty()) {
                 targetPanel = new StepProblemMessage(
                         project,
                         NbBundle.getMessage(EmptyTestCaseWizardIterator.class,
@@ -249,8 +256,8 @@ public class EmptyTestCaseWizardIterator
           NbBundle.getMessage(EmptyTestCaseWizardIterator.class,"LBL_panel_chooseFileType"),
           NbBundle.getMessage(EmptyTestCaseWizardIterator.class,"LBL_panel_Target")};
 
-        ((javax.swing.JComponent)getTargetPanel().getComponent()).putClientProperty("WizardPanel_contentData", panelNames); 
-        ((javax.swing.JComponent)getTargetPanel().getComponent()).putClientProperty("WizardPanel_contentSelectedIndex", new Integer(0)); 
+        ((javax.swing.JComponent)getTargetPanel().getComponent()).putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, panelNames); 
+        ((javax.swing.JComponent)getTargetPanel().getComponent()).putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(0)); 
 
 
     }
