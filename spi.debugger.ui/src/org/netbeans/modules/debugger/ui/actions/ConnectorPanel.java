@@ -48,6 +48,7 @@ import java.awt.Insets;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
@@ -67,6 +68,7 @@ import org.netbeans.spi.debugger.ui.AttachType;
 import org.netbeans.spi.debugger.ui.Controller;
 import org.openide.awt.Mnemonics;
 
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 
@@ -97,9 +99,16 @@ public class ConnectorPanel extends JPanel implements ActionListener {
             NbBundle.getMessage (ConnectorPanel.class, 
                 "ACSD_CTL_Connect_through")// NOI18N
         ); 
-        attachTypes = DebuggerManager.getDebuggerManager ().lookup (
+        List types = DebuggerManager.getDebuggerManager ().lookup (
             null, AttachType.class
         );
+        attachTypes = new ArrayList(types);
+        for (Object t : types) {
+            AttachType att = (AttachType) t;
+            if (att.getTypeDisplayName() == null) {
+                attachTypes.remove(t);
+            }
+        }
         String defaultAttachTypeName =
                 Properties.getDefault ().getProperties ("debugger").getString ("last_attach_type", null);
         int defaultIndex = 0;
@@ -166,6 +175,7 @@ public class ConnectorPanel extends JPanel implements ActionListener {
         JComponent customizer = attachType.getCustomizer ();
         controller = attachType.getController();
         if (controller == null && (customizer instanceof Controller)) {
+            Exceptions.printStackTrace(new IllegalStateException("FIXME: JComponent "+customizer+" must not implement Controller interface!"));
             controller = (Controller) customizer;
         }
         firePropertyChange(PROP_TYPE, null, customizer);

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,8 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-package org.netbeans.modules.debugger.jpda.ui;
+package org.netbeans.modules.ruby.debugger.ui;
 
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
@@ -48,18 +47,13 @@ import org.netbeans.spi.debugger.ui.AttachType;
 import org.netbeans.spi.debugger.ui.Controller;
 import org.openide.util.NbBundle;
 
-
-/**
- *
- * @author   Jan Jancura
- */
-public class JPDAAttachType extends AttachType {
+public final class RubyAttachType extends AttachType {
 
     private Reference<ConnectPanel> customizerRef = new WeakReference<ConnectPanel>(null);
-
+    
     @Override
-    public String getTypeDisplayName () {
-        return NbBundle.getMessage (JPDAAttachType.class, "CTL_Connector_name");
+    public String getTypeDisplayName() {
+        return NbBundle.getMessage(RubyAttachType.class, "RubyAttachType.ConnectorName");
     }
 
     public JComponent getCustomizer () {

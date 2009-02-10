@@ -152,9 +152,9 @@ public class AddBreakpointAction extends AbstractAction {
             Controller controller = panel.getController ();
             boolean close = false;
             if (okPressed)
-                close = controller.ok ();
+                close = controller != null && controller.ok ();
             else
-                close = controller.cancel ();
+                close = controller == null || controller.cancel ();
                 
             if (!close) return;
             panel.removePropertyChangeListener (this);
@@ -194,7 +194,12 @@ public class AddBreakpointAction extends AbstractAction {
                 bOk.setEnabled (false);
                 return;
             }
-            bOk.setEnabled (controller.isValid ());
+            if (panel.isNoValidityController()) {
+                // Always valid
+                bOk.setEnabled (true);
+            } else {
+                bOk.setEnabled (controller.isValid ());
+            }
         }
 
         /** @return true if OK button was pressed in dialog,
