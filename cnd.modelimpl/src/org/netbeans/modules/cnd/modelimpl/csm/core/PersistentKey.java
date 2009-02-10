@@ -41,11 +41,10 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmProject;
 import org.netbeans.modules.cnd.api.model.CsmUID;
-import org.netbeans.modules.cnd.api.model.util.*;
+import org.netbeans.modules.cnd.modelimpl.uid.UIDProviderIml;
 import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
 
 /**
@@ -53,18 +52,12 @@ import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
  * @author Alexander Simon
  */
 public final class PersistentKey {
-    private static final byte PROXY = 0;
-    private static final byte UID = 1;
-    private static final byte DECLARATION = 2;
+    private static final byte UID = 1<<0;
+    private static final byte DECLARATION = 1<<1;
     
     private Object key;
     private CsmProject project;
     private byte kind;
-    
-    private PersistentKey(CsmIdentifiable id) {
-        key = id;
-        kind = PROXY;
-    }
     
     private PersistentKey(CsmUID id) {
         key = id;
@@ -86,15 +79,15 @@ public final class PersistentKey {
         } else {
             //System.out.println("Skip "+uniq);
         }
-        return new PersistentKey(decl.getUID());
+        // obtain UID directly without "null-check", because notificator works
+        // in separate thread which can be run after closed project
+        return new PersistentKey(UIDProviderIml.get(decl, false));
     }
     
-    public CsmIdentifiable getObject(){
+    public Object getObject(){
         switch(kind){
             case UID:
-                return (CsmIdentifiable) ((CsmUID)key).getObject();
-            case PROXY:
-                return (CsmIdentifiable) key;
+                return ((CsmUID)key).getObject();
             case DECLARATION:
                 return project.findDeclaration((CharSequence)key);
         }
@@ -109,7 +102,6 @@ public final class PersistentKey {
                 return false;
             }
             switch(kind){
-                case PROXY:
                 case UID:
                     return key.equals(what.key);
                 case DECLARATION:
@@ -125,7 +117,6 @@ public final class PersistentKey {
     @Override
     public int hashCode() {
         switch(kind){
-            case PROXY:
             case UID:
                 return key.hashCode();
             case DECLARATION:

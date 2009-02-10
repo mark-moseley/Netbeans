@@ -1,8 +1,7 @@
-
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -22,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -38,49 +31,45 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.repository.support;
+package org.netbeans.modules.cnd.modelimpl.csm.guard;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import org.netbeans.modules.cnd.modelimpl.trace.TraceModelTestBase;
 
 /**
- *
- * @author Sergey Grinev
+ * A common base class for guard based tests
+ * @author Vladimir Kvashin
  */
-public abstract class AbstractObjectFactory {
+public class GuardTestBase  extends TraceModelTestBase {
 
-    protected abstract int getHandler(Object object);
-    protected abstract SelfPersistent createObject(int handler, DataInput stream) throws IOException;
-    
-    protected final void writeSelfPersistent(SelfPersistent object, DataOutput output) throws IOException
-    {
-        if (object == null) {
-            output.writeShort(NULL_POINTER);
-        } else {
-            int handler = getHandler(object);
-            assert LAST_INDEX < handler && handler <= Short.MAX_VALUE;
-            output.writeShort(handler);
-            object.write(output);
-        }
+    public GuardTestBase(String testName) {
+        super(testName);
     }
-    
-    protected final SelfPersistent readSelfPersistent(DataInput input) throws IOException
-    {
-        int handler = input.readShort();
-        SelfPersistent object = null;
-        if (handler != NULL_POINTER) {
-            object = createObject(handler, input);
-            assert object != null;
-        }
-        return object;
+
+    protected void parse(String... fileNames) throws Exception {
+        performModelTest(tansformParameters(fileNames), null, System.err);
     }
-    
-    public static final int NULL_POINTER = -1;
-    
-    // index to be used in another factory (but only in one) 
-    // to start own indeces from the next after LAST_INDEX
-    public static final int LAST_INDEX = 0; 
+
+    protected String[] tansformParameters(String[] files) {
+        String[] result = new String[files.length];
+        for (int i = 0; i < files.length; i++) {
+            if (files[i].startsWith("-")) {
+                result[i] = files[i];
+            } else {
+                result[i] = getDataFile(files[i]).getAbsolutePath();
+            }
+        }
+        return result;
+    }
+
+//    protected String getClassName(Class cls){
+//        String s = cls.getName();
+//        return s.substring(s.lastIndexOf('.')+1);
+//    }
+
 }

@@ -46,7 +46,6 @@ import java.util.*;
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.deep.*;
 
-import org.netbeans.modules.cnd.modelimpl.csm.*;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 
 import antlr.collections.AST;
@@ -60,9 +59,10 @@ public class TryCatchStatementImpl extends StatementBase implements CsmTryCatchS
     
     private StatementBase tryStatement;
     private List<CsmExceptionHandler> handlers;
-    
-    public TryCatchStatementImpl(AST ast, CsmFile file, CsmScope scope) {
+
+    public TryCatchStatementImpl(AST ast, CsmFile file, CsmScope scope, boolean global) {
         super(ast, file, scope);
+        render(ast, global);
     }
     
     public CsmStatement.Kind getKind() {
@@ -70,28 +70,22 @@ public class TryCatchStatementImpl extends StatementBase implements CsmTryCatchS
     }
 
     public CsmStatement getTryStatement() {
-        if( tryStatement == null ) {
-            render();
-        }
         return tryStatement;
     }
     
     public List<CsmExceptionHandler> getHandlers() {
-        if( handlers == null ) {
-            render();
-        }
         return handlers;
     }
     
-    private void render() {
+    private void render(AST ast, boolean global) {
         handlers = new ArrayList<CsmExceptionHandler>();
-        for( AST token = getAst().getFirstChild(); token != null; token = token.getNextSibling() ) {
+        for( AST token = ast.getFirstChild(); token != null; token = token.getNextSibling() ) {
             switch( token.getType() ) {
                 case CPPTokenTypes.CSM_COMPOUND_STATEMENT:
                     tryStatement = AstRenderer.renderStatement(token, getContainingFile(), this);
                     break;
                 case CPPTokenTypes.CSM_CATCH_CLAUSE:
-                    handlers.add(new ExceptionHandlerImpl(token, getContainingFile(), this));
+                    handlers.add(new ExceptionHandlerImpl(token, getContainingFile(), this, global));
                     break;
             }
         }
@@ -99,8 +93,12 @@ public class TryCatchStatementImpl extends StatementBase implements CsmTryCatchS
 
     public Collection<CsmScopeElement> getScopeElements() {
 	Collection<CsmScopeElement> elements = new ArrayList<CsmScopeElement>();
-	elements.add(tryStatement);
-	elements.addAll(handlers);
+        if (tryStatement != null) {
+            elements.add(tryStatement);
+        }
+        if (handlers != null) {
+            elements.addAll(handlers);
+        }
 	return elements;
     }
     

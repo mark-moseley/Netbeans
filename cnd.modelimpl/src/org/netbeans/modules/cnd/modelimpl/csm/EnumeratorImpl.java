@@ -69,12 +69,9 @@ public final class EnumeratorImpl extends OffsetableDeclarationBase<CsmEnumerato
     public EnumeratorImpl(AST ast, EnumImpl enumeration) {
         super(ast, enumeration.getContainingFile());
         this.name = NameCache.getManager().getString(ast.getText());
-        
         // set parent enum, do it in constructor to have final fields
         this.enumerationUID = UIDCsmConverter.declarationToUID((CsmEnum)enumeration);
         this.enumerationRef = null;
-        
-        enumeration.addEnumerator(this);
     }
     
     public CharSequence getName() {
@@ -101,7 +98,7 @@ public final class EnumeratorImpl extends OffsetableDeclarationBase<CsmEnumerato
 	return CharSequenceKey.create(_getEnumeration().getQualifiedName() + "::" + getQualifiedNamePostfix()); // NOI18N    
     }
 
-    private CsmEnum _getEnumeration() {
+    private synchronized CsmEnum _getEnumeration() {
         CsmEnum enumeration = this.enumerationRef;
         if (enumeration == null) {
             enumeration = UIDCsmConverter.UIDtoDeclaration(this.enumerationUID);
@@ -116,7 +113,7 @@ public final class EnumeratorImpl extends OffsetableDeclarationBase<CsmEnumerato
         onDispose();
     } 
     
-    private void onDispose() {
+    private synchronized void onDispose() {
         if (TraceFlags.RESTORE_CONTAINER_FROM_UID) {
             // restore container from it's UID
             this.enumerationRef = UIDCsmConverter.UIDtoDeclaration(this.enumerationUID);

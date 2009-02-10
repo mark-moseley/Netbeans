@@ -70,6 +70,7 @@ public class ConditionDeclarationImpl extends OffsetableBase implements CsmCondi
     
     private void initDeclaration(AST node, final CsmScope scope) {
         AstRenderer renderer = new AstRenderer((FileImpl) getContainingFile()) {
+            @Override
             protected VariableImpl createVariable(AST offsetAst, CsmFile file, CsmType type, String name, boolean _static, 
 		    MutableDeclarationsContainer container1, MutableDeclarationsContainer container2, CsmScope passedScope) {
 		
@@ -77,8 +78,14 @@ public class ConditionDeclarationImpl extends OffsetableBase implements CsmCondi
 			container1, container2, scope);
                 return declaration;
             }
+
+            @Override
+            protected boolean isRenderingLocalContext() {
+                return true;
+            }
+
         };
-        renderer.renderVariable(node, null, null);
+        renderer.renderVariable(node, null, null, false);
     }
 
     public CsmVariable getDeclaration() {
@@ -90,7 +97,7 @@ public class ConditionDeclarationImpl extends OffsetableBase implements CsmCondi
     }
 
     public CsmScope getScope() {
-        return declaration.getScope();
+        return (declaration == null) ? getContainingFile() : declaration.getScope();
     }
     
 }

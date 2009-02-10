@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.csm;
 
 import org.netbeans.modules.cnd.api.model.*;
@@ -46,7 +45,6 @@ import antlr.collections.AST;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 
 /**
@@ -56,20 +54,13 @@ import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 public final class FieldImpl extends VariableImpl<CsmField> implements CsmField {
 
     private final CsmVisibility visibility;
-    
-    public FieldImpl(AST ast, CsmFile file, CsmType type, String name, ClassImpl cls, CsmVisibility visibility) {
-        super(ast, file, type, name, /*cls*/null, false);
-        for( AST token = ast.getFirstChild(); token != null; token = token.getNextSibling() ) {
-            switch( token.getType() ) {
-                case CPPTokenTypes.LITERAL_static:
-                    setStatic(true);
-                    break;
-            }
-        }
+
+    public FieldImpl(AST ast, CsmFile file, CsmType type, String name, ClassImpl cls, CsmVisibility visibility, boolean register) {
+        super(ast, file, type, name, /*cls*/ null, false, register);
         this.visibility = visibility;
-	setScope(cls);
+        setScope(cls, register);
     }
-    
+
     public CsmClass getContainingClass() {
         return (CsmClass) getScope();
     }
@@ -77,17 +68,17 @@ public final class FieldImpl extends VariableImpl<CsmField> implements CsmField 
     public CsmVisibility getVisibility() {
         return visibility;
     }
-    
+
     ////////////////////////////////////////////////////////////////////////////
     // impl of SelfPersistent
-    
+    @Override
     public void write(DataOutput output) throws IOException {
-        super.write(output);      
+        super.write(output);
         PersistentUtils.writeVisibility(this.visibility, output);
-    }  
-    
+    }
+
     public FieldImpl(DataInput input) throws IOException {
         super(input);
         this.visibility = PersistentUtils.readVisibility(input);
-    }     
+    }
 }

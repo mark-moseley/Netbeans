@@ -39,65 +39,44 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.modelimpl.csm.deep;
 
-import java.util.*;
+package org.netbeans.modules.cnd.modelimpl.csm;
 
 import org.netbeans.modules.cnd.api.model.*;
-import org.netbeans.modules.cnd.api.model.deep.*;
-
-import org.netbeans.modules.cnd.modelimpl.csm.*;
-import org.netbeans.modules.cnd.modelimpl.csm.core.*;
-
 import antlr.collections.AST;
-import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 
 /**
- * Common ancestor for all ... statements
+ * Implements CsmParameter
  * @author Vladimir Kvashin
  */
-public class ExceptionHandlerImpl extends CompoundStatementImpl implements CsmExceptionHandler {
-    
-    private ParameterImpl parameter;
-    private final boolean globalHandler;
-    
-    public ExceptionHandlerImpl(AST ast,  CsmFile file, CsmScope scope, boolean global) {
-        super(ast, file, scope);
-        this.globalHandler = global;
-    }
-    
-    @Override
-    public CsmStatement.Kind getKind() {
-        return CsmStatement.Kind.CATCH;
-    }
-    
-    public boolean isCatchAll() {
-	CsmParameter aParameter = getParameter();
-        return aParameter == null || aParameter.isVarArgs();
-    }
-    
-    public CsmParameter getParameter() {
-        if( parameter == null ) {
-            AST ast = AstUtil.findChildOfType(getAst(), CPPTokenTypes.CSM_PARAMETER_DECLARATION);
-            if( ast != null ) {
-                List<ParameterImpl> params = AstRenderer.renderParameter(ast, getContainingFile(), this, !globalHandler);
-                if( params != null && ! params.isEmpty() ) {
-                            parameter = params.get(0);
-                }
-            }
-        }
-        return parameter;
-    }
-    
-    /** overrides parent method */
-    @Override
-    protected AST getStartRenderingAst() {
-        return AstUtil.findChildOfType(getAst(), CPPTokenTypes.CSM_COMPOUND_STATEMENT);
+public final class ParameterEllipsisImpl extends ParameterImpl {
+
+    public ParameterEllipsisImpl(AST ast, CsmFile file, CsmType type, CsmScope scope, boolean global) {
+        super(ast, file, type, "...", scope, global); //NOI18N
     }
 
     @Override
-    public Collection<CsmScopeElement> getScopeElements() {
-        return DeepUtil.merge(getParameter(), getStatements());
+    public boolean isVarArgs() {
+        return true;
     }
     
+    @Override
+    public CharSequence getDisplayText() {
+        return "..."; //NOI18N
+    }
+    
+    ////////////////////////////////////////////////////////////////////////////
+    // impl of SelfPersistent
+    
+    @Override
+    public void write(DataOutput output) throws IOException {
+        super.write(output);      
+    }  
+    
+    public ParameterEllipsisImpl(DataInput input) throws IOException {
+        super(input);
+    } 
 }
