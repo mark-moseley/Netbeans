@@ -43,21 +43,16 @@ package org.netbeans.modules.editor;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
-import java.awt.event.ContainerEvent;
-import java.awt.event.ContainerListener;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
-import java.awt.event.MouseMotionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.prefs.Preferences;
 import javax.swing.Action;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
@@ -68,9 +63,7 @@ import javax.swing.text.JTextComponent;
 import org.netbeans.editor.BaseKit;
 import org.netbeans.editor.EditorUI;
 import org.netbeans.editor.Utilities;
-import org.netbeans.editor.ext.ExtEditorUI;
 import org.netbeans.editor.ext.ExtKit;
-import org.netbeans.modules.editor.options.AllOptionsFolder;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.util.RequestProcessor;
@@ -84,9 +77,13 @@ import javax.swing.JScrollPane;
 import javax.swing.JToolBar;
 import javax.swing.SwingUtilities;
 import javax.swing.border.Border;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.mimelookup.MimePath;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.modules.editor.impl.CustomizableSideBar;
 import org.netbeans.modules.editor.impl.CustomizableSideBar.SideBarPosition;
 import org.netbeans.modules.editor.impl.SearchBar;
+import org.netbeans.modules.editor.lib.EditorPreferencesDefaults;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.util.ContextAwareAction;
 import org.openide.util.Lookup;
@@ -98,7 +95,7 @@ import org.openide.util.Lookup;
 * @version 1.00
 */
 
-public class NbEditorUI extends ExtEditorUI {
+public class NbEditorUI extends EditorUI {
 
     private FocusListener focusL;
 
@@ -107,7 +104,7 @@ public class NbEditorUI extends ExtEditorUI {
     
     /**
      *
-     * @deprecated - use {@link attachSystemActionPerformer(String)} instead
+     * @deprecated - use {@link #attachSystemActionPerformer(String)} instead
      */
     protected SystemActionUpdater createSystemActionUpdater(
         String editorActionName, boolean updatePerformer, boolean syncEnabling) {
@@ -116,7 +113,7 @@ public class NbEditorUI extends ExtEditorUI {
 
     public NbEditorUI() {
         focusL = new FocusAdapter() {
-                     public void focusGained(FocusEvent evt) {
+                     public @Override void focusGained(FocusEvent evt) {
                          // Refresh file object when component made active
                          Document doc = getDocument();
                          if (doc != null) {
@@ -156,7 +153,7 @@ public class NbEditorUI extends ExtEditorUI {
         new NbEditorUI.SystemActionPerformer(editorActionName);
     }
 
-    protected void installUI(JTextComponent c) {
+    protected @Override void installUI(JTextComponent c) {
         super.installUI(c);
 
         if (!attached){
@@ -176,7 +173,7 @@ public class NbEditorUI extends ExtEditorUI {
     }
 
 
-    protected void uninstallUI(JTextComponent c) {
+    protected @Override void uninstallUI(JTextComponent c) {
         super.uninstallUI(c);
 
         c.removeFocusListener(focusL);
@@ -220,12 +217,15 @@ public class NbEditorUI extends ExtEditorUI {
     }
     
 
-    public boolean isLineNumberEnabled() {
-        return AllOptionsFolder.getDefault().getLineNumberVisible();
+    public @Override boolean isLineNumberEnabled() {
+        Preferences prefs = MimeLookup.getLookup(MimePath.EMPTY).lookup(Preferences.class);
+        return prefs.getBoolean(SimpleValueNames.LINE_NUMBER_VISIBLE, EditorPreferencesDefaults.defaultLineNumberVisible);
     }
 
-    public void setLineNumberEnabled(boolean lineNumberEnabled) {
-        AllOptionsFolder.getDefault().setLineNumberVisible(lineNumberEnabled);
+    public @Override void setLineNumberEnabled(boolean lineNumberEnabled) {
+        Preferences prefs = MimeLookup.getLookup(MimePath.EMPTY).lookup(Preferences.class);
+        boolean visible = prefs.getBoolean(SimpleValueNames.LINE_NUMBER_VISIBLE, EditorPreferencesDefaults.defaultLineNumberVisible);
+        prefs.putBoolean(SimpleValueNames.LINE_NUMBER_VISIBLE, !visible);
     }
     
     private static void processSideBars(Map sideBars, JComponent ec) {
@@ -238,31 +238,31 @@ public class NbEditorUI extends ExtEditorUI {
         ec.add(scroller);
         scroller.setRowHeader(null);
         scroller.setColumnHeaderView(null);
-        final MouseDispatcher mouse = new MouseDispatcher((JTextComponent) ec.getClientProperty(JTextComponent.class));
+//        final MouseDispatcher mouse = new MouseDispatcher((JTextComponent) ec.getClientProperty(JTextComponent.class));
         for (Iterator entries = sideBars.entrySet().iterator(); entries.hasNext(); ) {
             Map.Entry entry = (Map.Entry) entries.next();
             SideBarPosition position = (SideBarPosition) entry.getKey();
             JComponent sideBar = (JComponent) entry.getValue();
             
-            if (position.getPosition() == SideBarPosition.WEST) {
-                JPanel p = new JPanel(new BorderLayout()) {
-
-                    @Override
-                    public void addNotify() {
-                        super.addNotify();
-                        infiltrateContainer(this, mouse, true);
-                    }
-
-                    @Override
-                    public void removeNotify() {
-                        infiltrateContainer(this, mouse, false);
-                        super.removeNotify();
-                    }
-                    
-                };
-                p.add(sideBar, BorderLayout.CENTER);
-                sideBar = p;
-            }
+//            if (position.getPosition() == SideBarPosition.WEST) {
+//                JPanel p = new JPanel(new BorderLayout()) {
+//
+//                    @Override
+//                    public void addNotify() {
+//                        super.addNotify();
+//                        infiltrateContainer(this, mouse, true);
+//                    }
+//
+//                    @Override
+//                    public void removeNotify() {
+//                        infiltrateContainer(this, mouse, false);
+//                        super.removeNotify();
+//                    }
+//
+//                };
+//                p.add(sideBar, BorderLayout.CENTER);
+//                sideBar = p;
+//            }
             
             if (position.isScrollable()) {
                 if (position.getPosition() == SideBarPosition.WEST) {
@@ -280,96 +280,96 @@ public class NbEditorUI extends ExtEditorUI {
         }
     }
     
-    private static void infiltrateContainer(Container c, MouseDispatcher mouse, boolean add) {
-        for (Component comp : c.getComponents()) {
-            if (add) {
-                comp.addMouseListener(mouse);
-                comp.addMouseMotionListener(mouse);
-            } else {
-                comp.removeMouseListener(mouse);
-                comp.removeMouseMotionListener(mouse);
-            }
-            if (comp instanceof Container) {
-                Container cont = (Container) comp;
-                if (add) {
-                    cont.addContainerListener(mouse);
-                } else {
-                    cont.removeContainerListener(mouse);
-                }
-                infiltrateContainer(cont, mouse,add);
-            }
-        }
-
-    }
+//    private static void infiltrateContainer(Container c, MouseDispatcher mouse, boolean add) {
+//        for (Component comp : c.getComponents()) {
+//            if (add) {
+//                comp.addMouseListener(mouse);
+//                comp.addMouseMotionListener(mouse);
+//            } else {
+//                comp.removeMouseListener(mouse);
+//                comp.removeMouseMotionListener(mouse);
+//            }
+//            if (comp instanceof Container) {
+//                Container cont = (Container) comp;
+//                if (add) {
+//                    cont.addContainerListener(mouse);
+//                } else {
+//                    cont.removeContainerListener(mouse);
+//                }
+//                infiltrateContainer(cont, mouse,add);
+//            }
+//        }
+//
+//    }
+//
+//    private static final class MouseDispatcher implements MouseListener, MouseMotionListener, ContainerListener {
+//
+//        private final Component target;
+//
+//        public MouseDispatcher(Component comp) {
+//            this.target = comp;
+//        }
+//
+//        private void redispatch(MouseEvent oe) {
+//            if (oe.isConsumed()) {
+//                return;
+//            }
+//            MouseEvent ne = SwingUtilities.convertMouseEvent(
+//                    oe.getComponent(), oe, target);
+//            target.dispatchEvent(ne);
+//        }
+//
+//        public void mouseDragged(MouseEvent e) {
+//            redispatch(e);
+//        }
+//
+//        public void mouseMoved(MouseEvent e) {
+//            redispatch(e);
+//        }
+//
+//        public void mouseClicked(MouseEvent e) {
+//            redispatch(e);
+//        }
+//
+//        public void mousePressed(MouseEvent e) {
+//            redispatch(e);
+//        }
+//
+//        public void mouseReleased(MouseEvent e) {
+//            redispatch(e);
+//        }
+//
+//        public void mouseEntered(MouseEvent e) {
+//            redispatch(e);
+//        }
+//
+//        public void mouseExited(MouseEvent e) {
+//            redispatch(e);
+//        }
+//
+//        public void componentAdded(ContainerEvent e) {
+//            Component comp = e.getChild();
+//            if (comp instanceof Container) {
+//                infiltrateContainer((Container) comp, this, true);
+//            } else {
+//                comp.addMouseListener(this);
+//                comp.addMouseMotionListener(this);
+//            }
+//        }
+//
+//        public void componentRemoved(ContainerEvent e) {
+//            Component comp = e.getChild();
+//            if (comp instanceof Container) {
+//                infiltrateContainer((Container) comp, this, false);
+//            } else {
+//                comp.removeMouseListener(this);
+//                comp.removeMouseMotionListener(this);
+//            }
+//        }
+//
+//    }
     
-    private static final class MouseDispatcher implements MouseListener, MouseMotionListener, ContainerListener {
-        
-        private final Component target;
-
-        public MouseDispatcher(Component comp) {
-            this.target = comp;
-        }
-        
-        private void redispatch(MouseEvent oe) {
-            if (oe.isConsumed()) {
-                return;
-            }
-            MouseEvent ne = SwingUtilities.convertMouseEvent(
-                    oe.getComponent(), oe, target);
-            target.dispatchEvent(ne);
-        }
-
-        public void mouseDragged(MouseEvent e) {
-            redispatch(e);
-        }
-
-        public void mouseMoved(MouseEvent e) {
-            redispatch(e);
-        }
-
-        public void mouseClicked(MouseEvent e) {
-            redispatch(e);
-        }
-
-        public void mousePressed(MouseEvent e) {
-            redispatch(e);
-        }
-
-        public void mouseReleased(MouseEvent e) {
-            redispatch(e);
-        }
-
-        public void mouseEntered(MouseEvent e) {
-            redispatch(e);
-        }
-
-        public void mouseExited(MouseEvent e) {
-            redispatch(e);
-        }
-
-        public void componentAdded(ContainerEvent e) {
-            Component comp = e.getChild();
-            if (comp instanceof Container) {
-                infiltrateContainer((Container) comp, this, true);
-            } else {
-                comp.addMouseListener(this);
-                comp.addMouseMotionListener(this);
-            }
-        }
-
-        public void componentRemoved(ContainerEvent e) {
-            Component comp = e.getChild();
-            if (comp instanceof Container) {
-                infiltrateContainer((Container) comp, this, false);
-            } else {
-                comp.removeMouseListener(this);
-                comp.removeMouseMotionListener(this);
-            }
-        }
-        
-    }
-    
-    protected JToolBar createToolBarComponent() {
+    protected @Override JToolBar createToolBarComponent() {
         return new NbEditorToolBar(getComponent());
     }
 
@@ -400,23 +400,23 @@ public class NbEditorUI extends ExtEditorUI {
         private void attachSystemActionPerformer(JTextComponent c){
             if (c == null) return;
 
-            Action editorAction = getEditorAction(c);
-            if (editorAction == null) return;
+            Action action = getEditorAction(c);
+            if (action == null) return;
 
             Action globalSystemAction = getSystemAction(c);
             if (globalSystemAction == null) return;
 
             if (globalSystemAction instanceof CallbackSystemAction){
                 Object key = ((CallbackSystemAction)globalSystemAction).getActionMapKey();
-                c.getActionMap ().put (key, editorAction);
+                c.getActionMap ().put (key, action);
             }                        
         }
         
         private void detachSystemActionPerformer(JTextComponent c){
             if (c == null) return;
 
-            Action editorAction = getEditorAction(c);
-            if (editorAction == null) return;
+            Action action = getEditorAction(c);
+            if (action == null) return;
 
             Action globalSystemAction = getSystemAction(c);
             if (globalSystemAction == null) return;
@@ -426,7 +426,7 @@ public class NbEditorUI extends ExtEditorUI {
                 ActionMap am = c.getActionMap();
                 if (am != null) {
                     Object ea = am.get(key);
-                    if (editorAction.equals(ea)) {
+                    if (action.equals(ea)) {
                         am.remove(key);
                     }
                 }
@@ -685,7 +685,7 @@ public class NbEditorUI extends ExtEditorUI {
             return systemAction;
         }
 
-        protected void finalize() throws Throwable {
+        protected @Override void finalize() throws Throwable {
             reset();
         }
 
