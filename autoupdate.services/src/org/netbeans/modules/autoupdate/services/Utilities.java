@@ -83,6 +83,7 @@ import org.netbeans.api.autoupdate.UpdateElement;
 import org.netbeans.api.autoupdate.UpdateUnit;
 import org.netbeans.core.startup.Main;
 import org.netbeans.core.startup.TopLogging;
+import org.netbeans.modules.autoupdate.updateprovider.DummyModuleInfo;
 import org.netbeans.spi.autoupdate.KeyStoreProvider;
 import org.netbeans.spi.autoupdate.UpdateItem;
 import org.netbeans.updater.ModuleDeactivator;
@@ -90,7 +91,6 @@ import org.netbeans.updater.ModuleUpdater;
 import org.netbeans.updater.UpdateTracking;
 import org.netbeans.updater.UpdaterDispatcher;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.modules.Dependency;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.modules.ModuleInfo;
@@ -298,7 +298,10 @@ public class Utilities {
     }
     
     private static void writeMarkedFilesToFile (Collection<File> files, File dest) {
-        
+        if(files==null) {
+            //#157703
+            return;
+        }
         // don't forget for content written before
         String content = "";
         if (dest.exists ()) {
@@ -506,6 +509,9 @@ public class Utilities {
                 retval.addAll (findRequiredUpdateElements (module.getUpdateElement (), infos, brokenDependencies));
             }
             break;
+        case CUSTOM_HANDLED_COMPONENT :
+            getLogger ().log (Level.INFO, "CUSTOM_HANDLED_COMPONENT doesn't care about required elements."); // XXX
+            break;
         default:
             assert false : "Not implement for type " + el.getType () + " of UpdateElement " + el;
         }
@@ -526,8 +532,25 @@ public class Utilities {
             if (i == null) {
                 continue;
             }
+
             // Dependency.TYPE_MODULE
-            for (Dependency d : Dependency.create (Dependency.TYPE_MODULE, mi.getCodeName ())) {
+            Collection<Dependency> dependencies = new HashSet<Dependency> ();
+            dependencies.addAll(Dependency.create (Dependency.TYPE_MODULE, mi.getCodeName ()));
+
+            SortedSet<String> newTokens = new TreeSet<String> (Arrays.asList (mi.getProvides ()));
+            SortedSet<String> oldTokens = new TreeSet<String> (Arrays.asList (((ModuleUpdateElementImpl) Trampoline.API.impl (i)).getModuleInfo ().getProvides ()));
+            oldTokens.removeAll (newTokens);
+            // handle diff
+            for (String tok : oldTokens) {
+                // don't care about provider of platform dependency here
+                if (tok.startsWith ("org.openide.modules.os")) { // NOI18N
+                    continue;
+                }
+                dependencies.addAll (Dependency.create (Dependency.TYPE_REQUIRES, tok));
+                dependencies.addAll (Dependency.create (Dependency.TYPE_NEEDS, tok));
+            }
+
+            for (Dependency d : dependencies) {
                 DependencyAggregator deco = DependencyAggregator.getAggregator (d);
                 if (deco != null) {
                     for (ModuleInfo depMI : deco.getDependening ()) {
@@ -555,41 +578,6 @@ public class Utilities {
                                         deps = newones;
                                     }
                                     moreRequested.add (tryUE);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // Dependency.TYPE_REQUIRES
-            // Dependency.TYPE_NEEDS
-            SortedSet<String> newTokens = new TreeSet<String> (Arrays.asList (mi.getProvides ()));
-            SortedSet<String> oldTokens = new TreeSet<String> (Arrays.asList (((ModuleUpdateElementImpl) Trampoline.API.impl (i)).getModuleInfo ().getProvides ()));
-            oldTokens.removeAll (newTokens);
-            // handle diff
-            for (String tok : oldTokens) {
-                // don't care about provider of platform dependency here
-                if (tok.startsWith ("org.openide.modules.os")) { // NOI18N
-                    continue;
-                }
-                Collection<Dependency> deps = new HashSet<Dependency> (Dependency.create (Dependency.TYPE_REQUIRES, tok));
-                deps.addAll (Dependency.create (Dependency.TYPE_NEEDS, tok));
-                for (Dependency d : deps) {
-                    DependencyAggregator deco = DependencyAggregator.getAggregator (d);
-                    if (deco != null) {
-                        for (ModuleInfo depMI : deco.getDependening ()) {
-                            Module depM = Utilities.toModule (depMI);
-                            if (depM == null) {
-                                continue;
-                            }
-                            if (depM.getProblems () != null && ! depM.getProblems ().isEmpty ()) {
-                                // skip this module because it has own problems already
-                                continue;
-                            }
-                            for (Dependency toTry : depM.getDependencies ()) {
-                                // check only relevant deps
-                                if (deco.equals (DependencyAggregator.getAggregator (toTry))) {
-                                    brokenDependencies.add (toTry);
                                 }
                             }
                         }
@@ -654,27 +642,36 @@ public class Utilities {
                         matched = DependencyChecker.checkDependencyModule (dep, ((ModuleUpdateElementImpl) reqElImpl).getModuleInfo ());
                     }
                     if (! matched) {
-                        UpdateElement reqEl = u.getAvailableUpdates ().isEmpty () ? null : u.getAvailableUpdates ().get (0);
-                        if (reqEl == null) {
-                            for (ModuleInfo m : availableInfos) {
-                                if (DependencyChecker.checkDependencyModule (dep, m)) {
-                                    matched = true;
-                                    break;
+                        // first chance
+                        for (ModuleInfo m : availableInfos) {
+                            if (DependencyChecker.checkDependencyModule (dep, m)) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (! matched) {
+                            UpdateElement reqEl = u.getAvailableUpdates ().isEmpty () ? null : u.getAvailableUpdates ().get (0);
+                            if (reqEl == null) {
+                                for (ModuleInfo m : availableInfos) {
+                                    if (DependencyChecker.checkDependencyModule (dep, m)) {
+                                        matched = true;
+                                        break;
+                                    }
                                 }
-                            }
-                            if (! matched) {
-                                brokenDependencies.add (dep);
-                            }
-                        } else {
-                            UpdateElementImpl reqElImpl = Trampoline.API.impl (reqEl);
-                            ModuleUpdateElementImpl reqModuleImpl = (ModuleUpdateElementImpl) reqElImpl;
-                            ModuleInfo info = reqModuleImpl.getModuleInfo ();
-                            if (DependencyChecker.checkDependencyModule (dep, info)) {
-                                if (! availableInfos.contains (info)) {
-                                    requested = reqEl;
+                                if (! matched) {
+                                    brokenDependencies.add (dep);
                                 }
                             } else {
-                                brokenDependencies.add (dep);
+                                UpdateElementImpl reqElImpl = Trampoline.API.impl (reqEl);
+                                ModuleUpdateElementImpl reqModuleImpl = (ModuleUpdateElementImpl) reqElImpl;
+                                ModuleInfo info = reqModuleImpl.getModuleInfo ();
+                                if (DependencyChecker.checkDependencyModule (dep, info)) {
+                                    if (! availableInfos.contains (info)) {
+                                        requested = reqEl;
+                                    }
+                                } else {
+                                    brokenDependencies.add (dep);
+                                }
                             }
                         }
                     }
@@ -683,6 +680,11 @@ public class Utilities {
             case Dependency.TYPE_REQUIRES :
             case Dependency.TYPE_NEEDS :
             case Dependency.TYPE_RECOMMENDS :
+                if (DummyModuleInfo.TOKEN_MODULE_FORMAT1.equals (dep.getName ()) ||
+                        DummyModuleInfo.TOKEN_MODULE_FORMAT2.equals (dep.getName ())) {
+                    // these tokens you can ignore here
+                    break;
+                }
                 UpdateUnit p = DependencyAggregator.getRequested (dep);
                 boolean passed = false;
                 if (p == null) {
@@ -1228,7 +1230,7 @@ public class Utilities {
         if (userDir != null) {
             cacheDir = new File (new File (new File (userDir, "var"), "cache"), "catalogcache"); // NOI18N
         } else {
-            File dir = FileUtil.toFile (Repository.getDefault ().getDefaultFileSystem ().getRoot());
+            File dir = FileUtil.toFile (FileUtil.getConfigRoot());
             cacheDir = new File (dir, "catalogcache"); // NOI18N
         }
         cacheDir.mkdirs();
