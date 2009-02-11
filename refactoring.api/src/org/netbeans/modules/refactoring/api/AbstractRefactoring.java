@@ -45,6 +45,10 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.netbeans.api.annotations.common.CheckForNull;
+import org.netbeans.api.annotations.common.NonNull;
 import org.netbeans.api.queries.SharabilityQuery;
 import org.netbeans.modules.refactoring.api.impl.APIAccessor;
 import org.netbeans.modules.refactoring.api.impl.ProgressSupport;
@@ -67,6 +71,7 @@ import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.netbeans.modules.refactoring.spi.impl.RefactoringPanel;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
+import org.openide.util.Parameters;
 import org.openide.util.lookup.InstanceContent;
 
 
@@ -111,13 +116,14 @@ public abstract class AbstractRefactoring {
     
     private ArrayList gbHandlers;
     
-    private ProgressListener progressListener = new ProgressL();
+    private ProgressL progressListener = new ProgressL();
     
     private ProgressSupport progressSupport;
     
     Lookup refactoringSource;
     
     protected AbstractRefactoring(Lookup refactoringSource) {
+        Parameters.notNull("refactoringSource", refactoringSource); // NOI18N
         this.refactoringSource = refactoringSource;
     }
     
@@ -169,6 +175,7 @@ public abstract class AbstractRefactoring {
      * @return Chain of problems encountered or <code>null</code> if no problems
      * were found.
      */
+    @CheckForNull
     public final Problem preCheck() {
 //        //workaround for #68803
 //        if (!(this instanceof WhereUsedQuery)) {
@@ -190,7 +197,11 @@ public abstract class AbstractRefactoring {
      * @return Chain of problems encountered or <code>null</code> in no problems
      * were found.
      */
-    public final Problem prepare(RefactoringSession session) {
+    @CheckForNull
+    public final Problem prepare(@NonNull RefactoringSession session) {
+        Parameters.notNull("session", session); // NOI18N
+        long time = System.currentTimeMillis();
+
         Problem p = null;
         boolean checkCalled = false;
         if (currentState < PARAMETERS_CHECK) {
@@ -199,13 +210,21 @@ public abstract class AbstractRefactoring {
         }
         if (p != null && p.isFatal())
             return p;
-        return pluginsPrepare(checkCalled?p:null, session);
+
+        p =  pluginsPrepare(checkCalled?p:null, session);
+        Logger timer = Logger.getLogger("TIMER.RefactoringPrepare");
+        if (timer.isLoggable(Level.FINE)) {
+            time = System.currentTimeMillis() - time;
+            timer.log(Level.FINE, "refactoring.prepare", new Object[] { this, time } );
+        }
+        return p;
     }
     
     /**
      * Checks if this refactoring has correctly set all parameters.
-     * @return Returns instancef Problem or null
+     * @return Returns instance of Problem or null
      */
+    @CheckForNull
     public final Problem checkParameters() {
 //        //workaround for #68803
 //        if (this instanceof WhereUsedQuery) {
@@ -229,6 +248,7 @@ public abstract class AbstractRefactoring {
      * If you want complete check of parameters, use #checkParameters()
      * @return Returns instance of Problem or null
      */
+    @CheckForNull
     public final Problem fastCheckParameters() {
         // Do not set classpath - use default merged class path
         // #57558
@@ -246,7 +266,8 @@ public abstract class AbstractRefactoring {
      * @param listener The listener to register.
      *
      */
-    public final synchronized void addProgressListener(ProgressListener listener) {
+    public final synchronized void addProgressListener(@NonNull ProgressListener listener) {
+        Parameters.notNull("listener", listener); // NOI18N
         if (progressSupport == null ) {
             progressSupport = new ProgressSupport();
         }
@@ -269,7 +290,8 @@ public abstract class AbstractRefactoring {
      * @param listener The listener to remove.
      *
      */
-    public final synchronized void removeProgressListener(ProgressListener listener) {
+    public final synchronized void removeProgressListener(@NonNull ProgressListener listener) {
+        Parameters.notNull("listener", listener); // NOI18N
         if (progressSupport != null ) {
             progressSupport.removeProgressListener(listener); 
         }
@@ -291,6 +313,7 @@ public abstract class AbstractRefactoring {
      * @see Context
      * @return context in which the refactoring was invoked.
      */
+    @NonNull
     public final Context getContext() {
         if (this.scope == null) {
             this.scope=new Context(new InstanceContent());
@@ -302,6 +325,7 @@ public abstract class AbstractRefactoring {
      * Object being refactored
      * @return 
      */
+    @NonNull
     public final Lookup getRefactoringSource() {
         return refactoringSource;
     }
@@ -323,22 +347,27 @@ public abstract class AbstractRefactoring {
     }
     
     private Problem pluginsPreCheck(Problem problem) {
-        Iterator pIt=getPlugins().iterator();
-        
-        while(pIt.hasNext()) {
-            if (cancel)
-                return null;
-            RefactoringPlugin plugin=(RefactoringPlugin)pIt.next();
-            
-            try {
-                problem=chainProblems(plugin.preCheck(),problem);
-            } catch (Throwable t) {
-                problem =createProblemAndLog(problem, t, plugin.getClass());
+        try {
+            progressListener.start();
+            Iterator pIt=getPlugins().iterator();
+
+            while(pIt.hasNext()) {
+                if (cancel)
+                    return null;
+                RefactoringPlugin plugin=(RefactoringPlugin)pIt.next();
+
+                try {
+                    problem=chainProblems(plugin.preCheck(),problem);
+                } catch (Throwable t) {
+                    problem =createProblemAndLog(problem, t, plugin.getClass());
+                }
+                if (problem!=null && problem.isFatal())
+                    return problem;
             }
-            if (problem!=null && problem.isFatal())
-                return problem;
+            return problem;
+        } finally {
+            progressListener.stop();
         }
-        return problem;
     }
     
     private String getModuleName(Class c) {
@@ -360,14 +389,24 @@ public abstract class AbstractRefactoring {
         if (cause != null && (cause.getClass().getName().equals("org.netbeans.api.java.source.JavaSource$InsufficientMemoryException") ||  //NOI18N
             (cause.getCause()!=null ) && cause.getCause().getClass().getName().equals("org.netbeans.api.java.source.JavaSource$InsufficientMemoryException"))) { //NOI18N
             newProblem = new Problem(true, NbBundle.getMessage(Util.class, "ERR_OutOfMemory"));
+            Logger.global.log(Level.INFO, "There is not enough memory to complete this task.", t);
         } else {
             newProblem = new Problem(false, createMessage(source, t));
-        }
             Exceptions.printStackTrace(t);
+        }
         return chainProblems(newProblem, p);
     }
     
     private Problem pluginsPrepare(Problem problem, RefactoringSession session) {
+        try {
+            progressListener.start();
+            return pluginsPrepare2(problem, session);
+        } finally {
+            progressListener.stop();
+        }
+    }
+    
+    private Problem pluginsPrepare2(Problem problem, RefactoringSession session) {
         RefactoringElementsBag elements = session.getElementsBag();
         Iterator pIt=getPlugins().iterator();
         
@@ -430,43 +469,53 @@ public abstract class AbstractRefactoring {
     }
     
     private Problem pluginsCheckParams(Problem problem) {
-        Iterator pIt=getPlugins().iterator();
-        
-        while(pIt.hasNext()) {
-            if (cancel)
-                return null;
-            
-            RefactoringPlugin plugin=(RefactoringPlugin)pIt.next();
-            
-            try {
-                problem=chainProblems(plugin.checkParameters(),problem);
-            } catch (Throwable t) {
-                problem =createProblemAndLog(problem, t, plugin.getClass());
+        try {
+            progressListener.start();
+            Iterator pIt=getPlugins().iterator();
+
+            while(pIt.hasNext()) {
+                if (cancel)
+                    return null;
+
+                RefactoringPlugin plugin=(RefactoringPlugin)pIt.next();
+
+                try {
+                    problem=chainProblems(plugin.checkParameters(),problem);
+                } catch (Throwable t) {
+                    problem =createProblemAndLog(problem, t, plugin.getClass());
+                }
+                if (problem!=null && problem.isFatal())
+                    return problem;
             }
-            if (problem!=null && problem.isFatal())
-                return problem;
+            return problem;
+        } finally {
+            progressListener.stop();
         }
-        return problem;
     }
     
     private Problem pluginsFastCheckParams(Problem problem) {
-        Iterator pIt=getPlugins().iterator();
-        
-        while(pIt.hasNext()) {
-           if (cancel)
-                return null;
+        try {
+            progressListener.start();
+            Iterator pIt=getPlugins().iterator();
 
-            RefactoringPlugin plugin=(RefactoringPlugin)pIt.next();
-            
-            try {
-                problem=chainProblems(plugin.fastCheckParameters(),problem);
-            } catch (Throwable t) {
-                problem =createProblemAndLog(problem, t, plugin.getClass());
+            while(pIt.hasNext()) {
+               if (cancel)
+                    return null;
+
+                RefactoringPlugin plugin=(RefactoringPlugin)pIt.next();
+
+                try {
+                    problem=chainProblems(plugin.fastCheckParameters(),problem);
+                } catch (Throwable t) {
+                    problem =createProblemAndLog(problem, t, plugin.getClass());
+                }
+                if (problem!=null && problem.isFatal())
+                    return problem;
             }
-            if (problem!=null && problem.isFatal())
-                return problem;
+            return problem;
+        } finally {
+            progressListener.stop();
         }
-        return problem;
     }
     
     static Problem chainProblems(Problem p,Problem p1) {
@@ -487,10 +536,10 @@ public abstract class AbstractRefactoring {
 
         private float progressStep;
         private float current;
-        private int starts = 0;
+        private boolean startCalledByPlugin = false;
         public void start(ProgressEvent event) {
-            starts++;
             progressStep = (float) PLUGIN_STEPS / event.getCount();
+            startCalledByPlugin |= true;
             
             if (pluginsWithProgress.indexOf(event.getSource()) == 0) {
                 //first plugin
@@ -513,11 +562,19 @@ public abstract class AbstractRefactoring {
         }
         
         public void stop(ProgressEvent event) {
-            starts--;
-            if (starts==0) {
+            // do not rely on plugins; see stop()
+        }
+        
+        void start() {
+            startCalledByPlugin = false;
+        }
+        
+        void stop() {
+            if (startCalledByPlugin) {
                 fireProgressListenerStop();
             }
         }
+        
         /** Notifies all registered listeners about the event.
          *
          * @param type Type of operation that is starting.
