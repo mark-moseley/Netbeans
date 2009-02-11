@@ -21,6 +21,12 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
+ * Contributor(s):
+ *
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,41 +37,38 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
- * Contributor(s):
- *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.languages.diff;
+package org.netbeans.modules.languages.bat;
 
-import org.netbeans.api.languages.ASTItem;
-import org.netbeans.api.languages.ASTNode;
-import org.netbeans.api.languages.ASTToken;
-import org.netbeans.api.languages.SyntaxContext;
-
+import org.netbeans.api.lexer.InputAttributes;
+import org.netbeans.api.lexer.Language;
+import org.netbeans.api.lexer.LanguagePath;
+import org.netbeans.api.lexer.Token;
+import org.netbeans.spi.lexer.LanguageEmbedding;
+import org.netbeans.spi.lexer.LanguageProvider;
 
 /**
  *
- * @author hanz
+ * @author Jan Jancura
  */
-public class Diff {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.lexer.LanguageProvider.class)
+public class BatLanguageProvider extends LanguageProvider {
     
-    public static String fileName (SyntaxContext context) {
-        ASTItem item = context.getASTPath ().getLeaf ();
-        String name = item instanceof ASTNode ?
-            ((ASTNode) item).getAsText () :
-            ((ASTToken) item).getIdentifier ();
-        int i = name.lastIndexOf ('/');
-        if (i < 0) return name.substring (7);
-        return name.substring (i + 1);
-    } 
-    
-    public static String filePath (SyntaxContext context) {
-        ASTItem item = context.getASTPath ().getLeaf ();
-        String name = item instanceof ASTNode ?
-            ((ASTNode) item).getAsText () :
-            ((ASTToken) item).getIdentifier ();
-        return name.substring (7);
-    } 
+    public Language<BatTokenId> findLanguage (String mimeType) {
+        if ("text/bat".equals (mimeType))
+            return new BatLanguageHierarchy ().language ();
+        return null;
+    }
+
+    @Override
+    public LanguageEmbedding<?> findLanguageEmbedding (
+        Token arg0,
+        LanguagePath arg1,
+        InputAttributes arg2
+    ) {
+        return null;
+    }
 }
+
+
