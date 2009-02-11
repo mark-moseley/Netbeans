@@ -56,8 +56,13 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import javax.swing.Action;
 import javax.swing.JPanel;
 import javax.swing.JLabel;
@@ -75,16 +80,26 @@ import javax.swing.text.Document;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.UIManager;
+import javax.swing.text.AttributeSet;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.FontColorNames;
+import org.netbeans.api.editor.settings.FontColorSettings;
+import org.netbeans.api.editor.settings.SimpleValueNames;
+import org.netbeans.modules.editor.lib.EditorPreferencesDefaults;
 import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
 
 /**
-* Status bar support
-*
-* @author Miloslav Metelka
-* @version 1.00
-*/
+ * Status bar support.
+ * <br>
+ * By default the status bar is hidden and a global IDE's status bar is used.
+ * It is only visible if the editor window is undocked.
+ *
+ * @author Miloslav Metelka
+ * @version 1.00
+ */
 
-public class StatusBar implements PropertyChangeListener, SettingsChangeListener, DocumentListener {
+public class StatusBar implements PropertyChangeListener, DocumentListener {
 
     public static final String CELL_MAIN = "main"; // NOI18N
 
@@ -112,16 +127,18 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
         BorderFactory.createEmptyBorder(0, 2, 0, 2)
     );
 
+    private static Map<String,JLabel> cellName2GlobalCell = new HashMap<String, JLabel>();
+
+    public static void setGlobalCell(String cellName, JLabel globalCell) {
+        cellName2GlobalCell.put(cellName, globalCell);
+    }
+
     protected EditorUI editorUI;
 
     /** The status bar panel into which the cells are added. */
     private JPanel panel;
 
     private boolean visible;
-
-    private Coloring coloring;
-
-    private Coloring boldColoring;
 
     private List cellList = new ArrayList();
 
@@ -141,6 +158,26 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
     private String insertModeLocaleString;
     private String overwriteModeLocaleString;
 
+    private Preferences prefs = null;
+    private final PreferenceChangeListener prefsListener = new PreferenceChangeListener() {
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            // #50073
+            SwingUtilities.invokeLater(new Runnable(){
+                public void run(){
+                    refreshPanel();
+                }
+            });
+            
+            if (evt == null || SimpleValueNames.STATUS_BAR_CARET_DELAY.equals(evt.getKey())) {
+                caretDelay = prefs.getInt(SimpleValueNames.STATUS_BAR_CARET_DELAY, EditorPreferencesDefaults.defaultStatusBarCaretDelay);
+                if (caretL != null) {
+                    caretL.setDelay(caretDelay);
+                }
+            }
+        }
+    };
+    private PreferenceChangeListener weakListener = null;
+    
     static final long serialVersionUID =-6266183959929157349L;
 
     public StatusBar(EditorUI editorUI) {
@@ -155,54 +192,17 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
         insertModeLocaleString = bundle.getString("status-bar-insert-mode"); //NOI18N
         overwriteModeLocaleString = bundle.getString("status-bar-overwrite-mode"); //NOI18N
 
-        Settings.addSettingsChangeListener(this);
-
         synchronized (editorUI.getComponentLock()) {
             // if component already installed in EditorUI simulate installation
             JTextComponent component = editorUI.getComponent();
             if (component != null) {
-                propertyChange(new PropertyChangeEvent(editorUI,
-                                                       EditorUI.COMPONENT_PROPERTY, null, component));
+                propertyChange(new PropertyChangeEvent(editorUI, EditorUI.COMPONENT_PROPERTY, null, component));
             }
 
             editorUI.addPropertyChangeListener(this);
         }
     }
 
-    public void settingsChange(SettingsChangeEvent evt) {
-        Class kitClass = Utilities.getKitClass(editorUI.getComponent());
-        String settingName = (evt != null) ? evt.getSettingName() : null;
-        if (kitClass != null) {
-            // #86272: Colorings not based on default editor coloring anymore,
-            // to provide native LF
-            coloring = editorUI.getColoring(SettingsNames.STATUS_BAR_COLORING);
-            boldColoring = editorUI.getColoring(SettingsNames.STATUS_BAR_BOLD_COLORING);
-
-            // #50073
-            SwingUtilities.invokeLater(new Runnable(){
-                public void run(){
-                    refreshPanel();
-                }
-            });
-            
-
-            if (settingName == null || SettingsNames.STATUS_BAR_CARET_DELAY.equals(settingName)) {
-                caretDelay = SettingsUtil.getInteger(kitClass, SettingsNames.STATUS_BAR_CARET_DELAY,
-                                                     SettingsDefaults.defaultStatusBarCaretDelay);
-                if (caretL != null) {
-                    caretL.setDelay(caretDelay);
-                }
-            }
-
-            if (settingName == null || SettingsNames.STATUS_BAR_VISIBLE.equals(settingName)) {
-                boolean wantVisible = SettingsUtil.getBoolean(kitClass,
-                                      SettingsNames.STATUS_BAR_VISIBLE, SettingsDefaults.defaultStatusBarVisible);
-                setVisible(wantVisible);
-            }
-
-        }
-    }
-    
     private void documentUndo(DocumentEvent evt) {
         Utilities.runInEventDispatchThread(new Runnable() {
             public void run() {
@@ -258,6 +258,18 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
                 }
             }
         }
+
+        // If not visible check that the global panel is updated by values
+        if (!v) {
+            JTextComponent compoennt = editorUI.getComponent();
+            if (compoennt != null && compoennt.hasFocus()) {
+                // Update all cell mappings
+                for (Map.Entry<String,JLabel> e : cellName2GlobalCell.entrySet()) {
+                    String s = getText(e.getKey());
+                    e.getValue().setText(s);
+                }
+            }
+        }
     }
 
     public final JPanel getPanel() {
@@ -291,6 +303,10 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
         String propName = evt.getPropertyName();
 
         if (EditorUI.COMPONENT_PROPERTY.equals(propName)) {
+            if (prefs != null && weakListener != null) {
+                prefs.removePreferenceChangeListener(weakListener);
+            }
+            
             JTextComponent component = (JTextComponent)evt.getNewValue();
             if (component != null) { // just installed
                 component.addPropertyChangeListener(this);
@@ -305,7 +321,12 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
                     doc.addDocumentListener(this);
                 }
 
-                settingsChange(null);
+                String mimeType = org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(component);
+                prefs = MimeLookup.getLookup(mimeType).lookup(Preferences.class);
+                weakListener = WeakListeners.create(PreferenceChangeListener.class, prefsListener, prefs);
+                prefs.addPreferenceChangeListener(weakListener);
+                prefsListener.preferenceChange(null);
+                
                 refreshPanel();
 
             } else { // just deinstalled
@@ -456,34 +477,71 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
         setText(cellName, text, null);
     }
 
+    private static Coloring getColoring(String mimeType, String highlight) {
+        FontColorSettings fcs = MimeLookup.getLookup(mimeType).lookup(FontColorSettings.class);
+        AttributeSet attribs = fcs == null ? null : fcs.getFontColors(highlight);
+        return attribs == null ? null : Coloring.fromAttributeSet(attribs);
+    }
+    
     public void setBoldText(String cellName, String text) {
-        setText(cellName, text, boldColoring);
+        setText(cellName, text, getColoring(
+            org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(editorUI.getComponent()), 
+            FontColorNames.STATUS_BAR_BOLD_COLORING));
     }
 
-    public void setText(String cellName, String text,
-                        Coloring extraColoring) {
+    public void setText(String cellName, String text, Coloring extraColoring) {
+        setText(cellName, text, extraColoring, 1);
+    }
+
+    public void setText(String cellName, String text, Coloring extraColoring, int importance) {
         JLabel cell = getCellByName(cellName);
         if (cell != null) {
-            Coloring c = coloring;
-            if (c != null && extraColoring != null) {
-                c = extraColoring.apply(c);
-            } else if (c == null) {
-                c = extraColoring;
-            }
             cell.setText(text);
-            
-            if (CELL_POSITION.equals(cellName)){
-                cell.setToolTipText(caretPositionLocaleString);
-            }else if (CELL_TYPING_MODE.equals(cellName)){
-                cell.setToolTipText(insText.equals(text)? insertModeLocaleString : overwriteModeLocaleString);
-            }else{
-                cell.setToolTipText(text.length() == 0 ? null : text);
-            }
-            
-            if (c != null && cell instanceof Cell) {
-                applyColoring((Cell) cell, c);            
+            if (visible) {
+                Coloring c = getColoring(
+                    org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(editorUI.getComponent()),
+                    FontColorNames.STATUS_BAR_COLORING
+                );
+
+                if (c != null && extraColoring != null) {
+                    c = extraColoring.apply(c);
+                } else if (c == null) {
+                    c = extraColoring;
+                }
+                if (CELL_POSITION.equals(cellName)){
+                    cell.setToolTipText(caretPositionLocaleString);
+                } else if (CELL_TYPING_MODE.equals(cellName)) {
+                    cell.setToolTipText(insText.equals(text)? insertModeLocaleString : overwriteModeLocaleString);
+                } else {
+                    cell.setToolTipText(text == null || text.length() == 0 ? null : text);
+                }
+
+                if (c != null && cell instanceof Cell) {
+                    applyColoring((Cell) cell, c);
+                }
+            } else { // Status bar not visible => use global status bar if possible
+                JLabel globalCell = cellName2GlobalCell.get(cellName);
+                if (globalCell != null) {
+                    if (CELL_MAIN.equals(cellName)) {
+                        globalCell.putClientProperty("importance", importance);
+                        globalCell.setText(text);
+                    }
+                    globalCell.setText(text);
+                }
             }
         }
+    }
+
+    /**
+     * Set text into main cell with a given importance.
+     *
+     * @param text non-null text to be displayed.
+     * @param importance positive integer having
+     */
+    public void setText(String text, int importance) {
+        setText(CELL_MAIN, text, getColoring(
+            org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(editorUI.getComponent()),
+            FontColorNames.STATUS_BAR_BOLD_COLORING), importance);
     }
 
     /* Refresh the whole panel by removing all the components
@@ -495,8 +553,12 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
             Iterator it = cellList.iterator();
             while (it.hasNext()) {
                 JLabel c = (JLabel)it.next();
-                if (c instanceof Cell && coloring != null) {
-                    applyColoring((Cell) c, coloring);
+                if (c instanceof Cell && editorUI.getComponent()!=null/*#141362 Check editorUI.getComponent() not null*/) {
+                    Coloring col = getColoring(
+                        org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(editorUI.getComponent()), 
+                        FontColorNames.STATUS_BAR_COLORING
+                    );
+                    applyColoring((Cell) c, col);
                 }
             }
 
@@ -596,7 +658,8 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
                 Border b = getBorder();
                 Insets ins = (b != null) ? b.getBorderInsets(this) : NULL_INSETS;
                 FontMetrics fm = getFontMetrics(f);
-                int mw = fm.stringWidth(this.getText());
+                String text = this.getText();
+                int mw = text == null ? 0 : fm.stringWidth(text);
                 maxDimension.height = fm.getHeight() + ins.top + ins.bottom;
                 if (widestStrings != null) {
                     for (int i = 0; i < widestStrings.length; i++) {
@@ -630,6 +693,12 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
             updateSize();
         }
 
+        @Override
+        public void setBorder(Border border) {
+            super.setBorder(border);
+            updateSize();
+        }
+
         /** Returns default foreground color of the cell, for current LF and theme.  
          * @return Default foreground color 
          */
@@ -642,7 +711,9 @@ public class StatusBar implements PropertyChangeListener, SettingsChangeListener
          * @return Default background color 
          */
         public Color getDefaultBackground () {
-            Color color = (Color) UIManager.get("Label.background"); //NOI18N
+            Color color = UIManager.getColor("NbEditorStatusBar.background"); //NOI18N
+            if( null == color )
+                color = (Color) UIManager.get("Label.background"); //NOI18N
             return color != null ? color : defaultBackground;
         }
 

@@ -60,7 +60,7 @@ public final class ComponentUtils {
     private static final Logger LOG = Logger.getLogger(Logger.class.getName());
     
     public static boolean isGuardedException(BadLocationException exc) {
-        return exc.getClass().getName().equals("GuardedException");
+        return exc.getClass().getName().equals("org.netbeans.editor.GuardedException");
     }
 
     public static void returnFocus() {
@@ -90,6 +90,23 @@ public final class ComponentUtils {
             Object statusBar = getSbMethod.invoke(editorUI);
             Method setTextMethod = statusBar.getClass().getMethod("setText", String.class, String.class);
             setTextMethod.invoke(statusBar, "main", text);
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, e.getMessage(), e);
+        }
+//        StatusBar sb = getEditorUI(c).getStatusBar();
+//        if (sb != null) {
+//            sb.setText(StatusBar.CELL_MAIN, text);
+//        }
+    }
+
+    public static void setStatusText(JTextComponent c, String text, int importance) {
+        // TODO: fix this, do not use reflection
+        try {
+            Object editorUI = getEditorUI(c);
+            Method getSbMethod = editorUI.getClass().getMethod("getStatusBar");
+            Object statusBar = getSbMethod.invoke(editorUI);
+            Method setTextMethod = statusBar.getClass().getMethod("setText", String.class, int.class);
+            setTextMethod.invoke(statusBar, text, importance);
         } catch (Exception e) {
             LOG.log(Level.WARNING, e.getMessage(), e);
         }
