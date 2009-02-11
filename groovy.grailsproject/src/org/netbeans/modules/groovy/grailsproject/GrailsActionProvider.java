@@ -39,26 +39,42 @@
 
 package org.netbeans.modules.groovy.grailsproject;
 
+import java.io.File;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.project.ProjectInformation;
-import org.netbeans.modules.extexecution.api.ExecutionDescriptorBuilder;
-import org.netbeans.modules.extexecution.api.ExecutionService;
-import org.netbeans.modules.extexecution.api.input.InputProcessors;
-import org.netbeans.modules.extexecution.api.input.LineProcessor;
+import org.netbeans.api.extexecution.ExecutionDescriptor.InputProcessorFactory;
+import org.netbeans.api.extexecution.ExecutionDescriptor;
+import org.netbeans.api.extexecution.ExecutionService;
+import org.netbeans.api.extexecution.input.InputProcessor;
+import org.netbeans.api.extexecution.input.InputProcessors;
+import org.netbeans.api.extexecution.input.LineProcessor;
 import org.netbeans.modules.groovy.grails.api.ExecutionSupport;
 import org.netbeans.modules.groovy.grails.api.GrailsProjectConfig;
 import org.netbeans.modules.groovy.grails.api.GrailsRuntime;
-import org.netbeans.modules.groovy.grailsproject.actions.ConfigSupport;
-import org.netbeans.modules.groovy.grailsproject.actions.RefreshProjectRunnable;
+import org.netbeans.modules.groovy.grailsproject.actions.ConfigurationSupport;
+import org.netbeans.modules.groovy.grailsproject.commands.GrailsCommandSupport;
+import org.netbeans.modules.groovy.support.api.GroovySettings;
+import org.netbeans.modules.web.client.tools.api.JSToNbJSLocationMapper;
+import org.netbeans.modules.web.client.tools.api.LocationMappersFactory;
+import org.netbeans.modules.web.client.tools.api.NbJSToJSLocationMapper;
+import org.netbeans.modules.web.client.tools.api.WebClientToolsProjectUtils;
+import org.netbeans.modules.web.client.tools.api.WebClientToolsSessionException;
+import org.netbeans.modules.web.client.tools.api.WebClientToolsSessionStarterService;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
 import org.openide.LifecycleManager;
 import org.openide.awt.HtmlBrowser;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
+import org.openide.util.lookup.Lookups;
 
 /**
  *
@@ -67,6 +83,10 @@ import org.openide.util.Lookup;
 public class GrailsActionProvider implements ActionProvider {
 
     public static final String COMMAND_GRAILS_SHELL = "grails-shell"; // NOI18N
+    public static final String COMMAND_COMPILE = "compile"; // NOI18N
+    public static final String COMMAND_STATS = "stats"; // NOI18N
+    public static final String COMMAND_UPGRADE = "upgrade"; // NOI18N
+    public static final String COMMAND_WAR = "war"; // NOI18N
 
     private static final Logger LOGGER = Logger.getLogger(GrailsActionProvider.class.getName());
 
@@ -75,7 +95,11 @@ public class GrailsActionProvider implements ActionProvider {
         COMMAND_TEST,
         COMMAND_CLEAN,
         COMMAND_DELETE,
-        COMMAND_GRAILS_SHELL
+        COMMAND_GRAILS_SHELL,
+        COMMAND_COMPILE,
+        COMMAND_STATS,
+        COMMAND_UPGRADE,
+        COMMAND_WAR
     };
 
     private final GrailsProject project;
@@ -86,25 +110,43 @@ public class GrailsActionProvider implements ActionProvider {
 
 
     public String[] getSupportedActions() {
-        return supportedActions.clone();
+        if (WebClientToolsSessionStarterService.isAvailable()) {
+            String[] debugSupportedActions = new String[supportedActions.length + 1];
+            for (int i = 0; i < supportedActions.length; i++) {
+                debugSupportedActions[i] = supportedActions[i];
+            }
+            debugSupportedActions[supportedActions.length] = COMMAND_DEBUG;
+            return debugSupportedActions;
+        } else {
+            return supportedActions.clone();
+        }
     }
 
     public void invokeAction(String command, Lookup context) throws IllegalArgumentException {
         final GrailsRuntime runtime = GrailsRuntime.getInstance();
         if (!runtime.isConfigured()) {
-            ConfigSupport.showConfigurationWarning(runtime);
+            ConfigurationSupport.showConfigurationWarning(runtime);
             return;
         }
 
         if (COMMAND_RUN.equals(command)) {
             LifecycleManager.getDefault().saveAll();
             executeRunAction();
+        } else if (COMMAND_DEBUG.equals(command)) {
+            LifecycleManager.getDefault().saveAll();
+            executeRunAction(true);
         } else if (COMMAND_GRAILS_SHELL.equals(command)) {
-            executeShellAction();
+            executeSimpleAction("shell"); // NOI18N
         } else if (COMMAND_TEST.equals(command)) {
             executeSimpleAction("test-app"); // NOI18N
         } else if (COMMAND_CLEAN.equals(command)) {
             executeSimpleAction("clean"); // NOI18N
+        } else if (COMMAND_COMPILE.equals(command)) {
+            executeSimpleAction("compile"); // NOI18N
+        } else if (COMMAND_STATS.equals(command)) {
+            executeSimpleAction("stats"); // NOI18N
+        } else if (COMMAND_UPGRADE.equals(command)) {
+            executeSimpleAction("upgrade"); // NOI18N
         } else if (COMMAND_DELETE.equals(command)) {
             DefaultProjectOperations.performDefaultDeleteOperation(project);
         }
@@ -115,11 +157,15 @@ public class GrailsActionProvider implements ActionProvider {
     }
 
     private void executeRunAction() {
+        executeRunAction(false);
+    }
+
+    private void executeRunAction(final boolean debug) {
         final GrailsServerState serverState = project.getLookup().lookup(GrailsServerState.class);
         if (serverState != null && serverState.isRunning()) {
             URL url = serverState.getRunningUrl();
             if (url != null) {
-                HtmlBrowser.URLDisplayer.getDefault().showURL(url);
+                GrailsCommandSupport.showURL(url, debug, project);
             }
             return;
         }
@@ -139,36 +185,14 @@ public class GrailsActionProvider implements ActionProvider {
 
         ProjectInformation inf = project.getLookup().lookup(ProjectInformation.class);
         String displayName = inf.getDisplayName() + " (run-app)"; // NOI18N
-        Runnable runnable = new Runnable() {
-            public void run() {
-                final GrailsServerState serverState = project.getLookup().lookup(GrailsServerState.class);
-                if (serverState != null) {
-                    serverState.setProcess(null);
-                    serverState.setRunningUrl(null);
-                }
+
+        ExecutionDescriptor descriptor = project.getCommandSupport().getRunDescriptor(new InputProcessorFactory() {
+            public InputProcessor newInputProcessor(InputProcessor defaultProcessor) {
+                return InputProcessors.proxy(defaultProcessor, InputProcessors.bridge(new ServerURLProcessor(project, debug)));
             }
-        };
+        });
 
-        ExecutionDescriptorBuilder builder = new ExecutionDescriptorBuilder();
-        builder.controllable(true).frontWindow(true).inputVisible(true).showProgress(true).showSuspend(true);
-        builder.outProcessor(InputProcessors.bridge(new ServerURLProcessor(project)));
-        builder.postExecution(runnable);
-
-        ExecutionService service = ExecutionService.newService(callable, builder.create(), displayName);
-        service.run();
-    }
-
-    private void executeShellAction() {
-        Callable<Process> callable = ExecutionSupport.getInstance().createSimpleCommand("shell",
-                GrailsProjectConfig.forProject(project));
-        ProjectInformation inf = project.getLookup().lookup(ProjectInformation.class);
-        String displayName = inf.getDisplayName() + " (shell)"; // NOI18N
-
-        ExecutionDescriptorBuilder builder = new ExecutionDescriptorBuilder();
-        builder.controllable(true).frontWindow(true).inputVisible(true).showProgress(true).showSuspend(true);
-        builder.postExecution(new RefreshProjectRunnable(project));
-
-        ExecutionService service = ExecutionService.newService(callable, builder.create(), displayName);
+        ExecutionService service = ExecutionService.newService(callable, descriptor, displayName);
         service.run();
     }
 
@@ -179,20 +203,20 @@ public class GrailsActionProvider implements ActionProvider {
         Callable<Process> callable = ExecutionSupport.getInstance().createSimpleCommand(
                 command, GrailsProjectConfig.forProject(project));
 
-        ExecutionDescriptorBuilder builder = new ExecutionDescriptorBuilder();
-        builder.controllable(true).frontWindow(true).inputVisible(true).showProgress(true);
-        builder.postExecution(new RefreshProjectRunnable(project));
+        ExecutionDescriptor descriptor = project.getCommandSupport().getDescriptor(command);
 
-        ExecutionService service = ExecutionService.newService(callable, builder.create(), displayName);
+        ExecutionService service = ExecutionService.newService(callable, descriptor, displayName);
         service.run();
     }
 
     private static class ServerURLProcessor implements LineProcessor {
 
         private final GrailsProject project;
+        private final boolean debug;
 
-        public ServerURLProcessor(GrailsProject project) {
+        public ServerURLProcessor(GrailsProject project, boolean debug) {
             this.project = project;
+            this.debug = debug;
         }
 
         public void processLine(String line) {
@@ -212,7 +236,7 @@ public class GrailsActionProvider implements ActionProvider {
                     state.setRunningUrl(url);
                 }
 
-                HtmlBrowser.URLDisplayer.getDefault().showURL(url);
+                GrailsCommandSupport.showURL(url, debug, project);
             }
         }
 
@@ -220,5 +244,8 @@ public class GrailsActionProvider implements ActionProvider {
             // noop
         }
 
+        public void close() {
+            // noop
+        }
     }
 }
