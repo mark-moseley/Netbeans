@@ -19,6 +19,7 @@ import javax.swing.ListModel;
 import javax.swing.event.ListDataListener;
 import org.netbeans.modules.e2e.api.wsdl.wsdl2java.WSDL2Java;
 import org.netbeans.modules.e2e.api.wsdl.wsdl2java.WSDL2Java.ValidationResult.ErrorLevel;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -120,8 +121,8 @@ public class ValidationNotifier extends javax.swing.JPanel {
         }
     }
     
-    private static final Icon ICON_WARNING  = new ImageIcon( Utilities.loadImage( "org/netbeans/modules/mobility/jsr172/resources/warning.png" ));
-    private static final Icon ICON_ERROR    = new ImageIcon( Utilities.loadImage( "org/netbeans/modules/mobility/jsr172/resources/error.png" ));
+    private static final Icon ICON_WARNING  = ImageUtilities.loadImageIcon("org/netbeans/modules/mobility/jsr172/resources/warning.png", false);
+    private static final Icon ICON_ERROR    = ImageUtilities.loadImageIcon("org/netbeans/modules/mobility/jsr172/resources/error.png", false);
     
     private static final class IconListRenderer implements ListCellRenderer {
     

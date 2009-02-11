@@ -53,11 +53,13 @@ import org.netbeans.modules.project.ui.OpenProjectList;
 import org.netbeans.modules.project.ui.OpenProjectListSettings;
 import org.netbeans.modules.project.ui.ProjectChooserAccessory;
 import org.netbeans.modules.project.ui.ProjectTab;
+import org.netbeans.modules.project.ui.ProjectUtilities;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.windows.WindowManager;
@@ -69,12 +71,13 @@ public class OpenProject extends BasicAction {
         
     /** Creates a new instance of BrowserAction */
     public OpenProject() {
-        super( DISPLAY_NAME, new ImageIcon( Utilities.loadImage( "org/netbeans/modules/project/ui/resources/openProject.png" ) ) );
+        super( DISPLAY_NAME, ImageUtilities.loadImageIcon("org/netbeans/modules/project/ui/resources/openProject.png", false));
         putValue("iconBase","org/netbeans/modules/project/ui/resources/openProject.png"); //NOI18N
         putValue(SHORT_DESCRIPTION, _SHORT_DESCRIPTION);
     }
 
     public void actionPerformed( ActionEvent evt ) {
+        Project projectToExpand = null;
         JFileChooser chooser = ProjectChooserAccessory.createProjectChooser( true ); // Create the jFileChooser
         chooser.setMultiSelectionEnabled( true );
         
@@ -127,20 +130,29 @@ public class OpenProject extends BasicAction {
                 else {
                     Project projectsArray[] = new Project[ projects.size() ];
                     projects.toArray( projectsArray );
+                    
+                    Project mainProject = null;
+                    if ( opls.isOpenAsMain() && projectsArray.length == 1 ) {
+                        // Set main project if selected
+                        mainProject = projectsArray[0];
+                    }
+
+                    if (projectsArray.length == 1) {
+                        projectToExpand = projectsArray[0];
+                    }
+
                     OpenProjectList.getDefault().open( 
                         projectsArray,                    // Put the project into OpenProjectList
                         opls.isOpenSubprojects(),         // And optionaly open subprojects
-			true);                            // open asynchronously
-                    if ( opls.isOpenAsMain() && projectsArray.length == 1 ) {
-                        // Set main project if selected
-                        OpenProjectList.getDefault().setMainProject( projectsArray[0] );
-                    }
-                    final ProjectTab ptLogial  = ProjectTab.findDefault (ProjectTab.ID_LOGICAL);
+                        true,                             // open asynchronously
+                        mainProject);
+                    
+                    final ProjectTab ptLogical  = ProjectTab.findDefault (ProjectTab.ID_LOGICAL);
                     
                     // invoke later to select the being opened project if the focus is outside ProjectTab
                     SwingUtilities.invokeLater (new Runnable () {
                         public void run () {
-                            Node root = ptLogial.getExplorerManager ().getRootContext ();
+                            Node root = ptLogical.getExplorerManager ().getRootContext ();
                             
                             ArrayList<Node> nodes = new ArrayList<Node>( projectDirs.length );
                             for( int i = 0; i < projectDirs.length; i++ ) {                
@@ -152,10 +164,10 @@ public class OpenProject extends BasicAction {
                             try {
                                 Node[] nodesArray = new Node[ nodes.size() ];
                                 nodes.toArray( nodesArray );
-                                ptLogial.getExplorerManager ().setSelectedNodes (nodesArray);
+                                ptLogical.getExplorerManager ().setSelectedNodes (nodesArray);
                                 if (!Boolean.getBoolean("project.tab.no.selection")) { //NOI18N
-                                    ptLogial.open ();
-                                    ptLogial.requestActive ();
+                                    ptLogical.open ();
+                                    ptLogical.requestActive ();
                                 }
                             } catch (Exception ignore) {
                                 // may ignore it
@@ -170,7 +182,10 @@ public class OpenProject extends BasicAction {
                          // Don't remeber the last selected dir
             }
         }
-        
+
+        if (projectToExpand != null) {
+            ProjectUtilities.selectAndExpandProject(projectToExpand);
+        }
         opls.setLastOpenProjectDir( chooser.getCurrentDirectory().getPath() );
         
     }

@@ -51,6 +51,7 @@ import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -68,9 +69,7 @@ public class CommonAddExtensibilityAttributeAction extends CommonNodeAction {
      *
      */
     private static final long serialVersionUID = 2110730939475660217L;
-    private static final ImageIcon ICON  = new ImageIcon
-    (Utilities.loadImage
-     ("org/netbeans/modules/xml/wsdl/ui/view/resources/message.png"));
+    private static final ImageIcon ICON  = ImageUtilities.loadImageIcon("org/netbeans/modules/xml/wsdl/ui/view/resources/message.png", false);
 
     public CommonAddExtensibilityAttributeAction() {
         this.setIcon(ICON);

@@ -41,6 +41,7 @@
 package org.netbeans.modules.profiler.ppoints.ui;
 
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.SystemAction;
 import java.awt.event.ActionEvent;
@@ -65,8 +66,7 @@ public class OpenProfilingPointsWindowAction extends SystemAction {
 
     public OpenProfilingPointsWindowAction() {
         putValue("noIconInMenu", null); // NOI18N
-        setIcon(new ImageIcon(org.openide.util.Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/ppoint.png",
-                                                                   true))); // NOI18N
+        setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/ppoint.png", true)); // NOI18N
     }
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
@@ -80,7 +80,7 @@ public class OpenProfilingPointsWindowAction extends SystemAction {
     }
 
     public void actionPerformed(ActionEvent e) {
-        ProfilingPointsWindow stc = ProfilingPointsWindow.getInstance();
+        ProfilingPointsWindow stc = ProfilingPointsWindow.getDefault();
         stc.open();
         stc.requestActive();
     }

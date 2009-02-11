@@ -24,6 +24,7 @@ import javax.swing.AbstractAction;
 import javax.swing.ImageIcon;
 import org.netbeans.modules.bpel.debugger.ui.plinks.PLinksNodeModel;
 import org.netbeans.modules.bpel.debugger.ui.plinks.PLinksTopComponent;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
@@ -36,10 +37,10 @@ import org.openide.windows.WindowManager;
 public class PLinks extends AbstractAction {
     
     public PLinks() {
+      // When changed, update also mf-layer.xml, where are the properties duplicated because of Actions.alwaysEnabled()
       putValue(NAME, NbBundle.getMessage(
               PLinks.class, "LBL_PLinksView")); // NOI18N
-      putValue(SMALL_ICON, new ImageIcon(Utilities.loadImage(
-              PLinksNodeModel.PARTNER_LINK_ICON + ".gif"))); // NOI18N
+      putValue(SMALL_ICON, ImageUtilities.loadImageIcon(PLinksNodeModel.PARTNER_LINK_ICON + ".gif", false)); // NOI18N
     }
     
     public void actionPerformed(ActionEvent e) {

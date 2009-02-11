@@ -51,6 +51,7 @@ import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -142,8 +143,7 @@ public class DebugAction extends NodeAction {
         private final ServerInstance instance;
         
         public OutputAction(ServerInstance instance) {
-            super(NbBundle.getMessage(DebugAction.class, "LBL_DebugOutput"),
-                  new ImageIcon(Utilities.loadImage(ICON)));
+            super(NbBundle.getMessage(DebugAction.class, "LBL_DebugOutput"),ImageUtilities.loadImageIcon(ICON, false));
             putValue(SHORT_DESCRIPTION, NbBundle.getMessage(DebugAction.class, "LBL_DebugOutputDesc"));
             this.instance = instance;
             

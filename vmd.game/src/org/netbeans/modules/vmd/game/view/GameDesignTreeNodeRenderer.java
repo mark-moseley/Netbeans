@@ -51,8 +51,8 @@ import org.netbeans.modules.vmd.game.model.GlobalRepository;
 import org.netbeans.modules.vmd.game.model.Scene;
 import org.netbeans.modules.vmd.game.model.Sprite;
 import org.netbeans.modules.vmd.game.model.TiledLayer;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 public class GameDesignTreeNodeRenderer implements TreeCellRenderer {
 	
@@ -62,10 +62,10 @@ public class GameDesignTreeNodeRenderer implements TreeCellRenderer {
 	private static ImageIcon imgScene;
 	
 	static {
-		imgGame = new ImageIcon(Utilities.loadImage("org/netbeans/modules/vmd/game/integration/res/gamer_16.png"));
-		imgSprite = new ImageIcon(Utilities.loadImage("org/netbeans/modules/vmd/game/model/adapter/res/sprite.png"));
-		imgTiled = new ImageIcon(Utilities.loadImage("org/netbeans/modules/vmd/game/model/adapter/res/tiled.png"));
-		imgScene = new ImageIcon(Utilities.loadImage("org/netbeans/modules/vmd/game/model/adapter/res/scene.png"));
+		imgGame = ImageUtilities.loadImageIcon("org/netbeans/modules/vmd/game/integration/res/gamer_16.png", false);
+		imgSprite = ImageUtilities.loadImageIcon("org/netbeans/modules/vmd/game/model/adapter/res/sprite.png", false);
+		imgTiled = ImageUtilities.loadImageIcon("org/netbeans/modules/vmd/game/model/adapter/res/tiled.png", false);
+		imgScene = ImageUtilities.loadImageIcon("org/netbeans/modules/vmd/game/model/adapter/res/scene.png", false);
 	}
 
 	public Component getTreeCellRendererComponent(JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
@@ -87,6 +87,7 @@ public class GameDesignTreeNodeRenderer implements TreeCellRenderer {
 	}
 	
 	private class GlobalRepositoryNodeRenderer extends DefaultTreeCellRenderer {
+                @Override
 		public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
 			GlobalRepository gr = (GlobalRepository) value;
 			DefaultTreeCellRenderer r = (DefaultTreeCellRenderer) super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
@@ -98,6 +99,7 @@ public class GameDesignTreeNodeRenderer implements TreeCellRenderer {
 	}
 	
 	private class SceneNodeRenderer extends DefaultTreeCellRenderer {
+                @Override
 		public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
 			Scene scene = (Scene) value;
 			DefaultTreeCellRenderer r = (DefaultTreeCellRenderer) super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
@@ -109,6 +111,7 @@ public class GameDesignTreeNodeRenderer implements TreeCellRenderer {
 	}
 
 	private class TiledLayerNodeRenderer extends DefaultTreeCellRenderer {
+                @Override
 		public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
 			TiledLayer tiledLayer = (TiledLayer) value;
 			DefaultTreeCellRenderer r = (DefaultTreeCellRenderer) super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
@@ -120,6 +123,7 @@ public class GameDesignTreeNodeRenderer implements TreeCellRenderer {
 	}
 
 	private class SpriteNodeRenderer extends DefaultTreeCellRenderer {
+                @Override
 		public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
 			Sprite sprite = (Sprite) value;
 			DefaultTreeCellRenderer r = (DefaultTreeCellRenderer) super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);

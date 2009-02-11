@@ -52,6 +52,7 @@ import javax.swing.Timer;
 import org.netbeans.modules.uihandler.api.Controller;
 import org.openide.awt.HtmlBrowser;
 import org.openide.awt.StatusLineElementProvider;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
@@ -60,6 +61,7 @@ import org.openide.util.WeakListeners;
  *
  * @author jarda
  */
+@org.openide.util.lookup.ServiceProvider(service=org.openide.awt.StatusLineElementProvider.class, position=500)
 public class SubmitStatus implements StatusLineElementProvider {
 
     public SubmitStatus() {
@@ -86,9 +88,9 @@ public class SubmitStatus implements StatusLineElementProvider {
             timer = new Timer(100, this);
             this.action = action;
             
-            tacho = new ImageIcon(Utilities.loadImage("org/netbeans/modules/uihandler/tachometer24.png"));
-            tachoOk = new ImageIcon(Utilities.loadImage("org/netbeans/modules/uihandler/tachometer-ok.png"));
-            hints = new ImageIcon(Utilities.loadImage("org/netbeans/lib/uihandler/def.png"));
+            tacho = ImageUtilities.loadImageIcon("org/netbeans/modules/uihandler/tachometer24.png", false);
+            tachoOk = ImageUtilities.loadImageIcon("org/netbeans/modules/uihandler/tachometer-ok.png", false);
+            hints = ImageUtilities.loadImageIcon("org/netbeans/lib/uihandler/def.png", false);
             setIcon(tacho);
             setToolTipText(NbBundle.getMessage(SubmitAction.class, "CTL_SubmitAction"));
 

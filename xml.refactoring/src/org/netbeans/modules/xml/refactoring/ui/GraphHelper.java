@@ -80,6 +80,7 @@ import org.netbeans.modules.xml.xam.Referenceable;
 import org.netbeans.modules.xml.xam.dom.DocumentModel;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import prefuse.data.Edge;
@@ -92,10 +93,7 @@ import prefuse.data.Node;
  */
 public class GraphHelper {
     
-        private static final ImageIcon FIND_USAGES_ICON = new ImageIcon(
-            Utilities.loadImage(
-            "org/netbeans/modules/refactoring/api/resources/"+
-            "findusages.png"));
+        private static final ImageIcon FIND_USAGES_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/refactoring/api/resources/" + "findusages.png", false);
     
     public static final prefuse.data.Schema FIND_USAGES_NODES_SCHEMA =
             new prefuse.data.Schema();   // prefuse graph schema

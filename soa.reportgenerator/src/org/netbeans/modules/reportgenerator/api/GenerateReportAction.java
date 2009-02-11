@@ -14,6 +14,7 @@ import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -29,8 +30,7 @@ public class GenerateReportAction extends AbstractAction {
 
     public static final String ACCELERATOR = "alt shift F10"; // NOI18N
     
-    private static final Icon icon = new ImageIcon(Utilities.loadImage(
-    "org/netbeans/modules/reportgenerator/api/impl/resources/images/generateReport.png")); 
+    private static final Icon icon = ImageUtilities.loadImageIcon("org/netbeans/modules/reportgenerator/api/impl/resources/images/generateReport.png", false); 
     
     private static final String label = NbBundle.getMessage(
     GenerateReportAction.class,"NAME_Generate_Report");

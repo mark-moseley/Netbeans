@@ -71,6 +71,7 @@ import org.netbeans.modules.xml.xam.Nameable;
 import org.netbeans.modules.xml.xam.NamedReferenceable;
 import org.netbeans.modules.xml.xam.Referenceable;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.lookup.Lookups;
@@ -321,10 +322,7 @@ public class RenameRefactoringUI implements org.netbeans.modules.refactoring.spi
     }
 
     public Icon getCustomIcon() {
-         return new ImageIcon(
-            Utilities.loadImage(
-            "org/netbeans/modules/xml/refactoring/resources/"+
-            "graphical_view_refactoring.png"));
+         return ImageUtilities.loadImageIcon("org/netbeans/modules/xml/refactoring/resources/" + "graphical_view_refactoring.png", false);
     }
 
     public String getCustomToolTip() {

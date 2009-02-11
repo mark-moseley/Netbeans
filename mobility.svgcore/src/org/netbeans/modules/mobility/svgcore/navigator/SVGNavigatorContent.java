@@ -81,6 +81,7 @@ import org.netbeans.modules.mobility.svgcore.view.source.SVGSourceMultiViewEleme
 import org.netbeans.modules.mobility.svgcore.view.svg.AnimationCookie;
 import org.netbeans.modules.mobility.svgcore.view.svg.SelectionCookie;
 import org.openide.nodes.Node.Cookie;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -439,22 +440,19 @@ public class SVGNavigatorContent extends JPanel implements SceneManager.Selectio
             desc.addFilter(ATTRIBUTES_FILTER,
                     NbBundle.getMessage(SVGNavigatorContent.class, "LBL_ShowAttributes"),     //NOI18N
                     NbBundle.getMessage(SVGNavigatorContent.class, "LBL_ShowAttributesTip"),     //NOI18N
-                    SVGNavigatorTree.showAttributes,
-                    new ImageIcon(org.openide.util.Utilities.loadImage("org/netbeans/modules/mobility/svgcore/resources/a.png")), //NOI18N
+                    SVGNavigatorTree.showAttributes, ImageUtilities.loadImageIcon("org/netbeans/modules/mobility/svgcore/resources/a.png", false), //NOI18N
                     null
             );
             desc.addFilter(ID_FILTER,
                     NbBundle.getMessage(SVGNavigatorContent.class, "LBL_ShowId"),     //NOI18N
                     NbBundle.getMessage(SVGNavigatorContent.class, "LBL_ShowIdTip"),     //NOI18N
-                    SVGNavigatorTree.showIdOnly,
-                    new ImageIcon(org.openide.util.Utilities.loadImage("org/netbeans/modules/mobility/svgcore/resources/filterIdentified.png")), //NOI18N
+                    SVGNavigatorTree.showIdOnly, ImageUtilities.loadImageIcon("org/netbeans/modules/mobility/svgcore/resources/filterIdentified.png", false), //NOI18N
                     null
             );
             desc.addFilter(ANIMATION_FILTER,
                     NbBundle.getMessage(SVGNavigatorContent.class, "LBL_ShowAnimation"),     //NOI18N
                     NbBundle.getMessage(SVGNavigatorContent.class, "LBL_ShowAnimationTip"),     //NOI18N
-                    SVGNavigatorTree.showAnimationsOnly,
-                    new ImageIcon(org.openide.util.Utilities.loadImage("org/netbeans/modules/mobility/svgcore/resources/filterAnimations.png")), //NOI18N
+                    SVGNavigatorTree.showAnimationsOnly, ImageUtilities.loadImageIcon("org/netbeans/modules/mobility/svgcore/resources/filterAnimations.png", false), //NOI18N
                     null
             );
             

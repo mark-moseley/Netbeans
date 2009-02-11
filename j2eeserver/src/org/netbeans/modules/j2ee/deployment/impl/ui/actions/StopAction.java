@@ -49,6 +49,7 @@ import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Mutex;
 import org.openide.util.RequestProcessor;
 import org.openide.util.NbBundle;
@@ -148,8 +149,7 @@ public class StopAction extends NodeAction {
         private final ServerInstance instance;
         
         public OutputAction(ServerInstance instance) {
-            super(NbBundle.getMessage(StopAction.class, "LBL_StopOutput"),
-                  new ImageIcon(Utilities.loadImage(ICON)));
+            super(NbBundle.getMessage(StopAction.class, "LBL_StopOutput"),ImageUtilities.loadImageIcon(ICON, false));
             putValue(SHORT_DESCRIPTION, NbBundle.getMessage(StopAction.class, "LBL_StopOutputDesc"));
             this.instance = instance;
             

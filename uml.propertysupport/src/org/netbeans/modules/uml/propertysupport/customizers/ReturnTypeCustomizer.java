@@ -85,6 +85,7 @@ import org.netbeans.modules.uml.common.generics.ETPairT;
 import org.netbeans.modules.uml.propertysupport.nodes.CustomPropertyEditor;
 
 import org.openide.explorer.propertysheet.editors.EnhancedCustomPropertyEditor;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -401,9 +402,7 @@ private void returnTypeChangedHandler(java.awt.event.ItemEvent evt) {//GEN-FIRST
         if (text != null) {
             this.messageArea.setText(text);
             if (text.trim().length() > 0) {
-                icon = new ImageIcon(
-                  Utilities.loadImage(
-                  "org/netbeans/modules/uml/resources/images/error.png")); // NOI18N
+                icon = ImageUtilities.loadImageIcon("org/netbeans/modules/uml/resources/images/error.png", false); // NOI18N
             }
             this.messageIcon.setIcon(icon); 
         }

@@ -48,6 +48,7 @@ import org.netbeans.modules.profiler.spi.LoadGenPlugin;
 import org.netbeans.modules.profiler.ui.ProfilerDialogs;
 import org.netbeans.modules.profiler.utils.IDEUtils;
 import org.openide.NotifyDescriptor;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -157,9 +158,7 @@ public final class StopAction extends AbstractAction implements ProfilingStateLi
             ));
             putValue(Action.SHORT_DESCRIPTION, NbBundle.getMessage(StopAction.class, "HINT_StopAction" // NOI18N
             ));
-            putValue(Action.SMALL_ICON,
-                     new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/actions/resources/stop.png")) //NOI18N
-            );
+            putValue(Action.SMALL_ICON, ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/actions/resources/stop.png", false));
             putValue("iconBase", // NOI18N
                      "org/netbeans/modules/profiler/actions/resources/stop.png" // NOI18N
             );
@@ -168,9 +167,7 @@ public final class StopAction extends AbstractAction implements ProfilingStateLi
             ));
             putValue(Action.SHORT_DESCRIPTION, NbBundle.getMessage(StopAction.class, "HINT_DetachAction" // NOI18N
             ));
-            putValue(Action.SMALL_ICON,
-                     new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/actions/resources/detach.png")) //NOI18N
-            );
+            putValue(Action.SMALL_ICON, ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/actions/resources/detach.png", false));
             putValue("iconBase", // NOI18N
                      "org/netbeans/modules/profiler/actions/resources/detach.png" // NOI18N
             );

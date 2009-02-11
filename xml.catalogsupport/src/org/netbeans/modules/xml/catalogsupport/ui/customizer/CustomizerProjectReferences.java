@@ -65,6 +65,7 @@ import javax.swing.JList;
 
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.HelpCtx;
 import org.openide.util.Utilities;
@@ -345,8 +346,7 @@ public class CustomizerProjectReferences extends javax.swing.JPanel implements H
         
         ReferenceHelper.RawReference missingRef;
         
-        static Icon icon = new ImageIcon(Utilities.loadImage(
-                "org/netbeans/modules/java/j2seproject/ui/resources/brokenProjectBadge.gif")); // NOI18N
+        static Icon icon = ImageUtilities.loadImageIcon("org/netbeans/modules/java/j2seproject/ui/resources/brokenProjectBadge.gif", false); // NOI18N
 
         public MissingProjectInformation(ReferenceHelper.RawReference missingRef) {
             this.missingRef = missingRef;

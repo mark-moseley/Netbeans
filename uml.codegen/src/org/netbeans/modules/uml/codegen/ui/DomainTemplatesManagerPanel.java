@@ -43,6 +43,9 @@ package org.netbeans.modules.uml.codegen.ui;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -68,6 +71,7 @@ import org.netbeans.modules.uml.codegen.dataaccess.xmlbeans.Family;
 import org.netbeans.modules.uml.codegen.dataaccess.xmlbeans.TemplateFamilies;
 import org.netbeans.modules.uml.codegen.dataaccess.xmlbeans.TemplateFamiliesHandler;
 
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.NotifyDescriptor;
@@ -87,12 +91,10 @@ public class DomainTemplatesManagerPanel extends javax.swing.JPanel
     private Map<String, Boolean> treeExpandState = new HashMap<String, Boolean>();
     
     private static final Icon DOMAIN_OBJECT_NODE_ICON =
-        new ImageIcon(Utilities.loadImage(
-        "org/netbeans/modules/uml/resources/images/templates.png")); // NOI18N
+        ImageUtilities.loadImageIcon("org/netbeans/modules/uml/resources/images/templates.png", false); // NOI18N
     
     private static final Icon TEMPLATE_FAMILY_NODE_ICON =
-        new ImageIcon(Utilities.loadImage(
-        "org/netbeans/modules/uml/resources/images/default-category.gif")); // NOI18N
+        ImageUtilities.loadImageIcon("org/netbeans/modules/uml/resources/images/default-category.gif", false); // NOI18N
     
     public DomainTemplatesManagerPanel()
     {
@@ -126,16 +128,15 @@ public class DomainTemplatesManagerPanel extends javax.swing.JPanel
     
     private void populateElementTypeChoices()
     {
-        for (String type: ELEMENT_TYPE_CHOICE_BUNDLE_KEYS)
+        for (int i=0;i<ELEMENT_TYPE_CHOICE_BUNDLE_LABEL_KEYS.length;i++)
         {
-            modelElementCombo.addItem(NbBundle.getMessage(
-                DomainTemplatesManagerPanel.class, type));
+            modelElementCombo.addItem(LBLVALUES.get(ELEMENT_TYPE_CHOICE_BUNDLE_LABEL_KEYS[i]));
         }
     }
     
-    private final static String[] ELEMENT_TYPE_CHOICE_BUNDLE_KEYS = new String[]
+    private final static String[] ELEMENT_TYPE_CHOICE_BUNDLE_KEYS = new String[]//keep in synch with ELEMENT_TYPE_CHOICE_BUNDLE_LABEL_KEYS
     {
-        "VAL_ElementType_NodeSelected", // NOI18N
+        "VAL_ElementType_NoneSelected", // NOI18N
         "VAL_ElementType_Class", // NOI18N
         "VAL_ElementType_Interface", // NOI18N
         "VAL_ElementType_Enumeration", // NOI18N
@@ -169,6 +170,23 @@ public class DomainTemplatesManagerPanel extends javax.swing.JPanel
         "VAL_ElementType_Signal", // NOI18N
         "VAL_ElementType_SubmachineState", // NOI18N
     };
+    private final static String[] ELEMENT_TYPE_CHOICE_BUNDLE_LABEL_KEYS = new String[ELEMENT_TYPE_CHOICE_BUNDLE_KEYS.length];//keep in sync with ELEMENT_TYPE_CHOICE_BUNDLE_KEYS
+    private final static HashMap<String,String> VALVALUES=new HashMap<String,String>();
+    private final static HashMap<String,String> LBLVALUES=new HashMap<String,String>();
+    private final static HashMap<String,String> LBLTOVAL=new HashMap<String,String>();
+    private final static HashMap<String,String> VALTOLBL=new HashMap<String,String>();
+    {
+        for(int i=0;i<ELEMENT_TYPE_CHOICE_BUNDLE_KEYS.length;i++)
+        {
+            ELEMENT_TYPE_CHOICE_BUNDLE_LABEL_KEYS[i]="LBL"+ELEMENT_TYPE_CHOICE_BUNDLE_KEYS[i].substring(3);
+            String type_key=ELEMENT_TYPE_CHOICE_BUNDLE_KEYS[i];
+            String lbl_key=ELEMENT_TYPE_CHOICE_BUNDLE_LABEL_KEYS[i];
+            String value=NbBundle.getMessage(DomainTemplatesManagerPanel.class, type_key);VALVALUES.put(type_key,value);
+            String label=NbBundle.getMessage(DomainTemplatesManagerPanel.class, lbl_key);LBLVALUES.put(lbl_key,label);
+            LBLTOVAL.put(label,value);
+            VALTOLBL.put(value,label);
+        }
+    }
     
     private void populateTemplatesTreeValues(boolean reset)
     {
@@ -855,7 +873,7 @@ private void modelElementComboItemStateChanged(java.awt.event.ItemEvent evt) {//
         .getLastPathComponent().toString();
 
     templateFamilies.getFamilyByName(famName).getDomainByName(domName)
-        .setModelElement(modelElementCombo.getSelectedItem().toString());
+        .setModelElement(LBLTOVAL.get(modelElementCombo.getSelectedItem()));
 }//GEN-LAST:event_modelElementComboItemStateChanged
     
 private void templatesTableFocusGained(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_templatesTableFocusGained
@@ -1015,7 +1033,7 @@ private void templatesTableFocusLost(java.awt.event.FocusEvent evt) {//GEN-FIRST
                 {
                     domainObject.setModelElement(
                         modelElementCombo.getSelectedItem() == null
-                        ? null : modelElementCombo.getSelectedItem().toString());
+                        ? null : LBLTOVAL.get(modelElementCombo.getSelectedItem()));
             
                     domainObject.setStereotype(stereotypeText.getText());
                     domainObject.setDescription(descriptionTextArea.getText());
@@ -1094,7 +1112,8 @@ private void templatesTableFocusLost(java.awt.event.FocusEvent evt) {//GEN-FIRST
         if (domainObject != null)
         {
             enableTemplatePropsFields(true);
-            modelElementCombo.setSelectedItem(domainObject.getModelElement());
+            String domName=domainObject.getModelElement();
+            modelElementCombo.setSelectedItem(VALTOLBL.get(domName));
             stereotypeText.setText(domainObject.getStereotype());
             descriptionTextArea.setText(domainObject.getDescription());
             populateTemplatesTable(domainObject.getTemplatesTableData());
