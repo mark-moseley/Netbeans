@@ -98,6 +98,7 @@ import org.netbeans.modules.cnd.repository.util.IntToStringCache;
  * 
  * @author Nickolay Dalmatov
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.repository.api.RepositoryTranslation.class)
 public class RepositoryTranslatorImpl implements RepositoryTranslation{
     
     /**
@@ -205,13 +206,16 @@ public class RepositoryTranslatorImpl implements RepositoryTranslation{
     }    
     
     public static void closeUnit(String unitName, Set<String> requiredUnits) {
-        UnitsCache.updateReqUnitInfo(unitName, requiredUnits);
+        if( requiredUnits != null ) {
+            UnitsCache.updateReqUnitInfo(unitName, requiredUnits);
+        }
         storeUnitIndex(unitName);
         unitNamesCache.removeFileNames(unitName);
     }    
 
     public static void shutdown() {
         storeMasterIndex();
+        StorageAllocator.getInstance().purgeCaches();
     }
     
     public static void loadUnitIndex(final String unitName){
