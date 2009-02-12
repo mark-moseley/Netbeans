@@ -57,7 +57,6 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.util.Enumerations;
-import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 
 /**
@@ -74,7 +73,13 @@ import org.openide.util.Lookup;
 public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessibleClassLoader {
 
     private static final Logger LOGGER = Logger.getLogger(ProxyClassLoader.class.getName());
-    private static final boolean LOG_LOADING = LOGGER.isLoggable(Level.FINE);
+    private static final boolean LOG_LOADING;
+    private static final ClassLoader TOP_CL = ProxyClassLoader.class.getClassLoader();
+
+    static {
+        boolean prop1 = System.getProperty("org.netbeans.ProxyClassLoader.level") != null;
+        LOG_LOADING = prop1 || LOGGER.isLoggable(Level.FINE);
+    }
 
     /** All known packages */
     private final Map<String, Package> packages = new HashMap<String, Package>();
@@ -85,28 +90,25 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
     private final boolean transitive;
 
     /** The base class loader that is before all ProxyClassLoaders. */
-    private ClassLoader systemCL = ClassLoader.getSystemClassLoader();
+    private ClassLoader systemCL = TOP_CL;
  
     /** A shared map of all packages known by all classloaders. Also covers META-INF based resources.
      * It contains two kinds of keys: dot-separated package names and slash-separated
      * META-INF resource names, e.g. {"org.foobar", "/services/org.foobar.Foo"} 
      */
-    private static Map<String,Set<ProxyClassLoader>> packageCoverage = new HashMap<String,Set<ProxyClassLoader>>(); 
+    private static final Map<String,Set<ProxyClassLoader>> packageCoverage = new HashMap<String,Set<ProxyClassLoader>>();
     
-     
     private Set<ProxyClassLoader> parentSet = new HashSet<ProxyClassLoader>(); 
      
     private static Map<String,Boolean> sclPackages = Collections.synchronizedMap(new HashMap<String,Boolean>());  
-    
    
     /** Create a multi-parented classloader.
      * @param parents all direct parents of this classloader, except system one.
-     * @param coveredPackages Enumeration of Strings if format "org.something" 
-+     *   containing all packages to be covered by this classloader. 
      * @param transitive whether other PCLs depending on this one will
      *                   automatically search through its parent list
      */
     public ProxyClassLoader(ClassLoader[] parents, boolean transitive) {
+        super(TOP_CL);
         this.transitive = transitive;
         
         this.parents = coalesceParents(parents);
@@ -150,6 +152,7 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
         if (moduleFactory != null && moduleFactory.removeBaseClassLoader()) {
             // this hack is here to prevent having the application classloader
             // as parent to all module classloaders.
+            systemCL = ClassLoader.getSystemClassLoader();
             resParents = coalesceAppend(new ProxyClassLoader[0], nueparents);
         } else {
             resParents = coalesceAppend(parents, nueparents);
@@ -181,8 +184,10 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
     @Override
     protected synchronized Class loadClass(String name, boolean resolve)
                                             throws ClassNotFoundException {
-        if (LOG_LOADING) LOGGER.log(Level.FINEST, "{0} initiated loading of {1}",
+        if (LOG_LOADING && !name.startsWith("java.")) {
+            LOGGER.log(Level.FINEST, "{0} initiated loading of {1}",
                     new Object[] {this, name});
+        }
         
         Class cls = null;
 
@@ -225,25 +230,70 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
             // multicovered package, search in order
             for (ProxyClassLoader pcl : parents) { // all our accessible parents
                 if (del.contains(pcl) && shouldDelegateResource(path, pcl)) { // that cover given package
-                    cls = pcl.selfLoadClass(pkg, name);
-                    if (cls != null) break;
+                    Class _cls = pcl.selfLoadClass(pkg, name);
+                    if (_cls != null) {
+                        if (cls == null) {
+                            cls = _cls;
+                        } else if (cls != _cls) {
+                            String message = "Will not load class " + name + " arbitrarily from one of " +
+                                    cls.getClassLoader() + " and " + pcl + " starting from " + this +
+                                    "; see http://wiki.netbeans.org/DevFaqModuleCCE";
+                            LOGGER.warning(message);
+                            throw new ClassNotFoundException(message);
+                        }
                     }
-                } 
+                }
+            }
             if (cls == null && del.contains(this)) cls = selfLoadClass(pkg, name); 
             if (cls != null) sclPackages.put(pkg, false); 
-            } 
-        if (cls == null && shouldDelegateResource(path, null)) cls = systemCL.loadClass(name); // may throw CNFE
-        if (cls == null) throw new ClassNotFoundException(name); 
+        }
+        if (cls == null && shouldDelegateResource(path, null)) {
+            try {
+                cls = systemCL.loadClass(name);
+            } catch (ClassNotFoundException e) {
+                throw new ClassNotFoundException(diagnosticCNFEMessage(e.getMessage(), del), e);
+            }
+        }
+        if (cls == null) {
+            throw new ClassNotFoundException(diagnosticCNFEMessage(name, del));
+        }
         if (resolve) resolveClass(cls); 
         return cls; 
-    }       
+    }
+    private String diagnosticCNFEMessage(String base, Set<ProxyClassLoader> del) {
+        String parentSetS;
+        int size = parentSet.size();
+        if (size <= 10) {
+            parentSetS = parentSet.toString();
+        } else {
+            // Too big to show in its entirety - overwhelms the log file.
+            StringBuilder b = new StringBuilder();
+            Iterator<ProxyClassLoader> parentSetI = parentSet.iterator();
+            for (int i = 0; i < 10; i++) {
+                b.append(i == 0 ? "[" : ", ");
+                b.append(parentSetI.next());
+            }
+            b.append(", ..." + (size - 10) + " more]");
+            parentSetS = b.toString();
+        }
+        return base + " starting from " + this +
+                " with possible defining loaders " + del +
+                " and declared parents " + parentSetS;
+    }
 
     /** May return null */ 
     private synchronized Class selfLoadClass(String pkg, String name) { 
         Class cls = findLoadedClass(name); 
         if (cls == null) {
-            cls = doLoadClass(pkg, name);
-            if (LOG_LOADING) LOGGER.log(Level.FINEST, "{0} loaded {1}",
+            try {
+                cls = doLoadClass(pkg, name);
+            } catch (NoClassDefFoundError e) {
+                // #145503: we can make a guess as to what triggered this error (since the JRE does not inform you).
+                // XXX Exceptions.attachMessage does not seem to work here
+                throw (NoClassDefFoundError) new NoClassDefFoundError(e.getMessage() + " while loading " + pkg + name +
+                        "; see http://wiki.netbeans.org/DevFaqTroubleshootClassNotFound").initCause(e); // NOI18N
+            }
+            if (LOG_LOADING && !name.startsWith("java.")) LOGGER.log(Level.FINEST, "{0} loaded {1}",
                         new Object[] {this, name});
         }
         return cls; 
@@ -291,6 +341,18 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
         String pkg = (last >= 0) ? name.substring(0, last).replace('/', '.') : "";
         String path = name.substring(0, last+1);
         
+        Boolean systemPackage = sclPackages.get(pkg);
+        if ((systemPackage == null || systemPackage) && shouldDelegateResource(path, null)) {
+            URL u = systemCL.getResource(name);
+            if (u != null) {
+                if (systemPackage == null) {
+                    sclPackages.put(pkg, true);
+                }
+                return u;
+            }
+            // else try other loaders
+        }
+
         Set<ProxyClassLoader> del = packageCoverage.get(pkg);
 
         if (del == null) {
@@ -326,8 +388,8 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
      *      if the resource could not be found.
      */
     @Override
-    protected URL findResource(String name) {
-	return null;
+    public URL findResource(String name) {
+        return super.findResource(name);
     }
     
     /**
@@ -341,7 +403,7 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
      * @throws IOException if I/O errors occur
      */    
     @Override
-    protected final synchronized Enumeration<URL> findResources(String name) throws IOException {
+    public final synchronized Enumeration<URL> getResources(String name) throws IOException {
         name = stripInitialSlash(name);
         final int slashIdx = name.lastIndexOf('/');
         if (slashIdx == -1) {
@@ -362,16 +424,20 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
             if (del != null) { // unclaimed resource, go directly to SCL
                 for (ProxyClassLoader pcl : parents) { // all our accessible parents
                     if (del.contains(pcl) && shouldDelegateResource(path, pcl)) { // that cover given package
-                        sub.add(pcl.simpleFindResources(name));
+                        sub.add(pcl.findResources(name));
                     }
                 }
-                if (del.contains(this)) sub.add(simpleFindResources(name)); 
+                if (del.contains(this)) {
+                    sub.add(findResources(name));
+                }
             }
         } else { // Don't bother optimizing this call by domains.
             for (ProxyClassLoader pcl : parents) { 
-                if (shouldDelegateResource(path, pcl)) sub.add(pcl.simpleFindResources(name)); 
+                if (shouldDelegateResource(path, pcl)) {
+                    sub.add(pcl.findResources(name));
+                }
             }
-            sub.add(simpleFindResources(name));
+            sub.add(findResources(name));
         }
         // Should not be duplicates, assuming the parent loaders are properly distinct
         // from one another and do not overlap in JAR usage, which they ought not.
@@ -380,7 +446,8 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
         return Enumerations.concat(Collections.enumeration(sub));
     }
 
-    protected Enumeration<URL> simpleFindResources(String name) throws IOException {
+    @Override
+    public Enumeration<URL> findResources(String name) throws IOException {
         return super.findResources(name);
     }
 
@@ -442,15 +509,10 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
 		String implVersion, String implVendor, URL sealBase )
 		throws IllegalArgumentException {
 	synchronized (packages) {
-            try {
-                Package pkg = super.definePackage(name, specTitle, specVersion, specVendor, implTitle,
-                        implVersion, implVendor, sealBase);
-                packages.put(name, pkg);
-                return pkg;
-            } catch (IllegalArgumentException x) {
-                Exceptions.attachMessage(x, "If you are getting this, probably it is because you have several modules trying to load from the same package. This is not supported (#71524).");
-                throw x;
-            }
+            Package pkg = super.definePackage(name, specTitle, specVersion, specVendor, implTitle,
+                    implVersion, implVendor, sealBase);
+            packages.put(name, pkg);
+            return pkg;
 	}
     }
 
@@ -502,9 +564,9 @@ public class ProxyClassLoader extends ClassLoader implements Util.PackageAccessi
      * #38368: Warn that the default package should not be used.
      */
     private static void printDefaultPackageWarning(String name) {
-        // #42201 - commons-logging lib tries to read its config from this file, ignore
         if (!"commons-logging.properties".equals(name) &&
-            !"jndi.properties".equals(name)) { // NOI18N
+            !"jndi.properties".equals(name) &&
+            !"log4j.properties".equals(name)) { // NOI18N
             LOGGER.log(Level.INFO, null, new IllegalStateException("You are trying to access file: " + name + " from the default package. Please see http://www.netbeans.org/download/dev/javadoc/org-openide-modules/org/openide/modules/doc-files/classpath.html#default_package"));
         }
     }
