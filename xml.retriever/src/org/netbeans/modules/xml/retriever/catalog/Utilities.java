@@ -329,11 +329,13 @@ public class Utilities {
     }
     
     
-    
+    private static boolean firstRoot = true;
     public static List<File> getFilesWithExtension(File startFile, String fileExtension, List<File> curList) {
-        if(Thread.currentThread().isInterrupted())
-            //if interrupted by the client dump the result and immediately return
+        //if interrupted by the client dump the result and immediately return
+        if(Thread.currentThread().isInterrupted()) {
+            firstRoot = true; //reset before returning
             return curList;
+        }
         if(curList == null)
             curList = new ArrayList<File>();
         if(startFile.isFile()){
@@ -348,10 +350,17 @@ public class Utilities {
             File[] children = startFile.listFiles();
             if(children != null){
                 for(File child: children){
+                    //exclude "build" dir since that is generated one.
+                    //cannot think of a better solution.
+                    if(firstRoot && child.getName().endsWith("build")) //NOI18N
+                        continue;
+                    firstRoot = false;
                     getFilesWithExtension(child, fileExtension, curList);
                 }
             }
         }
+        //reset before returning.
+        firstRoot = true;
         return curList;
     }
     
@@ -427,7 +436,6 @@ public class Utilities {
             return null;
         ucn.connect();
         
-        int fileLen = ucn.getContentLength();
         byte buffer[] = new byte[1024];
         BufferedInputStream bis = new BufferedInputStream(ucn.getInputStream());
         saveFile.getParentFile().mkdirs();
@@ -438,19 +446,17 @@ public class Utilities {
             bis.close();
             throw ex;
         }
-        int curLen = 0;
-        while( curLen < fileLen){
+        
+        int len = 1024;
+        while((len = bis.read(buffer, 0, 1024)) > 0) {
             try {
                 if(Thread.currentThread().isInterrupted())
                     break;
-                Thread.sleep(100);
+                Thread.sleep(10);
             } catch (InterruptedException ex) {}
             try{
-                int readLen = bis.available();
-                int len = bis.read(buffer, 0, (readLen>buffer.length)?buffer.length:readLen);
                 bos.write(buffer, 0, len);
-                curLen += len;
-            }catch (IOException e){
+            } catch (IOException e){
                 expn = e;
                 break;
             }
@@ -496,14 +502,10 @@ public class Utilities {
             EditorCookie ec = (EditorCookie)dObject.getCookie(EditorCookie.class);
             Document doc = ec.openDocument();
             if(doc instanceof BaseDocument)
-                return doc;
-            
-            
-            result = new org.netbeans.editor.BaseDocument(
-                    org.netbeans.modules.xml.text.syntax.XMLKit.class, false);
+                return doc;            
+            result = new org.netbeans.editor.BaseDocument(true, modelSourceFileObject.getMIMEType());
             String str = doc.getText(0, doc.getLength());
-            result.insertString(0,str,null);
-            
+            result.insertString(0,str,null);            
         } catch (Exception dObjEx) {
             return null;
         }
@@ -514,20 +516,21 @@ public class Utilities {
     throws IOException {
         Document result = null;
         if (modelSourceDataObject != null && modelSourceDataObject.isValid()) {
-            EditorCookie ec = (EditorCookie)
-            modelSourceDataObject.getCookie(EditorCookie.class);
+            EditorCookie ec = modelSourceDataObject.getCookie(EditorCookie.class);
             assert ec != null : "Data object "+modelSourceDataObject.getPrimaryFile().getPath()+" has no editor cookies.";
-            Document doc = null;
-            try {
-                doc = ec.openDocument();
-            } catch (UserQuestionException uce) {
-                // this exception is thrown if the document is to large
-                // lets just confirm that it is ok
-                uce.confirmed();
-                doc = ec.openDocument();
+            if (ec != null) {
+                Document doc = null;
+                try {
+                    doc = ec.openDocument();
+                } catch (UserQuestionException uce) {
+                    // this exception is thrown if the document is to large
+                    // lets just confirm that it is ok
+                    uce.confirmed();
+                    doc = ec.openDocument();
+                }
+                assert(doc instanceof BaseDocument);
+                result = doc;
             }
-            assert(doc instanceof BaseDocument);
-            result = doc;
         }
         return result;
     }
@@ -629,15 +632,12 @@ public class Utilities {
         }
         Lookup proxyLookup = Lookups.proxy(
                 new Lookup.Provider() {
-            private Lookup lookup;
             public Lookup getLookup() {
-                if(lookup != null)
-                    return lookup;
                 Document document = null;
                 try {
                     document = _getDocument(dobj);
                     if (document != null) {
-                        lookup = Lookups.fixed(new Object[] {
+                        return Lookups.fixed(new Object[] {
                             dobj.getPrimaryFile(),
                             document,
                             dobj,
@@ -645,7 +645,7 @@ public class Utilities {
                             catalogModel
                         });
                     } else {
-                        lookup = Lookups.fixed(new Object[] {
+                        return Lookups.fixed(new Object[] {
                             dobj.getPrimaryFile(),
                             dobj,
                             catalogModel
@@ -658,7 +658,6 @@ public class Utilities {
                         catalogModel
                     });
                 }
-                return lookup;
             }
         }
         );
