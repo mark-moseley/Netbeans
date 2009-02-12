@@ -74,6 +74,9 @@ import org.openide.util.NbBundle;
  * dialog, or perhaps through a validator.
  * TODO: I should use the args-splitting logic from Utilities here such that
  *  the usage examples work better
+ * 
+ * TODO: Probably all generators don't have a corresponding destroy script, need 
+ * to think of a way to check that.
  *
  * @author  Tor Norbye
  */
@@ -87,6 +90,10 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
     public GeneratorPanel(Project project, Generator initialGenerator) {
         this.project = project;
         initComponents();
+        actionTypeButtonGroup.add(generateButton);
+        actionTypeButtonGroup.add(destroyButton);
+        generateButton.setSelected(true);
+
         if (initialGenerator != Generator.NONE) {
             typeCombo.setSelectedItem(initialGenerator.getName());
         }
@@ -306,37 +313,37 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         }
         
         GemManager gemManager = RubyPlatform.gemManagerFor(project);
-        assert gemManager != null : "Invalid platform for project [" + project + ']';
-        
-        // 3. Add in RubyGem generators
-        File gemDir = new File(gemManager.getGemHome() + File.separator + "gems"); // NOI18N
-        if (gemDir.exists()) {
-            Set<String> gems = gemManager.getInstalledGemsFiles();
-            for (String gem : gems) {
-                if (added.contains(gem)) {
-                    continue;
-                }
+        if (gemManager != null) {
+            // 3. Add in RubyGem generators
+            for (File repo : gemManager.getRepositories()) {
+                File gemDir = new File(repo, "gems"); // NOI18N
+                if (gemDir.exists()) {
+                    Set<String> gems = gemManager.getInstalledGemsFiles();
+                    for (String gem : gems) {
+                        if (added.contains(gem)) {
+                            continue;
+                        }
 
-                if (gem.endsWith("_generator")) { // NOI18N
-                    String version = gemManager.getVersion(gem);
-                    if (version != null) {
-                        File f = new File(gemDir, gem + "-" + version); // NOI18N
-                        if (f.exists()) {
-                            FileObject fo = FileUtil.toFileObject(f);
-                            // The generator is named "gem"
-                            int argsRequired = 0; // I could look at the usage files here to determine # of required arguments...
-                            // Chop off _generator suffix
-                            String name = gem.substring(0, gem.length()-"_generator".length()); // NOI18N
-                            Generator generator = new Generator(name, fo, argsRequired);
-                            generators.add(generator);
-                            added.add(generator.getName());
+                        if (gem.endsWith("_generator")) { // NOI18N
+                            String version = gemManager.getLatestVersion(gem);
+                            if (version != null) {
+                                File f = new File(gemDir, gem + "-" + version); // NOI18N
+                                if (f.exists()) {
+                                    FileObject fo = FileUtil.toFileObject(f);
+                                    // The generator is named "gem"
+                                    int argsRequired = 0; // I could look at the usage files here to determine # of required arguments...
+                                    // Chop off _generator suffix
+                                    String name = gem.substring(0, gem.length()-"_generator".length()); // NOI18N
+                                    Generator generator = new Generator(name, fo, argsRequired);
+                                    generators.add(generator);
+                                    added.add(generator.getName());
+                                }
+                            }
+
                         }
                     }
-                    
                 }
             }
-        } else {
-            gemDir = null;
         }
 
         // 4. Finally add in the built-in generators.
@@ -359,15 +366,21 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         if (railsInstall != null) {
             scan(generators, railsInstall, 
                 "lib/rails_generator/generators/components", null, added); // NOI18N
-        } else if (gemDir != null) {
-            railsVersion = gemManager.getVersion("rails"); // NOI18N
+        } else if (gemManager != null) {
+            railsVersion = gemManager.getLatestVersion("rails"); // NOI18N
             if (railsVersion != null) {
-                File railsDir = new File(gemDir, "rails" + "-" + railsVersion); // NOI18N
-                assert railsDir.exists();
-                railsInstall = FileUtil.toFileObject(railsDir);
-                if (railsInstall != null) {
-                    scan(generators, railsInstall, 
-                        "lib/rails_generator/generators/components", null, added); // NOI18N
+                for (File repo : gemManager.getRepositories()) {
+                    File gemDir = new File(repo, "gems"); // NOI18N
+                    if (gemDir.exists()) {
+                        File railsDir = new File(gemDir, "rails" + "-" + railsVersion); // NOI18N
+                        if (railsDir.exists()) {
+                            railsInstall = FileUtil.toFileObject(railsDir);
+                            if (railsInstall != null) {
+                                scan(generators, railsInstall, 
+                                    "lib/rails_generator/generators/components", null, added); // NOI18N
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -383,6 +396,10 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         Object o = typeCombo.getSelectedItem();
 
         return o != null ? o.toString() : "";
+    }
+    
+    public String getScript() {
+        return destroyButton.isSelected() ? "destroy" : "generate";
     }
     
     public boolean isForce() {
@@ -458,8 +475,7 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         changeListener = l; 
     }      
     
-    @Override
-    public boolean isValid() {
+    public boolean isDataValid() {
         Generator generator = getSelectedGenerator();
         if (generator == Generator.NONE) {
             return false;
@@ -472,7 +488,7 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
 
         String msg = RubyUtils.getIdentifierWarning(name, 0);
         if (msg != null) {
-            //wizardDescriptor.putProperty("WizardPanel_errorMessage", // NOI18N
+            //wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, // NOI18N
             //        msg);
             // warning only, don't return false
         }
@@ -502,11 +518,12 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
         forceGroup = new javax.swing.ButtonGroup();
+        actionTypeButtonGroup = new javax.swing.ButtonGroup();
         generateLabel = new javax.swing.JLabel();
         pretendCB = new javax.swing.JCheckBox();
         typeCombo = new javax.swing.JComboBox();
@@ -525,6 +542,8 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         usageText = new javax.swing.JTextArea();
         jSeparator2 = new javax.swing.JSeparator();
         installGeneratorsButton = new javax.swing.JButton();
+        generateButton = new javax.swing.JRadioButton();
+        destroyButton = new javax.swing.JRadioButton();
 
         FormListener formListener = new FormListener();
 
@@ -532,7 +551,6 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         org.openide.awt.Mnemonics.setLocalizedText(generateLabel, org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.generateLabel.text")); // NOI18N
 
         org.openide.awt.Mnemonics.setLocalizedText(pretendCB, org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.pretendCB.text")); // NOI18N
-        pretendCB.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         typeCombo.setMaximumRowCount(14);
         typeCombo.setModel(getTypeModel());
@@ -540,11 +558,9 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         forceGroup.add(skipRadio);
         skipRadio.setSelected(true);
         org.openide.awt.Mnemonics.setLocalizedText(skipRadio, org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.skipRadio.text")); // NOI18N
-        skipRadio.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         forceGroup.add(overwriteRadio);
         org.openide.awt.Mnemonics.setLocalizedText(overwriteRadio, org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.overwriteRadio.text")); // NOI18N
-        overwriteRadio.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         optionsPanel.setLayout(new java.awt.GridBagLayout());
 
@@ -596,11 +612,14 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         usageText.setEditable(false);
         usageText.setRows(5);
         jScrollPane1.setViewportView(usageText);
-        usageText.getAccessibleContext().setAccessibleName("");
         usageText.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "AD_UsageText")); // NOI18N
 
         org.openide.awt.Mnemonics.setLocalizedText(installGeneratorsButton, org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.installGeneratorsButton.text")); // NOI18N
         installGeneratorsButton.addActionListener(formListener);
+
+        org.openide.awt.Mnemonics.setLocalizedText(generateButton, org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.generateButton.text_1")); // NOI18N
+
+        org.openide.awt.Mnemonics.setLocalizedText(destroyButton, org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.destroyButton.text")); // NOI18N
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -609,23 +628,27 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
             .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 615, Short.MAX_VALUE)
-                    .add(jSeparator1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 615, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 644, Short.MAX_VALUE)
+                    .add(jSeparator1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 644, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
                         .add(forceLabel)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(skipRadio)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(overwriteRadio))
-                    .add(optionsPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 615, Short.MAX_VALUE)
+                    .add(optionsPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 644, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, pretendCB)
                     .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
                         .add(generateLabel)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(typeCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 383, Short.MAX_VALUE)
+                        .add(18, 18, 18)
+                        .add(generateButton)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(destroyButton)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 219, Short.MAX_VALUE)
                         .add(installGeneratorsButton))
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, jSeparator2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 615, Short.MAX_VALUE))
+                    .add(org.jdesktop.layout.GroupLayout.LEADING, jSeparator2, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 644, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -635,7 +658,9 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(generateLabel)
                     .add(typeCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                    .add(installGeneratorsButton))
+                    .add(installGeneratorsButton)
+                    .add(generateButton)
+                    .add(destroyButton))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(optionsPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 92, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
@@ -661,6 +686,8 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
         overwriteRadio.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "AD_OverwriteRadio")); // NOI18N
         forceLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "AD_ForceLabel")); // NOI18N
         installGeneratorsButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "AD_InstallGeneratorsButton")); // NOI18N
+        generateButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.generateButton.AccessibleContext.accessibleDescription")); // NOI18N
+        destroyButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(GeneratorPanel.class, "GeneratorPanel.destroyButton.AccessibleContext.accessibleDescription")); // NOI18N
     }
 
     // Code for dispatching events from components to event handlers.
@@ -676,7 +703,7 @@ public class GeneratorPanel extends javax.swing.JPanel implements Runnable {
 
 private void installGeneratorsButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_installGeneratorsButtonActionPerformed
     // Bring up remote gem installer with a "generator" filter
-    boolean changed = GemAction.showGemManager("generator$"); // NOI18N
+    boolean changed = GemAction.showGemManager(RubyPlatform.platformFor(project), "generator$"); // NOI18N
     if (changed) {
         run();
     }
@@ -684,8 +711,11 @@ private void installGeneratorsButtonActionPerformed(java.awt.event.ActionEvent e
     
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.ButtonGroup actionTypeButtonGroup;
+    private javax.swing.JRadioButton destroyButton;
     private javax.swing.ButtonGroup forceGroup;
     private javax.swing.JLabel forceLabel;
+    private javax.swing.JRadioButton generateButton;
     private javax.swing.JLabel generateLabel;
     private javax.swing.JButton installGeneratorsButton;
     private javax.swing.JScrollPane jScrollPane1;
