@@ -44,7 +44,6 @@ package org.netbeans.license;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Frame;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.URL;
@@ -54,7 +53,6 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JPanel;
-
 import org.netbeans.util.Util;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -67,7 +65,6 @@ import org.openide.util.Utilities;
 
 public final class AcceptLicense {
     
-    private static JDialog d;
     private static String command;
     
     /** If License was not accepted during installation user must accept it here. 
@@ -83,15 +80,6 @@ public final class AcceptLicense {
         JButton noButton = new JButton();
         setLocalizedText(yesButton,yesLabel);
         setLocalizedText(noButton,noLabel);
-        ActionListener listener = new ActionListener () {
-            public void actionPerformed (ActionEvent e) {
-                command = e.getActionCommand();
-                d.setVisible(false);
-                d = null;
-            }            
-        };
-        yesButton.addActionListener(listener);
-        noButton.addActionListener(listener);
         
         yesButton.setActionCommand("yes"); // NOI18N
         noButton.setActionCommand("no"); // NOI18N
@@ -109,12 +97,19 @@ public final class AcceptLicense {
         yesButton.setPreferredSize(new Dimension(maxWidth, maxHeight));
         noButton.setPreferredSize(new Dimension(maxWidth, maxHeight));
         
-        d = new JDialog((Frame) null,bundle.getString("MSG_LicenseDlgTitle"),true);
-        
+        final JDialog d = Util.createModalDialog(bundle.getString("MSG_LicenseDlgTitle"));
+        Util.initIcons(d);
         d.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_LicenseDlg"));
         d.getAccessibleContext().setAccessibleDescription(bundle.getString("ACSD_LicenseDlg"));
-        
         d.getContentPane().add(licensePanel,BorderLayout.CENTER);
+        ActionListener listener = new ActionListener () {
+            public void actionPerformed (ActionEvent e) {
+                command = e.getActionCommand();
+                d.setVisible(false);
+            }
+        };
+        yesButton.addActionListener(listener);
+        noButton.addActionListener(listener);
         JPanel buttonPanel = new JPanel();
         buttonPanel.setLayout(new FlowLayout(FlowLayout.RIGHT));
         buttonPanel.setBorder(BorderFactory.createEmptyBorder(17,12,11,11));
@@ -123,7 +118,6 @@ public final class AcceptLicense {
         d.getContentPane().add(buttonPanel,BorderLayout.SOUTH);
         d.setSize(new Dimension(600,600));
         d.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-        d.setModal(true);
         d.setResizable(true);
         //Center on screen
         d.setLocationRelativeTo(null);
@@ -135,7 +129,7 @@ public final class AcceptLicense {
             throw new org.openide.util.UserCancelException();
         }
     }
-    
+
     /**
      * Actual setter of the text & mnemonics for the AbstractButton or
      * their subclasses. We must copy necessary code from org.openide.awt.Mnemonics
