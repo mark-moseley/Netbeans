@@ -38,48 +38,52 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.profiler.j2se;
+package org.netbeans.modules.profiler.j2ee.selector;
 
-import org.netbeans.api.project.Project;
-import org.netbeans.spi.project.DataFilesProviderImplementation;
-import org.netbeans.spi.project.LookupProvider;
-import org.openide.filesystems.FileObject;
-import org.openide.util.Lookup;
-import org.openide.util.lookup.Lookups;
 import java.util.Collections;
-import java.util.LinkedList;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.profiler.selector.spi.nodes.SelectorChildren;
 import java.util.List;
+import org.netbeans.modules.profiler.j2ee.selector.nodes.ProjectNode;
+import org.netbeans.modules.profiler.j2ee.selector.nodes.web.WebProjectChildren;
+import org.netbeans.modules.profiler.selector.java.impl.ProjectSelectionTreeBuilder;
+import org.netbeans.modules.profiler.selector.spi.SelectionTreeBuilder;
+import org.netbeans.modules.profiler.selector.spi.nodes.SelectorNode;
+import org.netbeans.modules.web.spi.webmodule.WebModuleProvider;
+import org.netbeans.spi.project.LookupProvider.Registration.ProjectType;
+import org.netbeans.spi.project.ProjectServiceProvider;
 
 
 /**
  *
- * @author Jiri Sedlacek
+ * @author Jaroslav Bachorik
  */
-public class LookupProviderImpl implements LookupProvider {
-    //~ Methods ------------------------------------------------------------------------------------------------------------------
-
-    public DataFilesProviderImplementation getDataFilesProviderImplementation(final Project project) {
-        return new DataFilesProviderImplementation() {
-                public List<FileObject> getMetadataFiles() {
-                    List<FileObject> metadataFilesList = new LinkedList();
-                    FileObject buildBackupFile = (project == null) ? null
-                                                                   : project.getProjectDirectory()
-                                                                            .getFileObject("build-before-profiler.xml"); // NOI18N
-
-                    if ((buildBackupFile != null) && buildBackupFile.isValid()) {
-                        metadataFilesList.add(buildBackupFile);
-                    }
-
-                    return metadataFilesList;
-                }
-
-                public List<FileObject> getDataFiles() {
-                    return Collections.EMPTY_LIST;
-                }
-            };
+@ProjectServiceProvider(service = SelectionTreeBuilder.class, projectTypes = {
+    @ProjectType(id = "org-netbeans-modules-j2ee-earproject"),
+    @ProjectType(id = "org-netbeans-modules-web-project"),
+    @ProjectType(id = "org-netbeans-modules-maven")
+})
+public class PlainWebSelectionTreeBuilder extends ProjectSelectionTreeBuilder {
+    public PlainWebSelectionTreeBuilder(Project project) {
+        this(project, true);
+    }
+    
+    public PlainWebSelectionTreeBuilder(Project project, boolean isPreferred) {
+        super(new Type("web-application", "Web Applications View"), isPreferred, project);
     }
 
-    public Lookup createAdditionalLookup(Lookup baseContext) {
-        return Lookups.fixed(new Object[] { getDataFilesProviderImplementation(baseContext.lookup(Project.class)) });
+    public List<SelectorNode> buildSelectionTree() {
+        SelectorNode projectNode = new ProjectNode(project) {
+
+            protected SelectorChildren getChildren() {
+                return new WebProjectChildren(project);
+            }
+        };
+        return Collections.singletonList(projectNode);
+   }
+
+    @Override
+    public int estimatedNodeCount() {
+        return project.getLookup().lookup(WebModuleProvider.class) != null ? 1 : -1;
     }
 }
