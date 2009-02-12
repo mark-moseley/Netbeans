@@ -45,14 +45,16 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.SystemColor;
+import java.awt.Toolkit;
 import java.awt.event.ActionListener;
+import java.util.Map;
 import javax.swing.ComboBoxEditor;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.ListCellRenderer;
-import javax.swing.SwingUtilities;
 
 
 /**
@@ -78,35 +80,52 @@ ListCellRenderer, ComboBoxEditor {
         setFocusable (true);
     }
 
+    @Override
     public void paint (Graphics g) {
+        
+        //AntiAliasing check
+        @SuppressWarnings("unchecked") //NOI18N
+        Map<?, ?> aa = (Map<?, ?>) Toolkit.getDefaultToolkit().getDesktopProperty("awt.font.desktophints"); //NOI18N
+
+        if (aa != null) {
+            ((Graphics2D) g).setRenderingHints(aa);
+        }
+        
         Color oldColor = g.getColor ();
         Dimension size = getSize ();
-        if (isFocusOwner ())
+        if (isFocusOwner ()) {
             g.setColor (SystemColor.textHighlight);
-        else
+        } else {
             g.setColor (getBackground ());
+        }
         g.fillRect (0, 0, size.width, size.height);
-        int i = (size.height - SIZE) / 2;
-        if (value.color != null) {
-            g.setColor (Color.black);
-            g.drawRect (i, i, SIZE, SIZE);
-            g.setColor (value.color);
-            g.fillRect (i + 1, i + 1, SIZE - 1, SIZE - 1);
+
+        if (value != null) {
+            int i = (size.height - SIZE) / 2;
+            if (value.color != null) {
+                g.setColor (Color.black);
+                g.drawRect (i, i, SIZE, SIZE);
+                g.setColor (value.color);
+                g.fillRect (i + 1, i + 1, SIZE - 1, SIZE - 1);
+            }
+            if (value.text != null) {
+                if (isFocusOwner ()) {
+                    g.setColor (SystemColor.textHighlightText);
+                } else {
+                    g.setColor (getForeground ());
+                }
+                if (value.color != null) {
+                    g.drawString (value.text, i + SIZE + 5, i + SIZE);
+                } else {
+                    g.drawString (value.text, 5, i + SIZE);
+                }
+            }
         }
-        if (value.text != null) {
-            if (isFocusOwner ())
-                g.setColor (SystemColor.textHighlightText);
-            else
-                g.setColor (getForeground ());
-            if (value.color != null)
-                g.drawString (value.text, i + SIZE + 5, i + SIZE);
-            else
-                g.drawString (value.text, 5, i + SIZE);
-        }
+
         g.setColor (oldColor);
     }
 
-    public void setEnabled (boolean enabled) {
+    public @Override void setEnabled (boolean enabled) {
         setBackground (enabled ? 
             SystemColor.text : SystemColor.control
         );
@@ -124,6 +143,7 @@ ListCellRenderer, ComboBoxEditor {
         setEnabled (list.isEnabled ());
         setBackground (isSelected ? 
             SystemColor.textHighlight : SystemColor.text
+            //Color.RED
         );
         setForeground (isSelected ? 
             SystemColor.textHighlightText : SystemColor.textText
