@@ -41,38 +41,27 @@
 
 package org.netbeans.modules.cnd.repository.impl;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 import org.netbeans.modules.cnd.repository.api.Repository;
+import org.netbeans.modules.cnd.repository.disk.DiskRepositoryManager;
 import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.spi.RepositoryListener;
 import org.netbeans.modules.cnd.repository.testbench.Stats;
+import org.netbeans.modules.cnd.repository.translator.RepositoryTranslatorImpl;
 import org.netbeans.modules.cnd.repository.util.RepositoryListenersManager;
+import org.netbeans.modules.cnd.utils.CndUtils;
 
 /**
  *
  * @author Vladimir Voskresensky
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.repository.api.Repository.class)
 public final class DelegateRepository implements Repository {
     
-    private final Repository delegate;
-    
-    private Map<String, Object> locks = new HashMap<String, Object>();
-    private String mainLock = new String("DelegateRepository main lock"); // NOI18N
+    private Repository delegate;
     
     public DelegateRepository() {
-        if (Stats.validateKeys) {
-            Stats.log("Testing keys using KeyValidatorRepository."); // NOI18N
-            delegate = new KeyValidatorRepository();
-        } else if (Stats.useHardRefRepository) {
-            Stats.log("Using HashMapRepository."); // NOI18N
-            delegate = new HashMapRepository ();
-        } else {
-            Stats.log("by default using HybridRepository."); // NOI18N
-            delegate = new HybridRepository();
-        }        
     }
 
     public void hang(Key key, Persistent obj) {
@@ -107,39 +96,26 @@ public final class DelegateRepository implements Repository {
 
     public void debugClear() {
         delegate.debugClear();
+        delegate = null;
     }
 
     public void shutdown() {
-        delegate.shutdown();
-    }
-
-    private Object getLock(String unitName) {
-	synchronized( mainLock  ) {
-	    Object lock = locks.get(unitName);
-	    if( lock == null ) {
-		lock = new String(unitName); // NOI18N
-		locks.put(unitName, lock);
-	    }
-	    return lock;
-	}
+        Repository aDelegate = delegate;
+        if (aDelegate != null) {
+            aDelegate.shutdown();
+        }
     }
     
-    public void openUnit(String unitName) {
-	synchronized( getLock(unitName) ) {
-	    delegate.openUnit(unitName);
-	}
+    public void openUnit(int unitId, String unitName) {
+        delegate.openUnit(unitId, unitName);
     }
     
     public void closeUnit(String unitName, boolean cleanRepository, Set<String> requiredUnits) {
-	synchronized( getLock(unitName) ) {
-	    delegate.closeUnit(unitName, cleanRepository, requiredUnits);
-	}
+        delegate.closeUnit(unitName, cleanRepository, requiredUnits);
     }
     
     public void removeUnit(String unitName) {
-	synchronized( getLock(unitName) ) {
-	    delegate.removeUnit(unitName);
-	}
+        delegate.removeUnit(unitName);
     }
 
     public void cleanCaches() {
@@ -155,7 +131,25 @@ public final class DelegateRepository implements Repository {
     }
 
     public void startup(int persistMechanismVersion) {
+        initDelegate();
+        RepositoryTranslatorImpl.startup(persistMechanismVersion);
         delegate.startup(persistMechanismVersion);
     }
-    
+
+    private synchronized void initDelegate() {
+        if (delegate == null) {
+            // we have to ask sys property each time, because tests changes
+            // settings in runtime
+            if (CndUtils.getBoolean("cnd.repository.validate.keys", false)) {
+                Stats.log("Testing keys using KeyValidatorRepository."); // NOI18N
+                delegate = new KeyValidatorRepository();
+            } else if (CndUtils.getBoolean("cnd.repository.hardrefs", false)) { // NOI18N
+                Stats.log("Using HashMapRepository."); // NOI18N
+                delegate = new HashMapRepository();
+            } else {
+                Stats.log("by default using HybridRepository."); // NOI18N
+                delegate = new DiskRepositoryManager();
+            }
+        }
+    }
 }
