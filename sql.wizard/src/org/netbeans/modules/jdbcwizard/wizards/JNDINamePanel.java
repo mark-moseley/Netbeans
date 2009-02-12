@@ -13,13 +13,13 @@
  * "Portions Copyrighted [year] [name of copyright owner]"
  * 
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  */
 
 /*
  * 
- * Copyright 2005 Sun Microsystems, Inc.
+ * Copyright 2009 Sun Microsystems, Inc.
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.Arrays;
 import java.io.File;
-import java.io.FileOutputStream;
 
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ChangeEvent;
@@ -53,7 +52,7 @@ import org.openide.NotifyDescriptor;
 import org.openide.WizardDescriptor;
 import org.openide.util.HelpCtx;
 
-import org.netbeans.modules.jdbcwizard.builder.dbmodel.DBColumn;
+
 import org.netbeans.modules.jdbcwizard.builder.dbmodel.DBTable;
 import org.netbeans.modules.jdbcwizard.builder.util.XMLCharUtil;
 import org.netbeans.modules.jdbcwizard.builder.wsdl.GenerateWSDL;
@@ -65,62 +64,35 @@ import org.netbeans.modules.jdbcwizard.builder.dbmodel.DBConnectionDefinition;
 /**
  * @author npedapudi
  */
-public class JNDINamePanel extends javax.swing.JPanel implements WizardDescriptor.Panel {
+public class JNDINamePanel implements WizardDescriptor.Panel {
 
     /**
      * 
      */
     private static final long serialVersionUID = 1L;
 
-    protected final Set listeners = new HashSet(1);
+    protected final Set<ChangeListener> listeners = new HashSet<ChangeListener>(1);
 
     private static final String XSD_EXT = ".xsd";
 
-    private static final boolean enableNext = false;
+    static final String JNDI_DEFAULT_NAME = "jdbc/__defaultDS";
 
-    private static final String JNDI_DEFAULT_NAME = "jdbc/__defaultDS";
-
-    private static final String CONNECTION_INFO_FILE = "config\\ConnectionInfo.xml";
+    private JNDINamePanelUI comp;
+    private String title;
 
     /** Creates new form JNDINamePanel */
     public JNDINamePanel(final String title) {
-        if (title != null && title.trim().length() != 0) {
-            this.setName(title);
-        }
-        this.initComponents();
-    }
-
-    /**
-     * intializes the components
-     */
-    private void initComponents() {
-        this.jLabel1 = new javax.swing.JLabel();
-        this.jTextField1 = new javax.swing.JTextField();
-        this.jTextField1.setText(JNDINamePanel.JNDI_DEFAULT_NAME);
-
-        this.jLabel1.setText("JNDI Name:");
-
-        org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
-        this.setLayout(layout);
-        layout.setHorizontalGroup(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING).add(
-                layout.createSequentialGroup().add(55, 55, 55).add(this.jLabel1,
-                        org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 70,
-                        org.jdesktop.layout.GroupLayout.PREFERRED_SIZE).add(28, 28, 28).add(this.jTextField1,
-                        org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 179,
-                        org.jdesktop.layout.GroupLayout.PREFERRED_SIZE).addContainerGap(68, Short.MAX_VALUE)));
-        layout.setVerticalGroup(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING).add(
-                layout.createSequentialGroup().add(133, 133, 133).add(
-                        layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE).add(this.jLabel1).add(
-                                this.jTextField1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE,
-                                org.jdesktop.layout.GroupLayout.DEFAULT_SIZE,
-                                org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)).addContainerGap(128, Short.MAX_VALUE)));
+        this.title = title;
     }
 
     /**
      * @return
      */
     public Component getComponent() {
-        return this;
+        if (comp == null) {
+            comp = new JNDINamePanelUI (title);
+        }
+        return comp;
     }
 
     /**
@@ -179,7 +151,10 @@ public class JNDINamePanel extends javax.swing.JPanel implements WizardDescripto
             if (isAdvancingPanel) {
                 final Object[] listObj = (Object[]) wd.getProperty(JDBCWizardContext.SELECTEDTABLES);
                 final List list = Arrays.asList(listObj);
-                final String jndiName = this.jTextField1.getText().trim();
+                if (comp == null) {
+                    getComponent ();
+                }
+                final String jndiName = comp.jTextField1.getText().trim();
                 try {
                     final XSDGenerator xsdGen = new XSDGenerator();
                     final String targetFolderPath = (String) wd.getProperty(JDBCWizardContext.TARGETFOLDER_PATH);
@@ -243,7 +218,7 @@ public class JNDINamePanel extends javax.swing.JPanel implements WizardDescripto
         Iterator it;
 
         synchronized (this.listeners) {
-            it = new HashSet(this.listeners).iterator();
+            it = new HashSet<ChangeListener>(this.listeners).iterator();
         }
 
         final ChangeEvent ev = new ChangeEvent(this);
@@ -256,17 +231,7 @@ public class JNDINamePanel extends javax.swing.JPanel implements WizardDescripto
      * @see org.openide.WizardDescriptor.Panel#isValid
      */
     public boolean isValid() {
-        if (this.enableNext) {
-            return true;
-        }
-
-        return super.isValid();
+        return true;
     }
-
-    // Variables declaration - do not modify
-    private javax.swing.JLabel jLabel1;
-
-    private javax.swing.JTextField jTextField1;
-    // End of variables declaration
 
 }
