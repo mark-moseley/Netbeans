@@ -152,6 +152,12 @@ implements PropertyChangeListener, ChangeListener, FileChangeListener {
                     Arrays.sort(arr, order);
                     List<FolderChildrenPair> positioned = new ArrayList<FolderChildrenPair>(arr.length);
                     for (FileObject fo : FileUtil.getOrder(Arrays.asList(arr), false)) {
+                        if (filter instanceof DataFilter.FileBased) {
+                            DataFilter.FileBased f =(DataFilter.FileBased)filter;
+                            if (!f.acceptFileObject(fo)) {
+                                continue;
+                            }
+                        }
                         positioned.add(new FolderChildrenPair(fo));
                     }
 
@@ -189,14 +195,16 @@ implements PropertyChangeListener, ChangeListener, FileChangeListener {
     protected Node[] createNodes(FolderChildrenPair pair) {
         DataObject obj;
         long time = System.currentTimeMillis();
+        Node ret = null;
         try {
             FileObject pf = pair.primaryFile;
             obj = DataObject.find (pf);
             if (
+                obj.isValid() &&
                 pf.equals(obj.getPrimaryFile()) &&
                 (filter == null || filter.acceptDataObject (obj))
             ) {
-                return new Node[] { obj.getClonedNodeDelegate (filter) };
+                ret = obj.getClonedNodeDelegate (filter);
             } 
         } catch (DataObjectNotFoundException e) {
             Logger.getLogger(FolderChildren.class.getName()).log(Level.FINE, null, e);
@@ -204,9 +212,10 @@ implements PropertyChangeListener, ChangeListener, FileChangeListener {
             long took = System.currentTimeMillis() - time;
             if (err.isLoggable(Level.FINE)) {
                 err.fine("createNodes: " + pair + " took: " + took + " ms");
+                err.fine("  returning: " + ret);
             }
         }
-        return null;
+        return ret == null ? null : new Node[] { ret };
     }
 
     @Override
