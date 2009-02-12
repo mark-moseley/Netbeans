@@ -38,19 +38,18 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.profiler.j2ee;
+package org.netbeans.modules.profiler.j2ee.generic;
 
 import org.netbeans.lib.profiler.common.AttachSettings;
-import org.netbeans.lib.profiler.common.integration.IntegrationProvider;
 import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
-import org.netbeans.modules.profiler.ui.wizards.framework.steps.NullWizardStep;
-import org.netbeans.modules.profiler.ui.wizards.framework.steps.WizardStep;
-import org.netbeans.modules.profiler.ui.wizards.providers.AbstractIntegrationProvider;
-import org.netbeans.modules.profiler.ui.wizards.providers.IntegrationCategorizer;
-import org.netbeans.modules.profiler.ui.wizards.providers.TargetPlatformEnum;
-import org.netbeans.modules.profiler.ui.wizards.providers.ValidationResult;
 import java.text.MessageFormat;
 import java.util.ResourceBundle;
+import org.netbeans.modules.profiler.attach.providers.AbstractIntegrationProvider;
+import org.netbeans.modules.profiler.attach.providers.IntegrationCategorizer;
+import org.netbeans.modules.profiler.attach.providers.TargetPlatformEnum;
+import org.netbeans.modules.profiler.attach.spi.IntegrationProvider;
+import org.netbeans.modules.profiler.attach.wizard.steps.NullWizardStep;
+import org.netbeans.modules.profiler.attach.wizard.steps.WizardStep;
 
 
 /**
@@ -58,6 +57,7 @@ import java.util.ResourceBundle;
  * @author Tomas Hurka
  * @author Jaroslav Bachorik
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.attach.spi.IntegrationProvider.class)
 public class GenericWebAppServerIntegrationProvider extends AbstractIntegrationProvider {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -134,10 +134,6 @@ public class GenericWebAppServerIntegrationProvider extends AbstractIntegrationP
     }
 
     public boolean supportsDynamicPid() {
-        return true;
-    }
-
-    public boolean supportsJVM(TargetPlatformEnum jvm) {
         return true;
     }
 
