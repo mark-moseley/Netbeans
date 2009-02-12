@@ -49,15 +49,11 @@ import java.util.Collection;
 import javax.swing.*;
 import javax.swing.ImageIcon;
 import javax.swing.border.EmptyBorder;
-import javax.swing.text.Position;
 import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreePath;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.project.*;
 import org.netbeans.modules.refactoring.api.*;
-import org.netbeans.modules.refactoring.api.impl.APIAccessor;
-import org.netbeans.modules.refactoring.spi.RefactoringElementImplementation;
 import org.netbeans.modules.refactoring.spi.ui.RefactoringCustomUI;
 import org.netbeans.modules.refactoring.spi.ui.RefactoringUI;
 import org.netbeans.modules.refactoring.spi.ui.TreeElement;
@@ -68,14 +64,13 @@ import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.LifecycleManager;
-import org.openide.awt.Actions;
 import org.openide.awt.Mnemonics;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.text.PositionBounds;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
 
 /**
@@ -125,7 +120,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
     private Component customComponent;
 
     
-    static Image PACKAGE_BADGE = Utilities.loadImage( "org/netbeans/spi/java/project/support/ui/packageBadge.gif" ); // NOI18N
+    static Image PACKAGE_BADGE = ImageUtilities.loadImage( "org/netbeans/spi/java/project/support/ui/packageBadge.gif" ); // NOI18N
     
     public RefactoringPanel(RefactoringUI ui) {
         this(ui,null);
@@ -213,7 +208,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
     private JToolBar getToolBar() {
         checkEventThread();
         refreshButton = new JButton(
-            new ImageIcon(Utilities.loadImage(
+            new ImageIcon(ImageUtilities.loadImage(
             "org/netbeans/modules/refactoring/api/resources/refresh.png")) // NOI18N
         );
         Dimension dim = new Dimension(24, 24);
@@ -229,11 +224,11 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
         refreshButton.addActionListener(getButtonListener());
         // expand button settings
         expandButton = new JToggleButton(
-            new ImageIcon(Utilities.loadImage(
+            new ImageIcon(ImageUtilities.loadImage(
             "org/netbeans/modules/refactoring/api/resources/expandTree.png")) // NOI18N
         );
         expandButton.setSelectedIcon(
-            new ImageIcon(Utilities.loadImage(
+            new ImageIcon(ImageUtilities.loadImage(
             "org/netbeans/modules/refactoring/api/resources/colapseTree.png")) // NOI18N
         );
         expandButton.setMaximumSize(dim);
@@ -252,7 +247,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
         toolBar.setFloatable(false); 
         
         logicalViewButton = new JToggleButton(
-            new ImageIcon(Utilities.loadImage(
+            new ImageIcon(ImageUtilities.loadImage(
             "org/netbeans/modules/refactoring/api/resources/logical_view.png")) // NOI18N
         );
         
@@ -269,7 +264,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
         logicalViewButton.addActionListener(getButtonListener());
 
         physicalViewButton = new JToggleButton(
-            new ImageIcon(Utilities.loadImage(
+            new ImageIcon(ImageUtilities.loadImage(
             "org/netbeans/modules/refactoring/api/resources/file_view.png")) // NOI18N
         );
         
@@ -297,7 +292,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
         }
         
         nextMatch = new JButton(
-            new ImageIcon(Utilities.loadImage(
+            new ImageIcon(ImageUtilities.loadImage(
             "org/netbeans/modules/refactoring/api/resources/nextmatch.png")) // NOI18N
         );
         
@@ -310,7 +305,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
         nextMatch.addActionListener(getButtonListener());
 
         prevMatch = new JButton(
-            new ImageIcon(Utilities.loadImage(
+            new ImageIcon(ImageUtilities.loadImage(
             "org/netbeans/modules/refactoring/api/resources/prevmatch.png")) // NOI18N
         );
         
@@ -667,7 +662,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
                         errorsDesc.append("</font>"); // NOI18N
                     }
                     errorsDesc.append(']');
-                    final CheckNode root = new CheckNode(null, description + errorsDesc.toString(), new ImageIcon(Utilities.loadImage("org/netbeans/modules/refactoring/api/resources/" + (isQuery ? "findusages.png" : "refactoring.gif"))));
+                    final CheckNode root = new CheckNode(null, description + errorsDesc.toString(), new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/refactoring/api/resources/" + (isQuery ? "findusages.png" : "refactoring.gif"))));
                     HashMap nodes = new HashMap();
                     
                     final Cursor old = getCursor();
@@ -809,11 +804,11 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
     }
     
     void selectNextUsage() {
-        selectNextPrev(true);
+        CheckNodeListener.selectNextPrev(true, isQuery, tree);
     }
     
     void selectPrevUsage() {
-        selectNextPrev(false);
+        CheckNodeListener.selectNextPrev(false, isQuery, tree);
     }
     
     private int location;
@@ -825,44 +820,6 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
     public void restoreDeviderLocation() {
         if (splitPane.getRightComponent()!=null)
             splitPane.setDividerLocation(location);
-    }
-    
-    private void selectNextPrev(final boolean next) {
-        int newRow = getSelectedRow();
-        int maxcount = tree.getRowCount();
-        CheckNode node;
-        do {
-            if (next) {
-                newRow++;
-                if (newRow>=maxcount)
-                    newRow = 0;
-            } else {
-                newRow--;
-                if (newRow<0)
-                    newRow = maxcount-1;
-            }
-            TreePath path = tree.getPathForRow(newRow);
-            node = (CheckNode) path.getLastPathComponent();
-            if (!node.isLeaf()) {
-                tree.expandRow(newRow);
-                maxcount = tree.getRowCount();
-            }
-        }
-        while (!node.isLeaf());
-        tree.setSelectionRow(newRow);
-        tree.scrollRowToVisible(newRow);
-        if (isQuery) {
-            CheckNodeListener.findInSource(node);
-        } else {
-            CheckNodeListener.openDiff(node);
-        }
-    }
-    
-    private int getSelectedRow() {
-        int[] rows = tree.getSelectionRows();
-        if (rows == null || rows.length == 0)
-            return 0;
-        return rows[0];
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -1017,7 +974,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
                     ((JDialog) d).setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
                     
                     handle.start(event.getCount());
-                    d.show();
+                    d.setVisible(true);
                 }
             });
         }
@@ -1038,7 +995,7 @@ public class RefactoringPanel extends JPanel implements InvalidationListener {
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
                     handle.finish();
-                    d.hide();
+                    d.setVisible(false);
                 }
             });
         }
