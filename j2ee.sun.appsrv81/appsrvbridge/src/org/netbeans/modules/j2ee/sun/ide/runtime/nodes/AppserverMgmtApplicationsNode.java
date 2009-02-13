@@ -43,13 +43,13 @@ package org.netbeans.modules.j2ee.sun.ide.runtime.nodes;
 
 import javax.swing.Action;
 import org.netbeans.modules.j2ee.sun.bridge.apis.AppserverMgmtActiveNode;
+import org.netbeans.modules.j2ee.sun.bridge.apis.AppserverMgmtControllerBase;
 import org.netbeans.modules.j2ee.sun.ide.controllers.DeployedItemsController;
 import org.netbeans.modules.j2ee.sun.ide.controllers.EnablerController;
 import org.netbeans.modules.j2ee.sun.bridge.apis.Controller;
 import org.netbeans.modules.j2ee.sun.bridge.apis.Enableable;
 import org.netbeans.modules.j2ee.sun.bridge.apis.Undeployable;
 import org.netbeans.modules.j2ee.sun.ide.controllers.J2EEServerMgmtController;
-import org.netbeans.modules.j2ee.sun.ide.runtime.actions.EnableDisableAction;
 import org.netbeans.modules.j2ee.sun.ide.runtime.actions.UndeployAction;
 import org.openide.actions.PropertiesAction;
 import org.openide.nodes.Children;
@@ -91,7 +91,6 @@ public abstract class AppserverMgmtApplicationsNode
         if(!isEmbedded) {
             return new SystemAction[] {
                 SystemAction.get(UndeployAction.class),
-                SystemAction.get(EnableDisableAction.class),
                 SystemAction.get(PropertiesAction.class)
             };
         } else {
@@ -168,5 +167,9 @@ public abstract class AppserverMgmtApplicationsNode
     public void setEnabled(boolean enabled) {
         ((EnablerController)getController()).setEnabled(enabled);
     }
-    
+
+    @Override
+    public boolean isServerLocal() {
+        return ((AppserverMgmtControllerBase)getController()).isDeployMgrLocal();
+    }
 }
