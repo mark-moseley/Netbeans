@@ -51,6 +51,8 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import javax.swing.ListModel;
 import javax.swing.event.ChangeEvent;
@@ -58,8 +60,8 @@ import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.ListDataListener;
+import org.netbeans.api.server.ServerInstance;
 import org.netbeans.modules.server.ServerRegistry;
-import org.netbeans.spi.server.ServerInstance;
 import org.netbeans.spi.server.ServerInstanceProvider;
 import org.netbeans.spi.server.ServerWizardProvider;
 import org.openide.util.NbBundle;
@@ -141,8 +143,7 @@ public class ServerWizardVisual extends javax.swing.JPanel {
         }
     }
 
-    @Override
-    public boolean isValid() {
+    boolean hasValidData() {
         boolean result = isServerValid() && isDisplayNameValid();
         if (result) {
             wizard.setErrorMessage(null);
@@ -178,8 +179,12 @@ public class ServerWizardVisual extends javax.swing.JPanel {
     private boolean existsDisplayName(String displayName) {
         for (ServerInstanceProvider type : ServerRegistry.getInstance().getProviders()) {
             for (ServerInstance instance : type.getInstances()) {
-                if (instance.getDisplayName().equalsIgnoreCase(displayName)) {
+                String instanceName = instance.getDisplayName();
+                if (null != instanceName && instanceName.equalsIgnoreCase(displayName)) {
                     return true;
+                } else if (null == instanceName) {
+                    Logger.getLogger(this.getClass().getName()).log(Level.FINE,
+                            "corrupted ServerInstance: " + instance.toString());
                 }
             }
         }
@@ -255,6 +260,7 @@ public class ServerWizardVisual extends javax.swing.JPanel {
         });
 
         serverListBox.setModel(new WizardListModel());
+        serverListBox.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
         serverListBox.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
             public void valueChanged(javax.swing.event.ListSelectionEvent evt) {
                 serverListBoxValueChanged(evt);
@@ -300,9 +306,14 @@ public class ServerWizardVisual extends javax.swing.JPanel {
 
 private void serverListBoxValueChanged(javax.swing.event.ListSelectionEvent evt) {//GEN-FIRST:event_serverListBoxValueChanged
        if (!evt.getValueIsAdjusting()) {
-           ServerWizardProvider server = ((WizardAdapter) serverListBox.getSelectedValue()).getServerInstanceWizard();
-           if (server != null) {
-               fillDisplayName(server);
+           WizardAdapter adapter = (WizardAdapter) serverListBox.getSelectedValue();
+           if (adapter != null) {
+               ServerWizardProvider server = adapter.getServerInstanceWizard();
+               if (server != null) {
+                   fillDisplayName(server);
+               }
+           } else {
+               fireChange();
            }
        }
 }//GEN-LAST:event_serverListBoxValueChanged
