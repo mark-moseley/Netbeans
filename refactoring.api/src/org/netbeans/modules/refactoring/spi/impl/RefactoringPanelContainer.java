@@ -49,14 +49,16 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import org.openide.awt.MouseUtils;
 import org.openide.util.HelpCtx;
-import org.openide.util.Utilities;
+import org.openide.util.ImageUtilities;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import javax.swing.AbstractAction;
 import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
+import org.openide.awt.TabbedPaneFactory;
 import org.openide.util.NbBundle;
 
 /**
@@ -73,8 +75,8 @@ public class RefactoringPanelContainer extends TopComponent {
     private PopupListener listener;
     private CloseListener closeL;
     private boolean isRefactoring;
-    private static Image REFACTORING_BADGE = Utilities.loadImage( "org/netbeans/modules/refactoring/api/resources/refactoringpreview.png" ); // NOI18N
-    private static Image USAGES_BADGE = Utilities.loadImage( "org/netbeans/modules/refactoring/api/resources/findusages.png" ); // NOI18N
+    private static Image REFACTORING_BADGE = ImageUtilities.loadImage( "org/netbeans/modules/refactoring/api/resources/refactoringpreview.png" ); // NOI18N
+    private static Image USAGES_BADGE = ImageUtilities.loadImage( "org/netbeans/modules/refactoring/api/resources/findusages.png" ); // NOI18N
     
     private RefactoringPanelContainer() {
         this("", false);
@@ -85,6 +87,7 @@ public class RefactoringPanelContainer extends TopComponent {
         setToolTipText(name);
         setFocusable(true);
         setLayout(new java.awt.BorderLayout());
+        setMinimumSize(new Dimension(1,1));
         getAccessibleContext().setAccessibleDescription(
             NbBundle.getMessage(RefactoringPanelContainer.class, "ACSD_usagesPanel")
         );
@@ -117,7 +120,7 @@ public class RefactoringPanelContainer extends TopComponent {
                 add(panel, BorderLayout.CENTER);
             } else {
                 remove(comp);
-                JTabbedPane pane = new CloseButtonTabbedPane();
+                JTabbedPane pane = TabbedPaneFactory.createCloseButtonTabbedPane();
                 pane.addMouseListener(listener);
                 pane.addPropertyChangeListener(closeL);
                 add(pane, BorderLayout.CENTER);
@@ -135,6 +138,7 @@ public class RefactoringPanelContainer extends TopComponent {
         requestActive();
     }
 
+    @Override
     protected void componentActivated () {
         super.componentActivated();
         JPanel panel = getCurrentPanel();
@@ -207,7 +211,8 @@ public class RefactoringPanelContainer extends TopComponent {
         return usages;
     }
     
-    protected void closeNotify() {
+    @Override
+    protected void componentClosed() {
         isVisible = false;
         if (getComponentCount() == 0) {
             return ;
@@ -224,10 +229,12 @@ public class RefactoringPanelContainer extends TopComponent {
         }
     }
     
+    @Override
     protected String preferredID() {
         return "RefactoringPanel"; // NOI18N
     }
 
+    @Override
     public int getPersistenceType() {
         return PERSISTENCE_ALWAYS;
     }
@@ -276,7 +283,7 @@ public class RefactoringPanelContainer extends TopComponent {
     private class CloseListener implements PropertyChangeListener {
         
         public void propertyChange(java.beans.PropertyChangeEvent evt) {
-            if (CloseButtonTabbedPane.PROP_CLOSE.equals(evt.getPropertyName())) {
+            if (TabbedPaneFactory.PROP_CLOSE.equals(evt.getPropertyName())) {
                 removePanel((JPanel) evt.getNewValue());
             }
         }
@@ -328,6 +335,7 @@ public class RefactoringPanelContainer extends TopComponent {
         }
     }
     
+    @Override
     public HelpCtx getHelpCtx() {
         return new HelpCtx(RefactoringPanelContainer.class.getName() + (isRefactoring ? ".refactoring-preview" : ".find-usages") ); //NOI18N
     }
