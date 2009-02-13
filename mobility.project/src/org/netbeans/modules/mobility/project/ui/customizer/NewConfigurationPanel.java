@@ -72,6 +72,7 @@ import org.openide.explorer.view.BeanTreeView;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -156,7 +157,7 @@ public class NewConfigurationPanel extends JPanel implements DocumentListener, P
         
         if (obj instanceof Icon) {
             Icon icon = (Icon)obj;
-            return Utilities.icon2Image(icon);
+            return ImageUtilities.icon2Image(icon);
         }
         
         return null;
@@ -194,7 +195,7 @@ public class NewConfigurationPanel extends JPanel implements DocumentListener, P
         oldName = ""; //NOI18N
     }
     
-    public boolean isValid() {
+    public boolean isStateValid() {
         final String name = jTextFieldName.getText();
         if (J2MEProjectUtils.ILEGAL_CONFIGURATION_NAMES.contains(name)) {
             errorPanel.setErrorBundleMessage("ERR_AddCfg_ReservedWord"); //NOI18N
@@ -219,7 +220,7 @@ public class NewConfigurationPanel extends JPanel implements DocumentListener, P
     public void changedUpdate(@SuppressWarnings("unused")
             final DocumentEvent e) {
         if (dialogDescriptor != null) {
-            dialogDescriptor.setValid(isValid());
+            dialogDescriptor.setValid(isStateValid());
         }
     }
     
