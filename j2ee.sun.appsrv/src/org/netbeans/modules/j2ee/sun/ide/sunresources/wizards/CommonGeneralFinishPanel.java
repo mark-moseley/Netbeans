@@ -49,10 +49,9 @@ package org.netbeans.modules.j2ee.sun.ide.sunresources.wizards;
 import java.awt.Component;
 import javax.swing.JTextField;
 
+import org.netbeans.modules.j2ee.sun.api.restricted.ResourceUtils;
 import org.openide.loaders.TemplateWizard;
 import org.openide.util.HelpCtx;
-
-import org.netbeans.modules.j2ee.sun.ide.sunresources.beans.ResourceUtils;
 
 import org.netbeans.modules.j2ee.sun.sunresources.beans.FieldGroup;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.Wizard;
@@ -138,12 +137,13 @@ public class CommonGeneralFinishPanel extends  ResourceWizardPanel {
             int i;
             for (i=0; i < component.jLabels.length; i++) {
                 String jLabel = (String)component.jLabels[i].getText();
-                if (jLabel.equals(bundle.getString("LBL_" + __JndiName))) { //NOI18N
+                if (jLabel.equals(Util.getCorrectedLabel(bundle, __JndiName))) { //NOI18N
                     String jndiName = (String)((JTextField)component.jFields[i]).getText();
                     if (jndiName == null || jndiName.length() == 0) {
                         setErrorMsg(bundle.getString("Err_InvalidJndiName"));
                         return false;
                     }else if(! ResourceUtils.isLegalResourceName(jndiName)){
+                        setErrorMsg(bundle.getString("Err_InvalidJndiName"));
                         return false;
                     }else if(! ResourceUtils.isUniqueFileName(jndiName, this.helper.getData().getTargetFileObject(), __MAILResource)){
                         setErrorMsg(bundle.getString("Err_DuplFileJndiName"));
@@ -151,21 +151,21 @@ public class CommonGeneralFinishPanel extends  ResourceWizardPanel {
                     }
                 }    
                 if (wizardInfo.getName().equals(__MailResource)) {
-                    if (jLabel.equals(bundle.getString("LBL_" + __Host))) { // NO18N
+                    if (jLabel.equals(Util.getCorrectedLabel(bundle, __Host))) { // NO18N
                         String host = (String)((JTextField)component.jFields[i]).getText();
                         if (host == null || host.length() == 0) {
                             setErrorMessage(bundle.getString("Err_EmptyValue"), jLabel);
                             return false;
                         }
                     }
-                    if (jLabel.equals(bundle.getString("LBL_" + __MailUser))) { // NO18N
+                    if (jLabel.equals(Util.getCorrectedLabel(bundle, __MailUser))) { // NO18N
                         String user = (String)((JTextField)component.jFields[i]).getText();
                         if (user == null || user.length() == 0) {
                             setErrorMessage(bundle.getString("Err_EmptyValue"), jLabel);
                             return false;
                         }
                     }
-                    if (jLabel.equals(bundle.getString("LBL_" + __From))) { //NOI18N
+                    if (jLabel.equals(Util.getCorrectedLabel(bundle, __From))) { //NOI18N
                         String from = (String)((JTextField)component.jFields[i]).getText();
                         if (from == null || from.length() == 0) {
                             setErrorMessage(bundle.getString("Err_EmptyValue"), jLabel);
@@ -190,6 +190,10 @@ public class CommonGeneralFinishPanel extends  ResourceWizardPanel {
             FileObject resFolder = ResourceUtils.getResourceDirectory(this.helper.getData().getTargetFileObject());
             this.helper.getData().setTargetFileObject (resFolder);
             if(resFolder != null){
+                String resourceName = helper.getData().getString("jndi-name"); //NOI18N
+                if ((resourceName != null) && (!resourceName.equals(""))) {
+                    targetName = resourceName;
+                }
                 targetName = ResourceUtils.createUniqueFileName (targetName, resFolder, __MAILResource);
                 this.helper.getData ().setTargetFile (targetName);
                 if(component == null)

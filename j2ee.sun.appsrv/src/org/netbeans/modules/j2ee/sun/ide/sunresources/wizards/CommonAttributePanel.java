@@ -48,16 +48,12 @@ package org.netbeans.modules.j2ee.sun.ide.sunresources.wizards;
 
 import java.awt.Component;
 import javax.swing.JTextField;
-import java.util.Set;
-import java.util.Arrays;
-import java.util.HashSet;
+import org.netbeans.modules.j2ee.sun.api.restricted.ResourceUtils;
 import org.openide.filesystems.FileObject;
 
 import org.openide.loaders.TemplateWizard;
 import org.openide.WizardDescriptor;
 import org.openide.util.HelpCtx;
-
-import org.netbeans.modules.j2ee.sun.ide.sunresources.beans.ResourceUtils;
 
 import org.netbeans.modules.j2ee.sun.sunresources.beans.FieldGroup;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.Wizard;
@@ -166,24 +162,7 @@ public class CommonAttributePanel extends ResourceWizardPanel {
         return wizardInfo;
     }
     
-    public String getJndiName() {
-        if(! getIsConnPool()) {
-            CommonAttributeVisualPanel visComponent = (CommonAttributeVisualPanel) component;
-            if (visComponent != null && visComponent.jLabels != null && visComponent.jFields != null) {
-                int i;
-                for (i = 0; i < visComponent.jLabels.length; i++) {
-                    String jLabel = (String) visComponent.jLabels[i].getText();
-                    if (jLabel.equals(bundle.getString("LBL_" + __JndiName))) {
-                        // NO18N
-                        return (String) ((JTextField)visComponent.jFields[i]).getText();
-                    }
-                }
-            }
-        }    
-        return null;
-    }
-    
-    /**
+     /**
      * Checks if the JNDI Name in the wizard is duplicate name in the
      * Unregistered resource list for JDBC Data Sources, Persistenc Managers, 
      * and Java Mail Sessions.
@@ -201,16 +180,15 @@ public class CommonAttributePanel extends ResourceWizardPanel {
           if(! getIsConnPool()) {
               CommonAttributeVisualPanel visComponent = (CommonAttributeVisualPanel) component;
               if (visComponent != null && visComponent.jLabels != null && visComponent.jFields != null) {
-                  int i;
-                  for (i = 0; i < visComponent.jLabels.length; i++) {
+                  for (int i = 0; i < visComponent.jLabels.length; i++) {
                       String jLabel = (String) visComponent.jLabels[i].getText ();
-                      if (jLabel.equals(bundle.getString("LBL_" + __JndiName))) {
-                          // NO18N
+                      if (jLabel.equals(Util.getCorrectedLabel(bundle, __JndiName))) { // NO18N
                           String jndiName = (String) ((JTextField)visComponent.jFields[i]).getText ();
                           if (jndiName == null || jndiName.length() == 0) {
                               setErrorMsg(bundle.getString("Err_InvalidJndiName"));
                               return false;
                           } else if (!ResourceUtils.isLegalResourceName(jndiName)) {
+                              setErrorMsg(bundle.getString("Err_InvalidJndiName"));
                               return false;
                           } else {
                               FileObject resFolder = this.helper.getData().getTargetFileObject();
@@ -228,17 +206,8 @@ public class CommonAttributePanel extends ResourceWizardPanel {
                                   }
                               }
                           }
-                      } else {
-                          Set commonAttr = new HashSet(Arrays.asList(COMMON_ATTR_INTEGER));
-                          if (commonAttr.contains(jLabel.trim())) {
-                              String fieldValue = (String) ((JTextField)visComponent.jFields[i]).getText ();
-                              if (fieldValue == null || fieldValue.length() == 0) {
-                                  setErrorMessage(bundle.getString("Err_EmptyValue"), jLabel);
-                                  return false;
-                              }
-                          }
-                      }
-                  }
+                      } //if
+                  } //for
               }
               if (!isNewResourceSelected()) {
                   //Need to check the poolname for jdbc
@@ -266,6 +235,9 @@ public class CommonAttributePanel extends ResourceWizardPanel {
                       }
                   }
               }
+          } else {
+              ConnectionPoolOptionalVisualPanel visComponent = (ConnectionPoolOptionalVisualPanel) component;
+              return visComponent.hasValidData();
           }
           return true;
       }
@@ -286,15 +258,20 @@ public class CommonAttributePanel extends ResourceWizardPanel {
         if(component == null)
             getComponent();
         if(resFolder != null){
-            if (wizardInfo.getName ().equals (__JdbcResource)){
-                if(this.helper.getData ().getString (__DynamicWizPanel).equals ("true")){ //NOI18N
-                    targetName = null;
+            String resourceName = this.helper.getData().getString("jndi-name");
+            if((resourceName != null) && (! resourceName.equals(""))) {
+                this.helper.getData().setTargetFile(resourceName);
+            } else {
+                if (wizardInfo.getName().equals(__JdbcResource)) {
+                    if (this.helper.getData().getString(__DynamicWizPanel).equals("true")) { //NOI18N
+                        targetName = null;
+                    }
+                    targetName = ResourceUtils.createUniqueFileName(targetName, resFolder, __JDBCResource);
+                    this.helper.getData().setTargetFile(targetName);
+                } else if (wizardInfo.getName().equals(__PersistenceManagerFactoryResource)) {
+                    targetName = ResourceUtils.createUniqueFileName(targetName, resFolder, __PersistenceResource);
+                    this.helper.getData().setTargetFile(targetName);
                 }
-                targetName = ResourceUtils.createUniqueFileName (targetName, resFolder, __JDBCResource);
-                this.helper.getData ().setTargetFile (targetName);
-            }else if(wizardInfo.getName ().equals (__PersistenceManagerFactoryResource)){
-                targetName = ResourceUtils.createUniqueFileName (targetName, resFolder, __PersistenceResource);
-                this.helper.getData ().setTargetFile (targetName);
             }
             if(! getIsConnPool()) {
               CommonAttributeVisualPanel visComponent = (CommonAttributeVisualPanel) component;
@@ -326,5 +303,9 @@ public class CommonAttributePanel extends ResourceWizardPanel {
     private boolean getIsConnPool(){
         return isConnPool;
     }
+
+//    protected final void fireChangeEvent (Object source) {
+//       super.fireChange(this);
+//    }
 }
 

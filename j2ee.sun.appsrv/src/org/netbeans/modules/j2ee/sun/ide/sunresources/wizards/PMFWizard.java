@@ -57,7 +57,7 @@ import java.awt.Component;
 import java.io.InputStream;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
-import org.netbeans.modules.j2ee.sun.ide.sunresources.beans.ResourceUtils;
+import org.netbeans.modules.j2ee.sun.api.restricted.ResourceUtils;
 
 import org.netbeans.modules.j2ee.sun.sunresources.beans.Wizard;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.WizardConstants;
@@ -219,9 +219,9 @@ public final class PMFWizard implements WizardDescriptor.InstantiatingIterator, 
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent)c;
                 // Step #.
-                jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }
     }
@@ -271,7 +271,7 @@ public final class PMFWizard implements WizardDescriptor.InstantiatingIterator, 
         }else if (index == 2) {
             ((CommonPropertyPanel) panels[3]).setInitialFocus();
         }else if (index == 3) {
-            ((CPVendorPanel) panels[4]).setInitialFocus();
+            ((CPVendor) panels[4]).setInitialFocus();
         }else if (index == 4){
             ((CPPropertiesPanelPanel) panels[5]).refreshFields();
         }else if (index == 5){
@@ -353,8 +353,8 @@ public final class PMFWizard implements WizardDescriptor.InstantiatingIterator, 
                     Component c = panels[i].getComponent();
                     if (c instanceof JComponent) {
                         JComponent jc = (JComponent)c;
-                        jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
-                        jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                        jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
+                        jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
                     }
                 }
             }else if((!addSteps) && (tempPanels != null) ){
@@ -380,8 +380,8 @@ public final class PMFWizard implements WizardDescriptor.InstantiatingIterator, 
                     Component c = panels[i].getComponent();
                     if (c instanceof JComponent) {
                         JComponent jc = (JComponent)c;
-                        jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
-                        jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                        jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
+                        jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
                     }
                 }
                 
@@ -430,7 +430,7 @@ public final class PMFWizard implements WizardDescriptor.InstantiatingIterator, 
                     panels[1],
                     panels[2],
                     panels[3],
-                    new CPVendorPanel(this.cphelper, this.cpWizardInfo),
+                    new CPVendor(this.cphelper, this.cpWizardInfo),
                     new CPPropertiesPanelPanel(this.cphelper, this.cpWizardInfo),
                     new CommonAttributePanel(this.cphelper, this.cpWizardInfo,  new String[] {"pool-setting", "pool-setting-2", "pool-setting-3"}), //NOI18N
                 };

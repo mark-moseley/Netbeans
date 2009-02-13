@@ -51,29 +51,32 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.Vector;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ResourceBundle;
 import javax.swing.JComponent;
 import javax.swing.KeyStroke;
 import javax.swing.ButtonGroup;
+import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ListDataListener;
 import javax.swing.event.DocumentListener;
 import org.netbeans.api.db.explorer.ConnectionManager;
 import org.netbeans.api.db.explorer.DatabaseConnection;
 
-import org.openide.util.HelpCtx;
+import org.netbeans.modules.j2ee.sun.api.restricted.ResourceConfigurator;
+import org.netbeans.modules.j2ee.sun.api.restricted.ResourceUtils;
 import org.openide.loaders.TemplateWizard;
 
-import org.netbeans.modules.j2ee.sun.ide.sunresources.beans.ResourceUtils;
-import org.netbeans.modules.j2ee.sun.ide.sunresources.beans.ResourceConfigurator;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.Field;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.FieldGroup;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.Wizard;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.FieldGroupHelper;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.FieldHelper;
-import org.openide.WizardDescriptor;
+import org.netbeans.modules.j2ee.sun.sunresources.beans.WizardConstants;
 import org.openide.filesystems.FileObject;
 
-public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener, DocumentListener, ListDataListener {
+public class CPVendorPanel extends javax.swing.JPanel implements ChangeListener, DocumentListener, ListDataListener, WizardConstants {
     
     static final long serialVersionUID = 93474632245456421L;
     
@@ -86,11 +89,18 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
     private boolean setupValid = true;
     
     private static final String CONST_TRUE = "true"; // NOI18N
-        
+
+    public ResourceBundle bundle = ResourceBundle.getBundle("org.netbeans.modules.j2ee.sun.ide.sunresources.wizards.Bundle"); //NOI18N
+    private final List listeners = new ArrayList();
+
+    protected final CPVendor panel;
+    
     /** Creates new form DBSchemaConnectionpanel */
-    public CPVendorPanel(ResourceConfigHelper helper, Wizard wiardInfo) {
+    public CPVendorPanel(CPVendor panel, ResourceConfigHelper helper, Wizard wiardInfo) {
         this.firstTime = true;
+        this.panel = panel;
         this.helper = helper;
+
         this.generalGroup = FieldGroupHelper.getFieldGroup(wiardInfo, __General); 
         this.propGroup = FieldGroupHelper.getFieldGroup(wiardInfo, __Properties); 
         this.vendorGroup = FieldGroupHelper.getFieldGroup(wiardInfo, __PropertiesURL); 
@@ -100,14 +110,8 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         setName(bundle.getString("TITLE_ConnPoolWizardPanel_dbConn")); //NOI18N
 
         initComponents ();
-        initAccessibility();
-        
+                
         nameLabel.setLabelFor(nameField);
-        nameLabel.setDisplayedMnemonic(bundle.getString("LBL_pool-name_Mnemonic").charAt(0)); //NOI18N
-        existingConnRadioButton.setMnemonic(bundle.getString("ExistingConnection_Mnemonic").charAt(0)); //NOI18N
-        newCofigRadioButton.setMnemonic(bundle.getString("NewConfiguration_Mnemonic").charAt(0)); //NOI18N
-        isXA.setMnemonic(bundle.getString("isXA_Mnemonic").charAt(0)); //NOI18N
-        
         nameComboBox.registerKeyboardAction(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     nameComboBox.requestFocus();
@@ -129,17 +133,17 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         if (existingConnComboBox.getItemCount() == 0) {
             existingConnComboBox.insertItemAt(bundle.getString("NoConnection"), 0); //NOI18N
             newCofigRadioButton.setSelected(true);
+            newCofigRadioButton.setEnabled(true);
+            nameComboBox.setEnabled(true);
+            existingConnComboBox.setEnabled(false);
         } else {
             existingConnComboBox.insertItemAt(bundle.getString("SelectFromTheList"), 0); //NOI18N
             existingConnRadioButton.setSelected(true);
+            existingConnRadioButton.setEnabled(true);
+            existingConnComboBox.setEnabled(true);
+            nameComboBox.setEnabled(false);
             setExistingConnData();
         }
-        
-        //String vendorName = "other"; //NOI18N
-        existingConnRadioButton.setEnabled(true);
-        existingConnComboBox.setEnabled(true);
-        newCofigRadioButton.setEnabled(true);
-        nameComboBox.setEnabled(true);
         
         Field vendorField = FieldHelper.getField(this.generalGroup, __DatabaseVendor);
         vendors = FieldHelper.getTags(vendorField);
@@ -159,31 +163,7 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         isXA.addChangeListener(this);
         newCofigRadioButton.addChangeListener(this);
         
-        getAccessibleContext().setAccessibleName(bundle.getString("TITLE_ConnPoolWizardPanel_dbConn"));
-        getAccessibleContext().setAccessibleDescription(bundle.getString("TITLE_ConnPoolWizardPanel_dbConn"));
-        
         this.firstTime = false;
-    }
-    
-    private void initAccessibility(){
-        descriptionTextArea.getAccessibleContext().setAccessibleName(bundle.getString("ACS_DescriptionA11yName"));  // NOI18N
-        descriptionTextArea.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DescriptionA11yDesc"));  // NOI18N
-        
-        nameLabel.getAccessibleContext().setAccessibleDescription(bundle.getString("ToolTip_pool-name")); //NOI18N
-        nameField.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_pool-nameA11yDesc")); //NOI18N
-        
-        existingConnRadioButton.getAccessibleContext().setAccessibleName(bundle.getString("ExistingConnection")); //NOI18N
-        existingConnRadioButton.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_ExistingConnectionA11yDesc")); //NOI18N
-        existingConnComboBox.getAccessibleContext().setAccessibleName(bundle.getString("ACS_ExistingConnectionComboBoxA11yName"));  // NOI18N
-        existingConnComboBox.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_ExistingConnectionComboBoxA11yDesc"));  // NOI18N
-        
-        newCofigRadioButton.getAccessibleContext().setAccessibleName(bundle.getString("NewConfiguration")); //NOI18N
-        newCofigRadioButton.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_NewConnectionA11yDesc")); //NOI18N
-        nameComboBox.getAccessibleContext().setAccessibleName(bundle.getString("ACS_NewConnectionComboBoxA11yName"));  // NOI18N
-        nameComboBox.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_NewConnectionComboBoxA11yDesc"));  // NOI18N
-        
-        isXA.getAccessibleContext().setAccessibleName(bundle.getString("isXA")); //NOI18N
-        isXA.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_isXA_A11yDesc")); //NOI18N
     }
     
     /** This method is called from within the constructor to
@@ -191,11 +171,11 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the FormEditor.
      */
-    private void initComponents() {//GEN-BEGIN:initComponents
-        java.awt.GridBagConstraints gridBagConstraints;
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+    private void initComponents() {
 
-        descriptionTextArea = new javax.swing.JTextArea();
         jPanel1 = new javax.swing.JPanel();
+        descriptionTextArea = new javax.swing.JTextArea();
         nameLabel = new javax.swing.JLabel();
         nameField = new javax.swing.JTextField();
         existingConnRadioButton = new javax.swing.JRadioButton();
@@ -204,40 +184,25 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         nameComboBox = new javax.swing.JComboBox();
         isXA = new javax.swing.JCheckBox();
 
-        setLayout(new java.awt.GridBagLayout());
-
         setMaximumSize(new java.awt.Dimension(600, 350));
         setMinimumSize(new java.awt.Dimension(600, 350));
         setPreferredSize(new java.awt.Dimension(600, 350));
+
+        descriptionTextArea.setColumns(20);
         descriptionTextArea.setEditable(false);
-        descriptionTextArea.setFont(javax.swing.UIManager.getFont("Label.font"));
-        descriptionTextArea.setText(bundle.getString("Description"));
-        descriptionTextArea.setDisabledTextColor(javax.swing.UIManager.getColor("Label.foreground"));
-        descriptionTextArea.setRequestFocusEnabled(false);
-        descriptionTextArea.setEnabled(false);
+        descriptionTextArea.setLineWrap(true);
+        descriptionTextArea.setRows(5);
+        descriptionTextArea.setText(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "Description")); // NOI18N
+        descriptionTextArea.setWrapStyleWord(true);
+        descriptionTextArea.setFocusable(false);
         descriptionTextArea.setOpaque(false);
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
-        gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.weighty = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(12, 12, 0, 11);
-        add(descriptionTextArea, gridBagConstraints);
+        descriptionTextArea.setRequestFocusEnabled(false);
+        descriptionTextArea.setVerifyInputWhenFocusTarget(false);
 
-        jPanel1.setLayout(new java.awt.GridBagLayout());
-
-        nameLabel.setText(bundle.getString("LBL_pool-name"));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.weighty = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(12, 0, 12, 0);
-        jPanel1.add(nameLabel, gridBagConstraints);
+        nameLabel.setLabelFor(nameField);
+        org.openide.awt.Mnemonics.setLocalizedText(nameLabel, org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "LBL_pool-name")); // NOI18N
 
         nameField.setText(this.helper.getData().getString(__Name));
-        nameField.setMinimumSize(new java.awt.Dimension(60, 21));
         nameField.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 CPVendorPanel.this.nameFieldActionPerformed(evt);
@@ -249,87 +214,116 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
             }
         });
 
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.weighty = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(12, 12, 12, 0);
-        jPanel1.add(nameField, gridBagConstraints);
-
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 2;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
-        gridBagConstraints.insets = new java.awt.Insets(10, 12, 20, 12);
-        add(jPanel1, gridBagConstraints);
-
         existingConnRadioButton.setSelected(true);
-        existingConnRadioButton.setText(bundle.getString("ExistingConnection"));
-        existingConnRadioButton.setToolTipText(bundle.getString("ACS_ExistingConnectionA11yDesc"));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 3;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.insets = new java.awt.Insets(12, 12, 0, 11);
-        add(existingConnRadioButton, gridBagConstraints);
+        org.openide.awt.Mnemonics.setLocalizedText(existingConnRadioButton, org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ExistingConnection")); // NOI18N
 
-        existingConnComboBox.setToolTipText(bundle.getString("ACS_ExistingConnectionComboBoxA11yDesc"));
         existingConnComboBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 CPVendorPanel.this.existingConnComboBoxActionPerformed(evt);
             }
         });
 
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 4;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.insets = new java.awt.Insets(12, 24, 0, 11);
-        add(existingConnComboBox, gridBagConstraints);
+        org.openide.awt.Mnemonics.setLocalizedText(newCofigRadioButton, org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "NewConfiguration")); // NOI18N
 
-        newCofigRadioButton.setText(bundle.getString("NewConfiguration"));
-        newCofigRadioButton.setToolTipText(bundle.getString("ACS_NewConnectionA11yDesc"));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 5;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.insets = new java.awt.Insets(12, 12, 0, 11);
-        add(newCofigRadioButton, gridBagConstraints);
-
-        nameComboBox.setToolTipText(bundle.getString("ACS_NewConnectionComboBoxA11yDesc"));
         nameComboBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 CPVendorPanel.this.nameComboBoxActionPerformed(evt);
             }
         });
 
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 6;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(12, 24, 50, 11);
-        add(nameComboBox, gridBagConstraints);
-
-        isXA.setText(bundle.getString("isXA"));
+        org.openide.awt.Mnemonics.setLocalizedText(isXA, org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "isXA")); // NOI18N
         isXA.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 CPVendorPanel.this.isXAActionPerformed(evt);
             }
         });
 
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 7;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.insets = new java.awt.Insets(12, 12, 5, 11);
-        add(isXA, gridBagConstraints);
+        org.jdesktop.layout.GroupLayout jPanel1Layout = new org.jdesktop.layout.GroupLayout(jPanel1);
+        jPanel1.setLayout(jPanel1Layout);
+        jPanel1Layout.setHorizontalGroup(
+            jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, jPanel1Layout.createSequentialGroup()
+                .add(30, 30, 30)
+                .add(existingConnComboBox, 0, 539, Short.MAX_VALUE)
+                .addContainerGap())
+            .add(jPanel1Layout.createSequentialGroup()
+                .addContainerGap()
+                .add(jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(jPanel1Layout.createSequentialGroup()
+                        .add(isXA)
+                        .addContainerGap())
+                    .add(jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                        .add(jPanel1Layout.createSequentialGroup()
+                            .add(21, 21, 21)
+                            .add(nameComboBox, 0, 538, Short.MAX_VALUE)
+                            .addContainerGap())
+                        .add(jPanel1Layout.createSequentialGroup()
+                            .add(newCofigRadioButton)
+                            .addContainerGap())
+                        .add(jPanel1Layout.createSequentialGroup()
+                            .add(existingConnRadioButton)
+                            .addContainerGap())
+                        .add(jPanel1Layout.createSequentialGroup()
+                            .add(nameLabel)
+                            .add(10, 10, 10)
+                            .add(nameField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 404, Short.MAX_VALUE)
+                            .addContainerGap()))))
+            .add(jPanel1Layout.createSequentialGroup()
+                .addContainerGap()
+                .add(descriptionTextArea, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 560, Short.MAX_VALUE)
+                .add(9, 9, 9))
+        );
+        jPanel1Layout.setVerticalGroup(
+            jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel1Layout.createSequentialGroup()
+                .add(descriptionTextArea)
+                .add(17, 17, 17)
+                .add(jPanel1Layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(nameField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(nameLabel))
+                .add(18, 18, 18)
+                .add(existingConnRadioButton)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
+                .add(existingConnComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
+                .add(newCofigRadioButton)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
+                .add(nameComboBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                .add(18, 18, 18)
+                .add(isXA)
+                .add(67, 67, 67))
+        );
 
-    }//GEN-END:initComponents
+        descriptionTextArea.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_DescriptionA11yName")); // NOI18N
+        descriptionTextArea.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_DescriptionA11yDesc")); // NOI18N
+        nameLabel.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_pool-nameA11yDesc")); // NOI18N
+        existingConnRadioButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_ExistingConnectionA11yDesc")); // NOI18N
+        existingConnComboBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_ExistingConnectionComboBoxA11yName")); // NOI18N
+        existingConnComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_ExistingConnectionComboBoxA11yDesc")); // NOI18N
+        newCofigRadioButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_NewConnectionA11yDesc")); // NOI18N
+        nameComboBox.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_NewConnectionComboBoxA11yName")); // NOI18N
+        nameComboBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_NewConnectionComboBoxA11yDesc")); // NOI18N
+        isXA.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "ACS_isXA_A11yDesc")); // NOI18N
 
-    private void nameFieldKeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_nameFieldKeyReleased
+        org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
+        this.setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(layout.createSequentialGroup()
+                .addContainerGap()
+                .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .add(11, 11, 11))
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+            .add(jPanel1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+        );
+
+        getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "TITLE_ConnPoolWizardPanel_dbConn")); // NOI18N
+        getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CPVendorPanel.class, "TITLE_ConnPoolWizardPanel_dbConn")); // NOI18N
+    }// </editor-fold>//GEN-END:initComponents
+    
+    private void nameFieldKeyReleased(java.awt.event.KeyEvent evt) {
         // Add your handling code here:
         ResourceConfigData data = this.helper.getData();
         String value = data.getString(__Name);
@@ -337,13 +331,13 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         if (!value.equals(newValue)) {
             this.helper.getData().setString(__Name, newValue);
         }
-        fireChange(this);
-    }//GEN-LAST:event_nameFieldKeyReleased
+        fireChange();
+    }
 
-    private void nameFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_nameFieldActionPerformed
+    private void nameFieldActionPerformed(java.awt.event.ActionEvent evt) {
         // Add your handling code here:
         setResourceName();
-    }//GEN-LAST:event_nameFieldActionPerformed
+    }
     
     public String getNameField() {
         return nameField.getText();
@@ -355,7 +349,7 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         String newValue = nameField.getText();
         if (!value.equals(newValue)) {
             this.helper.getData().setString(__Name, newValue);
-            fireChange(this);
+            fireChange();
         }
         
         if((this.getRootPane().getDefaultButton() != null) && (this.getRootPane().getDefaultButton().isEnabled())){
@@ -363,24 +357,16 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         }
     }
     
-    private void isXAActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_isXAActionPerformed
+    private void isXAActionPerformed(java.awt.event.ActionEvent evt) {
         // Add your handling code here:
         setNewConfigData(false); 
-    }//GEN-LAST:event_isXAActionPerformed
+    }
 
-    private void nameComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_nameComboBoxActionPerformed
+    private void nameComboBoxActionPerformed(java.awt.event.ActionEvent evt) {
         // Add your handling code here:
-        setNewConfigData(true);      
-/*           
-        usernameTextField.setText(""); //NOI18N
-        passwordField.setText(""); //NOI18N
-        
-        data.setDriver(driverTextField.getText());
-        data.setSchema(null);
-        schemas = false;
-*/       
-    }//GEN-LAST:event_nameComboBoxActionPerformed
-
+        setNewConfigData(true);           
+    }
+    
     private void setNewConfigData(boolean replaceProps) {
         if (firstTime) {
             return;
@@ -415,7 +401,7 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
             if (replaceProps) {
                 setPropertiesInData(vendorName);
             }
-        }    
+        }
     }
     
     private void setDataSourceClassNameAndResTypeInData(String vendorName) {
@@ -460,11 +446,10 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         }
     }
         
-    
-    private void existingConnComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_existingConnComboBoxActionPerformed
+    private void existingConnComboBoxActionPerformed(java.awt.event.ActionEvent evt) {
         setExistingConnData();
-    }//GEN-LAST:event_existingConnComboBoxActionPerformed
-  
+    }
+    
     public void setExistingConnData() {
         if(existingConnComboBox.getSelectedIndex() > 0) {
             if (!useExistingConnection) {
@@ -476,6 +461,9 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
             String url = dbconn.getDatabaseURL();
             String user = dbconn.getUser();
             String password = dbconn.getPassword();
+            if(user != null && (password == null || password.trim().length() == 0)){ 
+                password = "()"; //NOI18N
+            }
             String tmpStr = url;
             
             Field urlField = FieldHelper.getField(this.vendorGroup, "vendorUrls"); //NOI18N
@@ -496,7 +484,7 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
             
             setDataSourceClassNameAndResTypeInData(vendorName);
         }
-           
+
     }
     
     private void setDerbyProps(String vendorName, String url) {
@@ -533,33 +521,32 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         }
     }
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JTextField nameField;
     private javax.swing.JTextArea descriptionTextArea;
-    private javax.swing.JLabel nameLabel;
-    private javax.swing.JComboBox nameComboBox;
-    private javax.swing.JRadioButton newCofigRadioButton;
-    private javax.swing.JRadioButton existingConnRadioButton;
-    private javax.swing.JPanel jPanel1;
     private javax.swing.JComboBox existingConnComboBox;
+    private javax.swing.JRadioButton existingConnRadioButton;
     private javax.swing.JCheckBox isXA;
+    private javax.swing.JPanel jPanel1;
+    private javax.swing.JComboBox nameComboBox;
+    private javax.swing.JTextField nameField;
+    private javax.swing.JLabel nameLabel;
+    private javax.swing.JRadioButton newCofigRadioButton;
     // End of variables declaration//GEN-END:variables
 
-//    private static final ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.j2ee.sun.ide.sunresources.wizards.Bundle"); //NOI18N
-    
-    public boolean isValid() {
+    public boolean hasValidData() {
         if(! setupValid){
-            setErrorMsg(bundle.getString("Err_InvalidSetup"));
+            panel.setErrorMsg(bundle.getString("Err_InvalidSetup"));
             return false;
         }
-        setErrorMsg(bundle.getString("Empty_String"));
+        panel.setErrorMsg(bundle.getString("Empty_String"));
         String name = nameField.getText();
         if (name == null || name.length() == 0){
-            setErrorMsg(bundle.getString("Err_InvalidName"));
+            panel.setErrorMsg(bundle.getString("Err_InvalidName"));
             return false;
-        }else if(! ResourceUtils.isLegalResourceName(name))
+        }else if(! ResourceUtils.isLegalResourceName(name)){
+            panel.setErrorMsg(bundle.getString("Err_InvalidName"));
             return false;
-        else if(! ResourceUtils.isUniqueFileName(name, this.helper.getData().getTargetFileObject(), __ConnectionPoolResource)){
-            setErrorMsg(bundle.getString("Err_DuplFileName"));
+        }else if(! ResourceUtils.isUniqueFileName(name, this.helper.getData().getTargetFileObject(), __ConnectionPoolResource)){
+            panel.setErrorMsg(bundle.getString("Err_DuplFileName"));
             return false;
         }
         
@@ -567,39 +554,39 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
             if (existingConnComboBox.getSelectedIndex() > 0)
                 return true;
             else
-                setErrorMsg(bundle.getString("Err_ChooseDBConn"));
+                panel.setErrorMsg(bundle.getString("Err_ChooseDBConn"));
         }else if (newCofigRadioButton.isSelected()) {
             if (nameComboBox.getSelectedIndex() > 0)
                 return true;
             else
-                setErrorMsg(bundle.getString("Err_ChooseDBVendor"));
+                panel.setErrorMsg(bundle.getString("Err_ChooseDBVendor"));
         } 
         
         return false;
     }
 
     public void removeUpdate(final javax.swing.event.DocumentEvent event) {
-        fireChange(this);
+        fireChange();
     }
     
     public void changedUpdate(final javax.swing.event.DocumentEvent event) {
-        fireChange(this);
+        fireChange();
     }
     
     public void insertUpdate(final javax.swing.event.DocumentEvent event) {
-        fireChange(this);
+        fireChange();
     }
 
     public void intervalAdded(final javax.swing.event.ListDataEvent p1) {
-        fireChange(this);
+        fireChange();
     }
     
     public void intervalRemoved(final javax.swing.event.ListDataEvent p1) {
-        fireChange(this);
+        fireChange();
     }
     
     public void contentsChanged(final javax.swing.event.ListDataEvent p1) {
-        fireChange(this);
+        fireChange();
     }
 
     public void stateChanged(final javax.swing.event.ChangeEvent p1) {
@@ -622,7 +609,7 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
                 setNewConfigData(true);
             }  
         }
-        fireChange(this);
+        fireChange();
     }
     
     public CPVendorPanel setFirstTime(boolean first) {
@@ -630,54 +617,50 @@ public class CPVendorPanel extends ResourceWizardPanel implements ChangeListener
         return this;
     }
 
-    protected void initData() {
-        /*if (existingConnRadioButton.isSelected()) {
-            data.setExistingConn(true);
-            if(existingConnComboBox.getSelectedIndex() > 0)
-                data.setConnectionNodeInfo((ConnectionNodeInfo) connInfos.get(existingConnComboBox.getSelectedIndex() - 1));
-            
-            data.setDriver(null);
-            data.setUrl(null);
-            data.setUsername(null);
-            data.setPassword(null);
-        } else {
-            data.setExistingConn(false);
-            data.setDriver(driverTextField.getText());
-            data.setUrl(urlTextField.getText());
-            data.setUsername(usernameTextField.getText());
-            data.setPassword(new String(passwordField.getPassword()));
+    private void fireChange() {
+        ChangeEvent event = new ChangeEvent(this);
+        ArrayList tempList;
 
-            data.setConnectionNodeInfo(null);
-        }*/
+        synchronized (listeners) {
+            tempList = new ArrayList(listeners);
+        }
+
+        Iterator iter = tempList.iterator();
+        while (iter.hasNext())
+            ((ChangeListener)iter.next()).stateChanged(event);
     }
-    
-    public HelpCtx getHelp() {
-         return new HelpCtx("AS_Wiz_ConnPool_chooseDB"); //NOI18N
+
+    public void addChangeListener(ChangeListener l) {
+        synchronized (listeners) {
+            listeners.add(l);
+        }
     }
-    
-    public void readSettings(Object settings) {
-        this.wizDescriptor = (WizardDescriptor)settings;
-        TemplateWizard wizard = (TemplateWizard)settings;
+
+    public void read(Object settings) {
+        TemplateWizard wizard = (TemplateWizard) settings;
         String targetName = wizard.getTargetName();
-        if(this.helper.getData().getString(__DynamicWizPanel).equals(CONST_TRUE)){ //NOI18N
+        if (this.helper.getData().getString(__DynamicWizPanel).equals(CONST_TRUE)) { //NOI18N
             targetName = null;
-        }  
+        }
         FileObject setupFolder = ResourceUtils.getResourceDirectory(this.helper.getData().getTargetFileObject());
-        this.helper.getData().setTargetFileObject (setupFolder);
-        if(setupFolder != null){
-            targetName = ResourceUtils.createUniqueFileName (targetName, setupFolder, __ConnectionPoolResource);
-            this.nameField.setText (targetName);
-            this.helper.getData ().setString (__Name, targetName);
-            this.helper.getData ().setTargetFile (targetName);
-        }else
+        this.helper.getData().setTargetFileObject(setupFolder);
+        if (setupFolder != null) {
+            String resourceName = this.helper.getData().getString(__Name);
+            if ((resourceName != null) && (!resourceName.equals(""))) {
+                targetName = resourceName;
+            }
+            targetName = ResourceUtils.createUniqueFileName(targetName, setupFolder, __ConnectionPoolResource);
+            this.helper.getData().setTargetFile(targetName);
+            this.nameField.setText(targetName);
+            this.helper.getData().setString(__Name, targetName);
+        } else {
             setupValid = false;
+        }
     }
     
     public void setInitialFocus(){
         new setFocus(nameField);
     }
     
-//    private boolean setupValid(){
-//        return setupValid;
-//    }
+
 }

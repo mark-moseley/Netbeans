@@ -60,10 +60,9 @@ import javax.swing.event.ChangeListener;
 import org.openide.util.NbBundle;
 import org.openide.WizardDescriptor;
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.j2ee.sun.api.restricted.ResourceUtils;
 import org.openide.filesystems.FileObject;
 import org.netbeans.spi.project.ui.templates.support.Templates;
-
-import org.netbeans.modules.j2ee.sun.ide.sunresources.beans.ResourceUtils;
 
 import org.netbeans.modules.j2ee.sun.sunresources.beans.Wizard;
 import org.netbeans.modules.j2ee.sun.sunresources.beans.WizardConstants;
@@ -168,9 +167,9 @@ public final class DataSourceWizard implements WizardDescriptor.InstantiatingIte
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent)c;
                 // Step #.
-                jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }
         
@@ -212,7 +211,7 @@ public final class DataSourceWizard implements WizardDescriptor.InstantiatingIte
         if (index == 0) {
             ((CommonPropertyPanel) panels[1]).setInitialFocus();
         }else if (index == 1) {
-            ((CPVendorPanel) panels[2]).setInitialFocus();
+            ((CPVendor) panels[2]).setInitialFocus();
         }else if (index == 2){
             ((CPPropertiesPanelPanel) panels[3]).refreshFields();
         }else if (index == 3){
@@ -266,8 +265,8 @@ public final class DataSourceWizard implements WizardDescriptor.InstantiatingIte
                         }
                         if (c instanceof JComponent) {
                             JComponent jc = (JComponent)c;
-                            jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
-                            jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
+                            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
                         }
                     }
                 }else if((!addSteps) && (morePanels != null)){
@@ -288,8 +287,8 @@ public final class DataSourceWizard implements WizardDescriptor.InstantiatingIte
                         }
                         if (c instanceof JComponent) {
                             JComponent jc = (JComponent)c;
-                            jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
-                            jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
+                            jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
                         }
                     }
                     ((CommonAttributePanel)panels[0]).setInitialFocus();
@@ -310,7 +309,7 @@ public final class DataSourceWizard implements WizardDescriptor.InstantiatingIte
             morePanels = new WizardDescriptor.Panel[] {
                 panels[0],
                 panels[1],
-                new CPVendorPanel(this.cphelper, this.cpWizardInfo),
+                new CPVendor(this.cphelper, this.cpWizardInfo),
                 new CPPropertiesPanelPanel(this.cphelper, this.cpWizardInfo),
                 new CommonAttributePanel(this.cphelper, this.cpWizardInfo,  new String[] {"pool-setting", "pool-setting-2", "pool-setting-3"}), //NOI18N
             };
