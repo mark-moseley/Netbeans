@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?> <!-- -*- sgml-indent-step: 2 -*- -->
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
@@ -87,7 +87,7 @@ made subject to such option by the copyright holder.
 
   <target name="compile" depends="init">
     <property name="build.compiler.debug" value="true"/>
-    <javac srcdir="src" destdir="src" deprecation="${build.compiler.deprecation}" debug="${build.compiler.debug}" source="1.4">
+    <javac srcdir="src" destdir="src" deprecation="${build.compiler.deprecation}" debug="${build.compiler.debug}" source="1.5">
 	  <classpath refID="cp"/>
 	  <patternset>
         <include name="org/netbeans/modules/schema2beansdev/"/>
