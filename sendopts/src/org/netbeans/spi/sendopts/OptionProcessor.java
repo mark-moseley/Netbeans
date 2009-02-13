@@ -45,10 +45,7 @@ import java.util.Map;
 import java.util.Set;
 import org.netbeans.api.sendopts.CommandException;
 
-/** A subclass of this class shall be registered in 
- * <code>META-INF/services/org.netbeans.spi.sendopts.OptionProcessor</code>
- * file (see <a href="@org-openide-util@/org/openide/util/Lookup.html">Lookup</a> 
- * for description of how to do it and why) 
+/** A subclass of this class shall be registered using {@link org.openide.util.lookup.ServiceProvider}
  * in order to register it for participation on handling
  * and processing of command line options initiated by
  * {@link org.netbeans.api.sendopts.CommandLine#getDefault}'s
@@ -64,8 +61,8 @@ import org.netbeans.api.sendopts.CommandException;
  *   private Option option2 = ...;
  *   private Option option3 = ...;
  * 
- *   protected Set<Option> getOptions() {
- *      Set<Option> set = new HashSet<Option>();
+ *   protected Set&lt;Option> getOptions() {
+ *      Set&lt;Option> set = new HashSet&lt;Option>();
  *      set.add(option1);
  *      set.add(option2);
  *      set.add(option3);
@@ -73,10 +70,10 @@ import org.netbeans.api.sendopts.CommandException;
  *   }
  * 
  *   protected void process(<a href="Env.html">Env</a> env, Map&lt;<a href="Option.html">Option</a>,String[]&gt; values) 
- *   throws {@link CommandException} {
- *     if (values.containKey(option1) { ... }
- *     if (values.containKey(option2) { ... }
- *     if (values.containKey(option3) { ... }
+ *       throws {@link CommandException} {
+ *     if (values.containsKey(option1)) { ... }
+ *     if (values.containsKey(option2)) { ... }
+ *     if (values.containsKey(option3)) { ... }
  *   }
  * }
  * </pre>
