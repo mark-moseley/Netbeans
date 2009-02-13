@@ -48,6 +48,8 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.JarClassLoader.JarSource;
 
 /**
@@ -80,6 +82,7 @@ import org.netbeans.JarClassLoader.JarSource;
 class Archive implements Stamps.Updater {
     // increment on format change
     private static final long magic = 6836742066851800321l;
+    private static final Logger LOG = Logger.getLogger(Archive.class.getName());
     
     private volatile boolean saved;
     private final boolean prepopulated;
@@ -117,6 +120,10 @@ class Archive implements Stamps.Updater {
  
         active = true;
         gathering = true;
+    }
+
+    final boolean isActive() {
+        return active;
     }
 
     /**
@@ -164,20 +171,20 @@ class Archive implements Stamps.Updater {
         dos.write(data);
     }
     
-    private Entry getEntry(JarSource source, String name) {
-        Integer src = sources.get(source.getIdentifier());
-        if (src == null) return null;
-        
-        return entries.get(new Template(src, name)); // or null
-    }
-    
     public byte[] getData(JarSource source, String name) throws IOException {
         Entry e = null;
+        Map<Entry, Entry> ents = entries;
         if (active) {
-            e = getEntry(source, name);
+            Integer src = sources.get(source.getIdentifier());
+            if (src == null) {
+                e = null;
+            } else {
+                e = ents.get(new Template(src, name)); // or null
+            }
             if (e == null && gathering) {
                 String srcId = source.getIdentifier();
-                String key = srcId + "!/" + name;
+                StringBuilder sb = new StringBuilder(srcId.length() + name.length());
+                String key = sb.append(srcId).append(name).toString();
 
                 synchronized(gatheringLock) {
                     if (!knownSources.containsKey(srcId)) knownSources.put(srcId, source);
@@ -215,6 +222,9 @@ class Archive implements Stamps.Updater {
     }
 
     public void flushCaches(DataOutputStream dos) throws IOException {
+        stopGathering();
+        stopServing();
+        
         assert !gathering;
         assert !active;
        
@@ -226,8 +236,9 @@ class Archive implements Stamps.Updater {
         // no need to really synchronize on this collection, gathering flag
         // is already cleared
         for (String s:requests.keySet()) {
-            String[] parts = s.split("!/");
+            String[] parts = s.split("(?<=!/)");
             JarSource src = knownSources.get(parts[0]);
+            assert src != null : "Could not find " + s + " in " + knownSources;
             byte[] data = src.resource(parts[1]);
             Integer srcId = sources.get(parts[0]);
             if (srcId == null) {
@@ -244,6 +255,12 @@ class Archive implements Stamps.Updater {
             if (data != null) dos.write(data);
         }
         dos.close();
+
+        if (LOG.isLoggable(Level.FINER)) {
+            for (Object r : requests.keySet()) {
+                LOG.log(Level.FINER, "archiving: {0}", r);
+            }
+        }
 
         // clean up
         requests = null;

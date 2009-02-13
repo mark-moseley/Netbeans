@@ -187,7 +187,11 @@ final class StandardModule extends Module {
                             // Fine, ignore.
                         }
                     } catch (MissingResourceException mre) {
-                        Util.err.log(Level.WARNING, null, mre);
+                        String resource = basename.replace('.', '/') + ".properties";
+                        Exceptions.attachMessage(mre, "#149833: failed to find " + basename +
+                                " in locale " + Locale.getDefault() + " in " + classloader + " for " + jar +
+                                "; resource lookup of " + resource + " -> " + classloader.getResource(resource));
+                        Exceptions.printStackTrace(mre);
                     }
                 } else {
                     Util.err.warning("cannot efficiently load non-*.properties OpenIDE-Module-Localizing-Bundle: " + locb);
@@ -238,15 +242,6 @@ final class StandardModule extends Module {
         }
     }
     
-    public boolean owns(Class clazz) {
-        ClassLoader cl = clazz.getClassLoader();
-        if (cl instanceof Util.ModuleProvider) {
-            return ((Util.ModuleProvider) cl).getModule() == this;
-        }
-        return false;
-        
-    }
-    
     public boolean isFixed() {
         return false;
     }
@@ -256,7 +251,7 @@ final class StandardModule extends Module {
      * automatically from the classpath.
      * @see #isFixed
      */
-    public File getJarFile() {
+    public @Override File getJarFile() {
         return jar;
     }
     
@@ -566,7 +561,9 @@ final class StandardModule extends Module {
      * The parents should already have had their classloaders initialized.
      */
     protected void classLoaderUp(Set<Module> parents) throws IOException {
-        Util.err.fine("classLoaderUp on " + this + " with parents " + parents);
+        if (Util.err.isLoggable(Level.FINE)) {
+            Util.err.fine("classLoaderUp on " + this + " with parents " + parents);
+        }
         // Find classloaders for dependent modules and parent to them.
         List<ClassLoader> loaders = new ArrayList<ClassLoader>(parents.size() + 1);
         // This should really be the base loader created by org.nb.Main for loading openide etc.:
@@ -594,7 +591,7 @@ final class StandardModule extends Module {
             }
             ClassLoader l = parent.getClassLoader();
             if (parent.isFixed() && loaders.contains(l)) {
-                Util.err.fine("#24996: skipping duplicate classloader from " + parent);
+                Util.err.log(Level.FINE, "#24996: skipping duplicate classloader from {0}", parent);
                 continue;
             }
             loaders.add(l);
@@ -658,7 +655,7 @@ final class StandardModule extends Module {
     }
     
     /** String representation for debugging. */
-    public String toString() {
+    public @Override String toString() {
         String s = "StandardModule:" + getCodeNameBase() + " jarFile: " + jar.getAbsolutePath(); // NOI18N
         if (!isValid()) s += "[invalid]"; // NOI18N
         return s;
@@ -701,12 +698,12 @@ final class StandardModule extends Module {
          * @param cs is ignored
          * @return PermissionCollection with an AllPermission instance
          */
-        protected PermissionCollection getPermissions(CodeSource cs) {
+        protected @Override PermissionCollection getPermissions(CodeSource cs) {
             return getAllPermission();
         }
         
         /** look for JNI libraries also in modules/bin/ */
-        protected String findLibrary(String libname) {
+        protected @Override String findLibrary(String libname) {
             String mapped = System.mapLibraryName(libname);
             File lib = new File(new File(jar.getParentFile(), "lib"), mapped); // NOI18N
             if (lib.isFile()) {
@@ -716,7 +713,7 @@ final class StandardModule extends Module {
             }
         }
 
-        protected boolean shouldDelegateResource(String pkg, ClassLoader parent) {
+        protected @Override boolean shouldDelegateResource(String pkg, ClassLoader parent) {
             if (!super.shouldDelegateResource(pkg, parent)) {
                 return false;
             }
@@ -729,11 +726,11 @@ final class StandardModule extends Module {
             return getManager().shouldDelegateResource(StandardModule.this, other, pkg);
         }
         
-        public String toString() {
+        public @Override String toString() {
             return super.toString() + "[" + getCodeNameBase() + "]"; // NOI18N
         }
 
-        protected void finalize() throws Throwable {
+        protected @Override void finalize() throws Throwable {
             super.finalize();
             Util.err.fine("Finalize for " + this + ": rc=" + rc + " releaseCount=" + releaseCount + " released=" + released); // NOI18N
             if (rc == releaseCount) {
