@@ -48,12 +48,9 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.StyledDocument;
 
-import org.openide.cookies.EditorCookie;
-import org.openide.nodes.Node;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.text.NbDocument;
-import org.openide.util.Utilities;
-import org.openide.windows.TopComponent;
-
+import org.openide.util.ImageUtilities;
 
 /**
 * Helper methods for debugging.
@@ -61,17 +58,17 @@ import org.openide.windows.TopComponent;
 * @author  Jan Jancura
 */
 public class Utils {
+
+    private Utils() {
+        // to prevent instantiation
+    }
     
     public static String getIdentifier() {
-        EditorCookie e = getCurrentEditorCookie();
-        if (e == null) {
-            return null;
-        }
-        JEditorPane ep = getCurrentEditor(e);
+        JEditorPane ep = EditorContextDispatcher.getDefault().getCurrentEditor();
         if (ep == null) {
             return null;
         }
-        return getIdentifier(e.getDocument(), ep, ep.getCaret().getDot());
+        return getIdentifier((StyledDocument) ep.getDocument(), ep, ep.getCaret().getDot());
     }
     
     private static String getIdentifier(StyledDocument doc, JEditorPane ep, int offset) {
@@ -114,55 +111,6 @@ public class Utils {
         }
     }
     
-    /** 
-     * Returns current editor component instance.
-     *
-     * @return current editor component instance
-     */
-    private static JEditorPane getCurrentEditor () {
-        EditorCookie e = getCurrentEditorCookie ();
-        if (e == null) return null;
-        JEditorPane[] op = e.getOpenedPanes ();
-        if ((op == null) || (op.length < 1)) return null;
-        return op [0];
-    }
-    
-    /** 
-     * Returns current editor component instance.
-     *
-     * @return current editor component instance
-     */
-    private static JEditorPane getCurrentEditor (EditorCookie e) {
-        JEditorPane[] op = e.getOpenedPanes ();
-        if ((op == null) || (op.length < 1)) return null;
-        return op [0];
-    }
-     
-    /** 
-     * Returns current editor component instance.
-     *
-     * @return current editor component instance
-     */
-    private static String getSelectedText () {
-        JEditorPane ep = getCurrentEditor ();
-        if (ep == null) return null;
-        return ep.getSelectedText ();
-    }
-    
-    /** 
-     * Returns current editor component instance.
-     *
-     * @return current editor component instance
-     */
-    private static EditorCookie getCurrentEditorCookie () {
-        Node[] nodes = TopComponent.getRegistry ().getActivatedNodes ();
-        if ( (nodes == null) ||
-             (nodes.length != 1) ) return null;
-        Node n = nodes [0];
-        return (EditorCookie) n.getCookie (
-            EditorCookie.class
-        );
-    }
 //
 //    public static Line getCurrentLine () {
 //        EditorCookie e = getCurrentEditorCookie (); // grr ugly, but safe
@@ -184,7 +132,7 @@ public class Utils {
 //    }
     
     public static ImageIcon getIcon (String iconBase) {
-        return new ImageIcon (Utilities.loadImage (iconBase+".gif"));
+        return ImageUtilities.loadImageIcon(iconBase + ".gif", false); //NOI18N
     }
     
     /**
