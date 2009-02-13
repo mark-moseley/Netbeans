@@ -59,6 +59,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Types;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.java.queries.SourceForBinaryQuery;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
@@ -89,26 +90,55 @@ class AppFrameworkSupport {
     private static Map<FileObject, String> appClassMap = new HashMap<FileObject, String>();
     
     /**
-     * Checks if the given project uses the app framework. Technically it checks
-     * the project classpath for Application class.
+     * Checks whether the project of given file is an application based on
+     * Swing Application Framework. Technically it checks if the app framework
+     * library is on classpath and the project contains a valid Application
+     * subclass.
      * @param fileInProject some source file contained in the project
-     * @return true if the project of given file uses app framework
+     * @return true if the project of given file uses app framework and has
+     *         a valid application class
      */
     static boolean isFrameworkEnabledProject(FileObject fileInProject) {
         return isFrameworkLibAvailable(fileInProject)
                 && getApplicationClassName(fileInProject) != null;
     }
-    
+
+    /**
+     * Checks whether the project of given file uses Swing Application Framework,
+     * i.e. whether the framework is on project classpath. Does not check if
+     * there is an Application subclass (the project can be just a library).
+     * @param fileInProject some source file contained in the project
+     * @return true if the project of given file uses app framework
+     */
     static boolean isFrameworkLibAvailable(FileObject fileInProject) {
         ClassPath cp = ClassPath.getClassPath(fileInProject, ClassPath.EXECUTE);
         return cp != null && cp.findResource(APPLICATION_RESOURCE_NAME) != null
                && projectCanUseFramework(fileInProject);
     }
 
+    /**
+     * Checks whether given project has an Application subclass stored in its
+     * auxiliary configuration (i.e. a quick check if it is an application -
+     * without checking the application class really exists in the project).
+     * @param project
+     * @return true if the project appears as app framework-based application
+     */
     static boolean isApplicationProject(Project project) {
-        AuxiliaryConfiguration ac = project.getLookup().lookup(AuxiliaryConfiguration.class);
+        AuxiliaryConfiguration ac = ProjectUtils.getAuxiliaryConfiguration(project);
         return ac.getConfigurationFragment(SWINGAPP_ELEMENT, SWINGAPP_NS, true) != null;
         // [would be better to check for presence of valid application class in ac]
+    }
+
+    /**
+     * Checks whether project of given file has an Application subclass stored in
+     * its auxiliary configuration (i.e. a quick check if it is an application -
+     * without checking the application class really exists in the project).
+     * @param project
+     * @return true if the project appears as app framework-based application
+     */
+    private static boolean isApplicationProject(FileObject fileInProject) {
+        Project p = FileOwnerQuery.getOwner(fileInProject);
+        return p != null ? isApplicationProject(p) : false;
     }
 
     /**
@@ -141,15 +171,16 @@ class AppFrameworkSupport {
 
     /**
      * Finds the source file that represents the Application subclass of
-     * the project. Returns the corresponding class name.
+     * the project. Returns the corresponding class name. It looks into the
+     * project of given file, and also in projects it depends on if they have
+     * the auxiliary config element with application class name.
      * @param fileInProject some source file contained in the project
      * @return name of the application subclass for given project, or null
      */
     static String getApplicationClassName(FileObject fileInProject) {
         Project project = FileOwnerQuery.getOwner(fileInProject);
         if (project != null) {
-            AuxiliaryConfiguration ac = project.getLookup().lookup(AuxiliaryConfiguration.class);
-            return getApplicationClassName(fileInProject, project, ac);
+            return getApplicationClassName(fileInProject, project, true);
         } else {
             return null;
         }
@@ -158,68 +189,110 @@ class AppFrameworkSupport {
     static String getApplicationClassName(Project project) {
         FileObject fileRep = getSourceRoot(project);
         if (fileRep != null) {
-            AuxiliaryConfiguration ac = project.getLookup().lookup(AuxiliaryConfiguration.class);
-            return getApplicationClassName(fileRep, project, ac);
+            return getApplicationClassName(fileRep, project, false);
         }
         return null;
     }
 
-    private static String getApplicationClassName(FileObject fileInProject, Project project, AuxiliaryConfiguration ac) {
-        String appClassName = null;
+    static String getAppClassNameFromProjectConfig(Project project) {
+        AuxiliaryConfiguration ac = ProjectUtils.getAuxiliaryConfiguration(project);
         org.w3c.dom.Element appEl = ac.getConfigurationFragment(SWINGAPP_ELEMENT, SWINGAPP_NS, true);
-        boolean storedInProject = (appEl != null);
-        boolean searched = false;
-
-        if (storedInProject) { // get app class name stored in project config
-            org.w3c.dom.Element clsEl = null;
+        if (appEl != null) {
             org.w3c.dom.NodeList children = appEl.getChildNodes();
             for (int i=0; i < children.getLength(); i++) {
                 org.w3c.dom.Node n = children.item(i);
                 if (n.getNodeType() == org.w3c.dom.Node.ELEMENT_NODE
                         && n.getNodeName().equals(APP_CLASS_ELEMENT)) {
-                    clsEl = (org.w3c.dom.Element) n;
-                    break;
+                    return ((org.w3c.dom.Element)n).getAttribute(APP_CLASS_NAME_ATTR);
                 }
             }
-            if (clsEl != null) {
-                appClassName = clsEl.getAttribute(APP_CLASS_NAME_ATTR);
+            return ""; // somewhat misconfigured // NOI18N
+        }
+        return null;
+    }
+
+    private static String getApplicationClassName(FileObject fileInProject, Project project, boolean depProjects) {
+        boolean allowSearch = Boolean.getBoolean("netbeans.form.scan_for_app"); // NOI18N
+        boolean storedInProject = false;
+        boolean searched = false;
+        FileObject cpRep = fileInProject;
+
+        // first try to find it in project auxiliary configuration data
+        String appClassName = getAppClassNameFromProjectConfig(project);
+        if (appClassName == null && depProjects) { // look into projects this one depends on
+            ClassPath cp = ClassPath.getClassPath(cpRep, ClassPath.COMPILE);
+            if (cp == null) {
+                return null;
+            }
+            for (ClassPath.Entry e : cp.entries()) {
+                SourceForBinaryQuery.Result2 sr = SourceForBinaryQuery.findSourceRoots2(e.getURL());
+                if (sr != null && sr.preferSources()) {
+                    FileObject[] sourceRoots = sr.getRoots();
+                    if (sourceRoots != null && sourceRoots.length > 0) {
+                        Project p = FileOwnerQuery.getOwner(sourceRoots[0]);
+                        if (p != null && p != project) {
+                            appClassName = getAppClassNameFromProjectConfig(p);
+                            if (appClassName != null) {
+                                project = p; // this is actually the user's application project
+                                cpRep = getSourceRoot(p);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (appClassName != null) {
+            if (appClassName.length() == 0) {
+                appClassName = null;
+            } else {
+                storedInProject = true;
             }
         }
 
-        if (appClassName == null) {
+        if (appClassName == null) { // not found in project aux config
             if (appClassMap.containsKey(fileInProject)) {
                 appClassName = appClassMap.get(fileInProject);
-            } else {
-                appClassName = findApplicationClass(fileInProject);
+            } else if (allowSearch) {
+                appClassName = findApplicationClass(cpRep);
                 searched = true;
             }
         }
 
         if (appClassName != null && !searched) { // verify cached class name
-            ClassPath cp = ClassPath.getClassPath(fileInProject, ClassPath.SOURCE);
+            ClassPath cp = ClassPath.getClassPath(cpRep, ClassPath.SOURCE);
             if (cp.findResource(appClassName.replace('.', '/') + ".java") == null) { // NOI18N
-                appClassName = findApplicationClass(fileInProject);
+                appClassName = findApplicationClass(cpRep);
                 searched = true;
             }
         }
 
         if (searched) { // possibly update project and cache
-            if (storedInProject) {
+            if (appClassName != null) { // valid app class found - make sure it is stored in project
+                AuxiliaryConfiguration ac = ProjectUtils.getAuxiliaryConfiguration(project);
                 org.w3c.dom.Document xml = XMLUtil.createDocument(SWINGAPP_ELEMENT, SWINGAPP_NS, null, null);
-                appEl = xml.createElementNS(SWINGAPP_NS, SWINGAPP_ELEMENT);
-                if (appClassName != null) {
-                    org.w3c.dom.Element clsEl = xml.createElement(APP_CLASS_ELEMENT);
-                    clsEl.setAttribute(APP_CLASS_NAME_ATTR, appClassName);
-                    appEl.appendChild(clsEl);
-                }
+                org.w3c.dom.Element appEl = xml.createElementNS(SWINGAPP_NS, SWINGAPP_ELEMENT);
+                org.w3c.dom.Element clsEl = xml.createElement(APP_CLASS_ELEMENT);
+                clsEl.setAttribute(APP_CLASS_NAME_ATTR, appClassName);
+                appEl.appendChild(clsEl);
                 ac.putConfigurationFragment(appEl, true);
+                storedInProject = true;
+                try {
+                    ProjectManager.getDefault().saveProject(project);
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            } else if (storedInProject) { // app class disappeared
+                AuxiliaryConfiguration ac = ProjectUtils.getAuxiliaryConfiguration(project);
+                ac.removeConfigurationFragment(SWINGAPP_ELEMENT, SWINGAPP_NS, true);
+                storedInProject = false;
                 try {
                     ProjectManager.getDefault().saveProject(project);
                 } catch (IOException ex) {
                     Exceptions.printStackTrace(ex);
                 }
             }
-            if (!fileInProject.isFolder() && (!storedInProject || appClassName == null)) {
+            if (!fileInProject.isFolder() && !storedInProject) {
                 appClassMap.put(fileInProject, appClassName);
             }
         }
@@ -277,7 +350,26 @@ class AppFrameworkSupport {
 
     static FileObject getFileForClass(FileObject fileInProject, String className) {
         ClassPath cp = ClassPath.getClassPath(fileInProject, ClassPath.SOURCE);
-        return cp.findResource(className.replace('.', '/') + ".java"); // NOI18N
+        FileObject file = cp.findResource(className.replace('.', '/') + ".java"); // NOI18N
+        if (file == null && !isApplicationProject(fileInProject)) {
+            // specific case - may want user's application class source file
+            // in another project this one depends on (makes no sense to look
+            // into the other projects otherwise)
+            for (ClassPath.Entry e : ClassPath.getClassPath(fileInProject, ClassPath.COMPILE).entries()) {
+                SourceForBinaryQuery.Result2 sr = SourceForBinaryQuery.findSourceRoots2(e.getURL());
+                if (sr != null && sr.preferSources()) {
+                    FileObject[] sourceRoots = sr.getRoots();
+                    if (sourceRoots != null && sourceRoots.length > 0) {
+                        cp = ClassPath.getClassPath(sourceRoots[0], ClassPath.SOURCE);
+                        file = cp.findResource(className.replace('.', '/') + ".java"); // NOI18N
+                        if (file != null) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return file;
     }
 
     static ClassPath getSourcePath(Project project) {
@@ -362,9 +454,12 @@ class AppFrameworkSupport {
                                     Types types = controller.getTypes();
                                     TypeMirror tm1 = types.erasure(classEl.asType());
                                     TypeMirror tm2 = types.erasure(appEl.asType());
-                                    if (types.isSubtype(tm1, tm2) && !types.isSameType(tm1, tm2)) {
-                                        result[0] = classEl.getQualifiedName().toString();
-                                        return;
+                                    if (types.isSubtype(tm1, tm2)) {
+                                        String clsName = classEl.getQualifiedName().toString();
+                                        if (!clsName.startsWith("org.jdesktop.application.")) { // NOI18N
+                                            result[0] = clsName;
+                                            return;
+                                        }
                                     }
                                     break;
                                 }
