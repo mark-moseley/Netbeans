@@ -46,10 +46,7 @@ import com.sun.javadoc.MethodDoc;
 import com.sun.javadoc.ParamTag;
 import com.sun.javadoc.Tag;
 import com.sun.javadoc.ThrowsTag;
-import com.sun.source.tree.ClassTree;
-import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
-import com.sun.source.tree.VariableTree;
 import java.awt.EventQueue;
 import java.io.IOException;
 import java.util.HashSet;
@@ -58,7 +55,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
@@ -74,7 +70,6 @@ import org.netbeans.api.java.lexer.JavadocTokenId;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenId;
-import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.api.lexer.TokenSequence;
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.LineCookie;
@@ -111,12 +106,37 @@ public class JavadocUtilities {
         int elementStartOffset = (int) javac.getTrees().getSourcePositions().getStartPosition(javac.getCompilationUnit(), tree);
         TokenSequence<?> s = javac.getTokenHierarchy().tokenSequence();
         s.move(elementStartOffset);
-        while (s.movePrevious() && IGNORE_TOKES.contains(s.token().id()))
-            ;
-        if (s.token().id() != JavaTokenId.JAVADOC_COMMENT)
+        Token token = null;
+        while (s.movePrevious()) {
+            token = s.token();
+            if (token.id() == JavaTokenId.BLOCK_COMMENT) {
+                if ("/**/".contentEquals(token.text())) { // NOI18N
+                    // see #147533
+                    break;
+                }
+            }
+            if (!IGNORE_TOKES.contains(token.id())) {
+                break;
+            }
+        }
+        if (token == null || token.id() != JavaTokenId.JAVADOC_COMMENT) {
             return null;
+        }
         
         return s.embedded(JavadocTokenId.language());
+    }
+    /**
+     * Finds javadoc token sequence.
+     * @param javac compilation info
+     * @param e element for which the tokens are queried
+     * @return javadoc token sequence or null.
+     */
+    static TokenSequence<JavadocTokenId> findTokenSequence(CompilationInfo javac, Element e) {
+        if (e == null || javac.getElementUtilities().isSynthetic(e) || javac.getElements().getDocComment(e) == null) {
+            return null;
+        }
+        Doc doc = javac.getElementUtilities().javaDocFor(e);
+        return doc == null ? null: findTokenSequence(javac, doc);
     }
     
     /**
@@ -208,10 +228,22 @@ public class JavadocUtilities {
         int elementStartOffset = (int) javac.getTrees().getSourcePositions().getStartPosition(javac.getCompilationUnit(), tree);
         TokenSequence<?> tseq = javac.getTokenHierarchy().tokenSequence();
         tseq.move(elementStartOffset);
-        while (tseq.movePrevious() && IGNORE_TOKES.contains(tseq.token().id()))
-            ;
-        if (tseq.token().id() != JavaTokenId.JAVADOC_COMMENT)
+        Token token = null;
+        while (tseq.movePrevious()) {
+            token = tseq.token();
+            if (token.id() == JavaTokenId.BLOCK_COMMENT) {
+                if ("/**/".contentEquals(token.text())) { // NOI18N
+                    // see #147533
+                    break;
+                }
+            }
+            if (!IGNORE_TOKES.contains(token.id())) {
+                break;
+            }
+        }
+        if (token == null || token.id() != JavaTokenId.JAVADOC_COMMENT) {
             return null;
+        }
         
         Position[] positions = new Position[2];
         positions[0] = doc.createPosition(tseq.offset());
@@ -417,13 +449,14 @@ public class JavadocUtilities {
         return null;
     }
     
-    public static ParamTag findParamTag(CompilationInfo javac, MethodDoc doc, String paramName, boolean inherited) {
+    public static ParamTag findParamTag(CompilationInfo javac, MethodDoc doc, String paramName, boolean isTypeParam, boolean inherited) {
         ExecutableElement overrider = (ExecutableElement) javac.getElementUtilities().elementFor(doc);
         TypeElement overriderClass = (TypeElement) overrider.getEnclosingElement();
         TypeElement class2query = null;
         Set<TypeElement> exclude = null;
         while (doc != null) {
-            for (ParamTag paramTag : doc.paramTags()) {
+            ParamTag[] paramTags = isTypeParam ? doc.typeParamTags() : doc.paramTags();
+            for (ParamTag paramTag : paramTags) {
                 if (paramName.equals(paramTag.parameterName())) {
                     return paramTag;
                 }
@@ -479,6 +512,7 @@ public class JavadocUtilities {
                 }
                 
                 doc = searchInInterfaces(javac, class2query, overriderClass, overrider, exclude);
+                loadInheritedContext(javac, doc);
             } else {
                 break;
             }
@@ -515,6 +549,18 @@ public class JavadocUtilities {
         }
         return null;
     }
+
+    /**
+     * Resolves java types for inherited javadoc. It is necessary to call before
+     * invoking e.g. {@code ThrowsTag.exceptionType()}. The present implementation
+     * of JavadocEnv creates inherited javadocs in the separate javac instance
+     * (see method {@code JavadocEnv.getRawCommentFor()}).
+     * @see <a href="http://www.netbeans.org/issues/show_bug.cgi?id=153352">Issue 153352</a>
+     */
+    private static void loadInheritedContext(CompilationInfo javac, MethodDoc doc) {
+        Element elm = javac.getElementUtilities().elementFor(doc);
+        Tree tree = javac.getTrees().getTree(elm);
+    }
     
     public static void open(final FileObject fo, final int offset) {
         EventQueue.invokeLater(new Runnable() {
@@ -541,7 +587,7 @@ public class JavadocUtilities {
                         Line l = lc.getLineSet().getCurrent(line);
                         
                         if (l != null) {
-                            l.show(Line.SHOW_GOTO, column);
+                            l.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.FOCUS, column);
                             return true;
                         }
                     }
@@ -578,8 +624,8 @@ public class JavadocUtilities {
             
             // javadoc was changed
             for (Tag tag : tags) {
-                if (this.name.equals(tags[this.index].name()) &&
-                        this.text.equals(tags[this.index].text())) {
+                if (this.name.equals(tag.name()) &&
+                        this.text.equals(tag.text())) {
                     return tag;
                 }
             }
