@@ -41,21 +41,18 @@ package org.netbeans.modules.kenai.collab.im;
 
 import java.util.LinkedList;
 import javax.swing.Icon;
-import javax.swing.JEditorPane;
-import javax.swing.JScrollPane;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.util.StringUtils;
+import org.netbeans.modules.kenai.collab.chat.ui.ChatTopComponent;
 import org.netbeans.modules.notifications.spi.Notification;
-import org.openide.DialogDescriptor;
-import org.openide.DialogDisplayer;
 
 /**
  *
  * @author Jan Becicka
  */
-class MessageNotification extends Notification{
+class GroupChatNotification extends Notification{
 
-    private LinkedList<Message> messageQueue = new LinkedList<Message>();
+    private Message lastMessage;
 
     @Override
     public String getLinkTitle() {
@@ -64,30 +61,20 @@ class MessageNotification extends Notification{
 
     @Override
     public String getTitle() {
-        return "<b>New Private Message</b>";
+        return "<b>New Message</b>";
     }
 
     @Override
     public String getDescription() {
-        final Message top = messageQueue.getFirst();
-        String from= StringUtils.parseName(top.getFrom());
-        return "<i>"+from + " says: </i>" + top.getBody();
+        String from= StringUtils.parseName(lastMessage.getFrom());
+        return "<i>"+from + " says: </i>" + lastMessage.getBody();
     }
 
     @Override
     public void showDetails() {
-        JEditorPane pane = new JEditorPane();
-        pane.setEditable(false);
-        JScrollPane scrollPane = new JScrollPane(pane);
-        DialogDescriptor newMessages = new DialogDescriptor(scrollPane, "New Messages ");
-        StringBuffer b = new StringBuffer();
-        for (Message m : messageQueue) {
-            b.append(StringUtils.parseName(m.getFrom()) + " says: \n");
-            b.append(m.getBody() + "\n");
-        }
-        pane.setText(b.toString());
-        DialogDisplayer.getDefault().createDialog(newMessages).setVisible(true);
-        clear();
+        ChatTopComponent.getDefault().open();
+        ChatTopComponent.getDefault().requestActive();
+        ChatTopComponent.getDefault().setActive(StringUtils.parseName(lastMessage.getFrom()));
     }
 
     @Override
@@ -100,20 +87,7 @@ class MessageNotification extends Notification{
         return null;
     }
 
-    void addMessage(Message msg) {
-        messageQueue.add(msg);
-    }
-
-    Message removeMessage() {
-        return messageQueue.removeFirst();
-    }
-
-    boolean isEmpty() {
-        return messageQueue.isEmpty();
-    }
-
-    void clear() {
-        this.remove();
-        messageQueue.clear();
+    void setMessage(Message msg) {
+        lastMessage=msg;
     }
 }
