@@ -43,7 +43,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.net.URL;
-import java.util.Iterator;
+import java.util.Collection;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -96,11 +96,10 @@ public class KenaiTest {
      */
     @Test
     public void testSearchProjects() throws Exception {
-        String pattern = "ja";
-        Iterator<KenaiProject> result = instance.searchProjects(pattern);
+        String pattern = "jav";
+        Collection<KenaiProject> result = instance.searchProjects(pattern);
 
-        for (;result.hasNext();) {
-            KenaiProject prj = result.next();
+        for (KenaiProject prj:result) {
             System.out.println("Search projects: " + prj.getDisplayName());
         }
     }
@@ -174,7 +173,7 @@ public class KenaiTest {
         String name = "unittestfeature1";
         String displayName = "Feature 1";
         String description = "Test Description";
-        KenaiProject project = instance.getProject("unittestuniquename");
+        KenaiProject project = instance.getProject("unittestuniquename01");
         try {
             KenaiProjectFeature feature = project.createProjectFeature(name, displayName, description, KenaiFeature.FORUM.getId(), null, null, null);
             assert feature.getName().equals(name);
@@ -188,7 +187,7 @@ public class KenaiTest {
     @Test
     public void testGetFeatures() throws KenaiException {
         System.out.println("getFeature");
-        KenaiProject project = instance.getProject("unittestuniquename");
+        KenaiProject project = instance.getProject("unittestuniquename01");
         for (KenaiProjectFeature feature: project.getFeatures()) {
             System.out.println(feature.getName());
         }
@@ -197,9 +196,7 @@ public class KenaiTest {
     @Test
     public void testGetLicenses() throws KenaiException {
         System.out.println("testGetLicenses");
-        final Iterator<KenaiLicense> licenses = Kenai.getDefault().getLicenses();
-        while(licenses.hasNext()) {
-            KenaiLicense lic = licenses.next();
+        for(KenaiLicense lic: Kenai.getDefault().getLicenses()) {
             System.out.println(lic.getName());
             System.out.println(lic.getDisplayName());
             System.out.println(lic.getUri());
@@ -209,11 +206,11 @@ public class KenaiTest {
     @Test
     public void testGetServices() throws KenaiException {
         System.out.println("testGetServices");
-        final Iterator<KenaiService> services = Kenai.getDefault().getServices();
-        while(services.hasNext()) {
-            KenaiService ser = services.next();
+        for(KenaiService ser:Kenai.getDefault().getServices()) {
             System.out.println(ser.getName());
             System.out.println(ser.getDescription());
+            System.out.println(ser.getDisplayName());
+            System.out.println(ser.getType());
         }
     }
 }
