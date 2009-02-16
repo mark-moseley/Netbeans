@@ -42,10 +42,12 @@
 package org.netbeans.modules.cnd.completion.cplusplus.hyperlink;
 
 import java.io.File;
+import org.netbeans.cnd.api.lexer.CppTokenId;
+import org.netbeans.cnd.api.lexer.TokenItem;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.lib.editor.hyperlink.spi.HyperlinkType;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable.Position;
-import org.netbeans.modules.cnd.completion.cplusplus.utils.Token;
 import org.netbeans.modules.cnd.modelimpl.test.ProjectBasedTestCase;
 import org.netbeans.modules.cnd.test.CndCoreTestUtils;
 
@@ -71,6 +73,11 @@ public abstract class HyperlinkBaseTestCase extends ProjectBasedTestCase {
     private static boolean GENERATE_GOLDEN_DATA = false;
     public HyperlinkBaseTestCase(String testName) {
         super(testName);
+        //System.setProperty("cnd.repository.hardrefs", "true");
+    }
+
+    public HyperlinkBaseTestCase(String testName, boolean performInWorkDir) {
+        super(testName, performInWorkDir);
     }
 
     @Override
@@ -89,6 +96,26 @@ public abstract class HyperlinkBaseTestCase extends ProjectBasedTestCase {
     protected void tearDown() throws Exception {
         super.tearDown();
     }
+
+    /**
+     * A test that expects hyperlink target to be null.
+     * 
+     * @param source
+     * @param lineIndex
+     * @param colIndex
+     * @throws java.lang.Exception
+     */
+    protected void performNullTargetTest(String source, int lineIndex, int colIndex) throws Exception {
+        File testSourceFile = getDataFile(source);
+        BaseDocument doc = getBaseDocument(testSourceFile);
+        int offset = CndCoreTestUtils.getDocumentOffset(doc, lineIndex, colIndex);
+        TokenItem<CppTokenId> jumpToken = getJumpToken(doc, offset);
+        assertNotNull("Hyperlink not found token in file " + testSourceFile + " on position (" + lineIndex + ", " + colIndex + ")", // NOI18N
+                        jumpToken);
+        CsmOffsetable targetObject = findTargetObject(doc, offset, jumpToken);
+        assertNull("Hyperlink target is unexpectedly found for " + jumpToken.text().toString() + //NOI18N
+                " in file " + testSourceFile + " on position (" + lineIndex + ", " + colIndex + ")", targetObject);//NOI18N
+    }
     
     /**
      * @param source relative path of source file
@@ -103,11 +130,11 @@ public abstract class HyperlinkBaseTestCase extends ProjectBasedTestCase {
         File testSourceFile = getDataFile(source);
         BaseDocument doc = getBaseDocument(testSourceFile);
         int offset = CndCoreTestUtils.getDocumentOffset(doc, lineIndex, colIndex);
-        Token jumpToken = getJumpToken(doc, offset);
+        TokenItem<CppTokenId> jumpToken = getJumpToken(doc, offset);
         assertNotNull("Hyperlink not found token in file " + testSourceFile + " on position (" + lineIndex + ", " + colIndex + ")", // NOI18N
                         jumpToken);
         CsmOffsetable targetObject = findTargetObject(doc, offset, jumpToken);
-        assertNotNull("Hyperlink target is not found for " + jumpToken.getText() + //NOI18N
+        assertNotNull("Hyperlink target is not found for " + jumpToken.text().toString() + //NOI18N
                 " in file " + testSourceFile + " on position (" + lineIndex + ", " + colIndex + ")", targetObject);//NOI18N
         String destResultFileAbsPath = targetObject.getContainingFile().getAbsolutePath().toString();
         Position resultPos = targetObject.getStartPosition();
@@ -131,21 +158,21 @@ public abstract class HyperlinkBaseTestCase extends ProjectBasedTestCase {
         return "[" + file + ":" + "Line-" + line +"; Col-" + column + "]";
     }
     
-    private CsmOffsetable findTargetObject(BaseDocument doc, int offset, Token jumpToken) {
+    private CsmOffsetable findTargetObject(BaseDocument doc, int offset, TokenItem<CppTokenId> jumpToken) {
         CsmOffsetable csmItem = null;
         // emulate hyperlinks order
         // first ask includes handler
-        if (includeProvider.isValidToken(jumpToken)) {
+        if (includeProvider.isValidToken(jumpToken, HyperlinkType.GO_TO_DECLARATION)) {
             csmItem = includeProvider.findTargetObject(doc, offset);
         }
         // if failed => ask declarations handler
-        if (csmItem == null && declarationsProvider.isValidToken(jumpToken)) {
-            csmItem = declarationsProvider.findTargetObject(null, doc, jumpToken, offset);
+        if (csmItem == null && declarationsProvider.isValidToken(jumpToken, HyperlinkType.GO_TO_DECLARATION)) {
+            csmItem = (CsmOffsetable) declarationsProvider.findTargetObject(doc, jumpToken, offset, true);
         }
         return csmItem;
     }
     
-    private Token getJumpToken(BaseDocument doc, int offset) {
+    private TokenItem<CppTokenId> getJumpToken(BaseDocument doc, int offset) {
         return CsmAbstractHyperlinkProvider.getToken(doc, offset);
     }  
     
