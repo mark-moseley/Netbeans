@@ -56,11 +56,13 @@ import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.LineBreakpoint;
 import org.netbeans.modules.debugger.jpda.ui.EditorContextBridge;
+import org.netbeans.modules.debugger.jpda.ui.options.OptionsInit;
 import org.netbeans.spi.debugger.ActionsProviderSupport;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.URLMapper;
 
 import org.openide.util.NbBundle;
+import org.openide.util.RequestProcessor;
 
 
 /** 
@@ -75,11 +77,16 @@ implements PropertyChangeListener {
     
     public ToggleBreakpointActionProvider () {
         EditorContextBridge.getContext().addPropertyChangeListener (this);
+        // This provider is always instantiated, therefore initialize options here:
+        RequestProcessor.getDefault().post(new Runnable() {
+            public void run() {
+                OptionsInit.initDebuggerOptions();
+            }
+        });
     }
     
     public ToggleBreakpointActionProvider (ContextProvider lookupProvider) {
-        debugger = (JPDADebugger) lookupProvider.lookupFirst 
-                (null, JPDADebugger.class);
+        debugger = lookupProvider.lookupFirst(null, JPDADebugger.class);
         debugger.addPropertyChangeListener (JPDADebugger.PROP_STATE, this);
         EditorContextBridge.getContext().addPropertyChangeListener (this);
     }
