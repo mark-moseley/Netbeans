@@ -39,32 +39,43 @@
 
 package org.netbeans.modules.kenai.api;
 
+import org.netbeans.modules.kenai.FeatureData;
+
 /**
  *
  * @author Maros Sandor
+ * @author Jan Becicka
  */
 public final class KenaiProjectFeature {
 
-    KenaiProjectFeature() {
+    private FeatureData featureData;
+    
+    KenaiProjectFeature(FeatureData data) {
+        this.featureData = data;
     }
 
     public String getName() {
-        return null;
+        return featureData.name;
     }
 
-    public String getType() {
-        return null;
+    public KenaiFeature getType() {
+        return KenaiFeature.forId(featureData.type);
     }
 
     public String getService() {
-        return null;
+        return featureData.service;
     }
 
     public String getLocation() {
-        return null;
+        return featureData.url;
     }
 
     public String getWebLocation() {
-        return null;
+        return featureData.web_url;
     }
+
+    public String getDisplayName() {
+        return featureData.display_name;
+    }
+
 }
