@@ -85,6 +85,7 @@ public final class VCSContext {
 
     private final Lookup    elements;
     
+    private final Set<File> unfilteredRootFiles;
     private final Set<File> rootFiles;
     private final Set<File> exclusions;
 
@@ -133,7 +134,6 @@ public final class VCSContext {
             Node node = nodes[i];
             File aFile = node.getLookup().lookup(File.class);
             if (aFile != null) {
-                files.add(aFile);
                 rootFiles.add(aFile);
                 continue;
             }
@@ -142,9 +142,38 @@ public final class VCSContext {
                 addProjectFiles(rootFiles, rootFileExclusions, project);
                 continue;
             }
-            addFileObjects(node, files, rootFiles);
+            addFileObjects(node, rootFiles);
         }
-        
+
+        List<File> unversionedFiles = new ArrayList<File>(rootFiles.size());
+        Set<VersioningSystem> projectOwners = new HashSet<VersioningSystem>(2);
+        for (File root : rootFiles) {
+            VersioningSystem owner = VersioningManager.getInstance().getOwner(root);
+            if (owner == null) {
+                unversionedFiles.add(root);
+            } else {
+                projectOwners.add(owner);
+            }
+        }
+        if(projectOwners.size() == 0) {
+            // all roots are unversioned -> keep them
+        } else if(projectOwners.size() == 1) {
+            // context contais one owner -> remove unversioned files
+            for (File unversionedFile : unversionedFiles) {
+                for (Iterator<File> i = rootFileExclusions.iterator(); i.hasNext(); ) {
+                    File exclusion = i.next();
+                    if (Utils.isAncestorOrEqual(unversionedFile, exclusion)) {
+                        i.remove();
+                    }
+                }
+            }
+            rootFiles.removeAll(unversionedFiles);
+        } else {
+            // more than one owner -> return empty context
+            rootFileExclusions.clear();
+            rootFiles.clear();
+        }
+
         VCSContext ctx = new VCSContext(nodes, rootFiles, rootFileExclusions);
         contextCached = new WeakReference<VCSContext>(ctx);
         contextNodesCached = new WeakReference<Node []>(nodes);
@@ -184,8 +213,28 @@ public final class VCSContext {
 
     /**
      * Retrieves set of files/folders that represent this context.
+     * This set contains all files the user selected, unfiltered.
+     * For example, if the user selects two elements: folder /var and file /var/Foo.java then getFiles() 
+     * returns both of them and getRootFiles returns only the folder /var. 
+     * This method is suitable for versioning systems that DO manage folders, such as Clearcase. 
      * 
      * @return Set<File> set of Files this context represents
+     * @see #getRootFiles() 
+     * @since 1.6
+     */ 
+    public Set<File> getFiles() {
+        return unfilteredRootFiles;
+    }
+
+    /**
+     * Retrieves set of root files/folders that represent this context.
+     * This set only contains context roots, not files/folders that are contained within these roots.
+     * For example, if the user selects two elements: folder /var and file /var/Foo.java then getFiles() 
+     * returns both of them and getRootFiles returns only the folder /var. 
+     * This method is suitable for versioning systems that do not manage folders, such as CVS. 
+     * 
+     * @return Set<File> set of Files this context represents
+     * @see #getFiles() 
      */ 
     public Set<File> getRootFiles() {
         return rootFiles;
@@ -228,18 +277,11 @@ public final class VCSContext {
     private static void addProjectFiles(Collection<File> rootFiles, Collection<File> rootFilesExclusions, Project project) {
         Sources sources = ProjectUtils.getSources(project);
         SourceGroup[] sourceGroups = sources.getSourceGroups(Sources.TYPE_GENERIC);
-        List<File> unversionedFiles = new ArrayList<File>(sourceGroups.length);
-        Set<VersioningSystem> projectOwners = new HashSet<VersioningSystem>(2);
         for (int j = 0; j < sourceGroups.length; j++) {
             SourceGroup sourceGroup = sourceGroups[j];
             FileObject srcRootFo = sourceGroup.getRootFolder();
             File rootFile = FileUtil.toFile(srcRootFo);
-            VersioningSystem owner = VersioningManager.getInstance().getOwner(rootFile);
-            if (owner == null) {
-                unversionedFiles.add(rootFile);
-            } else {
-                projectOwners.add(owner);
-            }
+            if (rootFile == null) continue;
             rootFiles.add(rootFile);
             FileObject [] rootChildren = srcRootFo.getChildren();
             for (int i = 0; i < rootChildren.length; i++) {
@@ -251,21 +293,9 @@ public final class VCSContext {
                 }
             }
         }
-        if (projectOwners.size() == 1 && projectOwners.iterator().next() != null) {
-            rootFiles.removeAll(unversionedFiles);
-            outter: for (Iterator<File> i = rootFilesExclusions.iterator(); i.hasNext(); ) {
-                File exclusion = i.next();
-                for (File rootFile : rootFiles) {
-                    if (Utils.isAncestorOrEqual(rootFile, exclusion)) {
-                        continue outter;
-                    }
-                }
-                i.remove();
-            }
-        }
     }
     
-    private static void addFileObjects(Node node, Set<File> files, Set<File> rootFiles) {
+    private static void addFileObjects(Node node, Set<File> rootFiles) {
         Collection<? extends NonRecursiveFolder> folders = node.getLookup().lookup(new Lookup.Template<NonRecursiveFolder>(NonRecursiveFolder.class)).allInstances();
         List<File> nodeFiles = new ArrayList<File>();
         if (folders.size() > 0) {
@@ -291,7 +321,6 @@ public final class VCSContext {
                 }
             }
         }
-        files.addAll(nodeFiles);
         rootFiles.addAll(nodeFiles);
     }
     
@@ -308,6 +337,7 @@ public final class VCSContext {
         this.elements = nodes != null ? Lookups.fixed(nodes) : Lookups.fixed(new Node[0]);
         Set<File> tempRootFiles = new HashSet<File>(rootFiles);
         Set<File> tempExclusions = new HashSet<File>(exclusions);
+        this.unfilteredRootFiles = Collections.unmodifiableSet(new HashSet<File>(tempRootFiles));
         while (normalize(tempRootFiles, tempExclusions));
         this.rootFiles = Collections.unmodifiableSet(tempRootFiles);
         this.exclusions = Collections.unmodifiableSet(tempExclusions);
@@ -343,11 +373,20 @@ public final class VCSContext {
 
     private static Set<File> substract(Set<File> roots, Set<File> exclusions, FileFilter filter) {
         Set<File> files = new HashSet<File>(roots);
+        Set<File> checkedFiles = new HashSet<File>();
         for (File exclusion : exclusions) {
             assert exclusion != null;
             for (;;) {
-                addSiblings(files, exclusion, filter);
-                exclusion = exclusion.getParentFile();
+                File parent = exclusion.getParentFile();
+                /**
+                 * only if the parent has not been checked yet - #158221
+                 * otherwise skip adding of the siblings - they have been already added
+                 */
+                if (!checkedFiles.contains(exclusion.getParentFile())) {
+                    addSiblings(files, exclusion, filter);
+                    checkedFiles.add(parent);
+                }
+                exclusion = parent;
                 files.remove(exclusion);
                 if (roots.contains(exclusion)) break;
             }

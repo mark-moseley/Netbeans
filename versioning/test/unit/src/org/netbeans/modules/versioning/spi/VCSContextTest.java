@@ -52,6 +52,9 @@ import org.netbeans.api.project.Project;
 
 import java.io.FileFilter;
 import java.io.File;
+import org.netbeans.api.queries.SharabilityQuery;
+import org.netbeans.junit.MockServices;
+import org.netbeans.spi.queries.SharabilityQueryImplementation;
 
 /**
  * Versioning SPI unit tests of VCSContext.
@@ -74,6 +77,7 @@ public class VCSContextTest extends TestCase {
     public void testForEmptyNodes() {
         VCSContext ctx = VCSContext.forNodes(new Node[0]);
         assertTrue(ctx.getRootFiles().size() == 0);
+        assertTrue(ctx.getFiles().size() == 0);
         assertTrue(ctx.getExclusions().size() == 0);
         assertTrue(ctx.computeFiles(new DummyFileDilter()).size() == 0);
     }
@@ -81,34 +85,55 @@ public class VCSContextTest extends TestCase {
     public void testForFileNodes() {
         VCSContext ctx = VCSContext.forNodes(new Node[] { new DummyFileNode(dataRootDir) });
         assertTrue(ctx.getRootFiles().size() == 1);
+        assertTrue(ctx.getFiles().size() == 1);
         assertTrue(ctx.getExclusions().size() == 0);
         assertTrue(ctx.computeFiles(new DummyFileDilter()).size() == 1);
 
         ctx = VCSContext.forNodes(new Node[] { new DummyFileNode(dataRootDir), new DummyFileNode(dataRootDir) });
         assertTrue(ctx.getRootFiles().size() == 1);
+        assertTrue(ctx.getFiles().size() == 1);
         assertTrue(ctx.getExclusions().size() == 0);
         assertTrue(ctx.computeFiles(new DummyFileDilter()).size() == 1);
 
         ctx = VCSContext.forNodes(new Node[] { new DummyFileNode(dataRootDir), new DummyFileNode(new File(dataRootDir, "dummy")) });
         assertTrue(ctx.getRootFiles().size() == 1);
+        assertTrue(ctx.getFiles().size() == 2);
         assertTrue(ctx.getExclusions().size() == 0);
         assertTrue(ctx.computeFiles(new DummyFileDilter()).size() == 1);
 
         ctx = VCSContext.forNodes(new Node[] { new DummyFileNode(new File(dataRootDir, "dummy2")), new DummyFileNode(new File(dataRootDir, "dummy")) });
         assertTrue(ctx.getRootFiles().size() == 2);
+        assertTrue(ctx.getFiles().size() == 2);
         assertTrue(ctx.getExclusions().size() == 0);
         assertTrue(ctx.computeFiles(new DummyFileDilter()).size() == 2);
+        
+        ctx = VCSContext.forNodes(new Node[] { new DummyFileNode(new File(dataRootDir, "workdir/root")), new DummyFileNode(new File(dataRootDir, "workdir/root/a.txt")) });
+        assertTrue(ctx.getRootFiles().size() == 1);
+        assertTrue(ctx.getFiles().size() == 2);
+        assertTrue(ctx.getExclusions().size() == 0);
+        assertTrue(ctx.computeFiles(new DummyFileDilter()).size() == 1);        
     }
 
     public void testForProjectNodes() {
         VCSContext ctx = VCSContext.forNodes(new Node[] { new DummyProjectNode(new File(dataRootDir, "workdir/root")) });
         assertTrue(ctx.getRootFiles().size() == 1);
+        assertTrue(ctx.getFiles().size() == 1);
         assertTrue(ctx.getExclusions().size() == 1);
         assertTrue(ctx.computeFiles(new DummyFileDilter()).size() == 0);
     }
-    
+
+
+    public void testSubstract() {
+        MockServices.setServices(DummySharabilityImplementations.class);
+        VCSContext ctx = VCSContext.forNodes(new Node[] { new DummyProjectNode(new File(dataRootDir, "workdir/root-with-exclusions"))});
+        assertTrue(ctx.getRootFiles().size() == 1);
+        assertEquals(1, ctx.getFiles().size());
+        assertEquals(2, ctx.getExclusions().size());
+        assertEquals(2, ctx.computeFiles(new DummyFileDilter()).size());
+    }
+
     private class DummyFileDilter implements FileFilter {
-        
+
         private final boolean acceptAll;
 
         public DummyFileDilter() {
@@ -123,7 +148,7 @@ public class VCSContextTest extends TestCase {
             return acceptAll;
         }
     }
-    
+
     private class DummyFileNode extends AbstractNode {
         public DummyFileNode(File file) {
             super(Children.LEAF, Lookups.fixed(file));
@@ -131,14 +156,14 @@ public class VCSContextTest extends TestCase {
     }
 
     private class DummyProjectNode extends AbstractNode {
-        
+
         public DummyProjectNode(File file) {
             super(Children.LEAF, Lookups.fixed(new DummyProject(file)));
         }
     }
 
     private static class DummyProject implements Project {
-        
+
         private final File file;
 
         public DummyProject(File file) {
@@ -148,9 +173,23 @@ public class VCSContextTest extends TestCase {
         public FileObject getProjectDirectory() {
             return FileUtil.toFileObject(file);
         }
-        
+
         public Lookup getLookup() {
             return Lookups.fixed(file);
         }
+    }
+
+    public static class DummySharabilityImplementations implements SharabilityQueryImplementation {
+
+        public int getSharability(File file) {
+            if (!file.getAbsolutePath().startsWith(System.getProperty("data.root.dir"))) {
+                return SharabilityQuery.UNKNOWN;
+            }
+            if (file.getName().contains("excl") && !file.getName().contains("root")) {
+                return SharabilityQuery.SHARABLE;
+            }
+            return SharabilityQuery.NOT_SHARABLE;
+        }
+
     }
 }
