@@ -51,6 +51,7 @@ import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Image;
@@ -59,7 +60,6 @@ import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.text.*;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -100,9 +100,13 @@ public final class MainWindow extends JFrame {
 
     /** Constructs main window. */
     public MainWindow() {
+        if( "Aqua".equals(UIManager.getLookAndFeel().getID())
+                && null == System.getProperty("apple.awt.brushMetalLook") ) //NOI18N
+            getRootPane().putClientProperty("apple.awt.brushMetalLook", Boolean.TRUE); //NOI18N
     }
     
     /** Overrides superclass method, adds help context to the new root pane. */
+    @Override
     protected void setRootPane(JRootPane root) {
         super.setRootPane(root);
         if(root != null) {
@@ -118,6 +122,7 @@ public final class MainWindow extends JFrame {
             // use glass pane that will not cause repaint/revalidate of parent when set visible
             // is called (when setting wait cursor in ModuleActions) #40689
             JComponent c = new JPanel() {
+                @Override
                 public void setVisible(boolean flag) {
                     if (flag != isVisible ()) {
                         super.setVisible(flag);
@@ -170,12 +175,18 @@ public final class MainWindow extends JFrame {
                     // on mac there is window resize component in the right most bottom area.
                     // it paints over our icons..
                     magicConstant = 12;
+
+                    if( "Aqua".equals(UIManager.getLookAndFeel().getID()) ) { //NOI18N
+                        statusLinePanel.setBorder( BorderFactory.createCompoundBorder(
+                                BorderFactory.createMatteBorder(1, 0, 0, 0, UIManager.getColor("NbBrushedMetal.darkShadow")), //NOI18N
+                                BorderFactory.createMatteBorder(1, 0, 0, 0, UIManager.getColor("NbBrushedMetal.lightShadow") ) ) ); //NOI18N
+                    }
                 }
                 
                 // status line should add some pixels on the left side
                 statusLinePanel.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createEmptyBorder (0, 0, 0, magicConstant), 
-                        statusLinePanel.getBorder ()));
+                        statusLinePanel.getBorder(),
+                        BorderFactory.createEmptyBorder (0, 0, 0, magicConstant)));
                 
                 statusLinePanel.add(new JSeparator(), BorderLayout.NORTH);
                 statusLinePanel.add(status, BorderLayout.CENTER);
@@ -281,14 +292,14 @@ public final class MainWindow extends JFrame {
     private static final String ICON_48 = "org/netbeans/core/startup/frame48.gif"; // NOI18N
     
     private static Image createIDEImage() {
-        return Utilities.loadImage(ICON_16, true);
+        return ImageUtilities.loadImage(ICON_16, true);
     }
     
     private static List<Image> createIDEImages() {
         List<Image> l = new ArrayList<Image>();
-        l.add(Utilities.loadImage(ICON_16, true));
-        l.add(Utilities.loadImage(ICON_32, true));
-        l.add(Utilities.loadImage(ICON_48, true));
+        l.add(ImageUtilities.loadImage(ICON_16, true));
+        l.add(ImageUtilities.loadImage(ICON_32, true));
+        l.add(ImageUtilities.loadImage(ICON_48, true));
         return l;
     }
     
@@ -326,10 +337,12 @@ public final class MainWindow extends JFrame {
     
     private void initListeners() {
         addWindowListener (new WindowAdapter() {
+                @Override
                 public void windowClosing(WindowEvent evt) {
                     LifecycleManager.getDefault().exit();
                 }
 
+                @Override
                 public void windowActivated (WindowEvent evt) {
                    // #19685. Cancel foreigner popup when
                    // activated main window.
@@ -386,9 +399,7 @@ public final class MainWindow extends JFrame {
              if (fileName == null) {
                  return null;
              }
-             FileObject fo =
-                 Repository.getDefault().getDefaultFileSystem().findResource(
-                     fileName);
+             FileObject fo = FileUtil.getConfigFile(fileName);
              if (fo != null) {
                  DataObject dobj = DataObject.find(fo);
                  InstanceCookie ic = (InstanceCookie)dobj.getCookie(InstanceCookie.class);
@@ -413,9 +424,7 @@ public final class MainWindow extends JFrame {
              if (fileName == null) {
                  return null;
              }
-             FileObject fo =
-                 Repository.getDefault().getDefaultFileSystem().findResource(
-                     fileName);
+             FileObject fo = FileUtil.getConfigFile(fileName);
              if (fo != null) {
                  DataObject dobj = DataObject.find(fo);
                  InstanceCookie ic = (InstanceCookie)dobj.getCookie(InstanceCookie.class);
@@ -457,20 +466,6 @@ public final class MainWindow extends JFrame {
         if(!bounds.isEmpty()) {
             setBounds(bounds);
         }
-    }
-    
-    /**
-     * don't allow smaller bounds than the one constructed from preffered sizes, making sure everything is visible when
-     * in SDI. #40063
-     */
-    public void setBounds(Rectangle rect) {
-        Rectangle bounds = rect;
-        if (bounds != null) {
-            if (bounds.height < getPreferredSize().height) {
-                bounds = new Rectangle(bounds.x, bounds.y, bounds.width, getPreferredSize().height);
-            }
-        }
-        super.setBounds(bounds);
     }
     
     /** Prepares main window, has to be called after {@link initializeComponents()}. */
@@ -552,6 +547,7 @@ public final class MainWindow extends JFrame {
     private Graphics waitingForPaintDummyGraphic;
     boolean isOlderJDK = System.getProperty("java.version").startsWith("1.5");
 
+    @Override
     public void setVisible (boolean flag) {
         // The setVisible will cause a PaintEvent to be queued up, as a LOW_PRIORITY one
         // As the painting of my child components occurs, they cause painting of their own
@@ -566,6 +562,7 @@ public final class MainWindow extends JFrame {
         super.setVisible(flag);
     }
 
+    @Override
     public void paint(Graphics g) {
         // As a safeguard, always release the dummy graphic when we get a paint
         if (waitingForPaintDummyGraphic != null) {
@@ -575,11 +572,16 @@ public final class MainWindow extends JFrame {
             g = getGraphics();
         }
         super.paint(g);
+        Logger.getLogger(MainWindow.class.getName()).log(Level.FINE, 
+                "Paint method of main window invoked normally."); //NOI18N
+
+        WindowManagerImpl.getInstance().mainWindowPainted();
     }
 
     /** Overrides parent version to return fake dummy graphic in certain time
      * during startup
      */
+    @Override
     public Graphics getGraphics () {
         // Return the dummy graphics that paint nowhere, until we receive a paint() 
         if (waitingForPaintDummyGraphic != null) {
@@ -646,8 +648,11 @@ public final class MainWindow extends JFrame {
         final boolean updateBounds = ( !isFullScreenMode );//&& restoreExtendedState != JFrame.MAXIMIZED_BOTH );
 
         GraphicsDevice device = null;
-        if( getGraphics() instanceof Graphics2D ) {
-            device = ((Graphics2D)getGraphics()).getDeviceConfiguration().getDevice();
+        Graphics gc = getGraphics();
+        if( gc instanceof Graphics2D ) {
+            GraphicsConfiguration conf = ((Graphics2D)gc).getDeviceConfiguration();
+            if( null != conf )
+                device = conf.getDevice();
         }
         if( null != device && device.isFullScreenSupported() ) {
             device.setFullScreenWindow( isFullScreenMode ? this : null );
