@@ -55,6 +55,7 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.logging.Logger;
+import java.util.prefs.Preferences;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
@@ -64,14 +65,13 @@ import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.editor.settings.AttributesUtilities;
 import org.netbeans.api.editor.settings.EditorStyleConstants;
 import org.netbeans.api.editor.settings.FontColorSettings;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.JumpList;
-import org.netbeans.editor.Settings;
-import org.netbeans.editor.SettingsNames;
-import org.netbeans.editor.Utilities;
 import org.netbeans.lib.editor.hyperlink.spi.HyperlinkProvider;
 import org.netbeans.lib.editor.hyperlink.spi.HyperlinkProviderExt;
 import org.netbeans.lib.editor.hyperlink.spi.HyperlinkType;
+import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.spi.editor.highlighting.HighlightAttributeValue;
 import org.netbeans.spi.editor.highlighting.HighlightsLayer;
 import org.netbeans.spi.editor.highlighting.HighlightsLayerFactory;
@@ -85,6 +85,7 @@ import org.netbeans.spi.editor.highlighting.support.OffsetsBag;
 public class HyperlinkOperation implements MouseListener, MouseMotionListener, PropertyChangeListener, KeyListener {
 
     private static Logger LOG = Logger.getLogger(HyperlinkOperation.class.getName());
+    private static final String KEY = "hyperlink-operation"; //NOI18N
     
     private JTextComponent component;
     private Document       currentDocument;
@@ -95,14 +96,18 @@ public class HyperlinkOperation implements MouseListener, MouseMotionListener, P
 
     private boolean        hyperlinkEnabled;
     private int            actionKeyMask;
+    private int            altActionKeyMask;
     
-    public static HyperlinkOperation create(JTextComponent component, String mimeType) {
-        return new HyperlinkOperation(component, mimeType);
+    public static void ensureRegistered(JTextComponent component, String mimeType) {
+        if (component.getClientProperty(KEY) == null) {
+            component.putClientProperty(KEY, new HyperlinkOperation(component, mimeType));
+        }
     }
     
     private static synchronized Cursor getMouseCursor(HyperlinkType type) {
         switch (type) {
             case GO_TO_DECLARATION:
+            case ALT_HYPERLINK:
                 return Cursor.getPredefinedCursor(Cursor.HAND_CURSOR);
             default:
                 throw new UnsupportedOperationException();
@@ -190,14 +195,12 @@ public class HyperlinkOperation implements MouseListener, MouseMotionListener, P
         }
         
         this.hyperlinkEnabled = true;
-        
-        Object activation = Settings.getValue(Utilities.getKitClass(component), SettingsNames.HYPERLINK_ACTIVATION_MODIFIERS);
-        
-        if (activation != null && activation instanceof Integer) {
-            this.actionKeyMask = ((Integer) activation).intValue();
-        } else {
-            this.actionKeyMask = InputEvent.CTRL_DOWN_MASK;
-        }
+
+        Preferences prefs = MimeLookup.getLookup(DocumentUtilities.getMimeType(component)).lookup(Preferences.class);
+        // there is in Mac preferences shortcut for META_MASK, by default we use CTRL_DOWN_MASK
+        this.actionKeyMask = prefs.getInt(SimpleValueNames.HYPERLINK_ACTIVATION_MODIFIERS, InputEvent.CTRL_DOWN_MASK);
+        // there is in Mac preferences shortcut for "META_DONW_MASK | InputEvent.ALT_DOWN_MASK", by default we use Ctrl+Alt
+        this.altActionKeyMask = prefs.getInt(SimpleValueNames.ALT_HYPERLINK_ACTIVATION_MODIFIERS, InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK);
     }
     
     public void mouseMoved(MouseEvent e) {
@@ -223,7 +226,13 @@ public class HyperlinkOperation implements MouseListener, MouseMotionListener, P
     }
     
     private HyperlinkType getHyperlinkType(InputEvent e) {
-        return ((e.getModifiers() | e.getModifiersEx()) & actionKeyMask) == actionKeyMask ? HyperlinkType.GO_TO_DECLARATION : null;
+        int modifiers = e.getModifiers() | e.getModifiersEx();
+        if ((modifiers & altActionKeyMask) == altActionKeyMask) {
+            return HyperlinkType.ALT_HYPERLINK;
+        } else if ((modifiers & actionKeyMask) == actionKeyMask) {
+            return HyperlinkType.GO_TO_DECLARATION;
+        }
+        return null;
     }
     
     private void performHyperlinking(int position, HyperlinkType type) {
@@ -255,7 +264,7 @@ public class HyperlinkOperation implements MouseListener, MouseMotionListener, P
     }
     
     private HyperlinkProviderExt findProvider(int position, HyperlinkType type) {
-        Object mimeTypeObj = component.getDocument().getProperty("mimeType");  //NOI18N
+        Object mimeTypeObj = component.getDocument().getProperty(BaseDocument.MIME_TYPE_PROP);  //NOI18N
         String mimeType;
         
         if (mimeTypeObj instanceof String)
@@ -359,8 +368,9 @@ public class HyperlinkOperation implements MouseListener, MouseMotionListener, P
     }
 
     public void keyReleased(KeyEvent e) {
-        if ((e.getModifiers() & actionKeyMask) == 0)
+        if (getHyperlinkType(e) == null) {
             unHyperlink(true);
+        }
     }
 
     public void keyPressed(KeyEvent e) {
@@ -414,7 +424,7 @@ public class HyperlinkOperation implements MouseListener, MouseMotionListener, P
     public static final class HighlightFactoryImpl implements HighlightsLayerFactory {
         public HighlightsLayer[] createLayers(Context context) {
             return new HighlightsLayer[] {
-                HighlightsLayer.create(HyperlinkOperation.class.getName(), ZOrder.CARET_RACK, true, getBag(context.getDocument()))
+                HighlightsLayer.create(HyperlinkOperation.class.getName(), ZOrder.SHOW_OFF_RACK.forPosition(450), true, getBag(context.getDocument()))
             };
         }
     }
