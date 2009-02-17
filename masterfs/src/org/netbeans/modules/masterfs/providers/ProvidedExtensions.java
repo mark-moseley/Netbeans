@@ -138,6 +138,17 @@ public class ProvidedExtensions implements InterceptionListener {
     public void deleteFailure(FileObject fo) {}
     public void beforeDelete(FileObject fo) {}
 
+    /**
+     * Called by <code>MasterFileSystem</code> when <code>FileObject</code> is queried for writability with the
+     * canWrite() method.
+     * 
+     * @param f a file to query
+     * @return true if the file can be written to, deleted or moved, false otherwise
+     * @since 2.14
+     */
+    public boolean canWrite(File f) {         
+        return f.canWrite(); 
+    }
 
     /*
      * Called by <code>MasterFileSystem</code> when <code>FileObject</code>
@@ -164,5 +175,16 @@ public class ProvidedExtensions implements InterceptionListener {
      * @param fo file which <code>FileLock</code> was released
      * @since 1.11
      */                
-    public void fileUnlocked(FileObject fo) {}        
+    public void fileUnlocked(FileObject fo) {}
+
+    /**
+     * Called by {@code MasterFileSystem} when {@code FileObject} is
+     * queried for attribute and attribute's name starts with {@code ProvidedExtensions}
+     * prefix.
+     * @param attrName name of attribute
+     * @return value of attribute
+     */
+    public Object getAttribute(File file, String attrName) {
+        return null;
+    }
 }

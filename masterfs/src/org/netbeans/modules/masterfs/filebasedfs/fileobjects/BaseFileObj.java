@@ -268,28 +268,31 @@ public abstract class BaseFileObj extends FileObject {
         final File file = getFileName().getFile();
         final File parent = file.getParentFile();
 
-        final File file2Rename = BaseFileObj.getFile(parent, name, ext);
-        if (parent == null || !FileChangedManager.getInstance().exists(parent)) {
+        final String newNameExt = FileInfo.composeName(name, ext);
+        final File file2Rename = new File(parent, newNameExt);
+        if (parent == null || !FileChangedManager.getInstance().exists(parent) ||
+                // #128818 - slash or backslash not allowed in name
+                newNameExt.contains("/") || newNameExt.contains("\\")) {  //NOI18N
             FileObject parentFo = getExistingParent();
             String parentPath = (parentFo != null) ? parentFo.getPath() : file.getParentFile().getAbsolutePath();
-            FSException.io("EXC_CannotRename", file.getName(), parentPath, file2Rename.getName());// NOI18N            
+            FSException.io("EXC_CannotRename", file.getName(), parentPath, newNameExt);// NOI18N
         }
-        boolean cannotRename = FileChangedManager.getInstance().exists(file2Rename) && !file2Rename.equals(file);
+        boolean targetFileExists = FileChangedManager.getInstance().exists(file2Rename) && !file2Rename.equals(file);
         //#108690
-        if (cannotRename && Utilities.isMac()) {
+        if (targetFileExists && Utilities.isMac()) {
             final File parentFile2 = file2Rename.getParentFile();
             final File parentFile = file.getParentFile();
             if (parentFile2 != null && parentFile != null && parentFile.equals(parentFile2)) {
                 if (file2Rename.getName().equalsIgnoreCase(file.getName())) {
-                    cannotRename = false;
+                    targetFileExists = false;
                 }
             }
         }
 
-        if (cannotRename) {
+        if (targetFileExists) {
             FileObject parentFo = getExistingParent();
             String parentPath = (parentFo != null) ? parentFo.getPath() : file.getParentFile().getAbsolutePath();
-            FSException.io("EXC_CannotRename", file.getName(), parentPath, file2Rename.getName());// NOI18N            
+            FSException.io("EXC_CannotRename", file.getName(), parentPath, newNameExt);// NOI18N
         }
 
         final String originalName = getName();
@@ -299,11 +302,11 @@ public abstract class BaseFileObj extends FileObject {
         FileObjectFactory fs = getFactory();
 
         synchronized (fs.AllFactories) {
-            FileNaming[] allRenamed = NamingFactory.rename(getFileName(), file2Rename.getName(), handler);
+            FileNaming[] allRenamed = NamingFactory.rename(getFileName(), newNameExt, handler);
             if (allRenamed == null) {
                 FileObject parentFo = getExistingParent();
                 String parentPath = (parentFo != null) ? parentFo.getPath() : file.getParentFile().getAbsolutePath();
-                FSException.io("EXC_CannotRename", file.getName(), parentPath, file2Rename.getName());// NOI18N            
+                FSException.io("EXC_CannotRename", file.getName(), parentPath, newNameExt);// NOI18N
             }
             fs.rename();
             BaseFileObj.attribs.renameAttributes(file.getAbsolutePath().replace('\\', '/'), file2Rename.getAbsolutePath().replace('\\', '/'));//NOI18N
@@ -355,8 +358,12 @@ public abstract class BaseFileObj extends FileObject {
             }
         } else if (attrName.equals("ExistsParentNoPublicAPI")) {
             return getExistingParent() != null;
-        } 
-                
+        } else if (attrName.startsWith("ProvidedExtensions")) {  //NOI18N
+            // #158600 - delegate to ProvidedExtensions if attrName starts with ProvidedExtensions prefix
+            ProvidedExtensions extension = getProvidedExtensions();
+            return extension.getAttribute(getFileName().getFile(), attrName);
+        }
+   
         return BaseFileObj.attribs.readAttribute(getFileName().getFile().getAbsolutePath().replace('\\', '/'), attrName);//NOI18N
     }
 
@@ -783,10 +790,12 @@ public abstract class BaseFileObj extends FileObject {
             if (file.isDirectory()) {
                 // first of all delete whole content
                 final File[] arr = file.listFiles();
-                for (int i = 0; i < arr.length; i++) {
-                    final File f2Delete = arr[i];
-                    if (!deleteFolder(f2Delete)) {
-                        return false;
+                if (arr != null) {  // check for null in case of I/O errors
+                    for (int i = 0; i < arr.length; i++) {
+                        final File f2Delete = arr[i];
+                        if (!deleteFolder(f2Delete)) {
+                            return false;
+                        }
                     }
                 }
             }

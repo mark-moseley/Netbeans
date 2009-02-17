@@ -45,6 +45,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.modules.masterfs.providers.AnnotationProvider;
@@ -58,7 +59,7 @@ import org.openide.filesystems.FileObject;
  * @author Radek Matous
  */
 public class ProvidedExtensionsProxy extends ProvidedExtensions {
-    private Collection/*AnnotationProvider*/ annotationProviders;
+    private Collection<AnnotationProvider> annotationProviders;
     private static ThreadLocal  reentrantCheck = new ThreadLocal();
     
     /** Creates a new instance of ProvidedExtensionsProxy */
@@ -190,6 +191,23 @@ public class ProvidedExtensionsProxy extends ProvidedExtensions {
         }
     }       
 
+    public boolean canWrite(final File f) {
+        final Boolean ret[] = new Boolean [] { null };
+        for (Iterator it = annotationProviders.iterator(); it.hasNext();) {
+            AnnotationProvider provider = (AnnotationProvider) it.next();
+            final InterceptionListener iListener = (provider != null) ?  provider.getInterceptionListener() : null;
+            if (iListener instanceof ProvidedExtensions) {
+                runCheckCode(new Runnable() {
+                    public void run() {
+                        ret[0] = ((ProvidedExtensions)iListener).canWrite(f);
+                    }
+                });                                                                                
+            }
+        }
+        return ret[0] != null ? ret[0] : super.canWrite(f);
+    }
+        
+    
     public void beforeChange(final FileObject f) {    
         for (Iterator it = annotationProviders.iterator(); it.hasNext();) {
             AnnotationProvider provider = (AnnotationProvider) it.next();
@@ -230,7 +248,24 @@ public class ProvidedExtensionsProxy extends ProvidedExtensions {
                 });                
             }
         }
-    }        
+    }
+
+    @Override
+    public Object getAttribute(final File file, final String attrName) {
+        final AtomicReference<Object> value = new AtomicReference();
+        for (AnnotationProvider provider : annotationProviders) {
+            final InterceptionListener iListener = (provider != null) ? provider.getInterceptionListener() : null;
+            if (iListener instanceof ProvidedExtensions) {
+                runCheckCode(new Runnable() {
+                    public void run() {
+                        value.set(((ProvidedExtensions) iListener).getAttribute(file, attrName));
+                    }
+                });
+            }
+            if(value.get() != null) break;
+        }
+        return value.get();
+    }
     
     public static void checkReentrancy() {
         if (reentrantCheck.get() != null) {            
