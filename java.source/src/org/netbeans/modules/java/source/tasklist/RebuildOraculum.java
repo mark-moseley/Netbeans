@@ -55,7 +55,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -63,13 +62,11 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.util.Elements;
 import org.netbeans.api.java.source.ClassIndex;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.ElementHandle;
-import org.netbeans.api.java.source.JavaSource;
-import org.netbeans.modules.java.source.ElementHandleAccessor;
-import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 
 /**
@@ -274,6 +271,15 @@ public class RebuildOraculum {
         if (elements.isDeprecated(el)) {
             result.add(DEPRECATED);
         }
+
+        if (el.getKind() == ElementKind.FIELD) {
+            Object v = ((VariableElement) el).getConstantValue();
+
+            if (v != null) {
+                result.add(v.getClass().getName());
+                result.add(String.valueOf(v));
+            }
+        }
         
         return result;
     }
@@ -287,6 +293,12 @@ public class RebuildOraculum {
         
         while (!toHandle.isEmpty()) {
             TypeElement te = toHandle.poll();
+            if (te==null) {
+                //workaround for 6443073
+                //see Symbol.java:601
+                //see JavacTaskImpl.java:367
+                continue;
+            }
             
             types.put(ElementHandle.create(te), getExtendedModifiers(elements, te));
             
