@@ -39,27 +39,35 @@
 
 package org.netbeans.modules.php.editor.model;
 
-import java.util.List;
-import org.netbeans.modules.gsf.api.NameKind;
+import java.util.Collection;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
 
 /**
  * @author Radek Matous
  */
 public interface TypeScope extends Scope {
-    List<? extends InterfaceScope> getInterfaces();
-    List<? extends MethodScope> getAllMethods();
-    List<? extends MethodScope> getMethods(final int... modifiers);
-    List<? extends MethodScope> getMethods(final String queryName, final int... modifiers);
-    List<? extends MethodScope> getMethods(final NameKind nameKind, final String queryName, final int... modifiers);
-    List<? extends MethodScope> getAllInheritedMethods();
-    List<? extends MethodScope> getInheritedMethods(final String queryName);
-    List<? extends ClassConstantElement> getAllConstants();
-    List<? extends ClassConstantElement> getConstants(final String... queryName);
-    List<? extends ClassConstantElement> getConstants(final NameKind nameKind, final String... queryName);
-    List<? extends ClassConstantElement> getInheritedConstants(String constName);
+    PhpModifiers getPhpModifiers();
+    /**
+     * @return declared methods only
+     */
+    Collection<? extends MethodScope> getDeclaredMethods();
+    /**
+     * @return inherited methods only
+     */
+    Collection<? extends MethodScope> getInheritedMethods();
+    /**
+     * @return declared+inherited methods
+     */
+    Collection<? extends MethodScope> getMethods();
 
-    //List<? extends MethodScope> getTopInheritedMethods(final String queryName, final int... modifiers);
+    Collection<? extends ClassConstantElement> getDeclaredConstants();
+    Collection<? extends ClassConstantElement> getInheritedConstants();
+    Collection<? extends InterfaceScope> getSuperInterfaces();
 
-    //TODO: ...
-
+    Collection<? extends ClassConstantElement> findInheritedConstants(String constName);
+    Collection<? extends MethodScope> findInheritedMethods(final String queryName);
+    Collection<? extends MethodScope> findDeclaredMethods(final String queryName, final int... modifiers);
+    Collection<? extends MethodScope> findDeclaredMethods(final NameKind nameKind, final String queryName, final int... modifiers);
+    Collection<? extends ClassConstantElement> findDeclaredConstants(final String... queryName);
+    Collection<? extends ClassConstantElement> findDeclaredConstants(final NameKind nameKind, final String... queryName);
 }

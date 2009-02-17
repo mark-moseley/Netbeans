@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!-- -*- sgml-indent-step: 2 -*- -->
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
    - DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
    -
@@ -103,6 +103,51 @@ is the proper place.
 <!-- ACTUAL CHANGES BEGIN HERE: -->
 
   <changes>
+
+    <change id="DocumentUtilities.getDocumentVersion-added">
+      <summary>Added DocumentUtilities.getDocumentVersion(Document)</summary>
+        <version major="1" minor="28"/>
+        <date day="1" month="2" year="2009"/>
+        <author login="vstejskal"/>
+        <compatibility addition="yes" deletion="no" modification="no" binary="compatible" semantic="compatible" />
+        <description>
+        <p>
+            Adding DocumentUtilities.getDocumentVersion(Document) to provide access
+            to documents' version property.
+        </p>
+        </description>
+    </change>
+
+    <change id="DocumentUtilities.debugOffset-added">
+      <summary>Added DocumentUtilities.debugOffset(Document, int)</summary>
+        <version major="1" minor="25"/>
+        <date day="16" month="6" year="2008"/>
+        <author login="mmetelka"/>
+        <compatibility addition="yes" deletion="no" modification="no" binary="compatible" semantic="compatible" />
+        <description>
+        <p>
+            Adding DocumentUtilities.debugOffset(Document, int) to dump both the integer offset
+            and line and column as seen in editor's status bar.
+            PositionRegion.toString(doc) debugs its bounds using debugOffset().
+            Added PositionRegion.getText() and PositionRegion.getString() to obtain text of the region.
+        </p>
+        </description>
+    </change>
+
+    <change id="getMimeType-added">
+      <summary>Added DocumentUtilities.getMimeType</summary>
+        <version major="1" minor="23"/>
+        <date day="10" month="1" year="2008"/>
+        <author login="vstejskal"/>
+        <compatibility addition="yes" deletion="no" modification="no" binary="compatible" semantic="compatible" />
+        <description>
+        <p>
+            Adding <code>DocumentUtilities.getMimeType(Document)</code> and
+            <code>DocumentUtilities.getMimeType(JTextComponent)</code> in order
+            to standardize access to documents' mimetype.
+        </p>
+        </description>
+    </change>
 
     <change id="CharacterConversions-added">
       <summary>Added CharacterConversions class</summary>

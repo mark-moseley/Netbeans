@@ -38,8 +38,8 @@
  */
 package org.netbeans.modules.php.editor.model;
 
-import java.util.List;
-import org.netbeans.modules.gsf.api.OffsetRange;
+import java.util.Collection;
+import org.netbeans.modules.csl.api.OffsetRange;
 
 /**
  * @author Radek Matous
@@ -48,7 +48,7 @@ public interface Occurence{
     ModelElement getDeclaration();
     /**mostly the same as getDeclaration. In case of __constructor are different*/
     ModelElement gotoDeclaratin();
-    List<? extends ModelElement> getAllDeclarations();
-    List<Occurence> getAllOccurences();
+    Collection<? extends ModelElement> getAllDeclarations();
+    Collection<Occurence> getAllOccurences();
     OffsetRange getOccurenceRange();
 }

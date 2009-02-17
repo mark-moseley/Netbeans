@@ -49,15 +49,16 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
-import org.netbeans.modules.gsfpath.api.classpath.ClassPath;
-import org.netbeans.modules.gsfpath.spi.classpath.ClassPathFactory;
-import org.netbeans.modules.gsfpath.spi.classpath.ClassPathProvider;
-import org.netbeans.modules.gsfpath.spi.classpath.support.ClassPathSupport;
+import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.modules.php.project.api.PhpSourcePath;
 import org.netbeans.modules.php.project.SourceRoots;
 import org.netbeans.modules.php.project.api.PhpSourcePath.FileType;
 import org.netbeans.modules.php.project.classpath.support.ProjectClassPathSupport;
 import org.netbeans.modules.php.project.ui.customizer.PhpProjectProperties;
 import org.netbeans.modules.php.project.ui.options.PhpOptions;
+import org.netbeans.spi.java.classpath.ClassPathFactory;
+import org.netbeans.spi.java.classpath.ClassPathProvider;
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
@@ -77,7 +78,7 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PhpSource
     private static enum ClassPathCache {
         PLATFORM,
         SOURCE,
-        TEST,
+        TEST
     }
 
     private final AntProjectHelper helper;
@@ -85,17 +86,19 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PhpSource
     private final PropertyEvaluator evaluator;
     private final SourceRoots sources;
     private final SourceRoots tests;
+    private final SourceRoots selenium;
 
     // GuardedBy(dirCache)
     private final Map<String, List<FileObject>> dirCache = new HashMap<String, List<FileObject>>();
     // GuardedBy(cache)
     private final Map<ClassPathCache, ClassPath> cache = new EnumMap<ClassPathCache, ClassPath>(ClassPathCache.class);
 
-    public ClassPathProviderImpl(AntProjectHelper helper, PropertyEvaluator evaluator, SourceRoots sources, SourceRoots tests) {
+    public ClassPathProviderImpl(AntProjectHelper helper, PropertyEvaluator evaluator, SourceRoots sources, SourceRoots tests, SourceRoots selenium) {
         assert helper != null;
         assert evaluator != null;
         assert sources != null;
         assert tests != null;
+        assert selenium != null;
 
         this.helper = helper;
         projectDirectory = FileUtil.toFile(helper.getProjectDirectory());
@@ -103,6 +106,7 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PhpSource
         this.evaluator = evaluator;
         this.sources = sources;
         this.tests = tests;
+        this.selenium = selenium;
         evaluator.addPropertyChangeListener(WeakListeners.propertyChange(this, evaluator));
     }
 
@@ -172,6 +176,14 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PhpSource
             }
         }
 
+        // selenium
+        for (FileObject root : selenium.getRoots()) {
+            if (root.equals(file) || FileUtil.isParentOf(root, file)) {
+                // for now, return TEST type as well (it's probably ok)
+                return FileType.TEST;
+            }
+        }
+
         for (FileObject root : sources.getRoots()) {
             if (root.equals(file) || FileUtil.isParentOf(root, file)) {
                 return FileType.SOURCE;
@@ -220,8 +232,9 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PhpSource
                     if (cp == null) {
                         // return both because people expect such behaviour (in CC e.g.)
                         ClassPath testsCp = ClassPathFactory.createClassPath(new SourcePathImplementation(tests));
+                        ClassPath seleniumCp = ClassPathFactory.createClassPath(new SourcePathImplementation(selenium));
                         ClassPath sourcesCp = ClassPathFactory.createClassPath(new SourcePathImplementation(sources));
-                        cp = ClassPathSupport.createProxyClassPath(testsCp, sourcesCp);
+                        cp = ClassPathSupport.createProxyClassPath(testsCp, seleniumCp, sourcesCp);
                         cache.put(ClassPathCache.TEST, cp);
                     }
                 }
@@ -244,8 +257,9 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PhpSource
                         internalFolders.toArray(new FileObject[internalFolders.size()]));
                 ClassPath includePath = ClassPathFactory.createClassPath(
                         ProjectClassPathSupport.createPropertyBasedClassPathImplementation(projectDirectory, evaluator,
-                        new String[] {PhpProjectProperties.INCLUDE_PATH}));                
-                cp = ClassPathSupport.createProxyClassPath(internalClassPath, includePath);
+                        new String[] {PhpProjectProperties.INCLUDE_PATH}));
+                cp = ClassPathSupport.createProxyClassPath(
+                        internalClassPath, includePath);
                 cache.put(ClassPathCache.PLATFORM, cp);
             }
         }
@@ -253,17 +267,17 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PhpSource
     }
 
     public ClassPath findClassPath(FileObject file, String type) {
-        if (type.equals(ClassPath.BOOT)) {
+        if (type.equals(PhpSourcePath.BOOT_CP)) {
             return getBootClassPath();
-        } else if (type.equals(ClassPath.SOURCE)) {
+        } else if (type.equals(PhpSourcePath.SOURCE_CP)) {
             return getSourcePath(file);
-        } else if (type.equals(ClassPath.COMPILE)) {
-            // ???
-            return getBootClassPath();
-        } else if (type.equals("js/library")) { // NOI18N
-            return getSourcePath(FileType.SOURCE);
+//        } else if (type.equals(ClassPath.COMPILE)) {
+//            // ???
+//            return getBootClassPath();
+//        } else if (type.equals("js/library")) { // NOI18N
+//            return getSourcePath(FileType.SOURCE);
         }
-        assert false : "Unknown classpath type requested: " + type;
+//        assert false : "Unknown classpath type requested: " + type;
         return null;
     }
 
@@ -272,13 +286,13 @@ public final class ClassPathProviderImpl implements ClassPathProvider, PhpSource
      * The result is used for example for GlobalPathRegistry registrations.
      */
     public ClassPath[] getProjectClassPaths(String type) {
-        if (ClassPath.BOOT.equals(type)) {
+        if (PhpSourcePath.BOOT_CP.equals(type)) {
             // because of global include path, we need to ensure that it is known for property evaluator
             //  (=> need to be written in global properties, do it just once, just before getting BOOT class path)
             PhpOptions.getInstance().getPhpGlobalIncludePath();
 
             return new ClassPath[] {getBootClassPath()};
-        } else if (ClassPath.SOURCE.equals(type)) {
+        } else if (PhpSourcePath.SOURCE_CP.equals(type)) {
             return new ClassPath[] {
                 getSourcePath(FileType.SOURCE),
                 getSourcePath(FileType.TEST),
