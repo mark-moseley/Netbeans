@@ -39,7 +39,7 @@
 
 package org.netbeans.modules.kenai;
 
-import java.util.Iterator;
+import java.util.Collection;
 import org.netbeans.modules.kenai.api.KenaiException;
 
 /**
@@ -50,9 +50,11 @@ import org.netbeans.modules.kenai.api.KenaiException;
  */
 public abstract class KenaiImpl {
 
-    public abstract Iterator<LicensesListData.LicensesListItem> getLicenses() throws KenaiException;
+    public abstract Collection<LicensesListData.LicensesListItem> getLicenses() throws KenaiException;
 
-    public abstract Iterator<ServicesListData.ServicesListItem> getServices() throws KenaiException;
+    public abstract Collection<ServicesListData.ServicesListItem> getServices() throws KenaiException;
+
+    public abstract String checkName(String name) throws KenaiException;
 
 
     /**
@@ -62,7 +64,7 @@ public abstract class KenaiImpl {
      * @return list of Kenai projects
      * @throws org.netbeans.modules.kenai.api.KenaiException
      */
-    public abstract Iterator<ProjectData> searchProjects(String pattern) throws KenaiException;
+    public abstract Collection<ProjectData> searchProjects(String pattern) throws KenaiException;
 
     /**
      * Retrieves all available information about a Kenai project.
