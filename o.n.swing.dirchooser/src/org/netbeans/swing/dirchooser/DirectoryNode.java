@@ -45,7 +45,6 @@ package org.netbeans.swing.dirchooser;
 import java.io.File;
 import java.io.FileFilter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import javax.swing.JFileChooser;
@@ -75,13 +74,7 @@ public class DirectoryNode extends DefaultMutableTreeNode {
     
     private boolean loaded;
     
-    private boolean interim;
-    
     private boolean isSelected;
-    
-    private boolean isEditable;
-    
-    private boolean expanded;
     
     public DirectoryNode(File file) {
         this(file, true, false, false, false);
@@ -117,10 +110,12 @@ public class DirectoryNode extends DefaultMutableTreeNode {
         this.isSelected = isSelected;
     }
     
+    @Override
     public boolean isLeaf() {
         return !this.isDir;
     }
     
+    @Override
     public boolean getAllowsChildren() {
         return this.isDir;
     }
@@ -162,11 +157,16 @@ public class DirectoryNode extends DefaultMutableTreeNode {
         
         return loaded;
     }
-        
+
     private ArrayList getFiles(JFileChooser chooser) {
         //fixed bug #97124
         ArrayList list = new ArrayList();
         
+        // Fix for IZ#116859 [60cat] Node update bug in the "open project" panel while deleting directories
+        if ( directory == null || !directory.exists() ){
+            return list;
+        }
+
         File[] files = chooser.getFileSystemView().getFiles(directory, chooser.isFileHidingEnabled());
         int mode = chooser.getFileSelectionMode();
         if(mode == JFileChooser.DIRECTORIES_ONLY) {
@@ -195,10 +195,10 @@ public class DirectoryNode extends DefaultMutableTreeNode {
             list.addAll(dirList);
             list.addAll(fileList);
         }
-        
+
         return list;
     }
-    
+
     public boolean isNetBeansProject() {
         return isNetBeansProject(directory);
     }
@@ -243,7 +243,7 @@ public class DirectoryNode extends DefaultMutableTreeNode {
         fo = FileUtil.toFileObject(FileUtil.normalizeFile(testFile));
         return fo;
     }
-    
+
     private class DirectoryFilter implements FileFilter {
         public boolean accept(File f) {
             return f.isDirectory();
