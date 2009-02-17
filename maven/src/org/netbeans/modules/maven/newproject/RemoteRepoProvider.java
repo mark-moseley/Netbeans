@@ -36,46 +36,46 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.maven.newproject;
 
-package org.netbeans.modules.maven.api.archetype;
-
+import java.util.ArrayList;
 import java.util.List;
+import org.netbeans.modules.maven.indexer.api.NBVersionInfo;
+import org.netbeans.modules.maven.indexer.api.RepositoryInfo;
+import org.netbeans.modules.maven.indexer.api.RepositoryPreferences;
+import org.netbeans.modules.maven.indexer.api.RepositoryQueries;
+import org.netbeans.modules.maven.api.archetype.Archetype;
+import org.netbeans.modules.maven.api.archetype.ArchetypeProvider;
 
 /**
- * Deprecated: user layer based registration instead:
- * 
-     <p>
-       "Projects/org-netbeans-modules-maven/Archetypes" folder contains fileobjects
-       that represent archetypes. The archetypes are defined by the following file attributes:
-     </p>
-       <table>
-           <tbody>
-               <tr><td>groupId</td><td>mandatory</td><td></td></tr>
-               <tr><td>artifactId</td><td>mandatory</td><td></td></tr>
-               <tr><td>version</td><td>mandatory</td><td></td></tr>
-               <tr><td>repository</td><td>optional</td><td>url of the archetype's repository</td></tr>
-               <tr><td>nameBundleKey</td><td>optional</td><td>key in bundle file that holds localized name</td></tr>
-               <tr><td>descriptionBundleKey</td><td>optional</td><td>key in bundle file that holds localized description</td></tr>
-           </tbody>
-       </table>
-     <p>
- *<strike>
- * Componentized provider of list of available archetypes.
- * It is used in New Maven project wizard to populate the list of available archetypes.
- * The providers are expected to be registered using {@link org.openide.util.lookup.ServiceProvider}.
- * There are 3 default implementations registered: One lists 1 basic archetype
- * (simple and the other lists all archetypes it find in local and remote repository indexes.
- * </strike>
- * </p>
+ *
  * @author mkleint
- * @deprecated Use layer based registration instead.
  */
-public @Deprecated interface ArchetypeProvider {
+@SuppressWarnings("deprecation")
+public class RemoteRepoProvider implements ArchetypeProvider {
 
-    /**
-     * return Archetype instances known to this provider. Is called once per
-     * New Maven Project wizard invokation.
-     * @return list of archetypes
-     */
-    List<Archetype> getArchetypes();
+    public List<Archetype> getArchetypes() {
+        List<Archetype> lst = new ArrayList<Archetype>();
+        List<RepositoryInfo> infos = RepositoryPreferences.getInstance().getRepositoryInfos();
+        for (RepositoryInfo info : infos) {
+            if (RepositoryPreferences.LOCAL_REPO_ID.equals(info.getId())) {
+                continue;
+            }
+            List<NBVersionInfo> archs = RepositoryQueries.findArchetypes(info);
+            if (archs == null) {
+                continue;
+            }
+            for (NBVersionInfo art : archs) {
+                Archetype arch = new Archetype();
+                arch.setArtifactId(art.getArtifactId());
+                arch.setGroupId(art.getGroupId());
+                arch.setVersion(art.getVersion());
+                arch.setName(art.getProjectName());
+                arch.setDescription(art.getProjectDescription());
+                arch.setRepository(info.getRepositoryUrl());
+                lst.add(arch);
+            }
+        }
+        return lst;
+    }
 }
