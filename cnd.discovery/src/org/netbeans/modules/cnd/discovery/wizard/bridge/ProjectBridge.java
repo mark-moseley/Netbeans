@@ -54,15 +54,15 @@ import javax.swing.SwingUtilities;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.netbeans.modules.cnd.api.compilers.Tool;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.api.ProjectGenerator;
 import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BasicCompilerConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.CCCCompilerConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.configurations.CCCompilerConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.configurations.CCompilerConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Folder;
@@ -95,7 +95,8 @@ public class ProjectBridge {
     
     public ProjectBridge(String baseFolder) throws IOException{
         this.baseFolder = baseFolder;
-        MakeConfiguration extConf = new MakeConfiguration(baseFolder, "Default", MakeConfiguration.TYPE_MAKEFILE); // NOI18N
+        // TODO: create localhost based project
+        MakeConfiguration extConf = new MakeConfiguration(baseFolder, "Default", MakeConfiguration.TYPE_MAKEFILE, CompilerSetManager.LOCALHOST); // NOI18N
         String workingDir = baseFolder;
         String workingDirRel = IpeUtils.toRelativePath(baseFolder, FilePathAdaptor.naturalize(workingDir));
         workingDirRel = FilePathAdaptor.normalize(workingDirRel);
@@ -130,6 +131,24 @@ public class ProjectBridge {
             item = findByCanonicalName(path);
         }
         return item;
+    }
+
+    /**
+     * Check needed header extensions and store list in the NB/project properties.
+     * @param needAdd list of needed extensions of header files.
+     */
+    public void checkForNewExtensions(Set<String> needAdd){
+        Set<String> extensions = new HashSet<String>();
+        for(String name : needAdd){
+            int i = name.lastIndexOf('.');
+            if (i > 0){
+                String extension = name.substring(i+1);
+                if (extension.length()>0) {
+                    extensions.add(extension);
+                }
+            }
+        }
+        makeConfigurationDescriptor.addAdditionalHeaderExtensions(extensions);
     }
     
     private Item findByCanonicalName(String path){
@@ -234,29 +253,22 @@ public class ProjectBridge {
     public Folder getRoot(){
         Folder folder = makeConfigurationDescriptor.getLogicalFolders();
         Vector sources = folder.getFolders();
-        List<Folder> roots = new ArrayList<Folder>();
         for (Object o : sources){
             Folder sub = (Folder)o;
             if (sub.isProjectFiles()) {
                 if (MakeConfigurationDescriptor.SOURCE_FILES_FOLDER.equals(sub.getName())) {
-                    Vector v = sub.getFolders();
-                    for (Object e : v){
-                        Folder s = (Folder)e;
-                        if (s.isProjectFiles()) {
-                            roots.add(s);
-                        }
-                    }
+                    return sub;
                 }
             }
-        }
-        if (roots.size()>0){
-            return roots.get(0);
         }
         return folder;
     }
     
-    public Set getResult(){
+    public void save(){
         makeConfigurationDescriptor.save();
+    }
+    
+    public Set getResult(){
         if (SwingUtilities.isEventDispatchThread()) {
             makeConfigurationDescriptor.checkForChangedItems(project, null, null);
         } else {
@@ -269,7 +281,7 @@ public class ProjectBridge {
         return resultSet;
     }
     
-    public void setupProject(Vector includes, String macros, boolean isCPP){
+    public void setupProject(List<String> includes, List<String> macros, boolean isCPP){
         Configuration c = makeConfigurationDescriptor.getConfs().getActive();
         if (c instanceof MakeConfiguration) {
             MakeConfiguration extConf = (MakeConfiguration)c;
@@ -287,34 +299,33 @@ public class ProjectBridge {
         }
         makeConfigurationDescriptor.setModified();
     }
-    
-    public void setupFolder(Vector includes, boolean inheriteIncludes, String macros, boolean inheriteMacros, boolean isCPP, Folder folder) {
+
+    public CCCCompilerConfiguration getFolderConfiguration(boolean isCPP, Folder folder) {
         MakeConfiguration makeConfiguration = (MakeConfiguration)folder.getConfigurationDescriptor().getConfs().getActive();
         //FolderConfiguration folderConfiguration = (FolderConfiguration)makeConfiguration.getAuxObject(folder.getId());
         FolderConfiguration folderConfiguration = folder.getFolderConfiguration(makeConfiguration);
         if (folderConfiguration == null) {
-            return;
+            return null;
         }
         if (isCPP) {
-            CCCompilerConfiguration ccCompilerConfiguration = folderConfiguration.getCCCompilerConfiguration();
-            if (ccCompilerConfiguration != null) {
-                ccCompilerConfiguration.getIncludeDirectories().setValue(includes);
-                ccCompilerConfiguration.getInheritIncludes().setValue(inheriteIncludes);
-                ccCompilerConfiguration.getPreprocessorConfiguration().setValue(macros);
-                ccCompilerConfiguration.getInheritPreprocessor().setValue(inheriteMacros);
-            }
+            return folderConfiguration.getCCCompilerConfiguration();
         } else {
-            CCompilerConfiguration cCompilerConfiguration = folderConfiguration.getCCompilerConfiguration();
-            if (cCompilerConfiguration != null) {
-                cCompilerConfiguration.getIncludeDirectories().setValue(includes);
-                cCompilerConfiguration.getInheritIncludes().setValue(inheriteIncludes);
-                cCompilerConfiguration.getPreprocessorConfiguration().setValue(macros);
-                cCompilerConfiguration.getInheritPreprocessor().setValue(inheriteMacros);
-            }
+            return folderConfiguration.getCCompilerConfiguration();
         }
     }
+
+    public void setupFolder(List<String> includes, boolean inheriteIncludes, List<String> macros, boolean inheriteMacros, boolean isCPP, Folder folder) {
+        CCCCompilerConfiguration cccc = getFolderConfiguration(isCPP, folder);
+        if (cccc == null) {
+            return;
+        }
+        cccc.getIncludeDirectories().setValue(includes);
+        cccc.getInheritIncludes().setValue(inheriteIncludes);
+        cccc.getPreprocessorConfiguration().setValue(macros);
+        cccc.getInheritPreprocessor().setValue(inheriteMacros);
+    }
     
-    public void setExclude(Item item, boolean exclude){
+    public static void setExclude(Item item, boolean exclude){
         MakeConfiguration makeConfiguration = (MakeConfiguration)item.getFolder().getConfigurationDescriptor().getConfs().getActive();
         ItemConfiguration itemConfiguration = item.getItemConfiguration(makeConfiguration); //ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(item.getPath()));
         if (itemConfiguration == null) {
@@ -355,7 +366,20 @@ public class ProjectBridge {
         }
     }
     
-    public void setupFile(String compilepath, Vector includes, boolean inheriteIncludes, String macros, boolean inheriteMacros, Item item) {
+    public CCCCompilerConfiguration getItemConfiguration(Item item) {
+        MakeConfiguration makeConfiguration = (MakeConfiguration)item.getFolder().getConfigurationDescriptor().getConfs().getActive();
+        ItemConfiguration itemConfiguration = item.getItemConfiguration(makeConfiguration); //ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(item.getPath()));
+        if (itemConfiguration == null || !itemConfiguration.isCompilerToolConfiguration()) {
+            return null;
+        }
+        BasicCompilerConfiguration compilerConfiguration = itemConfiguration.getCompilerConfiguration();
+        if (compilerConfiguration instanceof CCCCompilerConfiguration) {
+            return (CCCCompilerConfiguration) compilerConfiguration;
+        }
+        return null;
+    }
+
+    public void setupFile(String compilepath, List<String> includes, boolean inheriteIncludes, List<String> macros, boolean inheriteMacros, Item item) {
         MakeConfiguration makeConfiguration = (MakeConfiguration)item.getFolder().getConfigurationDescriptor().getConfs().getActive();
         ItemConfiguration itemConfiguration = item.getItemConfiguration(makeConfiguration); //ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(item.getPath()));
         if (itemConfiguration == null || !itemConfiguration.isCompilerToolConfiguration()) {
@@ -374,12 +398,56 @@ public class ProjectBridge {
             cccCompilerConfiguration.getInheritPreprocessor().setValue(inheriteMacros);
         }
     }
+
+    public static void fixFileMacros(Map<String,String> macros, Item item) {
+        MakeConfiguration makeConfiguration = (MakeConfiguration)item.getFolder().getConfigurationDescriptor().getConfs().getActive();
+        ItemConfiguration itemConfiguration = item.getItemConfiguration(makeConfiguration); //ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(item.getPath()));
+        if (itemConfiguration == null || !itemConfiguration.isCompilerToolConfiguration()) {
+            return;
+        }
+        BasicCompilerConfiguration compilerConfiguration = itemConfiguration.getCompilerConfiguration();
+        if (compilerConfiguration instanceof CCCCompilerConfiguration) {
+            Set<String> set = new HashSet<String>(item.getUserMacroDefinitions());
+            CCCCompilerConfiguration cccCompilerConfiguration = (CCCCompilerConfiguration)compilerConfiguration;
+            List<String> list = new ArrayList<String>(cccCompilerConfiguration.getPreprocessorConfiguration().getValue());
+            for(Map.Entry<String,String> entry : macros.entrySet()) {
+                String s;
+                if (entry.getValue() != null) {
+                    s = entry.getKey()+"="+entry.getValue(); // NOI18N
+                } else {
+                    s = entry.getKey();
+                }
+                boolean find = set.contains(s);
+                if (!find && (entry.getValue() == null || "".equals(entry.getValue()))) { // NOI18N
+                    find = set.contains(s+"=1"); // NOI18N
+                    if (!find) {
+                        find = set.contains(s+"="); // NOI18N
+                    }
+                }
+                if (!find && ("1".equals(entry.getValue()) || "".equals(entry.getValue()))) { // NOI18N
+                    find = set.contains(entry.getKey());
+                }
+                if (!find) {
+                    list.add(s);
+                }
+            }
+            cccCompilerConfiguration.getPreprocessorConfiguration().setValue(list);
+        }
+    }
     
     private CompilerSet getCompilerSet(){
         MakeConfiguration makeConfiguration = (MakeConfiguration)makeConfigurationDescriptor.getConfs().getActive();
-        return CompilerSetManager.getDefault().getCompilerSet(makeConfiguration.getCompilerSet().getValue());
+        return CompilerSetManager.getDefault(makeConfiguration.getDevelopmentHost().getName()).getCompilerSet(makeConfiguration.getCompilerSet().getValue());
     }
-    
+
+    public String getCygwinDrive(){
+        String res =CompilerSetManager.getCygwinBase();
+        if (res != null && res.endsWith("/")){
+            res = res.substring(0,res.length()-1);
+        }
+        return res;
+    }
+
     public String getCompilerFlavor(){
         return getCompilerSet().getCompilerFlavor().toString();
     }
