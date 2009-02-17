@@ -62,8 +62,18 @@ public class TestVCSInterceptor extends VCSInterceptor {
     private final List<File>    beforeEditFiles = new ArrayList<File>();
     private final List<File>    beforeChangeFiles = new ArrayList<File>();
     private final List<File>    afterChangeFiles = new ArrayList<File>();
+    private final List<File>    isMutableFiles = new ArrayList<File>();
 
     public TestVCSInterceptor() {
+    }
+
+    public boolean isMutable(File file) {
+        isMutableFiles.add(file);
+        return super.isMutable(file);
+    }
+
+    public String getAttribute(File file, String attrName) {
+        return "http://a.repository.far.far.away/" + file.getName();
     }
 
     public boolean beforeCreate(File file, boolean isDirectory) {
@@ -127,6 +137,10 @@ public class TestVCSInterceptor extends VCSInterceptor {
         beforeEditFiles.add(file);
     }
 
+    public List<File> getIsMutableFiles() {
+        return isMutableFiles;
+    }
+
     public List<File> getBeforeCreateFiles() {
         return beforeCreateFiles;
     }
@@ -183,5 +197,6 @@ public class TestVCSInterceptor extends VCSInterceptor {
         beforeEditFiles.clear();
         beforeChangeFiles.clear();
         afterChangeFiles.clear();
+        isMutableFiles.clear();
     }
 }

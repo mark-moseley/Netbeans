@@ -69,7 +69,8 @@ public class VCSInterceptorTest extends TestCase {
 
     protected void setUp() throws Exception {
         super.setUp();
-        dataRootDir = new File(System.getProperty("data.root.dir"));
+        dataRootDir = new File("/tmp/"); //new File(System.getProperty("data.root.dir"));
+        if(!dataRootDir.exists()) dataRootDir.mkdirs();
         Lookup.getDefault().lookupAll(VersioningSystem.class);
         inteceptor = (TestVCSInterceptor) TestVCS.getInstance().getVCSInterceptor();
         File f = new File(dataRootDir, "workdir/root-test-versioned/deleteme.txt");
@@ -78,6 +79,36 @@ public class VCSInterceptorTest extends TestCase {
             fo.delete();
         }
         inteceptor.clearTestData();
+    }
+
+    public void testIsMutable() throws IOException {
+        File f = new File(dataRootDir, "workdir/root-test-versioned");
+        FileObject fo = FileUtil.toFileObject(f);
+        fo = fo.createData("checkme.txt");
+        File file = FileUtil.toFile(fo);
+        fo.canWrite();
+        assertTrue(inteceptor.getBeforeCreateFiles().contains(file));
+        assertTrue(inteceptor.getDoCreateFiles().contains(file));
+        assertTrue(inteceptor.getCreatedFiles().contains(file));
+        assertFalse(inteceptor.getIsMutableFiles().contains(file));
+        
+        file.setReadOnly();
+        fo.canWrite();
+        assertTrue(inteceptor.getIsMutableFiles().contains(file));
+    }
+
+    public void testGetAttribute() throws IOException {
+        File f = new File(dataRootDir, "workdir/root-test-versioned");
+        FileObject fo = FileUtil.toFileObject(f);
+        fo = fo.createData("gotattr.txt");
+        File file = FileUtil.toFile(fo);
+        
+        String attr = (String) fo.getAttribute("ProvidedExtensions.RemoteLocation");
+        assertNotNull(attr);
+        assertTrue(attr.endsWith(file.getName()));
+
+        attr = (String) fo.getAttribute("whatever");
+        assertNull(attr);
     }
 
     public void testChangedFile() throws IOException {
