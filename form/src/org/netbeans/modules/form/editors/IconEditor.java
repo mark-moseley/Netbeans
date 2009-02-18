@@ -42,6 +42,7 @@
 package org.netbeans.modules.form.editors;
 
 import java.awt.Component;
+import java.awt.Image;
 import java.beans.*;
 import java.util.*;
 import java.io.File;
@@ -389,7 +390,10 @@ public class IconEditor extends PropertyEditorSupport
     }
 
     private NbImageIcon iconFromResourceName(String resName) {
-        FileObject srcFile = getSourceFile();
+        return iconFromResourceName(resName, getSourceFile());
+    }
+
+    private static NbImageIcon iconFromResourceName(String resName, FileObject srcFile) {
         ClassPath cp = ClassPath.getClassPath(srcFile, ClassPath.SOURCE);
         FileObject fo = cp.findResource(resName);
         if (fo == null) {
@@ -398,8 +402,10 @@ public class IconEditor extends PropertyEditorSupport
         }
         if (fo != null) {
             try {
-                Icon icon = new ImageIcon(ImageIO.read(fo.getURL()));
-                return new NbImageIcon(TYPE_CLASSPATH, resName, icon);
+                Image image = ImageIO.read(fo.getURL());
+                if (image != null) { // issue 157546
+                    return new NbImageIcon(TYPE_CLASSPATH, resName, new ImageIcon(image));
+                }
             } catch (IOException ex) { // should not happen
                 Logger.getLogger(IconEditor.class.getName()).log(Level.WARNING, null, ex);
             }
@@ -423,14 +429,14 @@ public class IconEditor extends PropertyEditorSupport
                 }
             }
             catch (URISyntaxException ex) {}
+            catch (IllegalArgumentException ex) {}
 
             if (url != null) { // treat as url
+                Icon icon = null;
                 try {
-                    Icon icon = new ImageIcon(ImageIO.read(url));
-                    return new NbImageIcon(TYPE_URL, urlString, icon);
-                } catch (IOException ex) { // should not happen
-                    Logger.getLogger(IconEditor.class.getName()).log(Level.WARNING, null, ex);
-                }
+                    icon = new ImageIcon(ImageIO.read(url));
+                } catch (IOException ex) {}
+                return new NbImageIcon(TYPE_URL, urlString, icon);
             }
         }
         catch (MalformedURLException ex) {}
@@ -465,7 +471,7 @@ public class IconEditor extends PropertyEditorSupport
         
         public NbImageIcon(int type, String name, Icon icon) {
             this.type = type;
-            if (name.startsWith("/")) // NOI18N
+            if ((type == TYPE_CLASSPATH) && name.startsWith("/")) // NOI18N
                 name = name.substring(1);
             this.name = name;
             this.icon = icon;
@@ -497,7 +503,16 @@ public class IconEditor extends PropertyEditorSupport
         // FormDesignValue implementation
         @Override
         public FormDesignValue copy(FormProperty formProperty) {
-            return new IconEditor.NbImageIcon(type, name, icon);   
+            if (type == TYPE_CLASSPATH) {
+                // Issue 142337 - can copy into another project
+                // => try to reload the icon from this project
+                FormModel targetModel = formProperty.getPropertyContext().getFormModel();
+                if (targetModel != null) {
+                    FileObject sourceFile = FormEditor.getFormDataObject(targetModel).getPrimaryFile();
+                    return iconFromResourceName(name, sourceFile);
+                }
+            }
+            return new IconEditor.NbImageIcon(type, name, icon);
         }
     }
 
@@ -530,9 +545,15 @@ public class IconEditor extends PropertyEditorSupport
                     setValue(iconFromFileName(name));
                     break;
                 case TYPE_CLASSPATH:
-                    if (name.startsWith("/")) // NOI18N
+                    if (name.startsWith("/")) {// NOI18N
                         name = name.substring(1);
-                    setValue(iconFromResourceName(name));
+                    }
+                    NbImageIcon iconValue = iconFromResourceName(name);
+                    if (iconValue == null && name.contains("/")) { // NOI18N
+                        // likely the image file cannot be found, but we should keep the value
+                        iconValue = new NbImageIcon(TYPE_CLASSPATH, name, null);
+                    }
+                    setValue(iconValue);
                     break;
             }
         } catch (NullPointerException e) {
