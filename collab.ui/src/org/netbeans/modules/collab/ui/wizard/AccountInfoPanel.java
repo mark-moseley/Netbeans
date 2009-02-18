@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -40,19 +40,20 @@
  */
 package org.netbeans.modules.collab.ui.wizard;
 
-import javax.swing.*;
-import javax.swing.event.*;
-
-import org.openide.util.NbBundle;
-
 import com.sun.collablet.Account;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import org.netbeans.modules.collab.ui.DefaultUserInterface;
+import org.openide.WizardDescriptor;
+import org.openide.util.NbBundle;
 
 /**
  *
  *
  */
-public class AccountInfoPanel extends WizardPanelBase {
+public class AccountInfoPanel extends JPanel {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPasswordField confirmPasswordField;
     private javax.swing.JLabel confirmPasswordLabel;
@@ -66,12 +67,15 @@ public class AccountInfoPanel extends WizardPanelBase {
     // End of variables declaration//GEN-END:variables
     private AccountWizardSettings settings;
 
+    private WizardPanelBase wizardPanel;
+
     /**
      *
      *
      */
-    public AccountInfoPanel() {
-        super(NbBundle.getMessage(AccountInfoPanel.class, "LBL_AccountInfoPanel_Name")); // NOI18N
+    public AccountInfoPanel (WizardPanelBase wizardPanel) {
+        this.wizardPanel = wizardPanel;
+        setName(NbBundle.getMessage(AccountInfoPanel.class, "LBL_AccountInfoPanel_Name"));
         initComponents();
         initAccessibility();
 
@@ -97,7 +101,7 @@ public class AccountInfoPanel extends WizardPanelBase {
      *
      *
      */
-    public void readSettings(Object object) {
+    void readSettings(Object object) {
         settings = AccountWizardSettings.narrow(object);
 
         boolean isNewAccount = settings.isNewAccount();
@@ -116,7 +120,7 @@ public class AccountInfoPanel extends WizardPanelBase {
      *
      *
      */
-    public void storeSettings(Object object) {
+    void storeSettings(Object object) {
         if (object instanceof AccountWizardSettings) {
             Account account = AccountWizardSettings.narrow(object).getAccount();
             account.setUserName(userNameField.getText().trim());
@@ -152,10 +156,10 @@ public class AccountInfoPanel extends WizardPanelBase {
             }
 
             // Display a hint to the user
-            settings.getWizardDescriptor().putProperty("WizardPanel_errorMessage", message); // NOI18N
+            settings.getWizardDescriptor().putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, message); // NOI18N
         }
 
-        setValid(valid);
+        wizardPanel.setValid(valid);
     }
 
     /**
@@ -173,7 +177,7 @@ public class AccountInfoPanel extends WizardPanelBase {
         );
     }
 
-    public void initAccessibility() {
+    private void initAccessibility() {
         confirmPasswordField.getAccessibleContext().setAccessibleDescription(
             NbBundle.getMessage(AccountUserInfoPanel.class, "ACSD_DESC_AccountInfoPanel_ConfirmPasswordField")
         ); // NOI18N
