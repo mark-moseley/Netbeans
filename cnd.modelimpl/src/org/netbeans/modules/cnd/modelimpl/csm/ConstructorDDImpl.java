@@ -41,20 +41,30 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm;
 
+import java.io.DataOutput;
 import org.netbeans.modules.cnd.api.model.*;
 import antlr.collections.AST;
 import java.io.DataInput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import org.netbeans.modules.cnd.api.model.deep.CsmExpression;
+import org.netbeans.modules.cnd.modelimpl.csm.core.AstRenderer;
+import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 
 /**
  * @author Vladimir Voskresensky
  */
 public final class ConstructorDDImpl extends MethodDDImpl<CsmConstructor> implements CsmConstructor {
 
-    public ConstructorDDImpl(AST ast, ClassImpl cls, CsmVisibility visibility) {
-        super(ast, cls, visibility, true);
+    private List<CsmExpression> initializers;
+    
+    public ConstructorDDImpl(AST ast, ClassImpl cls, CsmVisibility visibility, boolean register) throws AstRendererException {
+        super(ast, cls, visibility, register, register);
+        
+        initializers = AstRenderer.renderConstructorInitializersList(ast, this, this.getContainingFile());
     }
  
     @Override
@@ -62,13 +72,32 @@ public final class ConstructorDDImpl extends MethodDDImpl<CsmConstructor> implem
         return NoType.instance();
     }
     
-    public List getInitializerList() {
-        return Collections.EMPTY_LIST;
+    public List<CsmExpression> getInitializerList() {
+        if(initializers != null) {
+            return initializers;
+        } else {
+            return Collections.<CsmExpression>emptyList();
+        }
     }    
+    
     ////////////////////////////////////////////////////////////////////////////
     // iml of SelfPersistent
     
     public ConstructorDDImpl(DataInput input) throws IOException {
         super(input);
-    }    
+        initializers = PersistentUtils.readExpressions(new ArrayList<CsmExpression>(), input);
+    }
+        
+    @Override
+    public void write(DataOutput output) throws IOException {
+        super.write(output);
+        PersistentUtils.writeExpressions(initializers, output);
+    }
+        
+    @Override
+    public Collection<CsmScopeElement> getScopeElements() {
+        Collection<CsmScopeElement> c = super.getScopeElements();
+        c.addAll(getInitializerList());
+        return c;
+    }
 }
