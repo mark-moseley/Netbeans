@@ -51,20 +51,21 @@ import java.util.Set;
 import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmInheritance;
+import org.netbeans.modules.cnd.api.model.CsmInstantiation;
 import org.netbeans.modules.cnd.api.model.CsmMember;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
-import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmProject;
-import org.netbeans.modules.cnd.api.model.CsmUID;
+import org.netbeans.modules.cnd.api.model.services.CsmInheritanceUtilities;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.model.xref.CsmReferenceSupport;
 import org.netbeans.modules.cnd.api.model.xref.CsmTypeHierarchyResolver;
-import org.netbeans.modules.cnd.modelimpl.csm.core.OffsetableBase;
 
 /**
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.api.model.xref.CsmTypeHierarchyResolver.class)
 public class TypeHierarchyResolverImpl extends CsmTypeHierarchyResolver {
 
     public TypeHierarchyResolverImpl() {
@@ -77,57 +78,13 @@ public class TypeHierarchyResolverImpl extends CsmTypeHierarchyResolver {
         if (set != null){
             List<CsmReference> res = new ArrayList<CsmReference>();
             for (CsmClass cls : set){
-                res.add(new RefImpl(cls));
+                res.add(CsmReferenceSupport.createObjectReference(cls));
             }
             return res;
         }
         return Collections.<CsmReference>emptyList();
     }
 
-    private static final class RefImpl extends OffsetableBase implements CsmReference {
-        private final CsmUID<CsmClass> delegate;
-        
-        private RefImpl(CsmClass owner) {
-            super(owner.getContainingFile(), owner.getStartOffset(), owner.getLeftBracketOffset());
-            delegate = owner.getUID();
-        }
-
-        public CsmObject getReferencedObject() {
-            return delegate.getObject();
-        }
-
-        public CsmObject getOwner() {
-            return delegate.getObject();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            final RefImpl other = (RefImpl) obj;
-            if (this.delegate != other.delegate && (this.delegate == null || !this.delegate.equals(other.delegate))) {
-                return false;
-            }
-            return true;
-        }
-
-        @Override
-        public int hashCode() {
-            int hash = 5;
-            hash = 97 * hash + (this.delegate != null ? this.delegate.hashCode() : 0);
-            return hash;
-        }
-
-        @Override
-        public String toString() {
-            return "Class Reference: " + (this.delegate != null ? delegate.toString() : super.getOffsetString()); // NOI18N
-        }
-    }
-    
     private static final class HierarchyModelImpl {
         private Map<CsmClass,Set<CsmClass>> myMap;
     
@@ -186,7 +143,7 @@ public class TypeHierarchyResolverImpl extends CsmTypeHierarchyResolver {
             Collection<CsmInheritance> list = cls.getBaseClasses();
             if (list != null && list.size() >0){
                 for(CsmInheritance inh : list){
-                    CsmClass c = inh.getCsmClass();
+                    CsmClass c = getClassDeclaration(inh);
                     if (c != null) {
                         back.add(c);
                         buildSuperHierarchy(c, map);
@@ -214,11 +171,22 @@ public class TypeHierarchyResolverImpl extends CsmTypeHierarchyResolver {
             }
         }
 
+        private CsmClass getClassDeclaration(CsmInheritance inh){
+            CsmClass c = CsmInheritanceUtilities.getCsmClass(inh);
+            if (CsmKindUtilities.isInstantiation(c)) {
+                CsmDeclaration d = ((CsmInstantiation)c).getTemplateDeclaration();
+                if (CsmKindUtilities.isClass(d)){
+                    c = (CsmClass) d;
+                }
+            }
+            return c;
+        }
+
         private void buildSubHierarchy(final Map<CsmClass, Set<CsmClass>> map, final CsmClass cls) {
             Collection<CsmInheritance> list = cls.getBaseClasses();
             if (list != null && list.size() >0){
                 for(CsmInheritance inh : list){
-                    CsmClass c = inh.getCsmClass();
+                    CsmClass c = getClassDeclaration(inh);
                     if (c != null) {
                         Set<CsmClass> back = map.get(c);
                         if (back == null){
