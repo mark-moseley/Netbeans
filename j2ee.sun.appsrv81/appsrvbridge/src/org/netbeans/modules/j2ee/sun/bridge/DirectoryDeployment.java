@@ -48,7 +48,6 @@ import java.util.logging.Logger;
 import javax.enterprise.deploy.spi.status.DeploymentStatus;
 import javax.enterprise.deploy.spi.status.ProgressEvent;
 import javax.enterprise.deploy.spi.status.ProgressListener;
-import org.netbeans.modules.j2ee.deployment.common.api.ConfigurationException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.IncrementalDeployment;
 import org.netbeans.modules.j2ee.deployment.plugins.api.AppChangeDescriptor;
@@ -66,7 +65,6 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.config.ContextRootConfiguration;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.config.ModuleConfiguration;
-import org.netbeans.modules.j2ee.sun.api.SunDeploymentConfigurationInterface;
 import org.netbeans.modules.j2ee.sun.api.SunDeploymentManagerInterface;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -135,6 +133,19 @@ public class DirectoryDeployment extends IncrementalDeployment {
             throw new IllegalStateException("invalid dm value");
         }
         File appDir = AppServerBridge.getDirLocation(module);
+        // clean up some unexpected pollution :: https://glassfish.dev.java.net/issues/show_bug.cgi?id=4669
+        String path = appDir.getPath();
+        String TCONST = "${com.sun.aas.installRoot}";
+        if (path.contains(TCONST)) {
+            int dex = path.indexOf(TCONST);
+            // the installRoot is an absolute... if it shows up somewhere else in a path 
+            // correct the path.
+            if (dex > 0) {
+                path = path.substring(dex);
+            }
+            path = path.replace(TCONST, dm.getPlatformRoot().getAbsolutePath());
+            appDir = new File(path);
+        }
         if (null != appDir && appDir.getPath().contains("${")) {
             throw new IllegalStateException(NbBundle.getMessage(DirectoryDeployment.class,
                     "ERR_UndeployAndRedeploy"));
@@ -166,19 +177,19 @@ public class DirectoryDeployment extends IncrementalDeployment {
      */
     final public ProgressObject  incrementalDeploy( final TargetModuleID tmid, AppChangeDescriptor aCD) {
         ProgressObject retVal = null;
+        Thread holder = Thread.currentThread();
         try {
-            
-            dm.grabInnerDM(false);
+            dm.grabInnerDM(holder,false);
             DirectoryDeploymentFacility ddf = 
                     new DirectoryDeploymentFacility(dm.getHost(),dm.getPort(),
                     dm.getUserName(),dm.getPassword(),dm.isSecure());
             retVal = ddf.incrementalDeploy(tmid);
             if (null != retVal) {
-                retVal.addProgressListener(new Releaser(dm));
+                retVal.addProgressListener(new Releaser(dm,holder));
             }
         } finally {
             if (null == retVal) {
-                dm.releaseInnerDM();
+                dm.releaseInnerDM(holder);
             }
         }
         return retVal; //ddf. incrementalDeploy( tmid);
@@ -193,6 +204,7 @@ public class DirectoryDeployment extends IncrementalDeployment {
      * @return its relative path within application archive, returns null by
      * default (for standalone module)
      */
+    @Override
     public String getModuleUrl(TargetModuleID module){        
         String retVal = AppServerBridge.getModuleUrl(module);
         if (!retVal.startsWith("/")) {
@@ -214,7 +226,7 @@ public class DirectoryDeployment extends IncrementalDeployment {
      * @param configuration server specific data for deployment
      * @param dir the destination directory for the given deploy app
      * @return the object for feedback on progress of deployment
-     */     
+     *     
     public ProgressObject initialDeploy(Target target, 
                 DeployableObject deployableObject,
                 DeploymentConfiguration deploymentConfiguration, 
@@ -238,7 +250,7 @@ public class DirectoryDeployment extends IncrementalDeployment {
         }
         return retVal;
     }
-
+*/
     private String computeModuleID(J2eeModule app, File dir) {
         String moduleID = null;
         File foo = app.getDeploymentConfigurationFile("application.xml"); // NOI18N
@@ -316,21 +328,23 @@ public class DirectoryDeployment extends IncrementalDeployment {
             }
         }
         if (null == moduleID || moduleID.trim().length() < 1) {
-            moduleID = getGoodDirNameFromContextRoot(dir.getParentFile().getParentFile().getName());
+            moduleID = simplifyModuleID(dir.getParentFile().getParentFile().getName());
+        } else {
+            moduleID = simplifyModuleID(moduleID);
         }
 
         return moduleID;
     }
     
-    private String getGoodDirNameFromContextRoot(String contextRoot){
+    private String simplifyModuleID(String candidateID){
         String   moduleID = null;
-        if (contextRoot==null){
+        if (candidateID==null){
             moduleID = "_default_"+this.hashCode() ;
-        } else if (contextRoot.equals("")){
+        } else if (candidateID.equals("")){
             moduleID =  "_default_"+this.hashCode();
         }
         if (null == moduleID) {
-            moduleID = contextRoot.replace(' ','_');
+            moduleID = candidateID.replace(' ','_');
             if (moduleID.startsWith("/")) {
                 moduleID = moduleID.substring(1);
             }
@@ -348,6 +362,9 @@ public class DirectoryDeployment extends IncrementalDeployment {
             // to register the module, so replace additional special
             // characters , =  used in property parsing with -
             moduleID = moduleID.replace(',', '_').replace('=', '_');
+
+            // parens are illegal in the object name, too. IZ 143389
+            moduleID = moduleID.replace('(', '_').replace(')', '_');
         }
         return moduleID;
     }
@@ -403,17 +420,18 @@ public class DirectoryDeployment extends IncrementalDeployment {
         ContextRootConfiguration crp = (ContextRootConfiguration) configuration.getLookup().lookup(ContextRootConfiguration.class);
         String moduleID= computeModuleID(app,dir);
         ProgressObject retVal = null;
+        Thread holder = Thread.currentThread();
         try {
             
-            dm.grabInnerDM(false);
+            dm.grabInnerDM(holder, false);
             DirectoryDeploymentFacility ddf = 
                     new DirectoryDeploymentFacility(dm.getHost(),dm.getPort(),
                     dm.getUserName(),dm.getPassword(),dm.isSecure());
             retVal = ddf.initialDeploy( target,    dir , moduleID);
-            retVal.addProgressListener(new Releaser(dm));
+            retVal.addProgressListener(new Releaser(dm,holder));
         } finally {
             if (null == retVal) {
-                dm.releaseInnerDM();
+                dm.releaseInnerDM(holder);
             }
         }
         return retVal;
@@ -434,13 +452,20 @@ public class DirectoryDeployment extends IncrementalDeployment {
             }
             //tmp = tmp.getParentFile();
             // I am depending on the fact that an app will have a resource dir!!!
-            dest = new File(tmp, "dist");
-            dest = new File(dest, "gfdeploy");
+            dest = new File(tmp, "target");  // NOI18N
+            if (!dest.exists()) {
+                // the app wasn't a maven project
+                dest = new File(tmp, "dist");  // NOI18N
+            }
+            if (dest.isFile() || (dest.isDirectory() && !dest.canWrite())) {
+               throw new IllegalStateException();
+            }
+            dest = new File(dest, "gfdeploy");  // NOI18N
             if (!dest.exists()) {
                 dest.mkdirs();
             }
             if (!dest.isDirectory()) {
-                dest = null;
+               dest = null;
             }
         }
         return dest;
@@ -451,11 +476,6 @@ public class DirectoryDeployment extends IncrementalDeployment {
     // editable file -- but it is quicker to access, if it is there....
     //
     private File getProjectDir(J2eeModule app) {
-        java.io.File tmp = app.getResourceDirectory();
-
-        if (tmp != null) {
-            return tmp.getParentFile();
-        }
         try {
             FileObject fo = app.getContentDirectory();
             Project p = FileOwnerQuery.getOwner(fo);
@@ -467,9 +487,15 @@ public class DirectoryDeployment extends IncrementalDeployment {
             Logger.getLogger("org.netbeans.modules.j2ee.sun.bridge").log(Level.FINER,    // NOI18N
                     null,ex);
         }
+        java.io.File tmp = app.getResourceDirectory();
+
+        if (tmp != null) {
+            return tmp.getParentFile();
+        }
         return null;
     }
     
+    @Override
     public File getDirectoryForNewApplication(String deploymentName, Target target, ModuleConfiguration configuration) {
         File retValue;
         
@@ -507,20 +533,23 @@ public class DirectoryDeployment extends IncrementalDeployment {
         return s;
     }
     
+    @Override
     public void notifyDeployment(TargetModuleID module) {
         super.notifyDeployment(module);
     }
     
     private static class Releaser implements ProgressListener {
         SunDeploymentManagerInterface dm;
-        Releaser(SunDeploymentManagerInterface dm) {
+        Thread holder;
+        Releaser(SunDeploymentManagerInterface dm, Thread holder) {
             this.dm = dm;
+            this.holder = holder;
         }
         
         public void handleProgressEvent(ProgressEvent progressEvent) {
             DeploymentStatus dms = progressEvent.getDeploymentStatus();
             if (!dms.isRunning()) {
-                dm.releaseInnerDM();
+                dm.releaseInnerDM(holder);
             }
         }
     }
