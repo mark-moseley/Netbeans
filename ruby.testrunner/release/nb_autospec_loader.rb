@@ -1,6 +1,7 @@
+#
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 #
-# Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+# Copyright 2008 Sun Microsystems, Inc. All rights reserved.
 #
 # The contents of this file are subject to the terms of either the GNU
 # General Public License Version 2 only ("GPL") or the Common
@@ -20,12 +21,6 @@
 # your own identifying information:
 # "Portions Copyrighted [year] [name of copyright owner]"
 #
-# Contributor(s):
-#
-# The Original Software is NetBeans. The Initial Developer of the Original
-# Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
-# Microsystems, Inc. All Rights Reserved.
-#
 # If you wish your version of this file to be governed by only the CDDL
 # or only the GPL Version 2, indicate your decision by adding
 # "[Contributor] elects to include this software in this distribution
@@ -36,24 +31,34 @@
 # However, if you add GPL Version 2 code and therefore, elected the GPL
 # Version 2 license, then the option applies only if the new code is
 # made subject to such option by the copyright holder.
-#Actions
+#
+# Contributor(s):
+#
+# Portions Copyrighted 2008 Sun Microsystems, Inc.
 
-LBL_CleanAction_Name=Clean
-LBL_BuildAction_Name=Build
-LBL_RebuildAction_Name=Clean and Build
-LBL_RunAction_Name=Run
-LBL_DebugAction_Name=Debug
-LBL_RDocAction_Name=Generate RDoc
-LBL_ConsoleAction_Name=Rails Console
-LBL_TestAction_Name=Test
-LBL_Properties_Action=Properties
-LBL_AutoTest=AutoTest
-LBL_AutoSpec=AutoSpec
-LBL_RSpec=RSpec Test
+require 'rubygems'
+require 'autotest'
 
-# FolderListSettings
-TXT_RailsProjectFolderList=RailsProjectFolderList
+puts "loading rspec.."
 
-# RailsLogicalViewProvider
-RailsLogicalViewProvider.ProjectTooltipDescription=<html>Rails project in <i>{0}</i>.<br>Active platform: <i>{1}</i></html>
-RailsLogicalViewProvider.PlatformNotFound=Platform not found
+Autotest.add_hook :run_command do |at|
+  puts "%AUTOTEST% reset"
+end
+
+# turn temporarily off warnings for method redefinitions
+org_verbose_level = $VERBOSE
+$VERBOSE = nil
+
+# Loads NbRspecMediator for running specs.
+require 'autotest/rspec'
+class Autotest::Rspec < Autotest
+
+  alias_method :nb_loader_existing_add_options_if_present, :add_options_if_present unless
+    instance_methods.include?("nb_loader_existing_add_options_if_present")
+  def add_options_if_present # :nodoc:
+    "#{ENV['NB_RSPEC_MEDIATOR']} #{nb_loader_existing_add_options_if_present}"
+  end
+
+end
+$VERBOSE = org_verbose_level
+
