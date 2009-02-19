@@ -83,9 +83,9 @@ import org.netbeans.spi.project.ui.support.UILookupMergerSupport;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
-import org.openide.util.Utilities;
 import org.openide.util.lookup.Lookups;
 import org.w3c.dom.Element;
 
@@ -97,7 +97,7 @@ public final class SuiteProject implements Project {
     
     public static final String SUITE_ICON_PATH =
             "org/netbeans/modules/apisupport/project/suite/resources/suite.png"; // NOI18N
-    
+
     private final AntProjectHelper helper;
     private Lookup lookup;
     private final PropertyEvaluator eval;
@@ -115,7 +115,7 @@ public final class SuiteProject implements Project {
             helper.createCacheDirectoryProvider(),
             new SavedHook(),
             UILookupMergerSupport.createProjectOpenHookMerger(new OpenedHook()),
-            helper.createSharabilityQuery(eval, new String[0], new String[] {"build", "dist"}), // NOI18N
+            helper.createSharabilityQuery(eval, new String[0], new String[] {"build", "${dist.dir}"}), // NOI18N
             new SuiteSubprojectProviderImpl(helper, eval),
             new SuiteProviderImpl(),
             new SuiteActions(this),
@@ -153,6 +153,10 @@ public final class SuiteProject implements Project {
     public PropertyEvaluator getEvaluator() {
         return eval;
     }
+
+    public File getTestUserDirLockFile() {
+        return getHelper().resolveFile(getEvaluator().evaluate("${test.user.dir}/lock"));
+    }
     
     /**
      * Get the platform selected for use with this suite.
@@ -175,7 +179,7 @@ public final class SuiteProject implements Project {
         }
         return p;
     }
-    
+
     private PropertyEvaluator createEvaluator() {
         PropertyProvider predefs = helper.getStockPropertyPreprovider();
         File dir = getProjectDirectoryFile();
@@ -210,6 +214,8 @@ public final class SuiteProject implements Project {
         fixedProps.put(SuiteProperties.DISABLED_CLUSTERS_PROPERTY, "");
         fixedProps.put(SuiteProperties.DISABLED_MODULES_PROPERTY, "");
         fixedProps.put(BrandingSupport.BRANDING_DIR_PROPERTY, "branding"); // NOI18N
+        fixedProps.put("dist.dir", "dist"); // NOI18N
+        fixedProps.put("test.user.dir", "build/testuserdir"); // NOI18N
         providers.add(PropertyUtils.fixedPropertyProvider(fixedProps));
         return PropertyUtils.sequentialPropertyEvaluator(predefs, providers.toArray(new PropertyProvider[providers.size()]));
     }
@@ -242,7 +248,7 @@ public final class SuiteProject implements Project {
         }
         
         public Icon getIcon() {
-            return new ImageIcon(Utilities.loadImage(SUITE_ICON_PATH));
+            return ImageUtilities.loadImageIcon(SUITE_ICON_PATH, false);
         }
         
         public Project getProject() {
@@ -341,7 +347,15 @@ public final class SuiteProject implements Project {
         public File getSuiteDirectory() {
             return getProjectDirectoryFile();
         }
-        
+
+        private static final String CLUSTER_PROP = "${cluster}";
+        public File getClusterDirectory() {
+            String clusterName = getEvaluator().evaluate(CLUSTER_PROP);
+            if (CLUSTER_PROP.equals(clusterName))
+                // not overriden, use default
+                clusterName = SuiteProperties.CLUSTER_DIR;
+            return getHelper().resolveFile(clusterName).getAbsoluteFile();
+        }
     }
     
     private static final class PrivilegedTemplatesImpl implements PrivilegedTemplates, RecommendedTemplates {
