@@ -43,7 +43,6 @@ package org.netbeans.test.php.insert;
 
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.junit.NbModuleSuite;
 import junit.framework.Test;
 import org.netbeans.jemmy.operators.JDialogOperator;
@@ -56,11 +55,11 @@ import org.netbeans.jemmy.operators.JListOperator;
  * @author michaelnazarov@netbeans.org
  */
 
-public class insert_0002 extends insert
+public class insert_0005 extends insert
 {
-  static final String TEST_PHP_NAME = "PhpProject_insert_0002";
+  static final String TEST_PHP_NAME = "PhpProject_insert_0005";
 
-  public insert_0002( String arg0 )
+  public insert_0005( String arg0 )
   {
     super( arg0 );
   }
@@ -68,9 +67,10 @@ public class insert_0002 extends insert
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( insert_0002.class ).addTest(
+      NbModuleSuite.createConfiguration( insert_0005.class ).addTest(
           "CreateApplication",
-          "InsertGetter"
+          "InsertConnectionToDatabase",
+          "InsertDatabaseTable"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -87,19 +87,16 @@ public class insert_0002 extends insert
     endTest( );
   }
 
-  public void InsertGetter( ) throws Exception
+  public void InsertConnectionToDatabase( ) throws Exception
   {
     startTest( );
-
-    // Invoke Alt+Insert without any code
-    // List should contain two database related items
 
     // Get editor
     EditorOperator eoPHP = new EditorOperator( "index.php" );
     // Locate comment
     eoPHP.setCaretPosition( "// put your code here\n", false );
-    eoPHP.insert( "\nclass name\n{\npublic $a;\nprotected $b;\nprivate $c, $d;\n}" );
-    eoPHP.setCaretPosition( "$d;\n", false );
+    eoPHP.insert( "\nclass name\n{\n\n}" );
+    eoPHP.setCaretPosition( "{\n", false );
     Sleep( 1000 );
     InvokeInsert( eoPHP );
     Sleep( 1000 );
@@ -109,40 +106,36 @@ public class insert_0002 extends insert
 
     ClickListItemNoBlock( jlList, 1, 1 );
 
-    JDialogOperator jdGenerator = new JDialogOperator( "Generate Getters" );
+    JDialogOperator jdGenerator = new JDialogOperator( "Select Database Connection" );
 
-    // Select all but $c
-    JTreeOperator jtTree = new JTreeOperator( jdGenerator, 0 );
-    jtTree.clickOnPath( jtTree.findPath( "a" ) );
-    jtTree.clickOnPath( jtTree.findPath( "b" ) );
-    jtTree.clickOnPath( jtTree.findPath( "d" ) );
-
-    JButtonOperator jbOk = new JButtonOperator( jdGenerator, "OK" );
-    jbOk.pushNoBlock( );
+    JButtonOperator jbCancel = new JButtonOperator( jdGenerator, "Cancel" );
+    jbCancel.pushNoBlock( );
     jdGenerator.waitClosed( );
 
-    // Check result
-    /*
-    String[] asResult =
-    {
-      "public function getA()",
-      "{",
-      "return $this->a;",
-      "}",
-      "",
-      "public function getB()",
-      "{",
-      "return $this->b;",
-      "}",
-      "",
-      "public function getD()",
-      "{",
-      "return $this->d;",
-      "}"
-    };
-    CheckResult( eoPHP, asResult, -15 );
-    */
-    CheckFlex( eoPHP, "public function getA(){return $this->a;}public function getB(){return $this->b;}public function getD(){return $this->d;}", false );
+    endTest( );
+  }
+
+  public void InsertDatabaseTable( ) throws Exception
+  {
+    startTest( );
+
+    // Get editor
+    EditorOperator eoPHP = new EditorOperator( "index.php" );
+    eoPHP.setCaretPosition( "{\n", false );
+    Sleep( 1000 );
+    InvokeInsert( eoPHP );
+    Sleep( 1000 );
+
+    JDialogOperator jdInsetter = new JDialogOperator( );
+    JListOperator jlList = new JListOperator( jdInsetter );
+
+    ClickListItemNoBlock( jlList, 2, 1 );
+
+    JDialogOperator jdGenerator = new JDialogOperator( "Select Table and Columns" );
+
+    JButtonOperator jbCancel = new JButtonOperator( jdGenerator, "Cancel" );
+    jbCancel.pushNoBlock( );
+    jdGenerator.waitClosed( );
 
     endTest( );
   }

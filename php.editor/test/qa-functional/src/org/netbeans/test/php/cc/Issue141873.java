@@ -39,28 +39,23 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.test.php.insert;
+package org.netbeans.test.php.cc;
 
-import org.netbeans.jemmy.operators.JButtonOperator;
+import java.awt.event.InputEvent;
 import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.junit.NbModuleSuite;
 import junit.framework.Test;
-import org.netbeans.jemmy.operators.JDialogOperator;
-import org.netbeans.jemmy.operators.JListOperator;
-//import org.netbeans.jemmy.util.Dumper;
-
 
 /**
  *
  * @author michaelnazarov@netbeans.org
  */
 
-public class insert_0002 extends insert
+public class Issue141873 extends cc
 {
-  static final String TEST_PHP_NAME = "PhpProject_insert_0002";
+  static final String TEST_PHP_NAME = "PhpProject_cc_Issue141873";
 
-  public insert_0002( String arg0 )
+  public Issue141873( String arg0 )
   {
     super( arg0 );
   }
@@ -68,9 +63,9 @@ public class insert_0002 extends insert
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( insert_0002.class ).addTest(
+      NbModuleSuite.createConfiguration( Issue141873.class ).addTest(
           "CreateApplication",
-          "InsertGetter"
+          "Issue141873"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -87,62 +82,48 @@ public class insert_0002 extends insert
     endTest( );
   }
 
-  public void InsertGetter( ) throws Exception
+  public void Issue141873( ) throws Exception
   {
     startTest( );
 
-    // Invoke Alt+Insert without any code
-    // List should contain two database related items
-
     // Get editor
     EditorOperator eoPHP = new EditorOperator( "index.php" );
+    Sleep( 1000 );
     // Locate comment
-    eoPHP.setCaretPosition( "// put your code here\n", false );
-    eoPHP.insert( "\nclass name\n{\npublic $a;\nprotected $b;\nprivate $c, $d;\n}" );
-    eoPHP.setCaretPosition( "$d;\n", false );
-    Sleep( 1000 );
-    InvokeInsert( eoPHP );
+    eoPHP.setCaretPosition( "// put your code here", false );
+    // Add new line
+    eoPHP.insert( "\nclass a\n{\n" );
     Sleep( 1000 );
 
-    JDialogOperator jdInsetter = new JDialogOperator( );
-    JListOperator jlList = new JListOperator( jdInsetter );
+    // Check constructor
+    String sCode = "function __con";
+    String sIdeal = "function __construct() {";
+    TypeCode( eoPHP, sCode );
+    eoPHP.typeKey( ' ', InputEvent.CTRL_MASK );
+    WaitCompletionScanning( );
 
-    ClickListItemNoBlock( jlList, 1, 1 );
+    // Get code
+    String sText = eoPHP.getText( eoPHP.getLineNumber( ) - 1 );
 
-    JDialogOperator jdGenerator = new JDialogOperator( "Generate Getters" );
+    // Check code completion list
+    if( -1 == sText.indexOf( sIdeal ) )
+      fail( "Invalid completion: \"" + sText + "\", should be: \"" + sIdeal + "\"" );
 
-    // Select all but $c
-    JTreeOperator jtTree = new JTreeOperator( jdGenerator, 0 );
-    jtTree.clickOnPath( jtTree.findPath( "a" ) );
-    jtTree.clickOnPath( jtTree.findPath( "b" ) );
-    jtTree.clickOnPath( jtTree.findPath( "d" ) );
+    // Check destructor
+    eoPHP.insert( ";\n" );
+    Sleep( 1000 );
+    sCode = "function __des";
+    sIdeal = "function __destruct()";
+    TypeCode( eoPHP, sCode );
+    eoPHP.typeKey( ' ', InputEvent.CTRL_MASK );
+    WaitCompletionScanning( );
 
-    JButtonOperator jbOk = new JButtonOperator( jdGenerator, "OK" );
-    jbOk.pushNoBlock( );
-    jdGenerator.waitClosed( );
+    // Get code
+    sText = eoPHP.getText( eoPHP.getLineNumber( ) );
 
-    // Check result
-    /*
-    String[] asResult =
-    {
-      "public function getA()",
-      "{",
-      "return $this->a;",
-      "}",
-      "",
-      "public function getB()",
-      "{",
-      "return $this->b;",
-      "}",
-      "",
-      "public function getD()",
-      "{",
-      "return $this->d;",
-      "}"
-    };
-    CheckResult( eoPHP, asResult, -15 );
-    */
-    CheckFlex( eoPHP, "public function getA(){return $this->a;}public function getB(){return $this->b;}public function getD(){return $this->d;}", false );
+    // Check code completion list
+    if( -1 == sText.indexOf( sIdeal ) )
+      fail( "Invalid completion: \"" + sText + "\", should be: \"" + sIdeal + "\"" );
 
     endTest( );
   }

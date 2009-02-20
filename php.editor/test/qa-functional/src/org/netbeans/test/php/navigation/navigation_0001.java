@@ -39,28 +39,26 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.test.php.insert;
+package org.netbeans.test.php.navigation;
 
-import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
+import org.netbeans.jemmy.operators.JDialogOperator;
 import org.netbeans.junit.NbModuleSuite;
 import junit.framework.Test;
-import org.netbeans.jemmy.operators.JDialogOperator;
-import org.netbeans.jemmy.operators.JListOperator;
-//import org.netbeans.jemmy.util.Dumper;
-
+import org.netbeans.jemmy.operators.JComboBoxOperator;
+import org.netbeans.jemmy.operators.JButtonOperator;
+import org.netbeans.jemmy.operators.JPopupMenuOperator;
 
 /**
  *
  * @author michaelnazarov@netbeans.org
  */
 
-public class insert_0002 extends insert
+public class navigation_0001 extends navigation
 {
-  static final String TEST_PHP_NAME = "PhpProject_insert_0002";
+  static final String TEST_PHP_NAME = "PhpProject_navigation_0001";
 
-  public insert_0002( String arg0 )
+  public navigation_0001( String arg0 )
   {
     super( arg0 );
   }
@@ -68,9 +66,11 @@ public class insert_0002 extends insert
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( insert_0002.class ).addTest(
+      NbModuleSuite.createConfiguration( navigation_0001.class ).addTest(
           "CreateApplication",
-          "InsertGetter"
+          "Create_a_PHP_web_page",
+          "Navigate_to_a_specified_line",
+          "Navigate_to_an_invalid_line"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -87,63 +87,50 @@ public class insert_0002 extends insert
     endTest( );
   }
 
-  public void InsertGetter( ) throws Exception
+  public void Create_a_PHP_web_page( )
   {
     startTest( );
 
-    // Invoke Alt+Insert without any code
-    // List should contain two database related items
-
-    // Get editor
-    EditorOperator eoPHP = new EditorOperator( "index.php" );
-    // Locate comment
-    eoPHP.setCaretPosition( "// put your code here\n", false );
-    eoPHP.insert( "\nclass name\n{\npublic $a;\nprotected $b;\nprivate $c, $d;\n}" );
-    eoPHP.setCaretPosition( "$d;\n", false );
-    Sleep( 1000 );
-    InvokeInsert( eoPHP );
-    Sleep( 1000 );
-
-    JDialogOperator jdInsetter = new JDialogOperator( );
-    JListOperator jlList = new JListOperator( jdInsetter );
-
-    ClickListItemNoBlock( jlList, 1, 1 );
-
-    JDialogOperator jdGenerator = new JDialogOperator( "Generate Getters" );
-
-    // Select all but $c
-    JTreeOperator jtTree = new JTreeOperator( jdGenerator, 0 );
-    jtTree.clickOnPath( jtTree.findPath( "a" ) );
-    jtTree.clickOnPath( jtTree.findPath( "b" ) );
-    jtTree.clickOnPath( jtTree.findPath( "d" ) );
-
-    JButtonOperator jbOk = new JButtonOperator( jdGenerator, "OK" );
-    jbOk.pushNoBlock( );
-    jdGenerator.waitClosed( );
-
-    // Check result
-    /*
-    String[] asResult =
-    {
-      "public function getA()",
-      "{",
-      "return $this->a;",
-      "}",
-      "",
-      "public function getB()",
-      "{",
-      "return $this->b;",
-      "}",
-      "",
-      "public function getD()",
-      "{",
-      "return $this->d;",
-      "}"
-    };
-    CheckResult( eoPHP, asResult, -15 );
-    */
-    CheckFlex( eoPHP, "public function getA(){return $this->a;}public function getB(){return $this->b;}public function getD(){return $this->d;}", false );
+    CreatePHPFile( TEST_PHP_NAME, "PHP Web Page", null );
 
     endTest( );
   }
+
+  protected void GoToLine( int iLineToGo, int iLineToCome )
+  {
+    EditorOperator eoPHP = new EditorOperator( "EmptyPHPWebPage.php" );
+    eoPHP.clickForPopup( );
+    JPopupMenuOperator menu = new JPopupMenuOperator( );
+    menu.pushMenuNoBlock( "Navigate|Line..." );
+    JDialogOperator jdGoto = new JDialogOperator( "Go To Line" );
+    JComboBoxOperator jcLine = new JComboBoxOperator( jdGoto, 0 );
+    jcLine.enterText( "" + iLineToGo );
+    JButtonOperator jbGoto = new JButtonOperator( jdGoto, "Go To" );
+    jbGoto.push( );
+    jdGoto.waitClosed( );
+    int iLine = eoPHP.getLineNumber( );
+    if( iLineToCome != iLine )
+    {
+      fail( "Navigate go to line came to incorrect one. Found: " + iLine + ", expected: " + iLineToCome );
+    }
+  }
+
+  public void Navigate_to_a_specified_line( )
+  {
+    startTest( );
+
+    GoToLine( 8, 8 );
+
+    endTest( );
+  }
+
+  public void Navigate_to_an_invalid_line( )
+  {
+    startTest( );
+
+    GoToLine( 100, 17 );
+
+    endTest( );
+  }
+
 }

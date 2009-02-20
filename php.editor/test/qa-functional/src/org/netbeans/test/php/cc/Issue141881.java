@@ -39,28 +39,22 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.test.php.insert;
+package org.netbeans.test.php.cc;
 
-import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.junit.NbModuleSuite;
 import junit.framework.Test;
-import org.netbeans.jemmy.operators.JDialogOperator;
-import org.netbeans.jemmy.operators.JListOperator;
-//import org.netbeans.jemmy.util.Dumper;
-
 
 /**
  *
  * @author michaelnazarov@netbeans.org
  */
 
-public class insert_0002 extends insert
+public class Issue141881 extends cc
 {
-  static final String TEST_PHP_NAME = "PhpProject_insert_0002";
+  static final String TEST_PHP_NAME = "PhpProject_cc_Issue141881";
 
-  public insert_0002( String arg0 )
+  public Issue141881( String arg0 )
   {
     super( arg0 );
   }
@@ -68,9 +62,9 @@ public class insert_0002 extends insert
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( insert_0002.class ).addTest(
+      NbModuleSuite.createConfiguration( Issue141881.class ).addTest(
           "CreateApplication",
-          "InsertGetter"
+          "Issue141881"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -87,62 +81,40 @@ public class insert_0002 extends insert
     endTest( );
   }
 
-  public void InsertGetter( ) throws Exception
+  public void Issue141881( ) throws Exception
   {
     startTest( );
 
-    // Invoke Alt+Insert without any code
-    // List should contain two database related items
-
     // Get editor
     EditorOperator eoPHP = new EditorOperator( "index.php" );
+    Sleep( 1000 );
     // Locate comment
-    eoPHP.setCaretPosition( "// put your code here\n", false );
-    eoPHP.insert( "\nclass name\n{\npublic $a;\nprotected $b;\nprivate $c, $d;\n}" );
-    eoPHP.setCaretPosition( "$d;\n", false );
-    Sleep( 1000 );
-    InvokeInsert( eoPHP );
-    Sleep( 1000 );
+    eoPHP.setCaretPosition( "// put your code here", false );
+    // Add new line
+    //eoPHP.insert( "\nclass a\n{\nfunction xx( )\n{\n}\n}\n$aa = new a;\n" );
+    //Sleep( 1000 );
 
-    JDialogOperator jdInsetter = new JDialogOperator( );
-    JListOperator jlList = new JListOperator( jdInsetter );
+    // Check constructor
+    String sCode = "\nclass a\n{\nfunction xx( )\n{\n}\n}\n$aa = new a;\n$aa -";
+    TypeCode( eoPHP, sCode );
+    Sleep( 10000 );
+    eoPHP.typeKey( '>' );
 
-    ClickListItemNoBlock( jlList, 1, 1 );
+    // Check code completion list
 
-    JDialogOperator jdGenerator = new JDialogOperator( "Generate Getters" );
+    String[] asIdeals = { "xx" };
 
-    // Select all but $c
-    JTreeOperator jtTree = new JTreeOperator( jdGenerator, 0 );
-    jtTree.clickOnPath( jtTree.findPath( "a" ) );
-    jtTree.clickOnPath( jtTree.findPath( "b" ) );
-    jtTree.clickOnPath( jtTree.findPath( "d" ) );
+    CompletionInfo jCompl = GetCompletion( );
+    if( null == jCompl )
+      fail( "Unale to find completion list in any form." );
+    //List list = jCompl.getCompletionItems( );
+    // Magic CC number for complete list
+    if( asIdeals.length != jCompl.size( ) )
+      fail( "Invalid CC list size: " + jCompl.size( ) + ", expected: " + asIdeals.length );
+    // Check each
+    CheckCompletionItems( jCompl, asIdeals );
 
-    JButtonOperator jbOk = new JButtonOperator( jdGenerator, "OK" );
-    jbOk.pushNoBlock( );
-    jdGenerator.waitClosed( );
-
-    // Check result
-    /*
-    String[] asResult =
-    {
-      "public function getA()",
-      "{",
-      "return $this->a;",
-      "}",
-      "",
-      "public function getB()",
-      "{",
-      "return $this->b;",
-      "}",
-      "",
-      "public function getD()",
-      "{",
-      "return $this->d;",
-      "}"
-    };
-    CheckResult( eoPHP, asResult, -15 );
-    */
-    CheckFlex( eoPHP, "public function getA(){return $this->a;}public function getB(){return $this->b;}public function getD(){return $this->d;}", false );
+    jCompl.hideAll( );
 
     endTest( );
   }

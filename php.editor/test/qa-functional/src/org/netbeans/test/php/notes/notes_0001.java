@@ -39,28 +39,22 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.test.php.insert;
+package org.netbeans.test.php.notes;
 
-import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
 import org.netbeans.junit.NbModuleSuite;
 import junit.framework.Test;
-import org.netbeans.jemmy.operators.JDialogOperator;
-import org.netbeans.jemmy.operators.JListOperator;
-//import org.netbeans.jemmy.util.Dumper;
-
 
 /**
  *
  * @author michaelnazarov@netbeans.org
  */
 
-public class insert_0002 extends insert
+public class notes_0001 extends notes
 {
-  static final String TEST_PHP_NAME = "PhpProject_insert_0002";
+  static final String TEST_PHP_NAME = "PhpProject_notes_0001";
 
-  public insert_0002( String arg0 )
+  public notes_0001( String arg0 )
   {
     super( arg0 );
   }
@@ -68,9 +62,9 @@ public class insert_0002 extends insert
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( insert_0002.class ).addTest(
+      NbModuleSuite.createConfiguration( notes_0001.class ).addTest(
           "CreateApplication",
-          "InsertGetter"
+          "Notes"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -87,62 +81,36 @@ public class insert_0002 extends insert
     endTest( );
   }
 
-  public void InsertGetter( ) throws Exception
+  public void Notes( ) throws Exception
   {
     startTest( );
 
-    // Invoke Alt+Insert without any code
-    // List should contain two database related items
-
+    try
+    {
     // Get editor
     EditorOperator eoPHP = new EditorOperator( "index.php" );
     // Locate comment
-    eoPHP.setCaretPosition( "// put your code here\n", false );
-    eoPHP.insert( "\nclass name\n{\npublic $a;\nprotected $b;\nprivate $c, $d;\n}" );
-    eoPHP.setCaretPosition( "$d;\n", false );
-    Sleep( 1000 );
-    InvokeInsert( eoPHP );
-    Sleep( 1000 );
-
-    JDialogOperator jdInsetter = new JDialogOperator( );
-    JListOperator jlList = new JListOperator( jdInsetter );
-
-    ClickListItemNoBlock( jlList, 1, 1 );
-
-    JDialogOperator jdGenerator = new JDialogOperator( "Generate Getters" );
-
-    // Select all but $c
-    JTreeOperator jtTree = new JTreeOperator( jdGenerator, 0 );
-    jtTree.clickOnPath( jtTree.findPath( "a" ) );
-    jtTree.clickOnPath( jtTree.findPath( "b" ) );
-    jtTree.clickOnPath( jtTree.findPath( "d" ) );
-
-    JButtonOperator jbOk = new JButtonOperator( jdGenerator, "OK" );
-    jbOk.pushNoBlock( );
-    jdGenerator.waitClosed( );
-
-    // Check result
-    /*
-    String[] asResult =
+    eoPHP.setCaretPosition( "// put your code here", false );
+    // Add new line
+    eoPHP.insert( "\n" );
+    System.out.println( "===X" );
+    TypeCode( eoPHP, "class a extends 1" );
+    System.out.println( "===A" );
+    Sleep( 30000 );
+    System.out.println( "===B" );
+    Object[] oo = eoPHP.getAnnotations( );
+    System.out.println( "===C" );
+    System.out.println( "+++" + oo.length );
+    for( Object o : oo )
     {
-      "public function getA()",
-      "{",
-      "return $this->a;",
-      "}",
-      "",
-      "public function getB()",
-      "{",
-      "return $this->b;",
-      "}",
-      "",
-      "public function getD()",
-      "{",
-      "return $this->d;",
-      "}"
-    };
-    CheckResult( eoPHP, asResult, -15 );
-    */
-    CheckFlex( eoPHP, "public function getA(){return $this->a;}public function getB(){return $this->b;}public function getD(){return $this->d;}", false );
+      System.out.println( "***" + eoPHP.getAnnotationType( o ) + " : " + eoPHP.getAnnotationShortDescription( o ) );
+    }
+    Sleep( 10000 );
+    }
+    catch( Exception ex )
+    {
+      System.out.println( "!!!" );
+    }
 
     endTest( );
   }

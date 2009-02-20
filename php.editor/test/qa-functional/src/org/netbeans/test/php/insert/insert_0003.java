@@ -56,11 +56,11 @@ import org.netbeans.jemmy.operators.JListOperator;
  * @author michaelnazarov@netbeans.org
  */
 
-public class insert_0002 extends insert
+public class insert_0003 extends insert
 {
-  static final String TEST_PHP_NAME = "PhpProject_insert_0002";
+  static final String TEST_PHP_NAME = "PhpProject_insert_0003";
 
-  public insert_0002( String arg0 )
+  public insert_0003( String arg0 )
   {
     super( arg0 );
   }
@@ -68,9 +68,9 @@ public class insert_0002 extends insert
   public static Test suite( )
   {
     return NbModuleSuite.create(
-      NbModuleSuite.createConfiguration( insert_0002.class ).addTest(
+      NbModuleSuite.createConfiguration( insert_0003.class ).addTest(
           "CreateApplication",
-          "InsertGetter"
+          "InsertSetter"
         )
         .enableModules( ".*" )
         .clusters( ".*" )
@@ -87,7 +87,7 @@ public class insert_0002 extends insert
     endTest( );
   }
 
-  public void InsertGetter( ) throws Exception
+  public void InsertSetter( ) throws Exception
   {
     startTest( );
 
@@ -107,11 +107,11 @@ public class insert_0002 extends insert
     JDialogOperator jdInsetter = new JDialogOperator( );
     JListOperator jlList = new JListOperator( jdInsetter );
 
-    ClickListItemNoBlock( jlList, 1, 1 );
+    ClickListItemNoBlock( jlList, 2, 1 );
 
-    JDialogOperator jdGenerator = new JDialogOperator( "Generate Getters" );
+    JDialogOperator jdGenerator = new JDialogOperator( "Generate Setters" );
 
-    // Select all but $c
+    // Sleect all but $c
     JTreeOperator jtTree = new JTreeOperator( jdGenerator, 0 );
     jtTree.clickOnPath( jtTree.findPath( "a" ) );
     jtTree.clickOnPath( jtTree.findPath( "b" ) );
@@ -125,24 +125,24 @@ public class insert_0002 extends insert
     /*
     String[] asResult =
     {
-      "public function getA()",
+      "public function setA($a)",
       "{",
-      "return $this->a;",
+      "$this->a = $a;",
       "}",
       "",
-      "public function getB()",
+      "public function setB($b)",
       "{",
-      "return $this->b;",
+      "$this->b = $b;",
       "}",
       "",
-      "public function getD()",
+      "public function setD($d)",
       "{",
-      "return $this->d;",
+      "$this->d = $d;",
       "}"
     };
     CheckResult( eoPHP, asResult, -15 );
     */
-    CheckFlex( eoPHP, "public function getA(){return $this->a;}public function getB(){return $this->b;}public function getD(){return $this->d;}", false );
+    CheckFlex( eoPHP, "public function setA($a){$this->a=$a;}public function setB($b){$this->b=$b;}public function setD($d){$this->d=$d;}", false );
 
     endTest( );
   }
