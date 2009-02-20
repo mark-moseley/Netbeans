@@ -41,9 +41,7 @@
 
 package org.netbeans.core.output2.ui;
 
-import java.awt.Rectangle;
 import javax.swing.plaf.TextUI;
-
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -52,6 +50,7 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.*;
 import java.awt.*;
 import java.awt.event.*;
+import org.netbeans.core.output2.Controller;
 import org.netbeans.core.output2.OutputDocument;
 import org.openide.util.Exceptions;
 
@@ -104,7 +103,17 @@ public abstract class AbstractOutputPane extends JScrollPane implements Document
     public boolean requestFocusInWindow() {
         return textView.requestFocusInWindow();
     }
-    
+
+    public Font getViewFont() {
+        return textView.getFont();
+    }
+
+    public void setViewFont (Font f) {
+        fontWidth = -1;
+        fontHeight = -1;
+        textView.setFont(f);
+    }
+
     protected abstract JEditorPane createTextView();
 
     protected void documentChanged() {
@@ -226,7 +235,14 @@ public abstract class AbstractOutputPane extends JScrollPane implements Document
         addMouseListener(this);
 
         getCaret().addChangeListener(this);
-        Integer i = (Integer) UIManager.get("customFontSize"); //NOI18N
+        Integer i = null;
+        int val = Controller.getDefaultFontSize();
+        if (val >= 7) {
+            i = new Integer(val);
+        }
+        if (i == null) {
+            i = (Integer) UIManager.get("customFontSize"); //NOI18N
+        }
         int size;
         if (i != null) {
             size = i.intValue();
@@ -409,6 +425,7 @@ public abstract class AbstractOutputPane extends JScrollPane implements Document
         if (fontHeight == -1) {
             fontHeight = g.getFontMetrics(textView.getFont()).getHeight();
             fontWidth = g.getFontMetrics(textView.getFont()).charWidth('m'); //NOI18N
+            getVerticalScrollBar().setUnitIncrement(fontHeight);
         }
         super.paint(g);
     }
@@ -646,15 +663,22 @@ public abstract class AbstractOutputPane extends JScrollPane implements Document
     public void keyTyped(KeyEvent keyEvent) {
     }
 
+    protected abstract void changeFontSizeBy(int change);
+
     public final void mouseWheelMoved(MouseWheelEvent e) {
+        if (e.isControlDown()) {
+            int change = -e.getWheelRotation();
+            changeFontSizeBy(change);
+            e.consume();
+            return;
+        }
         BoundedRangeModel sbmodel = getVerticalScrollBar().getModel();
         int max = sbmodel.getMaximum();
         int range = sbmodel.getExtent();
 
         int currPosition = sbmodel.getValue();
         if (e.getSource() == textView) {
-            int newPosition = Math.max (0, Math.min (sbmodel.getMaximum(),
-                currPosition + (e.getUnitsToScroll() * textView.getFontMetrics(textView.getFont()).getHeight())));
+            int newPosition = Math.max(0, Math.min(sbmodel.getMaximum(), currPosition + (e.getUnitsToScroll() * fontHeight)));
             // height is a magic constant because of #57532
             sbmodel.setValue (newPosition);
             if (newPosition + range >= max) {
