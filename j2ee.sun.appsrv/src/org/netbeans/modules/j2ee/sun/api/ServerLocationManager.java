@@ -58,8 +58,8 @@ import java.util.logging.Logger;
 import org.openide.modules.InstalledFileLocator;
 import javax.enterprise.deploy.spi.factories.DeploymentFactory;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
-import org.openide.util.Lookup;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Utilities;
 
 
 public class ServerLocationManager  {
@@ -74,10 +74,12 @@ public class ServerLocationManager  {
     
     public static final int GF_V2 = 910;
 
+    public static final int GF_V2point1 = 911;
+
     public static final String INSTALL_ROOT_PROP_NAME = "com.sun.aas.installRoot"; //NOI18N
     private static final String JAR_BRIGDES_DEFINITION_LAYER="/J2EE/SunAppServer/Bridge"; //NOI18N
     private static Map serverLocationAndClassLoaderMap = Collections.synchronizedMap((Map)new HashMap(2,1));
-    
+
     private static void updatePluginLoader(File platformLocation, ExtendedClassLoader loader) throws Exception{
         try {
             java.io.File f = platformLocation;
@@ -90,8 +92,7 @@ public class ServerLocationManager  {
                 System.setProperty(INSTALL_ROOT_PROP_NAME, installRoot);
             }
             
-            Repository rep = (Repository) Lookup.getDefault().lookup(Repository.class);
-            FileObject bridgesDir = rep.getDefaultFileSystem().findResource(JAR_BRIGDES_DEFINITION_LAYER);
+            FileObject bridgesDir = FileUtil.getConfigFile(JAR_BRIGDES_DEFINITION_LAYER);
             FileObject[] ch =new  FileObject[0];
             if(bridgesDir!=null){
                 ch = bridgesDir.getChildren();
@@ -367,7 +368,10 @@ public class ServerLocationManager  {
             //now test for AS 9 (J2EE 5.0) which should work for this plugin
             File as90 = new File((asInstallRoot)+"/lib/dtds/sun-domain_1_2.dtd");   // NOI18N
             File as91 = new File((asInstallRoot)+"/lib/dtds/sun-domain_1_3.dtd");   // NOI18N
-            if(as91.exists()){
+            File as911 = new File((asInstallRoot)+"/lib/dtds/sun-ejb-jar_3_0-1.dtd");   // NOI18N
+            if (as911.exists()) {
+                version = GF_V2point1;
+            } else if(as91.exists()){
                 version = GF_V2; 
             } else if (as90.exists()) {
                 version = GF_V1;
@@ -377,4 +381,38 @@ public class ServerLocationManager  {
         }
         return version;
     }
+
+    /**
+     * Does this Sun AppServer install have an update center launcher?
+     * 
+     * @param asInstallRoot appserver install location
+     * @return true if update center launcher was located, false otherwise.
+     */
+    public static boolean hasUpdateCenter(File asInstallRoot) {
+        return getUpdateCenterLauncher(asInstallRoot) != null;
+    }
+    
+    /**
+     * Locate update center launcher within the glassfish installation
+     *   [installRoot]/updatecenter/bin/updatetool[.BAT]
+     * 
+     * @param asInstallRoot appserver install location
+     * @return File reference to launcher, or null if not found.
+     */
+    public static File getUpdateCenterLauncher(File asInstallRoot) {
+        File result = null;
+        if(asInstallRoot != null && asInstallRoot.exists()) {
+            File updateCenterBin = new File(asInstallRoot, "updatecenter/bin"); // NOI18N
+            if(updateCenterBin.exists()) {
+                String launcher = "updatetool"; // NOI18N
+                if(Utilities.isWindows()) {
+                    launcher += ".BAT"; // NOI18N
+                }
+                File launcherPath = new File(updateCenterBin, launcher);
+                result = (launcherPath.exists()) ? launcherPath : null;
+            }
+        }
+        return result;
+    }
+    
 }
