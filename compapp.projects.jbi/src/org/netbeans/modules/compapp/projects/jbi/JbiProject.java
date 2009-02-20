@@ -66,6 +66,7 @@ import org.openide.ErrorManager;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.modules.InstalledFileLocator;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
 import org.openide.util.Utilities;
@@ -102,12 +103,14 @@ import org.openide.filesystems.FileUtil;
  *
  * @author Chris Webster
  */
+@AntBasedProjectRegistration(
+    type=JbiProjectType.TYPE,
+    iconResource="org/netbeans/modules/compapp/projects/jbi/ui/resources/composite_application_project.png",
+    sharedNamespace=JbiProjectType.PROJECT_CONFIGURATION_NAMESPACE,
+    privateNamespace=JbiProjectType.PRIVATE_CONFIGURATION_NAMESPACE
+)
 public final class JbiProject implements Project, AntProjectListener, ProjectPropertyProvider {
-    private static final Icon PROJECT_ICON = new ImageIcon(
-            Utilities.loadImage(
-            "org/netbeans/modules/compapp/projects/jbi/ui/resources/composite_application_project.png" // NOI18N
-            )
-            ); // NOI18N
+    private static final Icon PROJECT_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/compapp/projects/jbi/ui/resources/composite_application_project.png", false); // NOI18N
     
     /**
      * DOCUMENT ME!
@@ -117,17 +120,32 @@ public final class JbiProject implements Project, AntProjectListener, ProjectPro
     /**
      * DOCUMENT ME!
      */
-    public static final String MODULE_INSTALL_NAME = "modules/org-netbeans-modules-compapp-projects-jbi.jar"; // NOI18N
+    //public static final String MODULE_INSTALL_NAME = "modules/org-netbeans-modules-compapp-projects-jbi.jar"; // NOI18N
+    public static final String JAVA_MODULE_INSTALL_NAME = "modules/org-netbeans-modules-junit.jar"; // NOI18N
+    public static final String ENTERPRISE_MODULE_INSTALL_NAME = "modules/org-netbeans-modules-j2ee-sun-appsrv.jar"; // NOI18N
+    public static final String XML_MODULE_INSTALL_NAME = "modules/org-netbeans-modules-xml-wsdl-extensions.jar"; // NOI18N
+    public static final String IDE_MODULE_INSTALL_NAME = "modules/org-netbeans-modules-xml-wsdl-model.jar"; // NOI18N
+    public static final String SOA_MODULE_INSTALL_NAME = "modules/org-netbeans-modules-compapp-projects-jbi.jar"; // NOI18N
     
     /**
      * DOCUMENT ME!
      */
-    public static final String MODULE_INSTALL_CBN = "org.netbeans.modules.compapp.projects.jbi"; // NOI18N
+    //public static final String MODULE_INSTALL_CBN = "org.netbeans.modules.compapp.projects.jbi"; // NOI18N
+    public static final String JAVA_MODULE_INSTALL_CBN = "org.netbeans.modules.junit"; // NOI18N
+    public static final String ENTERPRISE_MODULE_INSTALL_CBN = "org.netbeans.modules.j2ee.sun.api"; // NOI18N
+    public static final String XML_MODULE_INSTALL_CBN = "org.netbeans.modules.xml.wsdl.model.extensions"; // NOI18N
+    public static final String IDE_MODULE_INSTALL_CBN = "org.netbeans.modules.xml.wsdl.model"; // NOI18N
+    public static final String SOA_MODULE_INSTALL_CBN = "org.netbeans.modules.compapp.projects.jbi"; // NOI18N
     
     /**
      * DOCUMENT ME!
      */
-    public static final String MODULE_INSTALL_DIR = "module.install.dir"; // NOI18N
+    //public static final String MODULE_INSTALL_DIR = "module.install.dir"; // NOI18N
+    public static final String JAVA_MODULE_INSTALL_DIR = "java.module.install.dir"; // NOI18N
+    public static final String ENTERPRISE_MODULE_INSTALL_DIR = "enterprise.module.install.dir"; // NOI18N
+    public static final String XML_MODULE_INSTALL_DIR = "xml.module.install.dir"; // NOI18N
+    public static final String IDE_MODULE_INSTALL_DIR = "ide.module.install.dir"; // NOI18N
+    public static final String SOA_MODULE_INSTALL_DIR = "soa.module.install.dir"; // NOI18N
     
     public static final String COMPONENT_INFO_FILE_NAME = "ComponentInformation.xml"; // NOI18N    
     public static final String BINDING_COMPONENT_INFO_FILE_NAME = "BindingComponentInformation.xml"; // NOI18N    
@@ -147,7 +165,6 @@ public final class JbiProject implements Project, AntProjectListener, ProjectPro
     private final ReferenceHelper refHelper;
     private final GeneratedFilesHelper genFilesHelper;
     private final Lookup lookup;
-    private AntBasedProjectType abpt;
     private JbiLogicalViewProvider lvp;    
     private FileChangeListener casaFileListener;
     
@@ -162,10 +179,9 @@ public final class JbiProject implements Project, AntProjectListener, ProjectPro
      *
      * @throws IOException DOCUMENT ME!
      */
-    public JbiProject(final AntProjectHelper helper, AntBasedProjectType abpt)
+    public JbiProject(final AntProjectHelper helper)
     throws IOException {
         this.helper = helper;
-        this.abpt = abpt;
         eval = createEvaluator();
         
         AuxiliaryConfiguration aux = helper.createAuxiliaryConfiguration();
@@ -180,15 +196,6 @@ public final class JbiProject implements Project, AntProjectListener, ProjectPro
 //                CasaHelper.registerCasaFileListener(JbiProject.this);
 //            }
 //        });
-    }
-    
-    /**
-     * DOCUMENT ME!
-     *
-     * @return DOCUMENT ME!
-     */
-    public AntBasedProjectType getAntBasedProjectType() {
-        return abpt;
     }
     
     /**
@@ -303,6 +310,7 @@ public final class JbiProject implements Project, AntProjectListener, ProjectPro
         };
         
         return Lookups.fixed(new Object[] {
+            this,
             new Info(),
             aux,
             helper.createCacheDirectoryProvider(),
@@ -670,10 +678,36 @@ public final class JbiProject implements Project, AntProjectListener, ProjectPro
                     privateEP.setProperty(
                             "netbeans.user", System.getProperty("netbeans.user")); // NOI18N
                     
-                    File f = InstalledFileLocator.getDefault().locate(
-                            MODULE_INSTALL_NAME, MODULE_INSTALL_CBN, false);                    
+                    InstalledFileLocator installedFileLocator = InstalledFileLocator.getDefault();
+                    
+                    File f = installedFileLocator.locate(
+                            SOA_MODULE_INSTALL_NAME, SOA_MODULE_INSTALL_CBN, false);                    
                     if (f != null) {
-                        privateEP.setProperty(MODULE_INSTALL_DIR, f.getParentFile().getPath());
+                        privateEP.setProperty(SOA_MODULE_INSTALL_DIR, f.getParentFile().getPath());
+                    }
+                    
+                    f = installedFileLocator.locate(
+                            JAVA_MODULE_INSTALL_NAME, JAVA_MODULE_INSTALL_CBN, false);                    
+                    if (f != null) {
+                        privateEP.setProperty(JAVA_MODULE_INSTALL_DIR, f.getParentFile().getPath());
+                    }
+                    
+                    f = installedFileLocator.locate(
+                            XML_MODULE_INSTALL_NAME, XML_MODULE_INSTALL_CBN, false);                    
+                    if (f != null) {
+                        privateEP.setProperty(XML_MODULE_INSTALL_DIR, f.getParentFile().getPath());
+                    }
+                    
+                    f = installedFileLocator.locate(
+                            IDE_MODULE_INSTALL_NAME, IDE_MODULE_INSTALL_CBN, false);                    
+                    if (f != null) {
+                        privateEP.setProperty(IDE_MODULE_INSTALL_DIR, f.getParentFile().getPath());
+                    }
+                    
+                    f = installedFileLocator.locate(
+                            ENTERPRISE_MODULE_INSTALL_NAME, ENTERPRISE_MODULE_INSTALL_CBN, false);                    
+                    if (f != null) {
+                        privateEP.setProperty(ENTERPRISE_MODULE_INSTALL_DIR, f.getParentFile().getPath());
                     }
                     
                     helper.putProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH, privateEP);

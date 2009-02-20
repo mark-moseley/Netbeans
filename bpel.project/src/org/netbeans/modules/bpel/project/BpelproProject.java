@@ -52,6 +52,7 @@ import org.openide.filesystems.FileLock;
 import org.netbeans.modules.compapp.projects.base.spi.JbiArtifactProvider;
 import org.netbeans.modules.compapp.projects.base.ui.IcanproCustomizerProvider;
 import org.netbeans.modules.compapp.projects.base.ui.customizer.IcanproProjectProperties;
+import org.netbeans.modules.bpel.model.api.support.Utils;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.bpel.project.ui.IcanproLogicalViewProvider;
@@ -73,6 +74,7 @@ import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.netbeans.spi.queries.FileBuiltQueryImplementation;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
 import org.openide.util.Utilities;
@@ -85,6 +87,7 @@ import org.netbeans.modules.xml.retriever.catalog.CatalogEntry;
 import org.netbeans.modules.xml.retriever.catalog.CatalogWriteModel;
 import org.netbeans.modules.xml.retriever.catalog.CatalogWriteModelFactory;
 import org.netbeans.modules.xml.xam.locator.CatalogModelException;
+import org.netbeans.spi.project.support.ant.AntBasedProjectRegistration;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -94,11 +97,18 @@ import org.w3c.dom.Text;
 /**
  * @author Chris Webster
  */
+@AntBasedProjectRegistration(
+    type=BpelproProjectType.TYPE,
+    iconResource="org/netbeans/modules/bpel/project/resources/bpelProject.png",
+    sharedNamespace=BpelproProjectType.PROJECT_CONFIGURATION_NAMESPACE,
+    sharedName=BpelproProjectType.PROJECT_CONFIGURATION_NAME,
+    privateNamespace=BpelproProjectType.PRIVATE_CONFIGURATION_NAMESPACE,
+    privateName=BpelproProjectType.PRIVATE_CONFIGURATION_NAME
+)
 public final class BpelproProject implements Project, AntProjectListener, ProjectPropertyProvider {
-    private static final Icon PROJECT_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/bpel/project/resources/bpelProject.png")); // NOI18N
-    public static final String SOURCES_TYPE_BPELPRO = "BIZPRO";
+    private static final Icon PROJECT_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/bpel/project/resources/bpelProject.png", false); // NOI18N
+
     public static final String ARTIFACT_TYPE_JBI_ASA = "CAPS.asa";
-    
     public static final String MODULE_INSTALL_NAME = "modules/org-netbeans-modules-bpel-project.jar";
     public static final String MODULE_INSTALL_CBN = "org.netbeans.modules.bpel.project";
     public static final String MODULE_INSTALL_DIR = "module.install.dir";
@@ -164,10 +174,10 @@ public final class BpelproProject implements Project, AntProjectListener, Projec
         String webModuleLabel = org.openide.util.NbBundle.getMessage(IcanproCustomizerProvider.class, "LBL_Node_EJBModule"); //NOI18N
         String srcJavaLabel = org.openide.util.NbBundle.getMessage(IcanproCustomizerProvider.class, "LBL_Node_Sources"); //NOI18N
         
-        sourcesHelper.addPrincipalSourceRoot("${"+IcanproProjectProperties.SOURCE_ROOT+"}", webModuleLabel, /*XXX*/null, null);
-        sourcesHelper.addPrincipalSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}", srcJavaLabel, /*XXX*/null, null);
+        sourcesHelper.addPrincipalSourceRoot("${"+IcanproProjectProperties.SOURCE_ROOT+"}", webModuleLabel, null, null);
+        sourcesHelper.addPrincipalSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}", srcJavaLabel, null, null);
         
-        sourcesHelper.addTypedSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}", SOURCES_TYPE_BPELPRO, srcJavaLabel, /*XXX*/null, null);
+        sourcesHelper.addTypedSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}", Utils.SOURCES_TYPE_BPELPRO, srcJavaLabel, /*XXX*/null, null);
         sourcesHelper.addTypedSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}",
                 org.netbeans.modules.xml.catalogsupport.ProjectConstants.SOURCES_TYPE_XML,
                 srcJavaLabel, null, null);

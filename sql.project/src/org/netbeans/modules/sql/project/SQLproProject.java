@@ -44,7 +44,6 @@ import org.netbeans.modules.sql.project.spi.JbiArtifactProvider;
 import org.netbeans.modules.compapp.projects.base.ui.IcanproCustomizerProvider;
 import org.netbeans.modules.compapp.projects.base.ui.customizer.IcanproProjectProperties;
 import org.netbeans.modules.compapp.projects.base.queries.IcanproProjectEncodingQueryImpl;
-import org.netbeans.modules.sql.project.SQLproConstants;
 import org.netbeans.modules.sql.project.ui.SQLproLogicalViewProvider;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
@@ -77,9 +76,9 @@ import org.netbeans.spi.queries.FileBuiltQueryImplementation;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.modules.InstalledFileLocator;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
-import org.openide.util.Utilities;
 import org.openide.util.lookup.Lookups;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -90,6 +89,7 @@ import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.logging.Logger;
 import org.netbeans.api.queries.FileEncodingQuery;
+import org.netbeans.spi.project.support.ant.AntBasedProjectRegistration;
 
 
 
@@ -97,9 +97,17 @@ import org.netbeans.api.queries.FileEncodingQuery;
  * Represents one sql module project
  * @author Chris Webster
  */
+@AntBasedProjectRegistration(
+    type=SQLproProjectType.TYPE,
+    iconResource="org/netbeans/modules/sql/project/ui/resources/sqlproProjectIcon.gif",
+    sharedNamespace=SQLproProjectType.PROJECT_CONFIGURATION_NAMESPACE,
+    sharedName=SQLproProjectType.PROJECT_CONFIGURATION_NAME,
+    privateNamespace=SQLproProjectType.PRIVATE_CONFIGURATION_NAMESPACE,
+    privateName=SQLproProjectType.PRIVATE_CONFIGURATION_NAME
+)
 public final class SQLproProject implements Project, AntProjectListener {
 
-    private static final Icon PROJECT_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/sql/project/ui/resources/sqlproProjectIcon.gif")); // NOI18N
+    private static final Icon PROJECT_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/sql/project/ui/resources/sqlproProjectIcon.gif", false); // NOI18N
     public static final String SOURCES_TYPE_ICANPRO = "BIZPRO";
     public static final String ARTIFACT_TYPE_JBI_ASA = "CAPS.asa";
 

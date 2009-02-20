@@ -52,7 +52,6 @@ import java.util.Map;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.j2ee.earproject.EarProject;
-import org.netbeans.spi.project.support.ant.AntBasedProjectType;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.CustomizerProvider;
@@ -68,20 +67,18 @@ import org.openide.util.lookup.Lookups;
  */
 public class CustomizerProviderImpl implements CustomizerProvider {
     
-    private final Project project;
+    private final EarProject project;
     private final AntProjectHelper antProjectHelper;   
     private final ReferenceHelper refHelper;
-    private final AntBasedProjectType abpt;
     
     private static Map<Project, Dialog> project2Dialog = new HashMap<Project, Dialog>();
     
     public static final String CUSTOMIZER_FOLDER_PATH = "Projects/org-netbeans-modules-j2ee-earproject/Customizer"; //NO18N
      
-    public CustomizerProviderImpl(Project project, AntProjectHelper antProjectHelper, ReferenceHelper refHelper, AntBasedProjectType abpt) {
+    public CustomizerProviderImpl(EarProject project, AntProjectHelper antProjectHelper, ReferenceHelper refHelper) {
         this.project = project;
         this.antProjectHelper = antProjectHelper;
         this.refHelper = refHelper;
-        this.abpt = abpt;
     }
     
     public void showCustomizer() {
@@ -99,7 +96,7 @@ public class CustomizerProviderImpl implements CustomizerProvider {
             dialog.setVisible(true);
             return;
         } else {
-            EarProjectProperties uiProperties = new EarProjectProperties((EarProject) project, refHelper, abpt);
+            EarProjectProperties uiProperties = new EarProjectProperties(project, project.getUpdateHelper(), project.evaluator(), project.getReferenceHelper());
             Lookup context = Lookups.fixed(new Object[] {
                 project,
                 uiProperties,
