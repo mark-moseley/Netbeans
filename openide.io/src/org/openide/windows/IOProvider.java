@@ -47,6 +47,7 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.Reader;
 import java.io.StringWriter;
+import java.util.Collection;
 import javax.swing.Action;
 import org.openide.util.Lookup;
 
@@ -70,17 +71,33 @@ public abstract class IOProvider {
      * @return the default instance (never null)
      */
     public static IOProvider getDefault() {
-        IOProvider iop = (IOProvider) Lookup.getDefault().lookup(IOProvider.class);
+        IOProvider iop = Lookup.getDefault().lookup(IOProvider.class);
         if (iop == null) {
             iop = new Trivial();
         }
         return iop;
     }
 
+    /**
+     * Gets IOProvider of selected name or delegates to getDefault() if none was found
+     * @param name ID of provider
+     * @return the instance corresponding to provided name or default instance if not found
+     * @since 1.15
+     */
+    public static IOProvider get(String name) {
+        Collection<? extends IOProvider> res = Lookup.getDefault().lookupAll(IOProvider.class);
+        for (IOProvider iop : res) {
+            if (iop.getName().equals(name)) {
+                return iop;
+            }
+        }
+        return getDefault();
+    }
+
     /** Subclass constructor. */
     protected IOProvider() {}
 
-    /** 
+    /**
      * Get a named instance of InputOutput, which represents an output tab in
      * the output window.  Streams for reading/writing can be accessed via
      * getters on the returned instance.
@@ -113,7 +130,34 @@ public abstract class IOProvider {
     public InputOutput getIO(String name, Action[] additionalActions) {
         return getIO(name, true);
     }
-    
+
+    /**
+     * @param name A localized display name for the tab
+     * @param additionalActions array of actions that are added to the toolbar, Can be empty array, but not null.
+     *   The number of actions should not exceed 5 and each should have the <code>Action.SMALL_ICON</code> property defined.
+     * @param ioContainer parent container accessor
+     * @return an <code>InputOutput</code> instance for accessing the new tab
+     * @see InputOutput
+     * @since 1.15
+     * <br>Note: The method is non-abstract for backward compatibility reasons only. If you are
+     * extending <code>IOProvider</code> and implementing its abstract classes, you are encouraged to override
+     * this method as well. The default implementation falls back to the <code>getIO(name, additionalActions)</code> method, ignoring the ioContainer passed.
+     */
+    public InputOutput getIO(String name, Action[] additionalActions, IOContainer ioContainer) {
+        return getIO(name, additionalActions);
+    }
+
+    /**
+     * Gets name (ID) of provider
+     * @return name of provider
+     * @since 1.15
+     * <br>Note: The method is non-abstract for backward compatibility reasons only. If you are
+     * extending <code>IOProvider</code>  you should override this method. The default implementation returns ""
+     */
+    public String getName() {
+        return "";
+    }
+
     /** Support writing to the Output Window on the main tab or a similar output device.
      * @return a writer for the standard NetBeans output area
      */
@@ -122,6 +166,10 @@ public abstract class IOProvider {
     /** Fallback implementation. */
     private static final class Trivial extends IOProvider {
         
+        private static final Reader in = new BufferedReader(new InputStreamReader(System.in));
+        private static final PrintStream out = System.out;
+        private static final PrintStream err = System.err;
+
         public Trivial() {}
 
         public InputOutput getIO(String name, boolean newIO) {
@@ -129,31 +177,28 @@ public abstract class IOProvider {
         }
 
         public OutputWriter getStdOut() {
-            return new TrivialOW(System.out, "stdout"); // NOI18N
+            return new TrivialOW(out, "stdout"); // NOI18N
         }
         
+        @SuppressWarnings("deprecation")
         private final class TrivialIO implements InputOutput {
             
             private final String name;
-            private Reader in;
             
             public TrivialIO(String name) {
                 this.name = name;
             }
 
             public Reader getIn() {
-                if (in == null) {
-                    in = new BufferedReader(new InputStreamReader(System.in));
-                }
                 return in;
             }
 
             public OutputWriter getOut() {
-                return new TrivialOW(System.out, name);
+                return new TrivialOW(out, name);
             }
 
             public OutputWriter getErr() {
-                return new TrivialOW(System.err, name);
+                return new TrivialOW(err, name);
             }
 
             public Reader flushReader() {
@@ -220,56 +265,95 @@ public abstract class IOProvider {
 
             public void reset() throws IOException {}
 
+            @Override
             public void println(float x) {
                 prefix(false);
                 stream.println(x);
             }
 
+            @Override
             public void println(double x) {
                 prefix(false);
                 stream.println(x);
             }
 
+            @Override
             public void println() {
                 prefix(false);
                 stream.println();
             }
 
+            @Override
             public void println(Object x) {
                 prefix(false);
                 stream.println(x);
             }
 
+            @Override
             public void println(int x) {
                 prefix(false);
                 stream.println(x);
             }
 
+            @Override
             public void println(char x) {
                 prefix(false);
                 stream.println(x);
             }
 
+            @Override
             public void println(long x) {
                 prefix(false);
                 stream.println(x);
             }
 
+            @Override
             public void println(char[] x) {
                 prefix(false);
                 stream.println(x);
             }
 
+            @Override
             public void println(boolean x) {
                 prefix(false);
                 stream.println(x);
             }
 
+            @Override
             public void println(String x) {
                 prefix(false);
                 stream.println(x);
             }
-            
+
+            @Override
+            public void write(int c) {
+                stream.write(c);
+            }
+
+            @Override
+            public void write(char[] buf, int off, int len) {
+                String s = new String(buf, off, len);
+                if (s.endsWith("\n")) {
+                    println(s.substring(0, s.length() - 1));
+                } else {
+                    try {
+                        stream.write(s.getBytes());
+                    } catch (IOException x) {}
+                }
+            }
+
+            @Override
+            public void write(String s, int off, int len) {
+                s = s.substring(off, off + len);
+                if (s.endsWith("\n")) {
+                    println(s.substring(0, s.length() - 1));
+                } else {
+                    try {
+                        stream.write(s.getBytes());
+                    } catch (IOException x) {}
+                }
+            }
+
         }
         
     }
