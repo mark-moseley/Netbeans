@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.ui.wizards;
 
 import java.awt.Component;
@@ -55,9 +54,8 @@ import org.openide.util.NbBundle;
 /**
  * Panel just asking for basic info.
  */
-public class PanelConfigureProject implements WizardDescriptor.Panel, NewMakeProjectWizardIterator.Name,
-        WizardDescriptor.FinishablePanel {
-    
+public class PanelConfigureProject implements WizardDescriptor.Panel<WizardDescriptor>, NewMakeProjectWizardIterator.Name, WizardDescriptor.FinishablePanel<WizardDescriptor> {
+
     private WizardDescriptor wizardDescriptor;
     private String name;
     private int type;
@@ -67,7 +65,7 @@ public class PanelConfigureProject implements WizardDescriptor.Panel, NewMakePro
     private String wizardACSD;
     private boolean initialized = false;
     private boolean showMakefileTextField;
-    
+
     /** Create the wizard panel descriptor. */
     public PanelConfigureProject(String name, int type, String wizardTitle, String wizardACSD, boolean showMakefileTextField) {
         this.name = name;
@@ -75,20 +73,20 @@ public class PanelConfigureProject implements WizardDescriptor.Panel, NewMakePro
         this.wizardTitle = wizardTitle;
         this.wizardACSD = wizardACSD;
         this.showMakefileTextField = showMakefileTextField;
-	title = NbBundle.getMessage(PanelConfigureProject.class, "LAB_ConfigureProject"); // NOI18N
+        title = NbBundle.getMessage(PanelConfigureProject.class, "LAB_ConfigureProject"); // NOI18N
     }
-    
+
     public Component getComponent() {
         if (component == null) {
-            component = new PanelConfigureProjectVisual(this, this.name, this.wizardTitle, this.wizardACSD, showMakefileTextField);
+            component = new PanelConfigureProjectVisual(this, this.name, this.wizardTitle, this.wizardACSD, showMakefileTextField, type);
         }
         return component;
     }
 
     public String getName() {
-	return title;
+        return title;
     }
-    
+
     public HelpCtx getHelp() {
         if (type == NewMakeProjectWizardIterator.TYPE_APPLICATION) {
             return new HelpCtx("NewAppWizard"); // NOI18N
@@ -102,55 +100,58 @@ public class PanelConfigureProject implements WizardDescriptor.Panel, NewMakePro
             return new HelpCtx("CreatingCorC++Project"); // NOI18N
         }
     }
-    
+
     public boolean isValid() {
         getComponent();
-        return component.valid( wizardDescriptor );
+        return component.valid(wizardDescriptor);
     }
-    
-    private final Set/*<ChangeListener>*/ listeners = new HashSet(1);
+    private final Set<ChangeListener> listeners = new HashSet<ChangeListener>(1);
+
     public final void addChangeListener(ChangeListener l) {
         synchronized (listeners) {
             listeners.add(l);
         }
     }
+
     public final void removeChangeListener(ChangeListener l) {
         synchronized (listeners) {
             listeners.remove(l);
         }
     }
+
     protected final void fireChangeEvent() {
         Iterator it;
         synchronized (listeners) {
-            it = new HashSet(listeners).iterator();
+            it = new HashSet<ChangeListener>(listeners).iterator();
         }
         ChangeEvent ev = new ChangeEvent(this);
         while (it.hasNext()) {
-            ((ChangeListener)it.next()).stateChanged(ev);
+            ((ChangeListener) it.next()).stateChanged(ev);
         }
     }
-    
-    public void readSettings(Object settings) {
-        if (initialized)
+
+    public void readSettings(WizardDescriptor settings) {
+        if (initialized) {
             return;
-        wizardDescriptor = (WizardDescriptor)settings;        
-        component.read (wizardDescriptor);
-        
+        }
+        wizardDescriptor = settings;
+        component.read(wizardDescriptor);
+
         // XXX hack, TemplateWizard in final setTemplateImpl() forces new wizard's title
         // this name is used in NewProjectWizard to modify the title
-        Object substitute = ((JComponent)component).getClientProperty ("NewProjectWizard_Title"); // NOI18N
+        Object substitute = ((JComponent) component).getClientProperty("NewProjectWizard_Title"); // NOI18N
         if (substitute != null) {
-            wizardDescriptor.putProperty ("NewProjectWizard_Title", substitute); // NOI18N
+            wizardDescriptor.putProperty("NewProjectWizard_Title", substitute); // NOI18N
         }
         initialized = true;
     }
-    
-    public void storeSettings(Object settings) {
-        WizardDescriptor d = (WizardDescriptor)settings;
+
+    public void storeSettings(WizardDescriptor settings) {
+        WizardDescriptor d = settings;
         component.store(d);
     }
 
     public boolean isFinishPanel() {
-	return true;
+        return true;
     }
 }
