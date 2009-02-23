@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,65 +38,69 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.web.core.syntax.gsf;
 
-package org.netbeans.modules.html.editor.indent;
-
-import java.util.List;
-import javax.swing.text.BadLocationException;
-import org.netbeans.api.editor.mimelookup.MimePath;
+import org.netbeans.api.jsp.lexer.JspTokenId;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.lexer.LanguagePath;
-import org.netbeans.editor.ext.html.HTMLLexerFormatter;
-import org.netbeans.modules.editor.indent.spi.Context;
-import org.netbeans.modules.editor.indent.spi.ExtraLock;
-import org.netbeans.modules.editor.indent.spi.IndentTask;
+import org.netbeans.modules.gsf.api.Parser;
+import org.netbeans.modules.gsf.api.StructureScanner;
+import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
 
-/**
- * Implementation of IndentTask for text/html mimetype.
- *
- * @author Marek Fukala
- */
-public class HtmlIndentTask implements IndentTask.ContextAwareIndentTask {
-
-    private Context context;
-    private HtmlIndenter indenter;
-
-//    private FileObject fo;
+public class JspLanguage extends DefaultLanguageConfig {
     
-    HtmlIndentTask(Context context) {
-        this.context = context;
-        //fo = NbEditorUtilities.getFileObject(context.document());
-        indenter = new HtmlIndenter(context);
-    }
-
-    public void reindent() throws BadLocationException {
-//        long st = System.currentTimeMillis();
-//        getFormatter().process(context);
-//        Logger.getLogger("TIMER").log(Level.FINE, "HTML Reindent",
-//                    new Object[] {fo, System.currentTimeMillis() - st});
-        indenter.reindent();
-    }
-
-    public ExtraLock indentLock() {
-        return null;
-    }
-
-    private HTMLLexerFormatter getFormatter() {
-        MimePath mimePath = MimePath.parse (context.mimePath ());
-        LanguagePath languagePath = LanguagePath.get (Language.find (mimePath.getMimeType (0)));
-        
-        for (int i = 1; i < mimePath.size(); i++) {
-            languagePath = languagePath.embedded(Language.find(mimePath.getMimeType(i)));
-        }
-
-        return new HTMLLexerFormatter(languagePath);
-    }
+    //XXX no line comment in jsp!
+    private static final String LINE_COMMENT_PREFIX = "<%--";
     
-    public void beforeReindent(List<FormattingContext> contexts) {
-        indenter.beforeReindent(contexts);
+    public JspLanguage() {
     }
 
-    public FormattingContext createFormattingContext() {
-        return indenter.createFormattingContext();
+    @Override
+    public Language getLexerLanguage() {
+        return JspTokenId.language();
     }
+
+    @Override
+    public String getLineCommentPrefix() {
+        return LINE_COMMENT_PREFIX;
+    }
+
+    @Override
+    public boolean isIdentifierChar(char c) {
+        return Character.isLetter(c);
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "JSP";
+    }
+
+    @Override
+    public String getPreferredExtension() {
+        return "jsp"; // NOI18N
+    }
+
+    @Override
+    public boolean isUsingCustomEditorKit() {
+        return true;
+    }
+
+    // Service Registrations
+    
+    @Override
+    public Parser getParser() {
+        // we need the parser and the StructureScanner to enable navigator of embedded languages
+        return new JspGSFParser();
+    }
+
+    @Override
+    public boolean hasStructureScanner() {
+        return true;
+    }
+
+    @Override
+    public StructureScanner getStructureScanner() {
+        return new JspStructureScanner();
+    }
+
+
 }

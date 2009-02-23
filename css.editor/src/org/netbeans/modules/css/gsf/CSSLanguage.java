@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,65 +38,79 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.css.gsf;
 
-package org.netbeans.modules.html.editor.indent;
-
-import java.util.List;
-import javax.swing.text.BadLocationException;
-import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.lexer.Language;
-import org.netbeans.api.lexer.LanguagePath;
-import org.netbeans.editor.ext.html.HTMLLexerFormatter;
-import org.netbeans.modules.editor.indent.spi.Context;
-import org.netbeans.modules.editor.indent.spi.ExtraLock;
-import org.netbeans.modules.editor.indent.spi.IndentTask;
+import org.netbeans.modules.css.lexer.api.CSSTokenId;
+import org.netbeans.modules.gsf.api.CodeCompletionHandler;
+import org.netbeans.modules.gsf.api.KeystrokeHandler;
+import org.netbeans.modules.gsf.api.Parser;
+import org.netbeans.modules.gsf.api.SemanticAnalyzer;
+import org.netbeans.modules.gsf.api.StructureScanner;
+import org.netbeans.modules.gsf.spi.CommentHandler;
+import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
 
 /**
- * Implementation of IndentTask for text/html mimetype.
- *
- * @author Marek Fukala
+ * Configuration for CSS
  */
-public class HtmlIndentTask implements IndentTask.ContextAwareIndentTask {
-
-    private Context context;
-    private HtmlIndenter indenter;
-
-//    private FileObject fo;
+public class CSSLanguage extends DefaultLanguageConfig {
     
-    HtmlIndentTask(Context context) {
-        this.context = context;
-        //fo = NbEditorUtilities.getFileObject(context.document());
-        indenter = new HtmlIndenter(context);
+    public CSSLanguage() {
     }
 
-    public void reindent() throws BadLocationException {
-//        long st = System.currentTimeMillis();
-//        getFormatter().process(context);
-//        Logger.getLogger("TIMER").log(Level.FINE, "HTML Reindent",
-//                    new Object[] {fo, System.currentTimeMillis() - st});
-        indenter.reindent();
+    @Override
+    public boolean isIdentifierChar(char c) {
+         /** Includes things you'd want selected as a unit when double clicking in the editor */
+        return Character.isJavaIdentifierPart(c) 
+                || (c == '-') || (c == '@') 
+                || (c == '&') || (c == '_')
+                || (c == '#');
     }
 
-    public ExtraLock indentLock() {
-        return null;
+    @Override
+    public CommentHandler getCommentHandler() {
+        return new CssCommentHandler();
     }
 
-    private HTMLLexerFormatter getFormatter() {
-        MimePath mimePath = MimePath.parse (context.mimePath ());
-        LanguagePath languagePath = LanguagePath.get (Language.find (mimePath.getMimeType (0)));
-        
-        for (int i = 1; i < mimePath.size(); i++) {
-            languagePath = languagePath.embedded(Language.find(mimePath.getMimeType(i)));
-        }
+    @Override
+    public Language getLexerLanguage() {
+        return CSSTokenId.language();
+    }
 
-        return new HTMLLexerFormatter(languagePath);
+    @Override
+    public String getDisplayName() {
+        return "CSS"; //NOI18N ???
     }
     
-    public void beforeReindent(List<FormattingContext> contexts) {
-        indenter.beforeReindent(contexts);
+    @Override
+    public String getPreferredExtension() {
+        return "css"; // NOI18N
     }
 
-    public FormattingContext createFormattingContext() {
-        return indenter.createFormattingContext();
+    // Service Registrations
+    
+    @Override
+    public SemanticAnalyzer getSemanticAnalyzer() {
+        return new CSSSemanticAnalyzer();
+    }
+
+    @Override
+    public Parser getParser() {
+        return new CSSGSFParser();
+    }
+
+    @Override
+    public StructureScanner getStructureScanner() {
+        return new CSSStructureScanner();
+    }
+
+    @Override
+    public CodeCompletionHandler getCompletionHandler() {
+        return new CSSCompletion();
+    }
+
+    @Override
+    public KeystrokeHandler getKeystrokeHandler() {
+        return new CssBracketCompleter();
     }
 }
