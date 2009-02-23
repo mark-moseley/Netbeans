@@ -44,21 +44,18 @@ package org.netbeans.modules.web.wizards;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.event.DocumentListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
-import org.netbeans.spi.project.support.GenericSources;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.netbeans.modules.web.api.webmodule.WebModule;
-
 import org.netbeans.modules.web.taglib.TLDDataObject;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.netbeans.modules.web.core.Util;
@@ -70,10 +67,14 @@ import org.netbeans.modules.web.core.Util;
  * @author  phrebejk, mkuchtiak
  */
 public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionListener, DocumentListener  {
+    private static final Logger LOG = Logger.getLogger(TargetChooserPanelGUI.class.getName());
     private static final String TAG_FILE_FOLDER="WEB-INF/tags"; //NOI18N
     private static final String TAG_FILE_IN_JAVALIB_FOLDER="META-INF/tags"; //NOI18N
     private static final String TLD_FOLDER="WEB-INF/tlds"; //NOI18N
     private static final String TLD_IN_JAVALIB_FOLDER="META-INF"; //NOI18N
+    private static final String NEW_FILE_PREFIX =
+        NbBundle.getMessage( TargetChooserPanelGUI.class, "LBL_TargetChooserPanelGUI_NewFilePrefix" ); // NOI18N
+
     
     private TargetChooserPanel wizardPanel;
     private Project project;
@@ -144,8 +145,8 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
             gridBagConstraints = new java.awt.GridBagConstraints();
             gridBagConstraints.gridx = 0;
             gridBagConstraints.gridy = 0;
-            gridBagConstraints.gridheight = 2;
-            gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
+            gridBagConstraints.insets = new java.awt.Insets(0, 6, 0, 0);
+            gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
             optionsPanel.add(optionLabel, gridBagConstraints);
 
             jspSyntaxButton.setSelected(true);
@@ -332,6 +333,7 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
                 tagNameTextField.getAccessibleContext().setAccessibleDescription(java.util.ResourceBundle.getBundle("org/netbeans/modules/web/wizards/Bundle").getString("A11Y_DESC_TagName"));
                 tagNameLabel.setLabelFor(tagNameTextField);
                 tagNameTextField.addKeyListener(new java.awt.event.KeyAdapter() {
+                    @Override
                     public void keyReleased(java.awt.event.KeyEvent evt) {
                         tagName = tagNameTextField.getText().trim();
                         wizardPanel.fireChange();
@@ -413,6 +415,7 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
             customPanel.add(new javax.swing.JPanel(), gridBagConstraints);
 
             uriTextField.addKeyListener(new java.awt.event.KeyAdapter() {
+                @Override
                 public void keyReleased(java.awt.event.KeyEvent evt) {
                     uriWasTyped=true;
                     wizardPanel.fireChange();
@@ -420,6 +423,7 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
             });
 
             prefixTextField.addKeyListener(new java.awt.event.KeyAdapter() {
+                @Override
                 public void keyReleased(java.awt.event.KeyEvent evt) {
                     prefixWasTyped=true;
                     wizardPanel.fireChange();
@@ -427,8 +431,6 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
             });
         }
           
-        
-        //initValues( project, null, null );
         browseButton.addActionListener( this );
         documentNameTextField.getDocument().addDocumentListener( this );
         folderTextField.getDocument().addDocumentListener( this );
@@ -504,9 +506,15 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
         
         // filling the folder field
         String target=null;
-        FileObject docBase = getLocationRoot();
-        if ( preselectedFolder != null && FileUtil.isParentOf( docBase, preselectedFolder ) ) {
-            target = FileUtil.getRelativePath( docBase, preselectedFolder );
+        if (preselectedFolder != null) {
+            for(int item = 0; target == null && item < locationCB.getModel().getSize(); item++) {
+                FileObject docBase = ((LocationItem)locationCB.getModel().getElementAt(item)).getFileObject();
+                if (preselectedFolder.equals(docBase) || FileUtil.isParentOf(docBase, preselectedFolder)) {
+                    target = FileUtil.getRelativePath(docBase, preselectedFolder);
+                    locationCB.getModel().setSelectedItem(locationCB.getModel().getElementAt(item));
+                    break;
+                }
+            }
         }
         
         // leave target null for tag files and TLDs outside the web project
@@ -537,6 +545,25 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
             folderTextField.setText( target == null ? "" : target ); // NOI18N      
         String ext = template == null ? "" : template.getExt(); // NOI18N
         expectedExtension = ext.length() == 0 ? "" : "." + ext; // NOI18N
+
+        //set default new file name
+        String documentName = NEW_FILE_PREFIX + fileType.toString();
+        String newDocumentName = documentName;
+        File targetFolder = getFileCreationRoot();
+        if (targetFolder != null) {
+            FileObject folder = FileUtil.toFileObject(targetFolder);
+            if (folder != null) {
+                int index = 0;
+                while (true) {
+                    FileObject _tmp = folder.getFileObject(documentName, ext);
+                    if (_tmp == null) {
+                        break;
+                    }
+                    documentName = newDocumentName + (++index);
+                }
+            }
+        }
+        documentNameTextField.setText(documentName);
     }
     
     private Object[] getLocations(SourceGroup[] folders) {
@@ -617,23 +644,6 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
             return text;
         }
     }
-    /*
-    public void addChangeListener(ChangeListener l) {
-        listeners.add(l);
-    }
-    
-    public void removeChangeListener(ChangeListener l) {
-        listeners.remove(l);
-    }
-    
-    private void fireChange() {
-        ChangeEvent e = new ChangeEvent(this);
-        Iterator it = listeners.iterator();
-        while (it.hasNext()) {
-            ((ChangeListener)it.next()).stateChanged(e);
-        }
-    }
-    */
         
     /** This method is called from within the constructor to
      * initialize the form.
@@ -890,7 +900,6 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
     /** specific for JSP/TAG wizards
      */
     private void checkBoxChanged(java.awt.event.ItemEvent evt) {
-        // TODO add your handling code here:
         if (fileType.equals(FileType.JSP)) {
             if (isSegment()) {
                 if (isXml()) {
@@ -1043,7 +1052,6 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
     }
     
     private void browseButton1ActionPerformed(java.awt.event.ActionEvent evt) {                                             
-        // TODO add your handling code here:
         org.openide.filesystems.FileObject fo=null;
         // Show the browse dialog 
         if (folders!=null) fo = BrowseFolders.showDialog(folders, TLDDataObject.class,
@@ -1065,8 +1073,13 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
                 // get existing tag names for testing duplicity
                 tagValues = Util.getTagValues(is, new String[]{"tag","tag-file"},"name"); //NOI18N
                 is.close();
-            } catch (java.io.IOException ex) {}
-              catch (org.xml.sax.SAXException ex ){}
+            }
+            catch (java.io.IOException ex) {
+                LOG.log(Level.FINE, "error", ex);
+            }
+            catch (org.xml.sax.SAXException ex){
+                LOG.log(Level.FINE, "error", ex);
+            }
             wizardPanel.fireChange();
         }
     }
@@ -1102,6 +1115,15 @@ public class TargetChooserPanelGUI extends javax.swing.JPanel implements ActionL
     
     public String getCreatedFilePath() {
         return fileTextField.getText();
+    }
+
+    private File getFileCreationRoot() {
+        File rootDirFile = FileUtil.toFile(((LocationItem) locationCB.getSelectedItem()).getFileObject());
+        if (rootDirFile != null) {
+            return new File(rootDirFile, folderTextField.getText().replace('/', File.separatorChar));
+        } else {
+            return null;
+        }
     }
 
 }
