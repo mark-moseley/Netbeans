@@ -62,7 +62,6 @@ import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -82,6 +81,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
+import org.netbeans.modules.profiler.utilities.queries.SettingsFolderQuery;
 
 
 /**
@@ -350,28 +350,9 @@ public final class IDEUtils {
         }
     }
 
-    public static String getServicesDir() {
-        // Need to search also for localized filters-default, there is a possibility that default en filters-default.xml won't be in Services directory.
-        final File dir = InstalledFileLocator.getDefault()
-                                             .locate("config/Services/filters-default.xml", "org.netbeans.modules.profiler", true); //NOI18N
-
-        if (dir == null) {
-            return null;
-        } else {
-            return dir.getParentFile().getPath();
-        }
-    }
-
     public static FileObject getSettingsFolder(final boolean create)
                                         throws IOException {
-        final FileObject folder = Repository.getDefault().getDefaultFileSystem().findResource("Services"); //NOI18N
-        FileObject settingsFolder = folder.getFileObject(SETTINGS_DIR, null);
-
-        if ((settingsFolder == null) && create) {
-            settingsFolder = folder.createFolder(SETTINGS_DIR);
-        }
-
-        return settingsFolder;
+        return SettingsFolderQuery.getDefault().getSettingsFolder(create);
     }
 
     /**
