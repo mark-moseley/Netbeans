@@ -221,7 +221,7 @@ public class UtilTest extends TestBase {
     // XXX testLoadManifest()
     // XXX testStoreManifest()
     
-    public void testFindJavadoc() throws Exception {
+    public void testGetJavadoc() throws Exception {
         File oneModuleDoc = new File(getWorkDir(), "org-example-module1");
         assertTrue(oneModuleDoc.mkdir());
         File index = new File(oneModuleDoc, "index.html");
@@ -229,11 +229,11 @@ public class UtilTest extends TestBase {
         
         NbModuleProject project = generateStandaloneModule("module1");
         NbPlatform platform = project.getPlatform(false);
-        URL oneModuleDocURL = Util.urlForDir(oneModuleDoc);
+        URL oneModuleDocURL = FileUtil.urlForArchiveOrDir(oneModuleDoc);
         platform.addJavadocRoot(oneModuleDocURL);
         ModuleDependency md = new ModuleDependency(project.getModuleList().getEntry(project.getCodeNameBase()));
         
-        URL url = Util.findJavadoc(md, platform);
+        URL url = md.getModuleEntry().getJavadoc(platform);
         assertNotNull("url was found", url);
         
         File nbDoc = new File(getWorkDir(), "nbDoc");
@@ -242,9 +242,9 @@ public class UtilTest extends TestBase {
         index = new File(moduleDoc, "index.html");
         assertTrue(index.createNewFile());
         
-        platform.addJavadocRoot(Util.urlForDir(nbDoc));
+        platform.addJavadocRoot(FileUtil.urlForArchiveOrDir(nbDoc));
         platform.removeJavadocRoots(new URL[] {oneModuleDocURL});
-        url = Util.findJavadoc(md, platform);
+        url = md.getModuleEntry().getJavadoc(platform);
         assertNotNull("url was found", url);
     }
     
