@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.cnd.debugger.gdb.breakpoints;
 
-import org.netbeans.api.debugger.Session;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
 
 /**
@@ -51,47 +50,44 @@ import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
 */
 public class LineBreakpointImpl extends BreakpointImpl {
 
-    private LineBreakpoint      breakpoint;
-    private int                 lineNumber;
-    private BreakpointsReader   reader;
-
+    private String lastPath;
     
-    public LineBreakpointImpl(LineBreakpoint breakpoint, BreakpointsReader reader,
-                GdbDebugger debugger, Session session) {
-        super(breakpoint, reader, debugger, session);
-        this.reader = reader;
-        this.breakpoint = breakpoint;
-        lineNumber = breakpoint.getLineNumber();
+    public LineBreakpointImpl(LineBreakpoint breakpoint, GdbDebugger debugger) {
+        super(breakpoint, debugger);
+	lastPath = null;
         set();
     }
-    
+
     @Override
-    void fixed() {
-        lineNumber = breakpoint.getLineNumber();
-        super.fixed();
-    }
-    
-    protected void setRequests() {
-        if (getDebugger().getState().equals(GdbDebugger.STATE_RUNNING)) {
-            getDebugger().setSilentStop();
-        }
-        if (getState().equals(BPSTATE_UNVALIDATED)) {
-            setState(BPSTATE_VALIDATION_PENDING);
-            lineNumber = breakpoint.getLineNumber();
-            String path = getDebugger().getBestPath(breakpoint.getPath());
-            int token = getDebugger().getGdbProxy().break_insert(path + ':' + lineNumber);
-            getDebugger().addPendingBreakpoint(token, this);
+    protected String getBreakpointCommand() {
+        int lineNumber = getBreakpoint().getLineNumber();
+	String bppath = getBreakpoint().getPath();
+	String path = null;
+
+	if (lastPath == null && bppath.indexOf(' ') == -1) {
+	    path = debugger.getPathMap().getRemotePath(bppath);
+	} else if (lastPath == null) {
+	    path = debugger.getBestPath(bppath);
+	} else if (lastPath.length() > 0) {
+	    if (lastPath.equals(bppath)) {
+		path = debugger.getBestPath(bppath);
+	    } else {
+		int pos = lastPath.lastIndexOf('/');
+		if (pos >= 0) {
+		    path = lastPath.substring(pos + 1);
+		}
+	    }
+	}
+        lastPath = path;
+	if (path == null) {
+	    return null;
 	} else {
-	    if (getState().equals(BPSTATE_DELETION_PENDING)) {
-		getDebugger().getGdbProxy().break_delete(getBreakpointNumber());
-	    } else if (getState().equals(BPSTATE_VALIDATED)) {
-                if (breakpoint.isEnabled()) {
-                    getDebugger().getGdbProxy().break_enable(getBreakpointNumber());
-                } else {
-                    getDebugger().getGdbProxy().break_disable(getBreakpointNumber());
-                }
-            }
+	    return path + ':' + lineNumber;
 	}
     }
-}
 
+    @Override
+    protected boolean alternateSourceRootAvailable() {
+	return err != null && err.startsWith("No source file named ") && lastPath != null && lastPath.length() > 0; // NOI18N
+    }
+}
