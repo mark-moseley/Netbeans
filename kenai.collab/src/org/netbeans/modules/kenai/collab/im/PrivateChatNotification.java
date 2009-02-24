@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,89 +34,94 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2009 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.hudson.kenai;
+package org.netbeans.modules.kenai.collab.im;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.CharConversionException;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.util.LinkedList;
 import javax.swing.Icon;
-import org.netbeans.modules.hudson.api.HudsonJob;
-import org.openide.awt.HtmlBrowser.URLDisplayer;
+import javax.swing.JEditorPane;
+import javax.swing.JScrollPane;
+import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.util.StringUtils;
+import org.openide.DialogDescriptor;
+import org.openide.DialogDisplayer;
 import org.openide.awt.Notification;
 import org.openide.awt.NotificationDisplayer;
 import org.openide.awt.NotificationDisplayer.Priority;
-import org.openide.util.Exceptions;
-import org.openide.util.ImageUtilities;
-import org.openide.xml.XMLUtil;
 
 /**
- * Build failed or was unstable.
+ *
+ * @author Jan Becicka
  */
-class ProblemNotification implements ActionListener {
+class PrivateChatNotification implements ActionListener {
 
-    private final HudsonJob job;
-    private final boolean failed;
-    private final boolean running;
+    private LinkedList<Message> messageQueue = new LinkedList<Message>();
     private Notification thisN;
 
-    ProblemNotification(HudsonJob job, boolean failed, boolean running) {
-        this.job = job;
-        this.failed = failed;
-        this.running = running;
+    public String getLinkTitle() {
+        return "read";
     }
 
     public String getTitle() {
-        try {
-            return XMLUtil.toElementContent(job.getDisplayName()) + (failed ? " <em>failed</em>" : " is <em>unstable</em>"); // XXX I18N
-        } catch (CharConversionException ex) {
-            Exceptions.printStackTrace(ex);
-            return "";
-        }
+        return "New Private Message";
     }
 
     public String getDescription() {
-        // XXX should perhaps summarize last lines of failed build, or list some failed tests...
-        return failed ? "The build failed." : "Some tests failed."; // XXX I18N
-    }
-
-    public String getLinkTitle() {
-        return "Show Job"; // XXX I18N
+        final Message top = messageQueue.getFirst();
+        String from= StringUtils.parseName(top.getFrom());
+        return from + " says: " + top.getBody();
     }
 
     public void showDetails() {
-        // XXX could also show console, show test failures, etc.
-        try {
-            URLDisplayer.getDefault().showURL(new URL(job.getUrl()));
-        } catch (MalformedURLException ex) {
-            Exceptions.printStackTrace(ex);
+        JEditorPane pane = new JEditorPane();
+        pane.setEditable(false);
+        JScrollPane scrollPane = new JScrollPane(pane);
+        DialogDescriptor newMessages = new DialogDescriptor(scrollPane, "New Messages ");
+        StringBuffer b = new StringBuffer();
+        for (Message m : messageQueue) {
+            b.append(StringUtils.parseName(m.getFrom()) + " says: \n");
+            b.append(m.getBody() + "\n");
         }
+        pane.setText(b.toString());
+        DialogDisplayer.getDefault().createDialog(newMessages).setVisible(true);
+        clear();
     }
 
-    public Priority getPriority() {
-        return failed ? Priority.HIGH : Priority.NORMAL;
+    public NotificationDisplayer.Priority getPriority() {
+        return NotificationDisplayer.Priority.NORMAL;
     }
 
     public Icon getIcon() {
-        return ImageUtilities.loadImageIcon("/org/netbeans/modules/hudson/ui/resources/" + // NOI18N
-                (failed ? "red" : "yellow") + (running ? "_run" : "") + ".png", true); // NOI18N
-    }
-
-    public void actionPerformed(ActionEvent e) {
-        showDetails();
+        return null;
     }
 
     void add() {
         thisN = NotificationDisplayer.getDefault().notify(getTitle(), getIcon(), getDescription(), this, getPriority());
     }
 
-    void remove() {
-        if (thisN!=null) {
+    void addMessage(Message msg) {
+        messageQueue.add(msg);
+    }
+
+    Message removeMessage() {
+        return messageQueue.removeFirst();
+    }
+
+    boolean isEmpty() {
+        return messageQueue.isEmpty();
+    }
+
+    void clear() {
+        if (thisN!=null)
             thisN.dispose();
-        }
+        messageQueue.clear();
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        showDetails();
     }
 }
