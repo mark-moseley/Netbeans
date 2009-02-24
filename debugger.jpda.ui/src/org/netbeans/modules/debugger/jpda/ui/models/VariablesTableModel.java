@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.debugger.jpda.ui.models;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.WeakHashMap;
 import javax.security.auth.Refreshable;
 import org.netbeans.api.debugger.jpda.Field;
@@ -56,6 +58,7 @@ import org.netbeans.api.debugger.jpda.Variable;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.debugger.jpda.EditorContext.Operation;
 import org.netbeans.spi.debugger.ui.Constants;
+import org.netbeans.spi.viewmodel.ModelEvent;
 import org.netbeans.spi.viewmodel.TableModel;
 import org.netbeans.spi.viewmodel.ModelListener;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
@@ -71,9 +74,10 @@ import org.openide.util.NbBundle;
 public class VariablesTableModel implements TableModel, Constants {
     
     private JPDADebugger debugger;
+    private Set<ModelListener> listeners = new HashSet<ModelListener>();
 
     public VariablesTableModel(ContextProvider contextProvider) {
-        debugger = (JPDADebugger) contextProvider.lookupFirst(null, JPDADebugger.class);
+        debugger = contextProvider.lookupFirst(null, JPDADebugger.class);
     }
     
     public Object getValueAt (Object row, String columnID) throws 
@@ -91,10 +95,17 @@ public class VariablesTableModel implements TableModel, Constants {
                     return ((ObjectVariable) row).getToStringValue ();
                 } catch (InvalidExpressionException ex) {
                     return getMessage (ex);
+                } finally {
+                    fireChildrenChange(row);
                 }
             else
-            if (row instanceof Variable)
-                return ((Variable) row).getValue ();
+            if (row instanceof Variable) {
+                try {
+                    return ((Variable) row).getValue ();
+                } finally {
+                    fireChildrenChange(row);
+                }
+            }
             if (row instanceof Operation ||
                 row == "lastOperations" || // NOI18N
                 row instanceof String && ((String) row).startsWith("operationArguments ")) { // NOI18N
@@ -125,10 +136,19 @@ public class VariablesTableModel implements TableModel, Constants {
                 String e = w.getExceptionDescription ();
                 if (e != null)
                     return ">" + e + "<";
-                return w.getValue ();
+                try {
+                    return w.getValue ();
+                } finally {
+                    fireChildrenChange(row);
+                }
             } else 
-            if (row instanceof Variable)
-                return ((Variable) row).getValue ();
+            if (row instanceof Variable) {
+                try {
+                    return ((Variable) row).getValue ();
+                } finally {
+                    fireChildrenChange(row);
+                }
+            }
         }
         if (row instanceof JPDAClassType) {
             return ""; // NOI18N
@@ -158,18 +178,36 @@ public class VariablesTableModel implements TableModel, Constants {
             ) {
                 if (row instanceof This)
                     return true;
-                else
-                if ( row instanceof LocalVariable ||
-                     row instanceof Field ||
-                     row instanceof JPDAWatch
-                ) {
-                    if (WatchesNodeModel.isEmptyWatch(row)) {
-                        return true;
-                    } else {
-                        return !debugger.canBeModified();
+                else {
+                    if (row instanceof JPDAWatch && row instanceof Refreshable) {
+                        if (!((Refreshable) row).isCurrent()) {
+                            return true;
+                        }
+                        try {
+                            // Retrieve the evaluated watch so that we can test if it's an object variable or not.
+                            java.lang.reflect.Method getEvaluatedWatchMethod = row.getClass().getDeclaredMethod("getEvaluatedWatch");
+                            getEvaluatedWatchMethod.setAccessible(true);
+                            row = (JPDAWatch) getEvaluatedWatchMethod.invoke(row);
+                        } catch (Exception ex) {
+                            // Log it only
+                            ex.printStackTrace();
+                        }
                     }
-                } else {
-                    return true;
+                    if (row instanceof ObjectVariable) {
+                        return true;
+                    }
+                    if ( row instanceof LocalVariable ||
+                         row instanceof Field ||
+                         row instanceof JPDAWatch
+                    ) {
+                        if (WatchesNodeModel.isEmptyWatch(row)) {
+                            return true;
+                        } else {
+                            return !debugger.canBeModified();
+                        }
+                    } else {
+                        return true;
+                    }
                 }
             }
         }
@@ -239,12 +277,26 @@ public class VariablesTableModel implements TableModel, Constants {
         throw new UnknownTypeException (row);
     }
     
+    private void fireChildrenChange(Object row) {
+        Set<ModelListener> ls;
+        synchronized(listeners) {
+            ls = new HashSet(listeners);
+        }
+        for (ModelListener ml : ls)
+            ml.modelChanged (
+                new ModelEvent.NodeChanged(this, row, ModelEvent.NodeChanged.CHILDREN_MASK)
+            );
+    }
+    
     /** 
      * Registers given listener.
      * 
      * @param l the listener to add
      */
     public void addModelListener (ModelListener l) {
+        synchronized(listeners) {
+            listeners.add(l);
+        }
     }
 
     /** 
@@ -253,6 +305,9 @@ public class VariablesTableModel implements TableModel, Constants {
      * @param l the listener to remove
      */
     public void removeModelListener (ModelListener l) {
+        synchronized(listeners) {
+            listeners.remove(l);
+        }
     }
     
     static String getShort (String c) {
@@ -268,6 +323,14 @@ public class VariablesTableModel implements TableModel, Constants {
         }
         if (m == null) {
             m = NbBundle.getMessage(VariablesTableModel.class, "MSG_NA");
+        }
+        Throwable t = e.getTargetException();
+        if (t != null && t instanceof org.omg.CORBA.portable.ApplicationException) {
+            java.io.StringWriter s = new java.io.StringWriter();
+            java.io.PrintWriter p = new java.io.PrintWriter(s);
+            t.printStackTrace(p);
+            p.close();
+            m += " \n"+s.toString();
         }
         return ">" + m + "<";
     }
