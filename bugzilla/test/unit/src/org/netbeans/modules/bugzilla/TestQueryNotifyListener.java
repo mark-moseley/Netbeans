@@ -39,18 +39,46 @@
 
 package org.netbeans.modules.bugzilla;
 
-import org.eclipse.core.runtime.NullProgressMonitor;
+import java.util.ArrayList;
+import java.util.List;
+import org.netbeans.modules.bugtracking.spi.Issue;
+import org.netbeans.modules.bugtracking.spi.QueryNotifyListener;
+import org.netbeans.modules.bugzilla.query.BugzillaQuery;
 
 /**
  *
  * @author tomas
  */
-public interface TestConstants {
-    public static final String TEST_PROJECT = "TestProduct";
-    public static final String REPO_PASSWD  = "dilino";
-    public static final String REPO_URL     = "http://192.168.0.7/bugzilla";
-//    public static final String REPO_URL     = "http://129.157.20.136/bugzilla"; //
-    public static final String REPO_USER    = "dil@dil.com";
-
-    static NullProgressMonitor NULL_PROGRESS_MONITOR = new NullProgressMonitor();
+public class TestQueryNotifyListener implements QueryNotifyListener {
+    public boolean started = false;
+    public boolean finished = false;
+    public List<Issue> issues = new ArrayList<Issue>();
+    private BugzillaQuery q;
+    public TestQueryNotifyListener(BugzillaQuery q) {
+        this.q = q;
+        q.addNotifyListener(this);
+    }
+    public void started() {
+        started = true;
+    }
+    public void notifyData(Issue issue) {
+        issues.add(issue);
+    }
+    public void finished() {
+        finished = true;
+    }
+    public void reset() {
+        started = false;
+        finished = false;
+        issues = new ArrayList<Issue>();
+    }
+    public List<Issue> getIssues(int includeStatus) {
+        List<Issue> ret = new ArrayList<Issue>();
+        for (Issue issue : issues) {
+            if (q == null || (q.getIssueStatus(issue) & includeStatus) != 0) {
+                ret.add(issue);
+            }
+        }
+        return ret;
+    }
 }
