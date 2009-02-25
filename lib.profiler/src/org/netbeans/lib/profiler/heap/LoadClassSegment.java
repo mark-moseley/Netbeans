@@ -46,7 +46,6 @@ import java.util.Map;
 /**
  *
  * @author Tomas Hurka
- * @author Toms Hurka
  */
 class LoadClassSegment extends TagBounds {
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
@@ -81,7 +80,7 @@ class LoadClassSegment extends TagBounds {
 
         while (offset[0] < endOffset) {
             long start = offset[0];
-            long classID = readLoadClassTag(offset);
+            long classID = readLoadClassID(offset);
 
             if (classID == classObjectID) {
                 return new LoadClass(this, start);
@@ -91,13 +90,28 @@ class LoadClassSegment extends TagBounds {
         return null;
     }
 
+    LoadClass getClassBySerialNumber(long classSerialNumber) {
+        long[] offset = new long[] { startOffset };
+
+        while (offset[0] < endOffset) {
+            long start = offset[0];
+            long serial = readLoadClassSerialNumber(offset);
+
+            if (serial == classSerialNumber) {
+                return new LoadClass(this, start);
+            }
+        }
+
+        return null;
+    }
+    
     void setLoadClassOffsets() {
         ClassDumpSegment classDumpSegment = hprofHeap.getClassDumpSegment();
         long[] offset = new long[] { startOffset };
 
         while (offset[0] < endOffset) {
             long start = offset[0];
-            long classID = readLoadClassTag(offset);
+            long classID = readLoadClassID(offset);
             ClassDump classDump = classDumpSegment.getClassDumpByID(classID);
 
             if (classDump != null) {
@@ -112,7 +126,17 @@ class LoadClassSegment extends TagBounds {
         return dumpBuffer;
     }
 
-    private long readLoadClassTag(long[] offset) {
+    private long readLoadClassSerialNumber(long[] offset) {
+        long start = offset[0];
+
+        if (hprofHeap.readTag(offset) != HprofHeap.LOAD_CLASS) {
+            return 0;
+        }
+
+        return getDumpBuffer().getInt(start + classSerialNumberOffset);
+    }
+    
+    private long readLoadClassID(long[] offset) {
         long start = offset[0];
 
         if (hprofHeap.readTag(offset) != HprofHeap.LOAD_CLASS) {
