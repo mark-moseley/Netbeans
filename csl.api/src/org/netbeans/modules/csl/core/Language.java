@@ -38,27 +38,35 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.gsf;
+package org.netbeans.modules.csl.core;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import javax.swing.Action;
-import org.netbeans.modules.gsf.api.*;
-import org.netbeans.modules.gsf.api.CodeCompletionHandler;
-import org.netbeans.modules.gsf.api.DeclarationFinder;
-import org.netbeans.modules.gsf.api.InstantRenamer;
-import org.netbeans.modules.gsf.api.Parser;
-import org.netbeans.modules.gsf.api.GsfLanguage;
-import org.netbeans.modules.gsf.api.annotations.CheckForNull;
-import org.netbeans.modules.gsf.api.annotations.NonNull;
-import org.netbeans.modules.gsf.api.KeystrokeHandler;
-import org.netbeans.modules.gsf.api.Formatter;
-import org.netbeans.modules.gsf.api.Indexer;
-import org.netbeans.modules.gsf.api.StructureScanner;
-//import org.netbeans.spi.palette.PaletteController;
-import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
-import org.netbeans.modules.gsfret.editor.semantic.ColoringManager;
-import org.netbeans.modules.gsfret.hints.infrastructure.GsfHintsManager;
+
+import org.netbeans.api.annotations.common.CheckForNull;
+import org.netbeans.api.annotations.common.NonNull;
+import org.netbeans.modules.csl.api.CodeCompletionHandler;
+import org.netbeans.modules.csl.api.DataLoadersBridge;
+import org.netbeans.modules.csl.api.DeclarationFinder;
+import org.netbeans.modules.csl.api.HintsProvider;
+import org.netbeans.modules.csl.api.IndexSearcher;
+import org.netbeans.modules.csl.api.InstantRenamer;
+import org.netbeans.modules.csl.api.OccurrencesFinder;
+import org.netbeans.modules.csl.api.GsfLanguage;
+import org.netbeans.modules.csl.api.SemanticAnalyzer;
+import org.netbeans.modules.csl.api.KeystrokeHandler;
+import org.netbeans.modules.csl.api.Formatter;
+import org.netbeans.modules.csl.api.StructureScanner;
+import org.netbeans.modules.csl.spi.DefaultLanguageConfig;
+import org.netbeans.modules.csl.editor.semantic.ColoringManager;
+import org.netbeans.modules.csl.hints.infrastructure.GsfHintsManager;
+import org.netbeans.modules.parsing.api.Snapshot;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.parsing.spi.ParserFactory;
+import org.netbeans.modules.parsing.spi.indexing.EmbeddingIndexerFactory;
 import org.openide.filesystems.FileObject;
 
 
@@ -84,13 +92,12 @@ public final class Language {
     private List<Action> actions;
     private GsfLanguage language;
     private DefaultLanguageConfig languageConfig;
-    private Parser parser;
     private CodeCompletionHandler completionProvider;
     private InstantRenamer renamer;
     private DeclarationFinder declarationFinder;
     private Formatter formatter;
     private KeystrokeHandler keystrokeHandler;
-    private Indexer indexer;
+    private EmbeddingIndexerFactory indexerFactory;
     private StructureScanner structure;
     private HintsProvider hintsProvider;
     private GsfHintsManager hintsManager;
@@ -112,8 +119,11 @@ public final class Language {
     private FileObject semanticFile;
     private FileObject occurrencesFile;
     private FileObject indexSearcherFile;
-    
-    
+
+    private Set<String> sourcePathIds;
+    private Set<String> libraryPathIds;
+    private Set<String> binaryLibraryPathIds;
+
     /** Creates a new instance of DefaultLanguage */
     public Language(String mime) {
         this.mime = mime;
@@ -121,20 +131,19 @@ public final class Language {
 
     /** For testing purposes only!*/
     public Language(String iconBase, String mime, List<Action> actions,
-            GsfLanguage gsfLanguage, Parser parser, CodeCompletionHandler completionProvider, InstantRenamer renamer,
-            DeclarationFinder declarationFinder, Formatter formatter, KeystrokeHandler bracketCompletion, Indexer indexer,
+            GsfLanguage gsfLanguage, CodeCompletionHandler completionProvider, InstantRenamer renamer,
+            DeclarationFinder declarationFinder, Formatter formatter, KeystrokeHandler bracketCompletion, EmbeddingIndexerFactory indexerFactory ,
             StructureScanner structure, /*PaletteController*/Object palette, boolean useCustomEditorKit) {
         this.iconBase = iconBase;
         this.mime = mime;
         this.actions = actions;
         this.language = gsfLanguage;
-        this.parser = parser;
         this.completionProvider = completionProvider;
         this.renamer = renamer;
         this.declarationFinder = declarationFinder;
         this.formatter = formatter;
         this.keystrokeHandler = bracketCompletion;
-        this.indexer = indexer;
+        this.indexerFactory = indexerFactory;
         this.structure = structure;
 //        this.palette = palette;
         this.useCustomEditorKit = useCustomEditorKit;
@@ -244,29 +253,28 @@ public final class Language {
      *  be called only once and management done by the IDE
      */
     @CheckForNull
-    public Parser getParser() {
-        if (parser == null) {
-            if (parserFile != null) {
-                // Lazily construct Parser
-                parser = (Parser)createInstance(parserFile);
-                if (parser == null) {
-                    // Don't keep trying
-                    parserFile = null;
-                }
+    public Parser getParser(Collection<Snapshot> snapshots) {
+        Parser parser = null;
+
+        if (parserFile != null) {
+            // Lazily construct Parser
+            ParserFactory factory = (ParserFactory)createInstance(parserFile);
+            if (factory == null) {
+                // Don't keep trying
+                parserFile = null;
             } else {
-                getGsfLanguage(); // Also initializes languageConfig
-                if (languageConfig != null) {
-                    parser = languageConfig.getParser();
-                }
+                parser = factory.createParser(snapshots);
+            }
+        } else {
+            getGsfLanguage(); // Also initializes languageConfig
+            if (languageConfig != null) {
+                parser = languageConfig.getParser();
             }
         }
+
         return parser;
     }
 
-    void setParser(Parser parser) {
-        this.parser = parser;
-    }
-    
     void setParserFile(FileObject parserFile) {
         this.parserFile = parserFile;
     }
@@ -439,22 +447,22 @@ public final class Language {
      * Get an associated indexer, if any
      */
     @CheckForNull
-    public Indexer getIndexer() {
-        if (indexer == null) {
+    public EmbeddingIndexerFactory getIndexerFactory() {
+        if (indexerFactory == null) {
             if (indexerFile != null) {
-                indexer = (Indexer)createInstance(indexerFile);
-                if (indexer == null) {
+                indexerFactory = (EmbeddingIndexerFactory)createInstance(indexerFile);
+                if (indexerFactory == null) {
                     // Don't keep trying
                     indexerFile = null;
                 }
             } else {
                 getGsfLanguage(); // Also initializes languageConfig
                 if (languageConfig != null) {
-                    indexer = languageConfig.getIndexer();
+                    indexerFactory = languageConfig.getIndexerFactory();
                 }
             }
         }
-        return indexer;
+        return indexerFactory;
     }
 
     void setIndexerFile(FileObject indexerFile) {
@@ -699,5 +707,35 @@ public final class Language {
 
     void setIndexSearcher(FileObject indexSearcherFile) {
         this.indexSearcherFile = indexSearcherFile;
+    }
+
+    public Set<String> getSourcePathIds() {
+        if (sourcePathIds == null) {
+            getGsfLanguage();
+            if (languageConfig != null) {
+                sourcePathIds = languageConfig.getSourcePathIds();
+            }
+        }
+        return sourcePathIds;
+    }
+
+    public Set<String> getLibraryPathIds() {
+        if (libraryPathIds == null) {
+            getGsfLanguage();
+            if (languageConfig != null) {
+                libraryPathIds = languageConfig.getLibraryPathIds();
+            }
+        }
+        return libraryPathIds;
+    }
+
+    public Set<String> getBinaryLibraryPathIds() {
+        if (binaryLibraryPathIds == null) {
+            getGsfLanguage();
+            if (languageConfig != null) {
+                binaryLibraryPathIds = languageConfig.getLibraryPathIds();
+            }
+        }
+        return binaryLibraryPathIds;
     }
 }
