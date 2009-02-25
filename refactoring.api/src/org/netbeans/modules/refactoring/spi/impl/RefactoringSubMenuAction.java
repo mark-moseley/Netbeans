@@ -41,23 +41,23 @@
 package org.netbeans.modules.refactoring.spi.impl;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import javax.swing.*;
-import javax.swing.text.JTextComponent;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.swing.AbstractButton;
+import javax.swing.Action;
+import javax.swing.JComponent;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.JSeparator;
 import javax.swing.text.TextAction;
 import org.openide.awt.Actions;
-import org.openide.awt.JMenuPlus;
-import org.openide.awt.Mnemonics;
+import org.openide.awt.DynamicMenuContent;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
-import org.openide.nodes.Node;
-import org.openide.util.Lookup;
-import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.Presenter;
 
@@ -66,6 +66,8 @@ import org.openide.util.actions.Presenter;
  * @author Martin Matula
  */
 public final class RefactoringSubMenuAction extends TextAction implements Presenter.Menu, Presenter.Popup {
+
+    private static final Logger LOG = Logger.getLogger(RefactoringSubMenuAction.class.getName());
     private final boolean showIcons;
     
     public static RefactoringSubMenuAction create(FileObject o) {
@@ -94,18 +96,21 @@ public final class RefactoringSubMenuAction extends TextAction implements Presen
         return getMenuPresenter();
     }
     
+    @Override
     public boolean equals(Object o) {
         return (o instanceof RefactoringSubMenuAction);
     }
     
+    @Override
     public int hashCode() {
         return 1;
     }
     
-    private class SubMenu extends JMenuPlus implements LookupListener {
-        private ArrayList actions = null;
-        private Lookup.Result nodes = null;
-        private boolean nodesChanged = true;
+    private final class SubMenu extends JMenu {
+        
+        private boolean createMenuLazily = true;
+        private boolean wasSeparator;
+        private boolean shouldAddSeparator;
         
         public SubMenu() {
             super((String) RefactoringSubMenuAction.this.getValue(Action.NAME));
@@ -114,77 +119,84 @@ public final class RefactoringSubMenuAction extends TextAction implements Presen
         }
         
         /** Gets popup menu. Overrides superclass. Adds lazy menu items creation. */
+        @Override
         public JPopupMenu getPopupMenu() {
-            if (actions == null) {
+            if (createMenuLazily) {
                 createMenuItems();
+                createMenuLazily = false;
             }
             return super.getPopupMenu();
         }
         
         /** Creates items when actually needed. */
         private void createMenuItems() {
-            actions = new ArrayList();
             removeAll();
-            FileSystem dfs = Repository.getDefault().getDefaultFileSystem();
-            FileObject fo = dfs.findResource("Menu/Refactoring"); // NOI18N
+            FileObject fo = FileUtil.getConfigFile("Menu/Refactoring"); // NOI18N
             DataFolder df = DataFolder.findFolder(fo);
                 
             if (df != null) {
+                wasSeparator = true;
+                shouldAddSeparator = false;
                 DataObject actionObjects[] = df.getChildren();
                 for (int i = 0; i < actionObjects.length; i++) {
-                    InstanceCookie ic = (InstanceCookie) actionObjects[i].getCookie(InstanceCookie.class);
+                    InstanceCookie ic = actionObjects[i].getCookie(InstanceCookie.class);
                     if (ic == null) continue;
                     Object instance;
                     try {
                         instance = ic.instanceCreate();
                     } catch (IOException e) {
                         // ignore
-                        e.printStackTrace();
+                        LOG.log(Level.WARNING, actionObjects[i].toString(), e);
                         continue;
                     } catch (ClassNotFoundException e) {
                         // ignore
-                        e.printStackTrace();
+                        LOG.log(Level.WARNING, actionObjects[i].toString(), e);
                         continue;
                     }
-                    if (instance instanceof RefactoringGlobalAction) {
+                    
+                    if (instance instanceof Presenter.Popup) {
+                        JMenuItem temp = ((Presenter.Popup)instance).getPopupPresenter();
+                        if (temp instanceof DynamicMenuContent) {
+                            for (JComponent presenter : ((DynamicMenuContent) temp).getMenuPresenters()) {
+                                addPresenter(presenter);
+                            }
+                        } else {
+                            addPresenter(temp);
+                        }
+                    } else if (instance instanceof Action) {
                         // if the action is the refactoring action, pass it information
                         // whether it is in editor, popup or main menu
-                        actions.add(instance);
                         JMenuItem mi = new JMenuItem();
                         Actions.connect(mi, (Action) instance, true);
-                        if (!showIcons)
-                            mi.setIcon(null);
-                        add(mi);
+                        addPresenter(mi);
                     } else if (instance instanceof JSeparator) {
-                        add((JSeparator) instance);
-                    } else if (instance instanceof Presenter.Popup) {
-                        JMenuItem temp = ((Presenter.Popup)instance).getPopupPresenter();
-                        if (!showIcons)
-                            temp.setIcon(null);
-                        add(temp);
-                    } else if (instance instanceof Action) {
-                        JMenuItem mi = new JMenuItem();
-                        Actions.connect(mi, (Action) instance, true);
-                        if (!showIcons)
-                            mi.setIcon(null);
-                        add(mi);
+                        addPresenter((JSeparator) instance);
                     }
                 }
             }
         }
-        
-        private void setText(JMenuItem t, Action a) {
-            String name = (String) a.getValue(Action.NAME);
-            int i = Mnemonics.findMnemonicAmpersand(name);
-            
-            if (i < 0)
-                t.setText(name);
-            else
-                t.setText(name.substring(0, i) + name.substring(i + 1));
-        }
-        
-        public void resultChanged(org.openide.util.LookupEvent ev) {
-            nodesChanged = true;
+
+        private void addPresenter(JComponent presenter) {
+            if (!showIcons && presenter instanceof AbstractButton) {
+                ((AbstractButton) presenter).setIcon(null);
+            }
+
+            boolean isSeparator = presenter == null || presenter instanceof JSeparator;
+
+            if (isSeparator) {
+                if (!wasSeparator) {
+                    shouldAddSeparator = true;
+                    wasSeparator = true;
+                }
+            } else {
+                if (shouldAddSeparator) {
+                    addSeparator();
+                    shouldAddSeparator = false;
+                }
+                add(presenter);
+                wasSeparator = false;
+            }
+
         }
         
     }
