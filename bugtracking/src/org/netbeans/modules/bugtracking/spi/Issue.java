@@ -59,9 +59,23 @@ public abstract class Issue {
      * Seen property id
      */
     public static String LABEL_NAME_SEEN = "issue.seen";
+    
+    /**
+     * Recetn Changes property id
+     */
+    public static String LABEL_RECENT_CHANGES = "issue.recent_changes";
+
+    /**
+     * issue data were changed
+     */
+    public static final String EVENT_ISSUE_DATA_CHANGED = "issue.data_changed";
+
+    /**
+     * issues seen state changed
+     */
+    public static final String EVENT_ISSUE_SEEN_CHANGED = "issue.seen_changed";
 
     private boolean seen;
-    private String EVENT_ISSUE_DATA_CHANGED = "issue.data_changed";
     
     /**
      * Creates an issue
@@ -135,6 +149,11 @@ public abstract class Issue {
     public abstract String getSummary();
 
     /**
+     * 
+     */
+    public abstract String getRecentChanges();
+
+    /**
      * Returns true if issue was already seen or marked as seen by the user
      * @return
      */
@@ -147,7 +166,8 @@ public abstract class Issue {
      * @param seen
      */
     protected void setSeen(boolean seen) {
-        this.seen = seen;
+        this.seen = seen;        
+        fireSeenChanged();
     }
 
     public abstract Map<String, String> getAttributes();
@@ -162,5 +182,9 @@ public abstract class Issue {
 
     protected void fireDataChanged() {
         support.firePropertyChange(EVENT_ISSUE_DATA_CHANGED, null, null);
+    }
+
+    protected void fireSeenChanged() {
+        support.firePropertyChange(EVENT_ISSUE_SEEN_CHANGED, null, null);
     }
 }
