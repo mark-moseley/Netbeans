@@ -69,6 +69,7 @@ import org.netbeans.modules.bugzilla.Bugzilla;
 import org.netbeans.modules.bugtracking.spi.IssueNode;
 import org.netbeans.modules.bugtracking.spi.BugtrackingController;
 import org.netbeans.modules.bugtracking.spi.Issue;
+import org.netbeans.modules.bugtracking.spi.Query;
 import org.netbeans.modules.bugtracking.spi.Query.ColumnDescriptor;
 import org.netbeans.modules.bugzilla.BugzillaRepository;
 import org.openide.util.Exceptions;
@@ -85,7 +86,7 @@ public class BugzillaIssue extends Issue {
     private static final SimpleDateFormat CC_DATE_FORMAT = new SimpleDateFormat(DATE_FORMAT);
     private IssueController controller;
     private IssueNode node;
-
+    
     static final String LABEL_NAME_ID           = "bugzilla.issue.id";
     static final String LABEL_NAME_SEVERITY     = "bugzilla.issue.severity";
     static final String LABEL_NAME_PRIORITY     = "bugzilla.issue.priority";
@@ -210,6 +211,106 @@ public class BugzillaIssue extends Issue {
         return attributes;
     }
 
+    @Override
+    public String getRecentChanges() {
+        if(wasSeen()) {
+            return "";
+        }
+        int status = repository.getIssuesCache().getStatus(getID());
+        if(status == Query.ISSUE_STATUS_NEW) {
+            return "New";
+        } else if(status == Query.ISSUE_STATUS_MODIFIED) {
+            List<IssueField> changedFields = new ArrayList<IssueField>();
+            Map<String, String> seenAtributes = repository.getIssuesCache().getSeenAttributes(getID());
+            assert seenAtributes != null;
+            for (IssueField f : IssueField.values()) {
+                String value = getFieldValue(f);
+                String seenValue = seenAtributes.get(f.key);
+                if(seenValue == null) {
+                    seenValue = "";
+                }
+                if(!value.trim().equals(seenValue)) {
+                    changedFields.add(f);
+                }
+            }
+            int changedCount = changedFields.size();
+            assert changedCount > 0 : "status MODIFIED yet zero changes found";
+            if(changedCount == 1) {
+                String ret = null;
+                for (IssueField changedField : changedFields) {
+                    switch(changedField) {
+                        case SUMMARY :
+                            ret = "Summary changed";
+                            break;
+                        case CC :
+                            ret = "CC field changed";
+                            break;
+                        case KEYWORDS :
+                            ret ="Keywords changed";
+                            break;
+                        case DEPENDS_ON :
+                        case BLOCKS :
+                            ret ="Dependence changed";
+                            break;
+                        default :
+                            ret = changedField.name() + " changed to " + getFieldValue(changedField);
+                    }
+                }
+                return ret;
+            } else {
+                String ret = null;
+                for (IssueField changedField : changedFields) {
+                    switch(changedField) {
+                        case SUMMARY :
+                            ret = changedCount + " changes, incl. summary";
+                            break;
+                        case PRIORITY :
+                            ret = changedCount + " changes, incl. priority";
+                            break;
+                        case SEVERITY :
+                            ret = changedCount + " changes, incl. severity";
+                            break;
+                        case PRODUCT :
+                            ret = changedCount + " changes, incl. product";
+                            break;
+                        case COMPONENT :
+                            ret = changedCount + " changes, incl. component";
+                            break;
+                        case PLATFORM :
+                            ret = changedCount + " changes, incl. platform";
+                            break;
+                        case VERSION :
+                            ret = changedCount + " changes, incl. version";
+                            break;
+                        case MILESTONE :
+                            ret = changedCount + " changes, incl. milestone";
+                            break;
+                        case KEYWORDS :
+                            ret = changedCount + " changes, incl. keywords";
+                            break;
+                        case URL :
+                            ret = changedCount + " changes, incl. url";
+                            break;
+                        case ASSIGEND_TO :
+                            ret = changedCount + " changes, incl. Assignee";
+                            break;
+                        case QA_CONTACT :
+                            ret = changedCount + " changes, incl. qa contact";
+                            break;
+                        case DEPENDS_ON :
+                        case BLOCKS :
+                            ret = changedCount + " changes, incl. dependence";
+                            break;
+                        default :
+                            ret = changedCount + " changes";
+                    }
+                    return ret;
+                }
+            }            
+        }
+        return "";
+    }
+
     public static String getID(TaskData taskData) {
         try {
             return Integer.toString(BugzillaRepositoryConnector.getBugId(taskData.getTaskId()));
@@ -249,7 +350,7 @@ public class BugzillaIssue extends Issue {
     public void setSeen(boolean seen, boolean cacheRefresh) {
         super.setSeen(seen);
         if(cacheRefresh) {
-            repository.getCache().setSeen(getID(), seen, getAttributes());
+            repository.getIssuesCache().setSeen(getID(), seen, getAttributes());
         }
     }
 
@@ -290,7 +391,6 @@ public class BugzillaIssue extends Issue {
         }
         return IssueField.STATUS_UPTODATE;
     }
-
 
     // XXX get rid of this
     Set<TaskAttribute> getResolveAttributes(String resolution) {
@@ -360,21 +460,28 @@ public class BugzillaIssue extends Issue {
         return attachments.toArray(new Attachment[attachments.size()]);
     }
 
-    void addAttachment(File f, String comment, String desc) {
+
+    void addAttachment(File f, String comment, String desc, String contentType) throws HttpException, IOException, CoreException  {
         FileTaskAttachmentSource attachmentSource = new FileTaskAttachmentSource(f);
-        attachmentSource.setContentType("text/plain");
+        attachmentSource.setContentType(contentType);
         BugzillaTaskAttachmentHandler.AttachmentPartSource source = new BugzillaTaskAttachmentHandler.AttachmentPartSource(attachmentSource);
 
-        try {
-            Bugzilla.getInstance().getRepositoryConnector().getClientManager().getClient(getTaskRepository(), new NullProgressMonitor()).
-            postAttachment(getID(), comment, desc, attachmentSource.getContentType(), false, source, new NullProgressMonitor());
-        } catch (HttpException ex) {
-            Bugzilla.LOG.log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Bugzilla.LOG.log(Level.SEVERE, null, ex);
-        } catch (CoreException ex) {
-            Bugzilla.LOG.log(Level.SEVERE, null, ex);
-        }
+//        try {
+            Bugzilla.getInstance().getClient(repository).postAttachment(
+                    getID(), 
+                    comment, 
+                    desc, 
+                    attachmentSource.getContentType(), 
+                    false, 
+                    source, 
+                    new NullProgressMonitor());
+//        } catch (HttpException ex) {
+//            Bugzilla.LOG.log(Level.SEVERE, null, ex);
+//        } catch (IOException ex) {
+//            Bugzilla.LOG.log(Level.SEVERE, null, ex);
+//        } catch (CoreException ex) {
+//            Bugzilla.LOG.log(Level.SEVERE, null, ex);
+//        }
     }
 
     Comment[] getComments() {
@@ -397,20 +504,23 @@ public class BugzillaIssue extends Issue {
         refresh();
 
         // resolved attrs
-        Set<TaskAttribute> attrs = null; // XXX looks like we don't need this at all - see in submmit -> attr = null
         if(close) {
-            attrs = getResolveAttributes("FIXED");
+            resolve("FIXED"); // XXX constant?
         }
-        // commet attrs
         if(comment != null) {
-            TaskAttribute ta = data.getRoot().createMappedAttribute(TaskAttribute.COMMENT_NEW);
-            ta.setValue(comment);
-            attrs.add(ta);
+            addComment(comment);
         }
         try {
             submit();
         } catch (CoreException ex) {
             Bugzilla.LOG.log(Level.SEVERE, null, ex);
+        }
+    }
+
+    public void addComment(String comment) {
+        if(comment != null) {
+            TaskAttribute ta = data.getRoot().createMappedAttribute(TaskAttribute.COMMENT_NEW);
+            ta.setValue(comment);
         }
     }
 
@@ -420,7 +530,8 @@ public class BugzillaIssue extends Issue {
 
     public void refresh() {
         try {
-            data = Bugzilla.getInstance().getRepositoryConnector().getTaskData(repository.getTaskRepository(), data.getTaskId(), new NullProgressMonitor());
+            TaskData td = Bugzilla.getInstance().getRepositoryConnector().getTaskData(repository.getTaskRepository(), data.getTaskId(), new NullProgressMonitor());
+            setTaskData(td);
         } catch (CoreException ex) {
             Bugzilla.LOG.log(Level.SEVERE, null, ex);
         }
