@@ -64,6 +64,7 @@ import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.glassfish.spi.GlassfishModule;
 import org.netbeans.modules.glassfish.spi.ServerUtilities;
 import org.openide.ErrorManager;
+import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.modules.InstalledFileLocator;
 
@@ -88,7 +89,6 @@ public class Hk2PluginProperties {
     public static final String PLAT_PROP_ANT_NAME = "platform.ant.name"; //NOI18N
 
     private InstanceProperties ip;
-    private Hk2DeploymentManager dm;
     private static final int DEBUGPORT = 8787;
 
     /**
@@ -96,7 +96,6 @@ public class Hk2PluginProperties {
      * @param dm
      */
     public Hk2PluginProperties(Hk2DeploymentManager dm) {
-        this.dm = dm;
         ip = InstanceProperties.getInstanceProperties(dm.getUri());
     }
 
@@ -131,7 +130,7 @@ public class Hk2PluginProperties {
         JavaPlatform[] installedPlatforms = jpm.getPlatforms(null, new Specification("J2SE", null)); // NOI18N
 
         for (int i = 0; i < installedPlatforms.length; i++) {
-            String platformName = (String) installedPlatforms[i].getProperties().get(PLAT_PROP_ANT_NAME);
+            String platformName = installedPlatforms[i].getProperties().get(PLAT_PROP_ANT_NAME);
             if (platformName != null && platformName.equals(currentJvm)) {
                 return installedPlatforms[i];
             }
@@ -154,25 +153,23 @@ public class Hk2PluginProperties {
      */
     public List<URL> getClasses() {
         List<String> jars = new ArrayList<String>();
-        jars.add("web/jsf-connector-10.0");
-        jars.add("webservices-api");
-        jars.add("webservices-tools");
-        jars.add("webservices-rt");
 
         List<URL> list = new ArrayList<URL>();
         File serverDir = new File(getGlassfishRoot());
 
         try {
-            File javaEEJar = ServerUtilities.getJarName(serverDir.getAbsolutePath(), "javax.javaee-10.0");
-            Logger.getLogger("glassfish.javaee").log(Level.FINER,
+            File javaEEJar = ServerUtilities.getJarName(serverDir.getAbsolutePath(), 
+                    "javax.javaee" + ServerUtilities.GFV3_VERSION_MATCHER);
+            Logger.getLogger("glassfish-javaee").log(Level.FINER,
                     "JavaEE jar is " + (javaEEJar != null ? javaEEJar.getAbsolutePath() : "null"));
             if(javaEEJar != null && javaEEJar.exists()) {
+                jars.add("web/jsf-connector-10.0"); // NOI18N -- watchout for builds older than b25
                 JarFile jarFile = new JarFile(javaEEJar);
                 Manifest manifest = jarFile.getManifest();
                 if(manifest != null) {
                     Attributes attrs = manifest.getMainAttributes();
                     String cp = attrs.getValue("Class-Path");
-                    Logger.getLogger("glassfish.javaee").log(Level.FINER,
+                    Logger.getLogger("glassfish-javaee").log(Level.FINER,
                             "JavaEE jar classpath is \"" + cp + "\"");
                     if(cp != null && cp.length() > 0) {
                         File parent = javaEEJar.getParentFile();
@@ -184,11 +181,31 @@ public class Hk2PluginProperties {
 
                 // Older V3 install that doesn't use Class-Path, so assume it's all in javax.javaee
                 if(list.size() == 0) {
-                    Logger.getLogger("glassfish.javaee").log(Level.FINER,
+                    Logger.getLogger("glassfish-javaee").log(Level.FINER,
                             javaEEJar.getAbsolutePath() + " contains null classpath or subjars not found.  Using directly.");
                     list.add(fileToUrl(javaEEJar));
                 }
+            } else {
+                // v3 (Prelude and Final) doesn't have the javax.javaee jar, since it is not a
+                // complete Java EE 5 implementation.
+                File modulesDir = new File(serverDir.getAbsolutePath() + File.separatorChar + ServerUtilities.GFV3_MODULES_DIR_NAME);
+                FileObject mDFO = FileUtil.toFileObject(FileUtil.normalizeFile(modulesDir));
+                jars = ServerUtilities.filterByManifest(jars, mDFO, 0, true);
             }
+            
+            // add webservices.jar if exists
+            jars.add("webservices"+ServerUtilities.GFV3_VERSION_MATCHER); //NOI18N
+            jars.add("jaxb"+ServerUtilities.GFV3_VERSION_MATCHER); //NOI18N
+            //
+            // these aren't caught by the filterByManifest method, so we add it 'by hand'
+            //
+            // for Prelude support
+            jars.add("web/jstl-impl"+ServerUtilities.GFV3_VERSION_MATCHER); //NOI18N
+            jars.add("web/jsf-impl"+ServerUtilities.GFV3_VERSION_MATCHER); //NOI18N
+            // for v3 support
+            jars.add("jstl-impl"+ServerUtilities.GFV3_VERSION_MATCHER); //NOI18N
+            jars.add("jsf-impl"+ServerUtilities.GFV3_VERSION_MATCHER); //NOI18N
+            jars.add("jsf-api"+ServerUtilities.GFV3_VERSION_MATCHER); //NOI18N
 
             for (String jarStr : jars) {
                 File jar = ServerUtilities.getJarName(serverDir.getAbsolutePath(), jarStr);
@@ -321,7 +338,7 @@ public class Hk2PluginProperties {
     public static String buildPath(List<URL> path) {
         String PATH_SEPARATOR = System.getProperty("path.separator"); // NOI18N
 
-        StringBuffer sb = new StringBuffer(path.size() * 16);
+        StringBuilder sb = new StringBuilder(path.size() * 16);
         for (Iterator<URL> i = path.iterator(); i.hasNext();) {
             sb.append(urlToString(i.next()));
             if (i.hasNext()) {
@@ -375,19 +392,15 @@ public class Hk2PluginProperties {
      * @param port
      * @return
      */
-    public static boolean isRunning(String host, int port) {
+    private static boolean isRunning(String host, int port) throws IOException {
         if (null == host) {
             return false;
         }
-        try {
-            InetSocketAddress isa = new InetSocketAddress(host, port);
-            Socket socket = new Socket();
-            socket.connect(isa, 1);
-            socket.close();
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
+        InetSocketAddress isa = new InetSocketAddress(host, port);
+        Socket socket = new Socket();
+        socket.connect(isa, 1);
+        socket.close();
+        return true;
     }
 
     /**
@@ -400,7 +413,8 @@ public class Hk2PluginProperties {
         try {
             return isRunning(host, Integer.parseInt(port));
         } catch (NumberFormatException e) {
-
+            return false;
+        } catch (IOException ioe) {
             return false;
         }
     }
