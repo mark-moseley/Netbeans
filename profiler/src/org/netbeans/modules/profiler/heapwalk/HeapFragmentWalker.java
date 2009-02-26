@@ -55,6 +55,7 @@ public class HeapFragmentWalker {
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
     private AnalysisController analysisController;
+    private OQLController oqlController;
     private ClassesController classesController;
     private Heap heapFragment; // TODO: Should be HeapFragment
     private HeapFragmentWalkerUI walkerUI;
@@ -62,8 +63,6 @@ public class HeapFragmentWalker {
     private InstancesController instancesController;
     private NavigationHistoryManager navigationHistoryManager;
     private SummaryController summaryController;
-    private int totalLiveBytes; // TODO: will be read from HeapSummary
-    private int totalLiveInstances; // TODO: will be read from HeapSummary
 
     //~ Constructors -------------------------------------------------------------------------------------------------------------
 
@@ -72,17 +71,13 @@ public class HeapFragmentWalker {
         this.heapFragment = heapFragment;
         this.heapWalker = heapWalker;
 
-        HeapSummary summary = heapFragment.getSummary();
-
-        totalLiveBytes = summary.getTotalLiveBytes();
-        totalLiveInstances = summary.getTotalLiveInstances();
-
         summaryController = new SummaryController(this);
         classesController = new ClassesController(this);
         instancesController = new InstancesController(this);
         analysisController = new AnalysisController(this);
 
         navigationHistoryManager = new NavigationHistoryManager(this);
+        oqlController = new OQLController(this);
     }
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
@@ -102,9 +97,15 @@ public class HeapFragmentWalker {
             return instancesController;
         } else if (ui.isAnalysisViewActive()) {
             return analysisController;
+        } else if (ui.isOQLViewActive()) {
+            return oqlController;
         }
 
         return null;
+    }
+
+    public OQLController getOQLController() {
+        return oqlController;
     }
 
     public AnalysisController getAnalysisController() {
@@ -152,16 +153,12 @@ public class HeapFragmentWalker {
         return summaryController;
     }
 
-    public int getTotalLiveBytes() {
-        return totalLiveBytes;
-
-        //    return heapFragment.getSummary().getTotalLiveBytes();
+    public long getTotalLiveBytes() {
+        return heapFragment.getSummary().getTotalLiveBytes();
     }
 
-    public int getTotalLiveInstances() {
-        return totalLiveInstances;
-
-        //    return heapFragment.getSummary().getTotalLiveInstances();
+    public long getTotalLiveInstances() {
+        return heapFragment.getSummary().getTotalLiveInstances();
     }
 
     // --- Navigation history support
@@ -203,12 +200,20 @@ public class HeapFragmentWalker {
         instancesController.setClass(jClass);
     }
 
+    public void switchToOQLView() {
+        ((HeapFragmentWalkerUI) getPanel()).showOQLView();
+    }
+
     public void switchToAnalysisView() {
         ((HeapFragmentWalkerUI) getPanel()).showAnalysisView();
     }
 
     public void switchToClassesView() {
         ((HeapFragmentWalkerUI) getPanel()).showClassesView();
+    }
+
+    public void switchToHistoryOQLView() {
+        ((HeapFragmentWalkerUI) getPanel()).showHistoryOQLView();
     }
 
     public void switchToHistoryAnalysisView() {
