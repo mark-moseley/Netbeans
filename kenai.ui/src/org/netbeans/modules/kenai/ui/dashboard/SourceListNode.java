@@ -36,29 +36,36 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.kenai.ui;
 
-import java.awt.Dialog;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import org.netbeans.modules.kenai.api.KenaiProject;
-import org.netbeans.modules.kenai.ui.spi.Dashboard;
-import org.openide.DialogDescriptor;
-import org.openide.DialogDisplayer;
+package org.netbeans.modules.kenai.ui.dashboard;
 
-public final class OpenKenaiProjectAction implements ActionListener {
+import java.util.ArrayList;
+import java.util.List;
+import org.netbeans.modules.kenai.ui.treelist.TreeListNode;
+import org.netbeans.modules.kenai.ui.spi.ProjectHandle;
+import org.netbeans.modules.kenai.ui.spi.SourceAccessor;
+import org.netbeans.modules.kenai.ui.spi.SourceHandle;
+import org.openide.util.NbBundle;
 
-    public void actionPerformed(ActionEvent e) {
-        KenaiSearchPanel searchPanel = new KenaiSearchPanel(KenaiSearchPanel.PanelType.OPEN);
-        DialogDescriptor dialogDesc = new DialogDescriptor(searchPanel,
-                "Open Kenai Project", true, null);
-        Dialog dialog = DialogDisplayer.getDefault().createDialog(dialogDesc);
-        dialog.setVisible(true);
-        dialog.toFront();
-        KenaiProject selProject = searchPanel.getSelectedProject();
-        if( null != selProject ) {
-            ProjectHandleImpl project = new ProjectHandleImpl(selProject);
-            Dashboard.getDefault().addNonMemberProject(project);
+/**
+ * Node for project's sources section.
+ *
+ * @author S. Aubrecht
+ */
+public class SourceListNode extends SectionNode {
+
+    public SourceListNode( ProjectNode parent ) {
+        super( NbBundle.getMessage(SourceListNode.class, "LBL_Sources"), parent, ProjectHandle.PROP_SOURCE_LIST ); //NOI18N
+    }
+
+    @Override
+    protected List<TreeListNode> createChildren() {
+        ArrayList<TreeListNode> res = new ArrayList<TreeListNode>(20);
+        SourceAccessor accessor = SourceAccessor.getDefault();
+        List<SourceHandle> sources = accessor.getSources(project);
+        for( SourceHandle s : sources ) {
+            res.add( new SourceNode( s, this ) );
         }
+        return res;
     }
 }

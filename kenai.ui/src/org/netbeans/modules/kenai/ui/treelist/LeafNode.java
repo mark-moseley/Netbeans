@@ -36,29 +36,24 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.kenai.ui;
 
-import java.awt.Dialog;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import org.netbeans.modules.kenai.api.KenaiProject;
-import org.netbeans.modules.kenai.ui.spi.Dashboard;
-import org.openide.DialogDescriptor;
-import org.openide.DialogDisplayer;
+package org.netbeans.modules.kenai.ui.treelist;
 
-public final class OpenKenaiProjectAction implements ActionListener {
+import java.util.Collections;
+import java.util.List;
 
-    public void actionPerformed(ActionEvent e) {
-        KenaiSearchPanel searchPanel = new KenaiSearchPanel(KenaiSearchPanel.PanelType.OPEN);
-        DialogDescriptor dialogDesc = new DialogDescriptor(searchPanel,
-                "Open Kenai Project", true, null);
-        Dialog dialog = DialogDisplayer.getDefault().createDialog(dialogDesc);
-        dialog.setVisible(true);
-        dialog.toFront();
-        KenaiProject selProject = searchPanel.getSelectedProject();
-        if( null != selProject ) {
-            ProjectHandleImpl project = new ProjectHandleImpl(selProject);
-            Dashboard.getDefault().addNonMemberProject(project);
-        }
+/**
+ * Node without any children.
+ *
+ * @author S. Aubrecht
+ */
+public abstract class LeafNode extends TreeListNode {
+
+    public LeafNode( TreeListNode parent ) {
+        super( false, parent );
+    }
+
+    protected final List<TreeListNode> createChildren() {
+        return Collections.emptyList();
     }
 }

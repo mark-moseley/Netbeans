@@ -36,29 +36,30 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
+
 package org.netbeans.modules.kenai.ui;
 
-import java.awt.Dialog;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import org.netbeans.modules.kenai.api.KenaiProject;
-import org.netbeans.modules.kenai.ui.spi.Dashboard;
-import org.openide.DialogDescriptor;
-import org.openide.DialogDisplayer;
+import org.netbeans.modules.kenai.ui.spi.ProjectHandle;
 
-public final class OpenKenaiProjectAction implements ActionListener {
+/**
+ *
+ * @author Jan Becicka
+ */
+public class ProjectHandleImpl extends ProjectHandle {
 
-    public void actionPerformed(ActionEvent e) {
-        KenaiSearchPanel searchPanel = new KenaiSearchPanel(KenaiSearchPanel.PanelType.OPEN);
-        DialogDescriptor dialogDesc = new DialogDescriptor(searchPanel,
-                "Open Kenai Project", true, null);
-        Dialog dialog = DialogDisplayer.getDefault().createDialog(dialogDesc);
-        dialog.setVisible(true);
-        dialog.toFront();
-        KenaiProject selProject = searchPanel.getSelectedProject();
-        if( null != selProject ) {
-            ProjectHandleImpl project = new ProjectHandleImpl(selProject);
-            Dashboard.getDefault().addNonMemberProject(project);
-        }
+    private KenaiProject prj;
+    public ProjectHandleImpl(KenaiProject prj) {
+        super( prj.getName() );
+        this.prj=prj;
+    }
+
+    @Override
+    public String getDisplayName() {
+        return prj.getDisplayName();
+    }
+
+    public KenaiProject getKenaiProject() {
+        return prj;
     }
 }
