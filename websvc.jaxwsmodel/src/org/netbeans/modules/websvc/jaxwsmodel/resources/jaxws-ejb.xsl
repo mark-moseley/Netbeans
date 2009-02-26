@@ -61,8 +61,7 @@ made subject to such option by the copyright holder.
             <xsl:if test="/jaxws:jax-ws/jaxws:services/jaxws:service">
                 <xsl:if test="count(/jaxws:jax-ws/jaxws:services/jaxws:service[not(jaxws:wsdl-url)]) > 0">
                     <target name="wsgen-init" depends="init">
-                        <mkdir dir="${{build.generated.dir}}/wsgen/service"/>
-                        <mkdir dir="${{build.generated.dir}}/wsgen/binaries"/>
+                        <mkdir dir="${{build.generated.sources.dir}}/jax-ws/resources/"/>
                         <taskdef name="wsgen" classname="com.sun.tools.ws.ant.WsGen">
                             <classpath path="${{j2ee.platform.wsgen.classpath}}"/>
                         </taskdef>
@@ -77,44 +76,41 @@ made subject to such option by the copyright holder.
                                 <xsl:text>wsgen-</xsl:text><xsl:value-of select="@name"/>
                             </xsl:for-each>
                         </xsl:attribute>
-                        <ejbjarproject2:javac srcdir="${{build.generated.dir}}/wsgen/service" classpath="${{j2ee.platform.wsgen.classpath}}:${{javac.classpath}}" destdir="${{classes.dir}}"/>
+                        <ejbjarproject2:javac srcdir="${{build.generated.sources.dir}}/jax-ws" classpath="${{j2ee.platform.wsgen.classpath}}:${{javac.classpath}}" destdir="${{classes.dir}}"/>
                     </target>
                 </xsl:if>
             </xsl:if>
             <xsl:for-each select="/jaxws:jax-ws/jaxws:services/jaxws:service">
                 <xsl:if test="not(jaxws:wsdl-url)">
                     <xsl:variable name="wsname" select="@name"/>
+                    
                     <xsl:variable name="seiclass" select="jaxws:implementation-class"/>
                     <target name="wsgen-{$wsname}" depends="wsgen-init, -do-compile">
-                    <xsl:choose>
-                         <xsl:when test="$jaxwsversion = 'jaxws21lib'">
-                             <wsgen
-                                 xendorsed="true"
-                                 fork="true"
-                                 destdir="${{build.generated.dir}}/wsgen/binaries"
-                                 sourcedestdir="${{build.generated.dir}}/wsgen/service"
-                                 resourcedestdir="${{build.generated.dir}}/wsgen/service"
-                                 keep="false"
-                                 genwsdl="true"
-                                 sei="{$seiclass}">
-                                 <classpath path="${{java.home}}/../lib/tools.jar:${{classes.dir}}:${{j2ee.platform.wsgen.classpath}}:${{javac.classpath}}"/>
-                                 <jvmarg value="-Djava.endorsed.dirs=${{jaxws.endorsed.dir}}"/>
-                             </wsgen>
-                         </xsl:when>
-                         <xsl:otherwise>
-                             <wsgen
-                                 fork="true"
-                                 destdir="${{build.generated.dir}}/wsgen/binaries"
-                                 sourcedestdir="${{build.generated.dir}}/wsgen/service"
-                                 resourcedestdir="${{build.generated.dir}}/wsgen/service"
-                                 keep="false"
-                                 genwsdl="true"
-                                 sei="{$seiclass}">
-                                 <classpath path="${{java.home}}/../lib/tools.jar:${{classes.dir}}:${{j2ee.platform.wsgen.classpath}}:${{javac.classpath}}"/>
-                                 <jvmarg value="-Djava.endorsed.dirs=${{jaxws.endorsed.dir}}"/>
-                             </wsgen>                            
-                        </xsl:otherwise>
-                    </xsl:choose>
+                        <xsl:choose>
+                            <xsl:when test="$jaxwsversion='jaxws21lib'">
+                                <wsgen
+                                    destdir="${{build.generated.sources.dir}}/jax-ws"
+                                    sourcedestdir="${{build.generated.sources.dir}}/jax-ws"
+                                    resourcedestdir="${{build.generated.sources.dir}}/jax-ws/resources/"
+                                    xendorsed="true"
+                                    keep="false"
+                                    genwsdl="true"
+                                    sei="{$seiclass}">
+                                    <classpath path="${{java.home}}/../lib/tools.jar:${{classes.dir}}:${{j2ee.platform.wsgen.classpath}}:${{javac.classpath}}"/>
+                                </wsgen>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <wsgen
+                                    destdir="${{build.generated.sources.dir}}/jax-ws"
+                                    sourcedestdir="${{build.generated.sources.dir}}/jax-ws"
+                                    resourcedestdir="${{build.generated.sources.dir}}/jax-ws/resources/"
+                                    keep="false"
+                                    genwsdl="true"
+                                    sei="{$seiclass}">
+                                    <classpath path="${{java.home}}/../lib/tools.jar:${{classes.dir}}:${{j2ee.platform.wsgen.classpath}}:${{javac.classpath}}"/>
+                                </wsgen>
+                            </xsl:otherwise>
+                        </xsl:choose>
                     </target>
                 </xsl:if>
             </xsl:for-each>
@@ -130,12 +126,11 @@ made subject to such option by the copyright holder.
             <xsl:if test="/*/*/*/jaxws:wsdl-url">
                 <target name="wsimport-init" depends="init">
                     <xsl:if test="/jaxws:jax-ws/jaxws:clients/jaxws:client">
-                        <mkdir dir="${{build.generated.dir}}/wsimport/client"/>                        
+                        <mkdir dir="${{build.generated.sources.dir}}/jax-ws"/>
                     </xsl:if>
                     <xsl:if test="/jaxws:jax-ws/jaxws:services/jaxws:service/jaxws:wsdl-url">
-                        <mkdir dir="${{build.generated.dir}}/wsimport/service"/>
+                        <mkdir dir="${{build.generated.sources.dir}}/jax-ws"/>
                     </xsl:if>
-                    <mkdir dir="${{build.generated.dir}}/wsimport/binaries"/>
                     <mkdir dir="${{classes.dir}}"/>
                     <taskdef name="wsimport" classname="com.sun.tools.ws.ant.WsImport">
                         <classpath path="${{j2ee.platform.wsimport.classpath}}"/>
@@ -146,27 +141,46 @@ made subject to such option by the copyright holder.
                 <xsl:variable name="wsname" select="@name"/>
                 <xsl:variable name="package_name" select="jaxws:package-name"/>
                 <xsl:variable name="wsdl_url" select="jaxws:local-wsdl-file"/>
-                <xsl:variable name="wsdl_url_actual" select="jaxws:wsdl-url"/>
                 <xsl:variable name="package_path" select = "translate($package_name,'.','/')"/>
                 <xsl:variable name="catalog" select = "jaxws:catalog-file"/>
-                <target name="wsimport-client-check-{$wsname}" depends="wsimport-init">
-                    <condition property="wsimport-client-{$wsname}.notRequired">
-                        <available file="${{build.generated.dir}}/wsimport/client/{$package_path}" type="dir"/>
-                    </condition>
-                </target>
-                <target name="wsimport-client-{$wsname}" depends="wsimport-init,wsimport-client-check-{$wsname}" unless="wsimport-client-{$wsname}.notRequired">
+                <xsl:variable name="wsimportoptions" select="jaxws:wsimport-options"/>
+                <xsl:variable name="is_xnocompile" select="$wsimportoptions/jaxws:wsimport-option/jaxws:wsimport-option-name='xnocompile'"/>
+                <target name="wsimport-client-{$wsname}" depends="wsimport-init">
+                    <mkdir dir="${{build.generated.dir}}/jax-wsCache/{$wsname}"/>
+                    <property name="wsdl-{$wsname}" location="${{meta.inf}}/xml-resources/web-service-references/{$wsname}/wsdl/{$wsdl_url}"/>
                     <xsl:if test="jaxws:package-name/@forceReplace">
-                      <xsl:choose>
-                         <xsl:when test="$jaxwsversion = 'jaxws21lib'">
                         <wsimport
-                            xendorsed="true"
-                            sourcedestdir="${{build.generated.dir}}/wsimport/client"
-                            extension="true"
+                            sourcedestdir="${{build.generated.dir}}/jax-wsCache/{$wsname}"
                             package="{$package_name}"
-                            destdir="${{build.generated.dir}}/wsimport/binaries"
-                            wsdl="${{basedir}}/${{meta.inf}}/xml-resources/web-service-references/{$wsname}/wsdl/{$wsdl_url}"
-                            wsdlLocation="{$wsdl_url_actual}"
+                            destdir="${{build.generated.dir}}/jax-wsCache/{$wsname}"
+                            wsdl="${{wsdl-{$wsname}}}"
                             catalog="{$catalog}">
+                            <xsl:if test="$wsimportoptions">
+                                <xsl:for-each select="$wsimportoptions/jaxws:wsimport-option">
+                                    <xsl:variable name="wsoptionname" select="jaxws:wsimport-option-name"/>
+                                    <xsl:variable name="wsoptionvalue" select="jaxws:wsimport-option-value"/>
+                                    <xsl:choose>
+                                        <xsl:when test="jaxws:jaxboption">
+                                            <xjcarg>
+                                                <xsl:variable name="wsoption">
+                                                    <xsl:text><xsl:value-of select="$wsoptionname"/></xsl:text>
+                                                </xsl:variable>
+                                                <xsl:attribute name="{$wsoption}">
+                                                    <xsl:value-of select="$wsoptionvalue"/>
+                                                </xsl:attribute>
+                                            </xjcarg>
+                                        </xsl:when>
+                                        <xsl:otherwise>
+                                            <xsl:variable name="wsoption">
+                                                <xsl:text><xsl:value-of select="$wsoptionname"/></xsl:text>
+                                            </xsl:variable>
+                                            <xsl:attribute name="{$wsoption}">
+                                                <xsl:value-of select="$wsoptionvalue"/>
+                                            </xsl:attribute>
+                                        </xsl:otherwise>
+                                    </xsl:choose>
+                                </xsl:for-each>
+                            </xsl:if>
                             <xsl:if test="jaxws:binding">
                                 <binding dir="${{meta.inf}}/xml-resources/web-service-references/{$wsname}/bindings">
                                     <xsl:attribute name="includes">
@@ -177,42 +191,44 @@ made subject to such option by the copyright holder.
                                     </xsl:attribute>
                                 </binding>
                             </xsl:if>
-                        </wsimport>
-                         </xsl:when>
-                         <xsl:otherwise>
-                            <wsimport
-                            sourcedestdir="${{build.generated.dir}}/wsimport/client"
-                            extension="true"
-                            package="{$package_name}"
-                            destdir="${{build.generated.dir}}/wsimport/binaries"
-                            wsdl="${{basedir}}/${{meta.inf}}/xml-resources/web-service-references/{$wsname}/wsdl/{$wsdl_url}"
-                            wsdlLocation="{$wsdl_url_actual}"
-                            catalog="{$catalog}">
-                            <xsl:if test="jaxws:binding">
-                                <binding dir="${{meta.inf}}/xml-resources/web-service-references/{$wsname}/bindings">
-                                    <xsl:attribute name="includes">
-                                        <xsl:for-each select="jaxws:binding">
-                                            <xsl:if test="position()!=1"><xsl:text>, </xsl:text></xsl:if>
-                                            <xsl:value-of select="normalize-space(jaxws:file-name)"/>
-                                        </xsl:for-each>
-                                    </xsl:attribute>
-                                </binding>
+                            <xsl:if test="$is_xnocompile">
+                                <depends file="${{wsdl-{$wsname}}}"/>
+                                <produces dir="${{build.generated.dir}}/jax-wsCache/{$wsname}"/>
                             </xsl:if>
                         </wsimport>
-                         </xsl:otherwise>
-                     </xsl:choose>
                     </xsl:if>
                     <xsl:if test="not(jaxws:package-name/@forceReplace)">
-                      <xsl:choose>
-                         <xsl:when test="$jaxwsversion = 'jaxws21lib'">
                         <wsimport
-                            xendorsed="true"
-                            sourcedestdir="${{build.generated.dir}}/wsimport/client"
-                            extension="true"
-                            destdir="${{build.generated.dir}}/wsimport/binaries"
-                            wsdl="${{basedir}}/${{meta.inf}}/xml-resources/web-service-references/{$wsname}/wsdl/{$wsdl_url}"
-                            wsdlLocation="{$wsdl_url_actual}"
+                            sourcedestdir="${{build.generated.dir}}/jax-wsCache/{$wsname}"
+                            destdir="${{build.generated.dir}}/jax-wsCache/{$wsname}"
+                            wsdl="${{wsdl-{$wsname}}}"
                             catalog="{$catalog}">
+                            <xsl:if test="$wsimportoptions">
+                                <xsl:for-each select="$wsimportoptions/jaxws:wsimport-option">
+                                    <xsl:variable name="wsoptionname" select="jaxws:wsimport-option-name"/>
+                                    <xsl:variable name="wsoptionvalue" select="jaxws:wsimport-option-value"/>
+                                    <xsl:choose>
+                                        <xsl:when test="jaxws:jaxboption">
+                                            <xjcarg>
+                                                <xsl:variable name="wsoption">
+                                                    <xsl:text><xsl:value-of select="$wsoptionname"/></xsl:text>
+                                                </xsl:variable>
+                                                <xsl:attribute name="{$wsoption}">
+                                                    <xsl:value-of select="$wsoptionvalue"/>
+                                                </xsl:attribute>
+                                            </xjcarg>
+                                        </xsl:when>
+                                        <xsl:otherwise>
+                                            <xsl:variable name="wsoption">
+                                                <xsl:text><xsl:value-of select="$wsoptionname"/></xsl:text>
+                                            </xsl:variable>
+                                            <xsl:attribute name="{$wsoption}">
+                                                <xsl:value-of select="$wsoptionvalue"/>
+                                            </xsl:attribute>
+                                        </xsl:otherwise>
+                                    </xsl:choose>
+                                </xsl:for-each>
+                            </xsl:if>
                             <xsl:if test="jaxws:binding">
                                 <binding dir="${{meta.inf}}/xml-resources/web-service-references/{$wsname}/bindings">
                                     <xsl:attribute name="includes">
@@ -223,36 +239,21 @@ made subject to such option by the copyright holder.
                                     </xsl:attribute>
                                 </binding>
                             </xsl:if>
-                        </wsimport>
-                        </xsl:when>
-                        <xsl:otherwise>
-                           <wsimport
-                            sourcedestdir="${{build.generated.dir}}/wsimport/client"
-                            extension="true"
-                            destdir="${{build.generated.dir}}/wsimport/binaries"
-                            wsdl="${{basedir}}/${{meta.inf}}/xml-resources/web-service-references/{$wsname}/wsdl/{$wsdl_url}"
-                            wsdlLocation="{$wsdl_url_actual}"
-                            catalog="{$catalog}">
-                            <xsl:if test="jaxws:binding">
-                                <binding dir="${{meta.inf}}/xml-resources/web-service-references/{$wsname}/bindings">
-                                    <xsl:attribute name="includes">
-                                        <xsl:for-each select="jaxws:binding">
-                                            <xsl:if test="position()!=1"><xsl:text>, </xsl:text></xsl:if>
-                                            <xsl:value-of select="normalize-space(jaxws:file-name)"/>
-                                        </xsl:for-each>
-                                    </xsl:attribute>
-                                </binding>
+                            <xsl:if test="$is_xnocompile">
+                                <depends file="${{wsdl-{$wsname}}}"/>
+                                <produces dir="${{build.generated.dir}}/jax-wsCache/{$wsname}"/>
                             </xsl:if>
                         </wsimport>
-                        </xsl:otherwise> 
-                      </xsl:choose>
                     </xsl:if>
-                    <copy todir="${{classes.dir}}">
-                        <fileset dir="${{build.generated.dir}}/wsimport/binaries" includes="**/*.xml"/>
+                    <copy todir="${{build.generated.sources.dir}}/jax-ws">
+                        <fileset dir="${{build.generated.dir}}/jax-wsCache/{$wsname}">
+                            <include name="**/*.java"/>
+                        </fileset>
                     </copy>
                 </target>
                 <target name="wsimport-client-clean-{$wsname}" depends="-init-project">
-                    <delete dir="${{build.generated.dir}}/wsimport/client/{$package_path}"/>
+                    <delete dir="${{build.generated.dir}}/jax-wsCache/{$wsname}"/>
+                    <delete dir="${{build.generated.sources.dir}}/jax-ws/{$package_path}"/>
                 </target>
             </xsl:for-each>
             
@@ -261,26 +262,47 @@ made subject to such option by the copyright holder.
                     <xsl:variable name="wsname" select="@name"/>
                     <xsl:variable name="package_name" select="jaxws:package-name"/>
                     <xsl:variable name="wsdl_url" select="jaxws:local-wsdl-file"/>
+                    <xsl:variable name="service_name" select="jaxws:service-name"/>
                     <xsl:variable name="package_path" select = "translate($package_name,'.','/')"/>
                     <xsl:variable name="catalog" select = "jaxws:catalog-file"/>
-                    <target name="wsimport-service-check-{$wsname}" depends="wsimport-init">
-                        <condition property="wsimport-service-{$wsname}.notRequired">
-                            <available file="${{build.generated.dir}}/wsimport/service/{$package_path}" type="dir"/>
-                        </condition>
-                    </target>
-                    <target name="wsimport-service-{$wsname}" depends="wsimport-init,wsimport-service-check-{$wsname}" unless="wsimport-service-{$wsname}.notRequired">
+                    <xsl:variable name="wsimportoptions" select="jaxws:wsimport-options"/>
+                    <xsl:variable name="is_xnocompile" select="$wsimportoptions/jaxws:wsimport-option/jaxws:wsimport-option-name='xnocompile'"/>
+                    <target name="wsimport-service-{$wsname}" depends="wsimport-init">
+                        <mkdir dir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}"/>
+                        <property name="service-wsdl-{$wsname}" location="${{meta.inf}}/xml-resources/web-services/{$wsname}/wsdl/{$wsdl_url}"/>
                         <xsl:if test="jaxws:package-name/@forceReplace">
-                         <xsl:choose>
-                           <xsl:when test="$jaxwsversion = 'jaxws21lib'">  
                             <wsimport
-                                xendorsed="true"
-                                sourcedestdir="${{build.generated.dir}}/wsimport/service"
-                                extension="true"
-                                verbose="true"
+                                sourcedestdir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}"
                                 package="{$package_name}"
-                                destdir="${{build.generated.dir}}/wsimport/binaries"
-                                wsdl="${{basedir}}/${{meta.inf}}/xml-resources/web-services/{$wsname}/wsdl/{$wsdl_url}"
+                                destdir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}"
+                                wsdl="${{service-wsdl-{$wsname}}}"
                                 catalog="{$catalog}">
+                                <xsl:if test="$wsimportoptions">
+                                    <xsl:for-each select="$wsimportoptions/jaxws:wsimport-option">
+                                        <xsl:variable name="wsoptionname" select="jaxws:wsimport-option-name"/>
+                                        <xsl:variable name="wsoptionvalue" select="jaxws:wsimport-option-value"/>
+                                        <xsl:choose>
+                                            <xsl:when test="jaxws:jaxboption">
+                                                <xjcarg>
+                                                    <xsl:variable name="wsoption">
+                                                        <xsl:text><xsl:value-of select="$wsoptionname"/></xsl:text>
+                                                    </xsl:variable>
+                                                    <xsl:attribute name="{$wsoption}">
+                                                        <xsl:value-of select="$wsoptionvalue"/>
+                                                    </xsl:attribute>
+                                                </xjcarg>
+                                            </xsl:when>
+                                            <xsl:otherwise>
+                                                <xsl:variable name="wsoption">
+                                                    <xsl:text><xsl:value-of select="$wsoptionname"/></xsl:text>
+                                                </xsl:variable>
+                                                <xsl:attribute name="{$wsoption}">
+                                                    <xsl:value-of select="$wsoptionvalue"/>
+                                                </xsl:attribute>
+                                            </xsl:otherwise>
+                                        </xsl:choose>
+                                    </xsl:for-each>
+                                </xsl:if>
                                 <xsl:if test="jaxws:binding">
                                     <binding dir="${{meta.inf}}/xml-resources/web-services/{$wsname}/bindings">
                                         <xsl:attribute name="includes">
@@ -291,42 +313,44 @@ made subject to such option by the copyright holder.
                                         </xsl:attribute>
                                     </binding>
                                 </xsl:if>
-                            </wsimport>
-                           </xsl:when>
-                           <xsl:otherwise>
-                              <wsimport
-                                sourcedestdir="${{build.generated.dir}}/wsimport/service"
-                                extension="true"
-                                verbose="true"
-                                package="{$package_name}"
-                                destdir="${{build.generated.dir}}/wsimport/binaries"
-                                wsdl="${{basedir}}/${{meta.inf}}/xml-resources/web-services/{$wsname}/wsdl/{$wsdl_url}"
-                                catalog="{$catalog}">
-                                <xsl:if test="jaxws:binding">
-                                    <binding dir="${{meta.inf}}/xml-resources/web-services/{$wsname}/bindings">
-                                        <xsl:attribute name="includes">
-                                            <xsl:for-each select="jaxws:binding">
-                                                <xsl:if test="position()!=1"><xsl:text>;</xsl:text></xsl:if>
-                                                <xsl:value-of select="normalize-space(jaxws:file-name)"/>
-                                            </xsl:for-each>
-                                        </xsl:attribute>
-                                    </binding>
+                                <xsl:if test="$is_xnocompile">
+                                    <depends file="${{wsdl-{$wsname}}}"/>
+                                    <produces dir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}"/>
                                 </xsl:if>
                             </wsimport>
-                           </xsl:otherwise>
-                          </xsl:choose>
                         </xsl:if>
                         <xsl:if test="not(jaxws:package-name/@forceReplace)">
-                          <xsl:choose>
-                           <xsl:when test="$jaxwsversion = 'jaxws21lib'"> 
                             <wsimport
-                                xendorsed="true"
-                                sourcedestdir="${{build.generated.dir}}/wsimport/service"
-                                extension="true"
-                                verbose="true"
-                                destdir="${{build.generated.dir}}/wsimport/binaries"
-                                wsdl="${{basedir}}/${{meta.inf}}/xml-resources/web-services/{$wsname}/wsdl/{$wsdl_url}"
+                                sourcedestdir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}"
+                                destdir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}"
+                                wsdl="${{service-wsdl-{$wsname}}}"
                                 catalog="{$catalog}">
+                                <xsl:if test="$wsimportoptions">
+                                    <xsl:for-each select="$wsimportoptions/jaxws:wsimport-option">
+                                        <xsl:variable name="wsoptionname" select="jaxws:wsimport-option-name"/>
+                                        <xsl:variable name="wsoptionvalue" select="jaxws:wsimport-option-value"/>
+                                        <xsl:choose>
+                                            <xsl:when test="jaxws:jaxboption">
+                                                <xjcarg>
+                                                    <xsl:variable name="wsoption">
+                                                        <xsl:text><xsl:value-of select="$wsoptionname"/></xsl:text>
+                                                    </xsl:variable>
+                                                    <xsl:attribute name="{$wsoption}">
+                                                        <xsl:value-of select="$wsoptionvalue"/>
+                                                    </xsl:attribute>
+                                                </xjcarg>
+                                            </xsl:when>
+                                            <xsl:otherwise>
+                                                <xsl:variable name="wsoption">
+                                                    <xsl:text><xsl:value-of select="$wsoptionname"/></xsl:text>
+                                                </xsl:variable>
+                                                <xsl:attribute name="{$wsoption}">
+                                                    <xsl:value-of select="$wsoptionvalue"/>
+                                                </xsl:attribute>
+                                            </xsl:otherwise>
+                                        </xsl:choose>
+                                    </xsl:for-each>
+                                </xsl:if>
                                 <xsl:if test="jaxws:binding">
                                     <binding dir="${{meta.inf}}/xml-resources/web-services/{$wsname}/bindings">
                                         <xsl:attribute name="includes">
@@ -337,36 +361,26 @@ made subject to such option by the copyright holder.
                                         </xsl:attribute>
                                     </binding>
                                 </xsl:if>
-                            </wsimport>  
-                          </xsl:when>
-                          <xsl:otherwise>
-                             <wsimport
-                                sourcedestdir="${{build.generated.dir}}/wsimport/service"
-                                extension="true"
-                                verbose="true"
-                                destdir="${{build.generated.dir}}/wsimport/binaries"
-                                wsdl="${{basedir}}/${{meta.inf}}/xml-resources/web-services/{$wsname}/wsdl/{$wsdl_url}"
-                                catalog="{$catalog}">
-                                <xsl:if test="jaxws:binding">
-                                    <binding dir="${{meta.inf}}/xml-resources/web-services/{$wsname}/bindings">
-                                        <xsl:attribute name="includes">
-                                            <xsl:for-each select="jaxws:binding">
-                                                <xsl:if test="position()!=1"><xsl:text>;</xsl:text></xsl:if>
-                                                <xsl:value-of select="normalize-space(jaxws:file-name)"/>
-                                            </xsl:for-each>
-                                        </xsl:attribute>
-                                    </binding>
+                                <xsl:if test="$is_xnocompile">
+                                    <depends file="${{wsdl-{$wsname}}}"/>
+                                    <produces dir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}"/>
                                 </xsl:if>
-                            </wsimport>
-                          </xsl:otherwise>
-                         </xsl:choose>                          
+                            </wsimport>                        
                         </xsl:if>
-                         <copy todir="${{basedir}}/${{meta.inf}}/wsdl/{$wsname}">
-                            <fileset dir="${{basedir}}/${{meta.inf}}/xml-resources/web-services/{$wsname}/wsdl/" />
+                        <copy todir="${{build.generated.sources.dir}}/jax-ws">
+                            <fileset dir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}">
+                                <include name="**/*.java"/>
+                            </fileset>
+                        </copy>
+                        <property name="targetLocation-{$wsname}" location="${{meta.inf}}/wsdl/{$wsname}"/>
+                        <property name="sourceLocation-{$wsname}" location="${{meta.inf}}/xml-resources/web-services/{$wsname}/wsdl/"/>
+                        <copy todir="${{targetLocation-{$wsname}}}">
+                            <fileset dir="${{sourceLocation-{$wsname}}}" />
                         </copy> 
                     </target>
                     <target name="wsimport-service-clean-{$wsname}" depends="-init-project">
-                        <delete dir="${{build.generated.dir}}/wsimport/service/{$package_path}"/>
+                        <delete dir="${{build.generated.dir}}/jax-wsCache/service/{$wsname}"/>
+                        <delete dir="${{build.generated.sources.dir}}/jax-ws/{$package_path}"/>
                     </target>
                 </xsl:if>
             </xsl:for-each>
@@ -380,9 +394,6 @@ made subject to such option by the copyright holder.
                             <xsl:text>wsimport-client-</xsl:text><xsl:value-of select="@name"/>
                         </xsl:for-each>
                     </xsl:attribute>
-                </target>
-                <target name="wsimport-client-compile" depends="wsimport-client-generate">
-                    <ejbjarproject2:javac srcdir="${{build.generated.dir}}/wsimport/client" classpath="${{j2ee.platform.wsimport.classpath}}:${{javac.classpath}}" destdir="${{classes.dir}}"/>
                 </target>
             </xsl:if>
             
@@ -399,9 +410,6 @@ made subject to such option by the copyright holder.
                             </xsl:if>
                         </xsl:for-each>
                     </xsl:attribute>
-                </target>
-                <target name="wsimport-service-compile" depends="wsimport-service-generate">
-                    <ejbjarproject2:javac srcdir="${{build.generated.dir}}/wsimport/service" classpath="${{j2ee.platform.wsimport.classpath}}:${{javac.classpath}}" destdir="${{classes.dir}}"/>
                 </target>
             </xsl:if>
             
