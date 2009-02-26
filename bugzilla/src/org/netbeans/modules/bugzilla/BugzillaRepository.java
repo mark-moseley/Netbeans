@@ -40,6 +40,7 @@
 package org.netbeans.modules.bugzilla;
 
 import java.awt.BorderLayout;
+import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
@@ -73,6 +74,7 @@ import org.netbeans.modules.bugzilla.util.BugzillaConstants;
 import org.netbeans.modules.bugzilla.util.BugzillaUtil;
 import org.openide.util.Cancellable;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.RequestProcessor.Task;
@@ -91,7 +93,7 @@ public class BugzillaRepository extends Repository {
 
     BugzillaRepository() { }
 
-    BugzillaRepository(String repoName, String url, String user, String password) {
+    protected BugzillaRepository(String repoName, String url, String user, String password) {
         name = repoName;
         taskRepository = createTaskRepository(name, url, user, password);
     }
@@ -108,6 +110,11 @@ public class BugzillaRepository extends Repository {
     public Query createQuery() {
         BugzillaQuery q = new BugzillaQuery(this);        
         return q;
+    }
+
+    @Override
+    public void fireQueryListChanged() {
+        super.fireQueryListChanged();
     }
 
     public String getDisplayName() {
@@ -133,7 +140,7 @@ public class BugzillaRepository extends Repository {
             Bugzilla.LOG.log(Level.SEVERE, null, ex);
             return null;
         }
-        return getCache().setIssueData(taskData);
+        return getIssuesCache().setIssueData(taskData);
     }
 
     @Override
@@ -194,7 +201,7 @@ public class BugzillaRepository extends Repository {
         return getQueriesIntern().toArray(new Query[queries.size()]);
     }
 
-    public IssuesCache getCache() {
+    public IssuesCache getIssuesCache() {
         if(cache == null) {
             cache = new IssuesCache(this);
         }
@@ -246,6 +253,11 @@ public class BugzillaRepository extends Repository {
             if(!Character.isDigit(str.charAt(i))) return false;
         }
         return true;
+    }
+
+    @Override
+    public Image getIcon() {
+        return null;
     }
     
     private class Controller extends BugtrackingController implements DocumentListener, ActionListener {
