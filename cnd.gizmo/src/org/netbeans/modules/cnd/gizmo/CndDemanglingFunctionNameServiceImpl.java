@@ -75,7 +75,7 @@ public class CndDemanglingFunctionNameServiceImpl implements DemanglingFunctionN
 
     CndDemanglingFunctionNameServiceImpl() {
         Project project = org.netbeans.api.project.ui.OpenProjects.getDefault().getMainProject();
-        NativeProject nPrj = project.getLookup().lookup(NativeProject.class);
+        NativeProject nPrj = (project == null) ? null : project.getLookup().lookup(NativeProject.class);
         if (nPrj == null) {
             cppCompiler = CPPCompiler.GNU;
             dem_util_path = GNU_FAMILIY;
@@ -114,7 +114,12 @@ public class CndDemanglingFunctionNameServiceImpl implements DemanglingFunctionN
 
     public Future<String> demangle(final String functionName) {
         //get current Project
-        final String nameToDemangle = functionName.substring(functionName.indexOf("`"), functionName.indexOf("+")); //NOI18N
+       final String nameToDemangle ;
+        if (functionName.indexOf("`") != -1 && functionName.indexOf("+") != -1){
+            nameToDemangle = functionName.substring(functionName.indexOf("`") + 1, functionName.indexOf("+")); //NOI18N;
+        }else{
+            nameToDemangle = functionName;
+        }
         return DLightExecutorService.service.submit(new Callable<String>() {
 
             public String call() {
@@ -136,7 +141,7 @@ public class CndDemanglingFunctionNameServiceImpl implements DemanglingFunctionN
                 }
 
                 //process.
-                return functionName;
+                return nameToDemangle;
             }
         });
 
