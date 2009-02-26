@@ -103,7 +103,7 @@ public class DetectPanel extends javax.swing.JPanel {
     public DetectPanel(NewJ2SEPlatform primaryPlatform) {
         initComponents();
         postInitComponents ();
-        putClientProperty("WizardPanel_contentData",
+        putClientProperty(WizardDescriptor.PROP_CONTENT_DATA,
             new String[] {
                 NbBundle.getMessage(DetectPanel.class,"TITLE_PlatformName"),
         });
@@ -345,8 +345,8 @@ public class DetectPanel extends javax.swing.JPanel {
     }
 
 
-    private static String getInitialName (Map m) {        
-        String vmVersion = (String)m.get("java.specification.version");        //NOI18N
+    private static String getInitialName (Map<String,String> m) {        
+        String vmVersion = m.get("java.specification.version");        //NOI18N
         StringBuilder result = new StringBuilder(NbBundle.getMessage(DetectPanel.class,"TXT_DetectPanel_Java"));        
         if (vmVersion != null) {
             result.append (vmVersion);
@@ -396,7 +396,7 @@ public class DetectPanel extends javax.swing.JPanel {
      * Controller for the outer class: manages wizard panel's valid state
      * according to the user's input and detection state.
      */
-    static class WizardPanel implements WizardDescriptor.Panel, TaskListener, ChangeListener {
+    static class WizardPanel implements WizardDescriptor.Panel<WizardDescriptor>, TaskListener, ChangeListener {
         private DetectPanel         component;
         private RequestProcessor.Task task;
         private final J2SEWizardIterator  iterator;
@@ -450,8 +450,8 @@ public class DetectPanel extends javax.swing.JPanel {
             return valid;
         }
 
-        public void readSettings(Object settings) {           
-            this.wiz = (WizardDescriptor) settings;
+        public void readSettings(WizardDescriptor settings) {           
+            this.wiz = settings;
             JavaPlatform platform = this.iterator.getPlatform();
             String srcPath = null;
             String jdocPath = null;
@@ -529,7 +529,7 @@ public class DetectPanel extends javax.swing.JPanel {
 	 Updates the Platform's display name with the one the user
 	 has entered. Stores user-customized display name into the Platform.
 	 */
-        public void storeSettings(Object settings) {
+        public void storeSettings(WizardDescriptor settings) {
             if (isValid()) {                                
                 String name = component.getPlatformName();                
                 List<PathResourceImplementation> src = new ArrayList<PathResourceImplementation>();
@@ -553,11 +553,9 @@ public class DetectPanel extends javax.swing.JPanel {
                         else {
                             src.add (ClassPathSupport.createResource(url));
                         }
+                    } catch (IllegalArgumentException mue) {
                     } catch (MalformedURLException mue) {
-                        ErrorManager.getDefault().notify (mue);
-                    }
-                    catch (FileStateInvalidException e) {
-                        ErrorManager.getDefault().notify(e);
+                    } catch (FileStateInvalidException e) {
                     }
                 }
                 String jdocPath = this.component.getJavadoc();
@@ -573,7 +571,6 @@ public class DetectPanel extends javax.swing.JPanel {
                         }
                         jdoc.add (url);
                     } catch (MalformedURLException mue) {
-                        ErrorManager.getDefault().notify (mue);
                     }
                 }
                 
@@ -618,22 +615,22 @@ public class DetectPanel extends javax.swing.JPanel {
         }
 
         private void checkValid () {
-            this.wiz.putProperty( "WizardPanel_errorMessage", ""); //NOI18N
+            this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE, ""); //NOI18N
             String name = this.component.getPlatformName ();            
             boolean validDisplayName = name.length() > 0;            
             boolean usedDisplayName = false;            
             if (!detected) {
-                this.wiz.putProperty( "WizardPanel_errorMessage",NbBundle.getMessage(DetectPanel.class,"ERROR_NoSDKRegistry"));         //NOI18N
+                this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE,NbBundle.getMessage(DetectPanel.class,"ERROR_NoSDKRegistry"));         //NOI18N
             }
             else if (!validDisplayName) {
-                this.wiz.putProperty( "WizardPanel_errorMessage",NbBundle.getMessage(DetectPanel.class,"ERROR_InvalidDisplayName"));    //NOI18N
+                this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE,NbBundle.getMessage(DetectPanel.class,"ERROR_InvalidDisplayName"));    //NOI18N
             }
             else {                
                 JavaPlatform[] platforms = JavaPlatformManager.getDefault().getInstalledPlatforms();                
                 for (int i=0; i<platforms.length; i++) {
                     if (name.equals (platforms[i].getDisplayName())) {
                         usedDisplayName = true;
-                        this.wiz.putProperty( "WizardPanel_errorMessage",NbBundle.getMessage(DetectPanel.class,"ERROR_UsedDisplayName"));    //NOI18N
+                        this.wiz.putProperty( WizardDescriptor.PROP_ERROR_MESSAGE,NbBundle.getMessage(DetectPanel.class,"ERROR_UsedDisplayName"));    //NOI18N
                         break;
                     }
                 }                
