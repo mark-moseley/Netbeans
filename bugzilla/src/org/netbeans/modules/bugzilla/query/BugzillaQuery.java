@@ -68,10 +68,20 @@ public class BugzillaQuery extends Query {
 
     private String urlParameters;
     private boolean firstRun = true;
+    private boolean kenai;
 
     public BugzillaQuery(BugzillaRepository repository) {
         super();
         this.repository = repository;
+    }
+
+    public BugzillaQuery(String name, BugzillaRepository repository, String urlParameters, boolean kenai, boolean saved) {
+        super();
+        this.name = name;
+        this.repository = repository;
+        this.urlParameters = urlParameters;
+        this.kenai = kenai;
+        this.saved = saved;
     }
 
     public BugzillaQuery(String name, BugzillaRepository repository, String urlParameters, long lastRefresh) {
@@ -118,10 +128,14 @@ public class BugzillaQuery extends Query {
                 if(isSaved()) {
                     List<String> ids;
                     if(!wasRun()) {
+                        
+                        assert issues.size() == 0;
+                        issues.clear(); // XXX just in case
+                        
                         firstRun = false;
-                        ids = repository.getCache().readQuery(BugzillaQuery.this);
+                        ids = repository.getIssuesCache().readQuery(BugzillaQuery.this);
                     } else {
-                        repository.getCache().storeQuery(BugzillaQuery.this, issues.toArray(new String[issues.size()]));
+                        repository.getIssuesCache().storeQuery(BugzillaQuery.this, issues.toArray(new String[issues.size()]));
                         ids = issues;
                     }
 
@@ -133,7 +147,7 @@ public class BugzillaQuery extends Query {
                 StringBuffer url = new StringBuffer();
                 url.append(BugzillaConstants.URL_ADVANCED_BUG_LIST);
                 url.append(urlParameters);
-                final IssuesCache cache = repository.getCache();
+                final IssuesCache cache = repository.getIssuesCache();
                 TaskDataCollector collector = new TaskDataCollector() {
                     public void accept(TaskData taskData) {
 
@@ -166,10 +180,14 @@ public class BugzillaQuery extends Query {
     @Override
     public int getIssueStatus(Issue issue) {
         String id = issue.getID();
+        return getIssueStatus(id);
+    }
+
+    public int getIssueStatus(String id) {
         if(obsoleteIssues.contains(id)) {
             return Query.ISSUE_STATUS_OBSOLETE;
         } else {
-            return repository.getCache().getStatus(id);
+            return repository.getIssuesCache().getStatus(id);
         }
     }
 
@@ -191,6 +209,10 @@ public class BugzillaQuery extends Query {
         this.name = name;
     }
 
+    public boolean isKenai() {
+        return kenai;
+    }
+
     @Override
     public void setSaved(boolean saved) {
         super.setSaved(saved);
@@ -199,11 +221,13 @@ public class BugzillaQuery extends Query {
     @Override
     public void fireQuerySaved() {
         super.fireQuerySaved();
+        repository.fireQueryListChanged();
     }
 
     @Override
     public void fireQueryRemoved() {
         super.fireQueryRemoved();
+        repository.fireQueryListChanged();
     }
 
     @Override
@@ -217,15 +241,15 @@ public class BugzillaQuery extends Query {
         }
 
         // XXX move to cache and sync
-        IssuesCache cache = repository.getCache();
-        List<Issue> l = new ArrayList<Issue>();
+        IssuesCache cache = repository.getIssuesCache();
+        List<Issue> ret = new ArrayList<Issue>();
         for (String id : ids) {
-            int status = cache.getStatus(id);
+            int status = getIssueStatus(id);
             if((status & includeStatus) != 0) {
-                l.add(cache.getIssue(id));
+                ret.add(cache.getIssue(id));
             }
         }
-        return l.toArray(new Issue[l.size()]);
+        return ret.toArray(new Issue[ret.size()]);
     }
 
     boolean wasRun() {
