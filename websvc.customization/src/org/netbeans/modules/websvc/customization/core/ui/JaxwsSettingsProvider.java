@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,51 +31,38 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-/*
- * WSEditorProviderRegistry.java
- *
- * Created on February 17, 2006, 10:31 AM
- *
- * To change this template, choose Tools | Template Manager
- * and open the template in the editor.
- */
+package org.netbeans.modules.websvc.customization.core.ui;
 
-package org.netbeans.modules.websvc.core.wseditor.spi;
-
-import java.util.HashSet;
-import java.util.Set;
+import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
+import org.netbeans.modules.websvc.api.wseditor.WSEditor;
+import org.netbeans.modules.websvc.spi.wseditor.WSEditorProvider;
+import org.openide.nodes.Node;
+import org.openide.util.Lookup;
 
 /**
  *
- * @author Roderico Cruz
+ * @author rico
  */
-public class WSEditorProviderRegistry {
-    
-    static WSEditorProviderRegistry registry = new WSEditorProviderRegistry();
-    
-    private Set<WSEditorProvider> editors = new HashSet<WSEditorProvider>();
-    
-    /**
-     * Creates a new instance of WSEditorProviderRegistry
-     */
-    private WSEditorProviderRegistry() {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.spi.wseditor.WSEditorProvider.class)
+public class JaxwsSettingsProvider implements WSEditorProvider{
+
+    public boolean enable(Node node) {
+        Lookup lookup = node.getLookup();
+        Service service = lookup.lookup(Service.class);
+        if(service != null){
+            return service.getWsdlUrl() != null;
+        }
+        return true;
     }
-    
-    public static WSEditorProviderRegistry getDefault(){
-        return registry;
+
+    public WSEditor createWSEditor() {
+        return new JaxwsSettingsEditor();
     }
-    
-    public void register(WSEditorProvider provider){
-        editors.add(provider);
-    }
-    
-    public void unregister(WSEditorProvider provider){
-        editors.remove(provider);
-    }
-    
-    public Set<WSEditorProvider> getEditorProviders(){
-        return editors;
-    }
+
 }

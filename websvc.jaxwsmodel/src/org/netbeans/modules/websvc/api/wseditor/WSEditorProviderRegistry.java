@@ -40,30 +40,49 @@
  */
 
 /*
- * WSEditorProvider.java
+ * WSEditorProviderRegistry.java
  *
- * Created on March 9, 2006, 2:38 PM
+ * Created on February 17, 2006, 10:31 AM
  *
  * To change this template, choose Tools | Template Manager
  * and open the template in the editor.
  */
 
-package org.netbeans.modules.websvc.core.wseditor.spi;
+package org.netbeans.modules.websvc.api.wseditor;
 
-import org.openide.nodes.Node;
+import org.netbeans.modules.websvc.spi.wseditor.WSEditorProvider;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  *
  * @author Roderico Cruz
  */
-public interface WSEditorProvider {
-     /**
-     * This is used to determine if this editor should be displayed
-     */
-    boolean enable(Node node);
+public class WSEditorProviderRegistry {
     
-    /*
-     * Create an instance of the editor component
+    static WSEditorProviderRegistry registry = new WSEditorProviderRegistry();
+    
+    private Set<WSEditorProvider> editors = new HashSet<WSEditorProvider>();
+    
+    /**
+     * Creates a new instance of WSEditorProviderRegistry
      */
-     WSEditor createWSEditor();
+    private WSEditorProviderRegistry() {
+    }
+    
+    public static WSEditorProviderRegistry getDefault(){
+        return registry;
+    }
+    
+    public void register(WSEditorProvider provider){
+        editors.add(provider);
+    }
+    
+    public void unregister(WSEditorProvider provider){
+        editors.remove(provider);
+    }
+    
+    public Set<WSEditorProvider> getEditorProviders(){
+        return editors;
+    }
 }

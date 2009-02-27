@@ -38,50 +38,25 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+
 /*
- * CustomizationWSEditorProvider.java
+ * SaveSetter.java
  *
- * Created on February 17, 2006, 11:04 AM
+ * Created on March 1, 2006, 6:36 PM
  *
  * To change this template, choose Tools | Template Manager
  * and open the template in the editor.
  */
 
-package org.netbeans.modules.websvc.customization.core.ui;
-
-import org.netbeans.modules.websvc.api.jaxws.project.config.Client;
-import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
-import org.netbeans.modules.websvc.api.wseditor.WSEditor;
-import org.netbeans.modules.websvc.spi.wseditor.WSEditorProvider;
-import org.openide.nodes.Node;
+package org.netbeans.modules.websvc.api.wseditor;
 
 /**
  *
  * @author Roderico Cruz
  */
-@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.spi.wseditor.WSEditorProvider.class)
-public class CustomizationWSEditorProvider
-        implements WSEditorProvider{
-    
-    /** Creates a new instance of CustomWSAttributeEditorProvider */
-    public CustomizationWSEditorProvider() {
-    }
-    
-    public WSEditor createWSEditor() {
-        return new CustomizationWSEditor();
-    }
-    
-    public boolean enable(Node node) {
-        Client client = (Client)node.getLookup().lookup(Client.class);
-        if(client != null){
-            return true;
-        } else{
-            Service service = (Service)node.getLookup().lookup(Service.class);
-            if(service != null){
-                return (service.getWsdlUrl() != null);
-            }
-        }
-        return false;
-    }
-    
+public interface SaveSetter {
+    /**
+     * Sets the dirty flag on the editor
+     */
+    public void setDirty();
 }

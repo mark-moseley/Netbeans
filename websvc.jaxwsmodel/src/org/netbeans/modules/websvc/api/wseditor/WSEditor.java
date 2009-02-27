@@ -48,7 +48,7 @@
  * and open the template in the editor.
  */
 
-package org.netbeans.modules.websvc.core.wseditor.spi;
+package org.netbeans.modules.websvc.api.wseditor;
 
 import javax.swing.JComponent;
 import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;

@@ -40,23 +40,31 @@
  */
 
 /*
- * SaveSetter.java
+ * WSEditorProvider.java
  *
- * Created on March 1, 2006, 6:36 PM
+ * Created on March 9, 2006, 2:38 PM
  *
  * To change this template, choose Tools | Template Manager
  * and open the template in the editor.
  */
 
-package org.netbeans.modules.websvc.core.wseditor.spi;
+package org.netbeans.modules.websvc.spi.wseditor;
+
+import org.netbeans.modules.websvc.api.wseditor.WSEditor;
+import org.openide.nodes.Node;
 
 /**
  *
  * @author Roderico Cruz
  */
-public interface SaveSetter {
-    /**
-     * Sets the dirty flag on the editor
+public interface WSEditorProvider {
+     /**
+     * This is used to determine if this editor should be displayed
      */
-    public void setDirty();
+    boolean enable(Node node);
+    
+    /*
+     * Create an instance of the editor component
+     */
+     WSEditor createWSEditor();
 }
