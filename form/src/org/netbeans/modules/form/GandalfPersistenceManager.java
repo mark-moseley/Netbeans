@@ -73,7 +73,7 @@ import org.netbeans.modules.form.layoutdesign.LayoutModel;
 import org.netbeans.modules.form.layoutdesign.LayoutComponent;
 import org.netbeans.modules.form.layoutdesign.support.SwingLayoutBuilder;
 
-import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.modules.form.editors.EnumEditor;
 import org.openide.nodes.Node.Property;
 import org.openide.util.TopologicalSortException;
 import org.w3c.dom.NamedNodeMap;
@@ -94,6 +94,8 @@ public class GandalfPersistenceManager extends PersistenceManager {
     private static final String NB50_VERSION = "1.3"; // NOI18N
     private static final String NB60_PRE_VERSION = "1.4"; // NOI18N
     private static final String NB60_VERSION = "1.5"; // NOI18N
+    private static final String NB61_VERSION = "1.6"; // NOI18N
+    private static final String NB65_VERSION = "1.7"; // NOI18N
 
     // XML elements names
     static final String XML_FORM = "Form"; // NOI18N
@@ -189,6 +191,9 @@ public class GandalfPersistenceManager extends PersistenceManager {
     private FormModel formModel;
 
     private List<Throwable> nonfatalErrors;
+    
+    // ErrorManager.findAnnotation() doesnt work properly, I will also store msg
+    private Map<Throwable, String> errorMessages;
 
     // name of the menu bar component loaded as AUX value of the top component
     private String mainMenuBarName;
@@ -212,6 +217,33 @@ public class GandalfPersistenceManager extends PersistenceManager {
                                      // or static code structure
 
     private Boolean newLayout; // whether a new layout support was loaded
+    
+    public String getExceptionAnnotation(Throwable t) {
+        if ((errorMessages != null) && errorMessages.containsKey(t)) {
+            return errorMessages.get(t);
+        } else {
+          return t.getMessage();
+        }
+    }
+    
+    private void annotateException(Throwable t, int severity, String localizedMessage) {
+        ErrorManager.getDefault().annotate(t, severity, null, localizedMessage, null, null);
+        
+        if (errorMessages == null) {
+            errorMessages = new HashMap<Throwable, String>();
+        }
+        
+        errorMessages.put(t, localizedMessage);
+    }
+    
+    private void annotateException(Throwable t, String localizedMessage) {
+        annotateException(t, ErrorManager.UNKNOWN, localizedMessage);
+    }
+
+    private void annotateException(Throwable t, Throwable target) {
+        ErrorManager.getDefault().annotate(t,target);
+    }
+
     
     /** This method is used to check if the persistence manager can read the
      * given form (if it understands the form file format).
@@ -294,17 +326,13 @@ public class GandalfPersistenceManager extends PersistenceManager {
         catch (IOException ex) {
             PersistenceException pe = new PersistenceException(
                                           ex, "Cannot open form file"); // NOI18N
-            ErrorManager.getDefault().annotate(
-                ex,
-                FormUtils.getBundleString("MSG_ERR_LoadingErrors")); // NOI18N
+            annotateException(ex, FormUtils.getBundleString("MSG_ERR_LoadingErrors")); // NOI18N
             throw pe;
         }
         catch (org.xml.sax.SAXException ex) {
             PersistenceException pe = new PersistenceException(
                                           ex, "Invalid XML in form file"); // NOI18N
-            ErrorManager.getDefault().annotate(
-                ex, 
-                FormUtils.getBundleString("MSG_ERR_InvalidXML")); // NOI18N
+            annotateException(ex, FormUtils.getBundleString("MSG_ERR_InvalidXML")); // NOI18N
             throw pe;
         }
 
@@ -312,13 +340,9 @@ public class GandalfPersistenceManager extends PersistenceManager {
         if (mainElement == null || !XML_FORM.equals(mainElement.getTagName())) {
             PersistenceException ex = new PersistenceException(
                             "Missing expected main XML element"); // NOI18N
-            ErrorManager.getDefault().annotate(
-                ex,
-                ErrorManager.ERROR,
-                null,
-                FormUtils.getBundleString("MSG_ERR_MissingMainElement"), // NOI18N
-                null,
-                null);
+            annotateException(ex, ErrorManager.ERROR,
+                    FormUtils.getBundleString("MSG_ERR_MissingMainElement") // NOI18N
+                    );
             throw ex;
         }
 
@@ -327,15 +351,12 @@ public class GandalfPersistenceManager extends PersistenceManager {
         if (!isSupportedFormatVersion(versionString)) {
             PersistenceException ex = new PersistenceException(
                                      "Unsupported form version"); // NOI18N
-            ErrorManager.getDefault().annotate(
-                ex,
-                ErrorManager.ERROR,
-                null,
-                FormUtils.getFormattedBundleString(
-                    "FMT_ERR_UnsupportedVersion", // NOI18N
-                    new Object[] { versionString }),
-                null,
-                null);
+            annotateException(ex,
+                    ErrorManager.ERROR,
+                    FormUtils.getFormattedBundleString(
+                        "FMT_ERR_UnsupportedVersion", // NOI18N
+                        new Object[] { versionString })
+                    );
             throw ex;
         }
         formModel.setCurrentVersionLevel(FormModel.FormVersion.BASIC);
@@ -459,13 +480,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 if (formBaseClassEx != null) {
                     ex = new PersistenceException(formBaseClassEx,
                                                   "Invalid form base class"); // NOI18N
-                    ErrorManager.getDefault().annotate(formBaseClassEx,
-                                                       annotation);
+                    annotateException(formBaseClassEx, annotation);
                 }
                 else {
                     ex = new PersistenceException("Invalid form base class"); // NOI18N
-                    ErrorManager.getDefault().annotate(
-                        ex, ErrorManager.ERROR, null, annotation, null, null);
+                    annotateException(ex, ErrorManager.ERROR, annotation);
                 }
                 throw ex;
             }
@@ -526,6 +545,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
         int type = local ? (CodeVariable.LOCAL | (modifiers & CodeVariable.FINAL)
             | CodeVariable.EXPLICIT_DECLARATION) : modifiers | CodeVariable.FIELD;
         formModel.getCodeStructure().setDefaultVariableType(type);
+
+        // Update code vartiables
+        for (RADComponent comp : formModel.getAllComponents()) {
+            JavaCodeGenerator.setupComponentFromAuxValues(comp);
+        }
 
         if (bindingProperties != null) {
             setBindingProperties();
@@ -648,7 +672,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_CannotSetLoadedValue"), // NOI18N
                     propNode);
-                ErrorManager.getDefault().annotate(ex, msg);
+                annotateException(ex, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -703,8 +727,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
             String msg = createLoadingErrorMessage(
                            FormUtils.getBundleString("MSG_ERR_MissingClass"), // NOI18N
                                                      node);
-            ErrorManager.getDefault().annotate(
-                ex, ErrorManager.ERROR, null, msg, null, null);
+            annotateException(ex, ErrorManager.ERROR, msg);
             nonfatalErrors.add(ex);
             return null;
         }
@@ -730,7 +753,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 FormUtils.getFormattedBundleString("FMT_ERR_CannotLoadClass", // NOI18N
                                                    new Object[] { className }),
                 node);
-            ErrorManager.getDefault().annotate(compEx, msg);
+            annotateException(compEx, msg);
             nonfatalErrors.add(compEx);            
         }
 
@@ -780,14 +803,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
         else {
             PersistenceException ex = new PersistenceException(
                                     "Unknown component element"); // NOI18N
-            ErrorManager.getDefault().annotate(
-                ex,
-                ErrorManager.ERROR,
-                null,
-                FormUtils.getFormattedBundleString("FMT_ERR_UnknownElement", // NOI18N
-                                                   new Object[] { nodeName }),
-                null,
-                null);
+            annotateException(ex,
+                    ErrorManager.ERROR,
+                    FormUtils.getFormattedBundleString("FMT_ERR_UnknownElement", // NOI18N
+                                                   new Object[] { nodeName })
+                    );
             nonfatalErrors.add(ex);
             return null;
         }
@@ -814,7 +834,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 FormUtils.getFormattedBundleString("FMT_ERR_CannotCreateInstance", // NOI18N
                                                    new Object[] { className }),
                 node);
-            ErrorManager.getDefault().annotate(compEx, msg);
+            annotateException(compEx, msg);
             nonfatalErrors.add(compEx);
             return null;
         }
@@ -1039,12 +1059,8 @@ public class GandalfPersistenceManager extends PersistenceManager {
                         if (SwingLayoutBuilder.isRelevantContainer(cont)) {
                             // acknowledged by SwingLayoutBuilder - this is new layout
                             visualContainer.setOldLayoutSupport(false);
-                            java.awt.Dimension prefSize = cont.getPreferredSize();
-                            java.awt.Insets insets = cont.getInsets();
-                            int w = prefSize != null ? prefSize.width - insets.left - insets.right : 100;
-                            int h = prefSize != null ? prefSize.height - insets.top - insets.bottom : 100;
                             formModel.getLayoutModel().addRootComponent(
-                                new LayoutComponent(visualContainer.getId(), true, w, h));
+                                new LayoutComponent(visualContainer.getId(), true));
                             layoutSupport = null;
                             newLayout = Boolean.TRUE;
                         }
@@ -1073,7 +1089,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                     String msg = createLoadingErrorMessage(
                         FormUtils.getBundleString("MSG_ERR_LayoutInitFailed"), // NOI18N
                         errNode);
-                    ErrorManager.getDefault().annotate(layoutEx, msg);
+                    annotateException(layoutEx, msg);
                     nonfatalErrors.add(layoutEx);
                 }
                 else { // no LayoutSupportDelegate found
@@ -1092,8 +1108,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 
                     PersistenceException ex = new PersistenceException(
                                               "No layout support found"); // NOI18N
-                    ErrorManager.getDefault().annotate(
-                        ex, ErrorManager.ERROR, null, msg, null, null);
+                    annotateException(ex, ErrorManager.ERROR, msg);
                     nonfatalErrors.add(ex);
                 }
                 layoutSupport.setUnknownLayoutDelegate(layoutCodeNode != null);
@@ -1124,7 +1139,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                         String msg = createLoadingErrorMessage(
                             FormUtils.getBundleString("MSG_ERR_CannotSetLoadedValue"), // NOI18N
                             node);
-                        ErrorManager.getDefault().annotate(ex, msg);
+                        annotateException(ex, msg);
                         nonfatalErrors.add(ex);
                     }
                 }
@@ -1149,7 +1164,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                     String msg = createLoadingErrorMessage(
                         FormUtils.getBundleString("MSG_ERR_CannotSetLoadedValue"), // NOI18N
                         node);
-                    ErrorManager.getDefault().annotate(ex, msg);
+                    annotateException(ex, msg);
                     nonfatalErrors.add(ex);
                 }
             }
@@ -2004,8 +2019,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 	    String msg = createLoadingErrorMessage(
 		FormUtils.getBundleString("MSG_ERR_UnknownProperty"), // NOI18N
 		propNode);
-	    ErrorManager.getDefault().annotate(
-		ex, ErrorManager.ERROR, null, msg, null, null);
+	    annotateException(ex, ErrorManager.ERROR, msg);
 	    nonfatalErrors.add(ex);
 	    return;
 	}
@@ -2056,7 +2070,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 			"FMT_ERR_CannotDecodePrimitive", // NOI18N
 			new Object[] { valueStr, propertyType.getName() }),
 		    propNode);
-		ErrorManager.getDefault().annotate(ex, msg);
+		annotateException(ex, msg);
 		nonfatalErrors.add(ex);
 		return;
 	    }
@@ -2065,6 +2079,16 @@ public class GandalfPersistenceManager extends PersistenceManager {
             value = ResourceSupport.findResource(resourceKey, property);
             if (value == null)
                 return;
+            PropertyEditor propEd = property.getPropertyEditor();
+            if (propEd instanceof FormPropertyEditor) {
+                FormPropertyEditor formPropEd = (FormPropertyEditor)propEd;
+                for (PropertyEditor newPropEd : formPropEd.getAllEditors()) {
+                    if (newPropEd instanceof ResourceWrapperEditor) {
+                        value = new FormProperty.ValueWithEditor(value, newPropEd);
+                        break;
+                    }
+                }
+            }
         }
 	else { // the value is serialized or saved by XMLPropertyEditor
 	    org.w3c.dom.NodeList children = propNode.getChildNodes();
@@ -2125,7 +2149,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 			FormUtils.getBundleString(
 			    "MSG_ERR_CannotReadPropertyValue"), // NOI18N
 			propNode);
-		    ErrorManager.getDefault().annotate(t, msg);
+		    annotateException(t, msg);
 		    nonfatalErrors.add(t);
 		    return;
 		}
@@ -2139,8 +2163,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 		String msg = createLoadingErrorMessage(
 		    FormUtils.getBundleString("MSG_ERR_MissingPropertyValue"), // NOI18N
 		    propNode);
-		ErrorManager.getDefault().annotate(
-		    ex, ErrorManager.ERROR, null, msg, null, null);
+		annotateException(ex, ErrorManager.ERROR, msg);
 		nonfatalErrors.add(ex);
 		return;
 	    }
@@ -2239,7 +2262,8 @@ public class GandalfPersistenceManager extends PersistenceManager {
         }
         int type = value.getType();
         if(type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_PROPERTY ||
-           type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_METHOD)
+           type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_METHOD ||
+           (type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_BEAN && value.getDesignValue() == FormDesignValue.IGNORED_VALUE)) // Issue 155654
         {    
             // makes sense only for PROPERTY, and METHOD type ...                    
             connectedProperties.put(property, value, beanName, propNode);        
@@ -2252,7 +2276,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
        String msg = createLoadingErrorMessage(
 		FormUtils.getBundleString("MSG_ERR_CannotSetLoadedValue"), // NOI18N
 		propNode);
-        ErrorManager.getDefault().annotate(ex, msg);
+        annotateException(ex, msg);
         nonfatalErrors.add(ex); 
     }
     
@@ -2283,7 +2307,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                             "FMT_ERR_CannotLoadClass3", // NOI18N
                             new Object[] { editorStr }),
                         propNode);
-                    ErrorManager.getDefault().annotate(t, ErrorManager.USER, null, msg, null, null);
+                    annotateException(t, ErrorManager.USER, msg);
                     nonfatalErrors.add(t);
                 }
 		return null;
@@ -2306,7 +2330,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 			"FMT_ERR_CannotCreateInstance2", // NOI18N
 			new Object[] { editorStr }),
 		    propNode);
-		ErrorManager.getDefault().annotate(t, msg);
+		annotateException(t, msg);
 		nonfatalErrors.add(t);
 		return null;
 	    }
@@ -2335,7 +2359,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 			"FMT_ERR_CannotLoadClass2", // NOI18N
 			new Object[] { typeStr }),
 		    propNode);
-		ErrorManager.getDefault().annotate(t, msg);
+		annotateException(t, msg);
 		nonfatalErrors.add(t);
 		return null;
 	    }
@@ -2345,8 +2369,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 		String msg = createLoadingErrorMessage(
 		    FormUtils.getBundleString("MSG_ERR_IncompatiblePropertyType"), // NOI18N
 		    propNode);
-		ErrorManager.getDefault().annotate(
-		    ex, ErrorManager.ERROR, null, msg, null, null);
+		annotateException(ex, ErrorManager.ERROR, msg);
 		nonfatalErrors.add(ex);
 		return null;
 	    }
@@ -2368,7 +2391,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
 		    "FMT_ERR_CannotLoadClass2", // NOI18N
 		    new Object[] { typeStr }),
 		    node);
-	    ErrorManager.getDefault().annotate(ex, msg);
+	    annotateException(ex, msg);
 	    nonfatalErrors.add(ex);
 	    return;
 	}
@@ -2408,8 +2431,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                                            "Missing property attribute " + attribute); // NOI18N
                 String msg = FormUtils.getFormattedBundleString("MSG_ERR_MissingPropertyName", // NOI18N
                                                    new Object[] { attribute });                
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2480,7 +2502,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 FormUtils.getFormattedBundleString("FMT_ERR_CannotLoadClass", // NOI18N
                                                    new Object[] { className }),
                                                    node);
-            ErrorManager.getDefault().annotate(t, msg);
+            annotateException(t, msg);
             nonfatalErrors.add(t);                 
         }        
         return clazz;
@@ -2511,8 +2533,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_MissingPropertyName"), // NOI18N
                     propNode);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2536,8 +2557,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_UnknownProperty"), // NOI18N
                     propNode);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2556,8 +2576,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_MissingPropertyValue"), // NOI18N
                     propNode);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2667,8 +2686,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_MissingPropertyName"), // NOI18N
                     propNode);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2701,8 +2719,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                     String msg = createLoadingErrorMessage(
                         FormUtils.getBundleString("MSG_ERR_UnknownProperty"), // NOI18N
                         propNode);
-                    ErrorManager.getDefault().annotate(
-                        ex, ErrorManager.ERROR, null, msg, null, null);
+                    annotateException(ex, ErrorManager.ERROR, msg);
                     nonfatalErrors.add(ex);
                     continue;
                 }
@@ -2732,7 +2749,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                             "FMT_ERR_CannotLoadClass2", // NOI18N
                             new Object[] { typeNode.getNodeValue() }),
                         propNode);
-                    ErrorManager.getDefault().annotate(t, msg);
+                    annotateException(t, msg);
                     nonfatalErrors.add(t);
                     continue;
                 }
@@ -2742,8 +2759,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                     String msg = createLoadingErrorMessage(
                         FormUtils.getBundleString("MSG_ERR_IncompatiblePropertyType"), // NOI18N
                         propNode);
-                    ErrorManager.getDefault().annotate(
-                        ex, ErrorManager.ERROR, null, msg, null, null);
+                    annotateException(ex, ErrorManager.ERROR, msg);
                     nonfatalErrors.add(ex);
                     continue;
                 }
@@ -2757,8 +2773,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_MissingPropertyValue"), // NOI18N
                     propNode);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2784,7 +2799,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_CannotReadPropertyValue"), // NOI18N
                     propNode);
-                ErrorManager.getDefault().annotate(t, msg);
+                annotateException(t, msg);
                 nonfatalErrors.add(t);
                 continue;
             }
@@ -2806,7 +2821,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_CannotSetLoadedValue"), // NOI18N
                     propNode);
-                ErrorManager.getDefault().annotate(ex, msg);
+                annotateException(ex, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2896,8 +2911,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_MissingPropertyName"), // NOI18N
                     auxNode);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2913,8 +2927,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_MissingPropertyType"), // NOI18N
                     auxNode);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2936,7 +2949,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                         "FMT_ERR_CannotLoadClass2", // NOI18N
                         new Object[] { typeNode.getNodeValue() }),
                     auxNode);
-                ErrorManager.getDefault().annotate(t, msg);
+                annotateException(t, msg);
                 nonfatalErrors.add(t);
                 continue;
             }
@@ -2948,8 +2961,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_MissingPropertyValue"), // NOI18N
                     auxNode);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -2975,7 +2987,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_CannotReadPropertyValue"), // NOI18N
                     auxNode);
-                ErrorManager.getDefault().annotate(t, msg);
+                annotateException(t, msg);
                 nonfatalErrors.add(t);
                 continue;
             }
@@ -2996,7 +3008,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                     if (autoResSetting instanceof Integer && ((Integer)autoResSetting).intValue() == ResourceSupport.AUTO_OFF) {
                         formSettings.set(ResourceSupport.PROP_AUTO_RESOURCING, ResourceSupport.AUTO_I18N);
                     }                    
-                }
+                    }
             } else {
                 // we have a valid name / value pair
                 comp.setAuxValue(name, value);
@@ -3014,33 +3026,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 comp.getAuxValue(JavaCodeGenerator.AUX_CODE_GENERATION)))
         {   // the component has a serialized instance => deserialize it
             try {
-                String serFile = (String) comp.getAuxValue(
-                                          JavaCodeGenerator.AUX_SERIALIZE_TO);
-                if (serFile == null)
-                    serFile = formFile.getName() + "_" + comp.getName(); // NOI18N
-
-                ClassPath sourcePath = ClassPath.getClassPath(formFile, ClassPath.SOURCE);
-                String serName = sourcePath.getResourceName(formFile.getParent());
-                if (!"".equals(serName)) // NOI18N
-                    serName += "."; // NOI18N
-                serName += serFile;
-
-                Object instance = null;
-                try {
-                    instance = Beans.instantiate(sourcePath.getClassLoader(true), serName);
-                } catch (ClassNotFoundException cnfe) {
-                    ClassPath executionPath = ClassPath.getClassPath(formFile, ClassPath.EXECUTE);
-                    instance = Beans.instantiate(executionPath.getClassLoader(true), serName);
-                }
-
-                comp.setInstance(instance);
-            }
-            catch (Exception ex) { // ignore
+                comp.setInstance(comp.createDefaultDeserializedInstance());
+            } catch (Exception ex) { // ignore
                 org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
             }
         }
-
-        JavaCodeGenerator.setupComponentFromAuxValues(comp);
     }
 
     // -----------
@@ -3065,8 +3055,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
             String msg = FormUtils.getFormattedBundleString(
                              "FMT_ERR_SaveToReadOnly", // NOI18N
                              new Object[] { formFile.getNameExt() });
-            ErrorManager.getDefault().annotate(
-                ex, ErrorManager.ERROR, null, msg, null, null);
+            annotateException(ex, ErrorManager.ERROR, msg);
             throw ex;
         }
 
@@ -3162,10 +3151,9 @@ public class GandalfPersistenceManager extends PersistenceManager {
         catch (IOException ex) {
             PersistenceException pe = new PersistenceException(
                                         ex, "Cannot obtain lock on form file"); // NOI18N
-            ErrorManager.getDefault().annotate(
-                ex,
-                FormUtils.getFormattedBundleString("FMT_ERR_CannotLockFormFile", // NOI18N
-                                      new Object[] { formFile.getNameExt() }));
+            annotateException(ex,
+                    FormUtils.getFormattedBundleString("FMT_ERR_CannotLockFormFile", // NOI18N
+                        new Object[]{formFile.getNameExt()}));
             throw pe;
         }
 
@@ -3177,10 +3165,10 @@ public class GandalfPersistenceManager extends PersistenceManager {
         catch (Exception ex) {
             PersistenceException pe = new PersistenceException(
                                           ex, "Cannot write to form file"); // NOI18N
-            ErrorManager.getDefault().annotate(
-                ex,
-                FormUtils.getFormattedBundleString("FMT_ERR_CannotWrtiteToFile", // NOI18N
-                                       new Object[] { formFile.getNameExt() }));
+            annotateException(ex,
+                    FormUtils.getFormattedBundleString("FMT_ERR_CannotWrtiteToFile", // NOI18N
+                                        new Object[]{formFile.getNameExt()})
+                    );
             throw pe;
         }
         finally {
@@ -3693,15 +3681,9 @@ public class GandalfPersistenceManager extends PersistenceManager {
             saveProperties(component.getKnownBeanProperties(),
                            XML_PROPERTIES, buf, indent);
 
-            if (component instanceof RADVisualComponent) {
-                // try to save accessibility properties
-                FormProperty[] accProps = ((RADVisualComponent)component)
-                                            .getAccessibilityProperties();
-                saveProperties(accProps, XML_A11Y_PROPERTIES, buf, indent);
-//                if (saveProperties(accProps,
-//                                   XML_A11Y_PROPERTIES, buf, indent))
-//                    raiseFormatVersion(NB34_VERSION);
-            }
+            // try to save accessibility properties
+            FormProperty[] accProps = component.getKnownAccessibilityProperties();
+            saveProperties(accProps, XML_A11Y_PROPERTIES, buf, indent);
         }
 
         // 2. Binding properties
@@ -3794,11 +3776,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
             realValue = property.getRealValue();
         }
         catch (Exception ex) {
-            ErrorManager.getDefault().annotate(
-                ex,
-                FormUtils.getFormattedBundleString(
-                    "FMT_ERR_CannotGetPropertyValue", // NOI18N
-                    new Object[] { property.getName() }));
+            annotateException( ex,
+                    FormUtils.getFormattedBundleString(
+                        "FMT_ERR_CannotGetPropertyValue", // NOI18N
+                        new Object[] { property.getName() })
+                    );
             nonfatalErrors.add(ex);
             return false;
         }
@@ -3846,8 +3828,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
     //                String msg = FormUtils.getFormattedBundleString(
     //                                 "FMT_ERR_CannotSaveProperty", // NOI18N
     //                                 new Object[] { property.getName() });
-    //                ErrorManager.getDefault().annotate(
-    //                    ex, ErrorManager.ERROR, null, msg, null, null);
+    //                annotate(ex, ErrorManager.ERROR, msg);
     //                nonfatalErrors.add(ex);
     //                return false;
     //            }
@@ -3859,11 +3840,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
                         encodedSerializeValue = encodeValue(value);
                     }
                     catch (Exception ex) {
-                        ErrorManager.getDefault().annotate(
-                            ex,
-                            FormUtils.getFormattedBundleString(
-                                "FMT_ERR_CannotSaveProperty", // NOI18N
-                                new Object[] { property.getName() }));
+                        annotateException(ex,
+                                FormUtils.getFormattedBundleString(
+                                    "FMT_ERR_CannotSaveProperty", // NOI18N
+                                    new Object[] { property.getName() })
+                                );
                         nonfatalErrors.add(ex);
                         return false;
                     }
@@ -4007,8 +3988,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = FormUtils.getFormattedBundleString(
                                  "FMT_ERR_CannotSaveProperty2", // NOI18N
                                  new Object[] { prEd.getClass().getName() });
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 return false;
             }
@@ -4020,11 +4000,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
                     encodedSerializeValue = encodeValue(value);
                 }
                 catch (Exception ex) {
-                    ErrorManager.getDefault().annotate(
-                        ex,
-                        FormUtils.getFormattedBundleString(
-                            "FMT_ERR_CannotSaveProperty3", // NOI18N
-                            new Object[] { valueType.getClass().getName() }));
+                    annotateException(ex,
+                            FormUtils.getFormattedBundleString(
+                                "FMT_ERR_CannotSaveProperty3", // NOI18N
+                                new Object[] { valueType.getClass().getName() })
+                            );
                     nonfatalErrors.add(ex);
                     return false;
                 }
@@ -4068,7 +4048,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
         boolean anyProp = false;
         String indent2 = null;
 
-        BindingProperty[] props = component.getAllBindingProperties();
+        BindingProperty[] props = component.getKnownBindingProperties();
         for (int i=0; i < props.length; i++) {
             BindingProperty prop = props[i];
 
@@ -4077,11 +4057,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 value = prop.getValue();
             }
             catch (Exception ex) {
-                ErrorManager.getDefault().annotate(
-                    ex,
-                    FormUtils.getFormattedBundleString(
-                        "FMT_ERR_CannotGetPropertyValue", // NOI18N
-                        new Object[] { prop.getName() }));
+                annotateException(ex,
+                        FormUtils.getFormattedBundleString(
+                            "FMT_ERR_CannotGetPropertyValue", // NOI18N
+                            new Object[] { prop.getName() })
+                        );
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -4269,11 +4249,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 value = prop.getValue();
             }
             catch (Exception ex) {
-                ErrorManager.getDefault().annotate(
-                    ex,
-                    FormUtils.getFormattedBundleString(
-                        "FMT_ERR_CannotGetPropertyValue", // NOI18N
-                        new Object[] { prop.getName() }));
+                annotateException(ex,
+                        FormUtils.getFormattedBundleString(
+                            "FMT_ERR_CannotGetPropertyValue", // NOI18N
+                            new Object[] { prop.getName() })
+                        );
                 nonfatalErrors.add(ex);
                 continue;
             }
@@ -4284,11 +4264,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
                     encodedValue = encodeValue(value);
                 }
                 catch (Exception ex) {
-                    ErrorManager.getDefault().annotate(
-                        ex,
-                        FormUtils.getFormattedBundleString(
-                            "FMT_ERR_CannotSaveProperty", // NOI18N
-                            new Object[] { prop.getName() }));
+                    annotateException(ex,
+                            FormUtils.getFormattedBundleString(
+                                "FMT_ERR_CannotSaveProperty", // NOI18N
+                                new Object[] { prop.getName() })
+                            );
                     nonfatalErrors.add(ex);
                     continue;
                 }
@@ -4397,11 +4377,11 @@ public class GandalfPersistenceManager extends PersistenceManager {
                     encodedValue = encodeValue(value);
                 }
                 catch (Exception ex) {
-                    ErrorManager.getDefault().annotate(
-                        ex,
-                        FormUtils.getFormattedBundleString(
-                            "FMT_ERR_CannotSaveProperty", // NOI18N
-                            new Object[] { valueName }));
+                    annotateException(ex,
+                            FormUtils.getFormattedBundleString(
+                                "FMT_ERR_CannotSaveProperty", // NOI18N
+                                new Object[] { valueName })
+                            );
                     nonfatalErrors.add(ex);
                     continue;
                 }
@@ -4435,6 +4415,12 @@ public class GandalfPersistenceManager extends PersistenceManager {
             ed = new RADConnectionPropertyEditor(propertyType);
         } else if (editorClass.equals(ComponentChooserEditor.class)) {
             ed = new ComponentChooserEditor(new Class[] {propertyType});
+        } else if (editorClass.equals(EnumEditor.class) && (property instanceof RADProperty)) {
+            RADProperty prop = (RADProperty)property;
+            ed = prop.createEnumEditor(prop.getPropertyDescriptor());
+            if (ed == null) {
+                ed = RADProperty.createDefaultEnumEditor(propertyType);
+            }
         } else {
             ed = (PropertyEditor) editorClass.newInstance();
         }
@@ -5324,8 +5310,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
             String msg = createLoadingErrorMessage(
                 FormUtils.getBundleString("MSG_ERR_MissingPropertyType"), // NOI18N
                 node);
-            ErrorManager.getDefault().annotate(
-                ex, ErrorManager.ERROR, null, msg, null, null);
+            annotateException(ex, ErrorManager.ERROR, msg);
             nonfatalErrors.add(ex);
             return NO_VALUE;
         }
@@ -5346,7 +5331,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 FormUtils.getFormattedBundleString("FMT_ERR_CannotLoadClass2", // NOI18N
                                      new Object[] { typeNode.getNodeValue() }),
                 node);
-            ErrorManager.getDefault().annotate(t, msg);
+            annotateException(t, msg);
             nonfatalErrors.add(t);
             return NO_VALUE;
         }
@@ -5371,7 +5356,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                         "FMT_ERR_CannotLoadClass3", // NOI18N
                         new Object[] { editorNode.getNodeValue() }),
                     node);
-                ErrorManager.getDefault().annotate(t, msg);
+                annotateException(t, msg);
                 nonfatalErrors.add(t);
                 return NO_VALUE;
             }
@@ -5391,7 +5376,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                         "FMT_ERR_CannotCreateInstance2", // NOI18N
                         new Object[] { editorNode.getNodeValue() }),
                     node);
-                ErrorManager.getDefault().annotate(t, msg);
+                annotateException(t, msg);
                 nonfatalErrors.add(t);
                 return NO_VALUE;
             }
@@ -5413,7 +5398,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                         new Object[] { valueNode.getNodeValue(),
                                        propertyType.getName() }),
                     node);
-                ErrorManager.getDefault().annotate(ex, msg);
+                annotateException(ex, msg);
                 nonfatalErrors.add(ex);
                 return NO_VALUE;
             }
@@ -5470,7 +5455,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                         FormUtils.getBundleString(
                             "MSG_ERR_CannotReadPropertyValue"), // NOI18N
                         node);
-                    ErrorManager.getDefault().annotate(t, msg);
+                    annotateException(t, msg);
                     nonfatalErrors.add(t);
                     return NO_VALUE;
                 }
@@ -5482,8 +5467,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
                 String msg = createLoadingErrorMessage(
                     FormUtils.getBundleString("MSG_ERR_MissingPropertyValue"), // NOI18N
                     node);
-                ErrorManager.getDefault().annotate(
-                    ex, ErrorManager.ERROR, null, msg, null, null);
+                annotateException(ex, ErrorManager.ERROR, msg);
                 nonfatalErrors.add(ex);
                 return NO_VALUE;
             }
@@ -5574,7 +5558,7 @@ public class GandalfPersistenceManager extends PersistenceManager {
             }
             IllegalArgumentException ex = new IllegalArgumentException(
                                           "Cannot load class: "+encoded); // NOI18N
-            ErrorManager.getDefault().annotate(ex, t);
+            annotateException(ex, t);
             throw ex;
         }
 
@@ -5997,7 +5981,9 @@ public class GandalfPersistenceManager extends PersistenceManager {
                || NB34_VERSION.equals(ver)
                || NB50_VERSION.equals(ver)
                || NB60_PRE_VERSION.equals(ver)
-               || NB60_VERSION.equals(ver);
+               || NB60_VERSION.equals(ver)
+               || NB61_VERSION.equals(ver)
+               || NB65_VERSION.equals(ver);
     }
 
     private static FormModel.FormVersion formVersionForVersionString(String version) {
@@ -6014,6 +6000,12 @@ public class GandalfPersistenceManager extends PersistenceManager {
             if (NB60_VERSION.equals(version)) {
                 return FormModel.FormVersion.NB60;
             }
+            if (NB61_VERSION.equals(version)) {
+                return FormModel.FormVersion.NB61;
+            }
+            if (NB65_VERSION.equals(version)) {
+                return FormModel.FormVersion.NB65;
+            }
         }
         return null;
     }
@@ -6021,10 +6013,12 @@ public class GandalfPersistenceManager extends PersistenceManager {
     private static String versionStringForFormVersion(FormModel.FormVersion version) {
         if (version != null) {
             switch (version) {
-            case BASIC: return NB34_VERSION;
-            case NB50: return NB50_VERSION;
-            case NB60_PRE: return NB60_PRE_VERSION;
-            case NB60: return NB60_VERSION;
+                case BASIC: return NB34_VERSION;
+                case NB50: return NB50_VERSION;
+                case NB60_PRE: return NB60_PRE_VERSION;
+                case NB60: return NB60_VERSION;
+                case NB61: return NB61_VERSION;
+                case NB65: return NB65_VERSION;
             }
         }
         return null;
