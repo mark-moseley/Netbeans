@@ -72,6 +72,7 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
@@ -83,7 +84,7 @@ import org.netbeans.api.queries.VisibilityQuery;
 import org.netbeans.modules.apisupport.project.ui.customizer.ModuleDependency;
 import org.netbeans.modules.apisupport.project.universe.LocalizedBundleInfo;
 import org.netbeans.modules.apisupport.project.universe.ModuleEntry;
-import org.netbeans.modules.apisupport.project.universe.NbPlatform;
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.PropertyProvider;
@@ -129,10 +130,9 @@ public final class Util {
      * @param parent a parent element
      * @param name the intended local name
      * @param namespace the intended namespace (or null)
-     * @return the one child element with that name, or null if none or more than one
+     * @return the first child element with that name, or null if none
      */
     public static Element findElement(Element parent, String name, String namespace) {
-        Element result = null;
         NodeList l = parent.getChildNodes();
         for (int i = 0; i < l.getLength(); i++) {
             if (l.item(i).getNodeType() == Node.ELEMENT_NODE) {
@@ -140,15 +140,11 @@ public final class Util {
                 if ((namespace == null && name.equals(el.getTagName())) ||
                         (namespace != null && name.equals(el.getLocalName()) &&
                         namespace.equals(el.getNamespaceURI()))) {
-                    if (result == null) {
-                        result = el;
-                    } else {
-                        return null;
-                    }
+                    return el;
                 }
             }
         }
-        return result;
+        return null;
     }
     
     /**
@@ -224,59 +220,6 @@ public final class Util {
         return to;
     }
 
-    // CANDIDATES FOR FileUtil (#59311):
-    
-    /**
-     * Creates a URL for a directory on disk.
-     * Works correctly even if the directory does not currently exist.
-     */
-    public static URL urlForDir(File dir) {
-        try {
-            URL u = FileUtil.normalizeFile(dir).toURI().toURL();
-            String s = u.toExternalForm();
-            if (s.endsWith("/")) { // NOI18N
-                return u;
-            } else {
-                return new URL(s + "/"); // NOI18N
-            }
-        } catch (MalformedURLException e) {
-            throw new AssertionError(e);
-        }
-    }
-    
-    /**
-     * Creates a URL for the root of a JAR on disk.
-     */
-    public static URL urlForJar(File jar) {
-        try {
-            return FileUtil.getArchiveRoot(FileUtil.normalizeFile(jar).toURI().toURL());
-        } catch (MalformedURLException e) {
-            throw new AssertionError(e);
-        }
-    }
-    
-    /**
-     * Creates a URL for a directory on disk or the root of a JAR.
-     * Works correctly whether or not the directory or JAR currently exists.
-     * Detects whether the file is supposed to be a directory or a JAR.
-     */
-    public static URL urlForDirOrJar(File location) {
-        try {
-            URL u = FileUtil.normalizeFile(location).toURI().toURL();
-            if (FileUtil.isArchiveFile(u)) {
-                u = FileUtil.getArchiveRoot(u);
-            } else {
-                String us = u.toExternalForm();
-                if (!us.endsWith("/")) { // NOI18N
-                    u = new URL(us + "/"); // NOI18N
-                }
-            }
-            return u;
-        } catch (MalformedURLException e) {
-            throw new AssertionError(e);
-        }
-    }
-    
     /**
      * Tries to find {@link Project} in the given directory. If succeeds
      * delegates to {@link ProjectInformation#getDisplayName}. Returns {@link
@@ -582,44 +525,7 @@ public final class Util {
             lock.releaseLock();
         }
     }
-    
-    /**
-     * Find Javadoc URL for NetBeans.org modules. May return <code>null</code>.
-     */
-    public static URL findJavadocForNetBeansOrgModules(final ModuleDependency dep) {
-        ModuleEntry entry = dep.getModuleEntry();
-        File destDir = entry.getDestDir();
-        File nbOrg = null;
-        if (destDir.getParent() != null) {
-            nbOrg = destDir.getParentFile().getParentFile();
-        }
-        if (nbOrg == null) {
-            throw new IllegalArgumentException("ModuleDependency " + dep +  // NOI18N
-                    " doesn't represent nb.org module"); // NOI18N
-        }
-        File builtJavadoc = new File(nbOrg, "nbbuild/build/javadoc"); // NOI18N
-        URL[] javadocURLs = null;
-        if (builtJavadoc.exists()) {
-            File[] javadocs = builtJavadoc.listFiles();
-            javadocURLs = new URL[javadocs.length];
-            for (int i = 0; i < javadocs.length; i++) {
-                javadocURLs[i] = Util.urlForDirOrJar(javadocs[i]);
-            }
-        }
-        return javadocURLs == null ? null : findJavadocURL(
-                dep.getModuleEntry().getCodeNameBase().replace('.', '-'), javadocURLs);
-    }
-    
-    /**
-     * Find Javadoc URL for the given module dependency using Javadoc roots of
-     * the given platform. May return <code>null</code>.
-     */
-    public static URL findJavadoc(final ModuleDependency dep, final NbPlatform platform) {
-        String cnbdashes = dep.getModuleEntry().getCodeNameBase().replace('.', '-');
-        URL[] roots = platform.getJavadocRoots();
-        return roots == null ? null : findJavadocURL(cnbdashes, roots);
-    }
-    
+
     public static boolean isValidSFSPath(final String path) {
         return path.matches(SFS_VALID_PATH_RE);
     }
@@ -694,7 +600,7 @@ public final class Util {
         return true;
     }
     
-    private static URL findJavadocURL(final String cnbdashes, final URL[] roots) {
+    public static URL findJavadocURL(final String cnbdashes, final URL[] roots) {
         URL indexURL = null;
         for (int i = 0; i < roots.length; i++) {
             URL root = roots[i];
@@ -1008,5 +914,21 @@ public final class Util {
         assert prov != null;
         return prov.getSourceDirectory();
     }
-    
+
+    public static String urlsToAntPath(final URL[] urls) {
+        return ClassPathSupport.createClassPath(urls).toString(ClassPath.PathConversionMode.WARN);
+    }
+
+    public static URL[] findURLs(final String path) {
+        if (path == null) {
+            return new URL[0];
+        }
+        String[] pieces = PropertyUtils.tokenizePath(path);
+        URL[] urls = new URL[pieces.length];
+        for (int i = 0; i < pieces.length; i++) {
+            // XXX perhaps also support http: URLs somehow?
+            urls[i] = FileUtil.urlForArchiveOrDir(FileUtil.normalizeFile(new File(pieces[i])));
+        }
+        return urls;
+    }
 }

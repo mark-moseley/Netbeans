@@ -54,10 +54,11 @@ import org.netbeans.modules.apisupport.project.spi.NbModuleProvider;
 import org.netbeans.modules.apisupport.project.Util;
 import org.netbeans.modules.apisupport.project.universe.NbPlatform;
 import org.netbeans.spi.java.queries.JavadocForBinaryQueryImplementation;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 
 /**
- * Defines Javadoc locations for built modules.
+ * Defines Javadoc locations for built modules with built javadoc.
  * @author Jesse Glick
  */
 public final class JavadocForBinaryImpl implements JavadocForBinaryQueryImplementation {
@@ -75,7 +76,7 @@ public final class JavadocForBinaryImpl implements JavadocForBinaryQueryImplemen
     }
 
     public JavadocForBinaryQuery.Result findJavadoc(URL binaryRoot) {
-        if (!binaryRoot.equals(Util.urlForJar(project.getModuleJarLocation()))) {
+        if (!binaryRoot.equals(FileUtil.urlForArchiveOrDir(project.getModuleJarLocation()))) {
             return null;
         }
         String cnb = project.getCodeNameBase();
@@ -100,7 +101,7 @@ public final class JavadocForBinaryImpl implements JavadocForBinaryQueryImplemen
                 dir = new File(project.getProjectDirectoryFile(), EXT_INFIX + cnbdashes);
             }
             if (dir != null) { // #118491
-                candidates.add(Util.urlForDir(dir));
+                candidates.add(FileUtil.urlForArchiveOrDir(dir));
             }
             if (ignoreNonexistentRoots) {
                 Iterator<URL> it = candidates.iterator();

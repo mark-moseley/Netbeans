@@ -45,7 +45,6 @@ import java.awt.Color;
 import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.net.URL;
 import java.text.Collator;
 import java.util.Arrays;
@@ -68,6 +67,7 @@ import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.apisupport.project.ui.customizer.SuiteUtils;
 import org.netbeans.modules.apisupport.project.universe.NbPlatform;
 import org.netbeans.modules.apisupport.project.universe.ModuleEntry;
+import org.netbeans.modules.apisupport.project.universe.SourceRootsProvider;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
 
@@ -353,14 +353,14 @@ public final class PlatformComponentFactory {
      * <code>ListModel</code> capable to manage NetBeans platform source roots.
      * <p>Can be used in conjuction with {@link URLListRenderer}</p>
      */
-    static final class NbPlatformSourceRootsModel extends AbstractListModel {
+    static final class SourceRootsModel extends AbstractListModel {
         
-        private NbPlatform plaf;
+        private SourceRootsProvider srcRP;
         private URL[] srcRoots;
         
-        NbPlatformSourceRootsModel(NbPlatform plaf) {
-            this.plaf = plaf;
-            this.srcRoots = plaf.getSourceRoots();
+        SourceRootsModel(SourceRootsProvider srp) {
+            this.srcRP = srp;
+            this.srcRoots = srp.getSourceRoots();
         }
         
         public Object getElementAt(int index) {
@@ -373,8 +373,8 @@ public final class PlatformComponentFactory {
         
         void removeSourceRoot(URL[] srcRootToRemove) {
             try {
-                plaf.removeSourceRoots(srcRootToRemove);
-                this.srcRoots = plaf.getSourceRoots(); // refresh
+                srcRP.removeSourceRoots(srcRootToRemove);
+                this.srcRoots = srcRP.getSourceRoots(); // refresh
                 fireContentsChanged(this, 0, srcRootToRemove.length);
             } catch (IOException e) {
                 // tell the user that something goes wrong
@@ -384,8 +384,8 @@ public final class PlatformComponentFactory {
         
         void addSourceRoot(URL srcRootToAdd) {
             try {
-                plaf.addSourceRoot(srcRootToAdd);
-                this.srcRoots = plaf.getSourceRoots(); // refresh
+                srcRP.addSourceRoot(srcRootToAdd);
+                this.srcRoots = srcRP.getSourceRoots(); // refresh
                 fireContentsChanged(this, 0, srcRoots.length);
             } catch (IOException e) {
                 // tell the user that something goes wrong
@@ -396,9 +396,9 @@ public final class PlatformComponentFactory {
         void moveSourceRootsDown(int[] toMoveDown) {
             try {
                 for (int i = 0; i < toMoveDown.length; i++) {
-                    plaf.moveSourceRootDown(toMoveDown[i]);
+                    srcRP.moveSourceRootDown(toMoveDown[i]);
                 }
-                this.srcRoots = plaf.getSourceRoots(); // refresh
+                this.srcRoots = srcRP.getSourceRoots(); // refresh
                 fireContentsChanged(this, 0, srcRoots.length);
             } catch (IOException e) {
                 // tell the user that something goes wrong
@@ -409,9 +409,9 @@ public final class PlatformComponentFactory {
         void moveSourceRootsUp(int[] toMoveUp) {
             try {
                 for (int i = 0; i < toMoveUp.length; i++) {
-                    plaf.moveSourceRootUp(toMoveUp[i]);
+                    srcRP.moveSourceRootUp(toMoveUp[i]);
                 }
-                this.srcRoots = plaf.getSourceRoots(); // refresh
+                this.srcRoots = srcRP.getSourceRoots(); // refresh
                 fireContentsChanged(this, 0, srcRoots.length);
             } catch (IOException e) {
                 // tell the user that something goes wrong
@@ -493,7 +493,7 @@ public final class PlatformComponentFactory {
     
     /**
      * Render {@link java.net.URL} using {@link java.net.URL#getFile}.
-     * <p>Use in conjuction with {@link NbPlatformSourceRootsModel} and
+     * <p>Use in conjuction with {@link SourceRootsModel} and
      * {@link NbPlatformJavadocRootsModel}</p>
      */
     static final class URLListRenderer extends DefaultListCellRenderer {
@@ -501,15 +501,8 @@ public final class PlatformComponentFactory {
         public @Override Component getListCellRendererComponent(JList list, Object value,
                 int index, boolean isSelected, boolean cellHasFocus) {
             URL u = (URL) value;
-            String text = u.toExternalForm();
-            if (u.getProtocol().equals("file")) { // NOI18N
-                text = new File(URI.create(u.toExternalForm())).getAbsolutePath();
-            } else if (u.getProtocol().equals("jar")) { // NOI18N
-                URL baseU = FileUtil.getArchiveFile(u);
-                if (u.equals(FileUtil.getArchiveRoot(baseU)) && baseU.getProtocol().equals("file")) { // NOI18N
-                    text = new File(URI.create(baseU.toExternalForm())).getAbsolutePath();
-                }
-            }
+            File f = FileUtil.archiveOrDirForURL(u);
+            String text = f != null ? f.getAbsolutePath() : u.toString();
             return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
         }
     }

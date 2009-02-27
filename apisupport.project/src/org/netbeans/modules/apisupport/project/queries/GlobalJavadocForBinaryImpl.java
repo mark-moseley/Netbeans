@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery.Result;
@@ -57,6 +58,8 @@ import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.apisupport.project.NbModuleProject;
 import org.netbeans.modules.apisupport.project.Util;
+import org.netbeans.modules.apisupport.project.universe.ModuleEntry;
+import org.netbeans.modules.apisupport.project.universe.ModuleList;
 import org.netbeans.modules.apisupport.project.universe.NbPlatform;
 import org.netbeans.spi.java.queries.JavadocForBinaryQueryImplementation;
 import org.openide.filesystems.FileUtil;
@@ -68,6 +71,7 @@ import org.openide.modules.InstalledFileLocator;
  *
  * @author Jesse Glick, Martin Krauskopf
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.java.queries.JavadocForBinaryQueryImplementation.class)
 public final class GlobalJavadocForBinaryImpl implements JavadocForBinaryQueryImplementation {
     
     public JavadocForBinaryQuery.Result findJavadoc(final URL root) {
@@ -88,13 +92,9 @@ public final class GlobalJavadocForBinaryImpl implements JavadocForBinaryQueryIm
             Util.err.log(binaryRoot + " is not an archive file."); // NOI18N
             return null;
         }
-        if (jar.toExternalForm().endsWith("/xtest/lib/junit.jar")) { // NOI18N
-            // #68685 hack - associate reasonable Javadoc with XTest's version of junit
+        if (jar.toExternalForm().endsWith("/modules/ext/junit-4.1.jar") || jar.toExternalForm().endsWith("/external/junit-4.1.jar")) { // NOI18N
+            // #68685 hack - associate reasonable Javadoc with JUnit 4.1 (currently we only bundle 3.x Javadoc)
             File f = InstalledFileLocator.getDefault().locate("modules/ext/junit-3.8.2.jar", "org.netbeans.modules.junit", false); // NOI18N
-            if (f == null) {
-                // For compat with NB 5.0.
-                f = InstalledFileLocator.getDefault().locate("modules/ext/junit-3.8.1.jar", "org.netbeans.modules.junit", false); // NOI18N
-            }
             if (f != null) {
                 return JavadocForBinaryQuery.findJavadoc(FileUtil.getArchiveRoot(f.toURI().toURL()));
             }
@@ -138,6 +138,12 @@ public final class GlobalJavadocForBinaryImpl implements JavadocForBinaryQueryIm
             NbModuleProject module = p.getLookup().lookup(NbModuleProject.class);
             if (module != null) {
                 String cnb = module.getCodeNameBase();
+
+                Set<ModuleEntry> entries = ModuleList.getKnownEntries(module.getModuleJarLocation());
+                for (ModuleEntry entry : entries) {
+//              TODO C.P      if (entry instanceof );
+                }
+
                 for (NbPlatform plaf : NbPlatform.getPlatforms()) {
                     Result r = findByDashedCNB(cnb.replace('.', '-'), plaf);
                     if (r != null) {

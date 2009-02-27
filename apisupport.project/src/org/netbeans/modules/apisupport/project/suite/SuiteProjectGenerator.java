@@ -44,9 +44,21 @@ package org.netbeans.modules.apisupport.project.suite;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.netbeans.api.project.ProjectManager;
+import org.netbeans.modules.apisupport.project.NbModuleProject;
 import org.netbeans.modules.apisupport.project.ProjectXMLManager;
+import org.netbeans.modules.apisupport.project.ui.customizer.BasicBrandingModel;
+import org.netbeans.modules.apisupport.project.ui.customizer.ClusterInfo;
+import org.netbeans.modules.apisupport.project.universe.ClusterUtils;
+import org.netbeans.modules.apisupport.project.ui.customizer.SuiteCustomizerLibraries;
+import org.netbeans.modules.apisupport.project.ui.customizer.SuiteProperties;
+import org.netbeans.modules.apisupport.project.ui.customizer.SuiteUtils;
+import org.netbeans.modules.apisupport.project.universe.ModuleEntry;
 import org.netbeans.modules.apisupport.project.universe.ModuleList;
+import org.netbeans.modules.apisupport.project.universe.NbPlatform;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.openide.filesystems.FileLock;
@@ -66,12 +78,11 @@ public class SuiteProjectGenerator {
             "nbproject/platform.properties"; // NOI18N
     public static final String PROJECT_PROPERTIES_PATH = "nbproject/project.properties"; // NOI18N
     public static final String PRIVATE_PROPERTIES_PATH = "nbproject/private/private.properties"; // NOI18N
-    
+
     /** Use static factory methods instead. */
     private SuiteProjectGenerator() {/* empty constructor*/}
     
-    /** Generates standalone NetBeans Module. */
-    public static void createSuiteProject(final File projectDir, final String platformID) throws IOException {
+    public static void createSuiteProject(final File projectDir, final String platformID, final boolean application) throws IOException {
         try {
             ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<Void>() {
                 public Void run() throws IOException {
@@ -84,6 +95,9 @@ public class SuiteProjectGenerator {
                     createProjectProperties(dirFO);
                     ModuleList.refresh();
                     ProjectManager.getDefault().clearNonProjectCache();
+                    if (application) {
+                        initApplication(dirFO, platformID);
+                    }
                     return null;
                 }
             });
@@ -108,6 +122,17 @@ public class SuiteProjectGenerator {
                 projectDir, PLATFORM_PROPERTIES_PATH);
         EditableProperties props = new EditableProperties(true);
         props.setProperty("nbplatform.active", platformID); // NOI18N
+
+        NbPlatform plaf = NbPlatform.getPlatformByID(platformID);
+        if (plaf != null && plaf.getHarnessVersion() > NbPlatform.HARNESS_VERSION_65) {
+            List<String> clusterPath = new ArrayList<String>();
+            File[] files = plaf.getDestDir().listFiles();
+            for (File file : files) {
+                if (ClusterUtils.isValidCluster(file))
+                    clusterPath.add(SuiteProperties.toPlatformClusterEntry(file.getName()));
+            }
+            props.setProperty(SuiteProperties.CLUSTER_PATH_PROPERTY, SuiteUtils.getAntProperty(clusterPath));
+        }
         storeProperties(plafPropsFO, props);
     }
     
@@ -117,6 +142,31 @@ public class SuiteProjectGenerator {
         EditableProperties props = new EditableProperties(true);
         props.setProperty("modules", ""); // NOI18N
         storeProperties(propsFO, props);
+    }
+
+    private static void initApplication(FileObject dirFO, String platformID) throws IOException  {
+        SuiteProject project = (SuiteProject) ProjectManager.getDefault().findProject(dirFO);
+        SuiteProperties suiteProps = new SuiteProperties(project, project.getHelper(), project.getEvaluator(), Collections.<NbModuleProject>emptySet());
+        BasicBrandingModel branding = suiteProps.getBrandingModel();
+        branding.setBrandingEnabled(true);
+        branding.setName(branding.getName());
+        branding.setTitle(branding.getTitle());
+        branding.store();
+        NbPlatform plaf = NbPlatform.getPlatformByID(platformID);
+        if (plaf != null) {
+            ModuleEntry bootstrapModule = plaf.getModule("org.netbeans.bootstrap");
+            if (bootstrapModule != null) {
+                if (plaf.getHarnessVersion() <= NbPlatform.HARNESS_VERSION_65) {
+                    // Will be stripped of version suffix if appropriate for the platform.
+                    suiteProps.setEnabledClusters(new String[] {bootstrapModule.getClusterDirectory().getName()});
+                } else {
+                    suiteProps.setClusterPath(Collections.singletonList(
+                            ClusterInfo.create(bootstrapModule.getClusterDirectory(), true, true)));
+                }
+            }
+        }
+        suiteProps.setDisabledModules(SuiteCustomizerLibraries.DISABLED_PLATFORM_MODULES.toArray(new String[0]));
+        suiteProps.storeProperties();
     }
     
     /** Just utility method. */
