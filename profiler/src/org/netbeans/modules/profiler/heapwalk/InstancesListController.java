@@ -174,7 +174,8 @@ public class InstancesListController extends AbstractController {
 
                         if (filteredInstances.size() == 0) {
                             // Class has no instances
-                            children = new HeapWalkerNode[0];
+                            children = new HeapWalkerNode[1];
+                            children[0] = HeapWalkerNodeFactory.createNoItemsNode(InstancesListClassNode.this);
                         } else if (filteredInstances.size() > HeapWalkerNodeFactory.ITEMS_COLLAPSE_THRESHOLD) {
                             int instanceToSelectIndex = -1;
 
@@ -415,8 +416,6 @@ public class InstancesListController extends AbstractController {
 
             this.name = "#" + instance.getInstanceNumber(); // NOI18N
             this.size = String.valueOf(instance.getSize());
-            this.retainedSize = "N/A"; // NOI18N
-            this.reachableSize = "N/A"; // NOI18N
         }
 
         //~ Methods --------------------------------------------------------------------------------------------------------------
@@ -484,10 +483,14 @@ public class InstancesListController extends AbstractController {
         }
 
         public String getReachableSize() {
+            if (reachableSize == null)
+                reachableSize = "N/A"; // NOI18N
             return reachableSize;
         }
 
         public String getRetainedSize() {
+            if (retainedSize == null)
+                retainedSize = String.valueOf(instance.getRetainedSize());
             return retainedSize;
         }
 

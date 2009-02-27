@@ -45,7 +45,6 @@ import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.project.Project;
 import org.netbeans.lib.profiler.heap.*;
 import org.netbeans.lib.profiler.utils.StringUtils;
-import org.netbeans.modules.profiler.heapwalk.HeapWalkerManager;
 import org.netbeans.modules.profiler.heapwalk.ui.HeapWalkerUI;
 import org.netbeans.modules.profiler.utils.IDEUtils;
 import org.openide.filesystems.FileObject;
@@ -166,7 +165,7 @@ public class HeapWalker {
     }
 
     void createMainFragment(Heap heap) {
-        mainHeapWalker = new HeapFragmentWalker(heap, this);
+        mainHeapWalker = new HeapFragmentWalker(heap, this, true);
     }
 
     void createReachableFragment(Instance instance) {
