@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.navigation.hierarchy;
 
+import java.util.Collections;
 import java.util.Iterator;
 import javax.swing.JEditorPane;
 import org.netbeans.modules.cnd.api.model.CsmClass;
@@ -51,28 +52,26 @@ import org.netbeans.modules.cnd.api.model.CsmInclude;
 import org.netbeans.modules.cnd.api.model.CsmNamespaceDefinition;
 import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
+import org.netbeans.modules.cnd.api.model.CsmScope;
+import org.netbeans.modules.cnd.api.model.CsmScopeElement;
+import org.netbeans.modules.cnd.api.model.CsmType;
 import org.netbeans.modules.cnd.api.model.CsmVariable;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceResolver;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.netbeans.modules.cnd.utils.CndUtils;
 import org.openide.cookies.EditorCookie;
 import org.openide.nodes.Node;
 
 public class ContextUtils {
-    public static final boolean USE_REFERENCE_RESOLVER = getBoolean("hierarchy.use.reference", true); // NOI18N
+    public static final boolean USE_REFERENCE_RESOLVER = CndUtils.getBoolean("hierarchy.use.reference", true); // NOI18N
     
     private ContextUtils() {
     }
 
-    public static boolean getBoolean(String name, boolean result) {
-        String text = System.getProperty(name);
-        if( text != null ) {
-            result = Boolean.parseBoolean(text);
-        }
-        return result;
-    }
-    
     public static CsmFile findFile(Node[] activatedNodes) {
         if (activatedNodes != null && activatedNodes.length > 0) {
             if (ContextUtils.USE_REFERENCE_RESOLVER) {
@@ -111,7 +110,9 @@ public class ContextUtils {
                     return (CsmClass)decl;
                 } else if (CsmKindUtilities.isVariable(decl)){
                     CsmVariable v = (CsmVariable)decl;
-                    CsmClassifier cls = v.getType().getClassifier();
+                    CsmType type = v.getType();
+                    // could be null type for parameter with vararg "..." type
+                    CsmClassifier cls = type == null ? null : type.getClassifier();
                     if (CsmKindUtilities.isClass(cls)){
                         return (CsmClass)cls;
                     }
@@ -150,38 +151,41 @@ public class ContextUtils {
         return null;
     }
     
-    private static CsmDeclaration findInnerFileDeclaration(CsmFile file, int offset) {
-        CsmDeclaration innerDecl = null;
-        for (Iterator it = file.getDeclarations().iterator(); it.hasNext();) {
-            CsmDeclaration decl = (CsmDeclaration) it.next();
-            if (isInObject(decl, offset)) {
-                innerDecl = findInnerDeclaration(decl, offset);
-                innerDecl = innerDecl != null ? innerDecl : decl;
-                break;
-            }
+    public static CsmDeclaration findInnerFileDeclaration(CsmFile file, int offset) {
+        CsmFilter offsetFilter = CsmSelect.getFilterBuilder().createOffsetFilter(offset);
+        Iterator<? extends CsmObject> fileElements = getInnerObjectsIterator(offsetFilter, file);
+        CsmDeclaration innermostDecl = (CsmDeclaration)(fileElements.hasNext() ? fileElements.next() : null);
+        if (innermostDecl != null && CsmKindUtilities.isScope(innermostDecl)) {
+            CsmDeclaration inner = findInnerDeclaration(offsetFilter, (CsmScope)innermostDecl);
+            innermostDecl = inner != null ? inner : innermostDecl;
         }
-        return innerDecl;
+        return innermostDecl;
     }
 
-    private static CsmDeclaration findInnerDeclaration(CsmDeclaration outDecl, int offset) {
-        Iterator it = null;
-        if (CsmKindUtilities.isNamespaceDefinition(outDecl)) {
-            it = ((CsmNamespaceDefinition) outDecl).getDeclarations().iterator();
-        } else if (CsmKindUtilities.isClass(outDecl)) {
-            CsmClass cl  = (CsmClass)outDecl;
-            it = cl.getMembers().iterator();
+    private static Iterator<? extends CsmObject> getInnerObjectsIterator(CsmFilter offsetFilter, CsmScope scope) {
+        Iterator<? extends CsmObject> out = Collections.<CsmObject>emptyList().iterator();
+        if (CsmKindUtilities.isFile(scope)) {
+            out = CsmSelect.getDeclarations((CsmFile)scope, offsetFilter);
+        } else if (CsmKindUtilities.isNamespaceDefinition(scope)) {
+            out = CsmSelect.getDeclarations(((CsmNamespaceDefinition)scope), offsetFilter);
+        } else if (CsmKindUtilities.isClass(scope)) {
+            out = CsmSelect.getClassMembers(((CsmClass)scope), offsetFilter);
+        } else {
+            out = scope.getScopeElements().iterator();
         }
-        if (it != null) {
-            while (it.hasNext()) {
-                CsmDeclaration decl = (CsmDeclaration) it.next();
-                if (isInObject(decl, offset)) {
-                    CsmDeclaration innerDecl = findInnerDeclaration(decl, offset);
-                    if (CsmKindUtilities.isClass(innerDecl)){
-                        return innerDecl;
-                    } else if (CsmKindUtilities.isClass(decl)){
-                        return decl;
-                    }
-                    break;
+        return out;
+    }
+
+    private static CsmDeclaration findInnerDeclaration(CsmFilter offsetFilter, CsmScope scope) {
+        Iterator<? extends CsmObject> it = getInnerObjectsIterator(offsetFilter, scope);
+        if (it != null && it.hasNext()) {
+            CsmObject decl = it.next();
+            if (CsmKindUtilities.isScope(decl)) {
+                CsmObject innerDecl = findInnerDeclaration(offsetFilter, (CsmScope)decl);
+                if (CsmKindUtilities.isClass(innerDecl)){
+                    return (CsmClass)innerDecl;
+                } else if (CsmKindUtilities.isClass(decl)){
+                    return (CsmClass)decl;
                 }
             }
         }
@@ -199,5 +203,76 @@ public class ContextUtils {
         }
         return false;
     }
+
+    public static CsmScope findScope(Node activatedNode) {
+        EditorCookie c = activatedNode.getCookie(EditorCookie.class);
+        if (c != null) {
+            JEditorPane[] panes = c.getOpenedPanes();
+            if (panes != null && panes.length>0) {
+                int offset = panes[0].getCaret().getDot();
+                CsmFile file = CsmUtilities.getCsmFile(activatedNode,false);
+                if (file != null){
+                    return findInnerFileScope(file, offset);
+                }
+            }
+        }
+        return null;
+    }
+
+    public static CsmScope findInnerFileScope(CsmFile file, int offset) {
+        CsmScope innerScope = null;
+        for (Iterator it = file.getDeclarations().iterator(); it.hasNext();) {
+            CsmDeclaration decl = (CsmDeclaration) it.next();
+            if (CsmKindUtilities.isScope(decl) && isInObject(decl, offset)) {
+                innerScope = findInnerScope((CsmScope)decl, offset);
+                innerScope = innerScope != null ? innerScope : (CsmScope)decl;
+                break;
+            }
+        }
+        return innerScope;
+    }
+
+    private static CsmScope findInnerScope(CsmScope outScope, int offset) {
+        for (CsmScopeElement item : outScope.getScopeElements()) {
+            if(CsmKindUtilities.isScope(item) && isInObject(item, offset)) {
+                CsmScope inScope = findInnerScope((CsmScope) item, offset);
+                if(inScope != null) {
+                    return inScope;
+                } else {
+                    if(CsmKindUtilities.isClass(item) ||
+                            CsmKindUtilities.isNamespace(item) ||
+                            CsmKindUtilities.isFunction(item) ||
+                            CsmKindUtilities.isEnum(item) ||
+                            CsmKindUtilities.isUnion(item) ||
+                            CsmKindUtilities.isFile(item)) {
+                        return (CsmScope) item;
+                    }
+                }
+            }
+        }
+        if (CsmKindUtilities.isNamespaceDefinition(outScope)) {
+            for (CsmDeclaration item : ((CsmNamespaceDefinition) outScope).getDeclarations()) {
+                if (CsmKindUtilities.isScope(item) && isInObject(item, offset)) {
+                    CsmScope inScope = findInnerScope((CsmScope) item, offset);
+                    if (inScope != null) {
+                        return inScope;
+                    } else {
+                        if (CsmKindUtilities.isClass(item) ||
+                                CsmKindUtilities.isNamespace(item) ||
+                                CsmKindUtilities.isFunction(item) ||
+                                CsmKindUtilities.isEnum(item) ||
+                                CsmKindUtilities.isUnion(item) ||
+                                CsmKindUtilities.isFile(item)) {
+                            return (CsmScope) item;
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+
 
 }
