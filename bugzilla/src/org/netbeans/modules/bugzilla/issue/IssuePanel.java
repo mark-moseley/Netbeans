@@ -59,6 +59,7 @@ import org.openide.util.NbBundle;
 public class IssuePanel extends javax.swing.JPanel {
     private BugzillaIssue issue;
     private CommentsPanel commentsPanel;
+    private int resolvedIndex;
 
     public IssuePanel() {
         initComponents();
@@ -96,7 +97,7 @@ public class IssuePanel extends javax.swing.JPanel {
             String reportedTxt = MessageFormat.format(format, issue.getFieldValue(BugzillaIssue.IssueField.CREATION), issue.getFieldValue(BugzillaIssue.IssueField.REPORTER));
             reportedField.setText(reportedTxt);
             modifiedField.setText(issue.getFieldValue(BugzillaIssue.IssueField.MODIFICATION));
-            assignedField.setText(issue.getFieldValue(BugzillaIssue.IssueField.ASSIGEND_TO));
+            assignedField.setText(issue.getFieldValue(BugzillaIssue.IssueField.ASSIGNED_TO));
             qaContactField.setText(issue.getFieldValue(BugzillaIssue.IssueField.QA_CONTACT));
             ccField.setText(issue.getFieldValue(BugzillaIssue.IssueField.CC));
             dependsField.setText(issue.getFieldValue(BugzillaIssue.IssueField.DEPENDS_ON));
@@ -116,6 +117,8 @@ public class IssuePanel extends javax.swing.JPanel {
         // componentCombo, versionCombo, targetMilestoneCombo are filled
         // automatically when productCombo is set/changed
         platformCombo.setModel(toComboModel(bugzilla.getPlatforms(repository)));
+        List<String> statuses = bugzilla.getStatusValues(repository);
+        resolvedIndex = statuses.indexOf("RESOLVED"); // NOI18N
         statusCombo.setModel(toComboModel(bugzilla.getStatusValues(repository)));
         resolutionCombo.setModel(toComboModel(bugzilla.getResolutions(repository)));
         priorityCombo.setModel(toComboModel(bugzilla.getPriorities(repository)));
@@ -451,6 +454,8 @@ public class IssuePanel extends javax.swing.JPanel {
 
         layout.linkSize(new java.awt.Component[] {dummyLabel1, dummyLabel2, targetMilestoneCombo}, org.jdesktop.layout.GroupLayout.VERTICAL);
 
+        layout.linkSize(new java.awt.Component[] {resolutionLabel, statusCombo}, org.jdesktop.layout.GroupLayout.VERTICAL);
+
     }// </editor-fold>//GEN-END:initComponents
 
     private void productComboActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_productComboActionPerformed
@@ -478,8 +483,7 @@ public class IssuePanel extends javax.swing.JPanel {
 
     private void statusComboActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_statusComboActionPerformed
         // Hide/show resolution combo
-        String status = statusCombo.getSelectedItem().toString();
-        boolean shown = !status.equals("NEW"); // NOI18N
+        boolean shown = (statusCombo.getSelectedIndex() >= resolvedIndex);
         resolutionCombo.setVisible(shown);
     }//GEN-LAST:event_statusComboActionPerformed
 
