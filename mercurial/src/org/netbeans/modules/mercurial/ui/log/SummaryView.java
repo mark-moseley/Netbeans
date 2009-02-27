@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,7 +40,6 @@
  */
 package org.netbeans.modules.mercurial.ui.log;
 
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.ErrorManager;
@@ -56,20 +55,22 @@ import java.awt.event.*;
 import java.awt.*;
 import java.awt.geom.Rectangle2D;
 import java.util.*;
-import java.util.List;
 import java.io.File;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.util.List;
-import java.util.List;
-import org.netbeans.modules.mercurial.ExceptionHandler;
-import org.netbeans.modules.mercurial.HgException;
+import javax.swing.plaf.TextUI;
+import org.netbeans.api.editor.mimelookup.MimePath;
+import org.netbeans.modules.mercurial.HgModuleConfig;
 import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.VersionsCache;
 import org.netbeans.modules.mercurial.ui.diff.DiffSetupSource;
-import org.netbeans.modules.mercurial.ui.update.RevertModifications;
+import org.netbeans.modules.mercurial.ui.diff.ExportDiffAction;
+import org.netbeans.modules.mercurial.ui.rollback.BackoutAction;
 import org.netbeans.modules.mercurial.ui.update.RevertModificationsAction;
+import org.netbeans.modules.versioning.util.HyperlinkProvider;
+import org.openide.util.Lookup;
 
 /**
  * @author Maros Sandor
@@ -81,7 +82,10 @@ import org.netbeans.modules.mercurial.ui.update.RevertModificationsAction;
  */
 class SummaryView implements MouseListener, ComponentListener, MouseMotionListener, DiffSetupSource {
 
+    private static final String SUMMARY_DIFF_PROPERTY = "Summary-Diff-";
     private static final String SUMMARY_REVERT_PROPERTY = "Summary-Revert-";
+    private static final String HLINK_ISSUE_PROPERTY = "Hyperlink-Issue-";
+    private static final String SUMMARY_EXPORTDIFFS_PROPERTY = "Summary-ExportDiffs-";
 
     private final SearchHistoryPanel master;
     
@@ -97,7 +101,7 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         this.master = master;
         this.results = results;
         this.dispResults = expandResults(results);
-        FontColorSettings fcs = (FontColorSettings) MimeLookup.getMimeLookup("text/x-java").lookup(FontColorSettings.class); // NOI18N
+        FontColorSettings fcs = (FontColorSettings) MimeLookup.getLookup(MimePath.get("text/x-java")).lookup(FontColorSettings.class); // NOI18N
         searchHiliteAttrs = fcs.getFontColors("highlight-search"); // NOI18N
         message = master.getCriteria().getCommitMessage();
         resultsList = new JList(new SummaryListModel());
@@ -136,6 +140,7 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         // not interested
     }
     
+    @SuppressWarnings("unchecked")
     private List expandResults(List<RepositoryRevision> results) {
         ArrayList newResults = new ArrayList(results.size());
         for (RepositoryRevision repositoryRevision : results) {
@@ -153,7 +158,7 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         if (idx == -1) return;
         Rectangle rect = resultsList.getCellBounds(idx, idx);
         Point p = new Point(e.getX() - rect.x, e.getY() - rect.y);
-        Rectangle diffBounds = (Rectangle) resultsList.getClientProperty("Summary-Diff-" + idx); // NOI18N
+        Rectangle diffBounds = (Rectangle) resultsList.getClientProperty(SUMMARY_DIFF_PROPERTY + idx); // NOI18N
         if (diffBounds != null && diffBounds.contains(p)) {
             diffPrevious(idx);
         }
@@ -161,8 +166,23 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         if (diffBounds != null && diffBounds.contains(p)) {
             revertModifications(new int [] { idx });
         }
-    }
+        diffBounds = (Rectangle) resultsList.getClientProperty(SUMMARY_EXPORTDIFFS_PROPERTY + idx); // NOI18N
+        if (diffBounds != null && diffBounds.contains(p)) {
+            System.out.println("ExportDiffs: " + idx); // DEBUG
+            exportDiffs(idx);
+        }
+        Linker l = (Linker) resultsList.getClientProperty(HLINK_ISSUE_PROPERTY + idx);// NOI18N
+        if(l != null) {
+            for (int i = 0; i < l.start.length; i++) {
+                if (l.bounds != null && l.bounds[i] != null && l.bounds[i].contains(p)) {
+                    l.hp.onClick(master.getRoots()[0], l.text[i], l.start[i], l.end[i]);
+                    break;
+                }
+            }
+        }
 
+    }
+    
     public void mouseEntered(MouseEvent e) {
         // not interested
     }
@@ -172,13 +192,13 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
     }
 
     public void mousePressed(MouseEvent e) {
-        if (e.isPopupTrigger()) {
+        if (!master.isIncomingSearch() && e.isPopupTrigger()) {
             onPopup(e);
         }
     }
 
     public void mouseReleased(MouseEvent e) {
-        if (e.isPopupTrigger()) {
+        if (!master.isIncomingSearch() && e.isPopupTrigger()) {
             onPopup(e);
         }
     }
@@ -189,9 +209,10 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
     public void mouseMoved(MouseEvent e) {
         int idx = resultsList.locationToIndex(e.getPoint());
         if (idx == -1) return;
+//        resultsList.setToolTipText("");
         Rectangle rect = resultsList.getCellBounds(idx, idx);
         Point p = new Point(e.getX() - rect.x, e.getY() - rect.y);
-        Rectangle diffBounds = (Rectangle) resultsList.getClientProperty("Summary-Diff-" + idx); // NOI18N
+        Rectangle diffBounds = (Rectangle) resultsList.getClientProperty(SUMMARY_DIFF_PROPERTY + idx); // NOI18N
         if (diffBounds != null && diffBounds.contains(p)) {
             resultsList.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             return;
@@ -200,6 +221,21 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         if (diffBounds != null && diffBounds.contains(p)) {
             resultsList.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             return;
+        }
+        diffBounds = (Rectangle) resultsList.getClientProperty(SUMMARY_EXPORTDIFFS_PROPERTY + idx); // NOI18N
+        if (diffBounds != null && diffBounds.contains(p)) {
+            resultsList.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            return;
+        }
+        Linker l = (Linker) resultsList.getClientProperty(HLINK_ISSUE_PROPERTY + idx);
+        if(l != null) {
+            for (int i = 0; i < l.start.length; i++) {
+                if (l.bounds != null && l.bounds[i] != null && l.bounds[i].contains(p)) {
+                    resultsList.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+//                    resultsList.setToolTipText(l.hp.getTooltip(l.text[i], l.start[i], l.end[i]));
+                    return;
+                }
+            }
         }
         resultsList.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
     }
@@ -286,13 +322,13 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         }
         long revision = Long.parseLong(container.getLog().getRevision());
 
-        final boolean rollbackToEnabled = !missingFile && !revisionSelected && oneRevisionMultiselected;
-        final boolean rollbackChangeEnabled = !missingFile && oneRevisionMultiselected && (drev.length == 0 || noExDeletedExistingFiles); // drev.length == 0 => the whole revision was selected
+        final boolean revertToEnabled = !missingFile && !revisionSelected && oneRevisionMultiselected;
+        final boolean backoutChangeEnabled = !missingFile && oneRevisionMultiselected && (drev.length == 0); // drev.length == 0 => the whole revision was selected
         final boolean viewEnabled = selection.length == 1 && !revisionSelected && drev[0].getFile() != null && drev[0].getFile().exists() &&  !drev[0].getFile().isDirectory();
         final boolean diffToPrevEnabled = selection.length == 1;
         
         if (revision > 0) {
-            menu.add(new JMenuItem(new AbstractAction(NbBundle.getMessage(SummaryView.class, "CTL_SummaryView_DiffToPrevious", previousRevision)) { // NOI18N
+            menu.add(new JMenuItem(new AbstractAction(NbBundle.getMessage(SummaryView.class, "CTL_SummaryView_DiffToPrevious", "" + previousRevision )) { // NOI18N
                 {
                     setEnabled(diffToPrevEnabled);
                 }
@@ -302,39 +338,27 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             }));
         }
 
-        /* TBD - Support Rollback Changes:
-         * Need to figure out how to implement SVN functionality to allow you to rollback a change
-         * currently for svn this cmd runs: merge -R <revX>:<revY> it basically diffs the two revs
-         * and creates a patch which is then applied ot the file in the working dir, effectively removing
-         * the change applied between revX and revY
-         * In hg we'd need to do a hg diff -r revX -r revY, generate a patch and then apply it to the working dir copy
-         * /
-        menu.add(new JMenuItem(new AbstractAction(NbBundle.getMessage(SummaryView.class, "CTL_SummaryView_RollbackChange")) { // NOI18N
-            {
-                setEnabled(false); // rollbackChangeEnabled); 
-            }
-            public void actionPerformed(ActionEvent e) {
-                revertModifications(selection);
-            }
-        }));
-        */
-        if (!revisionSelected) {
-            menu.add(new JMenuItem(new AbstractAction(NbBundle.getMessage(SummaryView.class, "CTL_SummaryView_RollbackTo", revision)) { // NOI18N
+        if (revisionSelected) {
+            menu.add(new JMenuItem(new AbstractAction(NbBundle.getMessage(SummaryView.class, "CTL_SummaryView_RollbackChange")) { // NOI18N
+
+                {
+                    setEnabled(backoutChangeEnabled);
+                }
+
+                public void actionPerformed(ActionEvent e) {
+                    backout(selection[0]);
+                }
+            }));
+        }else{
+            menu.add(new JMenuItem(new AbstractAction(NbBundle.getMessage(SummaryView.class, "CTL_SummaryView_RollbackTo", "" + revision)) { // NOI18N
                 {                    
-                    setEnabled(rollbackToEnabled);
+                    setEnabled(revertToEnabled);
                 }
                 public void actionPerformed(ActionEvent e) {
                     revertModifications(selection);
-                }
-                
-                /*public void actionPerformed(ActionEvent e) {
-                    RequestProcessor.getDefault().post(new Runnable() {
-                        public void run() {                            
-                            rollback(drev);
-                        }
-                    });
-                }*/
+                }                
             }));
+            
             menu.add(new JMenuItem(new AbstractAction(NbBundle.getMessage(SummaryView.class, "CTL_SummaryView_View")) { // NOI18N
                 {
                     setEnabled(viewEnabled);
@@ -347,52 +371,48 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
                     });
                 }
             }));
+            menu.add(new JMenuItem(new AbstractAction(NbBundle.getMessage(SummaryView.class, "CTL_SummaryView_ExportFileDiff")) { // NOI18N
+                {
+                    setEnabled(viewEnabled);
+                }
+                public void actionPerformed(ActionEvent e) {
+                    RequestProcessor.getDefault().post(new Runnable() {
+                        public void run() {
+                            exportFileDiff(selection[0]);
+                        }
+                    });
+                }
+            }));
         }
 
         menu.show(resultsList, p.x, p.y);
     }
-
-    /**
-     * Overwrites local file with this revision.
-     *
-     * @param event
-     */
-    static void rollback(RepositoryRevision.Event event) {
-        rollback(new RepositoryRevision.Event[ ]{event});
-    }    
     
     /**
-     * Overwrites local file with this revision.
+     * Rollback this changeset only
      *
      * @param event
      */
-    static void rollback(final RepositoryRevision.Event[] events) {
-        String repository = events[0].getLogInfoHeader().getRepositoryRootUrl();
-        RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(repository);
-        HgProgressSupport support = new HgProgressSupport() {
-            public void perform() {
-                for(RepositoryRevision.Event event : events) {
-                    rollback(event, this);   
-                }                
-            }
-        };
-        support.start(rp, repository, NbBundle.getMessage(SummaryView.class, "MSG_Rollback_Progress")); // NOI18N
-}
-
-    private static void rollback(RepositoryRevision.Event event, HgProgressSupport progress) {
-        File file = event.getFile();
-        File parent = file.getParentFile();
-        parent.mkdirs();
-        try {
-            File oldFile = VersionsCache.getInstance().getFileRevision(event.getFile(), event.getLogInfoHeader().getLog().getRevision());
-            file.delete();
-            FileUtil.copyFile(FileUtil.toFileObject(oldFile), FileUtil.toFileObject(parent), file.getName(), "");
-        } catch (IOException e) {
-            ErrorManager.getDefault().notify(e);
-        }
+    private void backout(int idx) {
+        Object o = dispResults.get(idx);
+        if (o instanceof RepositoryRevision) {
+            RepositoryRevision repoRev = (RepositoryRevision) o;
+            BackoutAction.backout(repoRev);
+        }        
+    }
+    
+    static void backout(final RepositoryRevision.Event event) {
+        RepositoryRevision repoRev = event.getLogInfoHeader();
+        BackoutAction.backout(repoRev);
     }
 
-    private void revertModifications(int[] selection) {
+    static void revertModifications(final RepositoryRevision.Event event) {
+        Set<RepositoryRevision.Event> events = new HashSet<RepositoryRevision.Event>();
+        events.add(event);
+        revert(null, (RepositoryRevision.Event[]) events.toArray(new RepositoryRevision.Event[events.size()]));
+    }
+
+    public void revertModifications(int[] selection) {
         Set<RepositoryRevision.Event> events = new HashSet<RepositoryRevision.Event>();
         Set<RepositoryRevision> revisions = new HashSet<RepositoryRevision>();
         for (int idx : selection) {
@@ -403,45 +423,50 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
                 events.add((RepositoryRevision.Event) o);
             }
         }
-        revert(master, revisions.toArray(new RepositoryRevision[revisions.size()]), (RepositoryRevision.Event[]) events.toArray(new RepositoryRevision.Event[events.size()]));
+        revert(revisions.toArray(new RepositoryRevision[revisions.size()]), (RepositoryRevision.Event[]) events.toArray(new RepositoryRevision.Event[events.size()]));
     }
 
-    static void revert(final SearchHistoryPanel master, final RepositoryRevision [] revisions, final RepositoryRevision.Event [] events) {
-        String url;
-        try {
-            url = master.getSearchRepositoryRootUrl();        
-        } catch (HgException ex) {
-            ExceptionHandler eh = new ExceptionHandler(ex);
-            eh.notifyException();                
-            return;
-        }                   
+    static void revert(final RepositoryRevision [] revisions, final RepositoryRevision.Event [] events) {
+        String url;        
+        if(revisions == null || revisions.length == 0){
+            if(events == null || events.length == 0 || events[0].getLogInfoHeader() == null) return;
+            url = events[0].getLogInfoHeader().getRepositoryRootUrl();             
+        }else{
+            url = revisions[0].getRepositoryRootUrl(); 
+        }
+        
         RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(url);
         HgProgressSupport support = new HgProgressSupport() {
             public void perform() {
-                revertImpl(master, revisions, events, this);
+                revertImpl(revisions, events, this);
             }
         };
         support.start(rp, url, NbBundle.getMessage(SummaryView.class, "MSG_Revert_Progress")); // NOI18N
     }
 
-    private static void revertImpl(SearchHistoryPanel master, RepositoryRevision[] revisions, RepositoryRevision.Event[] events, HgProgressSupport progress) {
+    private static void revertImpl(RepositoryRevision[] revisions, RepositoryRevision.Event[] events, HgProgressSupport progress) {
         List<File> revertFiles = new ArrayList<File>();
-        for (RepositoryRevision revision : revisions) {
-            File root = new File(revision.getRepositoryRootUrl());
-            for(RepositoryRevision.Event event: revision.getEvents()){
-                if (event.getFile() == null) continue;
-                revertFiles.add(event.getFile());
+        boolean doBackup = HgModuleConfig.getDefault().getBackupOnRevertModifications();
+        if (revisions != null) {
+            for (RepositoryRevision revision : revisions) {
+                File root = new File(revision.getRepositoryRootUrl());
+                for (RepositoryRevision.Event event : revision.getEvents()) {
+                    if (event.getFile() == null) {
+                        continue;
+                    }
+                    revertFiles.add(event.getFile());
+                }
+                RevertModificationsAction.performRevert(
+                        root, revision.getLog().getRevision(), revertFiles, doBackup, progress.getLogger());
+                revertFiles.clear();
             }
-            RevertModificationsAction.performRevert(
-                        root, revision.getLog().getRevision(), revertFiles);
-            revertFiles.clear();
         }
         
         Map<File, List<RepositoryRevision.Event>> revertMap = new HashMap<File, List<RepositoryRevision.Event>>();
         for (RepositoryRevision.Event event : events) {
             if (event.getFile() == null) continue;
          
-            File root = Mercurial.getInstance().getTopmostManagedParent(event.getFile());
+            File root = Mercurial.getInstance().getRepositoryRoot(event.getFile());
             if(revertMap == null){
                 revertMap = new HashMap<File, List<RepositoryRevision.Event>>();    
             }
@@ -463,7 +488,7 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
                 if(revEvents != null && !revEvents.isEmpty()){
                     // Assuming all files in a given repository reverting to same revision
                     RevertModificationsAction.performRevert(
-                        root, revEvents.get(0).getLogInfoHeader().getLog().getRevision(), revertFiles);
+                        root, revEvents.get(0).getLogInfoHeader().getLog().getRevision(), revertFiles, doBackup, progress.getLogger());
                 }
             }                       
         }
@@ -477,7 +502,7 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
                 RepositoryRevision.Event drev = (RepositoryRevision.Event) o;
                 File file = VersionsCache.getInstance().getFileRevision(drev.getFile(), drev.getLogInfoHeader().getLog().getRevision());
 
-                FileObject fo = FileUtil.toFileObject(file);
+                FileObject fo = FileUtil.toFileObject(FileUtil.normalizeFile(file));
                 org.netbeans.modules.versioning.util.Utils.openFile(fo, drev.getLogInfoHeader().getLog().getRevision());
             } catch (IOException ex) {
                 // Ignore if file not available in cache
@@ -492,6 +517,22 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         } else {
             RepositoryRevision container = (RepositoryRevision) o;
             master.showDiff(container);
+        }
+    }
+
+    private void exportDiffs(int idx) {
+        Object o = dispResults.get(idx);
+        if (o instanceof RepositoryRevision) {
+            RepositoryRevision repoRev = (RepositoryRevision) o;
+            ExportDiffAction.exportDiffRevision(repoRev, master.getRoots());
+        }        
+    }
+    
+    private void exportFileDiff(int idx) {
+        Object o = dispResults.get(idx);
+        if (o instanceof RepositoryRevision.Event) {
+            RepositoryRevision.Event drev = (RepositoryRevision.Event) o;
+            ExportDiffAction.exportDiffFileRevision(drev);
         }
     }
 
@@ -510,6 +551,16 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         }
     }
     
+    private class Linker {
+        HyperlinkProvider hp;
+        Rectangle bounds[];
+        int docstart[];
+        int docend[];
+        int start[];
+        int end[];
+        String text[];
+    }
+
     private class SummaryCellRenderer extends JPanel implements ListCellRenderer {
 
         private static final String FIELDS_SEPARATOR = "        "; // NOI18N
@@ -521,6 +572,10 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         private Style indentStyle;
         private Style noindentStyle;
         private Style hiliteStyle;
+        private Style hyperlinkStyle;
+        
+        private Color selectionBackground;
+        private Color selectionForeground;
         
         private JTextPane textPane = new JTextPane();
         private JPanel    actionsPane = new JPanel();
@@ -530,10 +585,15 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
         private int             index;
         private HyperlinkLabel  diffLink;
         private HyperlinkLabel  revertLink;
+        private HyperlinkLabel  exportDiffsLink;
 
         public SummaryCellRenderer() {
+            selectionBackground = new JList().getSelectionBackground();
+            selectionForeground = new JList().getSelectionForeground();
+
             selectedStyle = textPane.addStyle("selected", null); // NOI18N
-            StyleConstants.setForeground(selectedStyle, UIManager.getColor("List.selectionForeground")); // NOI18N
+            StyleConstants.setForeground(selectedStyle, selectionForeground);
+            StyleConstants.setBackground(selectedStyle, selectionBackground);
             normalStyle = textPane.addStyle("normal", null); // NOI18N
             StyleConstants.setForeground(normalStyle, UIManager.getColor("List.foreground")); // NOI18N
             filenameStyle = textPane.addStyle("filename", normalStyle); // NOI18N
@@ -543,6 +603,10 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             noindentStyle = textPane.addStyle("noindent", null); // NOI18N
             StyleConstants.setLeftIndent(noindentStyle, 0);
             defaultFormat = DateFormat.getDateTimeInstance();
+
+            hyperlinkStyle = textPane.addStyle("hyperlink", normalStyle); // NOI18N
+            StyleConstants.setForeground(hyperlinkStyle, Color.BLUE);
+            StyleConstants.setUnderline(hyperlinkStyle, true);
 
             hiliteStyle = textPane.addStyle("hilite", normalStyle); // NOI18N
             Color c = (Color) searchHiliteAttrs.getAttribute(StyleConstants.Background);
@@ -560,7 +624,11 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             actionsPane.add(diffLink);
 
             revertLink = new HyperlinkLabel();
+            revertLink.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 8));
             actionsPane.add(revertLink);
+            
+            exportDiffsLink = new HyperlinkLabel();
+            actionsPane.add(exportDiffsLink);
             
             textPane.setBorder(null);
         }
@@ -589,8 +657,8 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             Color foregroundColor;
             
             if (isSelected) {
-                foregroundColor = UIManager.getColor("List.selectionForeground"); // NOI18N
-                backgroundColor = UIManager.getColor("List.selectionBackground"); // NOI18N
+                foregroundColor = selectionForeground;
+                backgroundColor = selectionBackground;
                 style = selectedStyle;
             } else {
                 foregroundColor = UIManager.getColor("List.foreground"); // NOI18N
@@ -603,11 +671,16 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             
             this.index = index;
                         
+            // XXX cache
+            Lookup.Result<HyperlinkProvider> hpResult = Lookup.getDefault().lookupResult(HyperlinkProvider.class);
+            Collection<HyperlinkProvider> hpInstances = (Collection<HyperlinkProvider>) hpResult.allInstances();
+
             try {
                 sd.remove(0, sd.getLength());
                 sd.setParagraphAttributes(0, sd.getLength(), noindentStyle, false);
 
-                sd.insertString(0, container.getLog().getRevision(), null);
+                sd.insertString(0, container.getLog().getRevision() + 
+                        " (" + container.getLog().getCSetShortID() + ")", null); // NOI18N
                 sd.setCharacterAttributes(0, sd.getLength(), filenameStyle, false);
                 sd.insertString(sd.getLength(), FIELDS_SEPARATOR + container.getLog().getAuthor(), null);                
                 sd.insertString(sd.getLength(), FIELDS_SEPARATOR + defaultFormat.format(container.getLog().getDate()), null);
@@ -618,12 +691,55 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
 
                 sd.insertString(sd.getLength(), commitMessage, null);
                 
+                int len = commitMessage.length();
+                int doclen = sd.getLength();
+                for (HyperlinkProvider hp : hpInstances) {
+                    int[] spans = hp.getSpans(commitMessage);
+                    if (spans == null) {
+                        break;
+                    }
+                    if(spans.length % 2 != 0) {
+                        // XXX more info and log only _ONCE_
+                        Mercurial.LOG.warning("Hyperlink provider " + hp.getClass().getName() + " returns wrong spans");
+                        break;
+                    }
+                    if(spans.length > 0) {
+                        Linker l = new Linker();
+
+                        l.docstart = new int[spans.length / 2];
+                        l.docend = new int[spans.length / 2];
+                        l.start = new int[spans.length / 2];
+                        l.end = new int[spans.length / 2];
+                        l.text = new String[spans.length / 2];
+                        for (int i = 0; i < spans.length;) {
+                            int linkeridx = i / 2;
+                            int start = spans[i++];
+                            int end = spans[i++];
+                            if(end < start) {
+                                Mercurial.LOG.warning("Hyperlink provider " + hp.getClass().getName() + " returns wrong spans [" + start + "," + end + "]");
+                                continue;
+                            }
+                            sd.setCharacterAttributes(doclen - len + start, end - start, hyperlinkStyle, false);
+                            int docstart = doclen - len + start;
+                            int docend = docstart + end - start;
+
+
+                            l.hp = hp;
+                            l.start[linkeridx] = start;
+                            l.end[linkeridx] = end;
+                            l.docstart[linkeridx] = docstart;
+                            l.docend[linkeridx] = docend;
+                            l.text[linkeridx] = commitMessage;
+
+                        }
+                        resultsList.putClientProperty(HLINK_ISSUE_PROPERTY + index, l); // NOI18N
+                    }
+                }
+
                 if (message != null && !isSelected) {
                     int idx = commitMessage.indexOf(message);
                     if (idx != -1) {
-                        int len = commitMessage.length();
-                        int doclen = sd.getLength();
-                        sd.setCharacterAttributes(doclen - len + idx, message.length(), hiliteStyle, false);
+                        sd.setCharacterAttributes(doclen - len + idx, message.length(), hiliteStyle, true);
                     }
                 }
                                 
@@ -634,9 +750,12 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             }
             
             actionsPane.setVisible(true);
-            diffLink.set(NbBundle.getMessage(SummaryView.class, "CTL_Action_Diff"), foregroundColor, backgroundColor);
-            revertLink.set(NbBundle.getMessage(SummaryView.class, "CTL_Action_Revert"), foregroundColor, backgroundColor); // NOI18N
-        }
+            if(!master.isIncomingSearch()){
+                diffLink.set(NbBundle.getMessage(SummaryView.class, "CTL_Action_Diff"), foregroundColor, backgroundColor);// NOI18N
+                revertLink.set(NbBundle.getMessage(SummaryView.class, "CTL_Action_Revert"), foregroundColor, backgroundColor); // NOI18N
+                exportDiffsLink.set(NbBundle.getMessage(SummaryView.class, "CTL_Action_ExportDiffs"), foregroundColor, backgroundColor); // NOI18N
+            }
+    }
 
         private void renderRevision(JList list, RepositoryRevision.Event dispRevision, final int index, boolean isSelected) {
             Style style;
@@ -646,8 +765,8 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             Color foregroundColor;
             
             if (isSelected) {
-                foregroundColor = UIManager.getColor("List.selectionForeground"); // NOI18N
-                backgroundColor = UIManager.getColor("List.selectionBackground"); // NOI18N
+                foregroundColor = selectionForeground;
+                backgroundColor = selectionBackground;
                 style = selectedStyle;
             } else {
                 foregroundColor = UIManager.getColor("List.foreground"); // NOI18N
@@ -661,9 +780,11 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             try {
                 sd.remove(0, sd.getLength());
                 sd.setParagraphAttributes(0, sd.getLength(), indentStyle, false);
-                
-                sd.insertString(sd.getLength(), String.valueOf(dispRevision.getChangedPath().getAction()), null);
-                sd.insertString(sd.getLength(), FIELDS_SEPARATOR + dispRevision.getChangedPath().getPath(), null);
+
+                String action = String.valueOf(dispRevision.getChangedPath().getAction()).trim();
+
+                sd.insertString(sd.getLength(), action, null);
+                sd.insertString(sd.getLength(), (action.equals("") ? "" : FIELDS_SEPARATOR) + dispRevision.getChangedPath().getPath(), null);
                 
                 sd.setCharacterAttributes(0, Integer.MAX_VALUE, style, false);
                 resizePane(sd.getText(0, sd.getLength() - 1), list.getFontMetrics(list.getFont()));
@@ -698,12 +819,34 @@ class SummaryView implements MouseListener, ComponentListener, MouseMotionListen
             {
                 Rectangle bounds = diffLink.getBounds();
                 bounds.setBounds(bounds.x, bounds.y + apb.y, bounds.width, bounds.height);
-                resultsList.putClientProperty("Summary-Diff-" + index, bounds); // NOI18N
+                resultsList.putClientProperty(SUMMARY_DIFF_PROPERTY + index, bounds); // NOI18N
             }
 
             Rectangle bounds = revertLink.getBounds();
             bounds.setBounds(bounds.x, bounds.y + apb.y, bounds.width, bounds.height);
             resultsList.putClientProperty(SUMMARY_REVERT_PROPERTY + index, bounds); // NOI18N
+
+            Rectangle edBounds = exportDiffsLink.getBounds();
+            edBounds.setBounds(edBounds.x, edBounds.y + apb.y, edBounds.width, edBounds.height);
+            resultsList.putClientProperty(SUMMARY_EXPORTDIFFS_PROPERTY + index, edBounds); // NOI18N            
+
+            Rectangle tpBounds = textPane.getBounds();
+            try {
+                Linker l = (Linker) resultsList.getClientProperty(HLINK_ISSUE_PROPERTY + index); // NOI18N
+                if(l != null) {
+                    TextUI tui = textPane.getUI();
+                    l.bounds = new Rectangle[l.docstart.length];
+                    for (int i = 0; i < l.docstart.length; i++) {
+                        Rectangle startr = tui.modelToView(textPane, l.docstart[i], Position.Bias.Forward).getBounds();
+                        Rectangle endr = tui.modelToView(textPane, l.docend[i], Position.Bias.Backward).getBounds();
+                        bounds = new Rectangle(tpBounds.x + startr.x, startr.y, endr.x - startr.x, startr.height);
+                        l.bounds[i] = bounds;
+                    }
+                    resultsList.putClientProperty(HLINK_ISSUE_PROPERTY + index, l); // NOI18N
+                }
+            } catch (BadLocationException ex) {
+
+            }
         }
     }
     
