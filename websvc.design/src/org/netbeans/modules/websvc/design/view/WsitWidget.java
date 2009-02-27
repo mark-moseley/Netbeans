@@ -57,8 +57,7 @@ import org.netbeans.api.visual.layout.LayoutFactory;
 import org.netbeans.api.visual.widget.Widget;
 import org.netbeans.api.visual.model.ObjectScene;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
-import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.*;
-import org.netbeans.modules.websvc.core.wseditor.support.EditWSAttributesCookie;
+import org.netbeans.modules.websvc.api.support.EditWSAttributesCookie;
 import org.netbeans.modules.websvc.design.configuration.WSConfiguration;
 import org.netbeans.modules.websvc.design.configuration.WSConfigurationProvider;
 import org.netbeans.modules.websvc.design.configuration.WSConfigurationProviderRegistry;
@@ -269,6 +268,7 @@ public class WsitWidget extends AbstractTitledWidget {
                 if(WSConfiguration.PROPERTY.equals(property)) {
                     if(configWidget instanceof CheckBoxWidget) {
                         ((CheckBoxWidget)configWidget).setSelected((Boolean)newValue);
+                        scene.validate();
                         widget.revalidate(true);
                     }
                 } else if(WSConfiguration.PROPERTY_ENABLE.equals(property)) {
