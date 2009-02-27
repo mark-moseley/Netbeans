@@ -170,18 +170,16 @@ public class AutoupdateCatalogParser extends DefaultHandler {
     }
     
     private static InputSource getInputSource(URL toParse, AutoupdateCatalogProvider p, URI base) {
-        try {
-            InputStream is;
+        try {            
+            InputStream is = toParse.openStream ();
             if (isGzip (p)) {
-                is = new BufferedInputStream (new GZIPInputStream (toParse.openStream ()));
-            } else {
-                is = new BufferedInputStream (toParse.openStream ());
+                is = new GZIPInputStream(is);
             }
-            InputSource src = new InputSource(is);
+            InputSource src = new InputSource(new BufferedInputStream (is));
             src.setSystemId(base.toString());
             return src;
         } catch (IOException ex) {
-            ERR.log (Level.SEVERE, null, ex);
+            ERR.log (Level.SEVERE, "Cannot estabilish input stream for " + toParse , ex);
             return new InputSource();
         }
     }

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -49,12 +49,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.modules.autoupdate.services.AutoupdateSettings;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
 /**
  *
@@ -87,7 +85,7 @@ public class AutoupdateCatalogCache {
         if (userDir != null) {
             cacheDir = new File (new File (new File (userDir, "var"), "cache"), "catalogcache"); // NOI18N
         } else {
-            File dir = FileUtil.toFile (Repository.getDefault ().getDefaultFileSystem ().getRoot());
+            File dir = FileUtil.toFile (FileUtil.getConfigRoot());
             cacheDir = new File(dir, "catalogcache"); // NOI18N
         }
         cacheDir.mkdirs();
@@ -111,6 +109,9 @@ public class AutoupdateCatalogCache {
             }
             assert new File (dir, codeName).exists () : "Cache " + cache + " exists.";
             err.log (Level.FINER, "Cache file " + cache + " was wrote from original URL " + original);
+            if(cache.exists() && cache.length()==0) {
+                err.log (Level.INFO, "Written cache size is zero bytes");
+            }
             return url;
         }
     }
@@ -121,6 +122,10 @@ public class AutoupdateCatalogCache {
         File cache = new File (dir, codeName);
         
         if (cache != null && cache.exists ()) {
+            if(cache.length() == 0) {
+                err.log(Level.INFO, "Cache file " + cache + " exists and of zero size");
+                return null;
+            }
             URL url = null;
             try {
                 url = cache.toURI ().toURL ();
@@ -151,9 +156,13 @@ public class AutoupdateCatalogCache {
 
         NetworkAccess.NetworkListener nwl = new NetworkAccess.NetworkListener () {
 
-            public void streamOpened (InputStream stream) {
-                err.log (Level.FINE, "Successfully read URI " + sourceUrl);
-                doCopy (sourceUrl, stream, cache, temp);
+            public void streamOpened (InputStream stream, int contentLength) {
+                err.log (Level.FINE, "Successfully started reading URI " + sourceUrl);
+                try {
+                    doCopy (sourceUrl, stream, cache, temp, contentLength);
+                } catch (IOException ex) {
+                    storeException (ex);
+                }
             }
 
             public void accessCanceled () {
@@ -198,37 +207,63 @@ public class AutoupdateCatalogCache {
         return storedException;
     }
     
-    private void doCopy (URL sourceUrl, InputStream is, File cache, File temp) {
+    private void doCopy (URL sourceUrl, InputStream is, File cache, File temp, int contentLength) throws IOException {
         
         OutputStream os = null;
         int read = 0;
+        int totalRead = 0;
         
         try {
-            os = new BufferedOutputStream(new FileOutputStream (temp));
-            while ((read = is.read ()) != -1) {
-                os.write (read);
-            }   
+            os = new BufferedOutputStream(new FileOutputStream (temp));            
+            byte [] bytes = new byte [1024];
+            while ((read = is.read (bytes)) != -1) {
+                os.write (bytes, 0, read);
+                totalRead+=read;
+            }
+            is.close ();
+            os.flush ();
+            os.close ();
+            os = null;
+            if(contentLength!=-1 && contentLength!=totalRead) {
+                err.log(Level.INFO, "Content length was reported as " + contentLength + " bytes, but read " + totalRead + " bytes from " + sourceUrl);
+                throw new IOException("unexpected closed connection to " + sourceUrl);
+            }
+            if(totalRead==0) {
+                err.log(Level.INFO, "Connection content length was " + contentLength + " bytes (read " + totalRead + "bytes), catalog size can`t be that size - likely server with catalog at " + sourceUrl + " is temporary down");
+                throw new IOException("zero sized catalog reported at " + sourceUrl);
+            }
+            synchronized (this) {
+                if (cache.exists () && ! cache.delete ()) {
+                    err.log (Level.INFO, "Cannot delete cache " + cache);
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException ie) {
+                        assert false : ie;
+                    }
+                    cache.delete();
+                }
+            }
+            err.log (Level.INFO, "Read " + totalRead + " bytes from catalog at " + sourceUrl);
+            
+            if(temp.length()==0) {
+                err.log (Level.INFO, "Temp cache size is zero bytes");
+            }
+            if (! temp.renameTo (cache)) {
+                err.log (Level.INFO, "Cannot rename temp " + temp + " to cache " + cache);
+            }
+            if(cache.exists() && cache.length()==0) {
+                err.log (Level.INFO, "Final cache size is zero bytes");
+            }
         } catch (IOException ioe) {
             err.log (Level.INFO, "Writing content of URL " + sourceUrl + " failed.", ioe);
+            throw ioe;
         } finally {
             try {
                 if (is != null) is.close ();
-                if (os != null) os.flush ();
-                if (os != null) os.close ();
-                synchronized (this) {
-                    if (cache.exists () && ! cache.delete ()) {
-                        err.log (Level.INFO, "Cannot delete cache " + cache);
-                        try {
-                            Thread.sleep(200);
-                        } catch (InterruptedException ie) {
-                            assert false : ie;
-                        }
-                        cache.delete();
-                    }
-                    if (! temp.renameTo (cache)) {
-                        err.log (Level.INFO, "Cannot rename temp " + temp + " to cache " + cache);
-                    }
-                }                    
+                if (os != null)  {
+                    os.flush ();
+                    os.close ();
+                }
             } catch (IOException ioe) {
                 err.log (Level.INFO, "Closing streams failed.", ioe);
             }
