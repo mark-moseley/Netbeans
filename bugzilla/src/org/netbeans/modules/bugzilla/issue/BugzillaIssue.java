@@ -41,6 +41,8 @@ package org.netbeans.modules.bugzilla.issue;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.MalformedURLException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -69,9 +71,9 @@ import org.netbeans.modules.bugzilla.Bugzilla;
 import org.netbeans.modules.bugtracking.spi.IssueNode;
 import org.netbeans.modules.bugtracking.spi.BugtrackingController;
 import org.netbeans.modules.bugtracking.spi.Issue;
+import org.netbeans.modules.bugtracking.spi.Query;
 import org.netbeans.modules.bugtracking.spi.Query.ColumnDescriptor;
 import org.netbeans.modules.bugzilla.BugzillaRepository;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 /**
@@ -85,7 +87,7 @@ public class BugzillaIssue extends Issue {
     private static final SimpleDateFormat CC_DATE_FORMAT = new SimpleDateFormat(DATE_FORMAT);
     private IssueController controller;
     private IssueNode node;
-
+    
     static final String LABEL_NAME_ID           = "bugzilla.issue.id";
     static final String LABEL_NAME_SEVERITY     = "bugzilla.issue.severity";
     static final String LABEL_NAME_PRIORITY     = "bugzilla.issue.priority";
@@ -104,7 +106,7 @@ public class BugzillaIssue extends Issue {
         PLATFORM(BugzillaAttribute.REP_PLATFORM.getKey()),
         MILESTONE(BugzillaAttribute.TARGET_MILESTONE.getKey()),
         REPORTER(BugzillaAttribute.REPORTER.getKey()),
-        ASSIGEND_TO(BugzillaAttribute.ASSIGNED_TO.getKey()),
+        ASSIGNED_TO(BugzillaAttribute.ASSIGNED_TO.getKey()),
         ASSIGNED_TO_NAME(BugzillaAttribute.ASSIGNED_TO_NAME.getKey()),
         QA_CONTACT(BugzillaAttribute.QA_CONTACT.getKey()),
         QA_CONTACT_NAME(BugzillaAttribute.QA_CONTACT_NAME.getKey()),
@@ -210,6 +212,106 @@ public class BugzillaIssue extends Issue {
         return attributes;
     }
 
+    @Override
+    public String getRecentChanges() {
+        if(wasSeen()) {
+            return "";
+        }
+        int status = repository.getIssuesCache().getStatus(getID());
+        if(status == Query.ISSUE_STATUS_NEW) {
+            return "New";
+        } else if(status == Query.ISSUE_STATUS_MODIFIED) {
+            List<IssueField> changedFields = new ArrayList<IssueField>();
+            Map<String, String> seenAtributes = repository.getIssuesCache().getSeenAttributes(getID());
+            assert seenAtributes != null;
+            for (IssueField f : IssueField.values()) {
+                String value = getFieldValue(f);
+                String seenValue = seenAtributes.get(f.key);
+                if(seenValue == null) {
+                    seenValue = "";
+                }
+                if(!value.trim().equals(seenValue)) {
+                    changedFields.add(f);
+                }
+            }
+            int changedCount = changedFields.size();
+            assert changedCount > 0 : "status MODIFIED yet zero changes found";
+            if(changedCount == 1) {
+                String ret = null;
+                for (IssueField changedField : changedFields) {
+                    switch(changedField) {
+                        case SUMMARY :
+                            ret = "Summary changed";
+                            break;
+                        case CC :
+                            ret = "CC field changed";
+                            break;
+                        case KEYWORDS :
+                            ret ="Keywords changed";
+                            break;
+                        case DEPENDS_ON :
+                        case BLOCKS :
+                            ret ="Dependence changed";
+                            break;
+                        default :
+                            ret = changedField.name() + " changed to " + getFieldValue(changedField);
+                    }
+                }
+                return ret;
+            } else {
+                String ret = null;
+                for (IssueField changedField : changedFields) {
+                    switch(changedField) {
+                        case SUMMARY :
+                            ret = changedCount + " changes, incl. summary";
+                            break;
+                        case PRIORITY :
+                            ret = changedCount + " changes, incl. priority";
+                            break;
+                        case SEVERITY :
+                            ret = changedCount + " changes, incl. severity";
+                            break;
+                        case PRODUCT :
+                            ret = changedCount + " changes, incl. product";
+                            break;
+                        case COMPONENT :
+                            ret = changedCount + " changes, incl. component";
+                            break;
+                        case PLATFORM :
+                            ret = changedCount + " changes, incl. platform";
+                            break;
+                        case VERSION :
+                            ret = changedCount + " changes, incl. version";
+                            break;
+                        case MILESTONE :
+                            ret = changedCount + " changes, incl. milestone";
+                            break;
+                        case KEYWORDS :
+                            ret = changedCount + " changes, incl. keywords";
+                            break;
+                        case URL :
+                            ret = changedCount + " changes, incl. url";
+                            break;
+                        case ASSIGNED_TO :
+                            ret = changedCount + " changes, incl. Assignee";
+                            break;
+                        case QA_CONTACT :
+                            ret = changedCount + " changes, incl. qa contact";
+                            break;
+                        case DEPENDS_ON :
+                        case BLOCKS :
+                            ret = changedCount + " changes, incl. dependence";
+                            break;
+                        default :
+                            ret = changedCount + " changes";
+                    }
+                    return ret;
+                }
+            }            
+        }
+        return "";
+    }
+
     public static String getID(TaskData taskData) {
         try {
             return Integer.toString(BugzillaRepositoryConnector.getBugId(taskData.getTaskId()));
@@ -249,7 +351,7 @@ public class BugzillaIssue extends Issue {
     public void setSeen(boolean seen, boolean cacheRefresh) {
         super.setSeen(seen);
         if(cacheRefresh) {
-            repository.getCache().setSeen(getID(), seen, getAttributes());
+            repository.getIssuesCache().setSeen(getID(), seen, getAttributes());
         }
     }
 
@@ -281,16 +383,15 @@ public class BugzillaIssue extends Issue {
     }
 
     int getFieldStatus(IssueField f) {
-        Map<String, String> a = getAttributes();
+        Map<String, String> a = repository.getIssuesCache().getSeenAttributes(getID());
         String seenValue = a.get(f.key);
-        if(seenValue == null) {
+        if(seenValue == null && getFieldValue(f) != null) {
             return IssueField.STATUS_NEW;
         } else if (!seenValue.equals(getFieldValue(f))) {
             return IssueField.STATUS_MODIFIED;
         }
         return IssueField.STATUS_UPTODATE;
     }
-
 
     // XXX get rid of this
     Set<TaskAttribute> getResolveAttributes(String resolution) {
@@ -312,8 +413,12 @@ public class BugzillaIssue extends Issue {
     void resolve(String resolution) {
         setOperation(BugzillaOperation.resolve);
         TaskAttribute rta = data.getRoot();
-        TaskAttribute ta = rta.getMappedAttribute(TaskAttribute.RESOLUTION);
-        ta.setValue(resolution);        
+        TaskAttribute ta = rta.getMappedAttribute(BugzillaOperation.resolve.getInputId());
+        ta.setValue(resolution);
+    }
+
+    void accept() {
+        setOperation(BugzillaOperation.accept);
     }
 
     void duplicate(String id) {
@@ -360,21 +465,28 @@ public class BugzillaIssue extends Issue {
         return attachments.toArray(new Attachment[attachments.size()]);
     }
 
-    void addAttachment(File f, String comment, String desc) {
+
+    void addAttachment(File f, String comment, String desc, String contentType) throws HttpException, IOException, CoreException  {
         FileTaskAttachmentSource attachmentSource = new FileTaskAttachmentSource(f);
-        attachmentSource.setContentType("text/plain");
+        attachmentSource.setContentType(contentType);
         BugzillaTaskAttachmentHandler.AttachmentPartSource source = new BugzillaTaskAttachmentHandler.AttachmentPartSource(attachmentSource);
 
-        try {
-            Bugzilla.getInstance().getRepositoryConnector().getClientManager().getClient(getTaskRepository(), new NullProgressMonitor()).
-            postAttachment(getID(), comment, desc, attachmentSource.getContentType(), false, source, new NullProgressMonitor());
-        } catch (HttpException ex) {
-            Bugzilla.LOG.log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Bugzilla.LOG.log(Level.SEVERE, null, ex);
-        } catch (CoreException ex) {
-            Bugzilla.LOG.log(Level.SEVERE, null, ex);
-        }
+//        try {
+            Bugzilla.getInstance().getClient(repository).postAttachment(
+                    getID(), 
+                    comment,
+                    desc,
+                    attachmentSource.getContentType(), 
+                    false, 
+                    source, 
+                    new NullProgressMonitor());
+//        } catch (HttpException ex) {
+//            Bugzilla.LOG.log(Level.SEVERE, null, ex);
+//        } catch (IOException ex) {
+//            Bugzilla.LOG.log(Level.SEVERE, null, ex);
+//        } catch (CoreException ex) {
+//            Bugzilla.LOG.log(Level.SEVERE, null, ex);
+//        }
     }
 
     Comment[] getComments() {
@@ -397,20 +509,23 @@ public class BugzillaIssue extends Issue {
         refresh();
 
         // resolved attrs
-        Set<TaskAttribute> attrs = null; // XXX looks like we don't need this at all - see in submmit -> attr = null
         if(close) {
-            attrs = getResolveAttributes("FIXED");
+            resolve("FIXED"); // XXX constant?
         }
-        // commet attrs
         if(comment != null) {
-            TaskAttribute ta = data.getRoot().createMappedAttribute(TaskAttribute.COMMENT_NEW);
-            ta.setValue(comment);
-            attrs.add(ta);
+            addComment(comment);
         }
         try {
             submit();
         } catch (CoreException ex) {
             Bugzilla.LOG.log(Level.SEVERE, null, ex);
+        }
+    }
+
+    public void addComment(String comment) {
+        if(comment != null) {
+            TaskAttribute ta = data.getRoot().createMappedAttribute(TaskAttribute.COMMENT_NEW);
+            ta.setValue(comment);
         }
     }
 
@@ -420,7 +535,8 @@ public class BugzillaIssue extends Issue {
 
     public void refresh() {
         try {
-            data = Bugzilla.getInstance().getRepositoryConnector().getTaskData(repository.getTaskRepository(), data.getTaskId(), new NullProgressMonitor());
+            TaskData td = Bugzilla.getInstance().getRepositoryConnector().getTaskData(repository.getTaskRepository(), data.getTaskId(), new NullProgressMonitor());
+            setTaskData(td);
         } catch (CoreException ex) {
             Bugzilla.LOG.log(Level.SEVERE, null, ex);
         }
@@ -440,7 +556,7 @@ public class BugzillaIssue extends Issue {
             try {
                 d = CC_DATE_FORMAT.parse(a.getMappedAttribute(TaskAttribute.COMMENT_DATE).getValue());
             } catch (ParseException ex) {
-                Exceptions.printStackTrace(ex);
+                Bugzilla.LOG.log(Level.SEVERE, null, ex);
             }
             when = d;            
             // XXX check for NULL
@@ -471,18 +587,31 @@ public class BugzillaIssue extends Issue {
         private final String filename;
         private final String author;
         private final Date date;
+        private final String id;
+        private String contentType;
+        private String isDeprected;
+        private String size;
+        private String isPatch;
+        private String url;
+
 
         public Attachment(TaskAttribute ta) {
+            id = ta.getValue();
             Date d = null;
             try {
                 d = CC_DATE_FORMAT.parse(ta.getMappedAttribute(TaskAttribute.ATTACHMENT_DATE).getValues().get(0));// XXX value or values?
             } catch (ParseException ex) {
-                Exceptions.printStackTrace(ex);
+                Bugzilla.LOG.log(Level.SEVERE, null, ex);
             }
             date = d;
             filename = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_FILENAME).getValue();
             desc = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_DESCRIPTION).getValues().get(0);// XXX value or values?
             author = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_AUTHOR).getMappedAttribute(TaskAttribute.PERSON_NAME).getValue();
+            contentType = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_CONTENT_TYPE).getValue();
+            isDeprected = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_IS_DEPRECATED).getValue();
+            isPatch = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_IS_PATCH).getValue();
+            size = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_SIZE).getValue();
+            url = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_URL).getValue();
         }
 
         public String getAuthor() {
@@ -499,6 +628,34 @@ public class BugzillaIssue extends Issue {
 
         public String getFilename() {
             return filename;
+        }
+
+        public String getContentType() {
+            return contentType;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public String getIsDeprected() {
+            return isDeprected;
+        }
+
+        public String getIsPatch() {
+            return isPatch;
+        }
+
+        public String getSize() {
+            return size;
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public void getAttachementData(OutputStream os) throws MalformedURLException, IOException, CoreException {
+            Bugzilla.getInstance().getClient(repository).getAttachmentData(id, os, new NullProgressMonitor());
         }
     }
 
