@@ -42,6 +42,8 @@
 package org.netbeans.modules.bugtracking.spi;
 
 import java.awt.event.ActionEvent;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.util.logging.Level;
 import org.openide.nodes.*;
 import org.openide.util.lookup.Lookups;
@@ -59,7 +61,6 @@ public abstract class IssueNode extends AbstractNode {
     
     private Issue issue;
 
-
     private String htmlDisplayName;
     private Action preferedAction = new AbstractAction() {
         public void actionPerformed(ActionEvent e) {
@@ -76,10 +77,17 @@ public abstract class IssueNode extends AbstractNode {
     }
 
     private IssueNode(Children children, Issue issue) {
-        super(children, Lookups.fixed());
+        super(children, Lookups.fixed(issue));
         this.issue = issue;
         initProperties();
         refreshHtmlDisplayName();
+        issue.addPropertyChangeListener(new PropertyChangeListener() {
+            public void propertyChange(PropertyChangeEvent evt) {
+                if(evt.getPropertyName().equals(Issue.EVENT_ISSUE_SEEN_CHANGED)) {
+                    fireSeenValueChanged((Boolean)evt.getOldValue(), (Boolean)evt.getNewValue());
+                }
+            }
+        });
     }
 
     protected Issue getIssue() {
@@ -109,12 +117,6 @@ public abstract class IssueNode extends AbstractNode {
         return super.getCookie(klass);
     }
 
-    public void setSeen(boolean seen) {
-        boolean oldValue = issue.wasSeen();
-        issue.setSeen(seen);
-        fireSeenValueChanged(oldValue, seen);
-    }
-
     public boolean wasSeen() {
         return issue.wasSeen();
     }
@@ -141,23 +143,22 @@ public abstract class IssueNode extends AbstractNode {
         return htmlDisplayName;
     }
 
-//
-//    public void refresh() {
-//        refreshHtmlDisplayName();
-//    }
-
-    void fireSeenValueChanged(boolean oldValue, boolean newValue) {
+    void fireSeenValueChanged(final boolean oldValue, final boolean newValue) {
         if(oldValue != newValue) {
-            firePropertyChange(Issue.LABEL_NAME_SEEN, oldValue, newValue);
-            Property[] properties = getProperties();
-            for (Property p : properties) {
-                if(p instanceof IssueNode.IssueProperty) {
-                    String pName = ((IssueProperty)p).getName();
-                    if(!pName.equals(Issue.LABEL_NAME_SEEN)) {
-                        firePropertyChange(pName, null, null);
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    firePropertyChange(Issue.LABEL_NAME_SEEN, oldValue, newValue);
+                    Property[] properties = getProperties();
+                    for (Property p : properties) {
+                        if(p instanceof IssueNode.IssueProperty) {
+                            String pName = ((IssueProperty)p).getName();
+                            if(!pName.equals(Issue.LABEL_NAME_SEEN)) {
+                                firePropertyChange(pName, null, null);
+                            }
+                        }
                     }
                 }
-            }
+            });
         }
     }
 
@@ -172,9 +173,9 @@ public abstract class IssueNode extends AbstractNode {
     }
 
     /**
-     *
+     * An IssueNode Property
      */
-    public abstract class IssueProperty extends org.openide.nodes.PropertySupport.ReadOnly {
+    public abstract class IssueProperty extends org.openide.nodes.PropertySupport.ReadOnly implements Comparable<IssueProperty> {
         protected IssueProperty(String name, Class type, String displayName, String shortDescription) {
             super(name, type, displayName, shortDescription);
         }
@@ -190,6 +191,9 @@ public abstract class IssueNode extends AbstractNode {
         public Issue getIssue() {
             return IssueNode.this.issue;
         }
+        public int compareTo(IssueProperty o) {
+            return toString().compareTo(o.toString());
+        }
     }
     
     /**
@@ -203,8 +207,41 @@ public abstract class IssueNode extends AbstractNode {
                   NbBundle.getMessage(Issue.class, "CTL_Issue_Seen_Desc")); // NOI18N
         }
         public Object getValue() {
-            return IssueNode.this.wasSeen();
+            return getIssue().wasSeen();
         }
+
+        public int compareTo(IssueProperty p) {
+            if(p == null) return 1;
+            if(IssueNode.this.wasSeen()) return 1;
+            if(p.getIssue().wasSeen()) return -1;
+            return 0;
+        }
+
+    }
+
+    /**
+     * Represens the Seen value in a IssueNode
+     */
+    public class RecentChangesProperty extends IssueProperty {
+        public RecentChangesProperty() {
+            super(Issue.LABEL_RECENT_CHANGES,
+                  String.class,
+                  NbBundle.getMessage(Issue.class, "CTL_Issue_Recent"), // NOI18N
+                  NbBundle.getMessage(Issue.class, "CTL_Issue_Recent_Desc")); // NOI18N
+        }
+        public Object getValue() {
+            return getIssue().getRecentChanges();
+        }
+        
+        @Override
+        public int compareTo(IssueProperty p) {
+            if(p == null) return 1;
+            if(p instanceof RecentChangesProperty) {
+                return getIssue().getRecentChanges().compareToIgnoreCase(((RecentChangesProperty)p).getIssue().getRecentChanges());
+            }
+            return 1;
+        }
+
     }
 
 }

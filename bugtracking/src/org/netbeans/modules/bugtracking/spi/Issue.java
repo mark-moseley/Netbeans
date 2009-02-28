@@ -41,8 +41,11 @@ package org.netbeans.modules.bugtracking.spi;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.io.IOException;
 import java.util.Map;
+import java.util.logging.Level;
 import javax.swing.SwingUtilities;
+import org.netbeans.modules.bugtracking.BugtrackingManager;
 import org.netbeans.modules.bugtracking.ui.issue.IssueTopComponent;
 import org.openide.util.NbBundle;
 
@@ -59,15 +62,64 @@ public abstract class Issue {
      * Seen property id
      */
     public static String LABEL_NAME_SEEN = "issue.seen";
+    
+    /**
+     * Recetn Changes property id
+     */
+    public static String LABEL_RECENT_CHANGES = "issue.recent_changes";
 
-    private boolean seen;
-    private String EVENT_ISSUE_DATA_CHANGED = "issue.data_changed";
+    /**
+     * issue data were changed
+     */
+    public static final String EVENT_ISSUE_DATA_CHANGED = "issue.data_changed";
+
+    /**
+     * issues seen state changed
+     */
+    public static final String EVENT_ISSUE_SEEN_CHANGED = "issue.seen_changed";
+
+    /**
+     * No information available
+     */
+    public static final int ISSUE_STATUS_UNKNOWN        = 0;
+
+    /**
+     * Issue was seen
+     */
+    public static final int ISSUE_STATUS_SEEN           = 2;
+
+    /**
+     * Issue wasn't seen yet
+     */
+    public static final int ISSUE_STATUS_NEW            = 4;
+
+    /**
+     * Issue was remotely modified since the last time it was seen
+     */
+    public static final int ISSUE_STATUS_MODIFIED       = 8;
+
+    /**
+     * Seen, New or Modified
+     */
+    public static final int ISSUE_STATUS_ALL   =
+                                ISSUE_STATUS_NEW |
+                                ISSUE_STATUS_MODIFIED |
+                                ISSUE_STATUS_SEEN;
+    /**
+     * New or modified
+     */
+    public static final int ISSUE_STATUS_NOT_SEEN   =
+                                ISSUE_STATUS_NEW |
+                                ISSUE_STATUS_MODIFIED;
+
+    private Repository repository;
     
     /**
      * Creates an issue
      */
-    public Issue() { 
+    public Issue(Repository repository) {
         support = new PropertyChangeSupport(this);
+        this.repository = repository;
     }
 
     /**
@@ -108,10 +160,18 @@ public abstract class Issue {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 IssueTopComponent tc = new IssueTopComponent();
-                Issue.this.setSeen(true);
                 tc.setIssue(Issue.this);
                 tc.open();
                 tc.requestActive();
+                BugtrackingManager.getInstance().getRequestProcessor().post(new Runnable() {
+                    public void run() {
+                        try {
+                            Issue.this.setSeen(true);
+                        } catch (IOException ex) {
+                            BugtrackingManager.LOG.log(Level.SEVERE, null, ex);
+                        }
+                    }
+                });
             }
         });
     }
@@ -135,19 +195,26 @@ public abstract class Issue {
     public abstract String getSummary();
 
     /**
+     * 
+     */
+    public abstract String getRecentChanges();
+
+    /**
      * Returns true if issue was already seen or marked as seen by the user
      * @return
      */
     public boolean wasSeen() {
-        return seen;
+        return repository.getCache().wasSeen(getID());
     }
 
     /**
      * Sets the seen flag
      * @param seen
      */
-    protected void setSeen(boolean seen) {
-        this.seen = seen;
+    public void setSeen(boolean seen) throws IOException {
+        boolean oldValue = wasSeen();
+        repository.getCache().setSeen(getID(), seen);
+        fireSeenChanged(oldValue, seen);
     }
 
     public abstract Map<String, String> getAttributes();
@@ -162,5 +229,9 @@ public abstract class Issue {
 
     protected void fireDataChanged() {
         support.firePropertyChange(EVENT_ISSUE_DATA_CHANGED, null, null);
+    }
+
+    protected void fireSeenChanged(boolean oldSeen, boolean newSeen) {
+        support.firePropertyChange(EVENT_ISSUE_SEEN_CHANGED, oldSeen, newSeen);
     }
 }

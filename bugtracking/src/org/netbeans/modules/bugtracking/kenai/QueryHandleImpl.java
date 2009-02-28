@@ -44,7 +44,9 @@ import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.util.ArrayList;
 import java.util.List;
+import org.netbeans.modules.bugtracking.spi.Issue;
 import org.netbeans.modules.bugtracking.spi.Query;
 import org.netbeans.modules.bugtracking.ui.query.QueryAction;
 import org.netbeans.modules.kenai.ui.spi.QueryHandle;
@@ -57,6 +59,7 @@ import org.netbeans.modules.kenai.ui.spi.QueryResultHandle;
 public class QueryHandleImpl extends QueryHandle implements ActionListener, PropertyChangeListener {
     private final Query query;
     private final PropertyChangeSupport changeSupport;
+    private Issue[] issues = new Issue[0];
 
     public QueryHandleImpl(Query query) {
         this.query = query;
@@ -84,13 +87,35 @@ public class QueryHandleImpl extends QueryHandle implements ActionListener, Prop
     }
 
     public void propertyChange(PropertyChangeEvent evt) {
-        if(evt.getPropertyName().equals(Query.EVENT_QUERY_DATA_CHANGED)) {
-            changeSupport.firePropertyChange(null); // XXX add result handles
+        if(evt.getPropertyName().equals(Query.EVENT_QUERY_ISSUES_CHANGED)) {
+            registerIssues();
+            changeSupport.firePropertyChange(new PropertyChangeEvent(this, PROP_QUERY_RESULT, null, getQueryResults())); // XXX add result handles
+        } else if(evt.getPropertyName().equals(Issue.EVENT_ISSUE_SEEN_CHANGED)) {
+            changeSupport.firePropertyChange(new PropertyChangeEvent(this, PROP_QUERY_RESULT, null, getQueryResults())); // XXX add result handles
         }
     }
 
     public List<QueryResultHandle> getQueryResults() {
-        return null;
+        List<QueryResultHandle> ret = new ArrayList<QueryResultHandle>();
+        QueryResultHandle qh = QueryResultHandleImpl.forStatus(query, Issue.ISSUE_STATUS_ALL);
+        if(qh != null) {
+            ret.add(qh);
+        }
+        qh = QueryResultHandleImpl.forStatus(query, Issue.ISSUE_STATUS_NOT_SEEN);
+        if(qh != null) {
+            ret.add(qh);
+        }
+        return ret;
+    }
+
+    private void registerIssues() {
+        for (Issue issue : issues) {
+            issue.removePropertyChangeListener(this);
+        }
+        issues = query.getIssues(Issue.ISSUE_STATUS_ALL);
+        for (Issue issue : issues) {
+            issue.addPropertyChangeListener(this);
+        }
     }
 
 }
