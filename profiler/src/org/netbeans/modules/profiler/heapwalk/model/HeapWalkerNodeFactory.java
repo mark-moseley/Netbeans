@@ -40,11 +40,21 @@
 
 package org.netbeans.modules.profiler.heapwalk.model;
 
-import org.netbeans.lib.profiler.heap.*;
+
 import org.openide.util.NbBundle;
 import java.text.MessageFormat;
 import java.util.List;
 import javax.swing.Icon;
+import org.netbeans.lib.profiler.heap.ArrayItemValue;
+import org.netbeans.lib.profiler.heap.FieldValue;
+import org.netbeans.lib.profiler.heap.GCRoot;
+import org.netbeans.lib.profiler.heap.Heap;
+import org.netbeans.lib.profiler.heap.Instance;
+import org.netbeans.lib.profiler.heap.JavaClass;
+import org.netbeans.lib.profiler.heap.ObjectArrayInstance;
+import org.netbeans.lib.profiler.heap.ObjectFieldValue;
+import org.netbeans.lib.profiler.heap.PrimitiveArrayInstance;
+import org.netbeans.lib.profiler.heap.Value;
 
 
 /**
@@ -90,6 +100,14 @@ public class HeapWalkerNodeFactory {
 
                 protected String computeValue() {
                     return MessageFormat.format(ARRAY_CONTAINER_VALUE_STRING, new Object[] { (endIndex - startIndex + 1) });
+                }
+
+                protected String computeSize() {
+                    return "-"; // NOI18N
+                }
+
+                protected String computeRetainedSize() {
+                    return "-"; // NOI18N
                 }
 
                 protected Icon computeIcon() {
@@ -177,10 +195,22 @@ public class HeapWalkerNodeFactory {
                     return NONE_STRING;
                 }
 
+                protected String computeSize() {
+                    return "-"; // NOI18N
+                }
+
+                protected String computeRetainedSize() {
+                    return "-"; // NOI18N
+                }
+
                 protected Icon computeIcon() {
                     return null;
                 }
             };
+    }
+    
+    public static boolean isNoFieldsNode(HeapWalkerNode node) {
+        return NO_FIELDS_STRING.equals(node.getName());
     }
 
     public static HeapWalkerNode createNoItemsNode(HeapWalkerNode parent) {
@@ -196,11 +226,23 @@ public class HeapWalkerNodeFactory {
                 protected String computeValue() {
                     return NONE_STRING;
                 }
+                
+                protected String computeSize() {
+                    return "-"; // NOI18N
+                }
+
+                protected String computeRetainedSize() {
+                    return "-"; // NOI18N
+                }
 
                 protected Icon computeIcon() {
                     return null;
                 }
             };
+    }
+    
+    public static boolean isNoItemsNode(HeapWalkerNode node) {
+        return NO_ITEMS_STRING.equals(node.getName());
     }
 
     public static HeapWalkerNode createNoReferencesNode(HeapWalkerNode parent) {
@@ -216,11 +258,23 @@ public class HeapWalkerNodeFactory {
                 protected String computeValue() {
                     return NONE_STRING;
                 }
+                
+                protected String computeSize() {
+                    return "-"; // NOI18N
+                }
+
+                protected String computeRetainedSize() {
+                    return "-"; // NOI18N
+                }
 
                 protected Icon computeIcon() {
                     return null;
                 }
             };
+    }
+    
+    public static boolean isNoReferencesNode(HeapWalkerNode node) {
+        return NO_REFERENCES_STRING.equals(node.getName());
     }
 
     public static HeapWalkerNode createOOMNode(HeapWalkerNode parent) {
@@ -230,17 +284,29 @@ public class HeapWalkerNodeFactory {
                 }
 
                 protected String computeType() {
-                    return "";
-                } // NOI18N
+                    return ""; // NOI18N
+                }
 
                 protected String computeValue() {
-                    return "";
-                } // NOI18N
+                    return ""; // NOI18N
+                }
+                
+                protected String computeSize() {
+                    return ""; // NOI18N
+                }
+
+                protected String computeRetainedSize() {
+                    return ""; // NOI18N
+                }
 
                 protected Icon computeIcon() {
                     return org.netbeans.modules.profiler.ui.Utils.ERROR_ICON;
                 }
             };
+    }
+    
+    public static boolean isOOMNode(HeapWalkerNode node) {
+        return OUT_OF_MEMORY_STRING.equals(node.getName());
     }
 
     public static HeapWalkerNode createObjectArrayItemNode(ObjectArrayNode array, int itemIndex, Instance instance) {
@@ -264,17 +330,29 @@ public class HeapWalkerNodeFactory {
                 }
 
                 protected String computeType() {
-                    return "";
-                } // NOI18N
+                    return ""; // NOI18N
+                }
 
                 protected String computeValue() {
-                    return "";
-                } // NOI18N
+                    return ""; // NOI18N
+                }
+
+                protected String computeSize() {
+                    return ""; // NOI18N
+                }
+
+                protected String computeRetainedSize() {
+                    return ""; // NOI18N
+                }
 
                 protected Icon computeIcon() {
                     return BrowserUtils.ICON_PROGRESS;
                 }
             };
+    }
+    
+    public static boolean isProgressNode(HeapWalkerNode node) {
+        return SEARCHING_STRING.equals(node.getName());
     }
 
     public static HeapWalkerNode createReferenceNode(Value value, HeapWalkerNode parent) {
@@ -300,11 +378,11 @@ public class HeapWalkerNodeFactory {
                 public GCRoot getGCRoot(Instance inst) {
                     return heap.getGCRoot(inst);
                 }
-                ;
+
                 public JavaClass getJavaClassByID(long javaclassId) {
                     return heap.getJavaClassByID(javaclassId);
                 }
-                ;
+
             };
     }
 
@@ -356,5 +434,14 @@ public class HeapWalkerNodeFactory {
                     ;
                 };
         }
+    }
+    
+    public static boolean isMessageNode(HeapWalkerNode node) {
+        return isNoFieldsNode(node) ||
+               isNoItemsNode(node) ||
+               isNoReferencesNode(node) ||
+               isNoReferencesNode(node) ||
+               isOOMNode(node) ||
+               isProgressNode(node);
     }
 }

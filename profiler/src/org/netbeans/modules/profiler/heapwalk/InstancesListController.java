@@ -40,7 +40,7 @@
 
 package org.netbeans.modules.profiler.heapwalk;
 
-import org.netbeans.lib.profiler.heap.*;
+
 import org.netbeans.modules.profiler.heapwalk.model.AbstractHeapWalkerNode;
 import org.netbeans.modules.profiler.heapwalk.model.BrowserUtils;
 import org.netbeans.modules.profiler.heapwalk.model.ChildrenComputer;
@@ -59,6 +59,9 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JPanel;
 import javax.swing.tree.TreePath;
+import org.netbeans.lib.profiler.heap.GCRoot;
+import org.netbeans.lib.profiler.heap.Instance;
+import org.netbeans.lib.profiler.heap.JavaClass;
 
 
 /**
@@ -174,7 +177,8 @@ public class InstancesListController extends AbstractController {
 
                         if (filteredInstances.size() == 0) {
                             // Class has no instances
-                            children = new HeapWalkerNode[0];
+                            children = new HeapWalkerNode[1];
+                            children[0] = HeapWalkerNodeFactory.createNoItemsNode(InstancesListClassNode.this);
                         } else if (filteredInstances.size() > HeapWalkerNodeFactory.ITEMS_COLLAPSE_THRESHOLD) {
                             int instanceToSelectIndex = -1;
 
@@ -331,16 +335,8 @@ public class InstancesListController extends AbstractController {
         }
 
         public String getReachableSize() {
-            return "";
-        } // NOI18N
-
-        public String getRetainedSize() {
-            return "";
-        } // NOI18N
-
-        public String getSize() {
-            return "";
-        } // NOI18N
+            return ""; // NOI18N
+        }
 
         protected ChildrenComputer getChildrenComputer() {
             return new ChildrenComputer() {
@@ -366,8 +362,6 @@ public class InstancesListController extends AbstractController {
                                 instanceToSelect = null;
                                 containerToSelectIndex = -1;
                             }
-
-                            ;
                         }
 
                         return children;
@@ -394,6 +388,14 @@ public class InstancesListController extends AbstractController {
         protected String computeValue() {
             return getParent().getValue();
         }
+
+        protected String computeSize() {
+            return ""; // NOI18N
+        }
+
+        protected String computeRetainedSize() {
+            return ""; // NOI18N
+        }
     }
 
     public class InstancesListInstanceNode implements HeapWalkerNode, InstancesListNode {
@@ -415,8 +417,6 @@ public class InstancesListController extends AbstractController {
 
             this.name = "#" + instance.getInstanceNumber(); // NOI18N
             this.size = String.valueOf(instance.getSize());
-            this.retainedSize = "N/A"; // NOI18N
-            this.reachableSize = "N/A"; // NOI18N
         }
 
         //~ Methods --------------------------------------------------------------------------------------------------------------
@@ -484,10 +484,14 @@ public class InstancesListController extends AbstractController {
         }
 
         public String getReachableSize() {
+            if (reachableSize == null)
+                reachableSize = "N/A"; // NOI18N
             return reachableSize;
         }
 
         public String getRetainedSize() {
+            if (retainedSize == null)
+                retainedSize = String.valueOf(instance.getRetainedSize());
             return retainedSize;
         }
 
@@ -573,19 +577,27 @@ public class InstancesListController extends AbstractController {
         protected String computeName() {
             return NO_INSTANCE_STRING;
         }
-        ;
+
         protected String computeType() {
-            return "";
+            return ""; // NOI18N
         }
-        ; // NOI18N
+
         protected String computeValue() {
-            return "";
+            return ""; // NOI18N
         }
-        ; // NOI18N
+
+        protected String computeSize() {
+            return ""; // NOI18N
+        }
+
+        protected String computeRetainedSize() {
+            return ""; // NOI18N
+        }
+
         protected Icon computeIcon() {
             return null;
         }
-        ;
+
         public boolean isLeaf() {
             return true;
         }
@@ -605,6 +617,14 @@ public class InstancesListController extends AbstractController {
         }
 
         public int getSize() {
+            return -1;
+        }
+
+        public int getRetainedSize() {
+            return -1;
+        }
+
+        public int getReachableSize() {
             return -1;
         }
 
@@ -630,14 +650,6 @@ public class InstancesListController extends AbstractController {
 
         public Instance getNearestGCRootPointer() {
             return null;
-        }
-
-        public int getRetainedSize() {
-            return -1;
-        }
-
-        public int getReachableSize() {
-            return -1;
         }
     };
 
