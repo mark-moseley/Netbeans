@@ -177,12 +177,31 @@ public class Resolver3 implements Resolver {
     private CsmNamespace findNamespace(CharSequence qualifiedName) {
         CsmNamespace result = project.findNamespace(qualifiedName);
         if( result == null ) {
-            for (Iterator iter = project.getLibraries().iterator(); iter.hasNext() && result == null;) {
+            for (Iterator iter = getLibraries().iterator(); iter.hasNext() && result == null;) {
                 CsmProject lib = (CsmProject) iter.next();
                 result = lib.findNamespace(qualifiedName);
             }
         }
         return result;
+    }
+
+    public Collection<CsmProject> getLibraries() {
+        return getLibraries(this.startFile.getProject());
+    }
+
+    public static Collection<CsmProject> getLibraries(CsmProject prj) {
+        if (prj.isArtificial() && prj instanceof ProjectBase) {
+            List<ProjectBase> dependentProjects = ((ProjectBase)prj).getDependentProjects();
+            Set<CsmProject> libs = new HashSet<CsmProject>();
+            for (ProjectBase projectBase : dependentProjects) {
+                if (!projectBase.isArtificial()) {
+                    libs.addAll(projectBase.getLibraries());
+                }
+            }
+            return libs;
+        } else {
+            return prj.getLibraries();
+        }
     }
 
     public CsmClassifier getOriginalClassifier(CsmClassifier orig) {
@@ -448,7 +467,7 @@ public class Resolver3 implements Resolver {
     private CsmClassifier findNestedClassifier(CsmClassifier clazz) {
         if (CsmKindUtilities.isClass(clazz)) {
             Iterator<CsmMember> it = CsmSelect.getClassMembers((CsmClass)clazz,
-                    CsmSelect.getFilterBuilder().createNameFilter(currName().toString(), true, true, false));
+                    CsmSelect.getFilterBuilder().createNameFilter(currName(), true, true, false));
             while(it.hasNext()) {
                 CsmMember member = it.next();
                 if( CharSequenceKey.Comparator.compare(currName(),member.getName())==0 ) {
