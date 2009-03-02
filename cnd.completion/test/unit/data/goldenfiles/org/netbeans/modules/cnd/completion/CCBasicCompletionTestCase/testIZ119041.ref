@@ -1,7 +1,6 @@
-argc int
-argv char**
-pointer int*
-value int
+str char*
+f() void
+f2() void
 A
 B
 C

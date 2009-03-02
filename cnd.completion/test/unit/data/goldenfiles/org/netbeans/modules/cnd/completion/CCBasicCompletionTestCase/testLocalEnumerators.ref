@@ -1,11 +1,13 @@
-argc int
-argv char**
-pointer int*
-value int
+action Action
 A
+Action
 B
 C
 In_Macro
+DELETE
+RECEIVE
+SEND
+local_enumerators_foo() void
 globInt int
 checkZero() void
 globFoo() void

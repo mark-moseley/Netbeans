@@ -1,5 +1,8 @@
+a A
 argc int
 argv char**
+i int
+pExtra void*
 pointer int*
 value int
 A
