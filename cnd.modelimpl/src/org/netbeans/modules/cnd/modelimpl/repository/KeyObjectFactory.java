@@ -55,6 +55,7 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  *
  * @author Nickolay Dalmatov
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.repository.support.KeyFactory.class)
 public class KeyObjectFactory extends KeyFactory {
     
     /** Creates a new instance of KeyObjectFactory */
@@ -71,6 +72,14 @@ public class KeyObjectFactory extends KeyFactory {
         assert aStream != null;
         SelfPersistent out = super.readSelfPersistent(aStream);
         assert out instanceof Key;
+        // no reasone to cache declaration keys.
+        boolean share = !(out instanceof OffsetableDeclarationKey);
+        if (share) {
+            Key shared = KeyManager.instance().getSharedUID((Key)out);
+            assert shared != null;
+            assert shared instanceof SelfPersistent;
+            out = (SelfPersistent) shared;
+        }
         return (Key)out;
     }
     
@@ -108,6 +117,8 @@ public class KeyObjectFactory extends KeyFactory {
         
         if (object instanceof ProjectKey ) {
             aHandle = KEY_PROJECT_KEY;
+        } else if (object instanceof NamespaceDeclararationContainerKey) {
+            aHandle = KEY_NS_DECLARATION_CONTAINER_KEY;
         }  else if (object instanceof NamespaceKey) {
             aHandle = KEY_NAMESPACE_KEY;
         } else if (object instanceof FileKey ) {
@@ -116,6 +127,8 @@ public class KeyObjectFactory extends KeyFactory {
             aHandle = KEY_MACRO_KEY;
         } else if (object instanceof IncludeKey) {
             aHandle = KEY_INCLUDE_KEY;
+        } else if (object instanceof ParamListKey) {
+            aHandle = KEY_PARAM_LIST_KEY;
         } else if (object instanceof OffsetableDeclarationKey) {
             aHandle = KEY_DECLARATION_KEY;
         } else if (object instanceof ProjectSettingsValidatorKey) {
@@ -126,6 +139,8 @@ public class KeyObjectFactory extends KeyFactory {
             aHandle = KEY_FILE_CONTAINER_KEY;
         } else if (object instanceof GraphContainerKey) {
             aHandle = KEY_GRAPH_CONTAINER_KEY;
+        } else if (object instanceof ClassifierContainerKey) {
+            aHandle = KEY_CLASSIFIER_CONTAINER_KEY;
         } else {
             throw new IllegalArgumentException("The Key is an instance of the unknown final class " + object.getClass().getName());  // NOI18N
         }
@@ -135,7 +150,7 @@ public class KeyObjectFactory extends KeyFactory {
     
     protected SelfPersistent createObject(int handler, DataInput aStream) throws IOException {
         SelfPersistent aKey;
-        
+        boolean share = true;
         switch (handler) {
             case KEY_PROJECT_KEY:
                 aKey = new ProjectKey(aStream);
@@ -152,25 +167,41 @@ public class KeyObjectFactory extends KeyFactory {
             case KEY_INCLUDE_KEY:
                 aKey = new IncludeKey(aStream);
                 break;
+            case KEY_PARAM_LIST_KEY:
+                aKey = new ParamListKey(aStream);
+                break;
             case KEY_DECLARATION_KEY:
+                share = false;
                 aKey = new OffsetableDeclarationKey(aStream);
                 break;
-	    case KEY_PRJ_VALIDATOR_KEY:
-		aKey = new ProjectSettingsValidatorKey(aStream);
-		break;
-	    case KEY_DECLARATION_CONTAINER_KEY:
-		aKey = new DeclarationContainerKey(aStream);
-		break;
-	    case KEY_FILE_CONTAINER_KEY:
-		aKey = new FileContainerKey(aStream);
-		break;
-	    case KEY_GRAPH_CONTAINER_KEY:
-		aKey = new GraphContainerKey(aStream);
-		break;
-            default:
+            case KEY_PRJ_VALIDATOR_KEY:
+                aKey = new ProjectSettingsValidatorKey(aStream);
+                break;
+            case KEY_DECLARATION_CONTAINER_KEY:
+                aKey = new DeclarationContainerKey(aStream);
+                break;
+            case KEY_FILE_CONTAINER_KEY:
+                aKey = new FileContainerKey(aStream);
+                break;
+            case KEY_GRAPH_CONTAINER_KEY:
+                aKey = new GraphContainerKey(aStream);
+                break;
+            case KEY_NS_DECLARATION_CONTAINER_KEY:
+                aKey = new NamespaceDeclararationContainerKey(aStream);
+                break;
+            case KEY_CLASSIFIER_CONTAINER_KEY:
+                aKey = new ClassifierContainerKey(aStream);
+            break;
+                default:
                 throw new IllegalArgumentException("Unknown hander was provided: " + handler);  // NOI18N
         }
-        
+        if (share) {
+            Key shared = KeyManager.instance().getSharedUID((Key)aKey);
+            assert shared != null;
+            assert shared instanceof SelfPersistent;
+            aKey = (SelfPersistent) shared;
+        }
+
         return aKey;
     }
     
@@ -184,14 +215,17 @@ public class KeyObjectFactory extends KeyFactory {
     public static final int KEY_FILE_KEY       = KEY_NAMESPACE_KEY + 1;
     public static final int KEY_MACRO_KEY      = KEY_FILE_KEY + 1;
     public static final int KEY_INCLUDE_KEY    = KEY_MACRO_KEY + 1;
-    public static final int KEY_DECLARATION_KEY = KEY_INCLUDE_KEY + 1;
+    public static final int KEY_PARAM_LIST_KEY    = KEY_INCLUDE_KEY + 1;
+    public static final int KEY_DECLARATION_KEY = KEY_PARAM_LIST_KEY + 1;
     public static final int KEY_PRJ_VALIDATOR_KEY = KEY_DECLARATION_KEY + 1;
     
     public static final int KEY_DECLARATION_CONTAINER_KEY = KEY_PRJ_VALIDATOR_KEY + 1;
     public static final int KEY_FILE_CONTAINER_KEY = KEY_DECLARATION_CONTAINER_KEY + 1;
     public static final int KEY_GRAPH_CONTAINER_KEY = KEY_FILE_CONTAINER_KEY    + 1;
+    public static final int KEY_NS_DECLARATION_CONTAINER_KEY = KEY_GRAPH_CONTAINER_KEY + 1;
+    public static final int KEY_CLASSIFIER_CONTAINER_KEY = KEY_NS_DECLARATION_CONTAINER_KEY + 1;
     
     // index to be used in another factory (but only in one) 
     // to start own indeces from the next after LAST_INDEX    
-    public static final int LAST_INDEX          = KEY_GRAPH_CONTAINER_KEY;
+    public static final int LAST_INDEX          = KEY_CLASSIFIER_CONTAINER_KEY;
 }
