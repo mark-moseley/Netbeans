@@ -29,10 +29,10 @@ import java.util.TreeMap;
 
 public final class RangeMap {
 
-    private SortedMap ranges;
+    private SortedMap<Range, Object> ranges;
 
     public RangeMap() {
-        ranges = new TreeMap(new RangeComparator());
+        ranges = new TreeMap<Range, Object>(new RangeComparator());
     }
 
     /**
@@ -83,12 +83,9 @@ public final class RangeMap {
         return ranges.toString();
     }
 
-    private class RangeComparator implements Comparator {
+    private class RangeComparator implements Comparator<Range> {
 
-        public int compare(Object o1, Object o2) {
-            Range r1 = (Range) o1;
-            Range r2 = (Range) o2;
-
+        public int compare(Range r1, Range r2) {
             if (r1.overlaps(r2)) {
                 return 0;
             }
@@ -107,7 +104,7 @@ public final class RangeMap {
 
         Range(final long begin, final long end) {
             if (ucomp(begin, end) > 0) {
-                throw new IllegalArgumentException("begin is not less than end (unsigned)");
+                throw new IllegalArgumentException("begin is not less than end (unsigned)"); // NOI18N
             }
             this.begin = begin;
             this.end = end;
@@ -139,7 +136,7 @@ public final class RangeMap {
 
         Range mergeWith(Range that) {
             if (!overlaps(that)) {
-                throw new IllegalArgumentException("ranges don't overlap this=" + this + " that=" + that);
+                throw new IllegalArgumentException("ranges don't overlap this=" + this + " that=" + that); // NOI18N
             }
             long begin = this.begin;
             if (ucomp(begin, that.begin) > 0) {
@@ -155,7 +152,7 @@ public final class RangeMap {
         @Override
         public String toString() {
             StringBuffer str = new StringBuffer(24);
-            str.append("(0x");
+            str.append("(0x"); // NOI18N
 
             String s = Long.toHexString(begin);
             int n = 16 - s.length();
@@ -163,7 +160,7 @@ public final class RangeMap {
                 str.append('0');
             }
             str.append(s);
-            str.append(", 0x");
+            str.append(", 0x"); // NOI18N
 
             s = Long.toHexString(end);
             n = 16 - s.length();
@@ -171,7 +168,7 @@ public final class RangeMap {
                 str.append('0');
             }
             str.append(s);
-            str.append(")");
+            str.append(")"); // NOI18N
             return str.toString();
         }
     }
