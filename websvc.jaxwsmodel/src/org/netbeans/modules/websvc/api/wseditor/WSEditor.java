@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,55 +38,49 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.wsitconf;
 
-import org.netbeans.api.project.FileOwnerQuery;
-import org.netbeans.api.project.Project;
-import org.netbeans.modules.websvc.api.jaxws.project.config.Client;
-import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;
-import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
-import org.netbeans.modules.websvc.api.wseditor.WSEditor;
-import org.netbeans.modules.websvc.spi.wseditor.WSEditorProvider;
-import org.openide.filesystems.FileObject;
+/*
+ * WSEditor.java
+ *
+ * Created on March 9, 2006, 2:38 PM
+ *
+ * To change this template, choose Tools | Template Manager
+ * and open the template in the editor.
+ */
+
+package org.netbeans.modules.websvc.api.wseditor;
+
+import javax.swing.JComponent;
 import org.openide.nodes.Node;
-import org.openide.util.Lookup;
 
 /**
  *
- * @author Martin Grebac
+ * @author Roderico Cruz
  */
-@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.spi.wseditor.WSEditorProvider.class)
-public class WSITEditorProvider implements WSEditorProvider {
+public interface WSEditor {
+    /**
+     * Return the main panel of the editor
+     */
+    JComponent createWSEditorComponent(Node node);   
+
+    /**
+     * The title text that will be displayed in the tab corresponding
+     * to the editor.
+     */
+    String getTitle();
     
     /**
-     * Creates a new instance of WSITEditorProvider
+     * This is called when the OK button is selected 
      */
-    public WSITEditorProvider () {
-    }
-
-    public WSEditor createWSEditor(Lookup nodeLookup) {
-        FileObject srcRoot = nodeLookup.lookup(FileObject.class);
-        if (srcRoot != null) {
-            Project prj = FileOwnerQuery.getOwner(srcRoot);
-            JaxWsModel jaxWsModel = prj.getLookup().lookup(JaxWsModel.class);
-            if (jaxWsModel != null) {
-                return new WSITEditor(jaxWsModel);
-            }
-        }
-        return null;
-    }
-
-    public boolean enable(Node node) {
-        Client client = node.getLookup().lookup(Client.class);
-        boolean doEnable = false;
-        if (client != null) {
-            doEnable = true;
-        } else {
-            Service service = node.getLookup().lookup(Service.class);
-            if (service != null) {
-                doEnable = true;
-            }
-        }
-        return doEnable;
-    }
+    void save(Node node);
+    
+    /**
+     * This is called when the Cancel button is selected
+     */
+    void cancel(Node node);
+    
+    /**
+     *  Provides a description text that will be displayed at the top of the editor
+     */
+    String getDescription();
 }
