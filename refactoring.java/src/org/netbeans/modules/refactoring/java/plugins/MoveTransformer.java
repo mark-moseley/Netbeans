@@ -41,8 +41,11 @@
 
 package org.netbeans.modules.refactoring.java.plugins;
 
+import com.sun.source.util.TreePath;
+import java.util.List;
 import org.netbeans.modules.refactoring.java.spi.RefactoringVisitor;
 import com.sun.source.tree.*;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import javax.lang.model.element.*;
@@ -79,6 +82,7 @@ public class MoveTransformer extends RefactoringVisitor {
         this.move = move;
     }
     
+    @Override
     public void setWorkingCopy(WorkingCopy copy) throws ToPhaseException {
         super.setWorkingCopy(copy);
         originalFolder = workingCopy.getFileObject().getParent();
@@ -92,14 +96,29 @@ public class MoveTransformer extends RefactoringVisitor {
     public Tree visitMemberSelect(MemberSelectTree node, Element p) {
         if (!workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
             Element el = workingCopy.getTrees().getElement(getCurrentPath());
-            if (el!=null) {
+            if (el != null) {
                 FileObject fo = SourceUtils.getFile(el, workingCopy.getClasspathInfo());
                 if (isElementMoving(el)) {
                     elementsAlreadyImported.add(el);
                     String newPackageName = move.getTargetPackageName(SourceUtils.getFile(el, workingCopy.getClasspathInfo()));
+                    String targetPackageName = workingCopy.getCompilationUnit().getPackageName().toString();
+                    
                     if (!"".equals(newPackageName)) {
-                        Tree nju = make.MemberSelect(make.Identifier(newPackageName), el);
-                        rewrite(node, nju);
+                        if (targetPackageName.equals(newPackageName)) { //remove newly created import from same package
+                            List<? extends ImportTree> imports = new ArrayList<ImportTree>(workingCopy.getCompilationUnit().getImports());
+                            ImportTree toRemove = null;
+                            for (ImportTree importTree : imports) {
+                                if (importTree.getQualifiedIdentifier().equals(node)) {
+                                    toRemove = importTree;
+                                }
+                            }
+                            imports.remove(toRemove);
+                            Tree nju = make.CompilationUnit(workingCopy.getCompilationUnit().getPackageName(), imports, workingCopy.getCompilationUnit().getTypeDecls(), workingCopy.getCompilationUnit().getSourceFile());
+                            rewrite(workingCopy.getCompilationUnit(), nju);
+                        } else {
+                            Tree nju = make.MemberSelect(make.Identifier(newPackageName), el);
+                            rewrite(node, nju);
+                        }
                     } else {
                         if (!moveToDefaulPackageProblem) {
                             problem = createProblem(problem, false, NbBundle.getMessage(MoveTransformer.class, "ERR_MovingClassToDefaultPackage"));
@@ -121,17 +140,27 @@ public class MoveTransformer extends RefactoringVisitor {
                             problem = createProblem(problem, false, NbBundle.getMessage(MoveTransformer.class, "ERR_AccessesPackagePrivateFeature",workingCopy.getFileObject().getName(),el, getTypeElement(el).getSimpleName()));
                         }
                 }
+            } else if (isPackageRename() && "*".equals(node.getIdentifier().toString())) { // NOI18N
+                ExpressionTree exprTree = node.getExpression();
+                TreePath exprPath = workingCopy.getTrees().getPath(workingCopy.getCompilationUnit(), exprTree);
+                Element elem = workingCopy.getTrees().getElement(exprPath);
+                if (elem != null && elem.getKind() == ElementKind.PACKAGE) {
+                    String newPackageName = move.getTargetPackageName(SourceUtils.getFile(elem, workingCopy.getClasspathInfo()));
+                    if (!newPackageName.equals(elem.toString())) {
+                        Tree nju = make.MemberSelect(make.Identifier(newPackageName), "*"); // NOI18N
+                        rewrite(node, nju);
+                    }
+                }
             }
         }
         return super.visitMemberSelect(node, p);
     }
     
-    
     @Override
     public Tree visitIdentifier(IdentifierTree node, Element p) {
         if (!workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
             Element el = workingCopy.getTrees().getElement(getCurrentPath());
-            if (el!=null) {
+            if (el != null) {
                 FileObject fo = SourceUtils.getFile(el, workingCopy.getClasspathInfo());
                 if (!isThisFileMoving) {
                     if (isElementMoving(el)) {
@@ -163,7 +192,7 @@ public class MoveTransformer extends RefactoringVisitor {
     }
     
     private TypeElement getTypeElement(Element e) {
-        TypeElement t = SourceUtils.getEnclosingTypeElement(e);
+        TypeElement t = workingCopy.getElementUtilities().enclosingTypeElement(e);
         if (t==null && e instanceof TypeElement) {
             return (TypeElement) e;
         }
@@ -189,8 +218,6 @@ public class MoveTransformer extends RefactoringVisitor {
     private boolean isPackageRename() {
         return move.refactoring instanceof RenameRefactoring;
     }
-    
-    
     
     private boolean isThisFileReferencedbyOldPackage() {
         Set<FileObject> references = new HashSet(move.whoReferences.get(workingCopy.getFileObject()));
@@ -269,7 +296,7 @@ public class MoveTransformer extends RefactoringVisitor {
         rewrite(node, cut);
         return result;
     }
-    
+
     private CompilationUnitTree insertImport(CompilationUnitTree node, String imp, Element orig) {
         for (ImportTree tree: node.getImports()) {
             if (tree.getQualifiedIdentifier().toString().equals(imp)) 
