@@ -39,87 +39,37 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.test.web.core.syntax;
+package org.netbeans.modules.css.editor.test;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.StringTokenizer;
-import org.netbeans.editor.BaseKit;
+import org.netbeans.modules.css.editor.Css;
+import org.netbeans.modules.css.gsf.CSSLanguage;
 import org.netbeans.modules.gsf.GsfTestBase;
 import org.netbeans.modules.gsf.api.Formatter;
 import org.netbeans.modules.gsf.spi.DefaultLanguageConfig;
-import org.netbeans.modules.web.core.syntax.JSPKit;
-import org.netbeans.modules.web.core.syntax.gsf.JspLanguage;
-import org.netbeans.modules.web.jspparser.JspParserImpl;
-import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 
 /**
  * Common ancestor for all test classes.
  */
-public class TestBase2 extends GsfTestBase {
+public class TestBase extends GsfTestBase {
 
+    private static final String PROP_MIME_TYPE = "mimeType"; //NOI18N
 
-    public TestBase2(String name) {
+    public TestBase(String name) {
         super(name);
     }
 
     @Override
     protected DefaultLanguageConfig getPreferredLanguage() {
-        return new JspLanguage();
+        return new CSSLanguage();
     }
 
     @Override
     protected String getPreferredMimeType() {
-        return "text/x-jsp";
+        return Css.CSS_MIME_TYPE;
     }
 
     @Override
     public Formatter getFormatter(IndentPrefs preferences) {
         return null;
     }
-
-    @Override
-    protected BaseKit getEditorKit(String mimeType) {
-        return new JSPKit(JSPKit.JSP_MIME_TYPE);
-    }
-
-    public final void initParserJARs() throws MalformedURLException {
-        String path = System.getProperty("jsp.parser.jars");
-        StringTokenizer st = new StringTokenizer(path, ":");
-        List<URL> list = new ArrayList();
-        while (st.hasMoreTokens()) {
-            String token = st.nextToken();
-            File f = new File(token);
-            if (!f.exists()) {
-                fail("cannot find file "+token);
-            }
-            list.add(f.toURI().toURL());
-        }
-        JspParserImpl.setParserJARs(list.toArray(new URL[list.size()]));
-    }
-
-    public final void copyWebProjectJarsTo(File p) throws MalformedURLException, IOException {
-        String path = System.getProperty("web.project.jars");
-        StringTokenizer st = new StringTokenizer(path, ":");
-        if (p.exists()) {
-            return;
-        }
-        p.mkdir();
-        FileObject dest = FileUtil.toFileObject(p);
-        while (st.hasMoreTokens()) {
-            String token = st.nextToken();
-            File f = new File(token);
-            if (!f.exists()) {
-                fail("cannot find file "+token);
-            }
-            FileObject fo = FileUtil.toFileObject(f);
-            FileUtil.copyFile(fo, dest, fo.getName(), fo.getExt());
-        }
-    }
-
 }
