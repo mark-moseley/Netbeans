@@ -1,22 +1,13 @@
 
 
 Document 0
-Delete:  source : <TESTURL>/action_mailer.rb
-
-Indexed:
-
-Not Indexed:
-
-
-Document 1
-Delete:
-Indexed:
+Searchable Keys:
   class : Base
   class-ig : base
   fqn : ActionMailer::Base
-  source : <TESTURL>/action_mailer.rb
+  require : action_mailer
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |CLASS|
   in : ActionMailer
   includes : ActionMailer::Helpers,ActionMailer::Quoting
