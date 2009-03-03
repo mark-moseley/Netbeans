@@ -40,12 +40,15 @@
 package org.netbeans.modules.bugzilla;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import javax.swing.SwingUtilities;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.mylyn.internal.bugzilla.core.BugzillaClient;
 import org.eclipse.mylyn.internal.bugzilla.core.BugzillaCorePlugin;
 import org.eclipse.mylyn.internal.bugzilla.core.BugzillaCustomField;
 import org.eclipse.mylyn.internal.bugzilla.core.BugzillaRepositoryConnector;
@@ -90,6 +93,17 @@ public class Bugzilla {
             brc = new BugzillaRepositoryConnector();
         }
         return brc;
+    }
+
+    /**
+     * Returns a BugzillaClient for the given repository
+     * @param repository
+     * @return
+     * @throws java.net.MalformedURLException
+     * @throws org.eclipse.core.runtime.CoreException
+     */
+    public BugzillaClient getClient(BugzillaRepository repository) throws MalformedURLException, CoreException {
+        return getRepositoryConnector().getClientManager().getClient(repository.getTaskRepository(), new NullProgressMonitor());
     }
 
     /**
@@ -159,6 +173,17 @@ public class Bugzilla {
      */
     public List<String> getStatusValues(BugzillaRepository repository) throws IOException, CoreException {
         return getRepositoryConfiguration(repository).getStatusValues();
+    }
+
+    /**
+     * Returns all open statuses defined in the given repository.
+     * @param repository
+     * @return all open statuses defined in the given repository.
+     * @throws java.io.IOException
+     * @throws org.eclipse.core.runtime.CoreException
+     */
+    public List<String> getOpenStatusValues(BugzillaRepository repository) throws IOException, CoreException {
+        return getRepositoryConfiguration(repository).getOpenStatusValues();
     }
 
     /**
@@ -261,6 +286,7 @@ public class Bugzilla {
     private RepositoryConfiguration getRepositoryConfiguration(BugzillaRepository repository) throws CoreException, IOException {
         RepositoryConfiguration rc = repoToRepoconf.get(repository.getDisplayName());
         if(rc == null) {
+            assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt";
             rc = getRepositoryConnector().getClientManager().getClient(repository.getTaskRepository(), new NullProgressMonitor()).getRepositoryConfiguration(new NullProgressMonitor());
             repoToRepoconf.put(repository.getDisplayName(), rc);
         }
