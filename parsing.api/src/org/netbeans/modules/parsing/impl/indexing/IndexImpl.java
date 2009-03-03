@@ -40,40 +40,25 @@
 package org.netbeans.modules.parsing.impl.indexing;
 
 import java.io.IOException;
-import org.netbeans.modules.parsing.spi.indexing.support.IndexingSupport;
-import org.openide.util.Exceptions;
+import java.util.Collection;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
+
 
 /**
  *
  * @author Tomas Zezula
  */
-public abstract class SupportAccessor {
+public interface IndexImpl {
 
-    private static volatile SupportAccessor instance;
+    public void addDocument (IndexDocumentImpl document);
 
-    public static void setInstance (final SupportAccessor _instance) {
-        assert _instance != null;
-        instance = _instance;
-    }
+    public void removeDocument (String relativePath);
 
-    public static synchronized SupportAccessor getInstance () {
-        if (instance == null) {
-            try {
-                Class.forName(IndexingSupport.class.getName(),true, IndexingSupport.class.getClassLoader());
-                assert instance != null;
-            } catch (ClassNotFoundException e) {
-                Exceptions.printStackTrace(e);
-            }
-        }
-        return instance;
-    }
+    public void store () throws IOException;
 
-//    public abstract void beginTrans ();
-//
-//    public abstract void endTrans ();
-//
-//    public abstract Collection<? extends IndexingSupport> getDirtySupports ();
+    public Collection<? extends IndexDocumentImpl> query (String fieldName, String value, QuerySupport.Kind kind, String... fieldsToLoad) throws IOException;
 
-    public abstract void store(IndexingSupport support) throws IOException;
+    public void fileModified(String relativePath);
 
+    public Collection<? extends String> getStaleFiles();
 }
