@@ -148,12 +148,14 @@ public abstract class NbClusterConfigurationLogic extends ProductConfigurationLo
         
         // add the product id to the productid file /////////////////////////////////
         try {
+	    if(productId!=null) {
             progress.setDetail(ResourceUtils.getString(
                     NbClusterConfigurationLogic.class,
                     "NCCL.install.productid", // NOI18N
                     productId));
             
             NetBeansUtils.addPackId(nbLocation, productId);
+            }
         } catch (IOException e) {
             throw new InstallationException(ResourceUtils.getString(
                     NbClusterConfigurationLogic.class,
@@ -223,14 +225,16 @@ public abstract class NbClusterConfigurationLogic extends ProductConfigurationLo
         // pick the first one and assume that we're integrated with it
         final File nbLocation = sources.get(0).getInstallationLocation();
         
-        // remove the cluster from the active clusters list /////////////////////////
+        // remove the product id from the productid file ////////////////////////////
         try {
+            if(productId!=null) {
             progress.setDetail(ResourceUtils.getString(
                     NbClusterConfigurationLogic.class,
                     "NCCL.uninstall.productid", // NOI18N
                     productId));
             
             NetBeansUtils.removePackId(nbLocation, productId);
+            }
         } catch (IOException e) {
             throw new UninstallationException(ResourceUtils.getString(
                     NbClusterConfigurationLogic.class,
@@ -239,7 +243,7 @@ public abstract class NbClusterConfigurationLogic extends ProductConfigurationLo
                     e);
         }
         
-        // remove the product id from the productid file ////////////////////////////
+        // remove the cluster from the active clusters list ///////////////////////// 
         for (String clusterName: clusterNames) {
             try {
                 progress.setDetail(ResourceUtils.getString(
@@ -255,6 +259,23 @@ public abstract class NbClusterConfigurationLogic extends ProductConfigurationLo
                         clusterName),
                         e);
             }
+        }
+        // remove cluster/update files /////////////////////////////////////////
+        try {
+            progress.setDetail(ResourceUtils.getString(
+                    NbClusterConfigurationLogic.class,
+                    "NCCL.uninstall.update.files")); // NOI18N
+            for(String cluster : clusterNames) {
+               File updateDir = new File(installLocation, cluster + File.separator + "update");
+               if ( updateDir.exists()) {
+                    FileUtils.deleteFile(updateDir, true);
+               }
+            }
+        } catch (IOException e) {
+            LogManager.log(ResourceUtils.getString(
+                    NbClusterConfigurationLogic.class,
+                    "NCCL.uninstall.error.update.files"), // NOI18N
+                    e);
         }
     }
     
