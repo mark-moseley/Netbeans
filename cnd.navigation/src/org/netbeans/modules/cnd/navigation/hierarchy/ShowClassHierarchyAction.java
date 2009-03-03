@@ -41,11 +41,9 @@
 
 package org.netbeans.modules.cnd.navigation.hierarchy;
 
-import org.netbeans.modules.cnd.navigation.classhierarchy.*;
 import org.netbeans.modules.cnd.api.model.CsmClass;
-import org.netbeans.modules.cnd.loaders.CCDataObject;
-import org.netbeans.modules.cnd.loaders.HDataObject;
 import org.openide.awt.StatusDisplayer;
+import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
@@ -57,8 +55,10 @@ public final class ShowClassHierarchyAction extends CookieAction {
         CsmClass decl = ContextUtils.getContextClass(activatedNodes);
         if (decl != null){
             HierarchyTopComponent view = HierarchyTopComponent.findInstance();
-            view.setClass(decl);
-            view.open();
+            if (!view.isOpened()) {
+                 view.open();
+            }
+            view.setClass(decl, false);
             view.requestActive();
         } else {
             String msg = NbBundle.getMessage(getClass(), "MESSAGE_NoContextClass"); // NOI18N
@@ -76,7 +76,7 @@ public final class ShowClassHierarchyAction extends CookieAction {
     }
     
     protected Class[] cookieClasses() {
-        return new Class[]{CCDataObject.class, HDataObject.class};
+        return new Class[]{DataObject.class};
     }
     
     @Override
