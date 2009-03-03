@@ -56,14 +56,12 @@ import org.netbeans.api.jsp.lexer.JspTokenId;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenHierarchyEvent;
 import org.netbeans.api.lexer.TokenHierarchyListener;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.spi.editor.highlighting.HighlightsLayer;
 import org.netbeans.spi.editor.highlighting.HighlightsLayerFactory;
-import org.netbeans.spi.editor.highlighting.HighlightsSequence;
 import org.netbeans.spi.editor.highlighting.HighlightsSequence;
 import org.netbeans.spi.editor.highlighting.ZOrder;
 import org.netbeans.spi.editor.highlighting.support.AbstractHighlightsContainer;
@@ -154,6 +152,14 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
     }
 
     private static boolean isWhitespace(Document document, int startOffset, int endOffset) throws BadLocationException {
+        int docLen = document.getLength();
+        
+        assert startOffset >= 0;
+        assert startOffset <= docLen;
+        assert endOffset >= 0;
+        assert endOffset <= docLen;
+        assert endOffset >= startOffset;
+
         CharSequence chars = DocumentUtilities.getText(document, startOffset, endOffset - startOffset);
         for(int i = 0; i < chars.length(); i++) {
             if (!Character.isWhitespace(chars.charAt(i))) {
@@ -192,13 +198,14 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
                     }
 
                     while (sequence.moveNext() && sequence.offset() < endOffset) {
-                        if (sequence.token().id() == JspTokenId.SCRIPTLET) {
+                        if (javascripletBackground != null && sequence.token().id() == JspTokenId.SCRIPTLET) {
                             sectionStart = sequence.offset();
                             sectionEnd = sequence.offset() + sequence.token().length();
 
                             try {
-                                int startLine = Utilities.getLineOffset((BaseDocument) document, sectionStart);
-                                int endLine = Utilities.getLineOffset((BaseDocument) document, sectionEnd);
+                                int docLen = document.getLength();
+                                int startLine = Utilities.getLineOffset((BaseDocument) document, Math.min(sectionStart, docLen));
+                                int endLine = Utilities.getLineOffset((BaseDocument) document, Math.min(sectionEnd, docLen));
 
                                 if (startLine != endLine) {
                                     // multiline scriplet section
@@ -216,7 +223,7 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
                                     if (endLine + 1 < lines) {
                                         lastLineEndOffset = Utilities.getRowStartFromLineOffset((BaseDocument) document, endLine + 1);
                                     } else {
-                                        lastLineEndOffset = document.getLength() + 1;
+                                        lastLineEndOffset = document.getLength();
                                     }
                                     
                                     if (sectionEnd + 2 >= lastLineEndOffset || // unclosed section
@@ -234,7 +241,7 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
                             }
                             
                             
-                        } else if (sequence.token().id() == JspTokenId.EL) {
+                        } else if (expressionLanguageBackground != null && sequence.token().id() == JspTokenId.EL) {
                             sectionStart = sequence.offset();
                             sectionEnd = sequence.offset() + sequence.token().length();
                             attributeSet = expressionLanguageBackground;
@@ -296,7 +303,7 @@ public class EmbeddedSectionsHighlighting extends AbstractHighlightsContainer im
         public HighlightsLayer[] createLayers(Context context) {
             return new HighlightsLayer[]{ HighlightsLayer.create(
                 "jsp-embedded-java-scriplets-highlighting-layer", //NOI18N
-                ZOrder.SYNTAX_RACK.forPosition(-10),  //we need to have lower priority than the default syntax from options - 0
+                ZOrder.BOTTOM_RACK.forPosition(100),  //we need to have lower priority than the default syntax from options - 0
                 true, 
                 new EmbeddedSectionsHighlighting(context.getDocument())
             )};
