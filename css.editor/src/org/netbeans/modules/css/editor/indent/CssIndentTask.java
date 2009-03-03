@@ -25,32 +25,25 @@
  *
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.web.core.syntax.indent;
+package org.netbeans.modules.css.editor.indent;
 
 import javax.swing.text.BadLocationException;
+import org.netbeans.modules.css.editor.CSSIndenter;
 import org.netbeans.modules.editor.indent.spi.Context;
 import org.netbeans.modules.editor.indent.spi.ExtraLock;
 import org.netbeans.modules.editor.indent.spi.IndentTask;
-import org.netbeans.modules.web.core.syntax.formatting.JspIndenter;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 
-/**
- * Implementation of IndentTask for text/x-jsp mimetype.
- *
- * @author Marek Fukala
- */
-                                        
-
-public class JspIndentTask implements IndentTask, Lookup.Provider {
+public class CssIndentTask implements IndentTask, Lookup.Provider {
 
     private Context context;
-    private JspIndenter indenter;
+    private CSSIndenter indenter;
     private Lookup lookup;
     
-    JspIndentTask(Context context) {
+    CssIndentTask(Context context) {
         this.context = context;
-        indenter = new JspIndenter(context);
+        indenter = new CSSIndenter(context);
         lookup = Lookups.singleton(indenter.createFormattingContext());
     }
 
@@ -66,4 +59,5 @@ public class JspIndentTask implements IndentTask, Lookup.Provider {
     public Lookup getLookup() {
         return lookup;
     }
+
 }

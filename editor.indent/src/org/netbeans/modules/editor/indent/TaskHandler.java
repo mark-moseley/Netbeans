@@ -60,7 +60,6 @@ import org.netbeans.api.lexer.LanguagePath;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.editor.GuardedDocument;
-import org.netbeans.editor.MarkBlockChain;
 import org.netbeans.lib.editor.util.swing.MutablePositionRegion;
 import org.netbeans.modules.editor.indent.spi.Context;
 import org.netbeans.modules.editor.indent.spi.ExtraLock;
@@ -200,22 +199,24 @@ public final class TaskHandler {
                     newItems.add(item);
                 }
             }
-            
+
             if (htmlItem != null) {
                 newItems.add(0, htmlItem);
             }
-            
+
             if (jspItem != null) {
                 newItems.add(0, jspItem);
             }
-            
+
             items = newItems;
         }
 
         if (LOG.isLoggable(Level.FINE)) {
             LOG.fine("Collected items: "); //NOI18N
-            for (MimeItem mi : items) {
-                LOG.fine("  Item: " + mi); //NOI18N
+            if (items != null) {
+                for (MimeItem mi : items) {
+                    LOG.fine("  Item: " + mi); //NOI18N
+                }
             }
             LOG.fine("-----------------"); //NOI18N
         }
@@ -340,7 +341,7 @@ public final class TaskHandler {
         private ExtraLock extraLock;
         
         private Context context;
-        
+
         MimeItem(TaskHandler handler, MimePath mimePath, LanguagePath languagePath) {
             this.handler = handler;
             this.mimePath = mimePath;
@@ -354,7 +355,7 @@ public final class TaskHandler {
         public LanguagePath languagePath() {
             return languagePath;
         }
-        
+
         public Context context() {
             if (context == null) {
                 context = IndentSpiPackageAccessor.get().createContext(this);
@@ -412,8 +413,8 @@ public final class TaskHandler {
                         }
                     }
                 } else { // used when no token hierarchy exists
-                    MutablePositionRegion wholeDocRegion = new MutablePositionRegion(doc.getStartPosition(),
-                            doc.createPosition(doc.getLength()));
+                    MutablePositionRegion wholeDocRegion = new MutablePositionRegion(handler.startPos,
+                            handler.endPos);
                     indentRegions.add(IndentSpiPackageAccessor.get().createContextRegion(wholeDocRegion));
                 }
                 
