@@ -42,8 +42,16 @@
 package org.netbeans.modules.cnd.loaders;
 
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.SoftReference;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
+import org.netbeans.modules.cnd.api.project.NativeFileItem;
+import org.netbeans.modules.cnd.api.project.NativeFileItemSet;
+import org.netbeans.modules.cnd.support.ReadOnlySupport;
 import org.openide.cookies.SaveCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
@@ -53,11 +61,10 @@ import org.openide.loaders.MultiDataObject.Entry;
 import org.openide.loaders.MultiFileLoader;
 import org.openide.loaders.DataObjectExistsException;
 import org.openide.nodes.Node;
-import org.openide.nodes.CookieSet;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.netbeans.modules.cnd.execution.BinaryExecSupport;
-import org.openide.nodes.CookieSet.Factory;
+import org.openide.nodes.CookieSet;
 import org.openide.nodes.Node.Cookie;
 import org.openide.util.Lookup;
 
@@ -68,28 +75,36 @@ public abstract class CndDataObject extends MultiDataObject {
 
     /** Serial version number */
     static final long serialVersionUID = -6788084224129713370L;
-    private CppEditorSupport cppEditorSupport;
+    private Reference<CppEditorSupport> cppEditorSupport;
+    private final ReadOnlySupportImpl readOnlySupport = new ReadOnlySupportImpl(false);
     private BinaryExecSupport binaryExecSupport;
+    private final MyNativeFileItemSet nativeFileItemSupport = new MyNativeFileItemSet();
 
     public CndDataObject(FileObject pf, MultiFileLoader loader) throws DataObjectExistsException {
-	super(pf, loader);
-	init();
+        super(pf, loader);
+        init();
     }
 
+    @Override
+    public Lookup getLookup() {
+        return getCookieSet().getLookup();
+    }
+    
     /**
      *  Initialize cookies for this DataObject. This method may get overridden
      *  by derived classes who need to use a different set of cookies.
      */
     protected void init() {
-	CookieSet cookies = getCookieSet();
-	//cookies.add(new CppEditorSupport(primary.getDataObject()));
-        cookies.add(CppEditorSupport.class, new Factory() {
+        CookieSet cookies = getCookieSet();
+        cookies.add(readOnlySupport);
+        cookies.add(nativeFileItemSupport);
+        cookies.add(CppEditorSupport.class, new CookieSet.Factory() {
             public <T extends Cookie> T createCookie(Class<T> klass) {
                 return klass.cast(createCppEditorSupport());
             }
         });
 	//cookies.add(new BinaryExecSupport(primary));
-        cookies.add(BinaryExecSupport.class, new Factory() {
+            cookies.add(BinaryExecSupport.class, new CookieSet.Factory() {
             public <T extends Cookie> T createCookie(Class<T> klass) {
                 return klass.cast(createBinaryExecSupport());
             }
@@ -97,10 +112,12 @@ public abstract class CndDataObject extends MultiDataObject {
     }
 
     private synchronized CppEditorSupport createCppEditorSupport() {
-        if (cppEditorSupport == null) {
-            cppEditorSupport = new CppEditorSupport(getPrimaryEntry().getDataObject());
+        CppEditorSupport support = (cppEditorSupport == null) ? null : cppEditorSupport.get();
+        if (support == null) {
+            support = new CppEditorSupport(getPrimaryEntry().getDataObject());
+            cppEditorSupport = new SoftReference<CppEditorSupport>(support);
         }
-        return cppEditorSupport;
+        return support;
     }
 
     private synchronized BinaryExecSupport createBinaryExecSupport() {
@@ -130,14 +147,6 @@ public abstract class CndDataObject extends MultiDataObject {
     
     void removeSaveCookie(SaveCookie save) {
         getCookieSet().remove(save);
-    }
-
-    public void addCookie(Cookie nc) {
-        getCookieSet().add(nc);
-    }
-    
-    public void removeCookie(Cookie nc) {
-        getCookieSet().remove(nc);
     }
 
     @Override
@@ -200,4 +209,46 @@ public abstract class CndDataObject extends MultiDataObject {
 	}
 	return true;
     }
+
+    private static final class ReadOnlySupportImpl implements ReadOnlySupport, Node.Cookie {
+        private boolean isReadOnly;
+
+        public ReadOnlySupportImpl(boolean isReadOnly) {
+            this.isReadOnly = isReadOnly;
+        }
+
+        public boolean isReadOnly() {
+            return isReadOnly;
+        }
+
+        public void setReadOnly(boolean readOnly) {
+            this.isReadOnly = readOnly;
+        }
+    }
+
+    private static class MyNativeFileItemSet implements NativeFileItemSet {
+        private List<NativeFileItem> items = new ArrayList<NativeFileItem>(1);
+
+        public synchronized Collection<NativeFileItem> getItems() {
+            return new ArrayList<NativeFileItem>(items);
+        }
+        public synchronized void add(NativeFileItem item){
+            if (item == null) {
+                return;
+            }
+            if (!items.contains(item)) {
+                items.add(item);
+            }
+        }
+        public synchronized void remove(NativeFileItem item){
+            if (item == null) {
+                return;
+            }
+            items.remove(item);
+        }
+        public boolean isEmpty() {
+            return items.isEmpty();
+        }
+    }
+
 }
