@@ -49,7 +49,6 @@ import org.netbeans.modules.kenai.api.KenaiException;
 import org.netbeans.modules.kenai.api.KenaiFeature;
 import org.netbeans.modules.kenai.api.KenaiProject;
 import org.netbeans.modules.kenai.api.KenaiProjectFeature;
-import org.netbeans.modules.kenai.ui.spi.Dashboard;
 import org.netbeans.modules.kenai.ui.spi.LoginHandle;
 import org.netbeans.modules.kenai.ui.spi.ProjectAccessor;
 import org.netbeans.modules.kenai.ui.spi.ProjectHandle;
@@ -69,7 +68,7 @@ public class ProjectAccessorImpl extends ProjectAccessor {
     public List<ProjectHandle> getMemberProjects(LoginHandle login) {
         try {
             LinkedList<ProjectHandle> l = new LinkedList<ProjectHandle>();
-            for (KenaiProject prj : kenai.getMyProjects()) {
+            for (KenaiProject prj : kenai.getMyProjects(true)) {
                 l.add(new ProjectHandleImpl(prj));
             }
             return l;
@@ -82,7 +81,7 @@ public class ProjectAccessorImpl extends ProjectAccessor {
     @Override
     public ProjectHandle getNonMemberProject(String projectId) {
         try {
-            return new ProjectHandleImpl(kenai.getProject(projectId));
+            return new ProjectHandleImpl(kenai.getProject(projectId,true));
         } catch (KenaiException ex) {
             throw new RuntimeException(ex);
         }
@@ -108,7 +107,6 @@ public class ProjectAccessorImpl extends ProjectAccessor {
         Action[] actions = new Action[]{
             (Action) getDetailsAction(project),
             new RemoveProjectAction(project),
-            new RefreshProjectAction(project)
         };
         return actions;
     }
