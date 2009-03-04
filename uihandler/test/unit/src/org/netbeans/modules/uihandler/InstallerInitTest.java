@@ -48,16 +48,17 @@ import java.beans.PropertyChangeListener;
 import java.io.ByteArrayInputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.logging.Level;
-import junit.framework.*;
 import java.util.Locale;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import java.util.prefs.Preferences;
 import javax.swing.SwingUtilities;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.util.NbPreferences;
 
 /**
  *
@@ -93,6 +94,7 @@ public class InstallerInitTest extends NbTestCase {
         installer = Installer.findObject(Installer.class, true);
         assertNotNull(installer);
 
+        Installer.dontWaitForUserInputInTests();
         DD.d = null;
         MockServices.setServices(DD.class);
 
@@ -110,35 +112,6 @@ public class InstallerInitTest extends NbTestCase {
         assertNotNull(installer);
         installer.doClose();
     }
-
-    /* XXX: implement by beta1
-    public void testWhatIfTheURLIsDown() throws Exception {
-        LogRecord r = new LogRecord(Level.INFO, "MSG_SOMETHING");
-        r.setLoggerName("org.netbeans.ui.anything");
-
-        String utf8 = "";
-        
-        MemoryURL.registerURL("memory://someunknownURL.html", utf8);
-        
-        for (int i = 0; i < 1500; i++) {
-            Logger.getLogger("org.netbeans.ui.anything").log(r);
-        }
-        assertEquals("full buffer", 1000, Installer.getLogsSize());
-        
-        assertNull("No dialogs so far", DD.d);
-        
-        installer.close();
-        waitAWT();
-        
-        assertNull("No dialogs at close", DD.d);
-        
-        installer.restored();
-        
-        waitAWT();
-
-        assertNull("No dialog if the URL does not live", DD.d);
-    }
-     */
 
     public void testGenerateEnoughLogsExit() throws Exception {
         LogRecord r = new LogRecord(Level.INFO, "MSG_SOMETHING");
@@ -159,7 +132,7 @@ public class InstallerInitTest extends NbTestCase {
         for (int i = 0; i < 1500; i++) {
             Logger.getLogger("org.netbeans.ui.anything").log(r);
         }
-        assertEquals("full buffer", 1000, Installer.getLogsSize());
+        assertEquals("full buffer", 1000, InstallerTest.getLogsSize());
         
         assertNull("No dialogs so far", DD.d);
         
@@ -167,12 +140,15 @@ public class InstallerInitTest extends NbTestCase {
         waitForGestures();
         
         assertNull("No dialogs at close", DD.d);
+
+        Preferences prefs = NbPreferences.forModule(Installer.class);
+        prefs.putInt("count", UIHandler.MAX_LOGS );
         
         installer.restored();
         
         waitForGestures();
 
-        assertNotNull("A dialog shown at begining", DD.d);
+//        assertNotNull("A dialog shown at begining", DD.d);
     }
 
     public void testGenerateTooLittleLogs() throws Exception {
@@ -194,7 +170,7 @@ public class InstallerInitTest extends NbTestCase {
         for (int i = 0; i < 500; i++) {
             Logger.getLogger("org.netbeans.ui.anything").log(r);
         }
-        assertEquals("not full buffer", 500, Installer.getLogsSize());
+        assertEquals("not full buffer", 500, InstallerTest.getLogsSize());
         
         assertNull("No dialogs so far", DD.d);
         
