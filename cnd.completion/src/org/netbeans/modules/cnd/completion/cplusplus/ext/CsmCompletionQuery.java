@@ -743,7 +743,7 @@ abstract public class CsmCompletionQuery {
             this.sort = sort;
         }
 
-        public void setFindType(boolean findType) {
+        private void setFindType(boolean findType) {
             this.findType = findType;
         }
 
@@ -767,11 +767,11 @@ abstract public class CsmCompletionQuery {
 
         private Collection<CsmFunction> getConstructors(CsmClass cls) {
             Collection<CsmFunction> out = new ArrayList<CsmFunction>();
-            CsmFilterBuilder filterBuilder = CsmSelect.getDefault().getFilterBuilder();
+            CsmFilterBuilder filterBuilder = CsmSelect.getFilterBuilder();
             CsmSelect.CsmFilter filter = filterBuilder.createCompoundFilter(
                     filterBuilder.createKindFilter(CsmDeclaration.Kind.FUNCTION, CsmDeclaration.Kind.FUNCTION_DEFINITION),
-                    filterBuilder.createNameFilter(cls.getName().toString(), true, true, false));
-            Iterator<CsmMember> classMembers = CsmSelect.getDefault().getClassMembers(cls, filter);
+                    filterBuilder.createNameFilter(cls.getName(), true, true, false));
+            Iterator<CsmMember> classMembers = CsmSelect.getClassMembers(cls, filter);
             while (classMembers.hasNext()) {
                 CsmMember csmMember = classMembers.next();
                 if (CsmKindUtilities.isConstructor(csmMember)) {
@@ -830,9 +830,16 @@ abstract public class CsmCompletionQuery {
         private CsmType resolveType(CsmCompletionExpression exp) {
             Context ctx = (Context) clone();
             ctx.setFindType(true);
+            // when resolve type use full scope of search
+            QueryScope old = ctx.compResolver.setResolveScope(QueryScope.GLOBAL_QUERY);
             CsmType typ = null;
-            if (ctx.resolveExp(exp)) {
-                typ = ctx.lastType;
+            try {
+                if (ctx.resolveExp(exp)) {
+                    typ = ctx.lastType;
+                }
+            } finally {
+                // restore old
+                ctx.compResolver.setResolveScope(old);
             }
             return typ;
         }
@@ -1798,24 +1805,19 @@ abstract public class CsmCompletionQuery {
         }
 
         private CsmObject createInstantiation(CsmTemplate template, CsmCompletionExpression exp) {
-            if (CsmKindUtilities.isClass(template) || CsmKindUtilities.isFunction(template)) {
-                if (exp.getExpID() == CsmCompletionExpression.GENERIC_TYPE) {
-                    List<CsmType> params = new ArrayList<CsmType>();
-                    int paramsNumber = (template.getTemplateParameters().size() < exp.getParameterCount() - 1) ? template.getTemplateParameters().size() : exp.getParameterCount() - 1;
-                    for (int i = 0; i < paramsNumber; i++) {
-                        CsmCompletionExpression paramInst = exp.getParameter(i + 1);
-                        if (paramInst != null) {
-                            params.add(resolveType(paramInst));
-                        } else {
-                            break;
-                        }
+            if (exp.getExpID() == CsmCompletionExpression.GENERIC_TYPE) {
+                List<CsmType> params = new ArrayList<CsmType>();
+                int paramsNumber = (template.getTemplateParameters().size() < exp.getParameterCount() - 1) ? template.getTemplateParameters().size() : exp.getParameterCount() - 1;
+                for (int i = 0; i < paramsNumber; i++) {
+                    CsmCompletionExpression paramInst = exp.getParameter(i + 1);
+                    if (paramInst != null) {
+                        params.add(resolveType(paramInst));
+                    } else {
+                        break;
                     }
-                    CsmInstantiationProvider ip = CsmInstantiationProvider.getDefault();
-                    return ip.instantiate(template, params, getFinder().getCsmFile());
                 }
-            }
-            if (CsmKindUtilities.isClassForwardDeclaration(template)) {
-                return template;
+                CsmInstantiationProvider ip = CsmInstantiationProvider.getDefault();
+                return ip.instantiate(template, params, getFinder().getCsmFile());
             }
             return null;
         }
