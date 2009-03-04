@@ -16,10 +16,9 @@
  * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  */
-
 package org.netbeans.modules.bpel.project.ui.customizer;
 
-import org.netbeans.modules.bpel.project.IcanproConstants;
+import org.netbeans.modules.bpel.project.ProjectConstants;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ant.AntArtifact;
 
@@ -36,7 +35,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 import java.io.*;
-
 import java.util.*;
 
 import javax.swing.*;
@@ -367,11 +365,9 @@ final class VisualArchiveIncludesSupport {
     private void updateModels(String jar, String uuid, String desc, String cid) {
         for (int i = 0, size = classpathModel.getRowCount(); i < size; i++) {
             VisualClassPathItem vi = (VisualClassPathItem) classpathModel.getValueAt(i, 0);
-//            System.out.println(vi);
         } //tbd temp add
     }
     
-  
     /**
      * DOCUMENT ME!
      */
@@ -422,7 +418,7 @@ final class VisualArchiveIncludesSupport {
             
             if (source == addArtifactButton) {
                 AntArtifact[] artifacts = AntArtifactChooser.showDialog(
-                        IcanproConstants.ARTIFACT_TYPE_EJB_WS, master
+                        ProjectConstants.ARTIFACT_TYPE_EJB_WS, master
                         );
                 
                 if (artifacts != null) {

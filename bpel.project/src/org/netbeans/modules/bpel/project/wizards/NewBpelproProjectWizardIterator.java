@@ -16,7 +16,6 @@
  * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  */
-
 package org.netbeans.modules.bpel.project.wizards;
 
 import java.io.File;
@@ -31,7 +30,7 @@ import org.netbeans.modules.compapp.projects.base.ui.wizards.NewIcanproProjectWi
  */
 public class NewBpelproProjectWizardIterator 
         extends NewIcanproProjectWizardIterator 
-        implements org.netbeans.modules.bpel.project.IcanproConstants {
+        implements org.netbeans.modules.bpel.project.ProjectConstants {
     
     private static final long serialVersionUID = 1L;
     
@@ -47,8 +46,6 @@ public class NewBpelproProjectWizardIterator
 
     @Override
     protected String getDefaultName() {
-        return NbBundle.getMessage(NewBpelproProjectWizardIterator.class, "LBL_NPW1_DefaultProjectName"); //NOI18N
+        return NbBundle.getMessage(NewBpelproProjectWizardIterator.class, "LBL_DefaultProjectName"); //NOI18N
     }
-
 }
-
