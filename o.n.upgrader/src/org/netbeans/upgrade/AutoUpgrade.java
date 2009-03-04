@@ -51,6 +51,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
+import javax.swing.JDialog;
 import javax.swing.JOptionPane;
 import org.netbeans.upgrade.systemoptions.Importer;
 
@@ -60,7 +61,6 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.LocalFileSystem;
 import org.openide.filesystems.MultiFileSystem;
-import org.openide.filesystems.Repository;
 import org.openide.filesystems.XMLFileSystem;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.util.NbBundle;
@@ -72,6 +72,8 @@ import org.xml.sax.SAXException;
  */
 public final class AutoUpgrade {
 
+    private static File importFile;
+
     public static void main (String[] args) throws Exception {
         String[] version = new String[1];
         File sourceFolder = checkPrevious (version, VERSION_TO_CHECK);
@@ -79,8 +81,14 @@ public final class AutoUpgrade {
             if (!showUpgradeDialog (sourceFolder)) {
                 throw new org.openide.util.UserCancelException ();
             }
-            doUpgrade (sourceFolder, version[0]);
-            //support for non standard configuration files
+            File netBeansDir = InstalledFileLocator.getDefault().locate("modules", null, false).getParentFile().getParentFile();  //NOI18N
+            importFile = new File(netBeansDir, "etc/netbeans.import");  //NOI18N
+            // less than 6.5 or import file dosn't exist
+            if (version[0].compareTo("6.5") < 0 || !importFile.exists()) {  //NOI18N
+                doUpgrade (sourceFolder, version[0]);
+            }
+            // Till 6.1 support for non standard configuration files and since
+            // 6.5 it is standard way of import.
             doNonStandardUpgrade(sourceFolder, version[0]);
             //#75324 NBplatform settings are not imported
             upgradeBuildProperties(sourceFolder, version);
@@ -116,7 +124,7 @@ public final class AutoUpgrade {
     // the order of VERSION_TO_CHECK here defines the precedence of imports
     // the first one will be choosen for import
     final static private List VERSION_TO_CHECK = 
-            Arrays.asList (new String[] { ".netbeans/5.5.1",".netbeans/5.5",".netbeans/5.0",CREATOR });//NOI18N
+            Arrays.asList (new String[] { ".netbeans/6.5", ".netbeans/6.1", ".netbeans/6.0", ".netbeans/5.5.1", ".netbeans/5.5" });//NOI18N
 
             
     static private File checkPrevious (String[] version, final List versionsToCheck) {        
@@ -156,20 +164,16 @@ public final class AutoUpgrade {
             JOptionPane.QUESTION_MESSAGE,
             JOptionPane.YES_NO_OPTION
         );
-        javax.swing.JDialog d = p.createDialog (
-            null,
-            NbBundle.getMessage (AutoUpgrade.class, "MSG_Confirmation_Title") // NOI18N
-        );
-        d.setModal (true);
+        JDialog d = Util.createJOptionDialog(p, NbBundle.getMessage (AutoUpgrade.class, "MSG_Confirmation_Title"));
         d.setVisible (true);
 
         return new Integer (JOptionPane.YES_OPTION).equals (p.getValue ());
     }
-    
+
     static void doUpgrade (File source, String oldVersion) 
     throws java.io.IOException, java.beans.PropertyVetoException {        
         File userdir = new File(System.getProperty ("netbeans.user", "")); // NOI18N
-        
+
         java.util.Set includeExclude;
         try {
             Reader r = new InputStreamReader (
@@ -206,10 +210,8 @@ public final class AutoUpgrade {
             
             old = (xmlfs != null) ? createLayeredSystem(lfs, xmlfs) : lfs;
         }
-        org.openide.filesystems.FileSystem mine = Repository.getDefault ().
-            getDefaultFileSystem ();
         
-        Copy.copyDeep (old.getRoot (), mine.getRoot (), includeExclude, PathTransformation.getInstance(oldVersion));
+        Copy.copyDeep (old.getRoot (), FileUtil.getConfigRoot (), includeExclude, PathTransformation.getInstance(oldVersion));
         
     }
     
@@ -221,8 +223,15 @@ public final class AutoUpgrade {
         File userdir = new File(System.getProperty("netbeans.user", "")); // NOI18N        
         java.util.Set includeExclude;
         try {
-            InputStream is = AutoUpgrade.class.getResourceAsStream("nonstandard" + oldVersion);
-            if (is == null) return;
+            InputStream is;
+            if (oldVersion.compareTo("6.5") < 0 || !importFile.exists()) {  //NOI18N
+                // less than 6.5
+                is = AutoUpgrade.class.getResourceAsStream("nonstandard" + oldVersion); // NOI18N
+                if (is == null) return;
+            } else {
+                // 6.5 or greater
+                is = new FileInputStream(importFile);
+            }
             Reader r = new InputStreamReader(is, "utf-8"); // NOI18N
             includeExclude = IncludeExclude.create(r);
             r.close();
