@@ -45,7 +45,7 @@ import java.util.HashSet;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
 import org.netbeans.modules.websvc.wsitconf.ui.nodes.BindingFaultNode;
 import org.netbeans.modules.websvc.wsitconf.ui.nodes.OperationNode;
-import org.netbeans.modules.websvc.wsitconf.ui.nodes.ServiceNode;
+import org.netbeans.modules.websvc.wsitconf.ui.nodes.BindingNode;
 import org.netbeans.modules.websvc.wsitconf.ui.nodes.OperationContainerServiceNode;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.WSITModelSupport;
 import org.netbeans.modules.xml.multiview.ui.*;
@@ -60,6 +60,7 @@ import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import java.util.Collection;
 import java.util.Set;
+import org.netbeans.modules.websvc.jaxws.light.api.JaxWsService;
 import org.netbeans.modules.websvc.wsitconf.ui.nodes.BindingContainerServiceNode;
 import org.netbeans.modules.websvc.wsitconf.ui.nodes.BindingInputNode;
 import org.netbeans.modules.websvc.wsitconf.ui.nodes.BindingOutputNode;
@@ -72,23 +73,22 @@ import org.openide.filesystems.FileObject;
 public class ServiceView extends SectionView {
 
     ServiceView(InnerPanelFactory factory, WSDLModel model, Node node, Service s) {
-        this(factory,  model, node,  null, s, null, false);
+        this(factory,  model, node,  null, s, null, null, false);
     }
-  
-    ServiceView(InnerPanelFactory factory, WSDLModel model, Node node, FileObject implClass, Service s, Collection<Binding> bs, boolean serviceOnly) {
+
+    ServiceView(InnerPanelFactory factory, WSDLModel model, Node node, FileObject implClass, Service s, JaxWsService jaxService, Collection<Binding> bs, boolean serviceOnly) {
         super(factory);
 
         if ((implClass == null) && (node == null)) {
             return;
         }
         
-        if ((implClass == null) && (s != null)) {
-            String wsdlUrl = s.getWsdlUrl();
-            if (wsdlUrl == null) { // WS from Java
+        if (implClass == null) {
+            if (!(WSITModelSupport.isServiceFromWsdl(node))) {
                 implClass = node.getLookup().lookup(FileObject.class);
             }
         }
-        
+
         Collection<Binding> bindings = bs;
         if (bindings == null) {
             bindings = new HashSet<Binding>();
@@ -103,6 +103,7 @@ public class ServiceView extends SectionView {
         // if there's only one binding, make the dialog simpler
         Node root = new AbstractNode(rootChildren);
         setRoot(root);
+
         if (bindingNodes.length > 1) {
             int i = 0;
             for (Binding binding : bindings) {
@@ -132,20 +133,21 @@ public class ServiceView extends SectionView {
             }
             
             ArrayList<Node> nodes = initOperationView(null, b, serviceOnly);
-            rootChildren.add(nodes.toArray(new Node[nodes.size()]));            
+            rootChildren.add(nodes.toArray(new Node[nodes.size()]));
         }
+        
     }
         
     private ArrayList<Node> initOperationView(SectionContainer bindingCont, Binding binding, boolean serviceOnly) {
         ArrayList<Node> nodes = new ArrayList<Node>();
 
-        Node serviceNode = new ServiceNode(binding);
-        nodes.add(serviceNode);
-        SectionPanel servicePanel = new SectionPanel(this, serviceNode, binding, true);
+        Node bindingNode = new BindingNode(binding);
+        nodes.add(bindingNode);
+        SectionPanel bindingPanel = new SectionPanel(this, bindingNode, binding, true);
         if (bindingCont != null) {
-            bindingCont.addSection(servicePanel, false);
+            bindingCont.addSection(bindingPanel, false);
         } else {
-            addSection(servicePanel, false);
+            addSection(bindingPanel, false);
         }
         
         if (!serviceOnly) {
@@ -192,7 +194,7 @@ public class ServiceView extends SectionView {
                 nodes.add(opNodeContainer);
             }
         }
-        servicePanel.open();
+        //bindingPanel.open();
         return nodes;
-    } 
+    }
 }
