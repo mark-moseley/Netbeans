@@ -61,7 +61,6 @@ import javax.swing.AbstractAction;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.Icon;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JSeparator;
@@ -118,12 +117,6 @@ final class QueryTopComponent extends TopComponent implements PropertyChangeList
                 }
             });
 
-            Repository[] repos = BugtrackingManager.getInstance().getKnownRepositories();
-            DefaultComboBoxModel  repoModel = new DefaultComboBoxModel(repos);
-            if(toSelect != null) {
-                repoModel.addElement(toSelect);
-            }
-            repositoryComboBox.setModel(repoModel);
             repositoryComboBox.setRenderer(new DefaultListCellRenderer() {
                 @Override
                 public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
@@ -140,7 +133,24 @@ final class QueryTopComponent extends TopComponent implements PropertyChangeList
                 }
             });
 
-            queriesPanel.setVisible(false);
+            DefaultComboBoxModel repoModel;
+            if(toSelect != null) {
+                repoModel = new DefaultComboBoxModel();
+                repoModel.addElement(toSelect);
+                repositoryComboBox.setModel(repoModel);
+                repositoryComboBox.setSelectedItem(toSelect);
+                repositoryComboBox.setEnabled(false);
+                newButton.setEnabled(false);
+                onRepoSelected();
+            } else {
+                Repository[] repos = BugtrackingManager.getInstance().getKnownRepositories();
+                repoModel = new DefaultComboBoxModel(repos);
+                repositoryComboBox.setModel(repoModel);
+                if(repositoryComboBox.getModel().getSize() > 0) {
+                    repositoryComboBox.setSelectedIndex(0);
+                    onRepoSelected();
+                }   
+            }
             repositoryComboBox.addItemListener(new ItemListener() {
                 public void itemStateChanged(ItemEvent e) {
                     if(e.getStateChange() == ItemEvent.SELECTED) {
@@ -148,14 +158,9 @@ final class QueryTopComponent extends TopComponent implements PropertyChangeList
                     }
                 }
             });
-            if(repositoryComboBox.getModel().getSize() > 0) {
-                if(toSelect != null) {
-                    repositoryComboBox.setSelectedItem(toSelect);
-                } else {
-                    repositoryComboBox.setSelectedIndex(0);
-                }
-                onRepoSelected();
-            }
+
+            queriesPanel.setVisible(false);
+            
         }
     }
 
@@ -420,7 +425,7 @@ final class QueryTopComponent extends TopComponent implements PropertyChangeList
     }
 
     private void onRepoSelected() {
-        SwingUtilities.invokeLater(new Runnable() {
+        BugtrackingManager.getInstance().getRequestProcessor().post(new Runnable() {
             public void run() {
                 Repository repo = (Repository) repositoryComboBox.getSelectedItem();
                 if (repo == null) {
@@ -438,11 +443,15 @@ final class QueryTopComponent extends TopComponent implements PropertyChangeList
 
                 updateSavedQueries(repo);
 
-                BugtrackingController c = query.getController();
-                panel.add(c.getComponent());
-                query.addPropertyChangeListener(QueryTopComponent.this);
-                revalidate();
-                repaint();
+                final BugtrackingController c = query.getController();
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        panel.add(c.getComponent());
+                        query.addPropertyChangeListener(QueryTopComponent.this);
+                        revalidate();
+                        repaint();
+                    }
+                });
             }
         });
     }
@@ -450,7 +459,7 @@ final class QueryTopComponent extends TopComponent implements PropertyChangeList
     private void setNameAndTooltip() throws MissingResourceException {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                if(query != null) {
+                if(query != null && query.getDisplayName() != null) {
                     setName(NbBundle.getMessage(QueryTopComponent.class, "LBL_QueryName", new Object[]{query.getDisplayName()}));
                     setToolTipText(NbBundle.getMessage(QueryTopComponent.class, "LBL_QueryName", new Object[]{query.getTooltip()}));
                 } else {
@@ -567,18 +576,7 @@ final class QueryTopComponent extends TopComponent implements PropertyChangeList
             setText(query.getDisplayName());
             this.setAction(new AbstractAction() {
                 public void actionPerformed(ActionEvent e) {
-                    SwingUtilities.invokeLater(new Runnable() {
-                        public void run() {
-                            TopComponent tc = WindowManager.getDefault().findTopComponent(query.getDisplayName());
-                            if(tc == null) {
-                                tc = new QueryTopComponent(query);
-                            }
-                            if(!tc.isOpened()) {
-                                tc.open();
-                            }
-                            tc.requestActive();
-                        }
-                    });
+                    QueryAction.openQuery(query, repo);
                 }
             });
         }

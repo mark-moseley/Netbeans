@@ -39,11 +39,11 @@
 
 package org.netbeans.modules.bugzilla.query;
 
+import java.io.IOException;
 import org.netbeans.modules.bugzilla.*;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.logging.Level;
 import javax.swing.SwingUtilities;
 import org.eclipse.mylyn.tasks.core.TaskRepository;
 import org.eclipse.mylyn.tasks.core.data.TaskData;
@@ -51,6 +51,7 @@ import org.eclipse.mylyn.tasks.core.data.TaskDataCollector;
 import org.netbeans.modules.bugzilla.issue.BugzillaIssue;
 import org.netbeans.modules.bugtracking.spi.Issue;
 import org.netbeans.modules.bugtracking.spi.Query;
+import org.netbeans.modules.bugtracking.util.IssueCache;
 import org.netbeans.modules.bugzilla.util.BugzillaConstants;
 import org.netbeans.modules.bugzilla.util.BugzillaUtil;
 
@@ -64,9 +65,8 @@ public class BugzillaQuery extends Query {
     private final BugzillaRepository repository;
     private QueryController controller;
     private final List<String> issues = new ArrayList<String>();
-    private final Set<String> obsoleteIssues = new HashSet<String>();
 
-    private String urlParameters;
+    protected String urlParameters;
     private boolean firstRun = true;
 
     public BugzillaQuery(BugzillaRepository repository) {
@@ -74,14 +74,22 @@ public class BugzillaQuery extends Query {
         this.repository = repository;
     }
 
+    public BugzillaQuery(String name, BugzillaRepository repository, String urlParameters, boolean saved) {
+        super();
+        this.name = name;
+        this.repository = repository;
+        this.urlParameters = urlParameters;
+        this.saved = saved;
+    }
+
     public BugzillaQuery(String name, BugzillaRepository repository, String urlParameters, long lastRefresh) {
         this(repository);
         this.name = name;
         this.urlParameters = urlParameters;
         this.setLastRefresh(lastRefresh);
-        setSaved(true);
+        this.saved = true;
     }
-
+    
     @Override
     public String getDisplayName() {
         return name;
@@ -89,17 +97,20 @@ public class BugzillaQuery extends Query {
 
     @Override
     public String getTooltip() {
-        return name + " - " + repository.getDisplayName();
+        return name + " - " + repository.getDisplayName(); // NOI18N
     }
 
     @Override
     public QueryController getController() {
         if (controller == null) {
-            controller = new QueryController(repository, this, urlParameters);
+            controller = createControler(repository, this, urlParameters);
         }
         return controller;
     }
 
+    protected QueryController createControler(BugzillaRepository r, BugzillaQuery q, String parameters) {
+        return new QueryController(r, q, parameters);
+    }
 
     @Override
     public ColumnDescriptor[] getColumnDescriptors() {
@@ -110,77 +121,79 @@ public class BugzillaQuery extends Query {
     public void refresh() {
 
         assert urlParameters != null;
-        assert !SwingUtilities.isEventDispatchThread();
+        assert !SwingUtilities.isEventDispatchThread() : "Accesing remote host. Do not call in awt";
 
         executeQuery(new Runnable() {
             public void run() {
-
-                if(isSaved()) {
-                    List<String> ids;
-                    if(!wasRun()) {
-                        firstRun = false;
-                        ids = repository.getCache().readQuery(BugzillaQuery.this);
-                    } else {
-                        repository.getCache().storeQuery(BugzillaQuery.this, issues.toArray(new String[issues.size()]));
-                        ids = issues;
+                Bugzilla.LOG.log(Level.FINE, "refresh start - {0} [{1}]", new String[] {name, urlParameters});
+                try {
+                    List<String> obsoleteIssues = new ArrayList<String>();
+                    if(isSaved()) {
+                        if(!wasRun()) {
+                            if(issues.size() != 0) {
+                                Bugzilla.LOG.warning("query " + getDisplayName() + " supposed to be run for the first time yet already contains issues.");
+                                assert false;
+                            }
+                            obsoleteIssues.addAll(repository.getIssueCache().readQuery(BugzillaQuery.this.getDisplayName()));
+                        } else {
+                            repository.getIssueCache().storeQuery(BugzillaQuery.this.getDisplayName(), issues.toArray(new String[issues.size()]));
+                            obsoleteIssues.addAll(issues);
+                        }
                     }
+                    issues.clear();
+                    firstRun = false;
 
-                    obsoleteIssues.clear();
-                    obsoleteIssues.addAll(ids);
-                    ids.clear();
+                    StringBuffer url = new StringBuffer();
+                    url.append(BugzillaConstants.URL_ADVANCED_BUG_LIST);
+                    url.append(urlParameters); // XXX encode url?
+                    TaskRepository taskRepository = repository.getTaskRepository();
+                    BugzillaUtil.performQuery(taskRepository, url.toString(), new IssuesCollector(true));
+
+                    if(isSaved()) {
+                        obsoleteIssues.removeAll(issues);
+                        if(obsoleteIssues.size() > 0) {
+                            url = new StringBuffer();
+                            url.append(BugzillaConstants.URL_BUG_IDS);
+                            for (int i = 0; i < obsoleteIssues.size(); i++) {
+                                String id = obsoleteIssues.get(i);
+                                url.append(id);
+                                if(i < obsoleteIssues.size() -1) {
+                                    url.append(",");
+                                }
+                            }
+                            BugzillaUtil.performQuery(taskRepository, url.toString(), new IssuesCollector(false));
+                        }
+                    } 
+                } finally {
+                    Bugzilla.LOG.log(Level.FINE, "refresh finish - {0} [{1}]", new String[] {name, urlParameters});
                 }
-
-                StringBuffer url = new StringBuffer();
-                url.append(BugzillaConstants.URL_ADVANCED_BUG_LIST);
-                url.append(urlParameters);
-                final IssuesCache cache = repository.getCache();
-                TaskDataCollector collector = new TaskDataCollector() {
-                    public void accept(TaskData taskData) {
-
-                        // get id
-                        String id = BugzillaIssue.getID(taskData);
-
-                        BugzillaIssue issue = cache.setIssueData(taskData);
-                        issues.add(id);
-                        obsoleteIssues.remove(id);
-                        fireNotifyData(issue); // XXX - !!! triggers getIssues()
-                    }
-                };
-
-                final TaskRepository taskRepository = repository.getTaskRepository();
-                BugzillaUtil.performQuery(taskRepository, url.toString(), collector);
-
-                if(isSaved()) {
-                    for (String id : obsoleteIssues) {
-                        Issue issue = repository.getIssue(id);
-                        fireNotifyData(issue); // XXX - !!! triggers getIssues()
-                    }
-                }
-
             }
         });
+    }
 
-
+    public void refresh(String urlParameters) {
+        assert urlParameters != null;
+        this.urlParameters = urlParameters;
+        refresh();
     }
 
     @Override
     public int getIssueStatus(Issue issue) {
         String id = issue.getID();
-        if(obsoleteIssues.contains(id)) {
-            return Query.ISSUE_STATUS_OBSOLETE;
-        } else {
-            return repository.getCache().getStatus(id);
-        }
+        return getIssueStatus(id);
+    }
+
+    @Override
+    public boolean contains(Issue issue) {
+        return issues.contains(issue.getID());
+    }
+
+    public int getIssueStatus(String id) {
+        return repository.getIssueCache().getStatus(id);
     }
 
     int getSize() {
         return issues.size();
-    }
-
-    void refresh(String urlParameters) {
-        assert urlParameters != null;
-        this.urlParameters = urlParameters;
-        refresh();
     }
 
     public String getUrlParameters() {
@@ -197,13 +210,21 @@ public class BugzillaQuery extends Query {
     }
 
     @Override
+    public void setFilter(Filter filter) {
+        getController().selectFilter(filter);
+        super.setFilter(filter);
+    }
+
+    @Override
     public void fireQuerySaved() {
         super.fireQuerySaved();
+        repository.fireQueryListChanged();
     }
 
     @Override
     public void fireQueryRemoved() {
         super.fireQueryRemoved();
+        repository.fireQueryListChanged();
     }
 
     @Override
@@ -216,19 +237,41 @@ public class BugzillaQuery extends Query {
             ids.addAll(issues);
         }
 
-        // XXX move to cache and sync
-        IssuesCache cache = repository.getCache();
-        List<Issue> l = new ArrayList<Issue>();
+        IssueCache cache = repository.getIssueCache();
+        List<Issue> ret = new ArrayList<Issue>();
         for (String id : ids) {
-            int status = cache.getStatus(id);
+            int status = getIssueStatus(id);
             if((status & includeStatus) != 0) {
-                l.add(cache.getIssue(id));
+                ret.add(cache.getIssue(id));
             }
         }
-        return l.toArray(new Issue[l.size()]);
+        return ret.toArray(new Issue[ret.size()]);
     }
 
     boolean wasRun() {
         return !firstRun;
     }
+
+    private class IssuesCollector extends TaskDataCollector {
+        private boolean collect = true;
+
+        public IssuesCollector(boolean collect) {
+            this.collect = collect;
+        }
+
+        public void accept(TaskData taskData) {
+            String id = BugzillaIssue.getID(taskData);
+            BugzillaIssue issue;
+            try {
+                issue = (BugzillaIssue) repository.getIssueCache().setIssueData(id, taskData);
+            } catch (IOException ex) {
+                Bugzilla.LOG.log(Level.SEVERE, null, ex);
+                return;
+            }
+            if(collect) {
+                issues.add(id);
+            }
+            fireNotifyData(issue); // XXX - !!! triggers getIssues()
+        }
+    };
 }

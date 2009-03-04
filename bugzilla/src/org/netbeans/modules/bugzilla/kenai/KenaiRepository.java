@@ -43,7 +43,6 @@ import java.awt.Image;
 import java.text.MessageFormat;
 import org.netbeans.modules.bugtracking.spi.Query;
 import org.netbeans.modules.bugzilla.BugzillaRepository;
-import org.netbeans.modules.bugzilla.query.BugzillaQuery;
 import org.netbeans.modules.bugzilla.util.BugzillaConstants;
 import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
@@ -58,11 +57,15 @@ public class KenaiRepository extends BugzillaRepository {
     private String urlParam;
     private Query[] definedQueries;
     private Image icon;
+    private String userMail;
+    private String product;
 
-    public KenaiRepository(String repoName, String url, String user, String password, String urlParam) {
+    public KenaiRepository(String repoName, String url, String user, String password, String host, String urlParam, String product) {
         super(repoName, url, user, password);
         this.urlParam = urlParam;
         icon = ImageUtilities.loadImage(ICON_PATH, true);
+        userMail = user + "@"+ host; // NOI18N XXX escape @?
+        this.product = product;
     }
 
     @Override
@@ -72,42 +75,49 @@ public class KenaiRepository extends BugzillaRepository {
 
     @Override
     public Query createQuery() {
-        BugzillaQuery q = new BugzillaQuery(null, this, urlParam, true, false);
+        KenaiQuery q = new KenaiQuery(null, this, null, product, false);
         return q;
     }
 
     @Override
-    public Query[] getQueries() {
+    public synchronized Query[] getQueries() {
         Query[] qs = super.getQueries();
         Query[] dq = getDefinedQueries();
         Query[] ret = new Query[qs.length + dq.length];
         System.arraycopy(qs, 0, ret, 0, qs.length);
-        for (int i = 0; i < dq.length; i++) {
-            ret[qs.length + i] = dq[i];
-        }
+        System.arraycopy(dq, 0, ret, qs.length, dq.length);
         return ret;
     }
 
-    private synchronized Query[] getDefinedQueries() {
+    private Query[] getDefinedQueries() {
         if(definedQueries == null) {
-            definedQueries = new Query[2];
+            // XXX read first - store at least because of last refresh
 
-            StringBuffer sb = new StringBuffer();
-            sb.append(urlParam);
-            sb.append(MessageFormat.format(BugzillaConstants.MY_ISSUES_PARAMETERS_FORMAT, getUsername()));
-            BugzillaQuery myIssues = new BugzillaQuery(NbBundle.getMessage(KenaiRepository.class, "LBL_MyIssues"), this, sb.toString(), true, true); // NOI18N
-            myIssues.getController().onRefresh(); // XXX this is messy
-            definedQueries[0] = myIssues;
+            StringBuffer url = new StringBuffer();
+            url.append(urlParam);
+            url.append(MessageFormat.format(BugzillaConstants.MY_ISSUES_PARAMETERS_FORMAT, product, userMail));
 
-            sb = new StringBuffer();
-            sb.append(urlParam);
-            sb.append(BugzillaConstants.ALL_ISSUES_PARAMETERS);
-            BugzillaQuery allIssues = new BugzillaQuery(NbBundle.getMessage(KenaiRepository.class, "LBL_AllIssues"), this, sb.toString(), true, true); // NOI18N
-            allIssues.getController().onRefresh(); // XXX this is messy
-            definedQueries[1] = allIssues;
+            KenaiQuery myIssues = 
+                new KenaiQuery(
+                    NbBundle.getMessage(KenaiRepository.class, "LBL_MyIssues"), // NOI18N
+                    this,
+                    url.toString(),
+                    product,
+                    true);
 
+            url = new StringBuffer();
+            url.append(urlParam);
+            url.append(MessageFormat.format(BugzillaConstants.ALL_ISSUES_PARAMETERS, product));
+            KenaiQuery allIssues = 
+                new KenaiQuery(
+                    NbBundle.getMessage(KenaiRepository.class, "LBL_AllIssues"),
+                    this,
+                    url.toString(),
+                    product,
+                    true);
+
+            definedQueries = new Query[] {myIssues, allIssues};
         }
         return definedQueries;
     }
-
 }
