@@ -127,6 +127,7 @@ public class NumPadInputHandler extends TextInputHandler {
                         return true;
                     }
                     break;
+                case Canvas.FIRE:
                 case BACKSPACE:
                     if (nCaret > 0) {
                         aText.deleteCharAt(--nCaret);
@@ -141,6 +142,13 @@ public class NumPadInputHandler extends TextInputHandler {
                     break;
 
                 default:
+                    if ((int) ' ' <= nKeyCode && nKeyCode <= (int) '~') {
+                        resetKeyState();
+                        cChar = (char) nKeyCode;
+                        aText.insert(nCaret, cChar);
+                        nCaret++;
+                    }
+
                     break;
             }
         }
@@ -155,6 +163,21 @@ public class NumPadInputHandler extends TextInputHandler {
             return true;
         }
         return false;
+    }
+    
+    public void handlePointerPress( PointerEvent event ) {
+        event.getComponent().requestFocus();
+        super.handlePointerPress(event);
+    }
+    
+    public void handlePointerRelease( PointerEvent event ) {
+        if( event.getClickCount() == 1 ){
+            if ( event.getComponent() instanceof SVGTextField  ) {
+                SVGTextField field = (SVGTextField) event.getComponent();
+                field.setCaretPosition( field.getText().length() );
+            }
+        }
+        super.handlePointerRelease(event);
     }
 
     protected void setCaretPosition( SVGComponent comp , int position){
