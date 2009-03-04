@@ -53,11 +53,15 @@ import org.netbeans.api.debugger.Session;
 import org.netbeans.api.debugger.jpda.AttachingDICookie;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
+import org.netbeans.modules.j2ee.common.project.ui.DeployOnSaveUtils;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.deployment.plugins.api.ServerDebugInfo;
+import org.netbeans.modules.j2ee.earproject.ui.customizer.CustomizerProviderImpl;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.EarProjectProperties;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.modules.web.spi.webmodule.WebModuleProvider;
 import org.netbeans.spi.project.ActionProvider;
@@ -75,6 +79,8 @@ import org.openide.util.NbBundle;
  * Action provider of the Enterprise Application project.
  */
 public class EarActionProvider implements ActionProvider {
+
+    private static final String DIRECTORY_DEPLOYMENT_SUPPORTED = "directory.deployment.supported"; // NOI18N
     
     // Definition of commands
     private static final String COMMAND_COMPILE = "compile"; //NOI18N
@@ -94,7 +100,7 @@ public class EarActionProvider implements ActionProvider {
         COMMAND_MOVE,
         COMMAND_RENAME
     };
-    
+
     EarProject project;
     
     // Ant project helper of the project
@@ -147,13 +153,33 @@ public class EarActionProvider implements ActionProvider {
             DefaultProjectOperations.performDefaultRenameOperation(project, null);
             return ;
         }
+
+        String realCommand = command;
+        J2eeModuleProvider.DeployOnSaveSupport support = project.getAppModule().getDeployOnSaveSupport();
+        if (COMMAND_BUILD.equals(realCommand)
+                && isDosEnabled() && support != null && support.containsIdeArtifacts()) {
+            boolean cleanAndBuild = DeployOnSaveUtils.showBuildActionWarning(project,
+                    new DeployOnSaveUtils.CustomizerPresenter() {
+
+                public void showCustomizer(String category) {
+                    CustomizerProviderImpl provider = project.getLookup().lookup(CustomizerProviderImpl.class);
+                    provider.showCustomizer(category);
+                }
+            });
+            if (cleanAndBuild) {
+                realCommand = COMMAND_REBUILD;
+            } else {
+                return;
+            }
+        }
         
+        final String commandToExecute = realCommand;
         Runnable action = new Runnable () {
             public void run () {
                 Properties p = new Properties();
                 String[] targetNames;
 
-                targetNames = getTargetNames(command, context, p);
+                targetNames = getTargetNames(commandToExecute, context, p);
                 if (targetNames == null) {
                     return;
                 }
@@ -199,6 +225,7 @@ public class EarActionProvider implements ActionProvider {
             } else {
                 p.setProperty("forceRedeploy", "false"); //NOI18N
             }
+            setDirectoryDeploymentProperty(p);
         //DEBUGGING PART
         } else if (command.equals (COMMAND_DEBUG)) {
             if (!isSelectedServer ()) {
@@ -209,6 +236,7 @@ public class EarActionProvider implements ActionProvider {
                         new NotifyDescriptor.Message(msg, NotifyDescriptor.WARNING_MESSAGE));
                 return null;
             }
+            setDirectoryDeploymentProperty(p);
             
             //see issue 83056
             if (project.evaluator().getProperty("app.client") != null) { //MOI18N
@@ -256,11 +284,30 @@ public class EarActionProvider implements ActionProvider {
 
         return targetNames;
     }
-        
+
+     private void setDirectoryDeploymentProperty(Properties p) {
+        String instance = updateHelper.getAntProjectHelper().getStandardPropertyEvaluator().getProperty(EarProjectProperties.J2EE_SERVER_INSTANCE);
+        if (instance != null) {
+            J2eeModuleProvider jmp = project.getLookup().lookup(J2eeModuleProvider.class);
+            String sdi = jmp.getServerInstanceID();
+            J2eeModule mod = jmp.getJ2eeModule();
+            if (sdi != null && mod != null) {
+                boolean cFD = Deployment.getDefault().canFileDeploy(instance, mod);
+                p.setProperty(DIRECTORY_DEPLOYMENT_SUPPORTED, "" + cFD); // NOI18N
+            }
+        }
+    }
+
     public boolean isActionEnabled( String command, Lookup context ) {
         if ( findBuildXml() == null ) {
             return false;
         }
+
+        J2eeModuleProvider.DeployOnSaveSupport support = project.getAppModule().getDeployOnSaveSupport();
+        if (isDosEnabled() && support != null && support.containsIdeArtifacts() && COMMAND_COMPILE_SINGLE.equals(command)) {
+            return false;
+        }
+
         if ( command.equals( COMMAND_VERIFY ) ) {
             J2eeModuleProvider provider = project.getLookup().lookup(J2eeModuleProvider.class);
             return provider != null && provider.hasVerifierSupport();
@@ -344,5 +391,9 @@ public class EarActionProvider implements ActionProvider {
         String domain = props.getProperty("DOMAIN"); //NOI18N
         String location = props.getProperty("LOCATION"); //NOI18N
         return "".equals(domain) && "".equals(location); //NOI18N
+    }
+    
+    private boolean isDosEnabled() {
+        return Boolean.parseBoolean(project.evaluator().getProperty(EarProjectProperties.J2EE_DEPLOY_ON_SAVE));
     }
 }
