@@ -43,7 +43,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.4</specification-version>
+                        <specification-version>7.6</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -71,10 +71,8 @@
                     </run-dependency>
                 </dependency>
             </module-dependencies>
-            <friend-packages>
-                <friend>org.netbeans.modules.hudson.kenai</friend>
-                <package>org.netbeans.modules.notifications.spi</package>
-            </friend-packages>
+            <public-packages>
+            </public-packages>
         </data>
     </configuration>
 </project>
