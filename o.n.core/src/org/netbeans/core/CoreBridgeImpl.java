@@ -45,11 +45,10 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
-import org.netbeans.core.startup.Main;
 import org.netbeans.core.startup.ManifestSection;
 import org.netbeans.core.startup.StartLog;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
@@ -58,6 +57,7 @@ import org.openide.util.Lookup;
  *
  * @author Jaroslav Tulach
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.core.startup.CoreBridge.class)
 public final class CoreBridgeImpl extends org.netbeans.core.startup.CoreBridge
 implements Runnable {
     /** counts the number of CLI invocations */
@@ -121,7 +121,7 @@ implements Runnable {
     }
 
     public org.openide.util.Lookup lookupCacheLoad () {
-        FileObject services = Repository.getDefault().getDefaultFileSystem().findResource("Services"); // NOI18N
+        FileObject services = FileUtil.getConfigFile("Services"); // NOI18N
         if (services != null) {
             StartLog.logProgress("Got Services folder"); // NOI18N
             DataFolder servicesF;
@@ -218,8 +218,6 @@ implements Runnable {
         PropertyEditorManager.setEditorSearchPath(allpesp);
         PropertyEditorManager.registerEditor (java.lang.Character.TYPE, org.netbeans.beaninfo.editors.CharEditor.class);
         PropertyEditorManager.registerEditor(String[].class, org.netbeans.beaninfo.editors.StringArrayEditor.class); 
-        // bugfix #28676, register editor for a property which type is array of data objects
-        PropertyEditorManager.registerEditor(org.openide.loaders.DataObject[].class, org.netbeans.beaninfo.editors.DataObjectArrayEditor.class);
         // use replacement hintable/internationalizable primitive editors - issues 20376, 5278
         PropertyEditorManager.registerEditor (Integer.TYPE, org.netbeans.beaninfo.editors.IntEditor.class);
         PropertyEditorManager.registerEditor (Boolean.TYPE, org.netbeans.beaninfo.editors.BoolEditor.class);
