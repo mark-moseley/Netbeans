@@ -55,7 +55,6 @@ import org.netbeans.modules.vmd.midp.screen.display.property.ResourcePropertyEdi
 import org.netbeans.modules.vmd.midpnb.components.svg.SVGImageCD;
 import org.netbeans.modules.vmd.midpnb.components.svg.SVGPlayerCD;
 import org.openide.filesystems.FileObject;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import javax.microedition.m2g.SVGImage;
 import javax.swing.*;
@@ -65,6 +64,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
+import org.netbeans.modules.vmd.api.screen.display.ScreenDisplayPresenter;
 
 /**
  *
@@ -77,12 +77,18 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
     private SVGImageComponent imageView = new SVGImageComponent();
     private ScreenFileObjectListener imageFileListener;
     private FileObject svgFileObject;
+    private boolean useFileListener;
 
     public SVGPlayerDisplayPresenter() {
         JPanel contentPanel = getPanel().getContentPanel();
         contentPanel.setLayout(new BorderLayout());
         stringLabel = new JLabel();
         stringLabel.setHorizontalAlignment(JLabel.CENTER);
+    }
+    
+    public SVGPlayerDisplayPresenter(boolean useFilelistener) {
+        this();
+        this.useFileListener = useFilelistener;
     }
 
     @Override
@@ -107,7 +113,7 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
                     if (svgFileObject != null) {
                         try {
                             svgImage = Util.createSVGImage(svgFileObject, true);
-                            if (svgFileObject != null) {
+                            if (svgFileObject != null && useFileListener) {
                                 svgFileObject.removeFileChangeListener(imageFileListener);
                                 imageFileListener = new ScreenFileObjectListener(getRelatedComponent(), svgImageComponent, SVGImageCD.PROP_RESOURCE_PATH);
                                 svgFileObject.addFileChangeListener(imageFileListener);
@@ -135,6 +141,15 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
             stringLabel.setText(NbBundle.getMessage(SVGPlayerDisplayPresenter.class, "DISP_svg_image_is_usercode")); // NOI18N
             contentPanel.add(stringLabel, BorderLayout.CENTER);
         }
+
+        for (DesignComponent item : getChildren()) {
+            ScreenDisplayPresenter presenter = item.getPresenter(ScreenDisplayPresenter.class);
+            if (presenter == null) {
+                continue;
+            }
+            presenter.reload(deviceInfo);
+            contentPanel.add(presenter.getView(), BorderLayout.PAGE_END);
+        }
     }
 
     @Override
@@ -150,11 +165,28 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
     }
 
     @Override
+    public Collection<DesignComponent> getChildren() {
+        return getComponent().getComponents();
+    }
+
+    @Override
     protected void notifyDetached(DesignComponent component) {
         if (svgFileObject != null && imageFileListener != null) {
             svgFileObject.removeFileChangeListener(imageFileListener);
         }
         svgFileObject = null;
         imageFileListener = null;
+    }
+
+    protected float getScaleX(){
+        return imageView.getScaleX();
+    }
+
+    protected float getScaleY(){
+        return imageView.getScaleY();
+    }
+
+    protected SVGImage getSVGImage(){
+        return imageView.getImage();
     }
 }
