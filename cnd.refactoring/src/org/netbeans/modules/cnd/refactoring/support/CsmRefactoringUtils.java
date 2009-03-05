@@ -222,7 +222,7 @@ public final class CsmRefactoringUtils {
     }
     
     public static <T extends CsmObject> CsmUID<T> getHandler(T element) {
-        return UIDs.get(element);
+        return element == null ? null : UIDs.get(element);
     }
     
     public static <T> T getObject(CsmUID<T> handler) {
@@ -257,7 +257,7 @@ public final class CsmRefactoringUtils {
         CsmFilterBuilder filterBuilder = CsmSelect.getFilterBuilder();
         CsmSelect.CsmFilter filter = filterBuilder.createCompoundFilter(
                 filterBuilder.createKindFilter(CsmDeclaration.Kind.FUNCTION, CsmDeclaration.Kind.FUNCTION_DEFINITION),
-                filterBuilder.createNameFilter(cls.getName().toString(), true, true, false));
+                filterBuilder.createNameFilter(cls.getName(), true, true, false));
         Iterator<CsmMember> classMembers = CsmSelect.getClassMembers(cls, filter);
         while (classMembers.hasNext()) {
             CsmMember csmMember = classMembers.next();
