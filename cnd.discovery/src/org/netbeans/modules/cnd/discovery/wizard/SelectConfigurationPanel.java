@@ -58,9 +58,12 @@ import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 import javax.swing.tree.TreeSelectionModel;
+import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.cnd.discovery.api.Configuration;
 import org.netbeans.modules.cnd.discovery.api.DiscoveryProvider;
+import org.netbeans.modules.cnd.discovery.api.Progress;
 import org.netbeans.modules.cnd.discovery.api.ProjectProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
 import org.netbeans.modules.cnd.discovery.wizard.api.DiscoveryDescriptor;
@@ -72,9 +75,9 @@ import org.netbeans.modules.cnd.discovery.wizard.tree.IncludesListModel;
 import org.netbeans.modules.cnd.discovery.wizard.tree.MacrosListModel;
 import org.netbeans.modules.cnd.discovery.wizard.tree.ProjectConfigurationImpl;
 import org.netbeans.modules.cnd.discovery.wizard.tree.ProjectConfigurationNode;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
 
 /**
  *
@@ -302,13 +305,13 @@ public final class SelectConfigurationPanel extends JPanel {
 
     }// </editor-fold>//GEN-END:initComponents
     
-    private String getString(String key) {
+    private static String getString(String key) {
         return NbBundle.getBundle(SelectConfigurationPanel.class).getString(key);
     }
     
     private Icon getLoadingIcon() {
         String path = "org/netbeans/modules/cnd/discovery/wizard/resources/waitNode.gif"; // NOI18N
-        Image image = Utilities.loadImage(path);
+        Image image = ImageUtilities.loadImage(path);
         if (image != null) {
             return new ImageIcon(image);
         } else {
@@ -350,7 +353,7 @@ public final class SelectConfigurationPanel extends JPanel {
         }
     }
     
-    private static void consolidateModel(ProjectConfiguration project, String level){
+    public static void consolidateModel(ProjectConfiguration project, String level){
         if (ConsolidationStrategyPanel.PROJECT_LEVEL.equals(level)){
             ConfigurationFactory.consolidateProject((ProjectConfigurationImpl)project);
         } else if (ConsolidationStrategyPanel.FOLDER_LEVEL.equals(level)){
@@ -364,6 +367,7 @@ public final class SelectConfigurationPanel extends JPanel {
         String rootFolder = wizardDescriptor.getRootFolder();
         DiscoveryProvider provider = wizardDescriptor.getProvider();
         String consolidation = wizardDescriptor.getLevel();
+        assert consolidation != null;
         List<Configuration> configs = provider.analyze(new ProjectProxy() {
             public boolean createSubProjects() {
                 return false;
@@ -387,7 +391,7 @@ public final class SelectConfigurationPanel extends JPanel {
             public String getWorkingFolder() {
                 return null;
             }
-        });
+        }, new MyProgress());
         List<ProjectConfiguration> projectConfigurations = new ArrayList<ProjectConfiguration>();
         List<String> includedFiles = new ArrayList<String>();
         wizardDescriptor.setIncludedFiles(includedFiles);
@@ -487,6 +491,28 @@ public final class SelectConfigurationPanel extends JPanel {
             //System.out.println("End analyzing");
             if (!isStoped){
                 wasTerminated = false;
+            }
+        }
+    }
+
+    private static class MyProgress implements Progress {
+        private ProgressHandle handle;
+        private int done;
+        public void start(int length) {
+            handle = ProgressHandleFactory.createHandle(getString("AnalyzingProjectProgress"));
+            handle.start(length);
+        }
+
+        public void increment() {
+            if (handle != null) {
+                done++;
+                handle.progress(done);
+            }
+        }
+
+        public void done() {
+            if (handle != null) {
+                handle.finish();
             }
         }
     }
