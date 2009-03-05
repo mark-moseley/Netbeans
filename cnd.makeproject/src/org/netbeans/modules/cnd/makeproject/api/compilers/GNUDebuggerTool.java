@@ -39,19 +39,32 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.compilers;
+package org.netbeans.modules.cnd.makeproject.api.compilers;
 
-import org.netbeans.modules.cnd.api.compilers.CompilerProvider;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
 import org.netbeans.modules.cnd.api.compilers.Tool;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager.DebuggerDescriptor;
 
-/**
- *
- * @author gordonp
- */
-public class DefaultCompilerProvider extends CompilerProvider {
-    
-    public Tool createCompiler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        return Tool.createTool(hkey, flavor, kind, name, displayName, path);
+public class GNUDebuggerTool extends Tool {
+
+    private GNUDebuggerTool(String hkey, CompilerFlavor flavor, String name, String displayName, String path) { // GRP - FIXME
+        super(hkey, flavor, DebuggerTool, name, displayName, path); // NOI18N
     }
+
+    @Override
+    public GNUDebuggerTool createCopy() {
+        GNUDebuggerTool copy = new GNUDebuggerTool(getHostKey(), getFlavor(), "", getDisplayName(), getPath());
+        copy.setName(getName());
+        return copy;
+    }
+
+    public static GNUDebuggerTool create(String hkey, CompilerFlavor flavor, String name, String displayName, String path) {
+        return new GNUDebuggerTool(hkey, flavor, name, displayName, path);
+    }
+
+    @Override
+    public DebuggerDescriptor getDescriptor() {
+        return getFlavor().getToolchainDescriptor().getDebugger();
+    }
+
 }
