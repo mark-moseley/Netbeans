@@ -46,7 +46,10 @@ import org.openide.util.HelpCtx;
 import java.awt.event.ActionEvent;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.bugtracking.spi.Query;
+import org.netbeans.modules.bugtracking.spi.Repository;
 import org.openide.util.NbBundle;
+import org.openide.windows.TopComponent;
+import org.openide.windows.WindowManager;
 
 /**
  * 
@@ -71,17 +74,38 @@ public class QueryAction extends SystemAction {
         openQuery(null);
     }
 
-    public static void openQuery(final Query query) {
+    public static void openQuery(Query query) {
+        openQuery(query, null);
+    }
+
+    public static void openQuery(final Query query, final Repository repository) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                QueryTopComponent tc;
+                TopComponent tc = null;
                 if(query != null) {
-                    tc = new QueryTopComponent();
-                } else {
-                    tc = new QueryTopComponent();
+                    tc = WindowManager.getDefault().findTopComponent(query.getDisplayName());
                 }
-                tc.open();
+                if(tc == null) {
+                    tc = new QueryTopComponent(query, repository);
+                }
+                if(!tc.isOpened()) {
+                    tc.open();
+                }
                 tc.requestActive();
+            }
+        });
+    }
+
+    public static void closeQuery(final Query query) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                TopComponent tc = null;
+                if(query != null) {
+                    tc = WindowManager.getDefault().findTopComponent(query.getDisplayName());
+                }
+                if(tc != null) {
+                    tc.close();
+                }
             }
         });
     }
