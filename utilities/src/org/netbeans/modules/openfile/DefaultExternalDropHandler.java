@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.openfile;
 
+import java.awt.Component;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
@@ -54,15 +55,25 @@ import java.util.List;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
+import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.NbBundle;
 import org.openide.windows.ExternalDropHandler;
+import org.openide.windows.TopComponent;
 
 /**
  *
  * @author S. Aubrecht
  */
+@org.openide.util.lookup.ServiceProvider(service=org.openide.windows.ExternalDropHandler.class)
 public class DefaultExternalDropHandler extends ExternalDropHandler {
     
     public boolean canDrop(DropTargetDragEvent e) {
@@ -89,14 +100,70 @@ public class DefaultExternalDropHandler extends ExternalDropHandler {
         if( null == t )
             return false;
         List<File> fileList = getFileList( t );
-
-        if( null != fileList && !fileList.isEmpty() ) {
-            for (File file : fileList) {
-                openFile(file);
-            }
-            return true;
+        if ((fileList == null) || fileList.isEmpty()) {
+            return false;
         }
-        return false;
+
+        //#158473: Activate target TC to inform winsys in which mode new editor
+        //component should be opened. It assumes that openFile opens new editor component
+        //in some editor mode. If there would be problem with activating another TC first
+        //then another way how to infrom winsys must be used.
+        Component c = e.getDropTargetContext().getComponent();
+        while (c != null) {
+            if (c instanceof TopComponent) {
+                ((TopComponent) c).requestActive();
+                break;
+            }
+            c = c.getParent();
+        }
+
+        Object errMsg = null;
+        if (fileList.size() == 1) {
+            errMsg = openFile(fileList.get(0));
+        } else {
+            boolean hasSomeSuccess = false;
+            List<String> fileErrs = null;
+            for (File file : fileList) {
+                String fileErr = openFile(file);
+                if (fileErr == null) {
+                    hasSomeSuccess = true;
+                } else {
+                    if (fileErrs == null) {
+                        fileErrs = new ArrayList<String>(fileList.size());
+                    }
+                    fileErrs.add(fileErr);
+                }
+            }
+            if (fileErrs != null) {         //some file could not be opened
+                String mainMsgKey;
+                if (hasSomeSuccess) {
+                    mainMsgKey = "MSG_could_not_open_some_files";       //NOI18N
+                } else {
+                    mainMsgKey = "MSG_could_not_open_any_file";         //NOI18N
+                }
+                String mainMsg = NbBundle.getMessage(OpenFile.class, mainMsgKey);
+                if (fileErrs == null) {
+                    errMsg = mainMsg;
+                } else {
+                    JComponent msgPanel = new JPanel();
+                    msgPanel.setLayout(new BoxLayout(msgPanel, BoxLayout.PAGE_AXIS));
+                    msgPanel.add(new JLabel(mainMsg));
+                    msgPanel.add(Box.createVerticalStrut(12));
+                    for (String fileErr : fileErrs) {
+                        msgPanel.add(new JLabel(fileErr));
+                    }
+                    errMsg = msgPanel;
+                }
+            }
+        }
+        if (errMsg != null) {
+            DialogDisplayer.getDefault().notify(
+                    new NotifyDescriptor.Message(
+                            errMsg,
+                            NotifyDescriptor.WARNING_MESSAGE));
+            return false;
+        }
+        return true;
     }
 
     List<File> getFileList( Transferable t ) {
@@ -118,9 +185,18 @@ public class DefaultExternalDropHandler extends ExternalDropHandler {
         return null;
     }
 
-    void openFile( File file ) {
+    /**
+     * Opens the given file.
+     * @param  file  file to be opened
+     * @return  {@code null} if the file was successfully opened;
+     *          or a localized error message in case of failure
+     */
+    String openFile( File file ) {
         FileObject fo = FileUtil.toFileObject( FileUtil.normalizeFile( file ) );
-        OpenFile.open(fo, -1);
+        if (fo == null) {
+            return NbBundle.getMessage(OpenFile.class, "MSG_FilePathTypeNotSupported", file.toString()); //NOI18N
+        }
+        return OpenFile.open(fo, -1);
     }
 
     private static DataFlavor uriListDataFlavor;
