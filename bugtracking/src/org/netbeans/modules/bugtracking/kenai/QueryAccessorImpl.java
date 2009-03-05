@@ -39,20 +39,25 @@
 
 package org.netbeans.modules.bugtracking.kenai;
 
+import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.logging.Level;
+import java.util.Map;
+import java.util.Set;
 import org.netbeans.modules.bugtracking.BugtrackingManager;
+import org.netbeans.modules.bugtracking.spi.Query;
+import org.netbeans.modules.bugtracking.spi.Repository;
 import org.netbeans.modules.bugtracking.ui.query.QueryAction;
-import org.netbeans.modules.kenai.api.Kenai;
-import org.netbeans.modules.kenai.api.KenaiException;
-import org.netbeans.modules.kenai.api.KenaiProject;
 import org.netbeans.modules.kenai.ui.spi.ProjectHandle;
 import org.netbeans.modules.kenai.ui.spi.QueryAccessor;
 import org.netbeans.modules.kenai.ui.spi.QueryHandle;
 import org.netbeans.modules.kenai.ui.spi.QueryResultHandle;
-import org.openide.util.actions.SystemAction;
 
 /**
  *
@@ -61,31 +66,70 @@ import org.openide.util.actions.SystemAction;
 @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.kenai.ui.spi.QueryAccessor.class)
 public class QueryAccessorImpl extends QueryAccessor {
 
+    private static final List<QueryHandle> EMPTY_QH_LIST = Collections.unmodifiableList(Collections.EMPTY_LIST);
+    private static final List<QueryResultHandle> EMPTY_QRH_LIST = Collections.unmodifiableList(Collections.EMPTY_LIST);
+    private Map<String, Set<Query>> projetToQuery;
     @Override
     public List<QueryHandle> getQueries(ProjectHandle project) {
-        KenaiProject kenaiProject;
-        try {
-            kenaiProject = Kenai.getDefault().getProject(project.getId());
-        } catch (KenaiException ex) {
-            BugtrackingManager.LOG.log(Level.SEVERE, null, ex);
-            return null;
+        Repository repo = KenaiRepositories.getInstance().getRepository(project, this);
+        if(repo == null) {
+            // XXX log this inconvenience
+            return EMPTY_QH_LIST;
         }
+        List<QueryHandle> queries = getQueries(repo);
+        for (QueryHandle qh : queries) {
+            Query q = ((QueryHandleImpl)qh).getQuery();
+            if(projetToQuery == null) {
+                projetToQuery = new HashMap<String, Set<Query>>();
+            }
+            Set<Query> set = projetToQuery.get(project.getId());
+            if(set == null) {
+                set = new HashSet<Query>();
+                projetToQuery.put(project.getId(), set);
+            }
+            set.add(q);
+        }
+        return Collections.unmodifiableList(queries);
+    }
 
-        return null;
+    List<QueryHandle> getQueries(Repository repo) {
+        Query[] queries = repo.getQueries();
+        if(queries == null || queries.length == 0) {
+            // XXX is this possible - at least preset queries
+            return EMPTY_QH_LIST;
+        }
+        List<QueryHandle> ret = new ArrayList<QueryHandle>();
+        for (Query q : queries) {
+            QueryHandle qh = new QueryHandleImpl(q);
+            ret.add(qh);
+        }
+        return ret;
     }
 
     @Override
     public List<QueryResultHandle> getQueryResults(QueryHandle query) {
         if(query instanceof QueryHandleImpl) {
-            return ((QueryHandleImpl) query).getQueryResults();
+            QueryHandleImpl qh = (QueryHandleImpl) query;
+            qh.refreshIfFirstTime();
+            return Collections.unmodifiableList(qh.getQueryResults());
         } else {
-            return null;
+            return EMPTY_QRH_LIST;
         }
     }
 
     @Override
     public ActionListener getFindIssueAction(ProjectHandle project) {
-        return SystemAction.get(QueryAction.class);
+        final Repository repo = KenaiRepositories.getInstance().getRepository(project, this);
+        // XXX what if repo null!
+        return new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                BugtrackingManager.getInstance().getRequestProcessor().post(new Runnable() { // XXX add post method to BM
+                    public void run() {
+                        QueryAction.openQuery(null, repo);
+                    }
+                });          
+            }
+        };
     }
 
     @Override
@@ -106,4 +150,34 @@ public class QueryAccessorImpl extends QueryAccessor {
         }
     }
 
+    void fireQueriesChanged(ProjectHandle project, List<QueryHandle> newQueryList) {
+        fireQueryListChanged(project, newQueryList);
+    }
+    
+    @Override
+    public ActionListener getCreateIssueAction(ProjectHandle project) {
+        //TODO: implement me
+        return null;
+    }
+
+    
+    private class ProjectHandleListener implements PropertyChangeListener {
+        private ProjectHandle ph;
+        public ProjectHandleListener(ProjectHandle ph) {
+            this.ph = ph;
+        }
+
+        public void propertyChange(PropertyChangeEvent evt) {
+            if(projetToQuery == null) {
+                return;
+            }
+            if(evt.getPropertyName().equals(ProjectHandle.PROP_CLOSE)) {
+                Set<Query> s = projetToQuery.get(ph.getId());
+                for (Query query : s) {
+                    QueryAction.closeQuery(query);
+                }
+            }
+        }
+    }
+    }
 }
