@@ -128,10 +128,12 @@ public abstract class NbTestCase extends TestCase implements NbTest {
     public boolean canRun() {
         if (NbTestSuite.ignoreRandomFailures()) {
             if (getClass().isAnnotationPresent(RandomlyFails.class)) {
+                System.err.println("Skipping " + getClass().getName());
                 return false;
             }
             try {
                 if (getClass().getMethod(getName()).isAnnotationPresent(RandomlyFails.class)) {
+                    System.err.println("Skipping " + getClass().getName() + "." + getName());
                     return false;
                 }
             } catch (NoSuchMethodException x) {
@@ -158,8 +160,10 @@ public abstract class NbTestCase extends TestCase implements NbTest {
     
     /** Provides support for tests that can have problems with terminating.
      * Runs the test in a "watchdog" that measures the time the test shall
-     * take and if it does not terminate it reports a failure.
-     *
+     * take and if it does not terminate it reports a failure including a thread dump.
+     * <p>Best to specify a duration less than 600000, which is the default timeout
+     * for any JUnit test in an NBM project specified in {@code common.xml},
+     * as these "hard" timeouts (covering even VM crashes) do not capture a thread dump.
      * @return amount ms to give one test to finish or 0 (default) to disable time outs
      * @since 1.20
      */
@@ -210,8 +214,8 @@ public abstract class NbTestCase extends TestCase implements NbTest {
         sb.append(indent).append("Thread ").append(t.getName()).append('\n');
         indent = indent.concat("  ");
         for (StackTraceElement e : data.get(t)) {
-            sb.append(indent).append(e.getClassName()).append('.').append(e.getMethodName())
-                    .append(':').append(e.getLineNumber()).append('\n');
+            sb.append("\tat ").append(e.getClassName()).append('.').append(e.getMethodName())
+                    .append('(').append(e.getFileName()).append(':').append(e.getLineNumber()).append(")\n");
         }
     }
     
@@ -326,6 +330,9 @@ public abstract class NbTestCase extends TestCase implements NbTest {
                     long now = System.nanoTime();
                     try {
                         runTest();
+                    } catch (Throwable t) {
+                        noteWorkDir(workdirNoCreate());
+                        throw t;
                     } finally {
                         long last = System.nanoTime() - now;
                         if (last < 1) {
@@ -364,6 +371,36 @@ public abstract class NbTestCase extends TestCase implements NbTest {
             } else {
                 tearDown();
             }
+        }
+    }
+    /**
+     * Make a note of the working directory for a failed test.
+     * If running inside Hudson, archive it and show the presumed artifact location.
+     */
+    private void noteWorkDir(File wd) {
+        if (!wd.isDirectory()) {
+            return;
+        }
+        try {
+            String hudsonURL = System.getenv("HUDSON_URL");
+            if (hudsonURL != null) {
+                String workspace = System.getenv("WORKSPACE");
+                if (!workspace.endsWith(File.separator)) {
+                    workspace += File.separator;
+                }
+                String path = wd.getAbsolutePath();
+                if (path.startsWith(workspace)) {
+                    if (wd.renameTo(new File(wd.getParentFile(), wd.getName() + "-FAILED"))) {
+                        System.err.println("Working directory: " + hudsonURL + "job/" + System.getenv("JOB_NAME") + "/" +
+                                System.getenv("BUILD_NUMBER") + "/artifact/" +
+                                path.substring(workspace.length()).replace(File.separatorChar, '/') + "-FAILED/");
+                        return;
+                    }
+                }
+            }
+            System.err.println("Working directory: " + wd);
+        } catch (RuntimeException x) {
+            x.printStackTrace(); // do not mask real error
         }
     }
 
@@ -689,6 +726,10 @@ public abstract class NbTestCase extends TestCase implements NbTest {
         }
         return sb.toString();
     }
+
+    private File workdirNoCreate() {
+        return Manager.normalizeFile(new File(getWorkDirPath()));
+    }
     
     /** Returns unique working directory for a test (each test method has a unique dir).
      * If not available, method tries to create it. This method uses {@link #getWorkDirPath}
@@ -721,13 +762,12 @@ public abstract class NbTestCase extends TestCase implements NbTest {
         
         
         // now we have path, so if not available, create workdir
-        String path = getWorkDirPath();
-        File workdir = Manager.normalizeFile(new File(path));
+        File workdir = workdirNoCreate();
         if (workdir.exists()) {
             if (!workdir.isDirectory()) {
                 // work dir exists, but is not directory - this should not happen
                 // trow exception
-                throw new IOException("workdir exists, but is not a directory, workdir = "+path);
+                throw new IOException("workdir exists, but is not a directory, workdir = " + workdir);
             } else {
                 // everything looks correctly, return the path
                 return workdir;
@@ -774,7 +814,7 @@ public abstract class NbTestCase extends TestCase implements NbTest {
             // probably do nothing - file is not a directory
         }
     }
-    
+
     /** Deletes all files including subdirectories in test's working directory.
      * @throws IOException if any problem has occured during deleting files/directories
      */
@@ -798,12 +838,9 @@ public abstract class NbTestCase extends TestCase implements NbTest {
     }
     
     // hashtable holding all already used logs and correspondig printstreams
-    private Map<String,PrintStream> logStreamTable = new HashMap<String,PrintStream>();
+    private final Map<String,PrintStream> logStreamTable = new HashMap<String,PrintStream>();
     
     private PrintStream getFileLog(String logName) throws IOException {
-        OutputStream outputStream;
-        FileOutputStream fileOutputStream;
-
         synchronized (logStreamTable) {
             if (hasTestMethodChanged()) {
                 // we haven't used logging capability - create hashtables
