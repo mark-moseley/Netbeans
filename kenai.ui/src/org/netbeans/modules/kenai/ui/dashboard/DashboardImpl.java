@@ -52,11 +52,16 @@ import java.beans.PropertyChangeListener;
 import java.net.PasswordAuthentication;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.prefs.Preferences;
+import javax.swing.AbstractListModel;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.ListModel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.netbeans.modules.kenai.api.Kenai;
@@ -80,24 +85,40 @@ import org.openide.util.RequestProcessor;
 public final class DashboardImpl extends Dashboard {
 
     private LoginHandle login;
-    private TreeListModel model;
-    private ArrayList<ProjectHandle> memberProjects;
-    private final ArrayList<ProjectHandle> otherProjects = new ArrayList<ProjectHandle>(50);
-    private JPanel dashboardComponent;
+    private final TreeListModel model = new TreeListModel();
+    private static final ListModel EMPTY_MODEL = new AbstractListModel() {
+        public int getSize() {
+            return 0;
+        }
+        public Object getElementAt(int index) {
+            return null;
+        }
+    };
+    private final TreeList treeList = new TreeList(model);
+    private final ArrayList<ProjectHandle> memberProjects = new ArrayList<ProjectHandle>(50);
+    private final ArrayList<ProjectHandle> allProjects = new ArrayList<ProjectHandle>(50);
+    private final Set<String> ignoredProjectIds = new HashSet<String>(50);
+    private final JPanel dashboardComponent;
     private final PropertyChangeListener userListener;
     private boolean opened = false;
+    private boolean memberProjectsLoaded = false;
+    private boolean otherProjectsLoaded = false;
+    private boolean ignoredProjectsLoaded = false;
 
-    private static final long TIMEOUT_INTERVAL_MILLIS = 5*1000;
+    private static final long TIMEOUT_INTERVAL_MILLIS = 5*60*1000;
 
     private OtherProjectsLoader otherProjectsLoader;
     private MemberProjectsLoader memberProjectsLoader;
 
-    private LoginNode loginNode;
-    private UserNode userNode;
+    private final UserNode userNode;
+    private final ErrorNode memberProjectsError;
+    private final ErrorNode otherProjectsError;
 
     private final Object LOCK = new Object();
 
-    public DashboardImpl() {
+    private DashboardImpl() {
+        dashboardComponent = new JPanel(new BorderLayout());
+        dashboardComponent.setBackground(ColorManager.defaultBackground);
         userListener = new PropertyChangeListener() {
             public void propertyChange(PropertyChangeEvent evt) {
                 if( LoginHandle.PROP_MEMBER_PROJECT_LIST.equals(evt.getPropertyName()) ) {
@@ -107,7 +128,25 @@ public final class DashboardImpl extends Dashboard {
         };
         final Kenai kenai = Kenai.getDefault();
         final PasswordAuthentication pa = kenai.getPasswordAuthentication();
-        setUser(pa==null?null:new LoginHandleImpl(pa.getUserName()));
+        this.login = pa==null ? null : new LoginHandleImpl(pa.getUserName());
+        userNode = new UserNode(this);
+        userNode.set(login, false);
+        model.addRoot(-1, userNode);
+
+        memberProjectsError = new ErrorNode("Cannot open member projects", new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                clearError(memberProjectsError);
+                refreshMemberProjects();
+            }
+        });
+
+        otherProjectsError = new ErrorNode("Cannot open projects", new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                clearError(otherProjectsError);
+                refreshProjects();
+            }
+        });
+
         kenai.addPropertyChangeListener(Kenai.PROP_LOGIN, new PropertyChangeListener() {
             public void propertyChange(PropertyChangeEvent pce) {
                 final PasswordAuthentication newValue = (PasswordAuthentication) pce.getNewValue();
@@ -121,7 +160,23 @@ public final class DashboardImpl extends Dashboard {
     }
 
     public static DashboardImpl getInstance() {
-        return (DashboardImpl) Dashboard.getDefault();
+        return Holder.theInstance;
+    }
+
+    @Override
+    public ProjectHandle[] getOpenProjects() {
+        ProjectHandle[] open = new ProjectHandle[model.getSize()];
+        int i=0;
+        for (TreeListNode n:model.getRootNodes()) {
+            if (n instanceof ProjectNode) {
+                open[i++]=(((ProjectNode) n).getProject());
+            }
+        }
+        return open;
+    }
+
+    private static class Holder {
+        private static final DashboardImpl theInstance = new DashboardImpl();
     }
 
     /**
@@ -136,68 +191,62 @@ public final class DashboardImpl extends Dashboard {
                 this.login.removePropertyChangeListener(userListener);
             }
             this.login = login;
+            memberProjects.clear();
+            memberProjectsLoaded = false;
+            userNode.set(login, !allProjects.isEmpty());
             if( isOpened() ) {
-                if( null != memberProjects )
-                    removeProjectsFromModel(memberProjects);
-            }
-            memberProjects = null;
-            if( isOpened() ) {
-                Runnable r = new Runnable() {
-                    public void run() {
-                        initTreeList();
-                        if( null != loginNode )
-                            model.removeRoot( loginNode );
-                        if( null != userNode )
-                            model.removeRoot( userNode );
-                        userNode = new UserNode(login, DashboardImpl.this);
-                        model.addRoot(0, userNode);
-                        initTreeList();
-                        startLoadingMemberProjects();
-                    }
-                };
-                if( SwingUtilities.isEventDispatchThread() ) {
-                    r.run();
-                } else {
-                    SwingUtilities.invokeLater(r);
+                if( null != login ) {
+                    startLoadingMemberProjects();
                 }
+                switchContent();
+            }
+            if( null != this.login ) {
+                this.login.addPropertyChangeListener(userListener);
             }
         }
     }
 
     /**
-     * Add a Kenai project which current user isn't member of to the Dashboard.
+     * Add a Kenai project to the Dashboard.
      * @param project
      * @see ActionsFactory.getOpenNonMemberProjectAction
      */
-    public void addNonMemberProject( ProjectHandle project ) {
+    public void addProject( ProjectHandle project ) {
         synchronized( LOCK ) {
-            if( !otherProjects.contains(project) ) {
-                otherProjects.add(project);
-                storeOtherProjects();
-            }
+            if( allProjects.contains(project) )
+                return;
+            
+            allProjects.add(project);
+            storeAllProjects();
+            ArrayList<ProjectHandle> tmp = new ArrayList<ProjectHandle>(1);
+            tmp.add(project);
+            addProjectsToModel(-1, tmp);
+            switchMemberProjects();
             if( isOpened() ) {
-                initTreeList();
-                ArrayList<ProjectHandle> tmp = new ArrayList<ProjectHandle>(1);
-                tmp.add(project);
-                addProjectsToModel(-1, tmp);
+                switchContent();
             }
         }
     }
 
     public void removeProject( ProjectHandle project ) {
         synchronized( LOCK ) {
-            if( !otherProjects.contains(project) ) {
+            if( !allProjects.contains(project) ) {
                 return;
             }
-            otherProjects.remove(project);
-            storeOtherProjects();
+            allProjects.remove(project);
+
+            ignoredProjectIds.add(project.getId());
+            storeIgnoredProjects();
+
+            storeAllProjects();
+            ArrayList<ProjectHandle> tmp = new ArrayList<ProjectHandle>(1);
+            tmp.add(project);
+            removeProjectsFromModel(tmp);
             if( isOpened() ) {
-                initTreeList();
-                ArrayList<ProjectHandle> tmp = new ArrayList<ProjectHandle>(1);
-                tmp.add(project);
-                removeProjectsFromModel(tmp);
+                switchContent();
             }
         }
+        project.firePropertyChange(ProjectHandle.PROP_CLOSE, null, null);
     }
 
     ActionListener createLoginAction() {
@@ -222,63 +271,38 @@ public final class DashboardImpl extends Dashboard {
         };
     }
 
-    private void setErrorMessage( String msg ) {
-        if( null != userNode )
-            userNode.setError(msg);
-    }
-
-    private void setStatusMessage( String msg ) {
-        if( null != userNode )
-            userNode.setStatus(msg);
-    }
-
-    private void clearMessages() {
-        if( null != userNode )
-            userNode.clearMessage();
-    }
-
-    private void initTreeList() {
-        if( null != model ) {
-            return;
-        }
-        dashboardComponent.removeAll();
-        model = new TreeListModel();
-        if( null == login ) {
-            loginNode = new LoginNode(this);
-            model.addRoot(-1, loginNode);
-        } else {
-            userNode = new UserNode(login, this);
-            model.addRoot(-1, userNode);
-        }
-        TreeList treeList = new TreeList(model);
-        dashboardComponent.add(treeList, BorderLayout.CENTER);
-        dashboardComponent.invalidate();
-        dashboardComponent.revalidate();
-        dashboardComponent.repaint();
-    }
-    
     boolean isOpened() {
         return opened;
     }
 
-    void refreshMemberProjects() {
+    void refreshProjects() {
         synchronized( LOCK ) {
+            memberProjects.clear();
+            memberProjectsLoaded = false;
+            removeProjectsFromModel(allProjects);
+            allProjects.clear();
+            otherProjectsLoaded = false;
+            if( isOpened() ) {
+                startLoadingAllProjects();
+                startLoadingMemberProjects();
+            }
+        }
+    }
+
+    private void refreshMemberProjects() {
+        synchronized( LOCK ) {
+            memberProjects.clear();
+            memberProjectsLoaded = false;
             if( isOpened() ) {
                 startLoadingMemberProjects();
-            } else {
-                memberProjects = null;
             }
         }
     }
 
     public void close() {
         synchronized( LOCK ) {
-            if( null != dashboardComponent )
-                dashboardComponent.removeAll();
-            dashboardComponent = null;
-            if( null != model )
-                model.clear();
-            model = null;
+            treeList.setModel(EMPTY_MODEL);
+            model.clear();
             opened = false;
         }
     }
@@ -286,33 +310,78 @@ public final class DashboardImpl extends Dashboard {
     public JComponent getComponent() {
         synchronized( LOCK ) {
             opened = true;
-            if( otherProjects.isEmpty() ) {
-                startLoadingOtherProjects();
+            if( !ignoredProjectsLoaded ) {
+                loadIgnoredProjects();
             }
-            dashboardComponent = new JPanel(new BorderLayout());
-            dashboardComponent.setBackground(ColorManager.defaultBackground);
-            if( null == login && otherProjects.isEmpty() ) {
-                dashboardComponent.add( createEmptyContent(), BorderLayout.CENTER );
-            } else {
-                initTreeList();
-                if( null == memberProjects )
-                    startLoadingMemberProjects();
+            if( null != login && !memberProjectsLoaded ) {
+                startLoadingMemberProjects();
             }
+            if( !otherProjectsLoaded ) {
+                startLoadingAllProjects();
+            }
+            switchContent();
         }
         return dashboardComponent;
+    }
+
+    private void fillModel() {
+        synchronized( LOCK ) {
+            if( model.getSize() > 0 )
+                return;
+            model.addRoot(-1, userNode);
+            addProjectsToModel(-1, allProjects);
+        }
+    }
+
+    private void switchContent() {
+        Runnable r = new Runnable() {
+            public void run() {
+                boolean isEmpty = true;
+
+                synchronized( LOCK ) {
+                    isEmpty = null == DashboardImpl.this.login && allProjects.isEmpty();
+                }
+
+                boolean isTreeListShowing = treeList.getParent() == dashboardComponent;
+                if( isEmpty ) {
+                    if( isTreeListShowing|| dashboardComponent.getComponentCount() == 0 ) {
+                        dashboardComponent.removeAll();
+                        dashboardComponent.add(createEmptyContent(), BorderLayout.CENTER);
+                        dashboardComponent.invalidate();
+                        dashboardComponent.revalidate();
+                        dashboardComponent.repaint();
+                    }
+                } else {
+                    fillModel();
+                    treeList.setModel(model);
+                    if( !isTreeListShowing ) {
+                        dashboardComponent.removeAll();
+                        dashboardComponent.add(treeList, BorderLayout.CENTER);
+                        dashboardComponent.invalidate();
+                        dashboardComponent.revalidate();
+                        dashboardComponent.repaint();
+                    }
+                }
+            }
+        };
+        if( SwingUtilities.isEventDispatchThread() ) {
+            r.run();
+        } else {
+            SwingUtilities.invokeLater(r);
+        }
     }
 
     private JComponent createEmptyContent() {
         JPanel res = new JPanel( new GridBagLayout() );
         res.setOpaque(false);
-        LoginNode tmp = new LoginNode(this);
 
         JLabel lbl = new JLabel(NbBundle.getMessage(DashboardImpl.class, "LBL_No_Kenai_Project_Open")); //NOI18N
         lbl.setForeground(ColorManager.disabledColor);
         lbl.setHorizontalAlignment(JLabel.CENTER);
         LinkButton btnWhatIs = new LinkButton(NbBundle.getMessage(DashboardImpl.class, "LBL_WhatIsKenai"), createWhatIsKenaiAction() ); //NOI18N
 
-        res.add( tmp.getComponent(UIManager.getColor("List.foreground"), ColorManager.defaultBackground, false, false), new GridBagConstraints(0, 0, 3, 1, 1.0, 0.0, GridBagConstraints.CENTER, GridBagConstraints.HORIZONTAL, new Insets(3, 4, 3, 4), 0, 0) ); //NOI18N
+        userNode.set(null, false);
+        res.add( userNode.getComponent(UIManager.getColor("List.foreground"), ColorManager.defaultBackground, false, false), new GridBagConstraints(0, 0, 3, 1, 1.0, 0.0, GridBagConstraints.CENTER, GridBagConstraints.HORIZONTAL, new Insets(3, 4, 3, 4), 0, 0) ); //NOI18N
         res.add( new JLabel(), new GridBagConstraints(0, 1, 3, 1, 0.0, 1.0, GridBagConstraints.CENTER, GridBagConstraints.HORIZONTAL, new Insets(0, 0, 0, 0), 0, 0) );
         res.add( lbl, new GridBagConstraints(0, 2, 3, 1, 1.0, 0.0, GridBagConstraints.CENTER, GridBagConstraints.HORIZONTAL, new Insets(0, 0, 4, 0), 0, 0) );
         res.add( btnWhatIs, new GridBagConstraints(0, 3, 3, 1, 1.0, 0.0, GridBagConstraints.CENTER, GridBagConstraints.HORIZONTAL, new Insets(4, 0, 0, 0), 0, 0) );
@@ -320,14 +389,14 @@ public final class DashboardImpl extends Dashboard {
         return res;
     }
 
-    private void startLoadingOtherProjects() {
-        Preferences prefs = NbPreferences.forModule(DashboardImpl.class);
-        int count = prefs.getInt("projectCount", 0); //NOI18N
+    private void startLoadingAllProjects() {
+        Preferences prefs = NbPreferences.forModule(DashboardImpl.class).node("allProjects");
+        int count = prefs.getInt("count", 0); //NOI18N
         if( 0 == count )
             return; //nothing to load
         ArrayList<String> ids = new ArrayList<String>(count);
         for( int i=0; i<count; i++ ) {
-            String id = prefs.get("project"+i, null); //NOI18N
+            String id = prefs.get("id"+i, null); //NOI18N
             if( null != id && id.trim().length() > 0 ) {
                 ids.add( id.trim() );
             }
@@ -342,32 +411,77 @@ public final class DashboardImpl extends Dashboard {
         }
     }
 
-    private void storeOtherProjects() {
-        Preferences prefs = NbPreferences.forModule(DashboardImpl.class);
-        prefs.putInt("projectCount", otherProjects.size()); //NOI18N
+    private void loadIgnoredProjects() {
+        Preferences prefs = NbPreferences.forModule(DashboardImpl.class).node("ignoredProjects");
+        ignoredProjectIds.clear();
+        int count = prefs.getInt("count", 0); //NOI18N
+
+        for( int i=0; i<count; i++ ) {
+            String id = prefs.get("id"+i, null); //NOI18N
+            if( null != id && id.trim().length() > 0 ) {
+                ignoredProjectIds.add( id.trim() );
+            }
+        }
+        ignoredProjectsLoaded = true;
+    }
+
+    private void storeIgnoredProjects() {
+        Preferences prefs = NbPreferences.forModule(DashboardImpl.class).node("ignoredProjects");
+        prefs.putInt("count", ignoredProjectIds.size()); //NOI18N
         int index = 0;
-        for( ProjectHandle project : otherProjects ) {
-            prefs.put("project"+index++, project.getId()); //NOI18N
+        for( String id : ignoredProjectIds ) {
+            prefs.put("id"+index++, id); //NOI18N
+        }
+    }
+
+    private void storeAllProjects() {
+        Preferences prefs = NbPreferences.forModule(DashboardImpl.class).node("allProjects");
+        prefs.putInt("count", allProjects.size()); //NOI18N
+        int index = 0;
+        for( ProjectHandle project : allProjects ) {
+            prefs.put("id"+index++, project.getId()); //NOI18N
         }
     }
 
     private void setOtherProjects(ArrayList<ProjectHandle> projects) {
-        clearMessages();
         synchronized( LOCK ) {
-            if( isOpened() ) {
-                initTreeList();
-                removeProjectsFromModel( otherProjects );
-                otherProjects.clear();
-                otherProjects.addAll(projects);
-                addProjectsToModel( -1, otherProjects );
-            } else {
-                otherProjects.clear();
-                otherProjects.addAll(projects);
+            removeProjectsFromModel( allProjects );
+            for( ProjectHandle p : projects ) {
+                if( ignoredProjectIds.contains(p.getId()) )
+                    continue;
+                if( !allProjects.contains( p ) )
+                    allProjects.add( p );
             }
-            storeOtherProjects();
+            Collections.sort(allProjects);
+            otherProjectsLoaded = true;
+            addProjectsToModel( -1, allProjects );
+            userNode.set(login, !allProjects.isEmpty());
+            storeAllProjects();
+
+            switchMemberProjects();
+            
+            if( isOpened() ) {
+                switchContent();
+            }
         }
     }
 
+    private void switchMemberProjects() {
+        for( TreeListNode n : model.getRootNodes() ) {
+            if( !(n instanceof ProjectNode) )
+                continue;
+            ProjectNode pn = (ProjectNode) n;
+            pn.setMemberProject( memberProjects.contains( pn.getProject() ) );
+        }
+    }
+
+    private void loadingStarted() {
+        userNode.loadingStarted();
+    }
+
+    private void loadingFinished() {
+        userNode.loadingFinished();
+    }
 
     private void startLoadingMemberProjects() {
         synchronized( LOCK ) {
@@ -375,25 +489,38 @@ public final class DashboardImpl extends Dashboard {
                 memberProjectsLoader.cancel();
             if( null == login )
                 return;
-            if( null != userNode ) {
-                setStatusMessage(NbBundle.getMessage(DashboardImpl.class, "LBL_OpeningProjects")); //NOI18N
-            }
             memberProjectsLoader = new MemberProjectsLoader(login);
             RequestProcessor.getDefault().post(memberProjectsLoader);
         }
     }
 
     private void setMemberProjects(ArrayList<ProjectHandle> projects) {
-        clearMessages();
         synchronized( LOCK ) {
+            if( projects.isEmpty() ) {
+                if( isOpened() ) {
+                    switchContent();
+                }
+            }
+
+            removeProjectsFromModel( allProjects );
+            memberProjects.clear();
+            memberProjects.addAll(projects);
+            memberProjectsLoaded = true;
+            for( ProjectHandle p : projects ) {
+                if( ignoredProjectIds.contains(p.getId()) )
+                    continue;
+                if( !allProjects.contains(p) )
+                    allProjects.add(p);
+            }
+            Collections.sort(allProjects);
+            storeAllProjects();
+            addProjectsToModel( -1, allProjects );
+            userNode.set(login, !allProjects.isEmpty());
+
+            switchMemberProjects();
+
             if( isOpened() ) {
-                initTreeList();
-                if( null != memberProjects )
-                    removeProjectsFromModel( memberProjects );
-                memberProjects = projects;
-                addProjectsToModel( 1, memberProjects );
-            } else {
-                memberProjects = projects;
+                switchContent();
             }
         }
     }
@@ -420,6 +547,21 @@ public final class DashboardImpl extends Dashboard {
         }
     }
 
+    private void showError( ErrorNode node ) {
+        synchronized( LOCK ) {
+            List<TreeListNode> roots = model.getRootNodes();
+            if( !roots.contains(node) ) {
+                model.addRoot(1, node);
+            }
+        }
+    }
+
+    private void clearError( ErrorNode node ) {
+        synchronized( LOCK ) {
+            model.removeRoot(node);
+        }
+    }
+
     private class OtherProjectsLoader implements Runnable, Cancellable {
 
         private boolean cancelled = false;
@@ -432,6 +574,7 @@ public final class DashboardImpl extends Dashboard {
         }
 
         public void run() {
+            loadingStarted();
             final ArrayList[] res = new ArrayList[1];
             Runnable r = new Runnable() {
                 public void run() {
@@ -451,14 +594,16 @@ public final class DashboardImpl extends Dashboard {
             } catch( InterruptedException iE ) {
                 //ignore
             }
+            loadingFinished();
             if( cancelled )
                 return;
             if( null == res[0] ) {
-                setErrorMessage( NbBundle.getMessage(DashboardImpl.class, "LBL_ErrLoadProject")); //NOI18N
+                showError( otherProjectsError );
                 return;
             }
 
             setOtherProjects( res[0] );
+            clearError( otherProjectsError );
         }
 
         public boolean cancel() {
@@ -483,6 +628,7 @@ public final class DashboardImpl extends Dashboard {
         }
 
         public void run() {
+            loadingStarted();
             final ArrayList[] res = new ArrayList[1];
             Runnable r = new Runnable() {
                 public void run() {
@@ -497,14 +643,16 @@ public final class DashboardImpl extends Dashboard {
             } catch( InterruptedException iE ) {
                 //ignore
             }
+            loadingFinished();
             if( cancelled )
                 return;
             if( null == res[0] ) {
-                setErrorMessage( NbBundle.getMessage(DashboardImpl.class, "LBL_NotResponding")); //NOI18N
+                showError( memberProjectsError );
                 return;
             }
 
             setMemberProjects( res[0] );
+            clearError( memberProjectsError );
         }
 
         public boolean cancel() {

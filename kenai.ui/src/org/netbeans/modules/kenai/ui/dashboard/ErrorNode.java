@@ -36,35 +36,63 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.kenai.ui;
 
-import java.awt.event.ActionEvent;
+package org.netbeans.modules.kenai.ui.dashboard;
+
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.ActionListener;
-import org.netbeans.modules.kenai.api.KenaiProject;
-import org.netbeans.modules.kenai.ui.spi.Dashboard;
-import org.openide.DialogDescriptor;
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
+import javax.swing.ImageIcon;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import org.netbeans.modules.kenai.ui.treelist.LeafNode;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 
-public final class OpenKenaiProjectAction implements ActionListener {
+/**
+ * Error message visualization in TreeList
+ *
+ * @author S. Aubrecht
+ */
+public class ErrorNode extends LeafNode {
 
-    private String dialogTitle = NbBundle.getMessage(OpenKenaiProjectAction.class, "OpenKenaiProjectWindowTitle");
+    private JPanel panel;
+    private final JLabel lblMessage;
+    private final LinkButton btnRefresh;
+    private final ActionListener defaultAction;
 
-    public void actionPerformed(ActionEvent e) {
+    public ErrorNode( String text, ActionListener refreshAction ) {
+        super( null );
+        this.defaultAction = refreshAction;
+        btnRefresh = new LinkButton(NbBundle.getMessage(ErrorNode.class, "LBL_Retry"), refreshAction); //NOI18N
+        lblMessage = new JLabel(text);
+        lblMessage.setIcon(new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/kenai/ui/resources/error.png"))); //NOI18N
+    }
 
-        KenaiSearchPanel searchPanel = new KenaiSearchPanel(KenaiSearchPanel.PanelType.OPEN);
-        DialogDescriptor dialogDesc = new DialogDescriptor(searchPanel, dialogTitle, true, null);
+    @Override
+    protected JComponent getComponent(Color foreground, Color background, boolean isSelected, boolean hasFocus) {
+        if( null == panel ) {
+            panel = new JPanel( new GridBagLayout() );
+            panel.setOpaque(false);
 
-        Object option = DialogDisplayer.getDefault().notify(dialogDesc);
-
-        if (NotifyDescriptor.OK_OPTION.equals(option)) {
-            KenaiProject selProject = searchPanel.getSelectedProject();
-            if (null != selProject) {
-                Dashboard.getDefault().addProject(new ProjectHandleImpl(selProject));
-            }
+            panel.add( lblMessage, new GridBagConstraints(0,0,1,1,1.0,0.0,GridBagConstraints.WEST, GridBagConstraints.NONE, new Insets(0, 0, 0, 4), 0,0));
+            panel.add( btnRefresh, new GridBagConstraints(1,0,1,1,0.0,0.0,GridBagConstraints.EAST, GridBagConstraints.NONE, new Insets(0, 0, 0, 0), 0,0));
         }
 
+        if( isSelected ) {
+            lblMessage.setForeground(foreground);
+        } else {
+            lblMessage.setForeground(ColorManager.errorColor);
+        }
+        btnRefresh.setForeground(foreground, isSelected);
+        return panel;
     }
-    
+
+    @Override
+    protected ActionListener getDefaultAction() {
+        return defaultAction;
+    }
 }
