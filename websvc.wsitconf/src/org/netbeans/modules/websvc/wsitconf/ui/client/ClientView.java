@@ -55,7 +55,6 @@ import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.WSITModelSupport;
 import org.netbeans.modules.xml.multiview.ui.*;
 import org.netbeans.modules.xml.wsdl.model.Binding;
 import org.netbeans.modules.xml.wsdl.model.Port;
-import org.netbeans.modules.xml.wsdl.model.Service;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
@@ -64,6 +63,7 @@ import org.openide.util.NbBundle;
 import java.util.Collection;
 import java.util.List;
 import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProfilesModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityPolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityTokensModelHelper;
@@ -85,7 +85,7 @@ public class ClientView extends SectionView {
     static final String TRANSPORT_NODE_ID = "transpotr";                        //NOI18N
     static final String ADVANCEDCONFIG_NODE_ID = "advancedconfig";              //NOI18N
 
-    ClientView(InnerPanelFactory factory, WSDLModel clientModel, WSDLModel serviceModel, Service s) {
+    ClientView(InnerPanelFactory factory, WSDLModel clientModel, WSDLModel serviceModel, Collection<Port> ports) {
     
         super(factory);
 
@@ -95,12 +95,13 @@ public class ClientView extends SectionView {
 
         Collection<Binding> bindings = new HashSet<Binding>();
         WSITModelSupport.fillImportedBindings(clientModel, bindings, new HashSet());
-        
-        Collection<Port> ports = s.getPorts();
-        for (Port p : ports) {
-            QName bqname = p.getBinding().getQName();
-            Binding b = clientModel.findComponentByName(bqname, Binding.class);
-            bindings.add(b);
+
+        if (ports != null) {
+            for (Port p : ports) {
+                QName bqname = p.getBinding().getQName();
+                Binding b = clientModel.findComponentByName(bqname, Binding.class);
+                bindings.add(b);
+            }
         }
 
         ArrayList<Node> bindingNodes = new ArrayList<Node>();
@@ -193,6 +194,7 @@ public class ClientView extends SectionView {
         String profile = ProfilesModelHelper.getWSITSecurityProfile(serviceBinding);
         if (ComboConstants.PROF_STSISSUED.equals(profile) ||
             ComboConstants.PROF_STSISSUEDENDORSE.equals(profile) ||
+            ComboConstants.PROF_STSISSUEDSUPPORTING.equals(profile) ||
             ComboConstants.PROF_STSISSUEDCERT.equals(profile)) {
                 return true;
         }
@@ -201,12 +203,9 @@ public class ClientView extends SectionView {
 
     private boolean isClientAdvancedConfigRequired(Binding binding, WSDLModel serviceModel) {
         Binding serviceBinding = PolicyModelHelper.getBinding(serviceModel, binding.getName());
-        boolean rmEnabled = RMModelHelper.isRMEnabled(serviceBinding);
-//        boolean timestampEnabled = SecurityPolicyModelHelper.isIncludeTimestamp(serviceBinding); 
+        boolean rmEnabled = RMModelHelper.getInstance(ConfigVersion.CONFIG_1_0).isRMEnabled(serviceBinding) ||
+                            RMModelHelper.getInstance(ConfigVersion.CONFIG_1_3).isRMEnabled(serviceBinding);
         boolean secConvRequired = RequiredConfigurationHelper.isSecureConversationParamRequired(serviceBinding);
-        
-        //TODO - enable when timestamp becomes supported
-        
         return rmEnabled || secConvRequired /* || timestampEnabled*/;
     }
 
