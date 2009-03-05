@@ -38,31 +38,31 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
 import org.netbeans.modules.cnd.api.compilers.ToolchainManager.CompilerDescriptor;
 
-public class GNUFortranCompiler extends BasicCompiler {
+public class Assembler extends BasicCompiler {
+
     /** Creates a new instance of GNUCCompiler */
-    private GNUFortranCompiler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+    private Assembler(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
         super(hkey, flavor, kind, name, displayName, path); // NOI18N
     }
-    
+
     @Override
-    public GNUFortranCompiler createCopy() {
-        GNUFortranCompiler copy = new GNUFortranCompiler(getHostKey(), getFlavor(), getKind(), "", getDisplayName(), getPath());
+    public Assembler createCopy() {
+        Assembler copy = new Assembler(getHostKey(), getFlavor(), getKind(), "", getDisplayName(), getPath());
         copy.setName(getName());
         return copy;
     }
 
-    public static GNUFortranCompiler create(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        return new GNUFortranCompiler(hkey, flavor, kind, name, displayName, path);
+    public static Assembler create(String hkey, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+        return new Assembler(hkey, flavor, kind, name, displayName, path);
     }
-    
+
     @Override
     public CompilerDescriptor getDescriptor() {
-        return getFlavor().getToolchainDescriptor().getFortran();
+        return getFlavor().getToolchainDescriptor().getAssembler();
     }
 }
