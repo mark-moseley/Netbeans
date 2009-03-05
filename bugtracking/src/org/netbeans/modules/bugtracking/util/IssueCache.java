@@ -196,8 +196,12 @@ public abstract class IssueCache {
         for (Entry<String, String> e : oldAttr.entrySet()) {
             String newValue = newAttr.get(e.getKey());
             String oldValue = e.getValue();
-            if(newValue == null && oldValue == null) continue;
-            if(newValue == null || !newValue.trim().equals(oldValue.trim())) return true;
+            if(newValue == null && oldValue == null) {
+                continue;
+            }
+            if(newValue == null || !newValue.trim().equals(oldValue.trim())) {
+                return true;
+            }
         }
         return false;
     }
@@ -207,7 +211,15 @@ public abstract class IssueCache {
         private Map<String, String> seenAttributes;
         private int status;
         private boolean seen;
-        public IssueEntry() { }
+        IssueEntry() { }
+
+        IssueEntry(Issue issue, Map<String, String> seenAttributes, int status, boolean seen) {
+            this.issue = issue;
+            this.seenAttributes = seenAttributes;
+            this.status = status;
+            this.seen = seen;
+        }
+        
         public boolean wasSeen() {
             return seen;
         }
