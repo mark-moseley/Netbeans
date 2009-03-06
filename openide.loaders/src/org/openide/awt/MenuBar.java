@@ -41,6 +41,7 @@
 
 package org.openide.awt;
 
+import org.netbeans.modules.openide.loaders.AWTTask;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.event.KeyEvent;
@@ -64,13 +65,13 @@ import javax.swing.KeyStroke;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.openide.loaders.DataObjectAccessor;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.FolderInstance;
-import org.openide.loaders.InstanceSupport;
 import org.openide.nodes.Node;
 import org.openide.nodes.NodeEvent;
 import org.openide.nodes.NodeListener;
@@ -139,7 +140,13 @@ public class MenuBar extends JMenuBar implements Externalizable {
         }
         DataFolder theFolder = folder;
         if (theFolder == null) {
-            FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource("Menu");
+            FileObject root = FileUtil.getConfigRoot();
+            FileObject fo = null;
+            try {
+                fo = FileUtil.createFolder(root, "Menu"); // NOI18N
+            } catch (IOException ex) {
+                Exceptions.printStackTrace(ex);
+            }
             if (fo == null) throw new IllegalStateException("No Menu/"); // NOI18N
             theFolder = DataFolder.findFolder(fo);
         }
@@ -265,7 +272,12 @@ public class MenuBar extends JMenuBar implements Externalizable {
                 Throwable t = newEx;
                 while (true) {
                     if (t.getCause() == null) {
-                        t.initCause(ex);
+                        if (t instanceof ClassNotFoundException) {
+                            newEx = new ClassNotFoundException(t.getMessage(), ex);
+                            newEx.setStackTrace(t.getStackTrace());
+                        } else {
+                            t.initCause(ex);
+                        }
                         break;
                     }
                     t = t.getCause();
@@ -292,6 +304,9 @@ public class MenuBar extends JMenuBar implements Externalizable {
          */
         public MenuBarFolder (final DataFolder folder) {
             super(folder);
+            DataObjectAccessor.DEFAULT.precreateInstances(this);
+            // preinitialize outside of AWT
+            new DynaMenuModel();
             recreate ();
         }
 
@@ -425,6 +440,10 @@ public class MenuBar extends JMenuBar implements Externalizable {
 
     /** Menu based on the folder content whith lazy items creation. */
     private static class LazyMenu extends JMenu implements NodeListener, Runnable, ChangeListener {
+        static {
+            // preinitialize outside of AWT
+            new DynaMenuModel();
+        }
         DataFolder master;
         boolean icon;
         MenuFolder slave;
@@ -573,6 +592,7 @@ public class MenuBar extends JMenuBar implements Externalizable {
              */
     	    public MenuFolder () {
                 super(master);
+                DataObjectAccessor.DEFAULT.precreateInstances(this);
     	    }
 
 
@@ -603,19 +623,6 @@ public class MenuBar extends JMenuBar implements Externalizable {
                 super.waitFinished();
             }
             
-
-    	    /** If no instance cookie, tries to create execution action on the
-             * data object.
-             */
-    	    protected @Override InstanceCookie acceptDataObject (DataObject dob) {
-                InstanceCookie ic = super.acceptDataObject(dob);
-                if (ic == null) {
-                    JMenuItem item = ExecBridge.createMenuItem(dob);
-                    return item != null ? new InstanceSupport.Instance(item) : null;
-                } else {
-                    return ic;
-                }
-    	    }
 
     	    /**
              * Accepts only cookies that can provide <code>Menu</code>.
@@ -651,32 +658,33 @@ public class MenuBar extends JMenuBar implements Externalizable {
     	     * @param cookies array of instance cookies for the folder
     	     * @return the updated <code>JMenu</code> representee
     	     */
-    	    protected Object createInstance(InstanceCookie[] cookies)
-    			    throws IOException, ClassNotFoundException {
-        	LazyMenu m = LazyMenu.this;
+            protected Object createInstance(InstanceCookie[] cookies)
+            throws IOException, ClassNotFoundException {
+                LazyMenu m = LazyMenu.this;
+                assert EventQueue.isDispatchThread() : Thread.currentThread().getName();
 
-        	//synchronized (this) { // see #15917 - attachment from 2001/09/27
-        	LinkedList<Object> cInstances = new LinkedList<Object>();
-        	allInstances (cookies, cInstances);
+                //synchronized (this) { // see #15917 - attachment from 2001/09/27
+                LinkedList<Object> cInstances = new LinkedList<Object>();
+                allInstances(cookies, cInstances);
 
-        	m.removeAll();
+                m.removeAll();
 
-        	// #11848, #13013. Enablement should be set immediatelly,
-        	// popup will be created on-demand.
-        	// m.setEnabled(!cInstances.isEmpty());
-		// TODO: fill it with empty sign instead
-		if(cInstances.isEmpty()) {
-		    JMenuItem item = new JMenuItem(
+                // #11848, #13013. Enablement should be set immediatelly,
+                // popup will be created on-demand.
+                // m.setEnabled(!cInstances.isEmpty());
+                // TODO: fill it with empty sign instead
+                if (cInstances.isEmpty()) {
+                    JMenuItem item = new JMenuItem(
                             NbBundle.getMessage(DataObject.class, "CTL_EmptyMenu"));
 
-		    item.setEnabled(false);
-		    m.add(item);
-		}
+                    item.setEnabled(false);
+                    m.add(item);
+                }
 
                 m.dynaModel.loadSubmenu(cInstances, m);
-                
-        	return m;
-    	    }
+
+                return m;
+            }
             
             /** Removes icons from all direct menu items of this menu.
              * Not recursive, * /

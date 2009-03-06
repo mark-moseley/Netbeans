@@ -39,31 +39,78 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.openide.awt;
+package org.netbeans.modules.openide.loaders;
+
+import java.util.logging.Level;
+
+import java.awt.EventQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.Logger;
+import org.openide.util.Mutex;
 
 /** A special task designed to run in AWT thread.
  * It will fire itself immediatelly.
  */
-final class AWTTask extends org.openide.util.Task {
+public final class AWTTask extends org.openide.util.Task {
+    static final LinkedBlockingQueue<AWTTask> PENDING = new LinkedBlockingQueue<AWTTask>();
+    private static final Runnable PROCESSOR = new Processor();
+
     private boolean executed;
 
     public AWTTask (Runnable r) {
         super (r);
-        org.openide.util.Mutex.EVENT.readAccess (this);
+        PENDING.add(this);
+        Mutex.EVENT.readAccess (PROCESSOR);
     }
 
+    @Override
     public void run () {
         if (!executed) {
-            super.run ();
-            executed = true;
+            try {
+                super.run ();
+            } catch (ThreadDeath t) {
+                throw t;
+            } catch (Throwable t) {
+                Logger.getLogger("org.openide.awt.Toolbar").log(Level.WARNING, "Error in AWT task", t); // NOI18N
+            } finally {
+                executed = true;
+            }
         }
     }
 
+    @Override
     public void waitFinished () {
-        if (javax.swing.SwingUtilities.isEventDispatchThread ()) {
+        if (EventQueue.isDispatchThread ()) {
             run ();
         } else {
-            super.waitFinished ();
+            /*
+            if (DataObjectAccessor.DEFAULT.isInstancesThread()) {
+                try {
+                    super.waitFinished(100);
+                } catch (InterruptedException ex) {
+                    // ok, go on
+                }
+            } else {*/
+                super.waitFinished ();
+            //}
         }
     }
+
+    public static final void flush() {
+        PROCESSOR.run();
+    }
+
+    private static final class Processor implements Runnable {
+        public void run() {
+            assert EventQueue.isDispatchThread();
+            for(;;) {
+                AWTTask t = PENDING.poll();
+                if (t == null) {
+                    return;
+                }
+                t.run();
+            }
+        }
+    }
+
 }

@@ -41,12 +41,20 @@
 
 package org.openide.awt;
 
+import java.awt.Component;
+import java.awt.EventQueue;
+import java.awt.event.ActionEvent;
 import java.awt.event.ContainerEvent;
 import java.awt.event.ContainerListener;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.logging.Level;
+import javax.swing.AbstractAction;
 import javax.swing.JMenu;
+import javax.swing.JMenuItem;
 import org.netbeans.junit.Log;
 import org.netbeans.junit.NbTestCase;
 import org.openide.actions.OpenAction;
@@ -55,10 +63,12 @@ import org.openide.filesystems.FileSystem;
 import org.openide.loaders.*;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.XMLFileSystem;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.Utilities;
 import org.openide.util.actions.CallbackSystemAction;
+import org.openide.util.actions.Presenter;
 
 /**
  *
@@ -74,14 +84,22 @@ public class MenuBarTest extends NbTestCase implements ContainerListener {
     public MenuBarTest(String testName) {
         super(testName);
     }
-    
+
+    @Override
     protected Level logLevel() {
-        return Level.FINE;
+        return Level.WARNING;
     }
 
+    @Override
     protected void setUp() throws Exception {
+        CreateOnlyOnceAction.instancesCount = 0;
+        CreateOnlyOnceAction.w = new StringWriter();
+        CreateOnlyOnceAction.pw = new PrintWriter(CreateOnlyOnceAction.w);
+
+        MyAction.counter = 0;
+
         FileObject fo = FileUtil.createFolder(
-            Repository.getDefault().getDefaultFileSystem().getRoot(),
+            FileUtil.getConfigRoot(),
             "Folder" + getName()
         );
         df = DataFolder.findFolder(fo);
@@ -89,6 +107,7 @@ public class MenuBarTest extends NbTestCase implements ContainerListener {
         mb.waitFinished();
     }
 
+    @Override
     protected void tearDown() throws Exception {
     }
     
@@ -239,7 +258,46 @@ public class MenuBarTest extends NbTestCase implements ContainerListener {
             fail("There were warnings about the use of invalid nodes: " + seq);
         }
     }
-    
+
+    public void testActionIsCreatedOnlyOnce_13195() throws Exception {
+        doActionIsCreatedOnlyOnce_13195("Menu");
+    }
+
+    public void testActionIsCreatedOnlyOnceWithNewValue() throws Exception {
+        doActionIsCreatedOnlyOnce_13195("MenuWithNew");
+    }
+
+    public void testActionFactoryCanReturnNull() throws Exception {
+        CharSequence log = Log.enable("", Level.WARNING);
+        doActionIsCreatedOnlyOnce_13195("ReturnsNull");
+        if (log.length() > 0) {
+            fail("No warnings please:\n" + log);
+        }
+    }
+
+    private void doActionIsCreatedOnlyOnce_13195(String name) throws Exception {
+        // crate XML FS from data
+        String[] stringLayers = new String [] { "/org/openide/awt/data/testActionOnlyOnce.xml" };
+        URL[] layers = new URL[stringLayers.length];
+
+        for (int cntr = 0; cntr < layers.length; cntr++) {
+            layers[cntr] = Utilities.class.getResource(stringLayers[cntr]);
+        }
+
+        XMLFileSystem system = new XMLFileSystem();
+        system.setXmlUrls(layers);
+
+        // build menu
+        DataFolder dataFolder = DataFolder.findFolder(system.findResource(name));
+        MenuBar menuBar = new MenuBar(dataFolder);
+        menuBar.waitFinished();
+
+        if (CreateOnlyOnceAction.instancesCount != 1) {
+            // ensure that only one instance of action was created
+            fail("Action created only once, but was: " + CreateOnlyOnceAction.instancesCount + "\n" + CreateOnlyOnceAction.w);
+        }
+    }
+
     public void componentAdded(ContainerEvent e) {
         add++;
     }
@@ -248,10 +306,12 @@ public class MenuBarTest extends NbTestCase implements ContainerListener {
         remove++;
     }
     
-    public static final class MyAction extends CallbackSystemAction {
+    public static final class MyAction extends CallbackSystemAction
+    implements Presenter.Menu, Presenter.Toolbar {
         public static int counter;
         
         public MyAction() {
+            assertFalse("Not initialized in AWT thread", EventQueue.isDispatchThread());
             counter++;
         }
 
@@ -262,7 +322,54 @@ public class MenuBarTest extends NbTestCase implements ContainerListener {
         public HelpCtx getHelpCtx() {
             return HelpCtx.DEFAULT_HELP;
         }
-        
-        
+
+        @Override
+        public Component getToolbarPresenter() {
+            assertTrue("Presenters created only in AWT", EventQueue.isDispatchThread());
+            return super.getToolbarPresenter();
+        }
+
+        @Override
+        public JMenuItem getMenuPresenter() {
+            assertTrue("Presenters created only in AWT", EventQueue.isDispatchThread());
+            return super.getMenuPresenter();
+        }
     }
+
+    public static class NullOnlyAction extends AbstractAction {
+        private NullOnlyAction() {}
+
+        public static synchronized NullOnlyAction getNull() {
+            CreateOnlyOnceAction.instancesCount++;
+            return null;
+        }
+
+        public void actionPerformed(ActionEvent e) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+    }
+
+    public static class CreateOnlyOnceAction extends AbstractAction {
+
+        static int instancesCount = 0;
+        static StringWriter w;
+        static PrintWriter pw;
+
+        public static synchronized CreateOnlyOnceAction create() {
+            return new CreateOnlyOnceAction();
+        }
+
+        public void actionPerformed(ActionEvent e) {
+            // no op
+        }
+
+        public CreateOnlyOnceAction() {
+            new Exception("created for " + (++instancesCount) + " time").printStackTrace(pw);
+            putValue(NAME, "TestAction");
+            assertFalse("Not initialized in AWT thread", EventQueue.isDispatchThread());
+        }
+
+    }
+
+
 }
