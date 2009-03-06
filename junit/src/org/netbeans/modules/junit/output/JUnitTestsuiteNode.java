@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,60 +31,43 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.junit.output;
 
-import org.netbeans.modules.gsf.testrunner.api.TestSession.SessionType;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.Action;
+import org.netbeans.modules.gsf.testrunner.api.TestsuiteNode;
 
 /**
- * Holds information about an <code>AntSession</code>.
  *
- * @author  Marian Petras
- * @see  JUnitAntLogger
- * @see  AntSession
+ * @author answer
  */
-final class AntSessionInfo {
+public class JUnitTestsuiteNode extends TestsuiteNode{
 
-    JUnitOutputReader outputReader = null;
-    /** */
-    private long timeOfTestTaskStart;
-    /** */
-    private SessionType currentSessionType;
-
-    /**
-     * type of the session - one of the <code>SESSION_TYPE_xxx</code> constants
-     */
-    private SessionType sessionType;
-
-    /**
-     */
-    AntSessionInfo() { }
-
-    /**
-     */
-    long getTimeOfTestTaskStart() {
-        return timeOfTestTaskStart;
+    public JUnitTestsuiteNode(String suiteName, boolean filtered) {
+        super(suiteName, filtered);
     }
 
-    void setTimeOfTestTaskStart(long time) {
-        timeOfTestTaskStart = time;
-    }
-    
-    SessionType getCurrentSessionType() {
-        return currentSessionType;
-    }
-
-    void setCurrentSessionType(SessionType currentTaskType) {
-        this.currentSessionType = currentTaskType;
-    }
-
-    SessionType getSessionType() {
-        return sessionType;
+    @Override
+    public Action[] getActions(boolean context) {
+        List<Action> actions = new ArrayList<Action>();
+        Action preferred = getPreferredAction();
+        if (preferred != null) {
+            actions.add(preferred);
+        }
+        
+        return actions.toArray(new Action[actions.size()]);
     }
 
-    void setSessionType(SessionType sessionType) {
-        this.sessionType = sessionType;
+    @Override
+    public Action getPreferredAction() {
+        return null;
     }
 
 }

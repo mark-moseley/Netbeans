@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,7 +43,9 @@ package org.netbeans.modules.junit.output;
 
 import java.awt.event.ActionEvent;
 import javax.swing.AbstractAction;
+import javax.swing.Action;
 import org.openide.nodes.Node;
+import org.openide.util.NbBundle;
 
 /**
  *
@@ -67,11 +69,16 @@ final class JumpAction extends AbstractAction {
      * tries to jump to the callstack frame source code. Otherwise does nothing.
      */
     public void actionPerformed(ActionEvent e) {
-        if (callstackFrameInfo == null) {
-            return;
-        }
-        
         OutputUtils.openCallstackFrame(node, callstackFrameInfo);
+    }
+
+    @Override
+    public Object getValue(String key) {
+        if (key.equals(Action.NAME)) {
+            return NbBundle.getMessage(JumpAction.class, "LBL_GotoSource"); //NOI18N
+        }else{
+            return super.getValue(key);
+        }
     }
 
 }

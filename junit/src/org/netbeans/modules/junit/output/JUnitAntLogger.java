@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,13 +42,20 @@
 package org.netbeans.modules.junit.output;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.apache.tools.ant.module.spi.AntEvent;
 import org.apache.tools.ant.module.spi.AntLogger;
 import org.apache.tools.ant.module.spi.AntSession;
 import org.apache.tools.ant.module.spi.TaskStructure;
+import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.gsf.testrunner.api.TestSession.SessionType;
 import org.netbeans.modules.junit.output.antutils.AntProject;
 import org.netbeans.modules.junit.output.antutils.TestCounter;
 import org.openide.ErrorManager;
+import org.openide.filesystems.FileUtil;
 
 /**
  * Ant logger interested in task &quot;junit&quot;,
@@ -60,6 +67,7 @@ import org.openide.ErrorManager;
  * @see  Report
  * @author  Marian Petras
  */
+@org.openide.util.lookup.ServiceProvider(service=org.apache.tools.ant.module.spi.AntLogger.class)
 public final class JUnitAntLogger extends AntLogger {
     
     /** levels of interest for logging (info, warning, error, ...) */
@@ -106,7 +114,7 @@ public final class JUnitAntLogger extends AntLogger {
      *             task;
      *          or {@code null} if no Ant task is currently running
      */
-    private static TaskType detectTaskType(AntEvent event) {
+    private static SessionType detectSessionType(AntEvent event) {
         final String taskName = event.getTaskName();
         
         if (taskName == null) {
@@ -114,7 +122,7 @@ public final class JUnitAntLogger extends AntLogger {
         }
         
         if (taskName.equals(TASK_JUNIT)) {
-            return TaskType.TEST_TASK;
+            return SessionType.TEST;
         }
         
         if (taskName.equals(TASK_JAVA)) {
@@ -122,7 +130,7 @@ public final class JUnitAntLogger extends AntLogger {
 
             String className = taskStructure.getAttribute("classname"); //NOI18N
             if (className == null) {
-                return TaskType.OTHER_TASK;
+                return null;
             }
             
             className = event.evaluate(className);
@@ -133,22 +141,114 @@ public final class JUnitAntLogger extends AntLogger {
                 TaskStructure[] nestedElems = taskStructure.getChildren();
                 for (TaskStructure ts : nestedElems) {
                     if (ts.getName().equals("jvmarg")) {                //NOI18N
-                        String value = ts.getAttribute("value");        //NOI18N
-                        if ((value != null)
-                                && event.evaluate(value)
-                                   .equals("-Xdebug")) {                //NOI18N
-                            return TaskType.DEBUGGING_TEST_TASK;
+                        String a;
+                        if ((a = ts.getAttribute("value")) != null) {   //NOI18N
+                            if (event.evaluate(a).equals("-Xdebug")) {  //NOI18N
+                                return SessionType.DEBUG;
+                            }
+                        } else if ((a=ts.getAttribute("line")) != null){//NOI18N
+                            for (String part : parseCmdLine(event.evaluate(a))){
+                                if (part.equals("-Xdebug")) {           //NOI18N
+                                    return SessionType.DEBUG;
+                                }
+                            }
                         }
                     }
                 }
-                return TaskType.TEST_TASK;
+                return SessionType.TEST;
             }
             
-            return TaskType.OTHER_TASK;
+            return null;
         }
         
         assert false : "Unhandled task name";                           //NOI18N
-        return TaskType.OTHER_TASK;
+        return null;
+    }
+
+    /**
+     * Parses the given command-line string into individual arguments.
+     * @param  cmdLine  command-line to be parsed
+     * @return  list of invidividual parts of the given command-line,
+     *          or an empty list if the command-line was empty
+     */
+    private static final List<String> parseCmdLine(String cmdLine) {
+        cmdLine = cmdLine.trim();
+
+        /* maybe the command-line is empty: */
+        if (cmdLine.length() == 0) {
+            return Collections.<String>emptyList();
+        }
+
+        final char[] chars = cmdLine.toCharArray();
+
+        /* maybe the command-line contains just one part: */
+        boolean simple = true;
+        for (char c : chars) {
+            if ((c == ' ') || (c == '"') || (c == '\'')) {
+                simple = false;
+                break;
+            }
+        }
+        if (simple) {
+            return Collections.<String>singletonList(cmdLine);
+        }
+
+        /* OK, so it is not trivial: */
+        List<String> result = new ArrayList<String>(4);
+        StringBuilder buf = new StringBuilder(20);
+        final int stateBeforeWord = 0;
+        final int stateAfterWord = 1;
+        final int stateInSingleQuote = 2;
+        final int stateInDoubleQuote = 3;
+        int state = stateBeforeWord;
+        for (int i = 0; i < chars.length; i++) {
+            char c = chars[i];
+            switch (state) {
+                case stateBeforeWord:
+                    if (c == '"') {
+                        state = stateInDoubleQuote;
+                    } else if (c == '\'') {
+                        state = stateInSingleQuote;
+                    } else if (c == ' ') {
+                        //do nothing - remain in state "before word"
+                    } else {
+                        buf.append(c);
+                        state = stateAfterWord;
+                    }
+                    break;
+                case stateInDoubleQuote:
+                    if (c == '"') {
+                        state = stateAfterWord;
+                    } else {
+                        buf.append(c);
+                    }
+                    break;
+                case stateInSingleQuote:
+                    if (c == '\'') {
+                        state = stateAfterWord;
+                    } else {
+                        buf.append(c);
+                    }
+                    break;
+                case stateAfterWord:
+                    if (c == '"') {
+                        state = stateInDoubleQuote;
+                    } else if (c == '\'') {
+                        state = stateInSingleQuote;
+                    } else if (c == ' ') {
+                        result.add(buf.toString());
+                        buf = new StringBuilder(20);
+                        state = stateBeforeWord;
+                    }
+                    break;
+                default:
+                    assert false;
+            }
+        }
+        assert state != stateBeforeWord;        //thanks to cmdLine.trim()
+        result.add(buf.toString());
+
+        return result;
     }
     
     /**
@@ -158,8 +258,8 @@ public final class JUnitAntLogger extends AntLogger {
      * @return  {@code true} if the given task type marks a test task;
      *          {@code false} otherwise
      */
-    private static boolean isTestTaskType(TaskType taskType) {
-        return (taskType != null) && (taskType != TaskType.OTHER_TASK);
+    private static boolean isTestSessionType(SessionType sessionType) {
+        return sessionType != null;
     }
     
     @Override
@@ -189,22 +289,21 @@ public final class JUnitAntLogger extends AntLogger {
     /**
      */
     private boolean isTestTaskRunning(AntEvent event) {
-        return isTestTaskType(
-                getSessionInfo(event.getSession()).currentTaskType);
+        return isTestSessionType(getSessionInfo(event.getSession()).getCurrentSessionType());
     }
     
     /**
      */
     @Override
     public void taskStarted(final AntEvent event) {
-        TaskType taskType = detectTaskType(event);
-        if (isTestTaskType(taskType)) {
+        SessionType sessionType = detectSessionType(event);
+        if (isTestSessionType(sessionType)) {
             AntSessionInfo sessionInfo = getSessionInfo(event.getSession());
-            assert !isTestTaskType(sessionInfo.currentTaskType);
-            sessionInfo.timeOfTestTaskStart = System.currentTimeMillis();
-            sessionInfo.currentTaskType = taskType;
-            if (sessionInfo.sessionType == null) {
-                sessionInfo.sessionType = taskType;
+            assert !isTestSessionType(sessionInfo.getCurrentSessionType());
+            sessionInfo.setTimeOfTestTaskStart(System.currentTimeMillis());
+            sessionInfo.setCurrentSessionType(sessionType);
+            if (sessionInfo.getSessionType() == null) {
+                sessionInfo.setSessionType(sessionType);
             }
             
             /*
@@ -230,9 +329,9 @@ public final class JUnitAntLogger extends AntLogger {
     @Override
     public void taskFinished(final AntEvent event) {
         AntSessionInfo sessionInfo = getSessionInfo(event.getSession());
-        if (isTestTaskType(sessionInfo.currentTaskType)) {
+        if (isTestSessionType(sessionInfo.getCurrentSessionType())) {
             getOutputReader(event).testTaskFinished();
-            sessionInfo.currentTaskType = null;
+            sessionInfo.setCurrentSessionType(null);
         }
         
     }
@@ -244,7 +343,7 @@ public final class JUnitAntLogger extends AntLogger {
         AntSession session = event.getSession();
         AntSessionInfo sessionInfo = getSessionInfo(session);
 
-        if (isTestTaskType(sessionInfo.sessionType)) {
+        if (isTestSessionType(sessionInfo.getSessionType())) {
             getOutputReader(event).buildFinished(event);
         }
         
@@ -258,16 +357,29 @@ public final class JUnitAntLogger extends AntLogger {
      * @return  output reader for the session
      */
     private JUnitOutputReader getOutputReader(final AntEvent event) {
-        assert isTestTaskType(getSessionInfo(event.getSession()).sessionType);
+        assert isTestSessionType(getSessionInfo(event.getSession()).getSessionType());
         
         final AntSession session = event.getSession();
         final AntSessionInfo sessionInfo = getSessionInfo(session);
         JUnitOutputReader outputReader = sessionInfo.outputReader;
         if (outputReader == null) {
+            String projectDir = null;
+            Project project = null;
+            try{
+                projectDir = event.getProperty("work.dir");
+            }catch(Exception e){}// Maven throws exception for this property
+            try{
+                if (projectDir == null){
+                    projectDir = event.getProperty("basedir"); // for Maven project
+                }
+                if ((projectDir != null) && !projectDir.isEmpty()){
+                    project = FileOwnerQuery.getOwner(FileUtil.toFileObject(new File(projectDir))); //NOI18N
+                }
+            }catch(Exception e){}
             outputReader = new JUnitOutputReader(
                                         session,
-                                        sessionInfo.sessionType,
-                                        sessionInfo.getTimeOfTestTaskStart());
+                                        sessionInfo,
+                                        project);
             sessionInfo.outputReader = outputReader;
         }
         return outputReader;
@@ -356,14 +468,8 @@ public final class JUnitAntLogger extends AntLogger {
                     continue;
                 }
                 argValue = event.evaluate(argValue);
-                if (argValue.startsWith("formatter=")) {                //NOI18N
-                    String formatter = argValue.substring("formatter=".length());//NOI18N
-                    int commaIndex = formatter.indexOf(',');
-                    if ((commaIndex != -1)
-                        && formatter.substring(0, commaIndex)
-                           .equals(XML_FORMATTER_CLASS_NAME)) {
-                        return true;
-                    }
+                if (argValue.equals("formatter=" + XML_FORMATTER_CLASS_NAME)) { //NOI18N
+                    return true;
                 }
             }
         }
