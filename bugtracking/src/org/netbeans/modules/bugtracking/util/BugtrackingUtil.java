@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,35 +34,47 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008-2009 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.bugtracking.util;
 
 import java.awt.Dialog;
+import java.awt.Dimension;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.logging.Logger;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.SwingConstants;
+import org.jdesktop.layout.LayoutStyle;
 import org.netbeans.modules.bugtracking.BugtrackingManager;
+import org.netbeans.modules.bugtracking.kenai.KenaiRepositories;
+import org.netbeans.modules.bugtracking.spi.BugtrackingConnector;
 import org.netbeans.modules.bugtracking.ui.issue.IssueTopComponent;
 import org.netbeans.modules.bugtracking.spi.BugtrackingController;
 import org.netbeans.modules.bugtracking.spi.Issue;
 import org.netbeans.modules.bugtracking.spi.Repository;
+import org.netbeans.modules.bugtracking.ui.search.QuickSearchComboBar;
 import org.netbeans.modules.bugtracking.ui.selectors.RepositorySelector;
+import org.netbeans.modules.kenai.api.KenaiProject;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
+import org.openide.util.NbBundle;
 import org.openide.windows.TopComponent;
 
 /**
  *
- * @author Tomas Stupka
+ * @author Tomas Stupka, Jan Stola
  */
 public class BugtrackingUtil {
 
@@ -118,7 +130,7 @@ public class BugtrackingUtil {
         }
         List<Issue> ret = new ArrayList<Issue>();
         for (Issue issue : issues) {
-            if(issue.getID().equals(criteria) ||
+            if(criteria.equals(issue.getID()) ||
                issue.getSummary().indexOf(criteria) > -1)
             {
                 ret.add(issue);
@@ -136,6 +148,14 @@ public class BugtrackingUtil {
         return BugtrackingManager.getInstance().getKnownRepositories();
     }
 
+    public static BugtrackingConnector[] getBugtrackingConnectors() {
+        return BugtrackingManager.getInstance().getConnectors();
+    }
+
+    public static Repository getKenaiBugtrackingRepository(KenaiProject project) {
+        return KenaiRepositories.getInstance().getRepository(project);
+    }
+
     public static String scramble(String str) {
         return Scrambler.getInstance().scramble(str);
     }
@@ -144,7 +164,36 @@ public class BugtrackingUtil {
         return Scrambler.getInstance().descramble(str);
     }
 
-    public static int[] getIssueSpans(String text) {
-        return IssueFinder.getIssueSpans(text);
+    public static Issue selectIssue(String message, Repository repository, JPanel caller) {
+        QuickSearchComboBar bar = new QuickSearchComboBar(caller);
+        bar.setRepository(repository);
+        bar.setAlignmentX(0f);
+        bar.setMaximumSize(new Dimension(Short.MAX_VALUE, bar.getPreferredSize().height));
+        JPanel panel = new JPanel();
+        BoxLayout layout = new BoxLayout(panel, BoxLayout.PAGE_AXIS);
+        panel.setLayout(layout);
+        JLabel label = new JLabel(message);
+        panel.add(label);
+        int gap = LayoutStyle.getSharedInstance().getPreferredGap(label, bar, LayoutStyle.RELATED, SwingConstants.SOUTH, panel);
+        panel.add(Box.createVerticalStrut(gap));
+        panel.add(bar);
+        panel.add(Box.createVerticalStrut(100));
+        Issue issue = null;
+        ResourceBundle bundle = NbBundle.getBundle(BugtrackingUtil.class);
+
+        JButton ok = new JButton(bundle.getString("LBL_Select")); // NOI18N
+        JButton cancel = new JButton(bundle.getString("LBL_Cancel")); // NOI18N
+        NotifyDescriptor descriptor = new NotifyDescriptor (
+                panel,
+                bundle.getString("LBL_Issues"), // NOI18N
+                NotifyDescriptor.OK_CANCEL_OPTION,
+                NotifyDescriptor.QUESTION_MESSAGE,
+                new Object [] { ok, cancel },
+                ok);
+        if (DialogDisplayer.getDefault().notify(descriptor) == ok) {
+            issue = bar.getIssue();
+        }
+        return issue;
     }
+
 }
