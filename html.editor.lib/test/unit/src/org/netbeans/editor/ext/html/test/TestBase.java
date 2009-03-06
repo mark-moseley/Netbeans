@@ -45,10 +45,9 @@ import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.BaseKit;
-import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.editor.NbEditorDocument;
-import org.netbeans.modules.editor.html.HTMLKit;
+import org.netbeans.modules.html.editor.HTMLKit;
 
 /**
  * Common ancestor for all test classes.
@@ -56,10 +55,6 @@ import org.netbeans.modules.editor.html.HTMLKit;
  * @author Andrei Badea
  */
 public class TestBase extends NbTestCase {
-
-    static {
-        MockServices.setServices(new Class[] {RepositoryImpl.class});
-    }
 
     private static final String PROP_MIME_TYPE = "mimeType"; //NOI18N
     
