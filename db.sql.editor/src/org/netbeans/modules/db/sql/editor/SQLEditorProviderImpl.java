@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -53,7 +53,6 @@ import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Exceptions;
@@ -63,6 +62,7 @@ import org.openide.util.NbBundle;
  *
  * @author Andrei Badea
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.db.spi.sql.editor.SQLEditorProvider.class)
 public class SQLEditorProviderImpl implements SQLEditorProvider {
     
     // TODO: should ensure that the number of the generated temporary file
@@ -71,11 +71,10 @@ public class SQLEditorProviderImpl implements SQLEditorProvider {
     private static final String CMD_FOLDER = "Databases/SQLCommands"; // NOI18N
     
     public void openSQLEditor(DatabaseConnection dbconn, String sql, boolean execute) {
-        FileObject root = Repository.getDefault().getDefaultFileSystem().getRoot();
-        FileObject tmpFo = root.getFileObject(CMD_FOLDER);
+        FileObject tmpFo = FileUtil.getConfigFile(CMD_FOLDER);
         if (tmpFo == null) {
             try {
-                tmpFo = FileUtil.createFolder(root, CMD_FOLDER );
+                tmpFo = FileUtil.createFolder(FileUtil.getConfigRoot(), CMD_FOLDER );
             } catch (IOException e) {
                 Exceptions.printStackTrace(e);
             }
@@ -125,10 +124,10 @@ public class SQLEditorProviderImpl implements SQLEditorProvider {
             return;
         }
         
-        OpenCookie openCookie = (OpenCookie)sqlDo.getCookie(OpenCookie.class);
+        OpenCookie openCookie = sqlDo.getCookie (OpenCookie.class);
         openCookie.open();
         
-        SQLExecuteCookie sqlCookie = (SQLExecuteCookie)sqlDo.getCookie(SQLExecuteCookie.class);
+        SQLExecuteCookie sqlCookie = sqlDo.getCookie (SQLExecuteCookie.class);
         sqlCookie.setDatabaseConnection(dbconn);
         if (execute) {
             sqlCookie.execute();
