@@ -60,6 +60,7 @@ import org.eclipse.mylyn.commons.net.AuthenticationType;
 import org.eclipse.mylyn.internal.bugzilla.core.BugzillaClient;
 import org.eclipse.mylyn.internal.bugzilla.core.IBugzillaConstants;
 import org.eclipse.mylyn.tasks.core.TaskRepository;
+import org.eclipse.mylyn.tasks.core.data.TaskAttributeMapper;
 import org.eclipse.mylyn.tasks.core.data.TaskData;
 import org.eclipse.mylyn.tasks.core.data.TaskDataCollector;
 import org.netbeans.api.progress.ProgressHandle;
@@ -109,6 +110,22 @@ public class BugzillaRepository extends Repository {
     }
 
     @Override
+    public Issue createIssue() {
+        TaskAttributeMapper attributeMapper =
+                Bugzilla.getInstance()
+                    .getRepositoryConnector()
+                    .getTaskDataHandler()
+                    .getAttributeMapper(taskRepository);
+        TaskData data =
+                new TaskData(
+                    attributeMapper,
+                    taskRepository.getConnectorKind(),
+                    taskRepository.getRepositoryUrl(),
+                    "");
+        return new BugzillaIssue(data, this);
+    }
+
+    @Override
     public void fireQueryListChanged() {
         super.fireQueryListChanged();
     }
@@ -150,7 +167,7 @@ public class BugzillaRepository extends Repository {
         assert !SwingUtilities.isEventDispatchThread() : "Accesing remote host. Do not call in awt";
         String[] keywords = criteria.split(" ");
 
-        List<BugzillaIssue> issues = new ArrayList<BugzillaIssue>();
+        List<Issue> issues = new ArrayList<Issue>();
         StringBuffer url = new StringBuffer();
         if(keywords.length == 1 && isNumber(keywords[0])) {
             // only one search criteria -> might be we are looking for the bug with id=values[0]
@@ -158,7 +175,7 @@ public class BugzillaRepository extends Repository {
             url.append("="); // XXX ???
             url.append(keywords[0]);
 
-            executeQuery(url.toString(), issues);
+            issues.addAll(executeQuery(url.toString()));
         }
 
         url = new StringBuffer();
@@ -171,19 +188,26 @@ public class BugzillaRepository extends Repository {
                 url.append("+");
             }
         }
-        executeQuery(url.toString(), issues);
+        issues.addAll(executeQuery(url.toString()));
         return issues.toArray(new BugzillaIssue[issues.size()]);
     }
 
-    private void executeQuery(String queryUrl, final List<BugzillaIssue> issues)  {
+    private List<Issue> executeQuery(String queryUrl)  {
         assert taskRepository != null;
         assert !SwingUtilities.isEventDispatchThread() : "Accesing remote host. Do not call in awt";
+        final List<Issue> issues = new ArrayList<Issue>();
         TaskDataCollector collector = new TaskDataCollector() {
             public void accept(TaskData taskData) {
-                issues.add(new BugzillaIssue(taskData, BugzillaRepository.this)); // we don't cache this issues
+                try {
+                    Issue issue = getIssueCache().setIssueData(BugzillaIssue.getID(taskData), taskData);
+                    issues.add(issue); // XXX we don't cache this issues - why?
+                } catch (IOException ex) {
+                    Bugzilla.LOG.log(Level.SEVERE, null, ex); // XXX handle errors
+                }
             }
         };
         BugzillaUtil.performQuery(taskRepository, queryUrl, collector);
+        return issues;
     }
 
     @Override
@@ -261,11 +285,6 @@ public class BugzillaRepository extends Repository {
     @Override
     public Image getIcon() {
         return null;
-    }
-
-    @Override
-    public Issue createIssue() {
-        throw new UnsupportedOperationException("Not supported yet.");
     }
     
     private class Controller extends BugtrackingController implements DocumentListener, ActionListener {
