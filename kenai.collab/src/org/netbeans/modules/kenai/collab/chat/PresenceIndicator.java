@@ -41,12 +41,15 @@
 package org.netbeans.modules.kenai.collab.chat;
 
 import java.awt.Component;
+import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.HashSet;
 import java.util.Iterator;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
+import javax.swing.SwingUtilities;
+import javax.swing.ToolTipManager;
 import org.jivesoftware.smack.PacketListener;
 import org.jivesoftware.smack.packet.Packet;
 import org.jivesoftware.smack.util.StringUtils;
@@ -67,7 +70,6 @@ public class PresenceIndicator {
 
     private JLabel label;
     private MouseL helper;
-    private HashSet<String> onlineUsers = new HashSet();
 
     public static enum Status {
         ONLINE,
@@ -104,47 +106,66 @@ public class PresenceIndicator {
         label = new JLabel(OFFLINE, JLabel.HORIZONTAL);
         label.addMouseListener(helper);
     }
-    
+
+    void showPopup() {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                ToolTipManager.sharedInstance().mouseMoved(new MouseEvent(label, 0, 0, 0, 0, 0, 0, false));
+            }
+        });
+    }
+
     private class MouseL extends MouseAdapter {
         @Override
         public void mouseClicked(MouseEvent event) {
             if (event.getClickCount() == 2) {
-                ChatTopComponent.getDefault().open();
-                ChatTopComponent.getDefault().requestActive();
+                ChatTopComponent.openAction(ChatTopComponent.getDefault(), "", "", false).actionPerformed(new ActionEvent(event,event.getID(),""));
             }
         }
     }
 
+    private static RequestProcessor presenceUpdater = new RequestProcessor();
+
+
     public class PresenceListener implements PacketListener {
-        private String tip;
+        private RequestProcessor.Task task;
+        public PresenceListener() {
+            task = presenceUpdater.create(new Runnable() {
+
+                public void run() {
+                    HashSet<String> onlineUsers = new HashSet<String>();
+                    StringBuffer tipBuffer = new StringBuffer();
+                    tipBuffer.append("<html><body>");
+
+                    for (MultiUserChat muc : KenaiConnection.getDefault().getChats()) {
+                        String displayName = null;
+                        displayName = StringUtils.parseName(muc.getRoom());
+                        tipBuffer.append("<font color=gray>" + displayName + "</font><br>");
+                        Iterator<String> i = muc.getOccupants();
+                        ChatNotifications.getDefault().getMessagingHandle(displayName).setOnlineCount(muc.getOccupantsCount());
+                        while (i.hasNext()) {
+                            String uname = StringUtils.parseResource(i.next());
+                            onlineUsers.add(uname);
+                            tipBuffer.append("&nbsp;&nbsp;" + uname + "<br>");
+                        }
+                    }
+                    tipBuffer.append("</body></html>");
+                    if (onlineUsers.size() == 0) {
+                        setStatus(Status.OFFLINE);
+                    } else {
+                        label.setToolTipText(tipBuffer.toString());
+                        label.setText(String.valueOf(onlineUsers.size()));
+                    }
+
+                }
+            });
+        }
 
         /**
          * @param packet
          */
         public void processPacket(Packet packet) {
-            onlineUsers.clear();
-            StringBuffer tipBuffer = new StringBuffer();
-            tipBuffer.append("<html><body>");
-
-            for (MultiUserChat muc :KenaiConnection.getDefault().getChats()) {
-                String displayName = null;
-                displayName = StringUtils.parseName(muc.getRoom());
-                tipBuffer.append("<b>"+displayName+"</b><br>");
-                Iterator<String> i = muc.getOccupants();
-                while(i.hasNext()) {
-                    String uname = StringUtils.parseResource(i.next());
-                    onlineUsers.add(uname);
-                    tipBuffer.append(uname + "<br>");
-                }
-            }
-            tipBuffer.append("</body></html>");
-            this.tip=tipBuffer.toString();
-            if (onlineUsers.size()==0) {
-                setStatus(Status.OFFLINE);
-            } else {
-                label.setToolTipText(this.tip);
-                label.setText(String.valueOf(onlineUsers.size()));
-            }
+            task.schedule(100);
         }
     }
 }
