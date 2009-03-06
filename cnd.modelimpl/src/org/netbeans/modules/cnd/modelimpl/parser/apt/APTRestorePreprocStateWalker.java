@@ -48,6 +48,7 @@ import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.structure.APTInclude;
 import org.netbeans.modules.cnd.apt.support.APTHandlersSupport;
 import org.netbeans.modules.cnd.apt.support.APTIncludeHandler;
+import org.netbeans.modules.cnd.apt.support.APTIncludeHandler.IncludeInfo;
 import org.netbeans.modules.cnd.apt.support.APTPreprocHandler;
 import org.netbeans.modules.cnd.apt.support.APTWalker;
 import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
@@ -59,18 +60,18 @@ import org.netbeans.modules.cnd.modelimpl.csm.core.ProjectBase;
  */
 public class APTRestorePreprocStateWalker extends APTProjectFileBasedWalker {
     private final String interestedFile;
-    private final Stack/*<IncludeInfo>*/ inclStack;
+    private final Stack<IncludeInfo> inclStack;
     private final APTIncludeHandler.IncludeInfo stopDirective;
     private final boolean searchInterestedFile;
     
     /** Creates a new instance of APTRestorePreprocStateWalker */
-    public APTRestorePreprocStateWalker(ProjectBase base, APTFile apt, FileImpl file, APTPreprocHandler preprocHandler, Stack/*<IncludeInfo>*/ inclStack, String interestedFile) {
+    public APTRestorePreprocStateWalker(ProjectBase base, APTFile apt, FileImpl file, APTPreprocHandler preprocHandler, Stack<IncludeInfo> inclStack, String interestedFile) {
         super(base, apt, file, preprocHandler);
         this.searchInterestedFile = true;
         this.interestedFile = interestedFile;
         this.inclStack = inclStack;
         assert (!inclStack.empty());
-        this.stopDirective = (APTIncludeHandler.IncludeInfo) this.inclStack.pop();
+        this.stopDirective = this.inclStack.pop();
         assert (stopDirective != null);
     }
     
@@ -83,7 +84,7 @@ public class APTRestorePreprocStateWalker extends APTProjectFileBasedWalker {
         this.stopDirective = null;
     }
     
-    protected FileImpl includeAction(ProjectBase inclFileOwner, String inclPath, int mode, APTInclude apt) throws IOException {
+    protected FileImpl includeAction(ProjectBase inclFileOwner, CharSequence inclPath, int mode, APTInclude apt) throws IOException {
         FileImpl csmFile = null;
         boolean foundDirective = false;
         if (searchInterestedFile) {
@@ -100,7 +101,7 @@ public class APTRestorePreprocStateWalker extends APTProjectFileBasedWalker {
             }
         }
         try {
-            csmFile = inclFileOwner.getFile(new File(inclPath));
+            csmFile = inclFileOwner.getFile(new File(inclPath.toString()));
             if( csmFile == null ) {
 		// this might happen if the file has been just deleted from project
 		return null;

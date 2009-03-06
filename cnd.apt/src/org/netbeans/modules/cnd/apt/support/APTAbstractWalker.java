@@ -51,6 +51,7 @@ import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.structure.APTInclude;
 import org.netbeans.modules.cnd.apt.structure.APTIncludeNext;
 import org.netbeans.modules.cnd.apt.structure.APTUndefine;
+import org.netbeans.modules.cnd.apt.support.APTMacro.Kind;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 
 /**
@@ -60,7 +61,7 @@ import org.netbeans.modules.cnd.apt.utils.APTUtils;
 public abstract class APTAbstractWalker extends APTWalker {
     
     private final APTPreprocHandler preprocHandler;
-    private final String startPath;
+    private final CharSequence startPath;
     
     protected APTAbstractWalker(APTFile apt, APTPreprocHandler preprocHandler) {
         super(apt, preprocHandler == null ? null: preprocHandler.getMacroMap());
@@ -75,7 +76,7 @@ public abstract class APTAbstractWalker extends APTWalker {
             if (resolvedPath == null) {
                 if (DebugUtils.STANDALONE) {
                     if (APTUtils.LOG.getLevel().intValue() <= Level.SEVERE.intValue()) {
-                        System.err.println("FAILED INCLUDE: from " + new File(startPath).getName() + " for:\n\t" + apt);// NOI18N
+                        System.err.println("FAILED INCLUDE: from " + new File(startPath.toString()).getName() + " for:\n\t" + apt);// NOI18N
                     }
                 } else {
                     APTUtils.LOG.log(Level.WARNING,
@@ -94,7 +95,7 @@ public abstract class APTAbstractWalker extends APTWalker {
             if (resolvedPath == null) {
                 if (DebugUtils.STANDALONE) {
                     if (APTUtils.LOG.getLevel().intValue() <= Level.SEVERE.intValue()) {
-                        System.err.println("FAILED INCLUDE: from " + new File(startPath).getName() + " for:\n\t" + apt);// NOI18N
+                        System.err.println("FAILED INCLUDE: from " + new File(startPath.toString()).getName() + " for:\n\t" + apt);// NOI18N
                     }
                 } else {
                     APTUtils.LOG.log(Level.WARNING,
@@ -111,23 +112,23 @@ public abstract class APTAbstractWalker extends APTWalker {
     protected void onDefine(APT apt) {
         APTDefine define = (APTDefine)apt;
         if (define.isValid()) {
-            getMacroMap().define(define.getName(), define.getParams(), define.getBody());
+            getMacroMap().define(getRootFile(), define.getName(), define.getParams(), define.getBody(), Kind.DEFINED);
         } else {
             if (DebugUtils.STANDALONE) {
                 if (APTUtils.LOG.getLevel().intValue() <= Level.SEVERE.intValue()) {
-                    System.err.println("INCORRECT #define directive: in " + new File(startPath).getName() + " for:\n\t" + apt);// NOI18N
+                    System.err.println("INCORRECT #define directive: in " + new File(startPath.toString()).getName() + " for:\n\t" + apt);// NOI18N
                 }
             } else {
                 APTUtils.LOG.log(Level.SEVERE,
                         "INCORRECT #define directive: in {0} for:\n\t{1}", // NOI18N
-                        new Object[] { new File(startPath).getName(), apt });
+                        new Object[] { new File(startPath.toString()).getName(), apt });
             }
         }
     }
     
     protected void onUndef(APT apt) {
         APTUndefine undef = (APTUndefine)apt;
-        getMacroMap().undef(undef.getName());
+        getMacroMap().undef(getRootFile(), undef.getName());
     }
     
     protected boolean onIf(APT apt) {
@@ -153,6 +154,9 @@ public abstract class APTAbstractWalker extends APTWalker {
     protected void onEndif(APT apt, boolean wasInBranch) {
     }
 
+    protected void onEval(APT apt, boolean result) {
+    }
+
     protected APTPreprocHandler getPreprocHandler() {
         return preprocHandler;
     }
@@ -172,6 +176,7 @@ public abstract class APTAbstractWalker extends APTWalker {
         } catch (TokenStreamException ex) {
             APTUtils.LOG.log(Level.SEVERE, "error on evaluating condition node " + apt, ex);// NOI18N
         }
+        onEval(apt, res);
         return res;
     }
 }
