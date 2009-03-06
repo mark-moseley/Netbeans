@@ -42,6 +42,7 @@ package org.netbeans.modules.profiler;
 
 import org.netbeans.api.project.Project;
 import org.netbeans.lib.profiler.common.Profiler;
+import org.netbeans.lib.profiler.results.ExportDataDumper;
 import org.netbeans.lib.profiler.results.memory.AllocMemoryResultsDiff;
 import org.netbeans.lib.profiler.results.memory.LivenessMemoryResultsDiff;
 import org.netbeans.lib.profiler.results.memory.MemoryResultsSnapshot;
@@ -54,8 +55,8 @@ import org.netbeans.modules.profiler.actions.FindPreviousAction;
 import org.netbeans.modules.profiler.ui.FindDialog;
 import org.openide.actions.FindAction;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -68,6 +69,8 @@ import java.net.URL;
 import java.text.MessageFormat;
 import java.util.Date;
 import javax.swing.*;
+import org.netbeans.lib.profiler.results.memory.PresoObjAllocCCTNode;
+import org.netbeans.lib.profiler.utils.VMUtils;
 import org.netbeans.modules.profiler.ui.Utils;
 
 
@@ -76,34 +79,22 @@ import org.netbeans.modules.profiler.ui.Utils;
  *
  * @author Jiri Sedlacek
  */
-public class MemoryDiffPanel extends JPanel implements SnapshotResultsWindow.FindPerformer, SaveViewAction.ViewProvider {
+public class MemoryDiffPanel extends JPanel implements SnapshotResultsWindow.FindPerformer, SaveViewAction.ViewProvider, ExportAction.ExportProvider {
+
     //~ Inner Classes ------------------------------------------------------------------------------------------------------------
 
     private class DiffActionsHandler implements MemoryResUserActionsHandler {
-        //~ Static fields/initializers -------------------------------------------------------------------------------------------
-
-        public static final String BOOLEAN_CODE = "boolean"; // NOI18N
-        public static final String CHAR_CODE = "char"; // NOI18N
-        public static final String BYTE_CODE = "byte"; // NOI18N
-        public static final String SHORT_CODE = "short"; // NOI18N
-        public static final String INT_CODE = "int"; // NOI18N
-        public static final String LONG_CODE = "long"; // NOI18N
-        public static final String FLOAT_CODE = "float"; // NOI18N
-        public static final String DOUBLE_CODE = "double"; // NOI18N
-
         //~ Methods --------------------------------------------------------------------------------------------------------------
 
         public void showSourceForMethod(String className, String methodName, String methodSig) {
-            if (BOOLEAN_CODE.equals(className) || CHAR_CODE.equals(className) || BYTE_CODE.equals(className)
-                    || SHORT_CODE.equals(className) || INT_CODE.equals(className) || LONG_CODE.equals(className)
-                    || FLOAT_CODE.equals(className) || DOUBLE_CODE.equals(className)) {
-                // primitive type
-                Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
-
-                return;
-            }
-
-            NetBeansProfiler.getDefaultNB().openJavaSource(project, className, methodName, methodSig);
+            // Check if primitive type/array
+            if ((methodName == null && methodSig == null) && (VMUtils.isVMPrimitiveType(className) ||
+                 VMUtils.isPrimitiveType(className))) Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
+            // Check if allocated by reflection
+            else if (PresoObjAllocCCTNode.VM_ALLOC_CLASS.equals(className) && PresoObjAllocCCTNode.VM_ALLOC_METHOD.equals(methodName))
+                     Profiler.getDefault().displayWarning(CANNOT_SHOW_REFLECTION_SRC_MSG);
+            // Display source
+            else NetBeansProfiler.getDefaultNB().openJavaSource(project, className, methodName, methodSig);
         }
 
         public void showStacksForClass(int selectedClassId, int sortingColumn, boolean sortingOrder) {
@@ -124,12 +115,9 @@ public class MemoryDiffPanel extends JPanel implements SnapshotResultsWindow.Fin
     private static final String FIND_ACTION_TOOLTIP = NbBundle.getMessage(MemoryDiffPanel.class,
                                                                            "MemorySnapshotPanel_FindActionTooltip"); // NOI18N
                                                                                                                      // -----
-    private static final ImageIcon MEMORY_RESULTS_TAB_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/memoryResultsTab.png") // NOI18N
-    );
-    private static final ImageIcon INFO_TAB_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/infoTab.png") // NOI18N
-    );
-    private static final ImageIcon STACK_TRACES_TAB_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/stackTracesTab.png") // NOI18N
-    );
+    private static final ImageIcon MEMORY_RESULTS_TAB_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/memoryResultsTab.png", false); //NOI18N
+    private static final ImageIcon INFO_TAB_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/infoTab.png", false); //NOI18N
+    private static final ImageIcon STACK_TRACES_TAB_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/stackTracesTab.png", false); //NOI18N
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -180,7 +168,7 @@ public class MemoryDiffPanel extends JPanel implements SnapshotResultsWindow.Fin
         toolBar.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
 
         //    toolBar.add(saveAction = new SaveSnapshotAction(ls));
-        //    toolBar.add(new ExportSnapshotAction(ls));
+        toolBar.add(new ExportAction(this,null));
         toolBar.add(new SaveViewAction(this));
 
         toolBar.addSeparator();
@@ -222,9 +210,9 @@ public class MemoryDiffPanel extends JPanel implements SnapshotResultsWindow.Fin
         final String SNAPSHOT_1_MASK = "file:/1"; //NOI18N
         final String SNAPSHOT_2_MASK = "file:/2"; //NOI18N
 
-        final String SNAPSHOT_1_LINK = "<a href='" + SNAPSHOT_1_MASK + "'>"
+        final String SNAPSHOT_1_LINK = "<a href='" + SNAPSHOT_1_MASK + "'>" //NOI18N
                                        + StringUtils.formatUserDate(new Date(snapshot1.getSnapshot().getTimeTaken())) + "</a>"; //NOI18N
-        final String SNAPSHOT_2_LINK = "<a href='" + SNAPSHOT_2_MASK + "'>"
+        final String SNAPSHOT_2_LINK = "<a href='" + SNAPSHOT_2_MASK + "'>" //NOI18N
                                        + StringUtils.formatUserDate(new Date(snapshot2.getSnapshot().getTimeTaken())) + "</a>"; //NOI18N
 
         HTMLLabel descriptionLabel = new HTMLLabel(MessageFormat.format(SNAPSHOTS_COMPARISON_STRING,
@@ -275,7 +263,7 @@ public class MemoryDiffPanel extends JPanel implements SnapshotResultsWindow.Fin
         getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_F3, InputEvent.SHIFT_MASK), "FIND_PREVIOUS"); // NOI18N
         getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
             .put(KeyStroke.getKeyStroke(KeyEvent.VK_F3, InputEvent.SHIFT_MASK), "FIND_PREVIOUS"); // NOI18N
-        getActionMap().put("FIND_PREVIOUS",
+        getActionMap().put("FIND_PREVIOUS", //NOI18N
                            new AbstractAction() {
                 public void actionPerformed(ActionEvent e) {
                     performFindPrevious();
@@ -283,7 +271,7 @@ public class MemoryDiffPanel extends JPanel implements SnapshotResultsWindow.Fin
             }); // NOI18N
         getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_F3, 0), "FIND_NEXT"); // NOI18N
         getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke(KeyEvent.VK_F3, 0), "FIND_NEXT"); // NOI18N
-        getActionMap().put("FIND_NEXT",
+        getActionMap().put("FIND_NEXT", //NOI18N
                            new AbstractAction() {
                 public void actionPerformed(ActionEvent e) {
                     performFindNext();
@@ -361,5 +349,17 @@ public class MemoryDiffPanel extends JPanel implements SnapshotResultsWindow.Fin
 
     public void requestFocus() {
         memoryPanel.requestFocus(); // move focus to results table when tab is switched
+    }
+
+    public void exportData(int exportedFileType, ExportDataDumper eDD) {
+        ((DiffAllocResultsPanel) memoryPanel).exportData(exportedFileType, eDD);
+    }
+
+    public boolean hasLoadedSnapshot() {
+        return false;
+    }
+    
+    public boolean hasExportableView() {
+        return true;
     }
 }
