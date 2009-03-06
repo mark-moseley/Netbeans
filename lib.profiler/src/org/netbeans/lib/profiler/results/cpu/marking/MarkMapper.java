@@ -40,6 +40,7 @@
 
 package org.netbeans.lib.profiler.results.cpu.marking;
 
+import org.netbeans.lib.profiler.marker.Mark;
 import org.netbeans.lib.profiler.global.ProfilingSessionStatus;
 import java.util.HashMap;
 import java.util.Map;
@@ -58,13 +59,13 @@ public class MarkMapper implements MarkingEngine.StateObserver {
 
     //~ Constructors -------------------------------------------------------------------------------------------------------------
 
-    /** Creates a new instance of CategoryMapper */
-    MarkMapper() {
-    }
-
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
     public Mark getMark(int methodId, ProfilingSessionStatus status) {
+        if (status == null) {
+            return Mark.DEFAULT;
+        }
+        
         synchronized (marksGuard) {
             Mark mark = (Mark) markMap.get(Integer.valueOf(methodId));
 

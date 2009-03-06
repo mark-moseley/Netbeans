@@ -40,11 +40,10 @@
 
 package org.netbeans.lib.profiler.results.cpu.cct;
 
-import org.netbeans.lib.profiler.results.cpu.cct.nodes.CategoryCPUCCTNode;
-import org.netbeans.lib.profiler.results.cpu.cct.nodes.MethodCPUCCTNode;
+import java.util.Collection;
+import org.netbeans.lib.profiler.results.cpu.cct.nodes.MarkedCPUCCTNode;
 import org.netbeans.lib.profiler.results.cpu.cct.nodes.ThreadCPUCCTNode;
-import org.netbeans.lib.profiler.results.cpu.marking.HierarchicalMark;
-import org.netbeans.lib.profiler.results.cpu.marking.Mark;
+import org.netbeans.lib.profiler.marker.Mark;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -63,7 +62,11 @@ public final class CCTResultsFilter extends CPUCCTVisitorAdapter {
     public static interface Evaluator {
         //~ Methods --------------------------------------------------------------------------------------------------------------
 
-        boolean evaluate(Mark categoryMark);
+        boolean evaluate(Mark mark);
+    }
+    
+    public static interface EvaluatorProvider {
+        Set/*<Evaluator>*/ getEvaluators();
     }
 
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
@@ -73,6 +76,8 @@ public final class CCTResultsFilter extends CPUCCTVisitorAdapter {
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
     private Set /*<Evaluator>*/ evaluators = null;
+    private Set evaluatorProviders = new HashSet();
+
     private Stack passFlagStack;
     private boolean passingFilter;
 
@@ -85,22 +90,28 @@ public final class CCTResultsFilter extends CPUCCTVisitorAdapter {
         doReset();
     }
 
-    //~ Methods ------------------------------------------------------------------------------------------------------------------
-
-    public void addEvaluator(Evaluator evaluator) {
-        evaluators.add(evaluator);
+    public void setEvaluators(Collection evaluatorProviders) {
+        this.evaluatorProviders.clear();
+        this.evaluatorProviders.addAll(evaluatorProviders);
     }
 
+    //~ Methods ------------------------------------------------------------------------------------------------------------------
     public synchronized boolean passesFilter() {
         return passingFilter;
     }
 
-    public void removeAllEvaluators() {
+    public void beforeWalk() {
+        super.beforeWalk();
         evaluators.clear();
+        
+        for(Iterator iter = evaluatorProviders.iterator();iter.hasNext();) {
+            evaluators.addAll(((EvaluatorProvider)iter.next()).getEvaluators());
+        }
     }
 
-    public void removeEvaluator(Evaluator evaluator) {
-        evaluators.remove(evaluator);
+    public void afterWalk() {
+        evaluators.clear();
+        super.afterWalk();
     }
 
     public void reset() {
@@ -114,16 +125,16 @@ public final class CCTResultsFilter extends CPUCCTVisitorAdapter {
 
         for (Iterator iter = evaluators.iterator(); iter.hasNext();) {
             Evaluator evaluator = (Evaluator) iter.next();
-            passingFilter &= evaluator.evaluate(HierarchicalMark.DEFAULT);
+            passingFilter &= evaluator.evaluate(Mark.DEFAULT);
         }
 
         LOGGER.finest("Evaluator result: " + passingFilter);
         super.visit(node);
     }
 
-    public void visit(CategoryCPUCCTNode node) {
+    public void visit(MarkedCPUCCTNode node) {
         if (LOGGER.isLoggable(Level.FINEST)) {
-            LOGGER.finest("Entering category " + node.getMark().getDescription()); // NOI18N
+            LOGGER.finest("Entering a node marked " + node.getMark().getId()); // NOI18N
         }
 
         passFlagStack.push(Boolean.valueOf(passingFilter));
@@ -143,9 +154,9 @@ public final class CCTResultsFilter extends CPUCCTVisitorAdapter {
         }
     }
 
-    public void visitPost(CategoryCPUCCTNode node) {
+    public void visitPost(MarkedCPUCCTNode node) {
         if (LOGGER.isLoggable(Level.FINEST)) {
-            LOGGER.finest("Leaving category " + node.getMark().getDescription()); // NOI18N
+            LOGGER.finest("Leaving a node marked " + node.getMark().getId()); // NOI18N
         }
 
         if (!passFlagStack.isEmpty()) {
