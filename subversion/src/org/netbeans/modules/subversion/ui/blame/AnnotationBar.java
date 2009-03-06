@@ -55,7 +55,6 @@ import org.netbeans.modules.subversion.client.SvnProgressSupport;
 import org.netbeans.modules.subversion.util.SvnUtils;
 import org.netbeans.modules.subversion.util.Context;
 import org.netbeans.modules.versioning.util.Utils;
-import org.openide.*;
 import org.openide.loaders.*;
 import org.openide.filesystems.*;
 import org.openide.text.*;
@@ -77,7 +76,12 @@ import java.io.*;
 import java.text.DateFormat;
 import java.text.MessageFormat;
 import java.util.logging.Level;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.EditorStyleConstants;
+import org.netbeans.api.editor.settings.FontColorNames;
+import org.netbeans.api.editor.settings.FontColorSettings;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
+import org.netbeans.modules.versioning.util.HyperlinkProvider;
 import org.tigris.subversion.svnclientadapter.ISVNNotifyListener;
 import org.tigris.subversion.svnclientadapter.SVNClientException;
 
@@ -92,7 +96,7 @@ import org.tigris.subversion.svnclientadapter.SVNClientException;
  *
  * @author Petr Kuzel
  */
-final class AnnotationBar extends JComponent implements Accessible, PropertyChangeListener, DocumentListener, ChangeListener, ActionListener, Runnable, ComponentListener {
+final class AnnotationBar extends JComponent implements Accessible, PropertyChangeListener, DocumentListener, ChangeListener, ActionListener, Runnable, ComponentListener, LookupListener {
 
     /**
      * Target text component for which the annotation bar is aiming.
@@ -172,14 +176,15 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
     private RequestProcessor.Task latestAnnotationTask = null;
 
     /**
-     * Holds false if Rollback Changes action is NOT valid for current revision, true otherwise. 
-     */ 
-    private boolean recentRevisionCanBeRolledBack;
-
-    /**
      * Rendering hints for annotations sidebar inherited from editor settings.
      */
     private final Map renderingHints;
+
+    private Lookup.Result<? extends HyperlinkProvider> hpResult;
+    /**
+     * Hyperlink providers available for the commit message TooltipWindow
+     */
+    private List<HyperlinkProvider> providers;
 
     /**
      * Creates new instance initializing final fields.
@@ -191,15 +196,23 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         this.doc = editorUI.getDocument();
         this.caret = textComponent.getCaret();
         if (textComponent instanceof JEditorPane) {
-            JEditorPane jep = (JEditorPane) textComponent;
-            Class kitClass = jep.getEditorKit().getClass();
-            Object userSetHints = Settings.getValue(kitClass, SettingsNames.RENDERING_HINTS);
-            renderingHints = (userSetHints instanceof Map && ((Map)userSetHints).size() > 0) ? (Map)userSetHints : null;
+            String mimeType = org.netbeans.lib.editor.util.swing.DocumentUtilities.getMimeType(textComponent);
+            FontColorSettings fcs = MimeLookup.getLookup(mimeType).lookup(FontColorSettings.class);
+            renderingHints = (Map) fcs.getFontColors(FontColorNames.DEFAULT_COLORING).getAttribute(EditorStyleConstants.RenderingHints);
         } else {
             renderingHints = null;
         }
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        hpResult = (Lookup.Result<? extends HyperlinkProvider>) Lookup.getDefault().lookupResult(HyperlinkProvider.class);
+        hpResult.addLookupListener(this);
+        setHyperlinkProviders();
     }
-    
+
+    public void resultChanged(LookupEvent ev) {
+        hpResult = (Lookup.Result<? extends HyperlinkProvider>) Lookup.getDefault().lookupResult(HyperlinkProvider.class);
+        setHyperlinkProviders();
+    }
+
     // public contract ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     /**
@@ -228,10 +241,10 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
      * Takes AnnotateLines and shows them.
      */
     public void annotationLines(File file, List<AnnotateLine> annotateLines) {
-        List<AnnotateLine> lines = new LinkedList<AnnotateLine>(annotateLines);
+        final List<AnnotateLine> lines = new LinkedList<AnnotateLine>(annotateLines);
         int lineCount = lines.size();
         /** 0 based line numbers => 1 based line numbers*/
-        int ann2editorPermutation[] = new int[lineCount];
+        final int ann2editorPermutation[] = new int[lineCount];
         for (int i = 0; i< lineCount; i++) {
             ann2editorPermutation[i] = i+1;
         }
@@ -294,27 +307,26 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
             }
         }
 
-        try {
-            doc.atomicLock();
-            StyledDocument sd = (StyledDocument) doc;
-            Iterator<AnnotateLine> it = lines.iterator();
-            elementAnnotations = Collections.synchronizedMap(new HashMap<Element, AnnotateLine>(lines.size()));
-            while (it.hasNext()) {
-                AnnotateLine line = it.next();
-                int lineNum = ann2editorPermutation[line.getLineNum() -1];
-                try {
-                    int lineOffset = NbDocument.findLineOffset(sd, lineNum -1);
-                    Element element = sd.getParagraphElement(lineOffset);
-                    elementAnnotations.put(element, line);
-                } catch (IndexOutOfBoundsException ex) {
-                    // TODO how could I get line behind document end?
-                    // furtunately user does not spot it
-                    Subversion.LOG.log(Level.INFO, null, ex);
+        doc.runAtomic(new Runnable() {
+            public void run() {
+                StyledDocument sd = (StyledDocument) doc;
+                Iterator<AnnotateLine> it = lines.iterator();
+                elementAnnotations = Collections.synchronizedMap(new HashMap<Element, AnnotateLine>(lines.size()));
+                while (it.hasNext()) {
+                    AnnotateLine line = it.next();
+                    int lineNum = ann2editorPermutation[line.getLineNum() -1];
+                    try {
+                        int lineOffset = NbDocument.findLineOffset(sd, lineNum -1);
+                        Element element = sd.getParagraphElement(lineOffset);
+                        elementAnnotations.put(element, line);
+                    } catch (IndexOutOfBoundsException ex) {
+                        // TODO how could I get line behind document end?
+                        // furtunately user does not spot it
+                        Subversion.LOG.log(Level.INFO, null, ex);
+                    }
                 }
             }
-        } finally {
-            doc.atomicUnlock();
-        }
+        });
 
         // lazy listener registration
         caret.addChangeListener(this);
@@ -343,7 +355,7 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
      * @return the file related to the document, <code>null</code> if none
      * exists.
      */
-    private File getCurrentFile() {
+    File getCurrentFile() {
         File result = null;
         
         DataObject dobj = (DataObject)doc.getProperty(Document.StreamDescriptionProperty);
@@ -375,8 +387,11 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
             private void maybeShowPopup(MouseEvent e) {
                 if (e.isPopupTrigger()) {
                     e.consume();
-                    createPopup().show(e.getComponent(),
+                    createPopup(e).show(e.getComponent(),
                                e.getX(), e.getY());
+                } else if (e.getID() == MouseEvent.MOUSE_RELEASED && e.getButton() == MouseEvent.BUTTON1) {
+                    e.consume();
+                    showTooltipWindow(e);
                 }
             }
         });
@@ -386,18 +401,76 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
 
     }
 
-    private JPopupMenu createPopup() {
+    /**
+     *
+     * @return
+     */
+    JTextComponent getTextComponent () {
+        return textComponent;
+    }
+
+    /**
+     *
+     * @param event
+     */
+    private void showTooltipWindow (MouseEvent event) {
+        Point p = new Point(event.getPoint());
+        SwingUtilities.convertPointToScreen(p, this);
+        Point p2 = new Point(p);
+        SwingUtilities.convertPointFromScreen(p2, textComponent);
+
+        // annotation for target line
+        AnnotateLine al = null;
+        if (elementAnnotations != null) {
+            al = getAnnotateLine(getLineFromMouseEvent(event));
+        }
+
+        if (al != null) {
+            TooltipWindow ttw = new TooltipWindow(this, al);
+            ttw.show(new Point(p.x - p2.x, p.y));
+        }
+    }
+
+    /**
+     *
+     */
+    private void setHyperlinkProviders () {
+        Collection<? extends HyperlinkProvider> providersCol = hpResult.allInstances();
+        List<HyperlinkProvider> providersList = new ArrayList<HyperlinkProvider>(providersCol.size());
+        providersList.addAll(providersCol);
+        providers = Collections.unmodifiableList(providersList);
+    }
+
+    /**
+     *
+     * @return registered hyperlink providers
+     */
+    public List<HyperlinkProvider> getHyperlinkProviders() {
+        return providers;
+    }
+
+    private JPopupMenu createPopup(MouseEvent e) {
         final ResourceBundle loc = NbBundle.getBundle(AnnotationBar.class);
         final JPopupMenu popupMenu = new JPopupMenu();
 
-        final File file = getCurrentFile();
-        
         final JMenuItem diffMenu = new JMenuItem(loc.getString("CTL_MenuItem_DiffToRevision"));
+
+        // annotation for target line
+        AnnotateLine al = null;
+        if (elementAnnotations != null) {
+            al = getAnnotateLine(getLineFromMouseEvent(e));
+        }
+        // revision previous to target line's revision
+        final String revisionPerLine = al == null ? null : al.getRevision();
+        // used in menu Revert
+        final File file = getCurrentFile();
+        final boolean revisionCanBeRolledBack = al == null ? false : al.canBeRolledBack();
+        
         diffMenu.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                if (recentRevision != null) {
-                    if (getPreviousRevision(recentRevision) != null) {
-                        DiffAction.diff(file, getPreviousRevision(recentRevision), recentRevision);
+                if (revisionPerLine != null) {
+                    if (getPreviousRevision(revisionPerLine) != null) {
+                        DiffAction.diff(file, getPreviousRevision(revisionPerLine), revisionPerLine);
                     }
                 }
             }
@@ -407,11 +480,11 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         JMenuItem rollbackMenu = new JMenuItem(loc.getString("CTL_MenuItem_Revert"));
         rollbackMenu.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                revert(file, recentRevision);
+                revert(file, revisionPerLine);
             }
         });
         popupMenu.add(rollbackMenu);
-        rollbackMenu.setEnabled(recentRevisionCanBeRolledBack);
+        rollbackMenu.setEnabled(revisionCanBeRolledBack);
 
         JMenuItem menu;
         menu = new JMenuItem(loc.getString("CTL_MenuItem_CloseAnnotations"));
@@ -425,10 +498,10 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
 
         diffMenu.setVisible(false);
         rollbackMenu.setVisible(false);
-        if (recentRevision != null) {
-            if (getPreviousRevision(recentRevision) != null) {
+        if (revisionPerLine != null) {
+            if (getPreviousRevision(revisionPerLine) != null) {
                 String format = loc.getString("CTL_MenuItem_DiffToRevision");
-                diffMenu.setText(MessageFormat.format(format, new Object [] { recentRevision, getPreviousRevision(recentRevision) }));
+                diffMenu.setText(MessageFormat.format(format, new Object [] { revisionPerLine, getPreviousRevision(revisionPerLine) }));
                 diffMenu.setVisible(true);
             }
             rollbackMenu.setVisible(true);
@@ -509,7 +582,6 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         recentStatusMessage = loc.getString("CTL_StatusBar_WaitFetchAnnotation");
         statusBar.setText(StatusBar.CELL_MAIN, recentStatusMessage);
         
-        recentRevisionCanBeRolledBack = false;
         // determine current line
         int line = -1;
         int offset = caret.getDot();
@@ -536,8 +608,6 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
             return;
         }
 
-        recentRevisionCanBeRolledBack = al.canBeRolledBack();
-        
         // handle unchanged lines
         String revision = al.getRevision();
         if (revision.equals(recentRevision) == false) {
@@ -611,15 +681,6 @@ final class AnnotationBar extends JComponent implements Accessible, PropertyChan
         dim.width = width;
         dim.height *=2;  // XXX
         return dim;
-    }
-
-    /**
-     * Gets the maximum size of this component.
-     *
-     * @return the maximum size of this component
-     */
-    public Dimension getMaximumSize() {
-        return getPreferredSize();
     }
 
     /**
