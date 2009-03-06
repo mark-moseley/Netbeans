@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,7 +34,7 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008-2009 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.bugtracking.vcshooks;
@@ -52,6 +52,7 @@ import org.netbeans.modules.bugtracking.util.BugtrackingUtil;
 import org.netbeans.modules.bugtracking.spi.Issue;
 import org.netbeans.modules.bugtracking.spi.Repository;
 import org.netbeans.modules.bugtracking.bridge.BugtrackingOwnerSupport;
+import org.netbeans.modules.bugtracking.vcshooks.VCSHooksConfig.Format;
 import org.netbeans.modules.subversion.hooks.spi.SvnHook;
 import org.netbeans.modules.subversion.hooks.spi.SvnHookContext;
 import org.netbeans.modules.subversion.hooks.spi.SvnHookContext.LogEntry;
@@ -75,6 +76,42 @@ public class SvnHookImpl extends SvnHook {
 
     @Override
     public SvnHookContext beforeCommit(SvnHookContext context) throws IOException {
+        if(context.getFiles().length == 0) {
+            LOG.warning("calling svn beforeCommit for zero files");               // NOI18N
+            return null;
+        }
+
+        File file = context.getFiles()[0];
+        LOG.log(Level.FINE, "svn beforeCommit start for " + file);                // NOI18N
+
+        if(panel.addIssueCheckBox1.isSelected()) {
+            String msg = context.getMessage();
+
+            final Format format = VCSHooksConfig.getInstance().getSvnIssueFormat();
+            String formatString = format.getFormat();
+            formatString = formatString.replaceAll("\\{id\\}", "\\{0\\}");           // NOI18N
+            formatString = formatString.replaceAll("\\{summary\\}", "\\{1\\}");    // NOI18N
+
+            Issue issue = panel.getIssue();
+            if (issue == null) {
+                LOG.log(Level.FINE, " no issue set for " + file);                   // NOI18N
+                return null;
+            }
+            String issueInfo = new MessageFormat(formatString).format(
+                    new Object[] {issue.getID(), issue.getSummary()},
+                    new StringBuffer(),
+                    null).toString();
+
+            LOG.log(Level.FINER, " svn commit hook issue info '" + issueInfo + "'");     // NOI18N
+            if(format.isAbove()) {
+                msg = issueInfo + "\n" + msg;
+            } else {
+                msg = msg + "\n" + issueInfo;
+            }
+
+            context = new SvnHookContext(context.getFiles(), msg, context.getLogEntries());
+            return context;
+        }
         return super.beforeCommit(context);
     }
 
@@ -102,7 +139,7 @@ public class SvnHookImpl extends SvnHook {
             return;
         }
         
-        Repository repo = support.getRepository(file);
+        Repository repo = support.getRepository(file, issue.getID());
         if(repo == null) {
             LOG.log(Level.FINE, " could not find repository for " + file);      // NOI18N
             return;
@@ -121,7 +158,7 @@ public class SvnHookImpl extends SvnHook {
             Date date = logEntry.getDate();
             String message = logEntry.getMessage();
 
-            String formatString = VCSHooksConfig.getInstance().getSvnCommentFormat();
+            String formatString = VCSHooksConfig.getInstance().getSvnCommentFormat().getFormat();
             formatString = formatString.replaceAll("\\{revision\\}", "\\{0\\}");           // NOI18N
             formatString = formatString.replaceAll("\\{author\\}",   "\\{1\\}");           // NOI18N
             formatString = formatString.replaceAll("\\{date\\}",     "\\{2\\}");           // NOI18N
@@ -136,6 +173,7 @@ public class SvnHookImpl extends SvnHook {
         }
 
         issue.addComment(msg, panel.resolveCheckBox.isSelected());
+        issue.open();
         LOG.log(Level.FINE, "svn commit hook end for " + file);                 // NOI18N
     }
 
@@ -155,9 +193,14 @@ public class SvnHookImpl extends SvnHook {
         }
         panel.commitRadioButton.setVisible(false);
         panel.pushRadioButton.setVisible(false);
-        panel.changeFormatButton.addActionListener(new ActionListener() {
+        panel.changeRevisionFormatButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                onShowFormat();
+                onShowRevisionFormat();
+            }
+        });
+        panel.changeIssueFormatButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                onShowIssueFormat();
             }
         });
         return panel;
@@ -178,11 +221,17 @@ public class SvnHookImpl extends SvnHook {
         return sb.toString();
     }
 
-    private void onShowFormat() {
+    private void onShowRevisionFormat() {
         FormatPanel p = new FormatPanel(VCSHooksConfig.getInstance().getSvnCommentFormat());
         if(BugtrackingUtil.show(p, NbBundle.getMessage(HookPanel.class, "LBL_FormatTitle"), NbBundle.getMessage(HookPanel.class, "LBL_OK"))) { // NOI18N
             VCSHooksConfig.getInstance().setSvnCommentFormat(p.getFormat());
         }
     }
 
+    private void onShowIssueFormat() {
+        FormatPanel p = new FormatPanel(VCSHooksConfig.getInstance().getSvnIssueFormat());
+        if(BugtrackingUtil.show(p, NbBundle.getMessage(HookPanel.class, "LBL_FormatTitle"), NbBundle.getMessage(HookPanel.class, "LBL_OK"))) {  // NOI18N
+            VCSHooksConfig.getInstance().setSvnIssueFormat(p.getFormat());
+        }
+    }
 }
