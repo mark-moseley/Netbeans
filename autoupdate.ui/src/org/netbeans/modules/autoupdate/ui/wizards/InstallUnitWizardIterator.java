@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,6 +44,7 @@ package org.netbeans.modules.autoupdate.ui.wizards;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.logging.Logger;
 import javax.swing.event.ChangeListener;
 import org.openide.WizardDescriptor;
 import org.openide.util.NbBundle;
@@ -61,9 +62,15 @@ public final class InstallUnitWizardIterator implements WizardDescriptor.Iterato
     private WizardDescriptor.Panel<WizardDescriptor> customHandleStep = null;
     private WizardDescriptor.Panel<WizardDescriptor> installStep = null;
     private boolean isCompact = false;
+    private boolean clearLazyUnits = false;
     
     public InstallUnitWizardIterator (InstallUnitWizardModel model) {
+        this (model, false);
+    }
+    
+    public InstallUnitWizardIterator (InstallUnitWizardModel model, boolean clearLazyUnits) {
         this.installModel = model;
+        this.clearLazyUnits = clearLazyUnits;
         createPanels ();
         index = 0;
     }
@@ -80,7 +87,7 @@ public final class InstallUnitWizardIterator implements WizardDescriptor.Iterato
         panels.add (licenseApprovalStep);
         customHandleStep = new CustomHandleStep (installModel);
         panels.add (customHandleStep);
-        installStep = new InstallStep (installModel);
+        installStep = new InstallStep (installModel, clearLazyUnits);
         panels.add (installStep);
     }
     
@@ -94,10 +101,12 @@ public final class InstallUnitWizardIterator implements WizardDescriptor.Iterato
     }
     
     public boolean hasNext () {
+        compactPanels ();
         return index < panels.size () - 1;
     }
     
     public boolean hasPrevious () {
+        compactPanels ();
         return index > 0 && ! (current () instanceof InstallStep || current () instanceof CustomHandleStep);
     }
     
@@ -120,12 +129,14 @@ public final class InstallUnitWizardIterator implements WizardDescriptor.Iterato
     // If nothing unusual changes in the middle of the wizard, simply:
     public void addChangeListener (ChangeListener l) {}
     public void removeChangeListener (ChangeListener l) {}
-    
+
     private void compactPanels () {
         if (isCompact) {
             return ;
         }
-        if (getModel ().allLicensesApproved ()) {
+
+        boolean allLicensesTouched = getModel().allLicensesTouched();
+        if (allLicensesTouched && getModel ().allLicensesApproved ()) {            
             panels.remove (licenseApprovalStep);
         }
         if (! getModel ().hasCustomComponents ()) {
@@ -134,7 +145,7 @@ public final class InstallUnitWizardIterator implements WizardDescriptor.Iterato
         if (! getModel ().hasStandardComponents ()) {
             panels.remove (installStep);
         }
-        isCompact = true;
+        isCompact = allLicensesTouched;
     }
     
 }

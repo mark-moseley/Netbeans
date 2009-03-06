@@ -51,6 +51,7 @@ import org.apache.tools.ant.taskdefs.MatchingTask;
 import org.apache.tools.ant.DirectoryScanner;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -71,6 +72,8 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import org.apache.tools.ant.Project;
+import org.apache.tools.ant.types.Path;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Text;
@@ -159,6 +162,19 @@ public class MakeUpdateDesc extends MatchingTask {
     */
     public void setDistBase(String dbase) {
         dist_base = dbase;
+    }
+
+    private boolean useLicenseUrl;
+
+
+    public void setUseLicenseUrl(boolean useLicenseUrl) {
+        this.useLicenseUrl = useLicenseUrl;
+    }
+    
+    private Path updaterJar;
+    /** Fileset for platform/modules/ext/updater.jar, to be used in DTD validation. */
+    public Path createUpdaterJar() {
+        return updaterJar = new Path(getProject());
     }
     
     // Similar to org.openide.xml.XMLUtil methods.
@@ -261,7 +277,9 @@ public class MakeUpdateDesc extends MatchingTask {
                     }
                     File desc_ent = new File(ent_name);
                     desc_ent.delete();
-                    if (use25DTD) {
+                    if(useLicenseUrl) {
+                        pw.println("<!DOCTYPE module_updates PUBLIC \"-//NetBeans//DTD Autoupdate Catalog 2.6//EN\" \"http://www.netbeans.org/dtds/autoupdate-catalog-2_6.dtd\" [");
+                    } else if (use25DTD) {
                         pw.println("<!DOCTYPE module_updates PUBLIC \"-//NetBeans//DTD Autoupdate Catalog 2.5//EN\" \"http://www.netbeans.org/dtds/autoupdate-catalog-2_5.dtd\" [");
                     } else if (targetClustersDefined) {
                         pw.println("<!DOCTYPE module_updates PUBLIC \"-//NetBeans//DTD Autoupdate Catalog 2.4//EN\" \"http://www.netbeans.org/dtds/autoupdate-catalog-2_4.dtd\" [");
@@ -295,7 +313,9 @@ public class MakeUpdateDesc extends MatchingTask {
                     pw.println ();
                     
                 } else {
-                    if (use25DTD) {
+                    if(useLicenseUrl) {
+                        pw.println("<!DOCTYPE module_updates PUBLIC \"-//NetBeans//DTD Autoupdate Catalog 2.6//EN\" \"http://www.netbeans.org/dtds/autoupdate-catalog-2_6.dtd\">");
+                    } else if (use25DTD) {
                         pw.println("<!DOCTYPE module_updates PUBLIC \"-//NetBeans//DTD Autoupdate Catalog 2.5//EN\" \"http://www.netbeans.org/dtds/autoupdate-catalog-2_5.dtd\">");
                     } else if (targetClustersDefined) {
                         pw.println("<!DOCTYPE module_updates PUBLIC \"-//NetBeans//DTD Autoupdate Catalog 2.4//EN\" \"http://www.netbeans.org/dtds/autoupdate-catalog-2_4.dtd\">");
@@ -308,8 +328,26 @@ public class MakeUpdateDesc extends MatchingTask {
 
                 pw.println ();
 		Map<String,Element> licenses = new HashMap<String,Element>();
-                Set<String> licenseNames = new HashSet<String>();
-                
+                String prefix = null;
+                if (dist_base != null) {
+                    // fix/enforce distribution URL base
+                    if (dist_base.equals(".")) {
+                        prefix = "";
+                    } else {
+                        prefix = dist_base + "/";
+                    }
+                }
+                final File licensesDir = new File(desc.getParentFile(), "licenses");
+                if (useLicenseUrl) {
+                     if (licensesDir.exists()) {
+                         for (File f : licensesDir.listFiles()) {
+                            f.delete();
+                        }
+                        } else {
+                        licensesDir.mkdir();
+                     }
+                }
+
                 for (Map.Entry<String,Collection<Module>> entry : modulesByGroup.entrySet()) {
                     String groupName = entry.getKey();
                     // Don't indent; embedded descriptions would get indented otherwise.
@@ -327,20 +365,26 @@ public class MakeUpdateDesc extends MatchingTask {
                         String name = manifest.getAttribute("OpenIDE-Module-Name");
                         if (name.length() > 0) {
                             log(" Adding module " + name + " (" + m.nbm.getAbsolutePath() + ")");
-                        }
-                        if (dist_base != null) {
-                            // fix/enforce distribution URL base
-                            String prefix;
-                            if (dist_base.equals(".")) {
-                                prefix = "";
-                            } else {
-                                prefix = dist_base + "/";
-                            }
+                        }                        
+                        if(prefix!=null) {
                             module.setAttribute("distribution", prefix + m.relativePath);
                         }
                         NodeList licenseList = module.getElementsByTagName("license");
                         if (licenseList.getLength() > 0) {
                             Element license = (Element) licenseList.item(0);
+                            if (useLicenseUrl) {
+                                String relativePath = "licenses/" + license.getAttribute("name") + ".license";
+                                String path = relativePath;
+                                if (prefix != null) {
+                                    path = prefix + relativePath;
+                                }
+                                license.setAttribute("url", path);
+                                String licenseText = license.getTextContent();
+                                license.setTextContent("");
+                                FileOutputStream fos = new FileOutputStream(new File(desc.getParentFile(), relativePath));
+                                fos.write(licenseText.getBytes("UTF-8"));
+                                fos.close();
+                            }
                             // XXX ideally would compare the license texts to make sure they actually match up
                             licenses.put(license.getAttribute("name"), license);
                             module.removeChild(license);
@@ -378,6 +422,16 @@ public class MakeUpdateDesc extends MatchingTask {
 	    desc.delete ();
 	    throw new BuildException("Cannot create update description", ioe, getLocation());
 	}
+        if (updaterJar != null && updaterJar.size() > 0) {
+            try {
+                MakeNBM.validateAgainstAUDTDs(new InputSource(desc.toURI().toString()), updaterJar, this);
+            } catch (Exception x) {
+                desc.delete();
+                throw new BuildException("Could not validate " + desc + " after writing: " + x, x, getLocation());
+            }
+        } else {
+            log("No updater.jar specified, cannot validate " + desc + " against DTD", Project.MSG_WARN);
+        }
     }
 
     private static class Module {
