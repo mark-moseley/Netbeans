@@ -56,6 +56,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
+import org.netbeans.modules.glassfish.eecommon.api.RegisterDatabase;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceCreationException;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.j2ee.sun.api.ServerLocationManager;
@@ -65,7 +66,6 @@ import org.netbeans.modules.j2ee.sun.ide.j2ee.DeploymentManagerProperties;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.RunTimeDDCatalog;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.Utils;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.db.ExecSupport;
-import org.netbeans.modules.j2ee.sun.ide.j2ee.db.RegisterPointbase;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
@@ -107,7 +107,9 @@ public class AddDomainWizardIterator implements
     final static String ADMIN_JMX_PORT = "admin_jmx_port";                      //NOI18N
     final static String SIP_PORT = "sip_port";                                  //NOI18N
     final static String SIP_SSL_PORT = "sip_ssl_port";                          //NOI18N
-    final static String PROP_ERROR_MESSAGE = WizardDescriptor.PROP_ERROR_MESSAGE;        // NOI18N
+    final static String PROP_ERROR_MESSAGE = WizardDescriptor.PROP_ERROR_MESSAGE;
+    final static String PROP_WARNING_MESSAGE = WizardDescriptor.PROP_WARNING_MESSAGE;
+    final static String PROP_INFO_MESSAGE = WizardDescriptor.PROP_INFO_MESSAGE;
     final static String TYPE = "type";                                          //NOI18N
     final static String PROP_DISPLAY_NAME = "ServInstWizard_displayName";       // NOI18N
 
@@ -389,7 +391,8 @@ public class AddDomainWizardIterator implements
         instanceProperties.setProperty("LOCATION",                      //NOI18N
                 domainDir);
         if (wizard.getProperty(TYPE) != REMOTE) {
-            RegisterPointbase.getDefault().register((File) wizard.getProperty(PLATFORM_LOCATION));
+            String location = ((File)wizard.getProperty(PLATFORM_LOCATION)).getAbsolutePath();
+            RegisterDatabase.getDefault().setupDerby(location);
             instanceProperties.setProperty(DeploymentManagerProperties.HTTP_MONITOR_ATTR,
                 Boolean.FALSE.toString());            
         }
@@ -479,10 +482,10 @@ public class AddDomainWizardIterator implements
                         ((String)wizard.getProperty(SIP_SSL_PORT)).trim(),
                 domain
                 };
-                Integer detectedVersion = 
+                int detectedVersion =
                         ServerLocationManager.getAppServerPlatformVersion(irf);
                 // stop a warning about deprecated options...
-                if (detectedVersion.equals((Integer) ServerLocationManager.GF_V2)) {
+                if (detectedVersion >= ServerLocationManager.GF_V2) {
                     arrnd[6] = "--user";
                 }
                 Profile selectedProfile  = (Profile) wizard.getProperty(PROFILE);
