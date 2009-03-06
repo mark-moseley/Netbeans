@@ -40,7 +40,6 @@
  */
 package org.netbeans.modules.j2ee.weblogic9;
 
-import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -48,14 +47,13 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Properties;
-import java.util.jar.JarInputStream;
+import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.xml.XMLUtil;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
@@ -138,8 +136,7 @@ public class WLPluginProperties {
     private  FileObject propertiesFile = null;
     
     private FileObject getPropertiesFile() throws java.io.IOException {
-        FileSystem fs = Repository.getDefault().getDefaultFileSystem();
-        FileObject dir = fs.findResource("J2EE");
+        FileObject dir = FileUtil.getConfigFile("J2EE");
         FileObject retVal = null;
         if (null != dir) {
             retVal = dir.getFileObject("weblogic","properties"); // NOI18N
@@ -200,7 +197,6 @@ public class WLPluginProperties {
     
     static {
         fileColl.add("common");        // NOI18N
-        fileColl.add("javelin");       // NOI18N
         fileColl.add("uninstall");     // NOI18N
         fileColl.add("common/bin");    // NOI18N
         fileColl.add("server/lib/weblogic.jar"); // NOI18N
@@ -226,19 +222,22 @@ public class WLPluginProperties {
             return false;
         }
         try {
-            JarInputStream jarInputStream = new JarInputStream(new BufferedInputStream(
-                    new FileInputStream(weblogicJar)));
+            // JarInputStream cannot be used due to problem in weblogic.jar ib Oracle Weblogic Server 10.3
+            JarFile jar = new JarFile(weblogicJar);
             try {
-                Manifest manifest = jarInputStream.getManifest();
-                String implementationVersion = manifest.getMainAttributes()
-                        .getValue("Implementation-Version"); // NOI18N
+                Manifest manifest = jar.getManifest();
+                String implementationVersion = null;
+                if (manifest != null) {
+                    implementationVersion = manifest.getMainAttributes()
+                            .getValue("Implementation-Version"); // NOI18N
+                }
                 if (implementationVersion != null) { // NOI18N
                     implementationVersion = implementationVersion.trim();
                     return implementationVersion.startsWith("9.") || implementationVersion.startsWith("10."); // NOI18N
                 }
             } finally {
                 try {
-                    jarInputStream.close();
+                    jar.close();
                 } catch (IOException ex) {
                     LOGGER.log(Level.FINEST, null, ex);
                 }

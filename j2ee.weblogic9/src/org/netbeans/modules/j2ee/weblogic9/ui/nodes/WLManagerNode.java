@@ -79,7 +79,7 @@ public class WLManagerNode extends AbstractNode implements Node.Cookie {
     /**
      * Path to the node's icon that should reside in the class path
      */
-    private static final String ICON = "org/netbeans/modules/j2ee/weblogic9/resources/16x16.gif"; // NOI18N
+    private static final String ICON = "org/netbeans/modules/j2ee/weblogic9/resources/16x16.png"; // NOI18N
     
     /**
      * Creates a new instance of the WSManagerNode.
@@ -125,7 +125,7 @@ public class WLManagerNode extends AbstractNode implements Node.Cookie {
      * @return the node's icon
      */
     public Image getIcon(int type) {
-        return Utilities.loadImage(ICON);
+        return ImageUtilities.loadImage(ICON);
     }
     
     /**
@@ -134,7 +134,7 @@ public class WLManagerNode extends AbstractNode implements Node.Cookie {
      * @return the node's icon
      */
     public Image getOpenedIcon(int type) {
-        return Utilities.loadImage(ICON);
+        return ImageUtilities.loadImage(ICON);
     }
     
     /**
