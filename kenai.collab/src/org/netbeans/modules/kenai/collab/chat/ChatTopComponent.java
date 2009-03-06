@@ -102,6 +102,14 @@ public class ChatTopComponent extends TopComponent {
         }
     };
 
+    @Override
+    public void requestActive() {
+        super.requestActive();
+        Component c = chats.getSelectedComponent();
+        if (c!=null) {
+            c.requestFocus();
+        }
+    }
 
     private ChatTopComponent() {
         initComponents();
@@ -124,6 +132,7 @@ public class ChatTopComponent extends TopComponent {
                 if (index>=0) {
                     chats.setForegroundAt(index, Color.BLACK);
                     ChatNotifications.getDefault().removeGroup(chats.getTitleAt(index));
+                    chats.getComponentAt(index).requestFocus();
                 }
             }
         };
@@ -230,12 +239,13 @@ public class ChatTopComponent extends TopComponent {
 
     public void setActive(String name) {
         ChatNotifications.getDefault().removeGroup(name);
-        final int indexOfTab = chats.indexOfTab(name);
+        int indexOfTab = chats.indexOfTab(name);
         if (indexOfTab < 0) {
             MultiUserChat muc = kec.getChat(name);
             if (muc != null) {
                 ChatPanel chatPanel = new ChatPanel(muc);
                 addChat(chatPanel);
+                indexOfTab=chats.getTabCount()-1;
             }
 
         }
@@ -299,13 +309,15 @@ public class ChatTopComponent extends TopComponent {
             addChat(chatPanel);
         } else if (chs.size()!=0) {
             String s = prefs.get("kenai.open.chats." + Kenai.getDefault().getPasswordAuthentication().getUserName(),"");
-            for (String chat:s.split(",")) {
-                MultiUserChat muc = cc.getChat(chat);
-                if (muc!=null) {
-                    ChatPanel chatPanel = new ChatPanel(muc);
-                    addChat(chatPanel);
-                } else {
-                    Logger.getLogger(ChatTopComponent.class.getName()).warning("Cannot find chat " + chat);
+            if (s.length() > 1) {
+                for (String chat : s.split(",")) {
+                    MultiUserChat muc = cc.getChat(chat);
+                    if (muc != null) {
+                        ChatPanel chatPanel = new ChatPanel(muc);
+                        addChat(chatPanel);
+                    } else {
+                        Logger.getLogger(ChatTopComponent.class.getName()).warning("Cannot find chat " + chat);
+                    }
                 }
             }
         }
@@ -331,7 +343,6 @@ public class ChatTopComponent extends TopComponent {
         retryLink = new javax.swing.JLabel();
         initPanel = new javax.swing.JPanel();
         initLabel = new javax.swing.JLabel();
-        jProgressBar1 = new javax.swing.JProgressBar();
 
         chats.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
 
@@ -438,27 +449,21 @@ public class ChatTopComponent extends TopComponent {
 
         org.openide.awt.Mnemonics.setLocalizedText(initLabel, org.openide.util.NbBundle.getMessage(ChatTopComponent.class, "ChatTopComponent.initLabel.text")); // NOI18N
 
-        jProgressBar1.setIndeterminate(true);
-
         org.jdesktop.layout.GroupLayout initPanelLayout = new org.jdesktop.layout.GroupLayout(initPanel);
         initPanel.setLayout(initPanelLayout);
         initPanelLayout.setHorizontalGroup(
             initPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(initPanelLayout.createSequentialGroup()
                 .addContainerGap()
-                .add(initPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(jProgressBar1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 376, Short.MAX_VALUE)
-                    .add(initLabel))
-                .addContainerGap())
+                .add(initLabel)
+                .addContainerGap(285, Short.MAX_VALUE))
         );
         initPanelLayout.setVerticalGroup(
             initPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(initPanelLayout.createSequentialGroup()
                 .addContainerGap()
                 .add(initLabel)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jProgressBar1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(248, Short.MAX_VALUE))
+                .addContainerGap(272, Short.MAX_VALUE))
         );
 
         add(initPanel, java.awt.BorderLayout.CENTER);
@@ -512,7 +517,6 @@ public class ChatTopComponent extends TopComponent {
     private javax.swing.JPanel glassPane;
     private javax.swing.JLabel initLabel;
     private javax.swing.JPanel initPanel;
-    private javax.swing.JProgressBar jProgressBar1;
     private javax.swing.JLabel lblNotLoggedIn;
     private javax.swing.JLabel lblXmppError;
     private javax.swing.JLabel loginLink;
@@ -588,14 +592,19 @@ public class ChatTopComponent extends TopComponent {
 
     final class KenaiL implements PropertyChangeListener {
 
-        public void propertyChange(PropertyChangeEvent e) {
+        public void propertyChange(final PropertyChangeEvent e) {
             if (Kenai.PROP_LOGIN.equals(e.getPropertyName())) {
-                if (e.getNewValue() == null) {
-                    putLoginScreen();
-                } else {
-                    kec.getMyProjects();
-                    putChatsScreen();
-                }
+                kec.post(new Runnable() {
+
+                    public void run() {
+                        if (e.getNewValue() == null) {
+                            putLoginScreen();
+                        } else {
+                            kec.getMyProjects();
+                            putChatsScreen();
+                        }
+                    }
+                });
             } else if (Kenai.PROP_LOGIN_STARTED.equals(e.getPropertyName())) {
                 putConnectingScreen();
             } else if (Kenai.PROP_LOGIN_FAILED.equals(e.getPropertyName())) {
