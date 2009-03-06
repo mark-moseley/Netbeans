@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.java.source.usages;
 
 import java.io.File;
@@ -46,14 +45,14 @@ import org.netbeans.modules.parsing.impl.indexing.CacheFolder;
 import org.openide.filesystems.FileUtil;
 
 /**
- * <i>Copied from java/source, the package needs to be <code>org.netbeans.modules.java.source.usages</code>
- * to be able to access <code>Index.setCacheFolder()</code>.</i>
+ * We need to access org.netbeans.modules.java.source.usages package, which
+ * is not public.
  * 
+ * @author Tomas Zezula
  */
 public class IndexUtil {
 
-    public static void setCacheFolder (final File cacheFolder) {
+    public static void setCacheFolder(final File cacheFolder) {
         CacheFolder.setCacheFolder(FileUtil.toFileObject(cacheFolder));
     }
-
 }
