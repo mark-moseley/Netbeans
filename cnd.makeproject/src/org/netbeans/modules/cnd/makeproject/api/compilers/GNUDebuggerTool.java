@@ -42,28 +42,30 @@
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
-import org.netbeans.modules.cnd.api.compilers.ToolchainManager.CompilerDescriptor;
+import org.netbeans.modules.cnd.api.compilers.Tool;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager.DebuggerDescriptor;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
 
-public class GNUFortranCompiler extends BasicCompiler {
-    /** Creates a new instance of GNUCCompiler */
-    private GNUFortranCompiler(ExecutionEnvironment env, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        super(env, flavor, kind, name, displayName, path); // NOI18N
+public class GNUDebuggerTool extends Tool {
+
+    private GNUDebuggerTool(ExecutionEnvironment env, CompilerFlavor flavor, String name, String displayName, String path) { // GRP - FIXME
+        super(env, flavor, DebuggerTool, name, displayName, path); // NOI18N
     }
-    
+
     @Override
-    public GNUFortranCompiler createCopy() {
-        GNUFortranCompiler copy = new GNUFortranCompiler(getExecutionEnvironment(), getFlavor(), getKind(), "", getDisplayName(), getPath());
+    public GNUDebuggerTool createCopy() {
+        GNUDebuggerTool copy = new GNUDebuggerTool(getExecutionEnvironment(), getFlavor(), "", getDisplayName(), getPath());
         copy.setName(getName());
         return copy;
     }
 
-    public static GNUFortranCompiler create(ExecutionEnvironment env, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        return new GNUFortranCompiler(env, flavor, kind, name, displayName, path);
+    public static GNUDebuggerTool create(ExecutionEnvironment env, CompilerFlavor flavor, String name, String displayName, String path) {
+        return new GNUDebuggerTool(env, flavor, name, displayName, path);
     }
-    
+
     @Override
-    public CompilerDescriptor getDescriptor() {
-        return getFlavor().getToolchainDescriptor().getFortran();
+    public DebuggerDescriptor getDescriptor() {
+        return getFlavor().getToolchainDescriptor().getDebugger();
     }
+
 }
