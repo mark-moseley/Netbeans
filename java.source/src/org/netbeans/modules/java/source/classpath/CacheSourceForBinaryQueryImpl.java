@@ -56,6 +56,7 @@ import org.openide.util.Lookup;
  *
  * @author Tomas Zezula
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.java.queries.SourceForBinaryQueryImplementation.class, position=125)
 public class CacheSourceForBinaryQueryImpl implements SourceForBinaryQueryImplementation {
 
     private String FILE_PROTOCOL = "file";  //NOI18N
@@ -68,7 +69,7 @@ public class CacheSourceForBinaryQueryImpl implements SourceForBinaryQueryImplem
         if (!FILE_PROTOCOL.equals (binaryRoot.getProtocol())) {
             return null;
         }
-        URL sourceURL = Index.getSourceRootForClassFolder(binaryRoot);
+        URL sourceURL = null;//Index.getSourceRootForClassFolder(binaryRoot);
         SourceForBinaryQuery.Result result = null;
         if (sourceURL != null) {            
             for ( SourceForBinaryQueryImplementation impl :Lookup.getDefault().lookupAll(SourceForBinaryQueryImplementation.class)) {
@@ -80,7 +81,7 @@ public class CacheSourceForBinaryQueryImpl implements SourceForBinaryQueryImplem
                 }
             }
             result = new R (sourceURL, result);
-        }        
+            }
         return result;
     }
     

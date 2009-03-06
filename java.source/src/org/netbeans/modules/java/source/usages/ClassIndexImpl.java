@@ -43,13 +43,14 @@ package org.netbeans.modules.java.source.usages;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.netbeans.api.java.source.ClassIndex;
-import org.netbeans.api.java.source.JavaSource;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Utilities;
 
@@ -84,11 +85,13 @@ public abstract class ClassIndexImpl {
     
     public static ClassIndexFactory FACTORY;    
     
-    public abstract <T> void search (final String binaryName, final Set<UsageType> usageType, final ResultConvertor<T> convertor, final Set<? super T> result) throws InterruptedException;
+    public abstract <T> void search (final String binaryName, final Set<UsageType> usageType, final ResultConvertor<T> convertor, final Set<? super T> result) throws IOException, InterruptedException;
     
-    public abstract <T> void getDeclaredTypes (String name, ClassIndex.NameKind kind, final ResultConvertor<T> convertor, final Set<? super T> result) throws InterruptedException;
+    public abstract <T> void getDeclaredTypes (String name, ClassIndex.NameKind kind, final ResultConvertor<T> convertor, final Set<? super T> result) throws IOException, InterruptedException;
     
-    public abstract void getPackageNames (String prefix, boolean directOnly, Set<String> result) throws InterruptedException;
+    public abstract <T> void getDeclaredElements (String ident, ClassIndex.NameKind kind, ResultConvertor<T> convertor, Map<T,Set<String>> result) throws IOException, InterruptedException;
+    
+    public abstract void getPackageNames (String prefix, boolean directOnly, Set<String> result) throws IOException, InterruptedException;
     
     public abstract FileObject[] getSourceRoots ();
    
@@ -96,9 +99,9 @@ public abstract class ClassIndexImpl {
     
     public abstract SourceAnalyser getSourceAnalyser ();
     
-    public abstract String getSourceName (String binaryName);
+    public abstract String getSourceName (String binaryName) throws IOException;
     
-    public abstract void setDirty (JavaSource js);
+    public abstract void setDirty (URL url);
 
     public abstract boolean isSource ();
     
@@ -141,6 +144,9 @@ public abstract class ClassIndexImpl {
                 }
             }
         }
+    }
+    
+    public static final class IndexAlreadyClosedException extends IOException {        
     }
     
     private class Ref extends WeakReference<ClassIndexImplListener> implements Runnable {
