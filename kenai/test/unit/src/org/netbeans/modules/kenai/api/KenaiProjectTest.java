@@ -39,11 +39,7 @@
 
 package org.netbeans.modules.kenai.api;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.net.MalformedURLException;
-import java.net.URL;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -56,6 +52,8 @@ import org.junit.Test;
 public class KenaiProjectTest {
 
     static String UNITTESTUNIQUENAME = "unittestuniquename01";
+//    private static String uname = null;
+//    private static String passw = null;
 
     public KenaiProjectTest() {
     }
@@ -72,11 +70,13 @@ public class KenaiProjectTest {
     public void setUp() {
         try {
             System.setProperty("kenai.com.url","http://testkenai.com");
-            BufferedReader br = new BufferedReader(new FileReader(new File(System.getProperty("user.home"), ".test-kenai")));
-            String username = br.readLine();
-            String password = br.readLine();
-            br.close();
-            Kenai.getDefault().login(username, password.toCharArray());
+//            if (uname == null) {
+//                BufferedReader br = new BufferedReader(new FileReader(new File(System.getProperty("user.home"), ".test-kenai")));
+//                uname = br.readLine();
+//                passw = br.readLine();
+//                br.close();
+//            }
+//            Kenai.getDefault().login(uname, passw.toCharArray());
 
         } catch (Exception ex) {
             throw new RuntimeException(ex);
@@ -87,8 +87,8 @@ public class KenaiProjectTest {
      * Test of forRepository method, of class KenaiProject.
      */
     @Test
-    public void testForRepository1() throws Exception {
-        System.out.println("forRepository1");
+    public void testForRepositorySvn() throws Exception {
+        System.out.println("forRepositoryHg");
         String uri = "https://testkenai.com/svn/unittestuniquename01~source-code-repository";
         KenaiProject result = KenaiProject.forRepository(uri);
         assert result.getName().equals(UNITTESTUNIQUENAME);
@@ -97,8 +97,8 @@ public class KenaiProjectTest {
      * Test of forRepository method, of class KenaiProject.
      */
     @Test
-    public void testForRepository2() throws Exception {
-        System.out.println("forRepository2");
+    public void testForRepositoryHg() throws Exception {
+        System.out.println("forRepositorySvn");
         String uri = "https://testkenai.com/hg/unittestuniquename01~source-code-repository2";
         KenaiProject result = KenaiProject.forRepository(uri);
         assert result.getName().equals(UNITTESTUNIQUENAME);
