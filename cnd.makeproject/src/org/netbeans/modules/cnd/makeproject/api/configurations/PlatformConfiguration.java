@@ -39,17 +39,68 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.api.compilers;
+package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
+import org.netbeans.modules.cnd.makeproject.configurations.ui.PlatformNodeProp;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
 
-/**
- *
- * @author gordonp
- */
-public abstract class CompilerProvider {
+public class PlatformConfiguration extends IntConfiguration implements PropertyChangeListener {
     
-    public abstract Tool createCompiler(ExecutionEnvironment env, CompilerFlavor flavor, int kind, String name, String displayName, String path);
-        
+    private PlatformNodeProp pnp;
+    private DevelopmentHostConfiguration dhconf;
+
+    public PlatformConfiguration(DevelopmentHostConfiguration dhconf, int def, String[] names) {
+        super(null, def, names, null);
+        pnp = null;
+        this.dhconf = dhconf;
+    }
+
+    private PlatformConfiguration(PlatformConfiguration conf) {
+        super(null, conf.getDefault(), conf.getNames(), null);
+        setValue(conf.getValue());
+        setModified(conf.getModified());
+        pnp = conf.pnp;
+        dhconf = conf.dhconf;
+    }
+    
+    public void setPlatformNodeProp(PlatformNodeProp pnp) {
+        this.pnp = pnp;
+    }
+
+    @Override
+    public String getName() {
+        return dhconf.isOnline() ? super.getName() : "";
+    }
+
+    public void propertyChange(PropertyChangeEvent evt) {
+        dhconf = (DevelopmentHostConfiguration) evt.getNewValue();
+        ExecutionEnvironment execEnv = dhconf.getExecutionEnvironment();
+        int platform = CompilerSetManager.getDefault(execEnv).getPlatform();
+        if (platform == -1) {
+            // TODO: CompilerSet is not reliable about platform; it must be.
+            platform = PlatformTypes.PLATFORM_NONE;
+        }
+        setValue(platform);
+    }
+
+    public boolean isDevHostOnline() {
+        return dhconf.isOnline();
+    }
+
+    // Clone and Assign
+    public void assign(PlatformConfiguration conf) {
+        super.assign(conf);
+        pnp = conf.pnp;
+        dhconf = conf.dhconf;
+    }
+
+    @Override
+    public PlatformConfiguration clone() {
+        PlatformConfiguration clone = new PlatformConfiguration(this);
+        return clone;
+    }
 }
