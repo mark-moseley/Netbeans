@@ -50,13 +50,11 @@ import org.netbeans.modules.ruby.debugger.model.ThreadsModel;
 import org.netbeans.modules.ruby.debugger.model.VariablesModel;
 import org.netbeans.modules.ruby.debugger.model.WatchesModel;
 import org.netbeans.spi.debugger.ContextProvider;
+import org.netbeans.spi.viewmodel.NodeModel;
 import org.netbeans.spi.viewmodel.TableModel;
 import org.netbeans.spi.viewmodel.TableModelFilter;
 import org.netbeans.spi.viewmodel.TreeModel;
 
-/**
- * @author Martin Krauskopf
- */
 public class ContextProviderWrapper {
     
     private ContextProvider contextProvider;
@@ -76,14 +74,12 @@ public class ContextProviderWrapper {
         this.contextProvider = contextProvider;
     }
     
-    @SuppressWarnings("unchecked")
-    private static <T> List<T> debugLookup(String folder, Class<T> clazz) {
-        return (List<T>) DebuggerManager.getDebuggerManager().lookup(folder, clazz);
+    private static <T> List<? extends T> debugLookup(String folder, Class<T> clazz) {
+        return DebuggerManager.getDebuggerManager().lookup(folder, clazz);
     }
     
-    @SuppressWarnings("unchecked")
     static <T> T lookupFirst(final ContextProvider cp, Class<T> clazz) {
-        return (T) cp.lookupFirst(null, clazz);
+        return cp.lookupFirst(null, clazz);
     }
     
     public void fireModelChanges() {
@@ -98,7 +94,7 @@ public class ContextProviderWrapper {
 
     public static SessionsTableModelFilter getSessionsModel() {
         if (sessionsModel == null) {
-            List<TableModelFilter> tableModels = ContextProviderWrapper.debugLookup("SessionsView", TableModelFilter.class);
+            List<? extends TableModelFilter> tableModels = ContextProviderWrapper.debugLookup("SessionsView", TableModelFilter.class);
             for (TableModelFilter model : tableModels) {
                 if (model instanceof SessionsTableModelFilter) {
                     sessionsModel = (SessionsTableModelFilter) model;
@@ -111,8 +107,8 @@ public class ContextProviderWrapper {
     
     public static BreakpointModel getBreakpointModel() {
         if (breakpointModel == null) {
-            List<TableModel> tableModels = ContextProviderWrapper.debugLookup("BreakpointsView", TableModel.class);
-            for (TableModel model : tableModels) {
+            List<? extends NodeModel> tableModels = ContextProviderWrapper.debugLookup("BreakpointsView", NodeModel.class);
+            for (NodeModel model : tableModels) {
                 if (model instanceof BreakpointModel) {
                     breakpointModel = (BreakpointModel) model;
                     break;
