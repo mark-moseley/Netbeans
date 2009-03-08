@@ -56,14 +56,7 @@ public abstract class BugtrackingController {
      */
     public static String EVENT_COMPONENT_DATA_CHANGED   = "bugtracking.data.changed";
 
-    private final PropertyChangeSupport support;
-
-    /**
-     * Creates this controller
-     */
-    protected BugtrackingController() {
-        support = new PropertyChangeSupport(this);
-    }
+    private final PropertyChangeSupport support = new PropertyChangeSupport(this);
 
     /**
      * Returns a visual component representing the bugtracking entity this controller is meant for
@@ -84,6 +77,14 @@ public abstract class BugtrackingController {
      */
     public abstract boolean isValid();
 
+    /**
+     * Should return a message in case the controller isn't valid
+     * @return
+     */
+    public String getErrorMessage() {
+        return null;
+    }
+    
     /**
      *
      */
