@@ -25,33 +25,51 @@
  *
  * Portions Copyrighted 2007 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.groovy.grailsproject.actions;
 
-import java.awt.event.ActionEvent;
-import javax.swing.AbstractAction;
-import java.util.logging.Logger;
-import org.netbeans.modules.groovy.grailsproject.GrailsProject;
-import org.openide.util.NbBundle;
+package org.netbeans.modules.groovy.grailsproject;
 
-public class ResolvePluginsAction extends AbstractAction {
+import java.net.URL;
+import org.netbeans.api.project.Project;
 
-    private static final Logger LOG = Logger.getLogger(ResolvePluginsAction.class.getName());
+/**
+ *
+ * @author schmidtm, Petr Hejl
+ */
+public class GrailsServerState {
 
-    private final GrailsProject prj;
+    private final Project project;
 
-    public ResolvePluginsAction(GrailsProject prj) {
-        super(NbBundle.getMessage(ResolvePluginsAction.class, "LBL_ResolvePlugins"));
-        this.prj = prj;
+    /** <i>GuardedBy("this")</i> */
+    private Process process;
 
+    /** <i>GuardedBy("this")</i> */
+    private URL url;
+
+    public GrailsServerState(Project prj) {
+        this.project = prj;
     }
 
-    @Override
-    public boolean isEnabled() {
-        return true;
+    public synchronized boolean isRunning() {
+        return process != null;
     }
 
-    public void actionPerformed(ActionEvent e) {
-        // FIXME
-        
+    public synchronized Process getProcess() {
+        return process;
     }
+
+    public synchronized void setProcess(Process process) {
+        this.process = process;
+    }
+
+    public synchronized URL getRunningUrl() {
+        if (isRunning()) {
+            return url;
+        }
+        return null;
+    }
+
+    public synchronized void setRunningUrl(URL url) {
+        this.url = url;
+    }
+
 }
