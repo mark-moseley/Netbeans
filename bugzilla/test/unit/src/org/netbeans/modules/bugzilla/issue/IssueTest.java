@@ -611,7 +611,7 @@ public class IssueTest extends NbTestCase implements TestConstants {
             String attcomment = "my first attachement";
             String attdesc = "file containing text";
             File f = getAttachmentFile(atttext);
-            issue.addAttachment(f, attcomment, attdesc, "text/plain");
+            issue.addAttachment(f, attcomment, attdesc, "text/plain", false);
             issue.refresh();
 
             // get attachment
@@ -633,7 +633,7 @@ public class IssueTest extends NbTestCase implements TestConstants {
             attcomment = "my second attachement";
             attdesc = "file containing text";
             f = getAttachmentFile(atttext);
-            issue.addAttachment(f, attcomment, attdesc, "text/plain");
+            issue.addAttachment(f, attcomment, attdesc, "text/plain", false);
             issue.refresh();
 
             // get attachment
@@ -682,7 +682,7 @@ public class IssueTest extends NbTestCase implements TestConstants {
     }
 
     private String getSeenValue(BugzillaIssue issue, IssueField f) {
-        Map<String, String> m = getRepository().getIssueCache().getSeenAttributes(issue.getID());
+        Map<String, String> m = issue.getRepository().getIssueCache().getSeenAttributes(issue.getID());
         if(m == null) {
             return "";
         }
