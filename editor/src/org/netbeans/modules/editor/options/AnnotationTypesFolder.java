@@ -42,27 +42,26 @@
 package org.netbeans.modules.editor.options;
 
 import java.io.OutputStream;
-import org.openide.ErrorManager;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.openide.loaders.FolderInstance;
 import org.openide.cookies.InstanceCookie;
-import java.lang.ClassNotFoundException;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import java.util.Map;
 import java.util.HashMap;
 import java.io.IOException;
-import java.lang.String;
 import org.openide.filesystems.FileObject;
 import org.netbeans.editor.AnnotationType;
 import java.util.Iterator;
 import org.netbeans.editor.AnnotationTypes;
+import org.openide.util.Exceptions;
 import org.w3c.dom.*;
 import org.openide.xml.XMLUtil;
 import org.openide.filesystems.FileLock;
-import java.lang.Exception;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileEvent;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /** Representation of the "Editors/AnnotationTypes" folder. All
  * instances created through the createInstance() method are
@@ -86,16 +85,11 @@ public class AnnotationTypesFolder extends FolderInstance{
     /** map of annotationtype_name <-> AnnotationType_instance*/
     private Map annotationTypes;
 
-    /** FileObject which represent the folder with annotation types*/
-    private FileObject fo;
-    
     /** Creates new AnnotationTypesFolder */
     private AnnotationTypesFolder(FileObject fo, DataFolder fld) {
         super(fld);
         recreate();
         instanceFinished();
-        
-        this.fo = fo;
         
         // add listener on changes in annotation types folder
         fo.addFileChangeListener(new FileChangeAdapter() {
@@ -119,7 +113,7 @@ public class AnnotationTypesFolder extends FolderInstance{
             return folder;
         }
         
-        FileObject f = Repository.getDefault().getDefaultFileSystem().findResource(FOLDER);
+        FileObject f = FileUtil.getConfigFile(FOLDER);
         if (f == null) {
             return null;
         }
@@ -130,7 +124,7 @@ public class AnnotationTypesFolder extends FolderInstance{
             if (df != null)
                 folder = new AnnotationTypesFolder(f, df);
         } catch (org.openide.loaders.DataObjectNotFoundException ex) {
-            org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+            Logger.getLogger("global").log(Level.INFO,null, ex);
             return null;
         }
         return folder;
@@ -225,19 +219,19 @@ public class AnnotationTypesFolder extends FolderInstance{
                 os = fo.getOutputStream(lock);
                 XMLUtil.write(doc, os, "UTF-8"); // NOI18N
             } catch (Exception ex){
-                org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+                Logger.getLogger("global").log(Level.INFO,null, ex);
             } finally {
                 if (os != null) {
                     try {
                         os.close();
                     } catch (IOException e) {
-                        ErrorManager.getDefault().notify(e);
+                        Exceptions.printStackTrace(e);
                     }
                 }
                 lock.releaseLock();
             }
         }catch (IOException ex){
-            org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+            Logger.getLogger("global").log(Level.INFO,null, ex);
         }
         
     }
