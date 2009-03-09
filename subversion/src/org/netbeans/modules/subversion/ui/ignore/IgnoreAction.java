@@ -50,6 +50,7 @@ import org.openide.*;
 import org.openide.nodes.Node;
 import java.io.File;
 import java.lang.String;
+import java.util.logging.Level;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
 import org.tigris.subversion.svnclientadapter.*;
 
@@ -79,11 +80,11 @@ public class IgnoreAction extends ContextAction {
     }
 
     protected int getFileEnabledStatus() {
-        return FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY | FileInformation.STATUS_NOTVERSIONED_EXCLUDED;
+        return FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY | FileInformation.STATUS_VERSIONED_ADDEDLOCALLY | FileInformation.STATUS_NOTVERSIONED_EXCLUDED;
     }
 
     protected int getDirectoryEnabledStatus() {
-        return FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY | FileInformation.STATUS_NOTVERSIONED_EXCLUDED;
+        return FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY | FileInformation.STATUS_VERSIONED_ADDEDLOCALLY | FileInformation.STATUS_NOTVERSIONED_EXCLUDED;
     }
     
     public int getActionStatus(Node [] nodes) {
@@ -95,12 +96,14 @@ public class IgnoreAction extends ContextAction {
         if (files.length == 0) return UNDEFINED; 
         FileStatusCache cache = Subversion.getInstance().getStatusCache();
         for (int i = 0; i < files.length; i++) {
-            if (files[i].getName().equals(".svn") || files[i].getName().equals("_svn")) { // NOI18N
+            if (files[i].getName().equals(SvnUtils.SVN_ADMIN_DIR)) { // NOI18N
                 actionStatus = UNDEFINED;
                 break;
             }
             FileInformation info = cache.getStatus(files[i]);
-            if (info.getStatus() == FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY) {
+            if ((info.getStatus()
+                    & (FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY | FileInformation.STATUS_VERSIONED_ADDEDLOCALLY)
+                    ) != 0) {
                 if (actionStatus == UNIGNORING) {
                     actionStatus = UNDEFINED;
                     break;
@@ -136,7 +139,7 @@ public class IgnoreAction extends ContextAction {
         final File files[] = SvnUtils.getCurrentContext(nodes).getRootFiles();                                                
 
         ContextAction.ProgressSupport support = new ContextAction.ProgressSupport(this, nodes) {
-            public void perform() {                
+            public void perform() {
                 Map<File, Set<String>> names = splitByParent(files);
                 // do not attach onNotify listeners because the ignore command forcefully fires change events on ALL files
                 // in the parent directory and NONE of them interests us, see #89516
@@ -146,22 +149,48 @@ public class IgnoreAction extends ContextAction {
                 } catch (SVNClientException e) {
                     SvnClientExceptionHandler.notifyException(e, true, true);
                     return;
-                }                
+                }
+                if (actionStatus == IGNORING) {
+                    FileStatusCache cache = Subversion.getInstance().getStatusCache();
+                    try {
+                        for (File file : files) {
+                            // revert all locally added files (svn added but not comitted)
+                            // #108369 - added files cannot be ignored
+                            FileInformation s = cache.getStatus(file);
+                            if (s.getStatus() == FileInformation.STATUS_VERSIONED_ADDEDLOCALLY) {
+                                ISVNInfo info = client.getInfo(file);
+                                if (info == null || !info.isCopied()) { // do not revert copied files
+                                    client.revert(file, true); // revert the tree to NEWLOCALLY
+                                }
+                            }
+                        }
+                    } catch (SVNClientException ex) {
+                        SvnClientExceptionHandler.notifyException(ex, true, true);
+                        return;
+                    }
+                }
                 for (File parent : names.keySet()) {
                     Set<String> patterns = names.get(parent);
                     if(isCanceled()) {
                         return;
                     }
                     try {
-                        Set<String> currentPatterns = new HashSet<String>(client.getIgnoredPatterns(parent));
-                        if (actionStatus == IGNORING) {
-                            ensureVersioned(parent);
-                            currentPatterns.addAll(patterns);
-                        } else if (actionStatus == UNIGNORING) {
-                            currentPatterns.removeAll(patterns);
+                        Collection<String> c = client.getIgnoredPatterns(parent);
+                        if (c == null) {
+                            Subversion.LOG.log(Level.WARNING, IgnoreAction.class.toString() + ": cannot acquire ignored patterns for " + parent.getAbsolutePath()); // NOI18N
+                            if (parent.exists()) {
+                                Subversion.LOG.log(Level.WARNING, IgnoreAction.class.toString() + ": file does exist: " + parent.getAbsolutePath()); // NOI18N
+                            }
+                        } else {
+                            Set<String> currentPatterns = new HashSet<String>(c);
+                            if (actionStatus == IGNORING) {
+                                ensureVersioned(parent);
+                                currentPatterns.addAll(patterns);
+                            } else if (actionStatus == UNIGNORING) {
+                                currentPatterns.removeAll(patterns);
+                            }
+                            client.setIgnoredPatterns(parent, new ArrayList<String>(currentPatterns));
                         }
-                        client.setIgnoredPatterns(parent, new ArrayList<String>(currentPatterns));    
-                        
                     } catch (SVNClientException e) {
                         SvnClientExceptionHandler.notifyException(e, true, true);
                     }
@@ -229,7 +258,7 @@ public class IgnoreAction extends ContextAction {
         // technically, this block need not be synchronized but we want to have svn:ignore property set correctly at all times
         synchronized(IgnoreAction.class) {                        
             List<String> patterns = Subversion.getInstance().getClient(true).getIgnoredPatterns(parent);
-            if (patterns.contains(file.getName()) == false) {
+            if (patterns != null && patterns.contains(file.getName()) == false) {
                 patterns.add(file.getName());
                 Subversion.getInstance().getClient(true).setIgnoredPatterns(parent, patterns);
             }            
