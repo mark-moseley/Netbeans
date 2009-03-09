@@ -62,6 +62,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.jdesktop.swingx.JXBusyLabel;
 import org.jivesoftware.smackx.muc.MultiUserChat;
 import org.netbeans.modules.kenai.api.Kenai;
 import org.netbeans.modules.kenai.api.KenaiProject;
@@ -226,6 +227,7 @@ public class ChatTopComponent extends TopComponent {
                 removeAll();
                 chats.removeAll();
                 open.clear();
+                ((JXBusyLabel) initLabel).setBusy(true);
                 add(initPanel, BorderLayout.CENTER);
                 validate();
             }
@@ -255,7 +257,7 @@ public class ChatTopComponent extends TopComponent {
 
     void addChat(ChatPanel chatPanel) {
         ChatNotifications.getDefault().removeGroup(chatPanel.getName());
-        chats.addTab(chatPanel.getName(),chatPanel);
+        chats.add(chatPanel);
         open.add(chatPanel.getName());
         chats.setSelectedComponent(chatPanel);
         validate();
@@ -273,6 +275,7 @@ public class ChatTopComponent extends TopComponent {
         int index = chats.indexOfComponent(chatPanel);
         assert index>=0: "Component not found in CloseButtonTabbedPane " + chatPanel;
         open.remove(chats.getTitleAt(index));
+        chats.remove(chatPanel);
     }
 
     void setModified(ChatPanel panel) {
@@ -342,7 +345,7 @@ public class ChatTopComponent extends TopComponent {
         lblXmppError = new javax.swing.JLabel();
         retryLink = new javax.swing.JLabel();
         initPanel = new javax.swing.JPanel();
-        initLabel = new javax.swing.JLabel();
+        initLabel = new JXBusyLabel();
 
         chats.setTabLayoutPolicy(javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
 
@@ -456,7 +459,7 @@ public class ChatTopComponent extends TopComponent {
             .add(initPanelLayout.createSequentialGroup()
                 .addContainerGap()
                 .add(initLabel)
-                .addContainerGap(285, Short.MAX_VALUE))
+                .addContainerGap(271, Short.MAX_VALUE))
         );
         initPanelLayout.setVerticalGroup(
             initPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
