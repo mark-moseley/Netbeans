@@ -53,6 +53,7 @@ import org.openide.util.NbBundle;
  * Handler for core options.
  * @author Jaroslav Tulach
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.CLIHandler.class)
 public class CLIOptions extends CLIHandler {
 
     /** directory for modules */
@@ -169,24 +170,30 @@ public class CLIOptions extends CLIHandler {
                 }
             } else if (isOption (args[i], "locale")) { // NOI18N
                 args[i] = null;
-                String localeParam = args[++i];
-                String language;
-                String country = ""; // NOI18N
-                String variant = ""; // NOI18N
-                int index1 = localeParam.indexOf(":"); // NOI18N
-                if (index1 == -1)
-                    language = localeParam;
-                else {
-                    language = localeParam.substring(0, index1);
-                    int index2 = localeParam.indexOf(":", index1+1); // NOI18N
-                    if (index2 != -1) {
-                        country = localeParam.substring(index1+1, index2);
-                        variant = localeParam.substring(index2+1);
+                try {
+                    String localeParam = args[++i];
+                    String language;
+                    String country = ""; // NOI18N
+                    String variant = ""; // NOI18N
+                    int index1 = localeParam.indexOf(":"); // NOI18N
+                    if (index1 == -1)
+                        language = localeParam;
+                    else {
+                        language = localeParam.substring(0, index1);
+                        int index2 = localeParam.indexOf(":", index1+1); // NOI18N
+                        if (index2 != -1) {
+                            country = localeParam.substring(index1+1, index2);
+                            variant = localeParam.substring(index2+1);
+                        }
+                        else
+                            country = localeParam.substring(index1+1);
                     }
-                    else
-                        country = localeParam.substring(index1+1);
+                    Locale.setDefault(new Locale(language, country, variant));
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    System.err.println(getString("ERR_LocaleExpected"));
+                    return 2;
                 }
-                Locale.setDefault(new Locale(language, country, variant));
+
             } else if (isOption (args[i], "branding")) { // NOI18N
                 args[i] = null;
                 if (++i == args.length) {
@@ -225,11 +232,11 @@ public class CLIOptions extends CLIHandler {
         w.println("  --fontsize <size>     set the base font size of the user interface, in points");
         w.println("  --locale <language[:country[:variant]]> use specified locale");
         w.println("  --userdir <path>      use specified directory to store user settings");
+        w.println("  --nosplash            do not show the splash screen");
         w.println("");
 //   \  --branding <token>    use specified branding (- for default)
 //   
 //   \  --nologging           do not create the log file\n\
-//   \  --nosplash            do not show the splash screen\n\
 //   \  --nogui               just start up internals, do not show GUI
     }
     
