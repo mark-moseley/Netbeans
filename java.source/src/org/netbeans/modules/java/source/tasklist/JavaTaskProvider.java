@@ -49,10 +49,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
@@ -63,6 +63,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
+import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.TaskListener;
 import org.openide.util.WeakSet;
@@ -81,7 +82,8 @@ public final class JavaTaskProvider extends PushTaskScanner {
     private Callback callback;
     
     public JavaTaskProvider() {
-        super( "Java Errors", "Java compiler errors and warnings", null);
+        super( NbBundle.getBundle(JavaTaskProvider.class).getString("LBL_ProviderName"),
+                NbBundle.getBundle(JavaTaskProvider.class).getString("LBL_ProviderDescription"), null); //NOI18N
         INSTANCE = this;
     }
     
@@ -277,6 +279,20 @@ public final class JavaTaskProvider extends PushTaskScanner {
             }
 
             FileObject root = cp.findOwnerRoot(file);
+
+            if (root == null) {
+                Project p = FileOwnerQuery.getOwner(file);
+                
+                LOG.log(Level.WARNING,
+                        "file: {0} is not on its own source classpath: {1}, project: {2}",
+                        new Object[] {
+                            FileUtil.getFileDisplayName(file),
+                            cp.toString(ClassPath.PathConversionMode.PRINT),
+                            p != null ? p.getClass() : "null"
+                        });
+
+                return ;
+            }
 
             if (file.isData()) {
                 List<? extends Task> tasks = TaskCache.getDefault().getErrors(file);
