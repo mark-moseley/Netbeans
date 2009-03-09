@@ -79,13 +79,18 @@ public class ChatNotifications {
         return instance;
     }
 
-    public synchronized void removeGroup(String name) {
-        MessagingHandleImpl r=groupMessages.get(name);
-        if (r!=null) {
-            r.disposeNotification();
-            r.setMessageCount(0);
-            groupMessages.remove(r);
-        }
+    public synchronized void removeGroup(final String name) {
+        notificationsAdder.post(new Runnable() {
+
+            public void run() {
+                MessagingHandleImpl r = groupMessages.get(name);
+                if (r != null) {
+                    r.disposeNotification();
+                    r.setMessageCount(0);
+                    groupMessages.remove(r);
+                }
+            }
+        });
     }
 
     void addGroupMessage(final Message msg) {
@@ -110,6 +115,7 @@ public class ChatNotifications {
 
                     public void actionPerformed(ActionEvent arg0) {
                         ChatTopComponent.openAction(ChatTopComponent.getDefault(), "", "", false).actionPerformed(arg0);
+                        ChatTopComponent.getDefault().setActive(chatRoomName);
                     }
                 };
 
@@ -134,6 +140,7 @@ public class ChatNotifications {
         if (handle==null) {
             handle =new MessagingHandleImpl();
             groupMessages.put(id, handle);
+            handle.setMessageCount(0);
         }
         return handle;
     }
