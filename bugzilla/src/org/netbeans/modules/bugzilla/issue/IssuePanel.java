@@ -187,7 +187,9 @@ public class IssuePanel extends javax.swing.JPanel {
         String currentValue = null;
         if (!force) {
             if (component instanceof JComboBox) {
-                currentValue = ((JComboBox)component).getSelectedItem().toString();
+                // XXX HOTFIXING NPE
+                Object item  = ((JComboBox)component).getSelectedItem();
+                currentValue = item != null ? item.toString() : "";
             } else if (component instanceof JTextField) {
                 currentValue = ((JTextField)component).getText();
             }
@@ -262,10 +264,12 @@ public class IssuePanel extends javax.swing.JPanel {
                     statuses.addAll(closedStatuses);
                 } else {
                     statuses.add(resolved);
-                    for (int i=allStatuses.indexOf(status); i<allStatuses.size(); i++) {
-                        String s = allStatuses.get(i);
-                        if (!openStatuses.contains(s)) {
-                            statuses.add(s);
+                    if(!status.equals("")) {
+                        for (int i=allStatuses.indexOf(status); i<allStatuses.size(); i++) {
+                            String s = allStatuses.get(i);
+                            if (!openStatuses.contains(s)) {
+                                statuses.add(s);
+                            }
                         }
                     }
                 }
