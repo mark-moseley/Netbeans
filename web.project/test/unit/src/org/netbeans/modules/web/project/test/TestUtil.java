@@ -65,6 +65,7 @@ import org.netbeans.modules.j2ee.deployment.impl.ServerRegistry;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.spi.project.ProjectFactory;
 import org.netbeans.spi.project.ProjectState;
+import org.netbeans.spi.project.support.ant.AntBasedProjectType;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.openide.filesystems.FileLock;
@@ -92,16 +93,25 @@ public final class TestUtil extends ProxyLookup {
         TestUtil.class.getClassLoader().setDefaultAssertionStatus(true);
         System.setProperty("org.openide.util.Lookup", TestUtil.class.getName());
         Assert.assertEquals(TestUtil.class, Lookup.getDefault().getClass());
+        Lookup p = Lookups.forPath("Services/AntBasedProjectTypes/");
+        p.lookupAll(AntBasedProjectType.class);
+        projects = p;
+        setLookup(new Object[0]);
     }
     
     private static TestUtil DEFAULT;
     private static final int BUFFER = 2048;
+    private static final Lookup projects;
     
     /** Do not call directly */
     public TestUtil() {
         Assert.assertNull(DEFAULT);
         DEFAULT = this;
-        setLookup(new Object[0]);
+        ClassLoader l = TestUtil.class.getClassLoader();
+        setLookups(new Lookup[] {
+            Lookups.metaInfServices(l),
+            Lookups.singleton(l)
+        });
     }
     
     /**
@@ -116,12 +126,13 @@ public final class TestUtil extends ProxyLookup {
     /**
      * Set the global default lookup with some fixed instances including META-INF/services/*.
      */
-    public static void setLookup(Object[] instances) {
+    public static void setLookup(Object... instances) {
         ClassLoader l = TestUtil.class.getClassLoader();
         DEFAULT.setLookups(new Lookup[] {
             Lookups.fixed(instances),
             Lookups.metaInfServices(l),
             Lookups.singleton(l),
+            projects
         });
     }
     
@@ -266,9 +277,9 @@ public final class TestUtil extends ProxyLookup {
         String oldNbUser = System.getProperty("netbeans.user"); // NOI18N
         File root = test.getWorkDir();
         File systemDir = new File(root, "ud/system"); // NOI18N
-        new File(systemDir, "J2EE/InstalledServers").mkdirs(); // NOI18N
-        new File(systemDir, "J2EE/DeploymentPlugins").mkdirs(); // NOI18N
-        new File(root, "nb").mkdirs(); // NOI18N
+        FileUtil.createFolder(new File(systemDir, "J2EE/InstalledServers"));
+        FileUtil.createFolder(new File(systemDir, "J2EE/DeploymentPlugins"));
+        FileUtil.createFolder(new File(root, "nb"));
         System.setProperty("netbeans.home", new File(test.getWorkDir(), "nb").getAbsolutePath()); // NOI18N
         System.setProperty("netbeans.user", new File(test.getWorkDir(), "ud").getAbsolutePath()); // NOI18N
         
@@ -285,7 +296,7 @@ public final class TestUtil extends ProxyLookup {
         } else {
             asRoot = extractAppSrv(test.getWorkDir(), new File(test.getDataDir(), "SunAppServer.zip")); // NOI18N
         }
-        FileObject dir = Repository.getDefault().getDefaultFileSystem().findResource("/J2EE/InstalledServers"); // NOI18N
+        FileObject dir = FileUtil.getConfigFile("J2EE/InstalledServers"); // NOI18N
         String name = FileUtil.findFreeFileName(dir, "instance", null); // NOI18N
         FileObject instanceFO = dir.createData(name);
         String serverID = "[" + asRoot.getAbsolutePath() + "]deployer:Sun:AppServer::localhost:4848"; // NOI18N
@@ -310,7 +321,7 @@ public final class TestUtil extends ProxyLookup {
     public static void copyDir(File src,File tgt) throws IOException {
         if (src.isDirectory()) {
             if (!tgt.exists()) {
-                tgt.mkdir();
+                FileUtil.createFolder(tgt);
             }
             
             String[] dirList = src.list();
@@ -360,9 +371,9 @@ public final class TestUtil extends ProxyLookup {
                 byte data[] = new byte[BUFFER];
                 File entryFile = new File(destDir, entry.getName());
                 if (entry.isDirectory()) {
-                    entryFile.mkdirs();
+                    FileUtil.createFolder(entryFile);
                 } else {
-                    entryFile.getParentFile().mkdirs();
+                    FileUtil.createFolder(entryFile.getParentFile());
                     FileOutputStream fos = new FileOutputStream(entryFile);
                     dest = new BufferedOutputStream(fos, BUFFER);
                     int count;
@@ -587,7 +598,7 @@ public final class TestUtil extends ProxyLookup {
         private static FileSystem mksystem(NbTestCase t) throws Exception {
             LocalFileSystem lfs = new LocalFileSystem();
             File systemDir = new File(t.getWorkDir(), "ud/system");
-            systemDir.mkdirs();
+            FileUtil.createFolder(systemDir);
             lfs.setRootDirectory(systemDir);
             lfs.setReadOnly(false);
             List<FileSystem> layers = new ArrayList<FileSystem>();
