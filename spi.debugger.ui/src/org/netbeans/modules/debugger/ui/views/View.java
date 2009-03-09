@@ -48,6 +48,8 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import javax.swing.JComponent;
+import javax.swing.JToolBar;
+import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
 import org.netbeans.spi.viewmodel.Models;
 
@@ -70,6 +72,7 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
     public static final String THREADS_VIEW_NAME = "ThreadsView";
     public static final String WATCHES_VIEW_NAME = "WatchesView";
     public static final String SOURCES_VIEW_NAME = "SourcesView";
+    public static final String RESULTS_VIEW_NAME = "ResultsView";
     
     private transient JComponent contentComponent;
     private transient ViewModelListener viewModelListener;
@@ -109,9 +112,16 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
             //tree = Models.createView (Models.EMPTY_MODEL);
             contentComponent.setName (NbBundle.getMessage (View.class, toolTipResource));
             add (contentComponent, BorderLayout.CENTER);  //NOI18N
-            buttonsPane = new javax.swing.JPanel();
-            buttonsPane.setLayout(new GridBagLayout());
-            add(buttonsPane, BorderLayout.WEST);
+            JToolBar toolBar = new JToolBar(JToolBar.VERTICAL);
+            toolBar.setFloatable(false);
+            toolBar.setRollover(true);
+            toolBar.setBorderPainted(false);
+            if( "Aqua".equals(UIManager.getLookAndFeel().getID()) ) { //NOI18N
+                toolBar.setBackground(UIManager.getColor("NbExplorerView.background")); //NOI18N
+            }
+            //toolBar.setLayout(new GridBagLayout());
+            add(toolBar, BorderLayout.WEST);
+            buttonsPane = toolBar;
         } else {
             buttonsPane = (JComponent) ((BorderLayout) getLayout()).getLayoutComponent(BorderLayout.WEST);
         }
@@ -308,6 +318,20 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
         );
     }
 
+    /** Creates the view. Call from the module layer only!
+     * @deprecated Do not call.
+     */
+    public static synchronized TopComponent getResultsView() {
+        return new View(
+            "org/netbeans/modules/debugger/resources/sourcesView/sources_16.png",
+            RESULTS_VIEW_NAME,
+            "NetbeansDebuggerResultNode", // NOI18N
+            null,
+            "CTL_Result_view",
+            "CTL_Result_view_tooltip"
+        );
+    }
+
     private static TopComponent getView(String viewName) {
         if (viewName.equals(BREAKPOINTS_VIEW_NAME)) {
             return getBreakpointsView();
@@ -329,6 +353,9 @@ public class View extends TopComponent implements org.openide.util.HelpCtx.Provi
         }
         if (viewName.equals(SOURCES_VIEW_NAME)) {
             return getSourcesView();
+        }
+        if (viewName.equals(RESULTS_VIEW_NAME)) {
+            return getResultsView();
         }
         throw new IllegalArgumentException(viewName);
     }
