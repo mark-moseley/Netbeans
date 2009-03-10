@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,6 +60,9 @@ import javax.xml.namespace.QName;
 
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.Sources;
 import org.netbeans.modules.xml.catalogsupport.DefaultProjectCatalogSupport;
 import org.netbeans.modules.xml.schema.model.Element;
 import org.netbeans.modules.xml.schema.model.GlobalElement;
@@ -82,6 +86,7 @@ import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 import org.netbeans.modules.xml.wsdl.model.extensions.xsd.WSDLSchema;
 import org.netbeans.modules.xml.wsdl.ui.actions.NameGenerator;
 import org.netbeans.modules.xml.wsdl.ui.actions.schema.ExtensibilityElementCreatorVisitor;
+import org.netbeans.modules.xml.wsdl.ui.api.property.CatalogHelper;
 import org.netbeans.modules.xml.wsdl.ui.common.Constants;
 import org.netbeans.modules.xml.wsdl.ui.schema.visitor.OptionalAttributeFinderVisitor;
 import org.netbeans.modules.xml.wsdl.ui.view.treeeditor.pastetype.SchemaImportPasteType;
@@ -92,6 +97,7 @@ import org.netbeans.modules.xml.xam.Model;
 import org.netbeans.modules.xml.xam.Named;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentComponent;
 import org.netbeans.modules.xml.xam.locator.CatalogModelException;
+import org.netbeans.modules.xml.xam.ui.ProjectConstants;
 import org.netbeans.spi.palette.PaletteController;
 import org.openide.ErrorManager;
 import org.openide.explorer.view.TreeView;
@@ -614,17 +620,17 @@ public class Utility {
     /* Similiar logic can be found in SchemaImportsGenerator.processImports(). So if there are changes here, also change in SchemaImportsGenerator*/
     public static org.netbeans.modules.xml.schema.model.Import addSchemaImport(SchemaModel impSchemaModel, WSDLModel wsdlModel) {
         Map<String, String> existingLocationToNamespaceMap = new HashMap<String, String>();
-        
+
         FileObject wsdlFileObj = wsdlModel.getModelSource().getLookup().lookup(FileObject.class);
         URI wsdlFileURI = FileUtil.toFile(wsdlFileObj).toURI();
-        
+
         Definitions def = wsdlModel.getDefinitions();
         Types types = def.getTypes();
         if (types == null) {
             types = wsdlModel.getFactory().createTypes();
             def.setTypes(types);
         }
-        
+
         Schema defaultInlineSchema = null;
         String wsdlTNS = def.getTargetNamespace();
         if (wsdlTNS != null) {
@@ -638,7 +644,7 @@ public class Utility {
                 }
             }
         }
-        
+
         WSDLSchema wsdlSchema = null;
         if (defaultInlineSchema == null) {
             wsdlSchema = wsdlModel.getFactory().createWSDLSchema();
@@ -646,62 +652,72 @@ public class Utility {
             defaultInlineSchema = schemaModel.getSchema();
             defaultInlineSchema.setTargetNamespace(wsdlTNS);
         }
-        
+
         //if any import with same namespace is present, dont import it.
         Collection<org.netbeans.modules.xml.schema.model.Import> imports = defaultInlineSchema.getImports();
         for (org.netbeans.modules.xml.schema.model.Import imp : imports) {
             existingLocationToNamespaceMap.put(imp.getSchemaLocation(), imp.getNamespace());
         }
-        
+
         Collection<Schema> schemas = types.getSchemas();
         if (schemas != null) {
-             for (Schema schema : schemas) {
-                 Collection<org.netbeans.modules.xml.schema.model.Import> schemaImports = schema.getImports();
-                 for (org.netbeans.modules.xml.schema.model.Import imp : schemaImports) {
-                     existingLocationToNamespaceMap.put(imp.getSchemaLocation(), imp.getNamespace());
-                 }
-             }
+            for (Schema schema : schemas) {
+                Collection<org.netbeans.modules.xml.schema.model.Import> schemaImports = schema.getImports();
+                for (org.netbeans.modules.xml.schema.model.Import imp : schemaImports) {
+                    existingLocationToNamespaceMap.put(imp.getSchemaLocation(), imp.getNamespace());
+                }
+            }
         }
-        
+
         if (impSchemaModel != null) {
-            
+
             String schemaTNS = impSchemaModel.getSchema().getTargetNamespace();
-            if (schemaTNS != null && 
+            if (schemaTNS != null &&
                     !schemaTNS.equals(XMLConstants.W3C_XML_SCHEMA_NS_URI)) {
 
                 FileObject fo = impSchemaModel.getModelSource().getLookup().lookup(FileObject.class);
-                
-                
+
+
                 if (fo != null) {
                     String path = null;
-                    //should be different files. in case of inline schemas.
-                    if (!FileUtil.toFile(fo).toURI().equals(wsdlFileURI)) {
-                        DefaultProjectCatalogSupport catalogSupport = DefaultProjectCatalogSupport.getInstance(wsdlFileObj);
-                        if (catalogSupport.needsCatalogEntry(wsdlFileObj, fo)) {
-                            // Remove the previous catalog entry, then create new one.
-                            URI uri;
-                            try {
-                                uri = catalogSupport.getReferenceURI(wsdlFileObj, fo);
-                                catalogSupport.removeCatalogEntry(uri);
-                                catalogSupport.createCatalogEntry(wsdlFileObj, fo);
-                                path = catalogSupport.getReferenceURI(wsdlFileObj, fo).toString();
-                            } catch (URISyntaxException use) {
-                                ErrorManager.getDefault().notify(use);
-                            } catch (IOException ioe) {
-                                ErrorManager.getDefault().notify(ioe);
-                            } catch (CatalogModelException cme) {
-                                ErrorManager.getDefault().notify(cme);
+
+                    Project wsdlProject = FileOwnerQuery.getOwner(wsdlFileObj);
+                    if (wsdlProject == null) {
+                        //Generate absolute paths
+                        path = FileUtil.toFile(fo).toURI().toString();
+                    } else if (!FileUtil.toFile(fo).toURI().equals(wsdlFileURI)) {
+                        //see if its a remote reference
+                        CatalogHelper catalogHelper = new CatalogHelper(wsdlProject);
+                        path = catalogHelper.getReferencePath(fo, "xsd");
+                        if (path == null) {
+                            //see if its cross project reference
+                            //should be different files. in case of inline schemas.
+                            DefaultProjectCatalogSupport catalogSupport = DefaultProjectCatalogSupport.getInstance(wsdlFileObj);
+                            if (catalogSupport.needsCatalogEntry(wsdlFileObj, fo)) {
+                                // Remove the previous catalog entry, then create new one.
+                                URI uri;
+                                try {
+                                    uri = catalogSupport.getReferenceURI(wsdlFileObj, fo);
+                                    catalogSupport.removeCatalogEntry(uri);
+                                    catalogSupport.createCatalogEntry(wsdlFileObj, fo);
+                                    path = catalogSupport.getReferenceURI(wsdlFileObj, fo).toString();
+                                } catch (URISyntaxException use) {
+                                    ErrorManager.getDefault().notify(use);
+                                } catch (IOException ioe) {
+                                    ErrorManager.getDefault().notify(ioe);
+                                } catch (CatalogModelException cme) {
+                                    ErrorManager.getDefault().notify(cme);
+                                }
+                            } else {
+                                path = RelativePath.getRelativePath(FileUtil.toFile(wsdlFileObj).getParentFile(), FileUtil.toFile(fo));
                             }
-                        } else {
-                            path = RelativePath.getRelativePath(FileUtil.toFile(wsdlFileObj).getParentFile(), FileUtil.toFile(fo));
                         }
                     }
                     if (path != null && (!existingLocationToNamespaceMap.containsKey(path) ||
                             existingLocationToNamespaceMap.get(path) == null ||
-                            !existingLocationToNamespaceMap.get(path).equals(schemaTNS)))
-                    { 
+                            !existingLocationToNamespaceMap.get(path).equals(schemaTNS))) {
                         org.netbeans.modules.xml.schema.model.Import schemaImport =
-                            defaultInlineSchema.getModel().getFactory().createImport();
+                                defaultInlineSchema.getModel().getFactory().createImport();
                         schemaImport.setNamespace(schemaTNS);
                         schemaImport.setSchemaLocation(path);
                         defaultInlineSchema.addExternalReference(schemaImport);
@@ -714,8 +730,8 @@ public class Utility {
             }
         }
         return null;
-        
-    } 
+
+    }
     
     /**
      * Adds a import statement importing the wsdl comprising of the provided wsdl component.
@@ -780,8 +796,16 @@ public class Utility {
                 }
             }
             
-            if (path != null) wsdlImport.setLocation(path);
-            
+            if (path != null) {
+                wsdlImport.setLocation(path);
+                Collection<Import> wsdlImports = recievingModel.getDefinitions().getImports();
+                for (Import wsdlImp : wsdlImports) {
+                    String namespace = wsdlImp.getNamespace();
+                    if (namespace != null && namespace.equals(importedWSDLTargetNamespace)) {
+                        return wsdlImp; //already imported.
+                    }
+                }
+            }
             recievingModel.getDefinitions().addImport(wsdlImport);
             return wsdlImport;
         }
@@ -960,5 +984,22 @@ public class Utility {
         return null;
     }
     
-        
+    /**
+     * Get all interesting source roots for purposes of the wsdl editing.
+     * @param project
+     * @return all source roots.
+     */
+    public static List<SourceGroup> getSourceRoots(Project project) {
+        List<SourceGroup> roots = new ArrayList<SourceGroup>();
+        Sources sources = ProjectUtils.getSources(project);
+        SourceGroup[] javaRoots =
+                sources.getSourceGroups(ProjectConstants.JAVA_SOURCES_TYPE);
+        roots.addAll(Arrays.asList(javaRoots));
+        if (roots.isEmpty()) {
+            SourceGroup[] sourceGroups = sources.getSourceGroups(Sources.TYPE_GENERIC);
+            roots.addAll(Arrays.asList(sourceGroups));
+        }
+        return roots;
+    }
+    
 }

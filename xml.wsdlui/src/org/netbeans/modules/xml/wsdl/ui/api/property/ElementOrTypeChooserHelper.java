@@ -52,7 +52,10 @@ import javax.xml.XMLConstants;
 
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.SourceGroup;
 import org.netbeans.modules.xml.catalogsupport.DefaultProjectCatalogSupport;
+import org.netbeans.modules.xml.retriever.catalog.CatalogEntry;
+import org.netbeans.modules.xml.retriever.catalog.Utilities;
 import org.netbeans.modules.xml.schema.model.GlobalComplexType;
 import org.netbeans.modules.xml.schema.model.GlobalElement;
 import org.netbeans.modules.xml.schema.model.GlobalSimpleType;
@@ -64,15 +67,17 @@ import org.netbeans.modules.xml.schema.model.SchemaModelFactory;
 import org.netbeans.modules.xml.schema.ui.nodes.categorized.CategorizedSchemaNodeFactory;
 import org.netbeans.modules.xml.wsdl.model.Definitions;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
+import org.netbeans.modules.xml.wsdl.ui.netbeans.module.Utility;
 import org.netbeans.modules.xml.wsdl.ui.view.treeeditor.NodesFactory;
 import org.netbeans.modules.xml.wsdl.ui.wsdl.nodes.BuiltInTypeFolderNode;
 import org.netbeans.modules.xml.xam.Model;
 import org.netbeans.modules.xml.xam.ModelSource;
 import org.netbeans.modules.xml.xam.ui.customizer.FolderNode;
+import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataObject;
+import org.openide.nodes.AbstractNode;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
 import org.openide.nodes.FilterNode.Children;
@@ -105,29 +110,45 @@ public class ElementOrTypeChooserHelper extends ChooserHelper<SchemaComponent>{
         filters.add(GlobalSimpleType.class);
         filters.add(GlobalComplexType.class);
         filters.add(GlobalElement.class);
-     
-        if (project == null) {
+        Project wsdlProject = null;
+        DefaultProjectCatalogSupport catalogSupport = null;
+        if (project != null) {
+            wsdlProject = project;
+            //Fix for IZ 147816
+            SubprojectProvider provider = wsdlProject.getLookup().lookup(SubprojectProvider.class);
+            if (provider != null) {
+                catalogSupport = new DefaultProjectCatalogSupport(wsdlProject);
+            }
+        } else {
             FileObject wsdlFile = model.getModelSource().getLookup().lookup(FileObject.class);
             if(wsdlFile != null) {
-                project = FileOwnerQuery.getOwner(wsdlFile);
+                catalogSupport = DefaultProjectCatalogSupport.getInstance(wsdlFile);
+                wsdlProject = FileOwnerQuery.getOwner(wsdlFile);
             }
         }
-        if (project != null) {
+        if (wsdlProject != null) {
             projectsFolderNode = new FolderNode(new Children.Array()); 
             projectsFolderNode.setDisplayName(NbBundle.getMessage(ElementOrTypeChooserHelper.class, "LBL_ByFile_DisplayName"));
-            LogicalViewProvider viewProvider = project.getLookup().lookup(LogicalViewProvider.class);
+            LogicalViewProvider viewProvider = wsdlProject.getLookup().lookup(LogicalViewProvider.class);
 
 
             ArrayList<Node> nodes = new ArrayList<Node>();
-            nodes.add(new EnabledNode(new SchemaProjectFolderNode(viewProvider.createLogicalView(), project, filters)));
-
-            DefaultProjectCatalogSupport catalogSupport = new DefaultProjectCatalogSupport(project);
-            Set refProjects = catalogSupport.getProjectReferences();
-            if (refProjects != null && refProjects.size() > 0) {
-                for (Object o : refProjects) {
-                    Project refPrj = (Project) o;
-                    viewProvider = refPrj.getLookup().lookup(LogicalViewProvider.class);
-                    nodes.add(new EnabledNode(new SchemaProjectFolderNode(viewProvider.createLogicalView(), refPrj, filters)));
+            Node projectNode = new EnabledNode(new SchemaProjectFolderNode(viewProvider.createLogicalView(), wsdlProject, filters));
+            nodes.add(projectNode);
+            Node catalogNode = getCatalogNode(wsdlProject, filters);
+            if (catalogNode != null) {
+                projectNode.getChildren().add(new Node[] {catalogNode});
+            }
+            
+            
+            if (catalogSupport != null) {
+                Set refProjects = catalogSupport.getProjectReferences();
+                if (refProjects != null && refProjects.size() > 0) {
+                    for (Object o : refProjects) {
+                        Project refPrj = (Project) o;
+                        viewProvider = refPrj.getLookup().lookup(LogicalViewProvider.class);
+                        nodes.add(new EnabledNode(new SchemaProjectFolderNode(viewProvider.createLogicalView(), refPrj, filters)));
+                    }
                 }
             }
             projectsFolderNode.getChildren().add(nodes.toArray(new Node[nodes.size()]));
@@ -201,6 +222,68 @@ public class ElementOrTypeChooserHelper extends ChooserHelper<SchemaComponent>{
         }
         return selected;
     }
+
+    private Node getCatalogNode(Project wsdlProject, List<Class<? extends SchemaComponent>> filters) {
+        CatalogHelper helper = new CatalogHelper(wsdlProject);
+        
+        List<CatalogEntry> references = helper.getReferencedResources(SCHEMA_FILE_EXTENSION);
+        if (references == null || references.isEmpty()) return null;
+        
+        Node node = new CatalogNode(new CatalogChildren(project, helper, references, filters));
+        node.setName(NbBundle.getMessage(ElementOrTypeChooserHelper.class, "LBL_RemoteReferences"));
+        return node;
+    }
+    
+    class CatalogChildren extends Children.Keys<CatalogEntry> {
+        private Project wsdlProject;
+        List<Class<? extends SchemaComponent>> schemaComponentFilters;
+        private List<CatalogEntry> entries;
+        private Set<CatalogEntry> emptySet = Collections.emptySet();
+        private CatalogHelper helper;
+        
+         public CatalogChildren (Project project, CatalogHelper helper, List<CatalogEntry> entries, List<Class<? extends SchemaComponent>> filters) {
+            this.wsdlProject = project;
+            this.schemaComponentFilters = filters;
+            this.entries = entries;
+            this.helper = helper;
+        }
+
+        @Override
+        public Node[] createNodes(CatalogEntry entry) {
+            FileObject fo = helper.getFileObject(entry);
+            ModelSource modelSource = Utilities.getModelSource(fo, true);
+            if (modelSource != null) {
+                SchemaModel schemaModel = SchemaModelFactory.getDefault().getModel(modelSource);
+                if (schemaModel.getState() == SchemaModel.State.VALID) {
+                    CategorizedSchemaNodeFactory factory = new CategorizedSchemaNodeFactory(schemaModel, schemaComponentFilters, Lookup.EMPTY);
+                    return new Node[]{new FileNode(
+                                factory.createNode(schemaModel.getSchema()),
+                                CatalogHelper.getFileName(entry.getSource()))
+                            };
+                }
+            }
+            Node brokenReference = new AbstractNode(LEAF);
+            brokenReference.setName(NbBundle.getMessage(ElementOrTypeChooserHelper.class, "LBL_InvalidReference"));;
+            return new Node[]{brokenReference};
+        }
+
+        @Override
+        protected void addNotify() {
+            resetKeys();
+        }
+
+        @Override
+        protected void removeNotify() {
+            this.setKeys(emptySet);
+
+        }
+
+        private void resetKeys() {
+            ArrayList<CatalogEntry> keys = new ArrayList<CatalogEntry>();
+            keys.addAll(entries);
+            this.setKeys(keys);
+        }
+    }
     
     private Node selectNode(Node parentNode, SchemaComponent element) {
         org.openide.nodes.Children children = parentNode.getChildren();
@@ -224,6 +307,14 @@ public class ElementOrTypeChooserHelper extends ChooserHelper<SchemaComponent>{
             }
         }
         return null;
+    }
+    
+    class CatalogNode extends FolderNode {
+
+        public CatalogNode(Children.Keys children) {
+            super(children);
+        }
+        
     }
     
     class SchemaProjectFolderNode extends FilterNode {
@@ -269,20 +360,17 @@ public class ElementOrTypeChooserHelper extends ChooserHelper<SchemaComponent>{
 
         private void resetKeys() {
             ArrayList<FileObject> keys = new ArrayList<FileObject>();
-            LogicalViewProvider viewProvider = wsdlProject.getLookup().lookup(LogicalViewProvider.class);
-            Node node = viewProvider.createLogicalView();
-            org.openide.nodes.Children children = node.getChildren();
-            for (Node child : children.getNodes()) {
-                DataObject dobj = child.getCookie(DataObject.class);
-                if (dobj != null) {
-                    File[] files = recursiveListFiles(FileUtil.toFile(dobj.getPrimaryFile()), new SchemaFileFilter());
-                    for (File file : files) {
-                        FileObject fo = FileUtil.toFileObject(file);
-                        ModelSource modelSource = org.netbeans.modules.xml.retriever.catalog.Utilities.getModelSource(fo, false); 
-                        SchemaModel schemaModel = SchemaModelFactory.getDefault().getModel(modelSource);
-                        if (schemaModel != null && schemaModel.getState() == Model.State.VALID && schemaModel.getSchema().getTargetNamespace() != null) {
-                            keys.add(fo);
-                        }
+
+            List<SourceGroup> roots = Utility.getSourceRoots(wsdlProject);
+            for (SourceGroup srcGrp : roots) {
+                FileObject rootFolder = srcGrp.getRootFolder();
+                File[] files = recursiveListFiles(FileUtil.toFile(rootFolder), new SchemaFileFilter());
+                for (File file : files) {
+                    FileObject fo = FileUtil.toFileObject(file);
+                    ModelSource modelSource = org.netbeans.modules.xml.retriever.catalog.Utilities.getModelSource(fo, false);
+                    SchemaModel schemaModel = SchemaModelFactory.getDefault().getModel(modelSource);
+                    if (schemaModel != null && schemaModel.getState() == Model.State.VALID && schemaModel.getSchema().getTargetNamespace() != null) {
+                        keys.add(fo);
                     }
                 }
             }

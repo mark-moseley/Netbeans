@@ -279,8 +279,11 @@ public class WSDLDesignMultiViewElement extends TopComponent
     
     @Override
     public void componentDeactivated() {
-        ExplorerUtils.activateActions(explorerManager, false);
         super.componentDeactivated();
+        //Strangely, gets called after componentClosed is called
+        if (explorerManager != null) {
+            ExplorerUtils.activateActions(explorerManager, false);
+        }
         WSDLMultiViewFactory.updateGroupVisibility(WSDLDesignMultiViewDesc.PREFERRED_ID);
     }
     

@@ -17,9 +17,9 @@
   <Layout>
     <DimensionLayout dim="0">
       <Group type="103" groupAlignment="0" attributes="0">
-          <Group type="102" attributes="0">
+          <Group type="102" alignment="1" attributes="0">
               <EmptySpace min="-2" max="-2" attributes="0"/>
-              <Group type="103" groupAlignment="0" attributes="0">
+              <Group type="103" groupAlignment="1" attributes="0">
                   <Group type="102" alignment="0" attributes="0">
                       <Group type="103" groupAlignment="0" attributes="0">
                           <Group type="103" alignment="0" groupAlignment="1" max="-2" attributes="0">
@@ -31,21 +31,21 @@
                       </Group>
                       <EmptySpace min="-2" max="-2" attributes="0"/>
                       <Group type="103" groupAlignment="1" attributes="0">
-                          <Component id="bindingSubTypePanel" pref="265" max="32767" attributes="0"/>
-                          <Component id="bindingNameTextField" alignment="0" pref="265" max="32767" attributes="0"/>
-                          <Component id="bindingTypeComboBox" alignment="1" pref="265" max="32767" attributes="0"/>
-                          <Component id="portTypeComboPanel" alignment="1" pref="265" max="32767" attributes="0"/>
+                          <Component id="bindingSubTypePanel" pref="373" max="32767" attributes="0"/>
+                          <Component id="bindingNameTextField" alignment="0" pref="373" max="32767" attributes="0"/>
+                          <Component id="bindingTypeComboBox" alignment="1" pref="373" max="32767" attributes="0"/>
+                          <Component id="portTypeComboPanel" alignment="1" pref="373" max="32767" attributes="0"/>
                       </Group>
                   </Group>
                   <Group type="102" alignment="1" attributes="0">
                       <Component id="serviceNameLabel" min="-2" max="-2" attributes="0"/>
                       <EmptySpace min="-2" max="-2" attributes="0"/>
-                      <Component id="serviceComboPanel" pref="277" max="32767" attributes="3"/>
+                      <Component id="serviceComboPanel" pref="385" max="32767" attributes="3"/>
                   </Group>
                   <Group type="102" alignment="0" attributes="0">
                       <Component id="portNameLabel" min="-2" max="-2" attributes="0"/>
                       <EmptySpace type="separate" max="-2" attributes="0"/>
-                      <Component id="servicePortTextField" pref="278" max="32767" attributes="0"/>
+                      <Component id="servicePortTextField" pref="386" max="32767" attributes="0"/>
                   </Group>
                   <Component id="shouldCreateServicePort" alignment="0" min="-2" max="-2" attributes="0"/>
               </Group>
@@ -87,7 +87,7 @@
                   <Component id="portNameLabel" min="-2" max="-2" attributes="0"/>
                   <Component id="servicePortTextField" min="-2" max="-2" attributes="0"/>
               </Group>
-              <EmptySpace min="-2" max="-2" attributes="0"/>
+              <EmptySpace max="32767" attributes="0"/>
           </Group>
       </Group>
     </DimensionLayout>

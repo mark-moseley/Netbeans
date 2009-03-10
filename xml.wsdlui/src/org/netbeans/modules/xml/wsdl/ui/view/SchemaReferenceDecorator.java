@@ -84,6 +84,11 @@ public class SchemaReferenceDecorator extends AbstractReferenceDecorator {
                         "LBL_ReferenceDecorator_NoModel");
             }
             
+            if (model.getState() == Model.State.NOT_WELL_FORMED) {
+                return NbBundle.getMessage(SchemaReferenceDecorator.class,
+                        "LBL_ReferenceDecorator_NoModel");
+            }
+            
             //For wsdl, imported schema's should have a namespace.
             if (model instanceof SchemaModel) {
                 String tns = ((SchemaModel) model).getSchema().getTargetNamespace();
