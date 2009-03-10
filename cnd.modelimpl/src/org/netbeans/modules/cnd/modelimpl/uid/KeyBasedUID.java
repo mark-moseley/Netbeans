@@ -38,13 +38,11 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.uid;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.modelimpl.repository.KeyHolder;
 import org.netbeans.modules.cnd.modelimpl.repository.KeyObjectFactory;
@@ -56,36 +54,40 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  * help class for CsmUID based on repository Key
  * @author Vladimir Voskresensky
  */
-public abstract class KeyBasedUID<T extends CsmIdentifiable> implements CsmUID<T>, KeyHolder, SelfPersistent, Comparable {
+public abstract class KeyBasedUID<T> implements CsmUID<T>, KeyHolder, SelfPersistent, Comparable<CsmUID<T>> {
+
     private final Key key;
-    
+
     protected KeyBasedUID(Key key) {
         assert key != null;
         this.key = key;
     }
-    
+
     public T getObject() {
-        return (T) RepositoryUtils.get(this);
+        return RepositoryUtils.get(this);
     }
 
     public Key getKey() {
         return key;
     }
-    
+
+    @Override
     public String toString() {
         String retValue;
-        
+
         retValue = key.toString();
         return "KeyBasedUID on " + retValue; // NOI18N
     }
 
+    @Override
     public int hashCode() {
         int retValue;
-        
+
         retValue = key.hashCode();
         return retValue;
     }
 
+    @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
@@ -93,7 +95,7 @@ public abstract class KeyBasedUID<T extends CsmIdentifiable> implements CsmUID<T
         if (obj == null || obj.getClass() != this.getClass()) {
             return false;
         }
-        KeyBasedUID other = (KeyBasedUID)obj;
+        KeyBasedUID other = (KeyBasedUID) obj;
         return this.key.equals(other.key);
     }
 
@@ -105,11 +107,12 @@ public abstract class KeyBasedUID<T extends CsmIdentifiable> implements CsmUID<T
         key = KeyObjectFactory.getDefaultFactory().readKey(aStream);
     }
 
-    public int compareTo(Object o) {
+    @SuppressWarnings("unchecked")
+    public int compareTo(CsmUID<T> o) {
         assert o != null;
         assert o instanceof KeyBasedUID;
-        Comparable o1 = (Comparable)this.key;
-        Comparable o2 = (Comparable)((KeyBasedUID)o).key;
+        Comparable o1 = (Comparable) this.key;
+        Comparable o2 = (Comparable) ((KeyBasedUID) o).key;
         return o1.compareTo(o2);
     }
 }    

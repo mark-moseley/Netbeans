@@ -38,13 +38,11 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.uid;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.modelimpl.csm.core.CsmObjectFactory;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
@@ -54,26 +52,30 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  * help class for CsmUID based on CsmObject
  * @author Vladimir Voskresensky
  */
-public abstract class ObjectBasedUID<T extends CsmIdentifiable> implements CsmUID<T>, SelfPersistent {
+public abstract class ObjectBasedUID<T> implements CsmUID<T>, SelfPersistent {
+
     private final T ref;
-    
+
     protected ObjectBasedUID(T ref) {
         this.ref = ref;
     }
-    
+
     public T getObject() {
         return this.ref;
     }
-    
+
+    @Override
     public String toString() {
         String retValue = "UID for " + ref.toString(); // NOI18N
         return retValue;
     }
-    
+
+    @Override
     public int hashCode() {
         return ref.hashCode();
     }
-    
+
+    @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
@@ -81,19 +83,19 @@ public abstract class ObjectBasedUID<T extends CsmIdentifiable> implements CsmUI
         if (obj == null || obj.getClass() != this.getClass()) {
             return false;
         }
-        ObjectBasedUID other = (ObjectBasedUID)obj;
+        ObjectBasedUID other = (ObjectBasedUID) obj;
         return this.ref.equals(other.ref);
     }
-    
+
     ////////////////////////////////////////////////////////////////////////////
     // impl for Persistent 
-    
     public void write(DataOutput output) throws IOException {
         assert ref == null || ref instanceof Persistent;
-        CsmObjectFactory.instance().write(output, (Persistent)ref);
+        CsmObjectFactory.instance().write(output, (Persistent) ref);
     }
-    
+
+    @SuppressWarnings("unchecked")
     public ObjectBasedUID(DataInput input) throws IOException {
-        ref = (T)CsmObjectFactory.instance().read(input);
+        ref = (T) CsmObjectFactory.instance().read(input);
     }
 }
