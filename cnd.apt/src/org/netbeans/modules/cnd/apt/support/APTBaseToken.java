@@ -41,18 +41,20 @@
 
 package org.netbeans.modules.cnd.apt.support;
 
-import antlr.CommonToken;
 import antlr.Token;
-import org.netbeans.modules.cnd.apt.debug.APTTraceFlags;
 import org.netbeans.modules.cnd.utils.cache.TextCache;
 
 /**
  * token to be used in APT infrastructure
  * @author Vladimir Voskresensky
  */
-public class APTBaseToken extends CommonToken implements APTToken {
+public class APTBaseToken implements APTToken {
     private static final long serialVersionUID = 2834353662691067170L;
-    
+    // most tokens will want line and text information
+    protected int line;
+    protected CharSequence text = null;
+    protected int col;
+    protected int type;
     private int offset;
     /**
      * Creates a new instance of APTBaseToken
@@ -63,16 +65,16 @@ public class APTBaseToken extends CommonToken implements APTToken {
     public APTBaseToken(Token token) {
         this(token, token.getType());
     }
-    
+
     public APTBaseToken(Token token, int ttype) {
         this.setColumn(token.getColumn());
         this.setFilename(token.getFilename());
         this.setLine(token.getLine());
-        
-        // This constructor is used with the existing tokens so do not use setText here, 
+
+        // This constructor is used with the existing tokens so do not use setText here,
         // because we do not need to go through APTStringManager once again
         text = token.getText();
-        
+
         this.setType(ttype);
         if (token instanceof APTToken) {
             APTToken aptToken = (APTToken)token;
@@ -83,13 +85,28 @@ public class APTBaseToken extends CommonToken implements APTToken {
             this.setTextID(aptToken.getTextID());
         }
     }
-    
+
     public APTBaseToken(String text) {
         this.setText(text);
     }
     
+    public int getType() {
+        return type;
+    }
+
+    public void setType(int t) {
+        type = t;
+    }
+
+    public String getFilename() {
+        return null;
+    }
+
+    public void setFilename(String name) {
+    }
+    
     public int getOffset() {
-        return this.offset;
+        return offset;
     }
 
     public void setOffset(int o) {
@@ -103,32 +120,46 @@ public class APTBaseToken extends CommonToken implements APTToken {
     public void setEndOffset(int end) {
         // do nothing
     }
-    
-    public int getTextID() {
+
+    public CharSequence getTextID() {
 //        return textID;
-        return -1;
+        return this.text;
     }
-    
-    public void setTextID(int textID) {
+
+    public void setTextID(CharSequence textID) {
 //        this.textID = textID;
     }
-  
+
     public String getText() {
-        // TODO: get from shared string map
-        String res = super.getText();
-        return res;
+        // TODO: think about LW chars
+        return text.toString();
     }
-    
+
     public void setText(String t) {
-        if (APTTraceFlags.APT_SHARE_TEXT) {
-            t = TextCache.getString(t).toString();
-        }
-        super.setText(t);
+        text = TextCache.getString(t);
     }
-    
+
+    public int getLine() {
+        return line;
+    }
+
+    public void setLine(int l) {
+        line = l;
+    }
+
+    /** Return token's start column */
+    public int getColumn() {
+        return col;
+    }
+
+    public void setColumn(int c) {
+        col = c;
+    }
+
+    @Override
     public String toString() {
         return "[\"" + getText() + "\",<" + getType() + ">,line=" + getLine() + ",col=" + getColumn() + "]" + ",offset="+getOffset()+",file="+getFilename(); // NOI18N
-    }  
+    }
 
     public int getEndColumn() {
         return getColumn() + getText().length();
@@ -144,5 +175,35 @@ public class APTBaseToken extends CommonToken implements APTToken {
 
     public void setEndLine(int l) {
         // do nothing
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final APTBaseToken other = (APTBaseToken) obj;
+        if (this.getType() != other.getType()) {
+            return false;
+        }
+        if (this.getOffset() != other.getOffset()) {
+            return false;
+        }
+        if (!this.text.equals(other.text)) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 5;
+        hash = 23 * hash + this.getType();
+        hash = 23 * hash + this.offset;
+        hash = 23 * hash + this.text.hashCode();
+        return hash;
     }
 }

@@ -66,7 +66,7 @@ import org.netbeans.modules.cnd.apt.support.APTIncludeHandler;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
 import org.netbeans.modules.cnd.apt.support.APTMacroMap;
 import org.netbeans.modules.cnd.apt.support.APTPreprocHandler;
-import org.netbeans.modules.cnd.utils.cache.TextCache;
+import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
 
 /**
  * utilities for APT serialization
@@ -162,7 +162,7 @@ public class APTSerializeUtils {
         String suffix = file.getName();
         try {
             File out = File.createTempFile(prefix, suffix);                
-            if (false) System.out.println("...saving APT of file " + file.getAbsolutePath() + " into tmp file " + out); // NOI18N
+            if (false) { System.out.println("...saving APT of file " + file.getAbsolutePath() + " into tmp file " + out); } // NOI18N
             long astTime = System.currentTimeMillis();
             // write
             ObjectOutputStream oos = new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream(out), APTTraceFlags.BUF_SIZE));
@@ -172,7 +172,7 @@ public class APTSerializeUtils {
                 oos.close();
             }
             long writeTime = System.currentTimeMillis() - astTime;
-            if (false) System.out.println("saved APT of file " + file.getAbsolutePath() + " withing " + writeTime + "ms"); // NOI18N
+            if (false) { System.out.println("saved APT of file " + file.getAbsolutePath() + " withing " + writeTime + "ms"); } // NOI18N
             astTime = System.currentTimeMillis();
             // read
             ObjectInputStream ois = new ObjectInputStream(new BufferedInputStream(new FileInputStream(out), APTTraceFlags.BUF_SIZE));
@@ -184,7 +184,7 @@ public class APTSerializeUtils {
                 ois.close();                
             }
             long readTime = System.currentTimeMillis() - astTime;
-            if (false) System.out.println("read APT of file " + file.getAbsolutePath() + " withing " + readTime + "ms"); // NOI18N
+            if (false) { System.out.println("read APT of file " + file.getAbsolutePath() + " withing " + readTime + "ms"); } // NOI18N
             out.delete();
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -267,12 +267,12 @@ public class APTSerializeUtils {
     
     public static void writeSnapshot(APTMacroMapSnapshot snap, DataOutput output) throws IOException {
         // FIXUP: we do not support yet writing snapshots!
-        if (snap == null || true) {
+//        if (snap == null) {
             output.writeInt(NULL_POINTER);
-        } else {
-            output.writeInt(MACRO_MAP_SNAPSHOT);
-            snap.write(output);
-        }
+//        } else {
+//            output.writeInt(MACRO_MAP_SNAPSHOT);
+//            snap.write(output);
+//        }
     }
 
     public static APTMacroMapSnapshot readSnapshot(DataInput input) throws IOException {
@@ -285,12 +285,12 @@ public class APTSerializeUtils {
         return snap;
     }
 
-    public static void writeStringToMacroMap(Map<String, APTMacro> macros, DataOutput output) throws IOException {
+    public static void writeStringToMacroMap(Map<CharSequence, APTMacro> macros, DataOutput output) throws IOException {
         assert macros != null;
         output.writeInt(macros.size());
-        for (Entry<String, APTMacro> entry : macros.entrySet()) {
+        for (Entry<CharSequence, APTMacro> entry : macros.entrySet()) {
             assert entry != null;
-            String key = entry.getKey();
+            String key = entry.getKey().toString();
             assert key != null;
             output.writeUTF(key);
             APTMacro macro = entry.getValue();
@@ -299,10 +299,10 @@ public class APTSerializeUtils {
         }
     }
 
-    public static void readStringToMacroMap(Map<String, APTMacro> macros, DataInput input) throws IOException {
+    public static void readStringToMacroMap(Map<CharSequence, APTMacro> macros, DataInput input) throws IOException {
         int collSize = input.readInt();
         for (int i = 0; i < collSize; ++i) {
-            String key = TextCache.getString(input.readUTF()).toString();
+            CharSequence key = CharSequenceKey.create(input.readUTF());
             assert key != null;
             APTMacro macro = readMacro(input);
             assert macro != null;

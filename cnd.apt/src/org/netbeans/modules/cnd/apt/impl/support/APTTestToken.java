@@ -92,25 +92,22 @@ public class APTTestToken extends TokenImpl implements APTToken {
         // do nothing
     }
     
-    public int getTextID() {
-        return textID;
+    public CharSequence getTextID() {
+        return getText();
     }
     
-    public void setTextID(int textID) {
-        this.textID = textID;
+    public void setTextID(CharSequence textID) {
+        setText(textID == null ? null : textID.toString());
     }
   
+    @Override
     public String getText() {
         // TODO: use shared string map
         String res = super.getText();
         return res;
     }
-    
-    public void setText(String text) {
-        // TODO: use shared string map
-        super.setText(text);
-    }    
      
+    @Override
     public String toString() {
         return "[\"" + getText() + "\",<" + getType() + ">,line=" + getLine() + ",col=" + getColumn() + "]"+",offset="+getOffset();//+",file="+getFilename(); // NOI18N
     }
