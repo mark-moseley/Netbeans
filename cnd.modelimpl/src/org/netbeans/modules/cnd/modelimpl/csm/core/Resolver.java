@@ -50,7 +50,12 @@ import java.util.*;
 public interface Resolver {
     public static final int NAMESPACE = 1 << 0;
     public static final int CLASSIFIER = 1 << 1;
-    public static final int ALL = NAMESPACE | CLASSIFIER;
+    public static final int CLASS = 1 << 2;
+    public static final int ALL = NAMESPACE | CLASSIFIER | CLASS;
+
+    public Collection<CsmProject> getLibraries();
+
+    public CsmFile getStartFile();
 
     /**
      * Resolves classifier (class/enum/typedef) or namespace name.
@@ -58,7 +63,7 @@ public interface Resolver {
      * you don't know which is class and which is namespace name
      *
      * @param nameTokens tokenized name to resolve
-     * (for example, for std::vector it is new String[] { "std", "vector" })
+     * (for example, for std::vector it is new CharSequence[] { "std", "vector" })
      *
      * @return object of the following class:
      *  CsmClassifier (CsmClass, CsmEnum, CsmTypedef)
@@ -79,4 +84,13 @@ public interface Resolver {
      */
     public CsmObject resolve(CharSequence qualifiedName, int interestedKind);
 
+    public interface SafeClassifierProvider {
+        CsmClassifier getClassifier(Resolver resolver);
+    }    
+
+    public interface SafeTemplateBasedProvider {
+        boolean isTemplateBased(Set<CsmType> visited);
+    }    
+    
+    public CsmClassifier getOriginalClassifier(CsmClassifier orig);
 }

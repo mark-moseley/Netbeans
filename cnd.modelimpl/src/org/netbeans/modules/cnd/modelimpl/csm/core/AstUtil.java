@@ -54,18 +54,21 @@ import java.io.ObjectOutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.modules.cnd.utils.cache.TextCache;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 import org.netbeans.modules.cnd.modelimpl.cache.impl.CacheUtil;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.parser.CsmAST;
+import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 
 /**
  * Miscellaneous AST-related static utility functions
- * @author Vladimir Kvasihn
+ * @author Vladimir Kvashin
  */
 public class AstUtil {
+
+    private AstUtil() {
+    }
 
     public static boolean isEmpty(AST ast, boolean hasFakeChild) {
 	if( isEmpty(ast) ) {
@@ -79,17 +82,17 @@ public class AstUtil {
     private static boolean isEmpty(AST ast) {
 	return (ast == null || ast.getType() == CPPTokenTypes.EOF);
     }
-    
-    public static String[] getRawNameInChildren(AST ast) {
+
+    public static CharSequence[] getRawNameInChildren(AST ast) {
         return getRawName(findIdToken(ast));
     }
 
-    public static String[] getRawName(AST token) {
-        List/*<String>*/ l = new ArrayList/*<String>*/();
+    public static CharSequence[] getRawName(AST token) {
+        List<CharSequence> l = new ArrayList<CharSequence>();
         for( ; token != null; token = token.getNextSibling() ) {
             switch( token.getType() ) {
                 case CPPTokenTypes.ID:
-                    l.add(token.getText());
+                    l.add(NameCache.getString(token.getText()));
                     break;
                 case CPPTokenTypes.SCOPE:
                     break;
@@ -98,9 +101,9 @@ public class AstUtil {
                     break;
             }
         }
-        return (String[]) l.toArray(new String[l.size()]);
+        return l.toArray(new CharSequence[l.size()]);
     }
-    
+
     private static AST findIdToken(AST ast) {
         for( AST token = ast.getFirstChild(); token != null; token = token.getNextSibling() ) {
             if( token.getType() == CPPTokenTypes.ID ) {
@@ -112,16 +115,16 @@ public class AstUtil {
         }
         return null;
     }
-    
+
     public static String findId(AST ast) {
         return findId(ast, -1);
     }
-    
+
     /**
      * Finds ID (either CPPTokenTypes.CSM_QUALIFIED_ID or CPPTokenTypes.ID)
      * in direct children of the given AST tree
      *
-     * @param ast tree to secarch ID in 
+     * @param ast tree to secarch ID in
      *
      * @param limitingTokenType type of token that, if being found, stops search
      *        -1 means that there is no such token.
@@ -131,12 +134,12 @@ public class AstUtil {
     public static String findId(AST ast, int limitingTokenType) {
 	return findId(ast, limitingTokenType, false);
     }
-    
+
     /**
      * Finds ID (either CPPTokenTypes.CSM_QUALIFIED_ID or CPPTokenTypes.ID)
      * in direct children of the given AST tree
      *
-     * @param ast tree to secarch ID in 
+     * @param ast tree to secarch ID in
      *
      * @param limitingTokenType type of token that, if being found, stops search
      *        -1 means that there is no such token.
@@ -171,17 +174,17 @@ public class AstUtil {
                             if( next != null ) {
                                 sb.append(next.getText());
                             }
-                            return TextCache.getString(sb.toString()).toString();
+                            return sb.toString();
                         } else if (first.getType() == CPPTokenTypes.ID){
                             return first.getText();
                         }
                     }
-                }                
+                }
             }
         }
         return "";
     }
-  
+
     public static AST findMethodName(AST ast){
         AST type = ast.getFirstChild(); // type
         AST qn = null;
@@ -203,8 +206,14 @@ public class AstUtil {
                         qn = type;
                     }
                     continue;
+                case CPPTokenTypes.ID:
+                    if (i == 0 && qn == null) {
+                        qn = type;
+                    }
+                    type = type.getNextSibling();
+                    continue;
                 case CPPTokenTypes.CSM_QUALIFIED_ID:
-                    if (i == 0){
+                    if (i == 0) {
                         qn = type;
                     }
                     type = type.getNextSibling();
@@ -230,7 +239,7 @@ public class AstUtil {
         }
         return false;
     }
-    
+
     public static AST findChildOfType(AST ast, int type) {
         for( AST token = ast.getFirstChild(); token != null; token = token.getNextSibling() ) {
             if( token.getType() == type ) {
@@ -239,7 +248,7 @@ public class AstUtil {
         }
         return null;
     }
-    
+
     public static AST findSiblingOfType(AST ast, int type) {
         for( AST token = ast; token != null; token = token.getNextSibling() ) {
             if( token.getType() == type ) {
@@ -248,7 +257,7 @@ public class AstUtil {
         }
         return null;
     }
-    
+
     public static AST getLastChild(AST token) {
         if( token == null ) {
             return null;
@@ -262,7 +271,7 @@ public class AstUtil {
         }
         return null;
     }
-    
+
     public static AST getLastChildRecursively(AST token) {
         if( token == null ) {
             return null;
@@ -275,7 +284,7 @@ public class AstUtil {
             return getLastChildRecursively(child);
         }
     }
-    
+
     public static CsmAST getFirstCsmAST(AST node) {
         if( node != null ) {
             if( node instanceof CsmAST ) {
@@ -287,9 +296,9 @@ public class AstUtil {
         }
         return null;
     }
-    
-    
-    
+
+
+
     public static void toStream(AST ast, final PrintStream ps) {
         ASTVisitor impl = new ASTVisitor() {
             public void visit(AST node) {
@@ -304,8 +313,27 @@ public class AstUtil {
             }
         };
         impl.visit(ast);
-    }    
-    
+    }
+
+    /**
+     * Creates an AST with node <code>n1</code> as root and node <code>n2</code>
+     * as its single child, discarding all other children and siblings of
+     * both nodes. This function creates copies of nodes, original nodes
+     * are not changed.
+     *
+     * @param n1  root node
+     * @param n2  child node
+     * @return AST consisting of two given nodes
+     */
+    public static AST createAST(AST n1, AST n2) {
+        AST root = new CsmAST();
+        root.initialize(n1);
+        AST child = new CsmAST();
+        child.initialize(n2);
+        root.addChild(child);
+        return root;
+    }
+
     private static void print(AST ast, PrintStream ps) {
         ps.print('[');
         ps.print(ast.getText());
@@ -318,7 +346,7 @@ public class AstUtil {
         ps.print(']');
         //ps.print('\n');
     }
-    
+
     private static int fileIndex = 0;
     public static AST testASTSerialization(FileBuffer buffer, AST ast) {
         AST astRead = null;
@@ -327,9 +355,9 @@ public class AstUtil {
         String prefix = "cnd_modelimpl_"+(fileIndex++); // NOI18N
         String suffix = file.getName();
         try {
-            File out = File.createTempFile(prefix, suffix);                
-            if (false) System.err.println("...saving AST of file " + file.getAbsolutePath() + " into tmp file " + out); // NOI18N
-            long astTime = System.currentTimeMillis();
+            File out = File.createTempFile(prefix, suffix);
+            if (false) { System.err.println("...saving AST of file " + file.getAbsolutePath() + " into tmp file " + out); } // NOI18N
+            //long astTime = System.currentTimeMillis();
             // write
             ObjectOutputStream oos = new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream(out), TraceFlags.BUF_SIZE));
             try {
@@ -337,9 +365,9 @@ public class AstUtil {
             } finally {
                 oos.close();
             }
-            long writeTime = System.currentTimeMillis() - astTime;
-            if (false) System.err.println("saved AST of file " + file.getAbsolutePath() + " withing " + writeTime + "ms"); // NOI18N
-            astTime = System.currentTimeMillis();
+            //long writeTime = System.currentTimeMillis() - astTime;
+            //if (false) { System.err.println("saved AST of file " + file.getAbsolutePath() + " withing " + writeTime + "ms"); } // NOI18N
+            //astTime = System.currentTimeMillis();
             // read
             ObjectInputStream ois = new ObjectInputStream(new BufferedInputStream(new FileInputStream(out), TraceFlags.BUF_SIZE));
             try {
@@ -347,15 +375,33 @@ public class AstUtil {
             } catch (ClassNotFoundException ex) {
                 DiagnosticExceptoins.register(ex);
             } finally {
-                ois.close();                
+                ois.close();
             }
-            long readTime = System.currentTimeMillis() - astTime;
-            if (false) System.err.println("read AST of file " + file.getAbsolutePath() + " withing " + readTime + "ms"); // NOI18N
+            //long readTime = System.currentTimeMillis() - astTime;
+            //if (false) { System.err.println("read AST of file " + file.getAbsolutePath() + " withing " + readTime + "ms"); } // NOI18N
             out.delete();
         } catch (IOException ex) {
             DiagnosticExceptoins.register(ex);
         }
         return astRead;
     }
+
+    public static String getOffsetString(AST ast) {
+        if (ast == null) {
+            return "<null>"; // NOI18N
+        }
+        CsmAST startAst = getFirstCsmAST(ast);
+        AST endAst = getLastChildRecursively(ast);
+        if (startAst != null && endAst != null) {
+            StringBuilder sb = new StringBuilder();// NOI18N
+            sb.append("[").append(startAst.getLine());// NOI18N
+            sb.append(":").append(startAst.getColumn());// NOI18N
+            sb.append("-").append(endAst.getLine());// NOI18N
+            sb.append(":").append(endAst.getColumn());// NOI18N
+            sb.append("]"); //NOI18N
+            return sb.toString();
+        }
+        return "<no csm nodes>"; // NOI18N
+    }
 }
- 
+
