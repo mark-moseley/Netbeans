@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.cnd.dwarfdump.dwarf;
 
+import java.io.ByteArrayOutputStream;
 import org.netbeans.modules.cnd.dwarfdump.section.FileEntry;
 import java.io.File;
 import java.io.PrintStream;
@@ -126,6 +127,14 @@ public class DwarfStatementList {
             out.printf(" %-6d%-6d%-6d%-6d%s\n", ++idx, fileEntry.dirIndex, fileEntry.modifiedTime, fileEntry.fileSize, fileEntry.fileName); // NOI18N
         }
     }
+
+    @Override
+    public String toString() {
+        ByteArrayOutputStream st = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(st);
+        dump(out);
+        return st.toString();
+    }
     
     public int getDirectoryIndex(String dirname) {
         int idx = 0;
@@ -184,15 +193,18 @@ public class DwarfStatementList {
 
     public ArrayList<String> getPathsForFile(String fname) {
         ArrayList<String> result = new ArrayList<String>();
-        
+        String suffix = File.separator + fname;
+        StringBuilder buf = new StringBuilder(100);
         for (FileEntry fileEntry : fileEntries) {
             if (fileEntry.fileName.equals(fname)){
                 String dir = (fileEntry.dirIndex == 0) ? "." : includeDirs.get(fileEntry.dirIndex - 1); // NOI18N
                 result.add(dir);
-            } else if(fileEntry.fileName.endsWith(File.separator +fname)) {
-                String dir = (fileEntry.dirIndex == 0) ? "." : includeDirs.get(fileEntry.dirIndex - 1); // NOI18N
-                dir += File.separator + fileEntry.fileName.substring(0,fileEntry.fileName.length()-fname.length()-1);
-                result.add(dir);
+            } else if(fileEntry.fileName.endsWith(suffix)) {
+                buf.setLength(0);
+                buf.append( (fileEntry.dirIndex == 0) ? "." : includeDirs.get(fileEntry.dirIndex - 1) ); // NOI18N
+                buf.append(File.separator);
+                buf.append( fileEntry.fileName.substring(0,fileEntry.fileName.length()-fname.length()-1) );
+                result.add(buf.toString());
             }
         }
         
