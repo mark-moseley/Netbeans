@@ -94,6 +94,11 @@ public interface Repository {
     void debugClear();  
     
     /**
+     * Show distributions of object in repository
+     */
+    void debugDistribution();
+
+    /**
      * Prepare repositoty and tells the version of the persistent mechanism
      * @param verison 
      */
@@ -109,8 +114,8 @@ public interface Repository {
      * Opens repository unit
      * @param unitName the unique identifier of the unit to open
      */
-    void openUnit(String unitName);
-    
+
+    void openUnit(int unitId, String unitName);
     /**
      * Close Repository Unit, e.g. Project for IDE
      * @param unitName the name of unit
