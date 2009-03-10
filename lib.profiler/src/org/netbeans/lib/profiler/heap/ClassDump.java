@@ -42,6 +42,7 @@ package org.netbeans.lib.profiler.heap;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -53,6 +54,10 @@ import java.util.Map;
  * @author Tomas Hurka
  */
 class ClassDump extends HprofObject implements JavaClass {
+    //~ Static fields/initializers -----------------------------------------------------------------------------------------------
+    
+    private static final boolean DEBUG = false;
+
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
     final ClassDumpSegment classDumpSegment;
@@ -69,12 +74,12 @@ class ClassDump extends HprofObject implements JavaClass {
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
-    public int getAllInstancesSize() {
+    public long getAllInstancesSize() {
         if (isArray()) {
-            return ((Integer) classDumpSegment.arrayMap.get(this)).intValue();
+            return ((Long) classDumpSegment.arrayMap.get(this)).longValue();
         }
 
-        return getInstancesCount() * getInstanceSize();
+        return ((long)getInstancesCount()) * getInstanceSize();
     }
 
     public boolean isArray() {
@@ -102,16 +107,11 @@ class ClassDump extends HprofObject implements JavaClass {
     }
 
     public List /*<Field>*/ getFields() {
-        HprofByteBuffer buffer = getHprofBuffer();
-        long offset = fileOffset + getInstanceFieldOffset();
-        int i;
-        int fields = buffer.getShort(offset);
-        List filedsList = new ArrayList(fields);
-
-        for (i = 0; i < fields; i++) {
-            filedsList.add(new HprofField(this, offset + 2 + (i * classDumpSegment.fieldSize)));
+        List filedsList = (List) classDumpSegment.fieldsCache.get(this);
+        if (filedsList == null) {
+            filedsList = computeFields();
+            classDumpSegment.fieldsCache.put(this,filedsList);
         }
-
         return filedsList;
     }
 
@@ -125,7 +125,64 @@ class ClassDump extends HprofObject implements JavaClass {
     }
 
     public List /*<Instance>*/ getInstances() {
-        return getHprof().computeInstances(this);
+        int instancesCount = getInstancesCount();
+
+        if (instancesCount == 0) {
+            return Collections.EMPTY_LIST;
+        }
+
+        long classId = getJavaClassId();
+        HprofHeap heap = getHprof();
+        HprofByteBuffer dumpBuffer = getHprofBuffer();
+        int idSize = dumpBuffer.getIDSize();
+        List instances = new ArrayList(instancesCount);
+        TagBounds allInstanceDumpBounds = heap.getAllInstanceDumpBounds();
+        long[] offset = new long[] { allInstanceDumpBounds.startOffset };
+
+        while (offset[0] < allInstanceDumpBounds.endOffset) {
+            long start = offset[0];
+            int classIdOffset = 0;
+            long instanceClassId = 0L;
+            int tag = heap.readDumpTag(offset);
+            Instance instance;
+
+            if (tag == HprofHeap.INSTANCE_DUMP) {
+                classIdOffset = idSize + 4;
+            } else if (tag == HprofHeap.OBJECT_ARRAY_DUMP) {
+                classIdOffset = idSize + 4 + 4;
+            } else if (tag == HprofHeap.PRIMITIVE_ARRAY_DUMP) {
+                byte type = dumpBuffer.get(start + 1 + idSize + 4 + 4);
+                instanceClassId = classDumpSegment.getPrimitiveArrayClass(type).getJavaClassId();
+            }
+
+            if (classIdOffset != 0) {
+                instanceClassId = dumpBuffer.getID(start + 1 + classIdOffset);
+            }
+
+            if (instanceClassId == classId) {
+                if (tag == HprofHeap.INSTANCE_DUMP) {
+                    instance = new InstanceDump(this, start);
+                } else if (tag == HprofHeap.OBJECT_ARRAY_DUMP) {
+                    instance = new ObjectArrayDump(this, start);
+                } else if (tag == HprofHeap.PRIMITIVE_ARRAY_DUMP) {
+                    instance = new PrimitiveArrayDump(this, start);
+                } else {
+                    throw new IllegalArgumentException("Illegal tag " + tag); // NOI18N
+                }
+
+                instances.add(instance);
+
+                if (--instancesCount == 0) {
+                    return instances;
+                }
+            }
+        }
+
+        if (DEBUG) {
+            System.out.println("Class " + getName() + " Col " + instances.size() + " instances " + getInstancesCount()); // NOI18N
+        }
+
+        return instances;
     }
 
     public int getInstancesCount() {
@@ -221,6 +278,20 @@ class ClassDump extends HprofObject implements JavaClass {
         return null;
     }
 
+    private List /*<Field>*/ computeFields() {
+        HprofByteBuffer buffer = getHprofBuffer();
+        long offset = fileOffset + getInstanceFieldOffset();
+        int i;
+        int fields = buffer.getShort(offset);
+        List filedsList = new ArrayList(fields);
+
+        for (i = 0; i < fields; i++) {
+            filedsList.add(new HprofField(this, offset + 2 + (i * classDumpSegment.fieldSize)));
+        }
+
+        return filedsList;
+    }
+    
     List getAllInstanceFields() {
         List fields = new ArrayList(50);
 
@@ -271,12 +342,7 @@ class ClassDump extends HprofObject implements JavaClass {
     }
 
     List getReferences() {
-        HprofByteBuffer buffer = getHprofBuffer();
-        byte[] idArr = new byte[buffer.getIDSize()];
-
-        buffer.get(fileOffset + 1, idArr);
-
-        return getHprof().findReferencesFor(getJavaClassId(), idArr);
+        return getHprof().findReferencesFor(getJavaClassId());
     }
 
     int getStaticFieldOffset() {

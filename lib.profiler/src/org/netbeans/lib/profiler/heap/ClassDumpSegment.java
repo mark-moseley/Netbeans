@@ -42,8 +42,10 @@ package org.netbeans.lib.profiler.heap;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -73,6 +75,7 @@ class ClassDumpSegment extends TagBounds {
     final int stackTraceSerialNumberOffset;
     final int superClassIDOffset;
     ClassDump java_lang_Class;
+    Map /*<JavaClass,List<Field>>*/ fieldsCache;
     private List /*<JavaClass>*/ classes;
     private Map /*<Byte,JavaClass>*/ primitiveArrayMap;
 
@@ -102,6 +105,8 @@ class ClassDumpSegment extends TagBounds {
         fieldSize = fieldTypeOffset + 1;
 
         minimumInstanceSize = 2 * idSize;
+        
+        fieldsCache = Collections.synchronizedMap(new FieldsCache());
     }
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
@@ -115,7 +120,7 @@ class ClassDumpSegment extends TagBounds {
 
         if (entry != null) {
             try {
-                return (ClassDump) classes.get(entry.getIndex() - 1);
+                return (ClassDump) createClassCollection().get(entry.getIndex() - 1);
             } catch (ArrayIndexOutOfBoundsException ex) { // classObjectID do not reffer to ClassDump, its instance number is > classes.size()
 
                 return null;
@@ -129,7 +134,7 @@ class ClassDumpSegment extends TagBounds {
     }
 
     JavaClass getJavaClassByName(String fqn) {
-        Iterator classIt = classes.iterator();
+        Iterator classIt = createClassCollection().iterator();
 
         while (classIt.hasNext()) {
             ClassDump cls = (ClassDump) classIt.next();
@@ -157,8 +162,9 @@ class ClassDumpSegment extends TagBounds {
     }
 
     Map getClassIdToClassMap() {
-        Map map = new HashMap(classes.size()*4/3);
-        Iterator classIt = classes.iterator();
+        Collection allClasses = createClassCollection();
+        Map map = new HashMap(allClasses.size()*4/3);
+        Iterator classIt = allClasses.iterator();
         
         while(classIt.hasNext()) {
             ClassDump cls = (ClassDump) classIt.next();
@@ -170,8 +176,8 @@ class ClassDumpSegment extends TagBounds {
     
     void addInstanceSize(ClassDump cls, int tag, long instanceOffset) {
         if ((tag == HprofHeap.OBJECT_ARRAY_DUMP) || (tag == HprofHeap.PRIMITIVE_ARRAY_DUMP)) {
-            Integer sizeInt = (Integer) arrayMap.get(cls);
-            int size = 0;
+            Long sizeInt = (Long) arrayMap.get(cls);
+            long size = 0;
             HprofByteBuffer dumpBuffer = hprofHeap.dumpBuffer;
             int idSize = dumpBuffer.getIDSize();
             long elementsOffset = instanceOffset + 1 + idSize + 4;
@@ -189,12 +195,12 @@ class ClassDumpSegment extends TagBounds {
                 elSize = idSize;
             }
 
-            size += (getMinimumInstanceSize() + (elements * elSize));
-            arrayMap.put(cls, Integer.valueOf(size));
+            size += (getMinimumInstanceSize() + (((long)elements) * elSize));
+            arrayMap.put(cls, Long.valueOf(size));
         }
     }
 
-    List /*<JavaClass>*/ createClassCollection() {
+    synchronized List /*<JavaClass>*/ createClassCollection() {
         if (classes != null) {
             return classes;
         }
@@ -210,10 +216,10 @@ class ClassDumpSegment extends TagBounds {
             if (tag == HprofHeap.CLASS_DUMP) {
                 ClassDump classDump = new ClassDump(this, start);
                 long classId = classDump.getJavaClassId();
+                LongMap.Entry classEntry = hprofHeap.idToOffsetMap.put(classId, start);
 
                 classes.add(classDump);
-                hprofHeap.idToOffsetMap.put(classId, start);
-                hprofHeap.idToOffsetMap.get(classId).setIndex(classes.size());
+                classEntry.setIndex(classes.size());
             }
         }
 
@@ -222,19 +228,6 @@ class ClassDumpSegment extends TagBounds {
         extractSpecialClasses();
 
         return classes;
-    }
-
-    List findStaticReferencesFor(long instanceId) {
-        List refs = new ArrayList();
-        Iterator classIt = classes.iterator();
-
-        while (classIt.hasNext()) {
-            ClassDump cls = (ClassDump) classIt.next();
-
-            cls.findStaticReferencesFor(instanceId, refs);
-        }
-
-        return refs;
     }
 
     private void extractSpecialClasses() {
@@ -288,6 +281,21 @@ class ClassDumpSegment extends TagBounds {
             if (typeObj != null) {
                 primitiveArrayMap.put(typeObj, jcls);
             }
+        }
+    }
+    
+    private static class FieldsCache extends LinkedHashMap {
+        private static final int SIZE = 500;
+        
+        FieldsCache() {
+            super(SIZE,0.75f,true);
+        }
+
+        protected boolean removeEldestEntry(Map.Entry eldest) {
+            if (size() > SIZE) {
+                return true;
+            }
+            return false;
         }
     }
 }
