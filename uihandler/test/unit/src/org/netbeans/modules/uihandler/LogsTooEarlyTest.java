@@ -85,6 +85,7 @@ public class LogsTooEarlyTest extends NbTestCase {
     @Override
     protected void setUp() throws Exception {
         System.setProperty("netbeans.user", getWorkDirPath());
+        UIHandler.flushImmediatelly();
         clearWorkDir();
         
         Installer.clearLogs();
@@ -105,7 +106,7 @@ public class LogsTooEarlyTest extends NbTestCase {
 
         installer.restored();
         
-        assertEquals("one logger received", 1, Installer.getLogsSize());
+        assertEquals("one logger received", 1, InstallerTest.getLogsSize());
     }
  
     /** This simulates the standard core's handler

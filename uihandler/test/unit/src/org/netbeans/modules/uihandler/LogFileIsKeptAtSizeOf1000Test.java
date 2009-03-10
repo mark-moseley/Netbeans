@@ -46,32 +46,37 @@ import java.awt.Frame;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Arrays;
 import java.util.logging.Level;
+import junit.framework.*;
 import java.util.Locale;
+import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import java.util.prefs.Preferences;
 import javax.swing.SwingUtilities;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.lib.uihandler.LogRecords;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
-import org.openide.util.NbPreferences;
 
 /**
  *
  * @author Jaroslav Tulach
  */
-public class InstallerInitTest extends NbTestCase {
+public class LogFileIsKeptAtSizeOf1000Test extends NbTestCase {
     private Installer installer;
     
     static {
         MemoryURL.initialize();
     }
     
-    public InstallerInitTest(String testName) {
+    public LogFileIsKeptAtSizeOf1000Test(String testName) {
         super(testName);
     }
     
@@ -88,14 +93,13 @@ public class InstallerInitTest extends NbTestCase {
 
     @Override
     protected void setUp() throws Exception {
+        UIHandler.flushImmediatelly();
         System.setProperty("netbeans.user", getWorkDirPath());
         clearWorkDir();
-        UIHandler.flushImmediatelly();
         
         installer = Installer.findObject(Installer.class, true);
         assertNotNull(installer);
 
-        Installer.dontWaitForUserInputInTests();
         DD.d = null;
         MockServices.setServices(DD.class);
 
@@ -103,9 +107,6 @@ public class InstallerInitTest extends NbTestCase {
         installer.restored();
 
         assertNull("No dialog as there are no records", DD.d);
-        
-        Locale.setDefault(new Locale("in", "IT"));
-        
     }
 
     @Override
@@ -114,77 +115,73 @@ public class InstallerInitTest extends NbTestCase {
         installer.doClose();
     }
 
-    public void testGenerateEnoughLogsExit() throws Exception {
-        LogRecord r = new LogRecord(Level.INFO, "MSG_SOMETHING");
-        r.setLoggerName("org.netbeans.ui.anything");
-
-        String utf8 = 
-            "<html><head>" +
-            "</head>" +
-            "<body>" +
-            "<form action='http://anna.nbextras.org/analytics/upload.jsp' method='post'>" +
-            "  <input name='submit' value='&amp;Fill Survey' type='hidden'> </input>" +
-            "</form>" +
-            "</body></html>";
-        ByteArrayInputStream is = new ByteArrayInputStream(utf8.getBytes("utf-8"));
-        
-        MemoryURL.registerURL("memory://start.html", is);
-        
-        for (int i = 0; i < 1500; i++) {
-            Logger.getLogger("org.netbeans.ui.anything").log(r);
-        }
-        assertEquals("full buffer", 1000, InstallerTest.getLogsSize());
-        
-        assertNull("No dialogs so far", DD.d);
-        
-        installer.doClose();
-        waitForGestures();
-        
-        assertNull("No dialogs at close", DD.d);
-
-        Preferences prefs = NbPreferences.forModule(Installer.class);
-        prefs.putInt("count", UIHandler.MAX_LOGS );
-        
-        installer.restored();
-        
-        waitForGestures();
-
-//        assertNotNull("A dialog shown at begining", DD.d);
+    public void testGenerateEnoughLogsAndExit() throws Exception {
+        doGenerateALotOfLogs(true);
     }
 
-    public void testGenerateTooLittleLogs() throws Exception {
-        LogRecord r = new LogRecord(Level.INFO, "MSG_SOMETHING");
-        r.setLoggerName("org.netbeans.ui.anything");
+    public void testGenerateEnoughLogsInOneRun() throws Exception {
+        doGenerateALotOfLogs(false);
+    }
+    
+    private void doGenerateALotOfLogs(boolean exitMeanwhile) throws Exception {
+        
+        for (int repeat = 0; repeat < 10; repeat++) {
+            LogRecord r = new LogRecord(Level.INFO, "MSG_SOMETHING");
+            r.setLoggerName("org.netbeans.ui.anything");
 
-        String utf8 = 
-            "<html><head>" +
-            "</head>" +
-            "<body>" +
-            "<form action='http://anna.nbextras.org/analytics/upload.jsp' method='post'>" +
-            "  <input name='submit' value='&amp;Fill Survey' type='hidden'> </input>" +
-            "</form>" +
-            "</body></html>";
-        ByteArrayInputStream is = new ByteArrayInputStream(utf8.getBytes("utf-8"));
-        
-        MemoryURL.registerURL("memory://start.html", is);
-        
-        for (int i = 0; i < 500; i++) {
-            Logger.getLogger("org.netbeans.ui.anything").log(r);
+            for (int i = 0; i < 1500; i++) {
+                Logger.getLogger("org.netbeans.ui.anything").log(r);
+            }
+            assertEquals("full buffer", 1000, InstallerTest.getLogsSize());
+
+            File logs = new File(new File(getWorkDir(), "var"), "log");
+            assertEquals("Two log files: " + Arrays.asList(logs.list()), 2, logs.list().length);
+            
+            class Cnt extends Handler {
+                int cnt;
+                
+                public Cnt(File f) throws IOException {
+                    FileInputStream is = new FileInputStream(f);
+                    LogRecords.scan(is, this);
+                    is.close();
+                }
+                
+                @Override
+                public void publish(LogRecord record) {
+                    cnt++;
+                }
+
+                @Override
+                public void flush() {
+                }
+
+                @Override
+                public void close() throws SecurityException {
+                }
+
+                final void assert1000() {
+                    if (cnt > 1001) {
+                        fail("Too many logs in this file: " + cnt);
+                    }
+                }
+            }
+
+            Cnt one = new Cnt(logs.listFiles()[0]);
+            one.assert1000();
+            Cnt two = new Cnt(logs.listFiles()[1]);
+            two.assert1000();
+            
+            assertNull("No dialogs so far", DD.d);
+
+            if (exitMeanwhile) {
+                installer.doClose();
+                waitForGestures();
+
+                assertNull("No dialogs at close", DD.d);
+            }
+
+            assertNull("No dialog shown at begining", DD.d);
         }
-        assertEquals("not full buffer", 500, InstallerTest.getLogsSize());
-        
-        assertNull("No dialogs so far", DD.d);
-        
-        installer.doClose();
-        waitForGestures();
-        
-        assertNull("No dialogs at close", DD.d);
-        
-        installer.restored();
-        
-        waitForGestures();
-
-        assertNull("No dialog shown at begining", DD.d);
     }
     
     public static final class DD extends DialogDisplayer {

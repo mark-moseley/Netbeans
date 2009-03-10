@@ -66,6 +66,7 @@ public class UIHandlerTest extends NbTestCase {
     protected void setUp() throws Exception {
         Installer o = Installer.findObject(Installer.class, true);
         System.setProperty("netbeans.user", getWorkDirPath());
+        UIHandler.flushImmediatelly();
         clearWorkDir();
         assertNotNull("Installer created", o);
         o.restored();
@@ -91,8 +92,8 @@ public class UIHandlerTest extends NbTestCase {
         UILOG.log(rec);        
         
         List<LogRecord> logs = Installer.getLogs();
-        assertEquals("One log: " + logs, 1, logs.size());
-        LogRecord first = logs.get(0);
+        assertEquals("One log: " + logs, 2, logs.size());
+        LogRecord first = logs.get(1);
         
         assertEquals("This is the logged record", rec.getMessage(), first.getMessage());
         
