@@ -57,6 +57,7 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
 import org.netbeans.spi.project.ant.AntArtifactProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
@@ -68,6 +69,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.test.TestFileUtils;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.modules.SpecificationVersion;
+import org.openide.util.test.MockLookup;
 import org.openide.windows.IOProvider;
 import org.openide.windows.InputOutput;
 import org.openide.windows.OutputListener;
@@ -96,7 +98,7 @@ public final class BuildImplTest extends NbTestCase {
         assertNotNull("must set test.junit.jar", junitJarProp);
         junitJar = new File(junitJarProp);
         assertTrue("file " + junitJar + " exists", junitJar.isFile());
-        MockServices.setServices(IOP.class, IFL.class);
+        MockLookup.setInstances(new IOP(), new IFL());
     }
 
     private AntProjectHelper setupProject(String subFolder, int numberOfSourceFiles, boolean generateTests) throws Exception {
@@ -292,8 +294,8 @@ public final class BuildImplTest extends NbTestCase {
     public void testIncludesExcludes() throws Exception {
         AntProjectHelper aph = setupProject(12, true);
         EditableProperties ep = aph.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-        ep.setProperty(J2SEProjectProperties.INCLUDES, "**/*1*");
-        ep.setProperty(J2SEProjectProperties.EXCLUDES, "**/*0*");
+        ep.setProperty(ProjectProperties.INCLUDES, "**/*1*");
+        ep.setProperty(ProjectProperties.EXCLUDES, "**/*0*");
         aph.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         ProjectManager.getDefault().saveAllProjects();
         FileObject dir = aph.getProjectDirectory();
@@ -627,6 +629,7 @@ public final class BuildImplTest extends NbTestCase {
         output.remove("jar:");
         assertFalse("subproject's jar should not be executed", output.contains("jar:"));
         fo = aph1.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
         fo = aph2.getProjectDirectory();
@@ -639,9 +642,11 @@ public final class BuildImplTest extends NbTestCase {
         output.remove("jar:");
         assertTrue("subproject's jar target was not executed", output.contains("jar:"));
         fo = aph1.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
         fo = aph2.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
 
