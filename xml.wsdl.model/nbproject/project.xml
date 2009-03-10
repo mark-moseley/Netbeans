@@ -47,15 +47,6 @@ made subject to such option by the copyright holder.
             <code-name-base>org.netbeans.modules.xml.wsdl.model</code-name-base>
             <module-dependencies>
                 <dependency>
-                    <code-name-base>org.netbeans.api.xml</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.13.10</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
                     <code-name-base>org.netbeans.modules.xml.schema.model</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
@@ -65,28 +56,12 @@ made subject to such option by the copyright holder.
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.openide.filesystems</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>6.2.1</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
                     <code-name-base>org.netbeans.modules.xml.xam</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
                         <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.xml.retriever</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -132,6 +107,7 @@ made subject to such option by the copyright holder.
                 <package>org.netbeans.modules.xml.wsdl.model</package>
                 <package>org.netbeans.modules.xml.wsdl.model.extensions.http</package>
                 <package>org.netbeans.modules.xml.wsdl.model.extensions.soap</package>
+                <package>org.netbeans.modules.xml.wsdl.model.extensions.soap12</package>
                 <package>org.netbeans.modules.xml.wsdl.model.extensions.xsd</package>
                 <package>org.netbeans.modules.xml.wsdl.model.spi</package>
                 <package>org.netbeans.modules.xml.wsdl.model.visitor</package>
