@@ -49,7 +49,7 @@ import javax.swing.JEditorPane;
 import javax.swing.text.BadLocationException;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.ext.html.test.TestBase;
-import org.netbeans.modules.editor.html.NbReaderProvider;
+import org.netbeans.modules.html.editor.NbReaderProvider;
 import org.netbeans.spi.editor.completion.CompletionItem;
 
 
@@ -86,7 +86,7 @@ public class HTMLCompletionQueryTest extends TestBase {
         String content = Utils.readFileContentToString(inputFile);
         BaseDocument doc = createDocument();
         doc.insertString(0,content,null);
-        HTMLSyntaxSupport sup = new HTMLSyntaxSupport(doc);
+        HTMLSyntaxSupport sup = HTMLSyntaxSupport.get(doc);
         HTMLCompletionQuery query = new HTMLCompletionQuery();
         
         JEditorPane component = new JEditorPane();
