@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.debugger.jpda.ant;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
@@ -69,7 +70,7 @@ public class JPDAConnect extends Task {
     private String address;
     
     /** Explicit sourcepath of the debugged process. */
-    private Path sourcepath = null;
+    private JPDAStart.Sourcepath sourcepath = null;
     
     /** Explicit classpath of the debugged process. */
     private Path classpath = null;
@@ -114,7 +115,7 @@ public class JPDAConnect extends Task {
         bootclasspath = path;
     }
     
-    public void addSourcepath (Path path) {
+    public void addSourcepath (JPDAStart.Sourcepath path) {
         if (sourcepath != null)
             throw new BuildException ("Only one sourcepath subelement is supported");
         sourcepath = path;
@@ -180,6 +181,16 @@ public class JPDAConnect extends Task {
         properties.put ("sourcepath", sourcePath); // NOI18N
         properties.put ("name", getName ()); // NOI18N
         properties.put ("jdksources", jdkSourcePath); // NOI18N
+        String workDir = getProject().getProperty("work.dir");
+        File baseDir;
+        if (workDir != null) {
+            baseDir = new File(workDir);
+        } else {
+            baseDir = getProject().getBaseDir();
+        }
+        properties.put ("baseDir", baseDir); // NOI18N
+
+        logger.fine("JPDAStart: properties = "+properties);
         
 
         synchronized(lock) {
