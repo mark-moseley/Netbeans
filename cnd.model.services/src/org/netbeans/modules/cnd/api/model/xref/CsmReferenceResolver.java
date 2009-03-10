@@ -41,7 +41,9 @@
 
 package org.netbeans.modules.cnd.api.model.xref;
 
+import java.util.Set;
 import javax.swing.JEditorPane;
+import javax.swing.text.Document;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
 import org.openide.cookies.EditorCookie;
@@ -93,7 +95,8 @@ public abstract class CsmReferenceResolver {
         if (c != null) {
             JEditorPane[] panes = CsmUtilities.getOpenedPanesInEQ(c);
             if (panes != null && panes.length>0) {
-                int offset = panes[0].getCaret().getDot();
+                //System.err.printf("caret: %d, %d, %d\n",panes[0].getCaretPosition(), panes[0].getSelectionStart(), panes[0].getSelectionEnd());                
+                int offset = panes[0].getSelectionStart();
                 CsmFile file = CsmUtilities.getCsmFile(activatedNode,false);
                 if (file != null){
                     return findReference(file, offset);
@@ -101,17 +104,27 @@ public abstract class CsmReferenceResolver {
             }
         }
         return null;
+    }   
+
+    public CsmReference findReference(Document doc, int offset) {
+        CsmFile file = CsmUtilities.getCsmFile(doc, false);
+        if (file != null) {
+            return findReference(file, offset);
+        }
+        return null;
     }
-    
     /**
      * fast checks reference scope if possible
      * @param ref
      * @return scope kind if detected or UNKNOWN
      */
     public abstract Scope fastCheckScope(CsmReference ref);
-    
+
+    public abstract boolean isKindOf(CsmReference ref, Set<CsmReferenceKind> kinds);
+
     public static enum Scope {
         LOCAL,
+        FILE_LOCAL,
         GLOBAL,
         UNKNOWN
     }
@@ -144,7 +157,18 @@ public abstract class CsmReferenceResolver {
             }
             return null;
         }
-        
+
+        @Override
+        public CsmReference findReference(Document doc, int offset) {
+            for (CsmReferenceResolver resolver : res.allInstances()) {
+                CsmReference out = resolver.findReference(doc, offset);
+                if (out != null) {
+                    return out;
+                }
+            }
+            return null;
+        }
+
         @Override
         public Scope fastCheckScope(CsmReference ref) {
             for (CsmReferenceResolver resolver : res.allInstances()) {
@@ -154,6 +178,16 @@ public abstract class CsmReferenceResolver {
                 }
             }
             return Scope.UNKNOWN;
-        }        
+        }
+
+        @Override
+        public boolean isKindOf(CsmReference ref, Set<CsmReferenceKind> kinds) {
+            for (CsmReferenceResolver resolver : res.allInstances()) {
+                if (resolver.isKindOf(ref, kinds)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }    
 }
