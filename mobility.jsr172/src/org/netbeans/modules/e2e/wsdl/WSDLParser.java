@@ -10,6 +10,10 @@
 package org.netbeans.modules.e2e.wsdl;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -36,6 +40,8 @@ import org.netbeans.modules.e2e.api.wsdl.Part;
 import org.netbeans.modules.e2e.api.wsdl.Port;
 import org.netbeans.modules.e2e.api.wsdl.PortType;
 import org.netbeans.modules.e2e.api.wsdl.Service;
+import org.netbeans.modules.e2e.api.wsdl.Message.MessageReference;
+import org.netbeans.modules.e2e.api.wsdl.PortType.PortTypeReference;
 import org.netbeans.modules.e2e.api.wsdl.extensions.soap.SOAPAddress;
 import org.netbeans.modules.e2e.api.wsdl.extensions.soap.SOAPBinding;
 import org.netbeans.modules.e2e.api.wsdl.extensions.soap.SOAPBody;
@@ -85,9 +91,11 @@ public class WSDLParser extends DefaultHandler {
     private static final String FAULT               = "fault";
     
     private List<WSDL2Java.ValidationResult> validationResults;    
+    private URL                              myOriginalWsdlUri;
     
-    public WSDLParser() {
+    public WSDLParser( URL originalWsdlUri ) {
         validationResults = new ArrayList<WSDL2Java.ValidationResult>();
+        myOriginalWsdlUri = originalWsdlUri;
     }
     
     public Definition parse( String uri ) throws WSDLException {
@@ -102,8 +110,11 @@ public class WSDLParser extends DefaultHandler {
             
             SAXParser parser = spf.newSAXParser();
             parser.parse( uri, this );
-            try {                
-                schemaParser.parseLocation( uri );
+            try {
+                /*
+                 * Fix for IZ#120452 - JSR172: Client isn't generated when there is a relative path to xsd in wsdl
+                 */
+                schemaParser.parseLocation( myOriginalWsdlUri, definition.getTargetNamespace() );
             } catch (SchemaException ex) {
                 throw new WSDLException( ex );
             }
@@ -243,7 +254,7 @@ public class WSDLParser extends DefaultHandler {
                 if( localName.equals( WSDLConstants.MESSAGE.getLocalPart()) && state.peek().equals( DEFINITION )) {
                     state.push( MESSAGE );
                     String name = attributes.getValue( "name" );
-                    message = new MessageImpl( name );
+                    message = new MessageImpl( new QName( targetNamespace, name) );
                     return;
                 }
                 // Message Part
@@ -257,7 +268,8 @@ public class WSDLParser extends DefaultHandler {
                 // PortType
                 if( localName.equals( WSDLConstants.PORT_TYPE.getLocalPart()) && state.peek().equals( DEFINITION )) {
                     state.push( PORT_TYPE );
-                    portType = new PortTypeImpl( attributes.getValue( "name" ));
+                    portType = new PortTypeImpl( new QName( targetNamespace, 
+                            attributes.getValue( "name" )));
                     return;
                 }
                 // Operation
@@ -269,21 +281,35 @@ public class WSDLParser extends DefaultHandler {
                 }
                 if( localName.equals( WSDLConstants.INPUT.getLocalPart()) && state.peek().equals( OPERATION )) {
                     state.push( INPUT );
-                    String messageName = parseQName( attributes.getValue( "message" )).getLocalPart();
-                    input = new InputImpl( attributes.getValue( "name" ), definition.getMessage( messageName ));
+                    QName messageRef = parseQName( attributes.getValue( "message" ));
+                    String messageName = messageRef.getLocalPart();
+                    Message message = definition.getMessage( messageRef );
+                    if ( message == null ){
+                        message = new MessageImpl.MessageReferenceImpl( messageRef );
+                    }
+                    input = new InputImpl( attributes.getValue( "name" ), 
+                            message);
                     return;
                 }
                 if( localName.equals( WSDLConstants.OUTPUT.getLocalPart()) && state.peek().equals( OPERATION )) {
                     state.push( OUTPUT );
-                    String messageName = parseQName( attributes.getValue( "message" )).getLocalPart();
-                    output = new OutputImpl( attributes.getValue( "name" ), definition.getMessage( messageName ));
+                    QName messageRef = parseQName( attributes.getValue( "message" ));
+                    String messageName = messageRef.getLocalPart();
+                    Message message = definition.getMessage( messageRef );
+                    if ( message == null ){
+                        message = new MessageImpl.MessageReferenceImpl( messageRef );
+                    }
+                    output = new OutputImpl( attributes.getValue( "name" ), 
+                            message );
                     return;
                 }
                 // Fault
                 if( localName.equals( WSDLConstants.FAULT.getLocalPart()) && state.peek().equals( OPERATION )) {
                     state.push( FAULT );
-                    String messageName = attributes.getValue( "message" );
-                    fault = new FaultImpl(  attributes.getValue( "name" ), definition.getMessage( messageName ));
+                    QName messageName = parseQName( 
+                            attributes.getValue( "message" ));
+                    fault = new FaultImpl(  attributes.getValue( "name" ), 
+                            definition.getMessage( messageName ));
                     return;
                 }
                 
@@ -292,7 +318,13 @@ public class WSDLParser extends DefaultHandler {
                     state.push( BINDING );
                     QName typeQName = parseQName( attributes.getValue( "type" ));
                     binding = new BindingImpl( attributes.getValue( "name" ));
-                    binding.setPortType( definition.getPortType( typeQName.getLocalPart()));
+                    PortType portType = definition.getPortType( typeQName );
+                    if ( portType == null ) {
+                        portType = new PortTypeImpl.PortTypeReferenceImpl(
+                            typeQName  );
+                    }
+                    
+                    binding.setPortType( portType );
                     return;
                 }
                 // BindingOperation
@@ -336,8 +368,14 @@ public class WSDLParser extends DefaultHandler {
                     try {
                         String namespace = attributes.getValue( "namespace" );
                         String location = attributes.getValue( "location" );
-                        WSDLParser parser = new WSDLParser();
-                        Definition d = parser.parse( location );
+
+                        /*
+                         * Fix for IZ#153030 - JSR172: WSDL Validation failed if it contains imported wsdl with relative path
+                         */
+                        URI u = myOriginalWsdlUri.toURI();
+                        URI sl = u.normalize().resolve( location );
+                        WSDLParser parser = new WSDLParser( sl.toURL() );
+                        Definition d = parser.parse( sl.toString() );
                         
                         for( Binding b : d.getBindings().values()) definition.addBinding( b );
                         for( Message m : d.getMessages().values()) definition.addMessage( m );
@@ -350,6 +388,12 @@ public class WSDLParser extends DefaultHandler {
                         validationResults.addAll( parser.getValidationResults());
                         return;
                     } catch( WSDLException e ) {
+                        Exceptions.printStackTrace( e );
+                    }
+                    catch (URISyntaxException e ){
+                        Exceptions.printStackTrace( e );
+                    }
+                    catch ( MalformedURLException e ){
                         Exceptions.printStackTrace( e );
                     }
                 }
