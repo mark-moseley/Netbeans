@@ -61,6 +61,7 @@ import javax.swing.ListSelectionModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.DefaultTableModel;
 
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.netbeans.modules.uml.core.support.umlutils.IPropertyElement;
 import org.netbeans.modules.uml.core.support.umlutils.IPropertyDefinition;
@@ -182,7 +183,7 @@ public class ParameterCustomizerPanel extends javax.swing.JPanel {
                     column = table.getColumnModel().getColumn(i);
                     
                     comp = headerRenderer.getTableCellRendererComponent(
-                          null, column.getHeaderValue(),
+                          table, column.getHeaderValue(),
                           false, false, 0, 0);
                     headerWidth = comp.getPreferredSize().width;
                     
@@ -821,8 +822,7 @@ public class ParameterCustomizerPanel extends javax.swing.JPanel {
         if (text != null) {
             messageArea.setText(text);
             if (text.trim().length() > 0) {
-                errorIcon = new ImageIcon(
-                  Utilities.loadImage("org/netbeans/modules/uml/resources/images/error.png"));
+                errorIcon = ImageUtilities.loadImageIcon("org/netbeans/modules/uml/resources/images/error.png", false);
             }
             iconLabel.setIcon(errorIcon); // NOI18N
         }
