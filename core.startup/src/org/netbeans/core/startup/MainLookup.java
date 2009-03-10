@@ -50,6 +50,7 @@ import org.openide.util.lookup.ProxyLookup;
 
 /** The default lookup for the system.
  */
+@org.openide.util.lookup.ServiceProvider(service=org.openide.util.Lookup.class)
 public final class MainLookup extends ProxyLookup {
     private static boolean started = false;
     /** currently effective ClassLoader */
@@ -121,10 +122,12 @@ public final class MainLookup extends ProxyLookup {
      * @see "#28465"
      */
     public static final void moduleLookupReady(Lookup moduleLookup) {
-        MainLookup l = (MainLookup)Lookup.getDefault();
-        Lookup[] newDelegates = l.getLookups().clone();
-        newDelegates[2] = moduleLookup;
-        l.setLookups(newDelegates);
+        if (Lookup.getDefault() instanceof MainLookup) {
+            MainLookup l = (MainLookup)Lookup.getDefault();
+            Lookup[] newDelegates = l.getLookups().clone();
+            newDelegates[2] = moduleLookup;
+            l.setLookups(newDelegates);
+        }
     }
 
     /** When all module classes are accessible thru systemClassLoader, this
@@ -184,17 +187,16 @@ public final class MainLookup extends ProxyLookup {
             getLookups()[1], // ClassLoader lookup
             getLookups()[2], // ModuleInfo lookup
             instanceLookup, 
-            CoreBridge.conditionallyLookupCacheLoad (),
+            CoreBridge.getDefault().lookupCacheLoad(),
         };
         StartLog.logProgress ("prepared other Lookups"); // NOI18N
 
         setLookups (arr);
         StartLog.logProgress ("Lookups set"); // NOI18N
-
-        CoreBridge.lookupInitialized();
     //StartLog.logEnd ("NbTopManager$MainLookup: initialization of FolderLookup"); // NOI18N
     }
 
+    @Override
     protected void beforeLookup(Lookup.Template templ) {
         Class type = templ.getType();
 
