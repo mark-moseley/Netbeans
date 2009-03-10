@@ -193,19 +193,37 @@ public class JspLexer implements Lexer<JspTokenId> {
     
     /** Determines whether a given string is a JSP tag. */
     private boolean isJspTag(CharSequence tagName) {
-        if(startsWith(tagName, JSP_STANDART_TAG_PREFIX)) { // NOI18N
+        if (startsWith(tagName, JSP_STANDART_TAG_PREFIX)) { // NOI18N
             return true;
         }
-        
+
         //TODO handle custom tags from JSP parser here
-        if(jspParseData != null) {
-            int colonIndex = indexOf(tagName, ':');//NOI18N
-            if(colonIndex != -1) {
-                CharSequence prefix = tagName.subSequence(0, colonIndex);
-                return jspParseData.isTagLibRegistered(prefix.toString());
+        if (jspParseData != null) {
+            //Issue #149994 workaround
+            //All prefix tags (<xxx:yyy ... />) will be lexed as jsp tags until the jsp parser finishes. So this will fix the scanning
+            //problem and the only sideeffect for xhtml users using namespaces is that if thay open their xhtml file they non-jsp tags
+            //with namespaces will look like jsp tags for a while until the jsp parser finishes and tells the lexer which are real jsp
+            //tags and which not.
+            if (!jspParseData.isInitialized()) {
+                return contains(tagName, ':'); //NOI18N
+            } else {
+                int colonIndex = indexOf(tagName, ':');//NOI18N
+                if (colonIndex != -1) {
+                    CharSequence prefix = tagName.subSequence(0, colonIndex);
+                    return jspParseData.isTagLibRegistered(prefix.toString());
+                }
             }
         }
-        
+
+        return false;
+    }
+
+    private boolean contains(CharSequence text, char ch) {
+        for(int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == ch) {
+                return true;
+            }
+        }
         return false;
     }
     
@@ -213,7 +231,7 @@ public class JspLexer implements Lexer<JspTokenId> {
         if(text.length() < prefix.length()) {
             return false;
         }
-        
+       
         for(int i = 0; i < prefix.length(); i++) {
             if(text.charAt(i) != prefix.charAt(i)) {
                 return false;
@@ -391,6 +409,7 @@ public class JspLexer implements Lexer<JspTokenId> {
                             lexerState = ISA_LT_PC;
                             break;
                         default:
+                            input.backup(1);
                             lexerState = INIT; //just content
                             //                            state = ISI_TAG_ERROR;
                             //                            break;
@@ -455,6 +474,10 @@ public class JspLexer implements Lexer<JspTokenId> {
                                 input.backup(1);
                                 lexerState = ((lexerState == ISI_TAGNAME) ? ISP_TAG : ISP_DIR);
                                 break;
+                            case '\n':
+                                lexerState = ISP_TAG;
+                                input.backup(1); //backup the eof
+                                return token(JspTokenId.TAG);
                             default:
                                 lexerState = ((lexerState == ISI_TAGNAME) ? ISP_TAG : ISP_DIR);
                         }
@@ -559,6 +582,7 @@ public class JspLexer implements Lexer<JspTokenId> {
                     if (!(Character.isLetter(actChar) ||
                             Character.isDigit(actChar) ||
                             (actChar == '_') ||
+                            (actChar == '.') ||
                             (actChar == '-') ||
                             (actChar == ':'))
                             ) { // not alpha
