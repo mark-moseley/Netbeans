@@ -41,26 +41,40 @@
 
 package org.netbeans.modules.cnd.utils.cache;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
 /**
  * cache entry
  * @author Vladimir Voskresensky
  */
-public class FilePathCache {
+public class FilePathCache  extends APTStringManager {
+    private static final APTStringManager manager = new FilePathCache();
     private static final APTStringManager instance = 
             APTStringManager.instance(APTStringManager.FILE_PATH_MANAGER, APTStringManager.CacheKind.Sliced);
     
     private FilePathCache() {
     }
     
-    public static CharSequence getString(CharSequence text) {
+    public CharSequence getString(CharSequence text) {
+        text = CharSequenceKey.create(text);
         return instance.getString(text);
     }
-    
-    public static void dispose() {
+
+    public static List<CharSequence> asList(Collection<? extends CharSequence> paths) {
+        List<CharSequence> out = new ArrayList<CharSequence>(paths.size());
+        for (CharSequence path : paths) {
+            out.add(FilePathCache.getManager().getString(path));
+        }
+        return out;
+    }
+
+    public void dispose() {
         instance.dispose();
     }
 
     public static APTStringManager getManager() {
-        return instance;
+        return manager;
     }
 }

@@ -131,6 +131,7 @@ public abstract class APTStringManager  {
                 throw new NullPointerException("null string is illegal to share"); // NOI18N
             }
             CharSequence outText = null;
+
             synchronized (lock) {
                 outText = storage.addOrGet(text);
             }
@@ -141,7 +142,7 @@ public abstract class APTStringManager  {
 
         public final void dispose() {
             if (false){
-                System.out.println("Dispose cache "+name+" "+getClass().getName());
+                System.out.println("Dispose cache "+name+" "+getClass().getName()); // NOI18N
                 Object[] arr = storage.toArray();
                 Map<Class, Integer> classes = new HashMap<Class,Integer>();
                 for(Object o : arr){
@@ -156,7 +157,7 @@ public abstract class APTStringManager  {
                     }
                 }
                 for(Map.Entry<Class,Integer> e:classes.entrySet()){
-                    System.out.println("   "+e.getValue()+" of "+e.getKey().getName());
+                    System.out.println("   "+e.getValue()+" of "+e.getKey().getName()); // NOI18N
                 }
             }
             if (storage.size() > 0) {

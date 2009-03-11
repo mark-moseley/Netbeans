@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,56 +31,75 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.apt.support;
+package org.netbeans.modules.cnd.modelimpl.csm.core;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.repository.spi.Key;
-import org.netbeans.modules.cnd.repository.spi.Persistent;
-import org.netbeans.modules.cnd.repository.support.KeyFactory;
-import org.netbeans.modules.cnd.repository.support.SelfPersistent;
-import org.netbeans.modules.cnd.utils.cache.FilePathCache;
+import org.netbeans.modules.cnd.api.model.CsmErrorDirective;
+import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmOffsetable;
+import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
+import org.netbeans.modules.cnd.modelimpl.textcache.DefaultCache;
 
 /**
  *
- * @author Alexander Simon
+ * @author Vladimir Voskresensky
  */
-public final class StartEntry implements Persistent, SelfPersistent{
-    private final CharSequence startFile;
-    //private boolean isCPP; // TODO: flag to be used for understanding C/C++ lang
-    private final Key startFileProject;
-    public StartEntry(String startFile, Key startFileProject) {
-        this.startFile = FilePathCache.getManager().getString(startFile);
-        this.startFileProject = startFileProject;
-    }
-    
-    public CharSequence getStartFile(){
-        return startFile;
+public final class ErrorDirectiveImpl extends OffsetableBase implements CsmErrorDirective {
+    private final CharSequence msg;
+    private ErrorDirectiveImpl(CsmFile file, String text, CsmOffsetable offs) {
+        super(file, offs);
+        this.msg = DefaultCache.getManager().getString(text);
     }
 
-    public Key getStartFileProject(){
-        return startFileProject;
+    public static ErrorDirectiveImpl create(CsmFile file, String msg, CsmOffsetable offs) {
+        return new ErrorDirectiveImpl(file, msg, offs);
     }
-    
-    public void write(DataOutput output) throws IOException {
-        assert output != null;
-        output.writeUTF(startFile.toString());
-        KeyFactory.getDefaultFactory().writeKey(startFileProject, output);
-    }
-    
-    public StartEntry(final DataInput input) throws IOException {
-        assert input != null;
-        startFile = FilePathCache.getManager().getString(input.readUTF());
-        startFileProject = KeyFactory.getDefaultFactory().readKey(input);
+
+    @Override
+    public CharSequence getText() {
+        return msg;
     }
 
     @Override
     public String toString() {
-        StringBuilder out = new StringBuilder();
-        out.append("Start Entry: from file=" + startFile + "\nof project="+startFileProject); //NOI18N
-        return out.toString();
+        return super.toString() + msg;
+    }
+
+    @Override
+    public int hashCode() {
+        return 47 * super.hashCode() + msg.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!super.equals(obj)) {
+            return false;
+        }
+        final ErrorDirectiveImpl other = (ErrorDirectiveImpl) obj;
+        return this.msg.equals(other.msg);
+    }
+
+
+    ///////////////////////////////////////////////////////////////////////
+    // serialization
+    
+    @SuppressWarnings("unchecked")
+    public ErrorDirectiveImpl(DataInput input) throws IOException {
+        super(input);
+        this.msg = PersistentUtils.readUTF(input, DefaultCache.getManager());
+    }
+
+    @Override
+    public void write(DataOutput output) throws IOException {
+        super.write(output);
+        PersistentUtils.writeUTF(msg, output);
     }
 }

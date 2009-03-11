@@ -50,11 +50,14 @@ import java.util.Iterator;
 import java.util.List;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmMacro;
+import org.netbeans.modules.cnd.api.model.CsmMacroParameter;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
+import org.netbeans.modules.cnd.api.model.CsmParameterList;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.modelimpl.csm.core.OffsetableIdentifiableBase;
 import org.netbeans.modules.cnd.modelimpl.csm.core.Utils;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
+import org.netbeans.modules.cnd.modelimpl.textcache.DefaultCache;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDUtilities;
 import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
 import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
@@ -83,7 +86,7 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
      * flag to distinguish system and other types of macros 
      * now we support only macros in file => all macros are not system
      */
-    private final boolean system;
+    private final Kind kind;
     
     /** 
      * immutable list of parameters, 
@@ -92,7 +95,7 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
     private final List<? extends CharSequence> params;
     
     /** Creates new instance of MacroImpl based on macro information and specified position */
-    public MacroImpl(String macroName, List<String> macroParams, String macroBody, CsmOffsetable macroPos) {
+    public MacroImpl(String macroName, List<CharSequence> macroParams, String macroBody, CsmOffsetable macroPos) {
         this(macroName, macroParams, macroBody, null, macroPos);
     }
     
@@ -100,21 +103,21 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
      * constructor to create system macro impl
      */
     private MacroImpl(String macroName, String macroBody, CsmFile unresolved) {
-        this(macroName, null, macroBody, unresolved, Utils.createOffsetable(unresolved, 0, 0), true);
+        this(macroName, null, macroBody, unresolved, Utils.createOffsetable(unresolved, 0, 0), Kind.USER_SPECIFIED);
     }
     
-    public static MacroImpl createSystemMacro(String macroName, String macroBody, CsmFile unresolved) {
-        return new MacroImpl(macroName, macroBody, unresolved);
+    public static SystemMacroImpl createSystemMacro(String macroName, String macroBody, CsmFile unresolved, Kind kind) {
+        return new SystemMacroImpl(macroName, macroBody, null, unresolved, kind);
     }
     
-    public MacroImpl(String macroName, List<String> macroParams, String macroBody, CsmFile containingFile, CsmOffsetable macroPos, boolean system) {
+    public MacroImpl(String macroName, List<CharSequence> macroParams, String macroBody, CsmFile containingFile, CsmOffsetable macroPos, Kind kind) {
         super(containingFile, macroPos);
         assert(macroName != null);
         assert(macroName.length() > 0);
         assert(macroBody != null);
         this.name = NameCache.getManager().getString(macroName);
-        this.system = system;
-        this.body = macroBody;
+        this.kind = kind;
+        this.body = DefaultCache.getManager().getString(macroBody);
         if (macroParams != null) {
             this.params = Collections.unmodifiableList(macroParams);
         } else {
@@ -122,8 +125,8 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
         }
     }
     
-    public MacroImpl(String macroName, List<String> macroParams, String macroBody, CsmFile containingFile, CsmOffsetable macroPos) {
-        this(macroName, macroParams, macroBody, containingFile, macroPos, false);
+    public MacroImpl(String macroName, List<CharSequence> macroParams, String macroBody, CsmFile containingFile, CsmOffsetable macroPos) {
+        this(macroName, macroParams, macroBody, containingFile, macroPos, Kind.DEFINED);
     }
     
     public List<? extends CharSequence> getParameters() {
@@ -135,8 +138,8 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
         return body;
     }
     
-    public boolean isSystem() {
-        return system;
+    public Kind getKind() {
+        return kind;
     }
     
     public CharSequence getName() {
@@ -149,8 +152,8 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
         retValue.append(getName());
         if (getParameters() != null) {
             retValue.append("["); // NOI18N
-            for (Iterator it = getParameters().iterator(); it.hasNext();) {
-                String param = (String) it.next();
+            for (Iterator<? extends CharSequence> it = getParameters().iterator(); it.hasNext();) {
+                CharSequence param = it.next();
                 retValue.append(param);
                 if (it.hasNext()) {
                     retValue.append(", "); // NOI18N
@@ -170,7 +173,7 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
     
     public @Override boolean equals(Object obj) {
         boolean retValue;
-        if (obj == null || !(obj instanceof CsmMacro)) {
+        if (obj == null || !(obj instanceof MacroImpl)) {
             retValue = false;
         } else {
             MacroImpl other = (MacroImpl)obj;
@@ -195,21 +198,21 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
     public @Override void write(DataOutput output) throws IOException {
         super.write(output);
         assert this.name != null;
-        output.writeUTF(this.name.toString());
+        PersistentUtils.writeUTF(name, output);
         assert this.body != null;
-        output.writeUTF(this.body.toString());
-        output.writeBoolean(this.system);
-        String[] out = this.params == null?null:this.params.toArray(new String[params.size()]);
+        PersistentUtils.writeUTF(body, output);
+        output.writeByte((byte)this.kind.ordinal());
+        CharSequence[] out = this.params == null?null:this.params.toArray(new CharSequence[params.size()]);
         PersistentUtils.writeStrings(out, output);
     }
 
     public MacroImpl(DataInput input) throws IOException {
         super(input);
-        this.name = NameCache.getManager().getString(input.readUTF());
+        this.name = PersistentUtils.readUTF(input, NameCache.getManager());
         assert this.name != null;
-        this.body = NameCache.getManager().getString(input.readUTF());
+        this.body = PersistentUtils.readUTF(input, DefaultCache.getManager());
         assert this.body != null;
-        this.system = input.readBoolean();
+        this.kind = Kind.values()[input.readByte()];
         CharSequence[] out = PersistentUtils.readStrings(input, NameCache.getManager());
         this.params = out == null ? null : Collections.unmodifiableList(Arrays.asList(out));
     }
@@ -217,5 +220,9 @@ public class MacroImpl extends OffsetableIdentifiableBase<CsmMacro> implements C
 
     protected CsmUID createUID() {
         return UIDUtilities.createMacroUID(this);
-    }    
+    }
+
+    public CsmParameterList<CsmParameterList, CsmMacroParameter> getParameterList() {
+        throw new UnsupportedOperationException("Not supported yet."); //NOI18N
+    }
 }
