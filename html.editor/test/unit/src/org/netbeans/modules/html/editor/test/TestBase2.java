@@ -38,74 +38,45 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.web.core.syntax.gsf;
 
-import org.netbeans.api.jsp.lexer.JspTokenId;
-import org.netbeans.api.lexer.Language;
-import org.netbeans.modules.csl.api.KeystrokeHandler;
-import org.netbeans.modules.csl.api.StructureScanner;
+package org.netbeans.modules.html.editor.test;
+
+import org.netbeans.editor.BaseKit;
+import org.netbeans.modules.csl.api.Formatter;
+import org.netbeans.modules.csl.api.test.CslTestBase;
+import org.netbeans.modules.csl.api.test.CslTestBase.IndentPrefs;
 import org.netbeans.modules.csl.spi.DefaultLanguageConfig;
-import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.html.editor.HTMLKit;
+import org.netbeans.modules.html.editor.gsf.HtmlLanguage;
 
-public class JspLanguage extends DefaultLanguageConfig {
-    
-    //XXX no line comment in jsp!
-    private static final String LINE_COMMENT_PREFIX = "<%--";
-    
-    public JspLanguage() {
+/**
+ * Common ancestor for all test classes.
+ */
+public class TestBase2 extends CslTestBase {
+
+
+    public TestBase2(String name) {
+        super(name);
     }
 
     @Override
-    public Language getLexerLanguage() {
-        return JspTokenId.language();
+    protected DefaultLanguageConfig getPreferredLanguage() {
+        return new HtmlLanguage();
     }
 
     @Override
-    public String getLineCommentPrefix() {
-        return LINE_COMMENT_PREFIX;
+    protected String getPreferredMimeType() {
+        return "text/html";
     }
 
     @Override
-    public boolean isIdentifierChar(char c) {
-        return Character.isLetter(c);
+    public Formatter getFormatter(IndentPrefs preferences) {
+        return null;
     }
 
     @Override
-    public String getDisplayName() {
-        return "JSP";
-    }
-
-    @Override
-    public String getPreferredExtension() {
-        return "jsp"; // NOI18N
-    }
-
-    @Override
-    public boolean isUsingCustomEditorKit() {
-        return true;
-    }
-
-    // Service Registrations
-    
-    @Override
-    public Parser getParser() {
-        // we need the parser and the StructureScanner to enable navigator of embedded languages
-        return new JspGSFParser();
-    }
-
-    @Override
-    public boolean hasStructureScanner() {
-        return true;
-    }
-
-    @Override
-    public StructureScanner getStructureScanner() {
-        return new JspStructureScanner();
-    }
-
-    @Override
-    public KeystrokeHandler getKeystrokeHandler() {
-        return new JspKeystrokeHandler();
+    protected BaseKit getEditorKit(String mimeType) {
+        return new HTMLKit();
     }
 
 }
