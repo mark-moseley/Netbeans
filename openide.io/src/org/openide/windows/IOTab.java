@@ -39,88 +39,113 @@
 
 package org.openide.windows;
 
-import java.awt.Color;
+import javax.swing.Icon;
 import org.openide.util.Lookup;
 
 /**
- * Settings of colors for normal, error, hyperlink, important hyperlink lines
+ * Settings of tool tip/icon for IO component (tab)
  * <p>
  * Client usage:
  * <pre>
- *  // set important hyperlink color to red
+ *  // settings of IO tab icon, tooltip
  *  InputOutput io = ...;
- *  IOColors.setColor(io, IOColors.OutputType.HYPERLINK_IMPORTANT, Color.RED);
+ *  Icon icon = ...;
+ *  IOTab.setIcon(io, icon);
+ *  IOTab.setToolTipText(io, "text");
  * </pre>
- * How to support {@link IOColors} in own {@link IOProvider} implementation:
+ * How to support {@link IOTab} in own {@link IOProvider} implementation:
  * <ul>
  *   <li> {@link InputOutput} provided by {@link IOProvider} has to implement <a href="@org-openide-util@/org/openide/util/Lookup.Provider.html"><code>Lookup.Provider</code></a>
- *   <li> Extend {@link IOColors} and implement its abstract methods
- *   <li> Place instance of {@link IOColors} to {@link Lookup} provided by {@link InputOutput}
+ *   <li> Extend {@link IOTab} and implement its abstract methods
+ *   <li> Place instance of {@link IOTab} to {@link Lookup} provided by {@link InputOutput}
  * </ul>
- * @since 1.16
+ * @since 1.15
  * @author Tomas Holy
  */
-public abstract class IOColors {
-
-    private static IOColors find(InputOutput io) {
+public abstract class IOTab {
+    private static IOTab find(InputOutput io) {
         if (io instanceof Lookup.Provider) {
             Lookup.Provider p = (Lookup.Provider) io;
-            return p.getLookup().lookup(IOColors.class);
+            return p.getLookup().lookup(IOTab.class);
         }
         return null;
     }
 
     /**
-     * output types
+     * Gets current tab icon for specified IO
+     * @param io IO to operate on
+     * @return current tab icon or null if not supported
      */
-    public enum OutputType {
-        /** default output */
-        OUTPUT,
-        /** error output */
-        ERROR,
-        /** hyperlink */
-        HYPERLINK,
-        /** important hyperlink */
-        HYPERLINK_IMPORTANT,
-        /** input, could be supported in future */
-        // INPUT,
+    public static Icon getIcon(InputOutput io) {
+        IOTab iot = find(io);
+        return iot != null ? iot.getIcon() : null;
     }
 
     /**
-     * Gets current color for output
-     * @param io InputOutput to operate on
-     * @param type output type to get color for
-     * @return current color for specified output type or null if not supported
+     * Sets icon to tab corresponding to specified IO
+     * @param io IO to operate on
+     * @param icon tab icon
      */
-    public static Color getColor(InputOutput io, OutputType type) {
-        IOColors ioc = find(io);
-        return ioc != null ? ioc.getColor(type) : null;
-    }
-
-    /**
-     * Sets specified color for output
-     * @param io InputOutput to operate on
-     * @param type output type to set color for
-     * @param color new color for specified output type
-     */
-    public static void setColor(InputOutput io, OutputType type, Color color) {
-        IOColors ioc = find(io);
-        if (ioc != null) {
-            ioc.setColor(type, color);
+    public static void setIcon(InputOutput io, Icon icon) {
+        IOTab iot = find(io);
+        if (iot != null) {
+            iot.setIcon(icon);
         }
     }
 
     /**
-     * Gets current color for output
-     * @param type output type to get color for
-     * @return current color for specified output
+     * Gets current tool tip text for specified IO
+     * @param io IO to operate on
+     * @return current tool tip text or null if not supported
      */
-    abstract protected Color getColor(OutputType type);
+    public static String getToolTipText(InputOutput io) {
+        IOTab iot = find(io);
+        return iot != null ? iot.getToolTipText() : null;
+    }
 
     /**
-     * Sets specified color for output
-     * @param type output type to set color for
-     * @param color new color for specified output type
+     * Sets tool tip text to tab corresponding to specified IO
+     * @param io IO to operate on
+     * @param text new tool tip text
      */
-    abstract protected void setColor(OutputType type, Color color);
+    public static void setToolTipText(InputOutput io, String text) {
+        IOTab iot = find(io);
+        if (iot != null) {
+            iot.setToolTipText(text);
+        }
+    }
+
+    /**
+     * Checks whether this feature is supported for provided IO
+     * @param io IO to check on
+     * @return true if supported
+     */
+    public static boolean isSupported(InputOutput io) {
+        return find(io) != null;
+    }
+
+    /**
+     * Gets current tab icon
+     * @return current tab icon
+     */
+    abstract protected Icon getIcon();
+
+
+    /**
+     * Sets icon to tab
+     * @param icon tab icon
+     */
+    abstract protected void setIcon(Icon icon);
+
+    /**
+     * Gets current tool tip text
+     * @return current tool tip text
+     */
+    abstract protected String getToolTipText();
+
+    /**
+     * Sets tool tip text to tab
+     * @param text new tool tip text
+     */
+    abstract protected void setToolTipText(String text);
 }

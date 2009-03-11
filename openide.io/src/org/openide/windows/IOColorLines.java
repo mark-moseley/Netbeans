@@ -40,87 +40,87 @@
 package org.openide.windows;
 
 import java.awt.Color;
+import java.io.IOException;
 import org.openide.util.Lookup;
 
 /**
- * Settings of colors for normal, error, hyperlink, important hyperlink lines
+ * Line printing with custom color
  * <p>
  * Client usage:
  * <pre>
- *  // set important hyperlink color to red
+ *  // print green line
  *  InputOutput io = ...;
- *  IOColors.setColor(io, IOColors.OutputType.HYPERLINK_IMPORTANT, Color.RED);
+ *  IOColors.println(io, "Green line", Color.GREEN);
  * </pre>
- * How to support {@link IOColors} in own {@link IOProvider} implementation:
+ * How to support {@link IOColorLines} in own {@link IOProvider} implementation:
  * <ul>
  *   <li> {@link InputOutput} provided by {@link IOProvider} has to implement <a href="@org-openide-util@/org/openide/util/Lookup.Provider.html"><code>Lookup.Provider</code></a>
- *   <li> Extend {@link IOColors} and implement its abstract methods
- *   <li> Place instance of {@link IOColors} to {@link Lookup} provided by {@link InputOutput}
+ *   <li> Extend {@link IOColorLines} and implement its abstract methods
+ *   <li> Place instance of {@link IOColorLines} to {@link Lookup} provided by {@link InputOutput}
  * </ul>
  * @since 1.16
  * @author Tomas Holy
  */
-public abstract class IOColors {
+public abstract class IOColorLines {
 
-    private static IOColors find(InputOutput io) {
+    private static IOColorLines find(InputOutput io) {
         if (io instanceof Lookup.Provider) {
             Lookup.Provider p = (Lookup.Provider) io;
-            return p.getLookup().lookup(IOColors.class);
+            return p.getLookup().lookup(IOColorLines.class);
         }
         return null;
     }
 
     /**
-     * output types
+     * Prints line with selected color
+     * @param io IO to print to
+     * @param text a string to print to the tab
+     *        Makes the UI respond appropriately, eg. stop the automatic scrolling
+     *        or highlight the hyperlink.
+     * @param color a color for the line of text
      */
-    public enum OutputType {
-        /** default output */
-        OUTPUT,
-        /** error output */
-        ERROR,
-        /** hyperlink */
-        HYPERLINK,
-        /** important hyperlink */
-        HYPERLINK_IMPORTANT,
-        /** input, could be supported in future */
-        // INPUT,
-    }
-
-    /**
-     * Gets current color for output
-     * @param io InputOutput to operate on
-     * @param type output type to get color for
-     * @return current color for specified output type or null if not supported
-     */
-    public static Color getColor(InputOutput io, OutputType type) {
-        IOColors ioc = find(io);
-        return ioc != null ? ioc.getColor(type) : null;
-    }
-
-    /**
-     * Sets specified color for output
-     * @param io InputOutput to operate on
-     * @param type output type to set color for
-     * @param color new color for specified output type
-     */
-    public static void setColor(InputOutput io, OutputType type, Color color) {
-        IOColors ioc = find(io);
-        if (ioc != null) {
-            ioc.setColor(type, color);
+    public static void println(InputOutput io, CharSequence text, Color color) throws IOException {
+        IOColorLines iocl = find(io);
+        if (iocl != null) {
+            iocl.println(text, null, false, color);
         }
     }
 
     /**
-     * Gets current color for output
-     * @param type output type to get color for
-     * @return current color for specified output
+     * Prints line with selected color
+     * @param io IO to print to
+     * @param text a string to print to the tab
+     * @param listener a listener that will receive events about this line
+     * @param important  important mark the line as important.
+     *        Makes the UI respond appropriately, eg. stop the automatic scrolling
+     *        or highlight the hyperlink.
+     * @param color a color for the line of text
      */
-    abstract protected Color getColor(OutputType type);
+    public static void println(InputOutput io, CharSequence text, OutputListener listener, boolean important, Color color) throws IOException {
+        IOColorLines iocl = find(io);
+        if (iocl != null) {
+            iocl.println(text, listener, important, color);
+        }
+    }
+
 
     /**
-     * Sets specified color for output
-     * @param type output type to set color for
-     * @param color new color for specified output type
+     * Checks whether this feature is supported for provided IO
+     * @param io IO to check on
+     * @return true if supported
      */
-    abstract protected void setColor(OutputType type, Color color);
+    public static boolean isSupported(InputOutput io) {
+        return find(io) != null;
+    }
+
+    /**
+     * Prints line with selected color
+     * @param text a string to print to the tab
+     * @param listener a listener that will receive events about this line (null allowed)
+     * @param important  important mark the line as important.
+     *        Makes the UI respond appropriately, eg. stop the automatic scrolling
+     *        or highlight the hyperlink.
+     * @param color a color for the line of text
+     */
+    abstract protected void println(CharSequence text, OutputListener listener, boolean important, Color color) throws IOException;
 }

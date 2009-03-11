@@ -39,88 +39,65 @@
 
 package org.openide.windows;
 
-import java.awt.Color;
 import org.openide.util.Lookup;
 
 /**
- * Settings of colors for normal, error, hyperlink, important hyperlink lines
- * <p>
+ * Navigation in IO component
+  * <p>
  * Client usage:
  * <pre>
- *  // set important hyperlink color to red
  *  InputOutput io = ...;
- *  IOColors.setColor(io, IOColors.OutputType.HYPERLINK_IMPORTANT, Color.RED);
+ *  // store current position of IO
+ *  IOPosition.Position pos = IOPosition.currentPosition(io);
+ *  ...
+ *  // scroll to stored position
+ *  pos.scrollTo();
  * </pre>
- * How to support {@link IOColors} in own {@link IOProvider} implementation:
+ * How to support {@link IOPosition} in own {@link IOProvider} implementation:
  * <ul>
  *   <li> {@link InputOutput} provided by {@link IOProvider} has to implement <a href="@org-openide-util@/org/openide/util/Lookup.Provider.html"><code>Lookup.Provider</code></a>
- *   <li> Extend {@link IOColors} and implement its abstract methods
- *   <li> Place instance of {@link IOColors} to {@link Lookup} provided by {@link InputOutput}
+ *   <li> Extend {@link IOPosition} and implement its abstract methods
+ *   <li> Place instance of {@link IOPosition} to {@link Lookup} provided by {@link InputOutput}
  * </ul>
  * @since 1.16
  * @author Tomas Holy
  */
-public abstract class IOColors {
+public abstract class IOPosition {
 
-    private static IOColors find(InputOutput io) {
+    private static IOPosition find(InputOutput io) {
         if (io instanceof Lookup.Provider) {
             Lookup.Provider p = (Lookup.Provider) io;
-            return p.getLookup().lookup(IOColors.class);
+            return p.getLookup().lookup(IOPosition.class);
         }
         return null;
     }
 
-    /**
-     * output types
-     */
-    public enum OutputType {
-        /** default output */
-        OUTPUT,
-        /** error output */
-        ERROR,
-        /** hyperlink */
-        HYPERLINK,
-        /** important hyperlink */
-        HYPERLINK_IMPORTANT,
-        /** input, could be supported in future */
-        // INPUT,
+    public interface Position {
+        void scrollTo();
     }
 
     /**
-     * Gets current color for output
-     * @param io InputOutput to operate on
-     * @param type output type to get color for
-     * @return current color for specified output type or null if not supported
+     * Gets current position (in number of chars) in IO
+     * @param io IO to operate on
+     * @return current position or null if not supported
      */
-    public static Color getColor(InputOutput io, OutputType type) {
-        IOColors ioc = find(io);
-        return ioc != null ? ioc.getColor(type) : null;
+    public static Position currentPosition(InputOutput io) {
+        IOPosition iop = find(io);
+        return iop != null ? iop.currentPosition() : null;
     }
 
     /**
-     * Sets specified color for output
-     * @param io InputOutput to operate on
-     * @param type output type to set color for
-     * @param color new color for specified output type
+     * Checks whether this feature is supported for provided IO
+     * @param io IO to check on
+     * @return true if supported
      */
-    public static void setColor(InputOutput io, OutputType type, Color color) {
-        IOColors ioc = find(io);
-        if (ioc != null) {
-            ioc.setColor(type, color);
-        }
+    public static boolean isSupported(InputOutput io) {
+        return find(io) != null;
     }
 
     /**
-     * Gets current color for output
-     * @param type output type to get color for
-     * @return current color for specified output
+     * Gets current position in IO
+     * @return current position
      */
-    abstract protected Color getColor(OutputType type);
-
-    /**
-     * Sets specified color for output
-     * @param type output type to set color for
-     * @param color new color for specified output type
-     */
-    abstract protected void setColor(OutputType type, Color color);
+    abstract protected Position currentPosition();
 }
