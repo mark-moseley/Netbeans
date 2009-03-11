@@ -44,6 +44,8 @@ import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -60,6 +62,7 @@ import org.eclipse.mylyn.commons.net.AuthenticationType;
 import org.eclipse.mylyn.internal.bugzilla.core.BugzillaClient;
 import org.eclipse.mylyn.internal.bugzilla.core.IBugzillaConstants;
 import org.eclipse.mylyn.tasks.core.TaskRepository;
+import org.eclipse.mylyn.tasks.core.data.TaskAttributeMapper;
 import org.eclipse.mylyn.tasks.core.data.TaskData;
 import org.eclipse.mylyn.tasks.core.data.TaskDataCollector;
 import org.netbeans.api.progress.ProgressHandle;
@@ -71,9 +74,12 @@ import org.netbeans.modules.bugtracking.spi.Query;
 import org.netbeans.modules.bugtracking.spi.Repository;
 import org.netbeans.modules.bugtracking.spi.BugtrackingController;
 import org.netbeans.modules.bugtracking.util.IssueCache;
+import org.netbeans.modules.bugzilla.commands.BugzillaExecutor;
+import org.netbeans.modules.bugzilla.commands.ValidateCommand;
 import org.netbeans.modules.bugzilla.util.BugzillaConstants;
 import org.netbeans.modules.bugzilla.util.BugzillaUtil;
 import org.openide.util.Cancellable;
+import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -90,6 +96,7 @@ public class BugzillaRepository extends Repository {
     private Controller controller;
     private Set<Query> queries = null;
     private IssueCache cache;
+    private BugzillaExecutor executor;
 
     BugzillaRepository() { }
 
@@ -106,6 +113,22 @@ public class BugzillaRepository extends Repository {
     public Query createQuery() {
         BugzillaQuery q = new BugzillaQuery(this);        
         return q;
+    }
+
+    @Override
+    public Issue createIssue() {
+        TaskAttributeMapper attributeMapper =
+                Bugzilla.getInstance()
+                    .getRepositoryConnector()
+                    .getTaskDataHandler()
+                    .getAttributeMapper(taskRepository);
+        TaskData data =
+                new TaskData(
+                    attributeMapper,
+                    taskRepository.getConnectorKind(),
+                    taskRepository.getRepositoryUrl(),
+                    "");
+        return new BugzillaIssue(data, this);
     }
 
     @Override
@@ -150,7 +173,7 @@ public class BugzillaRepository extends Repository {
         assert !SwingUtilities.isEventDispatchThread() : "Accesing remote host. Do not call in awt";
         String[] keywords = criteria.split(" ");
 
-        List<BugzillaIssue> issues = new ArrayList<BugzillaIssue>();
+        List<Issue> issues = new ArrayList<Issue>();
         StringBuffer url = new StringBuffer();
         if(keywords.length == 1 && isNumber(keywords[0])) {
             // only one search criteria -> might be we are looking for the bug with id=values[0]
@@ -158,7 +181,7 @@ public class BugzillaRepository extends Repository {
             url.append("="); // XXX ???
             url.append(keywords[0]);
 
-            executeQuery(url.toString(), issues);
+            issues.addAll(executeQuery(url.toString()));
         }
 
         url = new StringBuffer();
@@ -171,19 +194,26 @@ public class BugzillaRepository extends Repository {
                 url.append("+");
             }
         }
-        executeQuery(url.toString(), issues);
+        issues.addAll(executeQuery(url.toString()));
         return issues.toArray(new BugzillaIssue[issues.size()]);
     }
 
-    private void executeQuery(String queryUrl, final List<BugzillaIssue> issues)  {
+    private List<Issue> executeQuery(String queryUrl)  {
         assert taskRepository != null;
         assert !SwingUtilities.isEventDispatchThread() : "Accesing remote host. Do not call in awt";
+        final List<Issue> issues = new ArrayList<Issue>();
         TaskDataCollector collector = new TaskDataCollector() {
             public void accept(TaskData taskData) {
-                issues.add(new BugzillaIssue(taskData, BugzillaRepository.this)); // we don't cache this issues
+                try {
+                    Issue issue = getIssueCache().setIssueData(BugzillaIssue.getID(taskData), taskData);
+                    issues.add(issue); // XXX we don't cache this issues - why?
+                } catch (IOException ex) {
+                    Bugzilla.LOG.log(Level.SEVERE, null, ex); // XXX handle errors
+                }
             }
         };
         BugzillaUtil.performQuery(taskRepository, queryUrl, collector);
+        return issues;
     }
 
     @Override
@@ -263,13 +293,16 @@ public class BugzillaRepository extends Repository {
         return null;
     }
 
-    @Override
-    public Issue createIssue() {
-        throw new UnsupportedOperationException("Not supported yet.");
+    public BugzillaExecutor getExecutor() {
+        if(executor == null) {
+            executor = new BugzillaExecutor(this);
+        }
+        return executor;
     }
-    
+
     private class Controller extends BugtrackingController implements DocumentListener, ActionListener {
         private RepositoryPanel panel = new RepositoryPanel();
+        private String errorMessage;
 
         private Controller() {
             if(taskRepository != null) {
@@ -297,10 +330,28 @@ public class BugzillaRepository extends Repository {
         }
 
         public boolean isValid() {
-            return !panel.nameField.getText().trim().equals("") &&
-                   !panel.urlField.getText().trim().equals("") &&
-                   !panel.userField.getText().trim().equals("") &&
-                   !new String(panel.psswdField.getPassword()).equals("");
+            errorMessage = null;
+            if(panel.nameField.getText().trim().equals("")) {
+                errorMessage = "Missing name";
+                return false;
+            }
+            String url = panel.urlField.getText().trim();
+            if(url.equals("")) {
+                errorMessage = "Missing URL";
+                return false;
+            }
+            try {
+                new URL(url);
+            } catch (MalformedURLException ex) {
+                errorMessage = "Wrong URL format";
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        public String getErrorMessage() {
+            return errorMessage;
         }
 
         @Override
@@ -362,14 +413,8 @@ public class BugzillaRepository extends Repository {
                                 panel.urlField.getText(),
                                 panel.userField.getText(),
                                 new String(panel.psswdField.getPassword()));
-                        try {
-                            BugzillaClient client = Bugzilla.getInstance().getRepositoryConnector().getClientManager().getClient(taskRepo, new NullProgressMonitor());
-                            client.validate(new NullProgressMonitor());
-                        } catch (IOException ex) {
-                            Bugzilla.LOG.log(Level.SEVERE, null, ex); // XXX handle errors
-                        } catch (CoreException ex) {
-                            Bugzilla.LOG.log(Level.SEVERE, null, ex); // XXX handle errors
-                        }
+                        ValidateCommand cmd = new ValidateCommand(taskRepo);
+                        getExecutor().execute(cmd);
                     } finally {
                         handle.finish();
                         panel.progressPanel.setVisible(false);
@@ -390,7 +435,7 @@ public class BugzillaRepository extends Repository {
             return new BugzillaIssue(taskData, BugzillaRepository.this);
         }
         protected void setTaskData(Issue issue, TaskData taskData) {
-            ((BugzillaIssue)issue).setTaskData(taskData); // XXX triggers events under lock
+            ((BugzillaIssue)issue).setTaskData(taskData); 
         }
     }
 
