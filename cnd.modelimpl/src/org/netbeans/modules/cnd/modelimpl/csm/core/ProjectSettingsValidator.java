@@ -52,7 +52,9 @@ import java.util.zip.Adler32;
 import java.util.zip.Checksum;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.api.project.NativeProject;
+import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 import org.netbeans.modules.cnd.modelimpl.repository.ProjectSettingsValidatorKey;
 import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.repository.spi.Key;
@@ -137,7 +139,10 @@ public class ProjectSettingsValidator {
 	}
 	Key key = new ProjectSettingsValidatorKey(csmProject.getUniqueName().toString());
 	data = (Data) RepositoryUtils.get(key);
-	assert data != null : "Can not get project settings validator data by the key " + key; //NOI18N
+        if( data == null ) {
+            data = new Data();
+            DiagnosticExceptoins.register(new IllegalStateException("Can not get project settings validator data by the key " + key)); //NOI18N
+        }
     }
     
     public boolean exists(FileImpl fileImpl) {
@@ -209,7 +214,7 @@ public class ProjectSettingsValidator {
 	    map = new HashMap<String, Long>();
 	    int cnt = stream.readInt();
 	    for (int i = 0; i < cnt; i++) {
-		String name = stream.readUTF();
+		String name = PersistentUtils.readUTF(stream);
 		long crc = stream.readLong();
 		map.put(name, crc);
 	    }
@@ -218,7 +223,7 @@ public class ProjectSettingsValidator {
 	public void write(DataOutput stream ) throws IOException {
 	    stream.writeInt(map.size());
 	    for( Map.Entry<String, Long> entry : map.entrySet()) {
-		stream.writeUTF(entry.getKey());
+		PersistentUtils.writeUTF(entry.getKey(), stream);
 		stream.writeLong(entry.getValue().longValue());
 	    }
 	}
