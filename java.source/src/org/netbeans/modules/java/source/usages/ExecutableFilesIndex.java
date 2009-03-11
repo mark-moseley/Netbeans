@@ -39,13 +39,17 @@
 
 package org.netbeans.modules.java.source.usages;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.java.source.indexing.JavaIndex;
 import org.openide.util.Exceptions;
 import org.openide.util.WeakSet;
 
@@ -64,6 +68,20 @@ public class ExecutableFilesIndex {
         ensureLoad(root);
         
         return mainSources.contains(source.toExternalForm());
+    }
+    
+    public synchronized Iterable<? extends URL> getMainClasses (URL root) {
+        ensureLoad(root);
+        List<URL> result = new ArrayList<URL>(mainSources.size());
+        for (String surl : mainSources) {
+            try {
+                result.add(new URL(surl));
+            } catch (MalformedURLException ex) {
+                //Report and ignore broken url
+                Exceptions.printStackTrace(ex);
+            }
+        }
+        return result;
     }
     
     public synchronized void setMainClass(URL root, URL source, boolean value) {
@@ -121,7 +139,7 @@ public class ExecutableFilesIndex {
         }
 
         try {
-            mainSources = unwrap(RepositoryUpdater.getAttribute(root, "executable-files", "")); //NOI18N
+            mainSources = unwrap(JavaIndex.getAttribute(root, "executable-files", "")); //NOI18N
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
             mainSources = new HashSet<String>();
@@ -132,7 +150,7 @@ public class ExecutableFilesIndex {
 
     private void save(URL root) {
         try {
-            RepositoryUpdater.setAttribute(root, "executable-files", wrap(mainSources)); //NOI18N
+            JavaIndex.setAttribute(root, "executable-files", wrap(mainSources)); //NOI18N
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
