@@ -1,2 +1,2 @@
 Add throws clause for javax.swing.text.BadLocationException
-Surround with try-catch
+Surround Statement with try-catch
