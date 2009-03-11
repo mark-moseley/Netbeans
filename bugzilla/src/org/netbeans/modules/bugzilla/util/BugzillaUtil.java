@@ -44,11 +44,13 @@ import java.util.ResourceBundle;
 import java.util.logging.Level;
 import javax.swing.JButton;
 import javax.swing.JPanel;
+import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.mylyn.internal.bugzilla.core.BugzillaRepositoryConnector;
 import org.eclipse.mylyn.internal.tasks.core.RepositoryQuery;
 import org.eclipse.mylyn.tasks.core.IRepositoryQuery;
 import org.eclipse.mylyn.tasks.core.TaskRepository;
+import org.eclipse.mylyn.tasks.core.data.TaskData;
 import org.eclipse.mylyn.tasks.core.data.TaskDataCollector;
 import org.netbeans.modules.bugzilla.Bugzilla;
 import org.netbeans.modules.bugzilla.BugzillaRepository;
@@ -81,6 +83,15 @@ public class BugzillaUtil {
         rc.performQuery(taskRepository, query, collector, null, new NullProgressMonitor());
     }
 
+    public static TaskData getTaskData(BugzillaRepository repository, String id) {
+        try {
+            return Bugzilla.getInstance().getRepositoryConnector().getTaskData(repository.getTaskRepository(), id, new NullProgressMonitor());
+        } catch (CoreException ex) {
+            Bugzilla.LOG.log(Level.SEVERE, null, ex);
+        }
+        return null;
+    }
+
     public static String getKeywords(String label, String keywordsString, BugzillaRepository repository) {
         String[] keywords = keywordsString.split(","); // NOI18N
         if(keywords == null || keywords.length == 0) {
@@ -97,7 +108,7 @@ public class BugzillaUtil {
         }       
 
         ResourceBundle bundle = NbBundle.getBundle(BugzillaUtil.class);
-        if (BugzillaUtil.show(kp, bundle.getString("LBL_Keywords"), bundle.getString("LBL_Select"))) { // NOI18N
+        if (BugzillaUtil.show(kp, bundle.getString("LBL_Keywords"), bundle.getString("LBL_Ok"))) { // NOI18N
             String[] values = kp.getSelectedKeywords();
             StringBuffer sb = new StringBuffer();
             for (int i = 0; i < values.length; i++) {
