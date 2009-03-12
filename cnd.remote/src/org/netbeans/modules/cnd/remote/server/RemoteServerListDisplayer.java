@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,57 +31,45 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+ *
  * Contributor(s):
- * 
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.api.remote;
+package org.netbeans.modules.cnd.remote.server;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.logging.Logger;
-import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import java.awt.Dialog;
+import org.netbeans.modules.cnd.api.remote.ServerListDisplayer;
+import org.netbeans.modules.cnd.remote.ui.EditServerListDialog;
+import org.netbeans.modules.cnd.ui.options.ToolsCacheManager;
+import org.openide.DialogDescriptor;
+import org.openide.DialogDisplayer;
+import org.openide.util.NbBundle;
+import org.openide.util.lookup.ServiceProvider;
 
 /**
- * Since the ServerList is updated from the Tools->Options panel, changes must be cached
- * until the OK button is pressed (T->O updates aren't immediately applied).
- * 
- * @author gordonp
+ * ServerListDisplayer implementation
+ * @author Vladimir Kvashin
  */
-public final class ServerUpdateCache {
+@ServiceProvider(service = ServerListDisplayer.class)
+public class RemoteServerListDisplayer implements ServerListDisplayer {
 
-    private List<ExecutionEnvironment> hosts;
-    private int defaultIndex;
-    private Logger log = Logger.getLogger("cnd.remote.logger"); // NOI18N
-    
-    public ServerUpdateCache() {
-        hosts = null;
-        defaultIndex = -1;
-    }
-    
-    public List<ExecutionEnvironment> getHosts() {
-        List<ExecutionEnvironment> h = hosts;
-        if (h == null) {
-            throw new IllegalStateException("hosts should not be null"); //NOI18N
+    public boolean showServerListDialog(ToolsCacheManager cacheManager) {
+        EditServerListDialog dlg = new EditServerListDialog(cacheManager);
+        DialogDescriptor dd = new DialogDescriptor(dlg, NbBundle.getMessage(RemoteServerList.class, "TITLE_EditServerList"), true,
+                    DialogDescriptor.OK_CANCEL_OPTION, DialogDescriptor.OK_OPTION, null);
+        dlg.setDialogDescriptor(dd);
+        dd.addPropertyChangeListener(dlg);
+        Dialog dialog = DialogDisplayer.getDefault().createDialog(dd);
+        dialog.setVisible(true);
+        if (dd.getValue() == DialogDescriptor.OK_OPTION) {
+            cacheManager.setHosts(dlg.getHosts());
+            cacheManager.setDefaultIndex(dlg.getDefaultIndex());
+            return true;
+        } else {
+            return false;
         }
-        return new ArrayList<ExecutionEnvironment>(hosts);
     }
 
-    public void setHosts(List<ExecutionEnvironment> newHosts) {
-        hosts = new ArrayList<ExecutionEnvironment>(newHosts);
-    }
-
-    public int getDefaultIndex() {
-        if (defaultIndex < 0) {
-            log.warning("ServerUpdateCache.getDefaultInded: Forcing negative index to 0");
-            defaultIndex = 0;
-        }
-        return defaultIndex;
-    }
-    
-    public void setDefaultIndex(int defaultIndex) {
-        this.defaultIndex = defaultIndex;
-    }
 }

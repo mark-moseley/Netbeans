@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,57 +31,57 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+ *
  * Contributor(s):
- * 
+ *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.cnd.remote.ui.wizard;
 
-package org.netbeans.modules.cnd.api.remote;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.logging.Logger;
+import javax.swing.event.ChangeListener;
+import org.netbeans.modules.cnd.ui.options.ToolsCacheManager;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.openide.WizardDescriptor;
+import org.openide.util.HelpCtx;
 
-/**
- * Since the ServerList is updated from the Tools->Options panel, changes must be cached
- * until the OK button is pressed (T->O updates aren't immediately applied).
- * 
- * @author gordonp
- */
-public final class ServerUpdateCache {
+public class CreateHostWizardPanel3 implements WizardDescriptor.Panel<WizardDescriptor> {
 
-    private List<ExecutionEnvironment> hosts;
-    private int defaultIndex;
-    private Logger log = Logger.getLogger("cnd.remote.logger"); // NOI18N
-    
-    public ServerUpdateCache() {
-        hosts = null;
-        defaultIndex = -1;
-    }
-    
-    public List<ExecutionEnvironment> getHosts() {
-        List<ExecutionEnvironment> h = hosts;
-        if (h == null) {
-            throw new IllegalStateException("hosts should not be null"); //NOI18N
+    private CreateHostVisualPanel3 component;
+
+    public CreateHostVisualPanel3 getComponent() {
+        if (component == null) {
+            component = new CreateHostVisualPanel3();
         }
-        return new ArrayList<ExecutionEnvironment>(hosts);
+        return component;
     }
 
-    public void setHosts(List<ExecutionEnvironment> newHosts) {
-        hosts = new ArrayList<ExecutionEnvironment>(newHosts);
+    public HelpCtx getHelp() {
+        // Show no Help button for this panel:
+        return HelpCtx.DEFAULT_HELP;
     }
 
-    public int getDefaultIndex() {
-        if (defaultIndex < 0) {
-            log.warning("ServerUpdateCache.getDefaultInded: Forcing negative index to 0");
-            defaultIndex = 0;
-        }
-        return defaultIndex;
+    public boolean isValid() {
+        return true;
     }
-    
-    public void setDefaultIndex(int defaultIndex) {
-        this.defaultIndex = defaultIndex;
+
+    public final void addChangeListener(ChangeListener l) {
+    }
+
+    public final void removeChangeListener(ChangeListener l) {
+    }
+
+    public void readSettings(WizardDescriptor settings) {
+        getComponent().init(
+            (ExecutionEnvironment)settings.getProperty(CreateHostWizardPanel2.PROP_HOST),
+            (ToolsCacheManager)settings.getProperty(CreateHostWizardIterator.PROP_CACHE_MANAGER)
+        );
+    }
+
+    static final String PROP_DEFAULT_TC = "defaulttoolchain"; //NOI18N
+
+    public void storeSettings(WizardDescriptor settings) {
+        settings.putProperty(PROP_DEFAULT_TC, getComponent().getDefaultCompilerSetDisplayName());
+        //Lookup.getDefault().lookup(ServerList.class).addServer((String)settings.getProperty(CreateHostWizardPanel2.PROP_HOSTKEY), false, false);
     }
 }
+
