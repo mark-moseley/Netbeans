@@ -153,7 +153,9 @@ public class ProjectUtil
             if((filename != null) && (filename.length() > 0))
             {
                 FileObject fo = FileUtil.toFileObject(new File(filename));
-                retVal = FileOwnerQuery.getOwner(fo);
+                if (fo != null) {
+                    retVal = FileOwnerQuery.getOwner(fo);
+                }
             }
         }
         
@@ -362,10 +364,13 @@ public class ProjectUtil
             
             DataObject dObj = (DataObject)it.next();
             FileObject fObj = dObj.getPrimaryFile();
-            Project p = FileOwnerQuery.getOwner(fObj);
-            if ( p != null )
+            if (fObj != null) 
             {
-                result.add( p );
+                Project p = FileOwnerQuery.getOwner(fObj);
+                if ( p != null )
+                {
+                    result.add( p );
+                }
             }
         }
         Project[] projects = new Project[ result.size() ];
@@ -423,7 +428,7 @@ public class ProjectUtil
             "<default package>"; // NOI18N
     
     
-    public static void selectInModel(Project proj, DataObject obj)
+    public static void selectInModel(List<Project> projects, DataObject obj)
     {
         String resourceName = "";
         String className = "";
@@ -456,7 +461,6 @@ public class ProjectUtil
             packageName = resourceName;
         }
         
-        StringTokenizer st = new StringTokenizer(packageName, "/");
         TopComponent tc = WindowManager.getDefault()
                 .findTopComponent("projectTabLogical_tc");
         
@@ -477,10 +481,11 @@ public class ProjectUtil
             
             Node selected = null;
             
-            if (p == proj)
+            if (projects.contains(p))
             {
                 Node selectedNode = null;
                 
+                StringTokenizer st = new StringTokenizer(packageName, "/");
                 if (st.hasMoreTokens())
                 {
                     String token = st.nextToken();
@@ -492,13 +497,16 @@ public class ProjectUtil
                     }
                 }
                 
-                if (!isPackage)
+                if (!isPackage && selectedNode!=null)
                 {
                     selectedNode = findNodeByName(selectedNode, className, false);
                 }
                 
                 final Node node = selectedNode;
-                selectNodeAsync(node);
+                if (node != null) {
+                    selectNodeAsync(node);
+                    return;
+                }
             }
         }
         return;
@@ -507,7 +515,7 @@ public class ProjectUtil
     
     public static Node findNodeByName(Node root, String name, boolean isPackage)
     {
-        if (root.isLeaf())
+        if (root == null || root.isLeaf())
             return null;
         
         Children children = root.getChildren();
@@ -571,7 +579,7 @@ public class ProjectUtil
         
         final ExplorerManager manager =
                 ((ExplorerManager.Provider)tc).getExplorerManager();
-        tc.setCursor( Utilities.createProgressCursor( tc ) );
+        tc.setCursor( Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR) );
         tc.open();
         tc.requestActive();
         

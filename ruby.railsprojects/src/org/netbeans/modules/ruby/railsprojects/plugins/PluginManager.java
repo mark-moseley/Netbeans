@@ -62,17 +62,16 @@ import javax.swing.JComponent;
 
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.ruby.platform.RubyPlatform;
-import org.netbeans.modules.ruby.platform.RubyExecution;
+import org.netbeans.modules.ruby.platform.execution.ExecutionUtils;
 import org.netbeans.modules.ruby.platform.Util;
 import org.netbeans.modules.ruby.railsprojects.RailsProject;
-import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
-import org.netbeans.modules.ruby.platform.execution.ExecutionDescriptor;
+import org.netbeans.modules.ruby.platform.execution.RubyExecutionDescriptor;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.FileUtil;
+import org.openide.modules.InstalledFileLocator;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
@@ -88,6 +87,7 @@ import org.openide.util.Utilities;
  * @author Tor Norbye
  */
 public class PluginManager {
+    private static final String PLUGIN_CUSTOMIZER = "plugin.rb";
 
     private RailsProject project;
     /** Share over invocations of the dialog since these are slow to compute */
@@ -275,7 +275,7 @@ public class PluginManager {
             final String successMessage, final String failureMessage, final List<String> lines,
             final Runnable successCompletionTask, final String command, final String... commandArgs) {
         final Cursor originalCursor = parent.getCursor();
-        Cursor busy = Utilities.createProgressCursor(parent);
+        Cursor busy = Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR);
         parent.setCursor(busy);
         
         final JButton closeButton = new JButton(NbBundle.getMessage(PluginManager.class, "CTL_Close"));
@@ -355,12 +355,13 @@ public class PluginManager {
         RubyPlatform platform = RubyPlatform.platformFor(project);
         File cmd = new File(platform.getInterpreter());
         
-        if (!cmd.getName().startsWith("jruby") || RubyExecution.LAUNCH_JRUBY_SCRIPT) { // NOI18N
+        if (!cmd.getName().startsWith("jruby") || ExecutionUtils.launchJRubyScript()) { // NOI18N
             argList.add(cmd.getPath());
         }
         
-        argList.addAll(RubyExecution.getRubyArgs(platform));
-        
+        argList.addAll(ExecutionUtils.getRubyArgs(platform));
+        // see #142698
+        argList.add("-r" + getPluginCustomizer().getAbsolutePath()); //NOI18N
         argList.add(pluginCmd);
         argList.add(command);
         
@@ -375,9 +376,9 @@ public class PluginManager {
         pb.redirectErrorStream(true);
         
         Util.adjustProxy(pb);
-        
         // PATH additions for JRuby etc.
-        new RubyExecution(new ExecutionDescriptor(platform, "plugin", pb.directory()).cmd(cmd)).setupProcessEnvironment(pb.environment()); // NOI18N
+        RubyExecutionDescriptor descriptor = new RubyExecutionDescriptor(platform, "plugin", pb.directory()).cmd(cmd);
+        ExecutionUtils.setupProcessEnvironment(pb.environment(), descriptor.getCmd().getParent(), descriptor.getAppendJdkToPath());
         
         if (lines == null) {
             lines = new ArrayList<String>(40);
@@ -467,7 +468,18 @@ public class PluginManager {
         }
         
         boolean succeeded = exitCode == 0;
-        
+        // see #142698
+        if (succeeded && "remove".equals(command) && commandArgs != null && commandArgs[0] != null) { //NOI18N
+            FileObject plugin = project.getProjectDirectory().getFileObject("vendor/plugins/" + commandArgs[0]); //NOI18N
+            if (plugin != null) {
+                try {
+                    plugin.delete();
+                } catch (IOException ex) {
+                    succeeded = false;
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        }
         return succeeded;
     }
     
@@ -512,6 +524,9 @@ public class PluginManager {
             argList.add("--revision"); // NOI18N
             argList.add(revision);
         }
+        
+        // see #123758
+        argList.add("--force"); //NOI18N
         
         String[] args = argList.toArray(new String[argList.size()]);
         
@@ -819,4 +834,16 @@ public class PluginManager {
         
         return cacheFolder;
     }
+    
+    private static synchronized File getPluginCustomizer() {
+        File pluginScript = InstalledFileLocator.getDefault().locate(
+                PLUGIN_CUSTOMIZER, "org.netbeans.modules.ruby.railsproject", false);  // NOI18N
+
+        if (pluginScript == null) {
+            throw new IllegalStateException("Could not locate " + PLUGIN_CUSTOMIZER); // NOI18N
+
+        }
+        return pluginScript;
+    }
+
 }
