@@ -76,6 +76,7 @@ import org.netbeans.modules.bugzilla.commands.BugzillaCommand;
 import org.openide.filesystems.FileUtil;
 import org.netbeans.modules.bugzilla.commands.BugzillaExecutor;
 import org.netbeans.modules.bugzilla.util.BugzillaUtil;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 /**
@@ -130,6 +131,7 @@ public class BugzillaIssue extends Issue {
         OS(BugzillaAttribute.OP_SYS.getKey()),
         MILESTONE(BugzillaAttribute.TARGET_MILESTONE.getKey()),
         REPORTER(BugzillaAttribute.REPORTER.getKey()),
+        REPORTER_NAME(BugzillaAttribute.REPORTER_NAME.getKey()),
         ASSIGNED_TO(BugzillaAttribute.ASSIGNED_TO.getKey()),
         ASSIGNED_TO_NAME(BugzillaAttribute.ASSIGNED_TO_NAME.getKey()),
         QA_CONTACT(BugzillaAttribute.QA_CONTACT.getKey()),
@@ -248,8 +250,19 @@ public class BugzillaIssue extends Issue {
     public Map<String, String> getAttributes() {
         if(attributes == null) {
             attributes = new HashMap<String, String>();
+            String value;
             for (IssueField field : IssueField.values()) {
-                String value = getFieldValue(field);
+                switch(field) {
+                    case REPORTER_NAME:
+                    case QA_CONTACT_NAME:
+                    case ASSIGNED_TO_NAME:
+                        continue;
+                    case DATE_MODIFICATION:
+                        value = getDateModification(data);
+                        break;
+                    default:    
+                        value = getFieldValue(field);
+                }
                 if(value != null && !value.trim().equals("")) {
                     if(field == IssueField.DATE_MODIFICATION) {
                         attributes.put(Issue.ATTR_DATE_MODIFICATION, value);
@@ -407,7 +420,10 @@ public class BugzillaIssue extends Issue {
             // XXX the issue cache is supposed to be used in a generec way
             // this should be also solved on a higher level then in each
             // particular bugtracking system
-            data = BugzillaUtil.getTaskData(repository, getID());
+            TaskData td = BugzillaUtil.getTaskData(repository, getID());
+            if(td != null) {
+                data = td;
+            }
         } else {
             data = taskData;
         }
@@ -441,7 +457,7 @@ public class BugzillaIssue extends Issue {
 
     public static String getDateModification(TaskData newData) {
         TaskAttribute a = newData.getRoot().getMappedAttribute(IssueField.DATE_MODIFICATION.key);
-        if(a==null) {
+        if(a == null) {
             a = newData.getRoot().getMappedAttribute("bug"); // XXX HACK
         }
         return a != null ? a.getValue() : "";
@@ -551,11 +567,13 @@ public class BugzillaIssue extends Issue {
         ta.setValue(id);
     }
 
-    void reassigne(String user) {
+    void reassign(String user) {
         setOperation(BugzillaOperation.reassign);
         TaskAttribute rta = data.getRoot();
         TaskAttribute ta = rta.getMappedAttribute(BugzillaOperation.reassign.getInputId());
-        ta.setValue(user);
+        if(ta != null) ta.setValue(user);
+        ta = rta.getMappedAttribute(BugzillaAttribute.ASSIGNED_TO.getKey());
+        if(ta != null) ta.setValue(user);
     }
 
     void verify() {
@@ -650,7 +668,7 @@ public class BugzillaIssue extends Issue {
         BugzillaCommand submitCmd = new BugzillaCommand() {
             @Override
             public void execute() throws CoreException, IOException, MalformedURLException {
-                submit();
+                submitAndRefresh();
             }
         };
         repository.getExecutor().execute(submitCmd);
@@ -676,10 +694,24 @@ public class BugzillaIssue extends Issue {
         }
     }
 
-    void submit() throws CoreException {
+    void submitAndRefresh() throws CoreException {
         assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt";
+
+        boolean wasSeenAlready = repository.getIssueCache().wasSeen(getID());
+
         RepositoryResponse rr = Bugzilla.getInstance().getRepositoryConnector().getTaskDataHandler().postTaskData(getTaskRepository(), data, null, new NullProgressMonitor());
         // XXX evaluate rr
+
+        refresh();
+
+        // it was the user who made the changes, so preserve the seen status if seen already
+        if(wasSeenAlready) {
+            try {
+                repository.getIssueCache().setSeen(getID(), true);
+            } catch (IOException ex) {
+                Bugzilla.LOG.log(Level.SEVERE, null, ex);
+            }
+        }
     }
 
     public void refresh() {
