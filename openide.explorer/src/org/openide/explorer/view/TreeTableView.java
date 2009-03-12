@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,6 +44,7 @@ import java.util.logging.Logger;
 import org.openide.awt.MouseUtils;
 import org.openide.nodes.Node;
 import org.openide.nodes.Node.Property;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.explorer.ExplorerManager;
 import org.openide.explorer.ExplorerManager.Provider;
@@ -56,10 +57,12 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.Iterator;
+import java.util.Map;
+import java.util.TreeSet;
+import java.util.WeakHashMap;
 import java.util.logging.Level;
 
 import javax.accessibility.AccessibleContext;
@@ -73,6 +76,10 @@ import javax.swing.tree.*;
 import org.openide.explorer.view.TreeView.PopupAdapter;
 import org.openide.explorer.view.TreeView.PopupSupport;
 import org.openide.explorer.view.TreeView.TreePropertyListener;
+import org.openide.nodes.FilterNode;
+import org.openide.nodes.NodeMemberEvent;
+import org.openide.nodes.NodeReorderEvent;
+import org.openide.util.Utilities;
 
 
 /** Explorer view. Allows to view tree of nodes on the left
@@ -267,6 +274,8 @@ public class TreeTableView extends BeanTreeView {
 
         ImageIcon ic = new ImageIcon(TreeTable.class.getResource(COLUMNS_ICON)); // NOI18N
         colsButton = new javax.swing.JButton(ic);
+        colsButton.getAccessibleContext().setAccessibleName(NbBundle.getMessage(TreeTableView.class, "ACN_ColumnsSelector")); //NOI18N
+        colsButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(TreeTableView.class, "ACD_ColumnsSelector")); //NOI18N
         colsButton.addActionListener(
             new ActionListener() {
                 public void actionPerformed(ActionEvent evt) {
@@ -287,6 +296,7 @@ public class TreeTableView extends BeanTreeView {
         setViewportBorder(BorderFactory.createEmptyBorder()); //NOI18N
     }
 
+    @Override
     public void setRowHeader(JViewport rowHeader) {
         rowHeader.setBorder(BorderFactory.createEmptyBorder());
         super.setRowHeader(rowHeader);
@@ -294,6 +304,7 @@ public class TreeTableView extends BeanTreeView {
 
     /* Overriden to allow hide special horizontal scrollbar
      */
+    @Override
     public void setHorizontalScrollBarPolicy(int policy) {
         hideHScrollBar = (policy == JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
@@ -305,6 +316,7 @@ public class TreeTableView extends BeanTreeView {
 
     /* Overriden to delegate policy of vertical scrollbar to inner scrollPane
      */
+    @Override
     public void setVerticalScrollBarPolicy(int policy) {
         if (scrollPane == null) {
             return;
@@ -321,17 +333,20 @@ public class TreeTableView extends BeanTreeView {
         scrollPane.setVerticalScrollBarPolicy(policy);
     }
 
+    @Override
     protected NodeTreeModel createModel() {
         return getSortedNodeTreeModel();
     }
 
     /** Requests focus for the tree component. Overrides superclass method. */
+    @Override
     public void requestFocus() {
         if (treeTable != null) {
             treeTable.requestFocus();
         }
     }
 
+    @Override
     public boolean requestFocusInWindow() {
         boolean res = super.requestFocusInWindow();
 
@@ -349,6 +364,7 @@ public class TreeTableView extends BeanTreeView {
         if (allow && (allow != allowSortingByColumn)) {
             addMouseListener(
                 new MouseAdapter() {
+                    @Override
                     public void mouseClicked(MouseEvent evt) {
                         // Check whether it was really a click
                         if (evt.getClickCount() == 0) return ;
@@ -446,6 +462,7 @@ public class TreeTableView extends BeanTreeView {
      * is fully created (constructor finished) which is horrible but I don't
      * have enough knowledge about this code to change it.
      */
+    @Override
     void initializeTree() {
     }
 
@@ -463,39 +480,13 @@ public class TreeTableView extends BeanTreeView {
         managerListener = new TreePropertyListener();
         tree.addTreeExpansionListener(managerListener);
 
-        // add listener to sort a new expanded folders
-        tree.addTreeExpansionListener(
-            new TreeExpansionListener() {
-                public void treeExpanded(TreeExpansionEvent event) {
-                    TreePath path = event.getPath();
-
-                    if (path != null) {
-                        // bugfix $32480, store and recover currently expanded subnodes
-                        // store expanded paths
-                        Enumeration en = TreeTableView.this.tree.getExpandedDescendants(path);
-
-                        // sort children
-                        getSortedNodeTreeModel().sortChildren((VisualizerNode) path.getLastPathComponent(), true);
-
-                        // expand again folders
-                        while (en.hasMoreElements()) {
-                            TreeTableView.this.tree.expandPath((TreePath) en.nextElement());
-                        }
-                    }
-                }
-
-                public void treeCollapsed(TreeExpansionEvent event) {
-                    // ignore it
-                }
-            }
-        );
-
         defaultActionListener = new PopupSupport();
         Action popupWrapper = new AbstractAction() {
                 public void actionPerformed(ActionEvent evt) {
                     SwingUtilities.invokeLater( defaultActionListener );
                 }
 
+                @Override
                 public boolean isEnabled() {
                     return treeTable.isFocusOwner() || tree.isFocusOwner();
                 }
@@ -537,6 +528,7 @@ public class TreeTableView extends BeanTreeView {
         }
     }
 
+    @Override
     public void setSelectionMode(int mode) {
         super.setSelectionMode(mode);
 
@@ -551,6 +543,7 @@ public class TreeTableView extends BeanTreeView {
 
     /** Overrides JScrollPane's getAccessibleContext() method to use internal accessible context.
      */
+    @Override
     public AccessibleContext getAccessibleContext() {
         if (accessContext == null) {
             accessContext = new AccessibleTreeTableView();
@@ -585,6 +578,7 @@ public class TreeTableView extends BeanTreeView {
 
     /* Overriden to work well with treeTable.
      */
+    @Override
     public void setPopupAllowed(boolean value) {
         if (tree == null) {
             return;
@@ -593,6 +587,7 @@ public class TreeTableView extends BeanTreeView {
         if ((popupListener == null) && value) {
             // on
             popupListener = new PopupAdapter() {
+                @Override
                         protected void showPopup(MouseEvent e) {
                             int selRow = tree.getClosestRowForLocation(e.getX(), e.getY());
 
@@ -618,6 +613,7 @@ public class TreeTableView extends BeanTreeView {
 
     /* Overriden to work well with treeTable.
      */
+    @Override
     public void setDefaultActionAllowed(boolean value) {
         if (tree == null) {
             return;
@@ -732,6 +728,7 @@ public class TreeTableView extends BeanTreeView {
         return treeTable.getColumnModel().getColumn(((TreeTable) treeTable).getTreeColumnIndex()).getPreferredWidth();
     }
 
+    @Override
     public void addNotify() {
         // to allow displaying popup also in blank area
         if (treeTable.getParent() != null) {
@@ -751,8 +748,12 @@ public class TreeTableView extends BeanTreeView {
             tableModel.setNodes(nodes);
         }
         listener.revalidateScrollBar();
+        ViewUtil.adjustBackground(treeTable);
+        ViewUtil.adjustBackground(scrollPane);
+        ViewUtil.adjustBackground(scrollPane.getViewport());
     }
 
+    @Override
     public void removeNotify() {
         super.removeNotify();
 
@@ -766,11 +767,13 @@ public class TreeTableView extends BeanTreeView {
         tableModel.setNodes(new Node[] {  });
     }
 
+    @Override
     public void addMouseListener(MouseListener l) {
         super.addMouseListener(l);
         treeTable.getTableHeader().addMouseListener(l);
     }
 
+    @Override
     public void removeMouseListener(MouseListener l) {
         super.removeMouseListener(l);
         treeTable.getTableHeader().removeMouseListener(l);
@@ -779,17 +782,20 @@ public class TreeTableView extends BeanTreeView {
     /**
      * Drag and drop is not supported in TreeTableView.
      */
+    @Override
     public void setDragSource(boolean state) {
     }
 
     /**
      * Drag and drop is not supported in TreeTableView.
      */
+    @Override
     public void setDropTarget(boolean state) {
     }
 
     /* Overriden to get position for popup invoked by keyboard
      */
+    @Override
     Point getPositionForPopup() {
         int row = treeTable.getSelectedRow();
 
@@ -824,6 +830,7 @@ public class TreeTableView extends BeanTreeView {
         e.consume();
     }
 
+    @Override
     void createPopup(int xpos, int ypos) {
         int treeXpos = xpos - ((TreeTable) treeTable).getPositionX();
 
@@ -1071,6 +1078,7 @@ public class TreeTableView extends BeanTreeView {
         AccessibleTreeTableView() {
         }
 
+        @Override
         public void setAccessibleName(String accessibleName) {
             super.setAccessibleName(accessibleName);
 
@@ -1079,6 +1087,7 @@ public class TreeTableView extends BeanTreeView {
             }
         }
 
+        @Override
         public void setAccessibleDescription(String accessibleDescription) {
             super.setAccessibleDescription(accessibleDescription);
 
@@ -1145,6 +1154,7 @@ public class TreeTableView extends BeanTreeView {
         }
 
         //Viewport height
+        @Override
         public void componentResized(ComponentEvent e) {
             revalidateScrollBar();
         }
@@ -1200,6 +1210,7 @@ public class TreeTableView extends BeanTreeView {
         CompoundScrollPane() {
         }
 
+        @Override
         public void setBorder(Border b) {
             //do nothing
         }
@@ -1255,16 +1266,116 @@ public class TreeTableView extends BeanTreeView {
         }
     }
 
+    @Override
+    Node getOriginalNode (Node n) {
+        if (n instanceof SortedNodeTreeModel.SortedNode) {
+            SortedNodeTreeModel.SortedNode sn = (SortedNodeTreeModel.SortedNode) n;
+            return sn.getOriginalNode ();
+        }
+        return n;
+    }
+
+    /* Synchronizes selected nodes from the manager of this Explorer.
+    */
+    @Override
+    protected void showSelection(TreePath[] treePaths) {
+        TreePath [] modifiedTreePaths = new TreePath [treePaths.length];
+        for (int i = 0; i < treePaths.length; i++) {
+            TreePath tp = treePaths [i];
+            Node o = ((VisualizerNode) tp.getLastPathComponent ()).node;
+            TreePath mtp = getTreePath (getSortedNodeFromOriginal (o));
+            modifiedTreePaths [i] = mtp;
+        }
+        super.showSelection (modifiedTreePaths);
+    }
+
+    private Node getSortedNodeFromOriginal (Node orig) {
+        if (getSortedNodeTreeModel () != null) {
+            if (getSortedNodeTreeModel ().original2filter != null) {
+                SortedNodeTreeModel.SortedNode sn = getSortedNodeTreeModel ().original2filter.get (orig);
+                if (sn != null) {
+                    return sn;
+                }
+            }
+        }
+        return orig;
+    }
+
     /* node tree model with added sorting support
      */
     private class SortedNodeTreeModel extends NodeTreeModel {
         private Node.Property sortedByProperty;
         private boolean sortAscending = true;
-        private Comparator<VisualizerNode> rowComparator;
+        private Comparator<Node> rowComparator;
         private boolean sortedByName = false;
-        private SortingTask sortingTask = null;
+        private Map<Node, SortedNode> original2filter = new WeakHashMap<Node, SortedNode> (11);
 
-        SortedNodeTreeModel() {
+        @Override
+        void setNode(final Node root, final TreeView.VisualizerHolder visHolder) {
+            final Node filterNode = new SortedNode (root);
+            super.setNode (filterNode, visHolder);
+        }
+        
+        private class SortedNode extends FilterNode {
+            public SortedNode (Node original) {
+                super (original, new SortedChildren (original));
+                original2filter.put (original, this);
+            }
+            public Node getOriginalNode () {
+                return super.getOriginal ();
+            }
+        }
+        
+        private class SortedChildren extends FilterNode.Children {
+            private Node orig;
+            public SortedChildren (Node n) {
+                super (n);
+                this.orig = n;
+                sortNodes ();
+            }
+
+            @Override
+            protected Node[] createNodes (Node key) {
+                return new Node [] { new SortedNode (key) };
+            }
+
+            @Override
+            protected void addNotify () {
+                super.addNotify ();
+                sortNodes ();
+            }
+
+            @Override
+            protected void filterChildrenAdded (NodeMemberEvent ev) {
+                super.filterChildrenAdded (ev);
+                sortNodes ();
+            }
+
+            @Override
+            protected void filterChildrenRemoved (NodeMemberEvent ev) {
+                super.filterChildrenRemoved (ev);
+                sortNodes ();
+            }
+
+            @Override
+            protected void filterChildrenReordered (NodeReorderEvent ev) {
+                super.filterChildrenReordered (ev);
+                sortNodes ();
+            }
+
+            private void sortNodes () {
+                Node [] originalNodes = orig.getChildren ().getNodes ();
+                if (isSortingActive ()) {
+                    Collection<Node> sortedNodes = new TreeSet<Node> (getRowComparator ());
+                    for (Node n : originalNodes) {
+                        sortedNodes.add (n);
+                    }
+                    setKeys (sortedNodes.toArray (new Node[0]));
+                } else {
+                    setKeys (originalNodes);
+                }
+            }
+
         }
 
         void setNoSorting() {
@@ -1360,16 +1471,15 @@ public class TreeTableView extends BeanTreeView {
             return null;
         }
 
-        synchronized Comparator<VisualizerNode> getRowComparator() {
+        synchronized Comparator<Node> getRowComparator() {
             if (rowComparator == null) {
-                rowComparator = new Comparator<VisualizerNode>() {
+                rowComparator = new Comparator<Node>() {
 
-                    public int compare(VisualizerNode o1, VisualizerNode o2) {
-                        if (o1 == o2) {
+                    @SuppressWarnings("unchecked")
+                    public int compare(Node n1, Node n2) {
+                        if (n1 == n2) {
                             return 0;
                         }
-                        Node n1 = o1.node;
-                        Node n2 = o2.node;
 
                         if ((n1 == null) && (n2 == null)) {
                             return 0;
@@ -1447,47 +1557,6 @@ public class TreeTableView extends BeanTreeView {
             return rowComparator;
         }
 
-        void sortChildren(VisualizerNode parent, boolean synchronous) {
-            //#37802 - resorts are processed too aggressively, causing 
-            //NPEs.  Except for user-invoked actions (clicking the column
-            //header, etc.), we will defer them to run later on the EQ, so
-            //the change in the node has a chance to be fully processed
-            if (synchronous) {
-                synchronized (this) {
-                    if (sortingTask != null) {
-                        sortingTask.remove(parent);
-
-                        if (sortingTask.isEmpty()) {
-                            sortingTask = null;
-                        }
-                    }
-                }
-
-                doSortChildren(parent);
-            } else {
-                synchronized (this) {
-                    if (sortingTask == null) {
-                        sortingTask = new SortingTask();
-                        SwingUtilities.invokeLater(sortingTask);
-                    }
-                }
-
-                sortingTask.add(parent);
-            }
-        }
-
-        void doSortChildren(VisualizerNode parent) {
-            if (isSortingActive()) {
-                final Comparator<VisualizerNode> comparator = getRowComparator();
-
-                if ((comparator != null) || (parent != null)) {
-                    parent.reorderChildren(comparator);
-                }
-            } else {
-                parent.naturalOrder();
-            }
-        }
-
         void sortingChanged() {
             // PENDING: remember the last sorting to avoid multiple sorting
             // remenber expanded folders
@@ -1499,7 +1568,8 @@ public class TreeTableView extends BeanTreeView {
                 TreePath path = en.nextElement();
 
                 // bugfix #32328, don't sort whole subtree but only expanded folders
-                sortChildren((VisualizerNode) path.getLastPathComponent(), true);
+                Node n = ((VisualizerNode) path.getLastPathComponent ()).node;
+                ((SortedChildren) n.getChildren ()).sortNodes ();
                 list.add(path);
             }
 
@@ -1521,59 +1591,6 @@ public class TreeTableView extends BeanTreeView {
             return ""; // NOI18N
         }
 
-        // overrided mothod from DefaultTreeModel
-        public void nodesWereInserted(TreeNode node, int[] childIndices) {
-            super.nodesWereInserted(node, childIndices);
-
-            if (node instanceof VisualizerNode && isSortingActive()) {
-                sortChildren((VisualizerNode) node, false);
-            }
-        }
-
-        // overrided mothod from DefaultTreeModel
-        public void nodesChanged(TreeNode node, int[] childIndices) {
-            super.nodesChanged(node, childIndices);
-
-            if ((node != null) && (childIndices != null) && isSortingActive()) {
-                sortChildren((VisualizerNode) node, false);
-            }
-        }
-
-        // overrided mothod from DefaultTreeModel
-        public void setRoot(TreeNode root) {
-            super.setRoot(root);
-
-            if (root instanceof VisualizerNode && isSortingActive()) {
-                sortChildren((VisualizerNode) root, false);
-            }
-        }
-
-        private class SortingTask implements Runnable {
-            private HashSet<VisualizerNode> toSort = new HashSet<VisualizerNode>();
-
-            public synchronized void add(VisualizerNode parent) {
-                toSort.add(parent);
-            }
-
-            public synchronized void remove(VisualizerNode parent) {
-                toSort.remove(parent);
-            }
-
-            public synchronized boolean isEmpty() {
-                return toSort.isEmpty();
-            }
-
-            public void run() {
-                synchronized (SortedNodeTreeModel.this) {
-                    SortedNodeTreeModel.this.sortingTask = null;
-                }
-
-                for (Iterator<VisualizerNode> i = toSort.iterator(); i.hasNext();) {
-                    VisualizerNode curr = i.next();
-                    SortedNodeTreeModel.this.doSortChildren(curr);
-                }
-            }
-        }
     }
 
     /* Cell renderer for sorting column header.
@@ -1583,6 +1600,7 @@ public class TreeTableView extends BeanTreeView {
         }
 
         /** Overrides superclass method. */
+        @Override
         public Component getTableCellRendererComponent(
             JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column
         ) {
@@ -1595,14 +1613,22 @@ public class TreeTableView extends BeanTreeView {
                     ((JLabel) comp).setIcon(getProperIcon(treeColumnProperty.isSortOrderDescending()));
                     ((JLabel) comp).setHorizontalTextPosition(SwingConstants.LEFT);
 
-                    // don't use deriveFont() - see #49973 for details
-                    comp.setFont(new Font(comp.getFont().getName(), Font.BOLD, comp.getFont().getSize()));
+                    if( Utilities.isWindows() ) {
+                        comp.setFont(getFont().deriveFont(Font.BOLD, getFont().getSize()));
+                    } else {
+                        // don't use deriveFont() - see #49973 for details
+                        comp.setFont(new Font(getFont().getName(), Font.BOLD, getFont().getSize()));
+                    }
                 } else if ((column != 0) && ((tableModel.getVisibleSortingColumn() + 1) == column)) {
                     ((JLabel) comp).setIcon(getProperIcon(tableModel.isSortOrderDescending()));
                     ((JLabel) comp).setHorizontalTextPosition(SwingConstants.LEFT);
 
-                    // don't use deriveFont() - see #49973 for details
-                    comp.setFont(new Font(comp.getFont().getName(), Font.BOLD, comp.getFont().getSize()));
+                    if( Utilities.isWindows() ) {
+                        comp.setFont(getFont().deriveFont(Font.BOLD, getFont().getSize()));
+                    } else {
+                        // don't use deriveFont() - see #49973 for details
+                        comp.setFont(new Font(getFont().getName(), Font.BOLD, getFont().getSize()));
+                    }
                 } else {
                     ((JLabel) comp).setIcon(null);
                 }
@@ -1613,9 +1639,9 @@ public class TreeTableView extends BeanTreeView {
 
         private ImageIcon getProperIcon(boolean descending) {
             if (descending) {
-                return new ImageIcon(org.openide.util.Utilities.loadImage(SORT_DESC_ICON));
+                return ImageUtilities.loadImageIcon(SORT_DESC_ICON, false);
             } else {
-                return new ImageIcon(org.openide.util.Utilities.loadImage(SORT_ASC_ICON));
+                return ImageUtilities.loadImageIcon(SORT_ASC_ICON, false);
             }
         }
     }
