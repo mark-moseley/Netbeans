@@ -20,6 +20,7 @@ package org.netbeans.modules.php.dbgp.models;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -34,14 +35,14 @@ import org.netbeans.api.debugger.ActionsManager;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.modules.php.dbgp.DebugSession;
-import org.netbeans.modules.php.dbgp.StartActionProviderImpl;
 import org.netbeans.modules.php.dbgp.actions.AbstractActionProvider;
 import org.netbeans.modules.php.dbgp.annotations.CurrentLineAnnotation;
 import org.netbeans.modules.php.dbgp.annotations.DebuggerAnnotation;
-import org.netbeans.modules.php.dbgp.api.SessionId;
+import org.netbeans.modules.php.dbgp.SessionId;
+import org.netbeans.modules.php.dbgp.SessionManager;
 import org.netbeans.modules.php.dbgp.breakpoints.BreakpointModel;
 import org.netbeans.spi.debugger.ActionsProvider;
-import org.netbeans.spi.viewmodel.TableModel;
+import org.netbeans.spi.viewmodel.NodeModel;
 import org.netbeans.spi.viewmodel.TreeModel;
 import org.openide.text.Line;
 
@@ -108,32 +109,39 @@ public abstract class AbstractIDEBridge {
     }
     
     public VariablesModel getVariablesModel() {
-        if ( getEngine() == null ) {
+        DebuggerEngine engine = getEngine();
+        if ( engine == null ) {
             return null;
         }
-        return (VariablesModel)getEngine().lookupFirst(LOCALS_VIEW_NAME, 
+        return (VariablesModel)engine.lookupFirst(LOCALS_VIEW_NAME, 
                 TreeModel.class);
     }
     
     public CallStackModel getCallStackModel() {
-        if ( getEngine() == null ) {
+        DebuggerEngine engine = getEngine();
+        if ( engine == null ) {
             return null;
         }
-        return (CallStackModel)getEngine().lookupFirst(CALLSTACK_VIEW_NAME, 
+        return (CallStackModel)engine.lookupFirst(CALLSTACK_VIEW_NAME,
                 TreeModel.class);
     }
     
     public WatchesModel getWatchesModel() {
-        return (WatchesModel)getEngine().lookupFirst(WATCHES_VIEW_NAME, 
+        DebuggerEngine engine = getEngine();
+        if ( engine == null ) {
+            return null;
+        }
+        return (WatchesModel)engine.lookupFirst(WATCHES_VIEW_NAME, 
                 TreeModel.class);
     }
     
     public BreakpointModel getBreakpointModel() {
-        Iterator it = DebuggerManager.getDebuggerManager().lookup(
-                BREAKPOINTS_VIEW_NAME, TableModel.class).iterator();
+        DebuggerManager debuggerManager = DebuggerManager.getDebuggerManager();
+        Iterator it = debuggerManager != null ? debuggerManager.lookup(
+                BREAKPOINTS_VIEW_NAME, NodeModel.class).iterator() : null;
 
-        while(it.hasNext()) {
-            TableModel model = (TableModel)it.next();
+        while(it != null && it.hasNext()) {
+            NodeModel model = (NodeModel)it.next();
             if (model instanceof BreakpointModel) {
                 return (BreakpointModel) model;
             }
@@ -143,24 +151,29 @@ public abstract class AbstractIDEBridge {
     }
     
     public ThreadsModel getThreadsModel() {
-        return (ThreadsModel)getEngine().lookupFirst(THREADS_VIEW_NAME, 
+        DebuggerEngine engine = getEngine();
+        if ( engine == null ) {
+            return null;
+        }
+        return (ThreadsModel)engine.lookupFirst(THREADS_VIEW_NAME, 
                 TreeModel.class);
     }
     
     public void setSuspended( boolean flag ) {
         isSuspended.set( flag );
-        synchronized ( StartActionProviderImpl.getInstance()) {
+        synchronized (SessionManager.getInstance()) {
             SessionId id = getDebugSession().getSessionId();
             if ( id == null ){
                 return;
             }
             DebugSession current = 
-                StartActionProviderImpl.getInstance().getCurrentSession(id);
-            if ( !current.equals( getDebugSession() ) ){
+                SessionManager.getInstance().getCurrentSession(id);
+            if ( current != null && !current.equals( getDebugSession() ) ){
                 return;
             }
         }
-        List list = getEngine().lookup( null , ActionsProvider.class );
+        DebuggerEngine engine = getEngine();
+        List list = engine != null ? engine.lookup( null , ActionsProvider.class ) : Collections.emptyList();
         for (Object object : list) {
             assert object instanceof AbstractActionProvider;
             AbstractActionProvider provider = (AbstractActionProvider) object;

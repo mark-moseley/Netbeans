@@ -42,7 +42,6 @@
 package org.netbeans.modules.php.dbgp.models;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 import javax.swing.Action;
@@ -50,9 +49,10 @@ import javax.swing.Action;
 import org.netbeans.api.debugger.Session;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.php.dbgp.ConversionUtils;
 import org.netbeans.modules.php.dbgp.DebugSession;
-import org.netbeans.modules.php.dbgp.StartActionProviderImpl;
-import org.netbeans.modules.php.dbgp.api.SessionId;
+import org.netbeans.modules.php.dbgp.SessionManager;
+import org.netbeans.modules.php.dbgp.SessionId;
 import org.netbeans.modules.php.dbgp.packets.StatusCommand;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.debugger.ui.Constants;
@@ -134,17 +134,18 @@ public class ThreadsModel extends ViewModelSupport
             if ( id == null ){
                 return new Object[0];
             }
-            Collection<DebugSession> collection = 
-                StartActionProviderImpl.getInstance().getSessions(id);
-            if ( from >= collection.size() ){
+            DebugSession debugSession = ConversionUtils.toDebugSession(id);
+            int size = (debugSession != null) ? 1 : 0;
+            
+            if ( from >= size ){
                 return new Object[0];
             }
-            int end = Math.min( to, collection.size());
-            if ( from == 0 && to == collection.size() ){
-                return collection.toArray( new Object[ collection.size() ]);
+            int end = Math.min( to, size);
+            if ( from == 0 && to == size ){
+                return debugSession != null ? new Object[] {debugSession} : new Object[ 0 ];
             }
-            ArrayList<DebugSession> list = new ArrayList<DebugSession>( 
-                    collection );
+            ArrayList<DebugSession> list = new ArrayList<DebugSession>();
+            if (debugSession != null) {list.add(debugSession);}
             List<DebugSession> result = list.subList( from , end );
             return result.toArray( new Object[ result.size() ] );
         }
@@ -175,7 +176,8 @@ public class ThreadsModel extends ViewModelSupport
             if ( id == null ){
                 return 0;
             }
-            return StartActionProviderImpl.getInstance().getSessions(id).size();
+            SessionManager sessionManager = SessionManager.getInstance();
+            return sessionManager.findSessionsById(id).size();
         }
         throw new UnknownTypeException(node);
     }
@@ -247,12 +249,9 @@ public class ThreadsModel extends ViewModelSupport
                 return;
             }
             DebugSession current = 
-                StartActionProviderImpl.getInstance().getCurrentSession(id);
+                SessionManager.getInstance().getCurrentSession(id);
             
             if (! session.equals( current)) {
-                Session sess = getSession();
-                StartActionProviderImpl.getInstance().setCurrentSession(
-                        sess, session );
                 StatusCommand command = new StatusCommand( 
                         session.getTransactionId() );
                 session.sendCommandLater(command);
@@ -334,7 +333,7 @@ public class ThreadsModel extends ViewModelSupport
             return "";
         }
         String fileName = session.getFileName();
-        FileObject script = id.getFileObjectByRemote( fileName );
+        FileObject script = id.toSourceFile( fileName );
         Project project = FileOwnerQuery.getOwner( script );
         return FileUtil.getRelativePath( project.getProjectDirectory(), script );
     }
@@ -358,7 +357,7 @@ public class ThreadsModel extends ViewModelSupport
     private boolean isCurrent( DebugSession session ){
         SessionId id = getSessionId();
         DebugSession current = 
-            StartActionProviderImpl.getInstance().getCurrentSession(id);
+            SessionManager.getInstance().getCurrentSession(id);
         return session.equals( current );
     }
     

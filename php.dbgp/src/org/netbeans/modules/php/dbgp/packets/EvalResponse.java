@@ -41,7 +41,9 @@
 package org.netbeans.modules.php.dbgp.packets;
 
 import org.netbeans.modules.php.dbgp.DebugSession;
-import org.netbeans.modules.php.dbgp.StartActionProviderImpl;
+import org.netbeans.modules.php.dbgp.DebugSession.IDESessionBridge;
+import org.netbeans.modules.php.dbgp.SessionManager;
+import org.netbeans.modules.php.dbgp.models.WatchesModel;
 import org.w3c.dom.Node;
 
 
@@ -81,12 +83,18 @@ public class EvalResponse extends DbgpResponse {
         EvalCommand eval = (EvalCommand)command;
         String expression = eval.getData();
         
-        DebugSession currentSession = StartActionProviderImpl.getInstance().
+        DebugSession currentSession = SessionManager.getInstance().
             getCurrentSession( session.getSessionId());
         if ( currentSession == session ){
             // perform view update only if response appears in current session
-            session.getBridge().getWatchesModel().updateExpressionValue(
-                expression, getProperty() );
+            IDESessionBridge bridge = session.getBridge();
+            if (bridge != null) {
+                WatchesModel watchesModel = bridge.getWatchesModel();
+                if (watchesModel != null) {
+                    watchesModel.updateExpressionValue(
+                        expression, getProperty() );
+                }
+            }
             
             eval.firePropertyChangeEvent( expression, getProperty() );
         }
