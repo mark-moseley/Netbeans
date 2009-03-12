@@ -39,6 +39,8 @@
  * made subject to such option by the copyright holder.
  */package org.netbeans.modules.vmd.midp.palette.wizard;
 
+import java.beans.PropertyChangeEvent;
+import java.util.concurrent.ExecutionException;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ui.OpenProjects;
@@ -46,7 +48,10 @@ import org.netbeans.modules.vmd.api.io.javame.MidpProjectPropertiesSupport;
 
 import javax.swing.*;
 import java.awt.*;
+import java.beans.PropertyChangeListener;
 import java.util.Vector;
+import java.util.concurrent.Future;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 /**
@@ -54,12 +59,14 @@ import org.openide.util.NbBundle;
  */
 public final class AddToPaletteVisualPanel1 extends JPanel {
 
+    private static final String MSG_NO_PROJECTS = "MSG_ERR_NoOpenedProjects"; // NOI18N
+    private static final String MSG_WAIT_PROJECTS = "MSG_WaitOpenedProjects"; // NOI18N
+    
     private AddToPaletteWizardPanel1 wizardPanel;
 
     public AddToPaletteVisualPanel1 (AddToPaletteWizardPanel1 wizardPanel) {
         this.wizardPanel = wizardPanel;
         initComponents();
-        projectCombo.setRenderer (new ProjectListCellRenderer ());
     }
 
     public String getName() {
@@ -67,32 +74,99 @@ public final class AddToPaletteVisualPanel1 extends JPanel {
     }
 
     public Project getActiveProject () {
-        return (Project) projectCombo.getSelectedItem();
-    }
-
-    public void reload (Project project) {
-        Project[] projects = OpenProjects.getDefault ().getOpenProjects ();
-        Vector projectsVector = new Vector ();
-        for (Project prj : projects)
-            if (MidpProjectPropertiesSupport.isMobileProject (prj))
-                projectsVector.add (prj);
-        projectCombo.setModel (new DefaultComboBoxModel (projectsVector));
-        if (project == null) {
-            Project prj = OpenProjects.getDefault ().getMainProject ();
-            if (MidpProjectPropertiesSupport.isMobileProject (prj))
-                project = prj;
+        Object item = projectCombo.getSelectedItem();
+        if (item instanceof Project){
+            return (Project)item;
         }
-        if (project == null  &&  projects.length > 0)
-            project = projects[0];
-        projectCombo.setSelectedItem (project);
+        return null;
     }
 
+    public int getProjectsCount () {
+        if (projectCombo.getItemAt(0)==null  ||
+                projectCombo.getItemAt(0).equals(MSG_NO_PROJECTS))
+        {
+            return 0;
+        }
+        return projectCombo.getItemCount();
+    }
+
+    public void reload(final Project project) {
+        reload( project , false );
+    }
+
+    public void reload(final Project project, boolean loaded) {
+        Future<Project[]> future =  OpenProjects.getDefault ().openProjects();
+        Project[] projects;
+        Vector projectsVector = new Vector ();
+        if ( loaded || future.isDone() ){
+            projects = OpenProjects.getDefault ().getOpenProjects ();
+        }
+        else {
+            new Thread(){
+                @Override
+                public void run() {
+                    try {
+                        OpenProjects.getDefault().openProjects().get();
+                        reload( );
+                    } catch (InterruptedException ex) {
+                        reload( );
+                    } catch (ExecutionException ex) {
+                        reload();
+                    }
+                }
+
+                private void reload(){
+                    SwingUtilities.invokeLater( new Runnable() {
+                        public void run() {
+                            AddToPaletteVisualPanel1.this.reload( project, true);
+                        }
+                    });
+                }
+            }.start();
+            projectsVector.add(getMessage(MSG_WAIT_PROJECTS));
+            projectCombo.setEnabled( false );
+            projectCombo.setRenderer(new DefaultListCellRenderer());
+            projectCombo.setModel(new DefaultComboBoxModel(projectsVector));
+            return;
+        }
+        //Project[] projects = OpenProjects.getDefault ().getOpenProjects ();
+        for (Project prj : projects) {
+            if (MidpProjectPropertiesSupport.isMobileProject(prj)) {
+                projectsVector.add(prj);
+            }
+        }
+        if(projectsVector.size() == 0){
+            projectsVector.add(getMessage(MSG_NO_PROJECTS));
+            projectCombo.setEnabled( false );
+            projectCombo.setRenderer(new DefaultListCellRenderer());
+            projectCombo.setModel(new DefaultComboBoxModel(projectsVector));
+        } else {
+            projectCombo.setEnabled( true );
+            projectCombo.setRenderer (new ProjectListCellRenderer ());
+            projectCombo.setModel(new DefaultComboBoxModel(projectsVector));
+            setProjectSelection(projects, project);
+        }
+    }
+
+    private void setProjectSelection(Project[] openedProjects, Project project){
+            if (project == null) {
+                Project prj = OpenProjects.getDefault().getMainProject();
+                if (MidpProjectPropertiesSupport.isMobileProject(prj)) {
+                    project = prj;
+                }
+            }
+            if (project == null && openedProjects.length > 0) {
+                project = openedProjects[0];
+            }
+            projectCombo.setSelectedItem(project);
+    }
+    
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
         projectCombo = new javax.swing.JComboBox();
@@ -104,6 +178,7 @@ public final class AddToPaletteVisualPanel1 extends JPanel {
             }
         });
 
+        jLabel1.setLabelFor(projectCombo);
         org.openide.awt.Mnemonics.setLocalizedText(jLabel1, NbBundle.getMessage(AddToPaletteVisualPanel1.class, "DISP_SelectProject")); // NOI18N
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
@@ -126,6 +201,11 @@ public final class AddToPaletteVisualPanel1 extends JPanel {
                 .add(projectCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap(243, Short.MAX_VALUE))
         );
+
+        projectCombo.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(AddToPaletteVisualPanel1.class, "ACCESSIBLE_NAME_projectCombo")); // NOI18N
+        projectCombo.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(AddToPaletteVisualPanel1.class, "ACCESSIBLE_DESCRIPTION_projectCombo")); // NOI18N
+        jLabel1.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(AddToPaletteVisualPanel1.class, "ACCESSIBLE_NAME_jLabel1_2")); // NOI18N
+        jLabel1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(AddToPaletteVisualPanel1.class, "ACCESSIBLE_DESCRIPTION_jLabel1_2")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
 private void projectComboActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_projectComboActionPerformed
@@ -151,5 +231,9 @@ private void projectComboActionPerformed(java.awt.event.ActionEvent evt) {//GEN-
 
     }
 
+    private static String getMessage(String key) {
+        return NbBundle.getMessage(AddToPaletteVisualPanel1.class, key);
+    }
+    
 }
 
