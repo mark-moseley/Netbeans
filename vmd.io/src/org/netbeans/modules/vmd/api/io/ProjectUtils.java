@@ -57,8 +57,12 @@ import org.openide.windows.TopComponent;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * @author David Kaspar
@@ -135,6 +139,9 @@ public final class ProjectUtils {
     public static List<SourceGroup> getSourceGroups(DataObjectContext context) {
         assert context != null;
         Project project = getProject(context);
+        if (project == null) {
+            return Collections.<SourceGroup>emptyList();
+        }
         Sources sources = org.netbeans.api.project.ProjectUtils.getSources(project);
         SourceGroup[] sg = sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
         return Arrays.asList(sg);
@@ -160,7 +167,8 @@ public final class ProjectUtils {
      *  RequestVisibity for TopComponent
      */
     public static void requestVisibility (DataObjectContext context, String topComponentDisplayName) {
-        for (TopComponent tc : TopComponent.getRegistry().getOpened()) {
+        Set<TopComponent> topComponents = new HashSet<TopComponent>(TopComponent.getRegistry().getOpened());
+        for (TopComponent tc : topComponents) {
             DataEditorView dev = tc.getLookup().lookup(DataEditorView.class);
             if (dev == null  ||  dev.getContext() != context)
                 continue;
