@@ -45,11 +45,9 @@ import java.io.IOException;
 import javax.swing.text.Document;
 import java.net.URLClassLoader;
 import java.util.Map;
-
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.filesystems.FileObject;
-
 import org.netbeans.modules.web.jsps.parserapi.JspParserFactory;
 import org.netbeans.modules.web.jsps.parserapi.JspParserAPI;
 import org.netbeans.modules.web.core.syntax.spi.JSPColoringData;
@@ -62,7 +60,7 @@ public class JspContextInfoImpl extends JspContextInfo {
     public JspContextInfoImpl() {
     }
     
-    private static TagLibParseSupport getTagLibParseSupport(Document doc, FileObject fo){
+    private static TagLibParseSupport getTagLibParseSupport(FileObject fo) {
         TagLibParseSupport tlps = null;
         if (fo != null && fo.isValid()){
             try {
@@ -75,21 +73,24 @@ public class JspContextInfoImpl extends JspContextInfo {
         return tlps;
     }
     
-    public URLClassLoader getModuleClassLoader(Document doc, FileObject fo){
-        return JspParserFactory.getJspParser().getModuleClassLoader(JspParserAccess.getJspParserWM (WebModule.getWebModule (fo)));
+    public URLClassLoader getModuleClassLoader(FileObject fo) {
+        return JspParserFactory.getJspParser().getModuleClassLoader(WebModule.getWebModule (fo));
     }
     
     /** Returns the taglib map as returned by the parser, taking data from the editor as parameters.
      * Returns null in case of a failure (exception, no web module, no parser etc.)
      */
-    public Map getTaglibMap(Document doc, FileObject fo) {
+    public Map getTaglibMap(FileObject fo) {
         try {
             JspParserAPI parser = JspParserFactory.getJspParser();
             if (parser == null) {
                 Logger.getLogger("global").log(Level.INFO, null, new NullPointerException());
             }
             else {
-                return parser.getTaglibMap(JspParserAccess.getJspParserWM (WebModule.getWebModule (fo)));
+                WebModule webModule = WebModule.getWebModule(fo);
+                if (webModule != null) {
+                    return parser.getTaglibMap(webModule);
+                }
             }
         }
         catch (IOException e) {
@@ -104,50 +105,47 @@ public class JspContextInfoImpl extends JspContextInfo {
      * @param fo file object for which the icon is looking for
      * @return an Image which is dislayed in the explorer for the file. 
      */
-    public java.awt.Image getIcon(Document doc, FileObject fo){
-        
+    public java.awt.Image getIcon(FileObject fo) {
         java.awt.Image icon = null;
-        
         try {
             icon = DataObject.find(fo).getNodeDelegate().getIcon(java.beans.BeanInfo.ICON_COLOR_16x16);
         }
         catch(org.openide.loaders.DataObjectNotFoundException e) {
             e.printStackTrace(System.out);
         }
-        
         return icon;
     }
     
    
-    public JspParserAPI.ParseResult getCachedParseResult (Document doc, FileObject fo, boolean successfulOnly, boolean preferCurrent, boolean forceParse) {
-        TagLibParseSupport sup = getTagLibParseSupport (doc, fo);
+    public JspParserAPI.ParseResult getCachedParseResult (FileObject fo, boolean successfulOnly, boolean preferCurrent, boolean forceParse) {
+        TagLibParseSupport sup = getTagLibParseSupport (fo);
         if (sup != null) {
             return sup.getCachedParseResult (successfulOnly, preferCurrent, forceParse);
         }
         return null;
     }
     
-    public JspParserAPI.ParseResult getCachedParseResult (Document doc, FileObject fo, boolean successfulOnly, boolean preferCurrent) {
-        return getCachedParseResult(doc, fo, successfulOnly, preferCurrent, false);
+    public JspParserAPI.ParseResult getCachedParseResult (FileObject fo, boolean successfulOnly, boolean preferCurrent) {
+        return getCachedParseResult(fo, successfulOnly, preferCurrent, false);
     }
     
-    public JSPColoringData getJSPColoringData (Document doc, FileObject fo) {
-        TagLibParseSupport sup = getTagLibParseSupport (doc, fo);
+    public JSPColoringData getJSPColoringData (FileObject fo) {
+        TagLibParseSupport sup = getTagLibParseSupport (fo);
         if (sup != null) {
             return sup.getJSPColoringData ();
         }
         return null;
     }
     
-    public org.netbeans.modules.web.jsps.parserapi.JspParserAPI.JspOpenInfo getCachedOpenInfo(Document doc, FileObject fo, boolean preferCurrent) {
-        TagLibParseSupport sup = getTagLibParseSupport (doc, fo);
+    public org.netbeans.modules.web.jsps.parserapi.JspParserAPI.JspOpenInfo getCachedOpenInfo(FileObject fo, boolean preferCurrent) {
+        TagLibParseSupport sup = getTagLibParseSupport (fo);
         if (sup != null) {
             return sup.getCachedOpenInfo(preferCurrent, true);
         }
         return null;
     }
     
-    public FileObject guessWebModuleRoot (Document doc, FileObject fo) {
+    public FileObject guessWebModuleRoot (FileObject fo) {
         WebModule wm =  WebModule.getWebModule (fo);
         if (wm != null)
             return wm.getDocumentBase ();
