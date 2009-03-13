@@ -40,6 +40,7 @@
 
 package org.netbeans.lib.profiler.server;
 
+import org.netbeans.lib.profiler.global.Platform;
 import org.netbeans.lib.profiler.server.system.Timers;
 import java.lang.reflect.Method;
 
@@ -100,12 +101,8 @@ public class ProfilerRuntimeCPU extends ProfilerRuntime {
     }
 
     public static void setTimerTypes(boolean absolute, boolean threadCPU) {
-        if (threadCPU != threadCPUTimerOn) {
-            String osName = System.getProperty("os.name"); // NOI18N
-
-            if (osName.startsWith("SunOS") || osName.startsWith("Solaris")) {
-                Timers.enableMicrostateAccounting(threadCPU); // NOI18N
-            }
+        if (threadCPU != threadCPUTimerOn && Platform.isSolaris()) {
+            Timers.enableMicrostateAccounting(threadCPU);
         }
 
         absoluteTimerOn = absolute;
@@ -553,7 +550,7 @@ public class ProfilerRuntimeCPU extends ProfilerRuntime {
         }
 
         byte[] evBuf = ti.evBuf;
-
+        if (!ti.isInitialized()) return;    // Reset collectors performed when we were already executing instrumentation code 
         evBuf[curPos++] = eventType;
         evBuf[curPos++] = (byte) ((methodId >> 8) & 0xFF);
         evBuf[curPos++] = (byte) ((methodId) & 0xFF);
