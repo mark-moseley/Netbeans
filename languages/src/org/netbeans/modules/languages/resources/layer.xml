@@ -49,21 +49,9 @@ made subject to such option by the copyright holder.
             <file name="org-netbeans-modules-languages-features-ASTBrowserAction.instance"/>
         </folder>
     </folder>
-    <folder name="Menu">
-        <folder name="Window">
-            <folder name="Other">
-                <file name="TokensBrowserAction.shadow">
-                    <attr name="originalFile" stringvalue="Actions/Window/org-netbeans-modules-languages-features-TokensBrowserAction.instance"/>
-                    <attr name="position" intvalue="1000"/>
-                </file>
-                <file name="ASTBrowserAction.shadow">
-                    <attr name="originalFile" stringvalue="Actions/Window/org-netbeans-modules-languages-features-ASTBrowserAction.instance"/>
-                    <attr name="position" intvalue="1100"/>
-                </file>
-            </folder>
-        </folder>
-    </folder>
     <folder name="Editors">
+        <file name="org-netbeans-modules-languages-ParserImpl$AParserFactory.instance"/>
+        <file name="org-netbeans-modules-languages-ParserListenerFactoryImpl.instance"/>
         <folder name="AnnotationTypes">
             <file name="Error.xml" url="Error.xml"/>
             <file name="SyntaxError.xml" url="SyntaxError.xml"/>
@@ -164,6 +152,15 @@ made subject to such option by the copyright holder.
                 </folder>
             </folder>
         </folder>
+        <folder name="content">
+            <folder name="unknown">
+                <folder name="Factories">
+                    <file name="org-netbeans-modules-languages-dataobject-LanguagesDataLoader.instance">
+                        <attr name="position" intvalue="99999"/>
+                    </file>
+                </folder>
+            </folder>
+        </folder>
         <folder name="Languages">
             <folder name="Actions">
                 <file name="org-openide-actions-OpenAction.instance">
@@ -236,4 +233,17 @@ made subject to such option by the copyright holder.
             </folder>
         </folder>
     </folder>
+    <folder name="Templates">
+        <folder name="NetBeansModuleDevelopment">
+            <file name="_language.nbs" url="nbs_template.nbs">
+                <attr name="template" boolvalue="true"/>
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.languages.resources.Bundle"/>
+                <attr name="templateCategory" stringvalue="simple-files"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/languages/resources/nbs_template.html"/>
+            </file>
+        </folder>
+    </folder>
 </filesystem>
+
+
+
