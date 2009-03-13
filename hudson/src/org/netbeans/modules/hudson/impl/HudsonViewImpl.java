@@ -41,80 +41,59 @@
 
 package org.netbeans.modules.hudson.impl;
 
-import org.netbeans.modules.hudson.spi.HudsonJobChangeItem;
-import java.util.Collection;
-import java.util.Collections;
-import org.netbeans.modules.hudson.api.HudsonJob;
-import org.netbeans.modules.hudson.api.HudsonJobBuild;
-import org.netbeans.modules.hudson.constants.HudsonXmlApiConstants;
-import org.netbeans.modules.hudson.spi.HudsonSCM;
+import org.netbeans.modules.hudson.api.HudsonInstance;
+import org.netbeans.modules.hudson.api.HudsonView;
 import org.netbeans.modules.hudson.ui.interfaces.OpenableInBrowser;
-import org.openide.filesystems.FileSystem;
-import org.openide.util.Lookup;
-import org.w3c.dom.Document;
+import static org.netbeans.modules.hudson.constants.HudsonViewConstants.*;
+import org.netbeans.modules.hudson.util.HudsonPropertiesSupport;
 
-public class HudsonJobBuildImpl implements HudsonJobBuild, OpenableInBrowser {
-
-    private final HudsonJobImpl job;
-    private final int build;
-    private final boolean building;
-    private final Result result;
-    private final HudsonConnector connector;
-
-    HudsonJobBuildImpl(HudsonConnector connector, HudsonJobImpl job, int build, boolean building, Result result) {
-        this.connector = connector;
-        this.job = job;
-        this.build = build;
-        this.building = building;
-        this.result = result;
+/**
+ * Implementation of the HudsonView
+ *
+ * @author Michal Mocnak
+ */
+public class HudsonViewImpl implements HudsonView, OpenableInBrowser {
+    
+    private HudsonInstance instance;
+    private HudsonPropertiesSupport properties = new HudsonPropertiesSupport();
+    
+    public HudsonViewImpl(HudsonInstance instance, String name, String description, String url) {
+        properties.putProperty(VIEW_NAME, name);
+        properties.putProperty(VIEW_DESCRIPTION, description);
+        properties.putProperty(VIEW_URL, url);
+        
+        this.instance = instance;
     }
     
-    public HudsonJob getJob() {
-        return job;
+    public String getName() {
+        return properties.getProperty(VIEW_NAME, String.class);
     }
-
-    public int getNumber() {
-        return build;
+    
+    public String getDescription() {
+        return properties.getProperty(VIEW_DESCRIPTION, String.class);
     }
-
+    
     public String getUrl() {
-        return job.getUrl() + build + "/"; // NOI18N
-    }
-
-    public @Override String toString() {
-        return getUrl();
-    }
-
-    public boolean isBuilding() {
-        return building;
+        return properties.getProperty(VIEW_URL, String.class);
     }
     
-    public Result getResult() {
-        return result;
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof HudsonViewImpl))
+            return false;
+        
+        HudsonViewImpl v = (HudsonViewImpl) o;
+        
+        return getName().equals(v.getName()) && getUrl().equals(v.getUrl());
     }
 
-    private Collection<? extends HudsonJobChangeItem> changes;
-    public Collection<? extends HudsonJobChangeItem> getChanges() {
-        if (changes == null) {
-            Document changeSet = connector.getDocument(getUrl() +
-                    HudsonXmlApiConstants.XML_API_URL + "?xpath=/*/changeSet");
-            if (changeSet != null) {
-                for (HudsonSCM scm : Lookup.getDefault().lookupAll(HudsonSCM.class)) {
-                    changes = scm.parseChangeSet(job, changeSet.getDocumentElement());
-                    if (changes != null) {
-                        break;
-                    }
-                }
-            }
-            if (changes == null) {
-                changes = Collections.emptyList();
-            }
-        }
-        return changes;
+    @Override
+    public int hashCode() {
+        return getName().hashCode();
     }
 
-    public FileSystem getArtifacts() {
-        return job.getInstance().getArtifacts(this);
+    public HudsonInstance getInstance() {
+        return instance;
     }
 
 }
