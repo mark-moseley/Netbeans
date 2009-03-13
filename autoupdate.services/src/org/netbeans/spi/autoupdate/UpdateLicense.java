@@ -64,5 +64,4 @@ public final class UpdateLicense {
     public static final UpdateLicense createUpdateLicense (String licenseName, String agreement) {
         return new UpdateLicense (new UpdateLicenseImpl (licenseName, agreement));
     }
-    
 }
