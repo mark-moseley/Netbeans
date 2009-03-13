@@ -142,11 +142,8 @@ public class ATTParser implements AsmParser {
              }   
              catch(Exception ex) {               
                 Logger.getLogger(this.getClass().getName()).
-                    log(Level.SEVERE, "Antlr lexer crashed"); // NOI18N
-                
-                tokens.add(new AsmToken(ASM_EOF, "", lastOffset,  // NOI18N
-                                        lastOffset + 1));
-                break;
+                    log(Level.SEVERE, "Antlr lexer faced error token on position " + lastOffset); // NOI18N
+                continue;
              }
            
              if (tok.getId() != ASM_EMPTY) {                 
@@ -238,9 +235,9 @@ public class ATTParser implements AsmParser {
     }
                
     private boolean isDefinitionMark(String str) {
-        return ".globl".equals(str)  || 
-               ".local".equals(str)  || 
-               ".global".equals(str);
+        return ".globl".equals(str)  || // NOI18N
+               ".local".equals(str)  || // NOI18N
+               ".global".equals(str); // NOI18N
     }
     
     private int getLastResultIdx() {
@@ -298,7 +295,7 @@ public class ATTParser implements AsmParser {
                 }
                     
             } else if (tok.getId() == ASM_MARK) {
-                if (tok.getText().equals(",") && inner == 0) {
+                if (tok.getText().equals(",") && inner == 0) { // NOI18N
                     argNo--;
                 }                                                     
                 else if (tok.getText().equals(memOpBeginMark)) {
@@ -340,12 +337,12 @@ public class ATTParser implements AsmParser {
                                                         
         public boolean isFunctionLabel(String name) {
             name = name.substring(0, name.length() - 1);
-            return  (!name.startsWith(".") &&  !Character.isDigit(name.charAt(0))) ||
+            return  (!name.startsWith(".") &&  !Character.isDigit(name.charAt(0))) || // NOI18N
                      globals.contains(name);
         }
 
         public String getCleanName(String name) {
-            if(name.endsWith(":"))
+            if(name.endsWith(":")) // NOI18N
                 return name.substring(0, name.length() - 1);
             return name;
         }        

@@ -48,6 +48,9 @@ import org.netbeans.modules.asm.base.syntax.*;
 
 }
 
+{
+@SuppressWarnings({"unchecked", "cast", "fallthrough"})
+}
 class ATTScanner extends Lexer;
 options {
     k = 3;   
@@ -93,12 +96,13 @@ options {
 
     public void resetText() {
         super.resetText();
+        resetMatchError();
         tokenStartOffset = offset;
     }
    
     public void consume() {
         super.consume();
-        if (inputState.guessing == 0) {
+        if (guessing == 0) {
             offset++;
         }
     }
@@ -301,7 +305,7 @@ StingLiteral
             '"' StringLiteralBody 
         ;
 
-
+BackSlash : '\\' ;
 
 protected
 StringLiteralBody
