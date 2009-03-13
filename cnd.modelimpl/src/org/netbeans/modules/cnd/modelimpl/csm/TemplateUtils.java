@@ -51,6 +51,7 @@ import org.netbeans.modules.cnd.api.model.CsmTemplate;
 import org.netbeans.modules.cnd.api.model.CsmTemplateParameter;
 import org.netbeans.modules.cnd.api.model.CsmType;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
+import org.netbeans.modules.cnd.modelimpl.csm.core.AstRenderer;
 import org.netbeans.modules.cnd.modelimpl.csm.core.AstUtil;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 
@@ -91,11 +92,21 @@ public class TemplateUtils {
             if (child.getType() == CPPTokenTypes.LESSTHAN) {
                 depth++;
             }
+                
             if (CPPTokenTypes.CSM_START <= child.getType() && child.getType() <= CPPTokenTypes.CSM_END) {
                 AST grandChild = child.getFirstChild();
                 if (grandChild != null) {
                     addSpecializationSuffix(grandChild, sb, parameters);
                 }
+            } else if (child != null && child.getType() == CPPTokenTypes.LITERAL_template) {
+                sb.append(child.getText());
+                sb.append('<');
+                AST grandChild = child.getFirstChild();
+                if (grandChild != null) {
+                    addSpecializationSuffix(grandChild, sb, parameters);
+                }
+                sb.append('>');
+                sb.append(' ');
             } else {
                 String text = child.getText();
                 if (parameters != null) {
@@ -150,7 +161,7 @@ public class TemplateUtils {
         return null;
     }
     
-    public static List<CsmTemplateParameter> getTemplateParameters(AST ast, CsmFile file, CsmScope scope) {
+    public static List<CsmTemplateParameter> getTemplateParameters(AST ast, CsmFile file, CsmScope scope, boolean global) {
         assert (ast != null && ast.getType() == CPPTokenTypes.LITERAL_template);
         List<CsmTemplateParameter> res = new ArrayList<CsmTemplateParameter>();
         AST parameterStart = null;
@@ -179,20 +190,25 @@ public class TemplateUtils {
                                 AST type = assign.getNextSibling();
                                 if (type.getType() == CPPTokenTypes.CSM_TYPE_COMPOUND
                                         || type.getType() == CPPTokenTypes.CSM_TYPE_BUILTIN) {
-                                    res.add(new TemplateParameterImpl(fakeAST, child.getText(), file, scope, type));
+                                    res.add(new TemplateParameterImpl(fakeAST, child.getText(), file, scope, global, type));
                                     parameterStart = null;
                                     break;
                                 }
                             }
                         }
                     }
-                    res.add(new TemplateParameterImpl(fakeAST, child.getText(), file, scope));                    
+                    res.add(new TemplateParameterImpl(fakeAST, child.getText(), file, scope, global));
                     parameterStart = null;
                     break;
                 case CPPTokenTypes.CSM_PARAMETER_DECLARATION:
                     // now create parameter
                     parameterStart = child;
                     AST varDecl = child.getFirstChild();
+                    // skip qualifiers
+                    // IZ#156679 : Constant in template is highlighted as invalid identifier
+                    if (varDecl != null) {
+                        varDecl = AstRenderer.getFirstSiblingSkipQualifiers(varDecl);
+                    }
                     // skip "typename"
                     if (varDecl != null && varDecl.getType() == CPPTokenTypes.LITERAL_typename) {
                         varDecl = varDecl.getNextSibling();
@@ -214,14 +230,14 @@ public class TemplateUtils {
                             case CPPTokenTypes.CSM_VARIABLE_DECLARATION:
                                 AST pn = varDecl.getFirstChild();
                                 if (pn != null) {
-                                    res.add(new TemplateParameterImpl(parameterStart, pn.getText(), file, scope));
+                                    res.add(new TemplateParameterImpl(parameterStart, pn.getText(), file, scope, global));
                                 }
                                 break;
                             case CPPTokenTypes.CSM_TYPE_BUILTIN:
                             case CPPTokenTypes.CSM_TYPE_COMPOUND:
                                 for(AST p = varDecl.getFirstChild(); p != null; p = p.getNextSibling()){
                                     if (p.getType() == CPPTokenTypes.ID) {
-                                       res.add(new TemplateParameterImpl(parameterStart, p.getText(), file, scope));
+                                       res.add(new TemplateParameterImpl(parameterStart, p.getText(), file, scope, global));
                                        break;
                                     }
                                 }
@@ -236,7 +252,7 @@ public class TemplateUtils {
                             // IZ 141842 : If template parameter declared as a template class, its usage is unresolved
                             // Now all IDs of template template parameter are added to template parameters of template.
                             // When CsmClassifierBasedTemplateParameter will be finished, this should be replaced. 
-                            res.add(new TemplateParameterImpl(parameterStart, paramChild.getText(), file, scope));
+                            res.add(new TemplateParameterImpl(parameterStart, paramChild.getText(), file, scope, global));
                         }
                     }
                     break;

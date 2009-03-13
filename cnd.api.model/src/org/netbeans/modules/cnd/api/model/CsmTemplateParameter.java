@@ -45,22 +45,24 @@ package org.netbeans.modules.cnd.api.model;
  * Represent one template parameter
  * @author Vladimir Kvashin
  */
-public interface CsmTemplateParameter extends CsmNamedElement {
+public interface CsmTemplateParameter extends CsmOffsetableDeclaration {
 
-    enum Kind {
+    /*enum Kind {
         DECLARATION,
         TYPENAME,
         TEMPLATE
     }
     
     /** Gets this template parameter kind */
-    Kind getKind();
+    /*Kind getKind();
     
     
     /** Gets this parameter text  */
     // TODO: perhaps we'd  better move this to some common interface
-    CharSequence getText();
+    //CharSequence getText();
     
+    /** Gets this parameter default value  */
+    CsmObject getDefaultValue();
     
 }
 
