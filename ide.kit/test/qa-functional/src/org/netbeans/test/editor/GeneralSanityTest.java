@@ -41,38 +41,33 @@
 
 package org.netbeans.test.editor;
 
-import java.lang.reflect.Method;
+import junit.framework.Test;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestCase;
+import org.openide.modules.ModuleInfo;
 import org.openide.util.Lookup;
-import org.openide.util.SharedClassObject;
 
-/**
- * test for reflection used in multiview module that retrieves a setting value from editor.
- *
- * @author mkleint
- */
-public class MultiviewEditorReflectionTest extends NbTestCase {
+public class GeneralSanityTest extends NbTestCase {
 
-    /** Creates a new instance of MultiviewEditorReflectionTest */
-    public MultiviewEditorReflectionTest(String name) {
+    public GeneralSanityTest(String name) {
         super(name);
     }
-
-    public void testReflection() throws Exception {
-            final ClassLoader loader = (ClassLoader)Lookup.getDefault().lookup(ClassLoader.class);
-            Class settingsClass = Class.forName(
-                    "org.netbeans.editor.Settings", false, loader); //NOI18N
-            Class listenerClass = Class.forName(
-                    "org.netbeans.editor.SettingsChangeListener", false, loader); //NOI18N
-            Method addSettingsListener = settingsClass.getMethod(
-                    "addSettingsChangeListener",new Class[ ] { listenerClass });//NOI18N
-            Method removeSettingsListener = settingsClass.getMethod(
-                    "removeSettingsChangeListener",new Class[ ] { listenerClass });//NOI18N
-
-            Class editorBaseOption = Class.forName("org.netbeans.modules.editor.options.BaseOptions", true,
-                    loader);
-            SharedClassObject option = SharedClassObject.findObject(editorBaseOption);
-            Method is = option.getClass().getMethod("isToolbarVisible", new Class[0]);
+    
+    public static Test suite() {
+        return NbModuleSuite.create(
+            NbModuleSuite.createConfiguration(
+                GeneralSanityTest.class
+            ).gui(false).clusters(".*").enableModules(".*").honorAutoloadEager(true)
+        );
     }
 
+    public void testOrgOpenideOptionsIsDisabledAutoload() {
+        for (ModuleInfo m : Lookup.getDefault().lookupAll(ModuleInfo.class)) {
+            if (m.getCodeNameBase().equals("org.openide.options")) {
+                assertFalse("org.openide.options shall not be enabled", m.isEnabled());
+                return;
+            }
+        }
+        fail("No org.openide.options module found, it should be present, but disabled");
+    }
 }
