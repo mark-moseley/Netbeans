@@ -46,22 +46,22 @@ import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.java.platform.Specification;
 import org.netbeans.api.project.Project;
 import org.netbeans.lib.profiler.ProfilerLogger;
-import org.netbeans.lib.profiler.marker.CompositeMarker;
-import org.netbeans.lib.profiler.marker.Marker;
-import org.netbeans.lib.profiler.marker.MethodMarker;
-import org.netbeans.lib.profiler.marker.PackageMarker;
-import org.netbeans.lib.profiler.results.cpu.marking.HierarchicalMark;
-import org.netbeans.lib.profiler.results.cpu.marking.Mark;
 import org.netbeans.modules.profiler.AbstractProjectTypeProfiler;
-import org.netbeans.modules.profiler.utils.SourceUtils;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.openide.filesystems.FileObject;
 import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 import org.w3c.dom.Element;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.lib.profiler.common.Profiler;
+import org.netbeans.lib.profiler.common.integration.IntegrationUtils;
+import org.netbeans.modules.profiler.projectsupport.utilities.SourceUtils;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 
 /**
@@ -70,6 +70,7 @@ import java.util.Set;
  * @author Tomas Hurka
  * @author Ian Formanek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.spi.ProjectTypeProfiler.class)
 public final class NbModuleProjectTypeProfiler extends AbstractProjectTypeProfiler {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -92,31 +93,10 @@ public final class NbModuleProjectTypeProfiler extends AbstractProjectTypeProfil
                                                                      "NbModuleProjectTypeProfiler_FilesCategory"); // NOI18N
     private static final String SOCKETS_CATEGORY = NbBundle.getMessage(NbModuleProjectTypeProfiler.class,
                                                                        "NbModuleProjectTypeProfiler_SocketsCategory"); // NOI18N
-
-    //~ Instance fields ----------------------------------------------------------------------------------------------------------
-
-    private HierarchicalMark projectRoot;
-    private Marker marker;
-
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
     public boolean isFileObjectSupported(final Project project, final FileObject fo) {
         return SourceUtils.isTest(fo); // profile single only for tests
-    }
-
-    @Override
-    public HierarchicalMark getMarkHierarchyRoot() {
-        if (projectRoot == null) {
-            projectRoot = new HierarchicalMark(Mark.DEFAULT_ID, PROJECT_CATEGORY, null); // NOI18N
-        }
-
-        return projectRoot;
-    }
-
-    public Marker getMethodMarker(Project project) {
-        setupMarks(project);
-
-        return marker;
     }
 
     public String getProfilerTargetName(final Project project, final FileObject buildScript, final int type,
@@ -133,13 +113,7 @@ public final class NbModuleProjectTypeProfiler extends AbstractProjectTypeProfil
 
     // --- ProjectTypeProfiler implementation ------------------------------------------------------------------------------
     public boolean isProfilingSupported(final Project project) {
-        final AuxiliaryConfiguration aux = (AuxiliaryConfiguration) project.getLookup().lookup(AuxiliaryConfiguration.class);
-
-        if (aux == null) {
-            ProfilerLogger.severe("Auxiliary Configuration is null for Project: " + project); // NOI18N
-
-            return false;
-        }
+        final AuxiliaryConfiguration aux = ProjectUtils.getAuxiliaryConfiguration(project);
 
         Element e = aux.getConfigurationFragment("data", NBMODULE_PROJECT_NAMESPACE_2, true); // NOI18N
 
@@ -159,18 +133,18 @@ public final class NbModuleProjectTypeProfiler extends AbstractProjectTypeProfil
     }
 
     public JavaPlatform getProjectJavaPlatform(Project project) {
-        final AuxiliaryConfiguration aux = (AuxiliaryConfiguration) project.getLookup().lookup(AuxiliaryConfiguration.class);
+        final AuxiliaryConfiguration aux = ProjectUtils.getAuxiliaryConfiguration(project);
         FileObject projectDir = project.getProjectDirectory();
 
         if (aux.getConfigurationFragment("data", NBMODULE_SUITE_PROJECT_NAMESPACE, true) != null) { // NOI18N
                                                                                                     // NetBeans suite
                                                                                                     // ask first subproject for its JavaPlatform
 
-            SubprojectProvider spp = (SubprojectProvider) project.getLookup().lookup(SubprojectProvider.class);
+            SubprojectProvider spp = project.getLookup().lookup(SubprojectProvider.class);
             Set subProjects;
 
             if (ProfilerLogger.isDebug()) {
-                ProfilerLogger.debug("NB Suite " + projectDir.getPath());
+                ProfilerLogger.debug("NB Suite " + projectDir.getPath()); //NOI18N
             }
 
             if (spp == null) {
@@ -190,11 +164,11 @@ public final class NbModuleProjectTypeProfiler extends AbstractProjectTypeProfil
         List bootCpEntries = bootCp.entries();
 
         if (ProfilerLogger.isDebug()) {
-            ProfilerLogger.debug("Boot CP " + bootCp);
+            ProfilerLogger.debug("Boot CP " + bootCp); //NOI18N
         }
 
         if (ProfilerLogger.isDebug()) {
-            ProfilerLogger.debug("File " + projectDir.getPath());
+            ProfilerLogger.debug("File " + projectDir.getPath()); //NOI18N
         }
 
         JavaPlatform[] platforms = JavaPlatformManager.getDefault().getPlatforms(null, new Specification("j2se", null)); // NOI18N
@@ -204,7 +178,7 @@ public final class NbModuleProjectTypeProfiler extends AbstractProjectTypeProfil
 
             if (bootCpEntries.equals(platform.getBootstrapLibraries().entries())) {
                 if (ProfilerLogger.isDebug()) {
-                    ProfilerLogger.debug("Platform " + platform.getDisplayName());
+                    ProfilerLogger.debug("Platform " + platform.getDisplayName()); //NOI18N
                 }
 
                 return platform;
@@ -212,7 +186,7 @@ public final class NbModuleProjectTypeProfiler extends AbstractProjectTypeProfil
         }
 
         if (ProfilerLogger.isDebug()) {
-            ProfilerLogger.debug("Platform null");
+            ProfilerLogger.debug("Platform null"); //NOI18N
         }
 
         return null;
@@ -231,106 +205,82 @@ public final class NbModuleProjectTypeProfiler extends AbstractProjectTypeProfil
             final String profiledClass = SourceUtils.getToplevelClassName(profiledClassFile);
             props.setProperty("profile.class", profiledClass); //NOI18N
         }
-
-        // not applicable for NBM projects
+        
+        String agentArg = props.getProperty("profiler.info.jvmargs.agent"); //NOI18N
+        if (agentArg.indexOf(' ') != -1) { //NOI18N
+            if (Utilities.isUnix()) {
+                // Profiler is installed in directory with space on Unix (Linux, Solaris, Mac OS X)
+                // create temporary link in /tmp directory and use it instead of directory with space
+                String libsDir = Profiler.getDefault().getLibsDir();
+                props.setProperty("profiler.info.jvmargs.agent", IntegrationUtils.fixLibsDirPath(libsDir, agentArg)); //NOI18N
+            } else if (Utilities.isWindows() && isNbSourceModule(project)) {
+                // Profiler is installed in directory with space on Windows
+                // surround the whole -agentpath argument with quotes for NB source module
+                agentArg = "\"" + agentArg + "\""; //NOI18N
+                props.setProperty("profiler.info.jvmargs.agent", agentArg); //NOI18N
+            }
+        }
     }
-
-    private void setupMarks(final Project project) {
-//        PackageMarker pMarker = new PackageMarker();
-        MethodMarker mMarker = new MethodMarker();
-
-        HierarchicalMark uiMark = new HierarchicalMark("UI", "Generic UI", getMarkHierarchyRoot()); // NOI18N
-        HierarchicalMark listenerMark = new HierarchicalMark("UI/LISTENER", LISTENERS_CATEGORY, uiMark); // NOI18N
-        HierarchicalMark painterMark = new HierarchicalMark("UI/PAINTER", PAINTERS_CATEGORY, uiMark); // NOI18N
-        HierarchicalMark ioMark = new HierarchicalMark("IO", IO_CATEGORY, getMarkHierarchyRoot()); // NOI18N
-        HierarchicalMark fileMark = new HierarchicalMark("IO/FILE", FILES_CATEGORY, ioMark); // NOI18N
-        HierarchicalMark socketMark = new HierarchicalMark("IO/SOCKET", SOCKETS_CATEGORY, ioMark); // NOI18N
-
-        String[] listenerIfcs = new String[] {
-                                    "java.awt.event.ActionListener", // NOI18N
-        "java.awt.event.AdjustmentListener", // NOI18N
-        "java.awt.event.AWTEventListener", // NOI18N
-        "java.awt.event.ComponentListener", // NOI18N
-        "java.awt.event.ContainerListener", // NOI18N
-        "java.awt.event.FocusListener", // NOI18N
-        "java.awt.event.HierarchyBoundsListener", // NOI18N
-        "java.awt.event.HierarchyListener", // NOI18N
-        "java.awt.event.InputMethodListener", // NOI18N
-        "java.awt.event.InputMethodListener", // NOI18N
-        "java.awt.event.ItemListener", // NOI18N
-        "java.awt.event.KeyListener", // NOI18N
-        "java.awt.event.MouseListener", // NOI18N
-        "java.awt.event.MouseMotionListener", // NOI18N
-        "java.awt.event.MouseWheelListener", // NOI18N
-        "java.awt.event.WindowFocusListener", // NOI18N
-        "java.awt.event.WindowListener", // NOI18N
-        "java.awt.event.WindowStateListener", // NOI18N
-        "java.awt.event.TextListener", // NOI18N
-        "javax.swing.event.AncestorListener", // NOI18N
-        "javax.swing.event.CaretListener", // NOI18N
-        "javax.swing.event.CellEditorListener", // NOI18N
-        "javax.swing.event.ChangeListener", // NOI18N
-        "javax.swing.event.DocumentListener", // NOI18N
-        "javax.swing.event.HyperlinkListener", // NOI18N
-        "javax.swing.event.InternalFrameListener", // NOI18N
-        "javax.swing.event.ListDataListener", // NOI18N
-        "javax.swing.event.ListSelectionListener", // NOI18N
-        "javax.swing.event.MenuDragMouseListener", // NOI18N
-        "javax.swing.event.MenuKeyListener", // NOI18N
-        "javax.swing.event.MenuListener", // NOI18N
-        "javax.swing.event.MouseInputListener", // NOI18N
-        "javax.swing.event.PopupMenuListener", // NOI18N
-        "javax.swing.event.TableColumnModelListener", // NOI18N
-        "javax.swing.event.TableModelListener", // NOI18N
-        "javax.swing.event.TreeExpansionListener", // NOI18N
-        "javax.swing.event.TreeModelListener", // NOI18N
-        "javax.swing.event.TreeSelectionListener", // NOI18N
-        "javax.swing.event.TreeWillExpandListener", // NOI18N
-        "javax.swing.event.UndoableEditListener" // NOI18N
-                                };
-
-        addInterfaceMarkers(mMarker, listenerIfcs, listenerMark, project);
-        addInterfaceMarker(mMarker, "java.awt.LightweightDispatcher", new String[] { "dispatchEvent" }, true, listenerMark,
-                           project); // NOI18N
-        addInterfaceMarker(mMarker, "javax.swing.JComponent",
-                           new String[] {
-                               "repaint", "paint", "paintBorder", "paintChildren", "paintComponent", "paintImmediately", "print",
-                               "printAll", "printBorder", "printChildren", "printComponent"
-                           }, true, painterMark, project); // NOI18N
-        addInterfaceMarker(mMarker, "java.awt.Component", new String[] { "paint", "paintAll", "print", "printAll" }, true,
-                           painterMark, project); // NOI18N
-
-        String[] ioFileClasses = new String[] {
-                                     "java.io.FileInputStream", // NOI18N
-        "java.io.FileOuptutStream", // NOI18N
-        "java.io.FileReader", // NOI18N
-        "java.io.FileWriter" // NOI18N
-                                 };
-        String[] ioSocketClasses = new String[] { "java.nio.SocketChannel" // NOI18N
-                                   };
-
-        String[] ioFileRestrictMethods = new String[] {
-                                             "read", // NOI18N
-        "write", // NOI18N
-        "reset", // NOI18N
-        "skip", // NOI18N
-        "flush" // NOI18N
-                                         };
-        String[] ioSocketRestrictMethods = new String[] { "open", // NOI18N
-            "read", // NOI18N
-            "write" // NOI18N
-                                           };
-
-        addInterfaceMarkers(mMarker,
-                            new String[] {
-                                "java.io.InputStreamReader", "java.io.OutputStreamWriter", "java.io.InputStream",
-                                "java.io.OutputStream"
-                            }, ioFileRestrictMethods, true, ioMark, project); // NOI18N
-        addInterfaceMarkers(mMarker, ioFileClasses, ioFileRestrictMethods, true, fileMark, project);
-        addInterfaceMarkers(mMarker, ioSocketClasses, ioSocketRestrictMethods, true, socketMark, project);
-
-        marker = new CompositeMarker();
-        ((CompositeMarker) marker).addMarker(mMarker);
-//        ((CompositeMarker) marker).addMarker(pMarker);
+    
+    /**
+     * Returns true if the provided Project is a NB source module, false otherwise.
+     * 
+     * @param project Project to be checked.
+     * @return true if the provided Project is a NB source module, false otherwise.
+     */
+    private boolean isNbSourceModule(Project project) {
+        // Resolve project.xml
+        AuxiliaryConfiguration aux = ProjectUtils.getAuxiliaryConfiguration(project);
+        
+        // Guess the namespace
+        String namespace = NBMODULE_PROJECT_NAMESPACE_3;
+        // Try to resolve nb-module-project/3 (current version in NB sources)
+        Element e = aux.getConfigurationFragment("data", namespace, true); // NOI18N
+        // Not a nb-module-project/3, can still be nb-module-project/2 or a suite
+        if (e == null) {
+            // Try to resolve nb-module-project/2 (just for compatibility)
+            namespace = NBMODULE_PROJECT_NAMESPACE_2;
+            e = aux.getConfigurationFragment("data", namespace, true); // NOI18N
+            // Project is a NB module suite - not a NB source module
+            if (e == null) return false;
+        }
+        
+        // Module is a NB module suite component, not a NB source module
+        if (findElement(e, "suite-component", namespace) != null) return false; // NOI18N
+        
+        // Module is a NB module suite component, not a NB source module
+        if (findElement(e, "standalone", namespace) != null) return false; // NOI18N
+        
+        // Module is a NB source module (neither suite component nor standalone)
+        return true;
+    }
+    
+    // COPIED FROM org.netbeans.modules.project.ant:
+    // (except for namespace == null support in findElement)
+    // (and support for comments in findSubElements)
+    
+    /**
+     * Search for an XML element in the direct children of a parent.
+     * DOM provides a similar method but it does a recursive search
+     * which we do not want. It also gives a node list and we want
+     * only one result.
+     * @param parent a parent element
+     * @param name the intended local name
+     * @param namespace the intended namespace (or null)
+     * @return the first child element with that name, or null if none
+     */
+    private static Element findElement(Element parent, String name, String namespace) {
+        NodeList l = parent.getChildNodes();
+        for (int i = 0; i < l.getLength(); i++) {
+            if (l.item(i).getNodeType() == Node.ELEMENT_NODE) {
+                Element el = (Element)l.item(i);
+                if ((namespace == null && name.equals(el.getTagName())) ||
+                        (namespace != null && name.equals(el.getLocalName()) &&
+                        namespace.equals(el.getNamespaceURI()))) {
+                    return el;
+                }
+            }
+        }
+        return null;
     }
 }
