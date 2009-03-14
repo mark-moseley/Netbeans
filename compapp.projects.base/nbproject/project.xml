@@ -47,7 +47,16 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.10.1</specification-version>
+                        <specification-version>1.18</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.api.java.classpath</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.0</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -56,7 +65,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.21</specification-version>
+                        <specification-version>1.27</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -92,7 +101,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.12.1</specification-version>
+                        <specification-version>1.30</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -214,7 +223,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.5.1</specification-version>
+                        <specification-version>7.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -238,7 +247,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.4.1</specification-version>
+                        <specification-version>7.19</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -284,7 +293,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.8.1</specification-version>
+                        <specification-version>7.22</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -302,19 +311,21 @@
                 <friend>org.netbeans.modules.aspect.project</friend>
                 <friend>org.netbeans.modules.bpel.project</friend>
                 <friend>org.netbeans.modules.compapp.projects.dtelpro</friend>
+                <friend>org.netbeans.modules.compapp.xmlproject</friend>
                 <friend>org.netbeans.modules.di.project</friend>
                 <friend>org.netbeans.modules.edm.project</friend>
                 <friend>org.netbeans.modules.etl.project</friend>
                 <friend>org.netbeans.modules.iep.project</friend>
+                <friend>org.netbeans.modules.soa.ui</friend>
                 <friend>org.netbeans.modules.sql.project</friend>
-                <friend>org.netbeans.modules.workflow.project</friend>
+                <friend>org.netbeans.modules.wlm.project</friend>
                 <friend>org.netbeans.modules.xslt.project</friend>
-                <friend>org.netbeans.modules.compapp.xmlproject</friend>
                 <package>org.netbeans.modules.compapp.projects.base</package>
                 <package>org.netbeans.modules.compapp.projects.base.queries</package>
                 <package>org.netbeans.modules.compapp.projects.base.spi</package>
                 <package>org.netbeans.modules.compapp.projects.base.ui</package>
                 <package>org.netbeans.modules.compapp.projects.base.ui.customizer</package>
+                <package>org.netbeans.modules.compapp.projects.base.ui.customizer.catalog</package>
                 <package>org.netbeans.modules.compapp.projects.base.ui.wizards</package>
                 <package>org.netbeans.modules.compapp.projects.common</package>
                 <package>org.netbeans.modules.compapp.projects.common.ui</package>

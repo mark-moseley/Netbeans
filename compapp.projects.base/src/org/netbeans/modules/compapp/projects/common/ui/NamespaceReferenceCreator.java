@@ -80,6 +80,7 @@ import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.nodes.PropertySupport;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -163,7 +164,7 @@ public abstract class NamespaceReferenceCreator<T extends Component>
     protected List<Node> getSelectedNodes() {
         List<Node> results = new LinkedList<Node>();
         Collection<NodeSet> sets = registeredNodes.values();
-        System.out.println("getSelectedNodes: Registered Node count : "+registeredNodes.size());
+        // System.out.println("getSelectedNodes: Registered Node count : "+registeredNodes.size());
         for (NodeSet set : sets) {
            if (set.isSelected()) {
                 List<ExternalReferenceDataNode> nodes = set.getNodes();
@@ -174,7 +175,7 @@ public abstract class NamespaceReferenceCreator<T extends Component>
                 }
            }
         }
-        System.out.println("getSelectedNodes: seletected result: "+results.size());
+        // System.out.println("getSelectedNodes: seletected result: "+results.size());
         return results;
     }
 
@@ -351,7 +352,7 @@ public abstract class NamespaceReferenceCreator<T extends Component>
             messageLabel.setIcon(null);
         } else {
             messageLabel.setText(msg);
-            messageLabel.setIcon(new ImageIcon(Utilities.loadImage(
+            messageLabel.setIcon(new ImageIcon(ImageUtilities.loadImage(
                     "org/netbeans/modules/xml/xam/ui/resources/error.gif"))); // NOI18N
         }
     }
