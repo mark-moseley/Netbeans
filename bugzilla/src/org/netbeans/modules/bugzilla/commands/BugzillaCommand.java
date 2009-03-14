@@ -1,5 +1,3 @@
-package org.netbeans.modules.bugtracking.ui.selectors;
-
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
@@ -39,50 +37,36 @@ package org.netbeans.modules.bugtracking.ui.selectors;
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-
+package org.netbeans.modules.bugzilla.commands;
 
 import java.io.IOException;
-import java.util.logging.Level;
-import org.netbeans.modules.bugtracking.BugtrackingManager;
-import org.netbeans.modules.bugtracking.spi.BugtrackingConnector;
-import org.netbeans.modules.bugtracking.spi.Repository;
+import java.net.MalformedURLException;
+import org.eclipse.core.runtime.CoreException;
 
 /**
  *
  * @author Tomas Stupka
  */
-public class RepositorySelector {
+public abstract class BugzillaCommand {
+    private boolean failed = false;
+    private String errorMessage;
 
-    private SelectorPanel selectorPanel = new SelectorPanel();
-    public RepositorySelector() {
-        // init connector cbo
+    public abstract void execute() throws CoreException, IOException, MalformedURLException;
+
+    public boolean hasFailed() {
+        return failed;
     }
 
-    public Repository create() {
-        BugtrackingConnector[] connectors = BugtrackingManager.getInstance().getConnectors();
-        selectorPanel.setConnectors(connectors);
-        if(!selectorPanel.open()) return null;
-        Repository repo = selectorPanel.getRepository();
-        try {
-            repo.getController().applyChanges();
-        } catch (IOException ex) {
-            BugtrackingManager.LOG.log(Level.SEVERE, null, ex);
-            return null;
-        }
-        BugtrackingManager.getInstance().addRepository(repo);
-        return repo;
+    void setFailed(boolean failed) {
+        this.failed = failed;
     }
 
-    public boolean edit(Repository repository, String errorMessage) {
-        if(!selectorPanel.edit(repository, errorMessage)) return false;
-        Repository repo = selectorPanel.getRepository();
-        try {
-            repo.getController().applyChanges();
-        } catch (IOException ex) {
-            BugtrackingManager.LOG.log(Level.SEVERE, null, ex);
-            return false;
-        }
-        return true;
+    void setErrorMessage(String msg) {
+        this.errorMessage = msg;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
     }
 
 }
