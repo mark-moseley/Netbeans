@@ -56,6 +56,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.management.Attribute;
 import javax.management.MBeanAttributeInfo;
+import javax.management.openmbean.CompositeDataSupport;
 import javax.swing.Action;
 import javax.swing.ImageIcon;
 import org.netbeans.modules.sun.manager.jbi.actions.RefreshAction;
@@ -64,7 +65,6 @@ import org.netbeans.modules.sun.manager.jbi.management.JBIComponentType;
 import org.netbeans.modules.sun.manager.jbi.management.wrapper.api.PerformanceMeasurementServiceWrapper;
 import org.netbeans.modules.sun.manager.jbi.management.wrapper.api.RuntimeManagementServiceWrapper;
 import org.netbeans.modules.sun.manager.jbi.nodes.property.JBIPropertySupportFactory;
-import org.netbeans.modules.sun.manager.jbi.nodes.property.OldSchemaBasedConfigPropertySupportFactory;
 import org.netbeans.modules.sun.manager.jbi.util.ComparableAttribute;
 import org.netbeans.modules.sun.manager.jbi.util.Utils;
 import org.openide.DialogDisplayer;
@@ -93,10 +93,10 @@ public class JBINode extends AppserverJBIMgmtContainerNode {
     private static final String RUNTIME_CONFIG_DISPLAY_NAME = "displayName"; // NOI18N
     private static final String RUNTIME_CONFIG_TOOLTIP = "toolTip"; // NOI18N
     private static final String RUNTIME_CONFIG_IS_STATIC = "isStatic"; // NOI18N
-    private static final String RUNTIME_CONFIG_IS_PASSWORD = "isPassword"; // NOI18N
-    private static final String RUNTIME_CONFIG_MIN_VALUE = "minValue"; // NOI18N
-    private static final String RUNTIME_CONFIG_MAX_VALUE = "maxValue"; // NOI18N
-    private static final String RUNTIME_CONFIG_ENUM_VALUE = "enumValue"; // NOI18N
+//    private static final String RUNTIME_CONFIG_IS_PASSWORD = "isPassword"; // NOI18N
+//    private static final String RUNTIME_CONFIG_MIN_VALUE = "minValue"; // NOI18N
+//    private static final String RUNTIME_CONFIG_MAX_VALUE = "maxValue"; // NOI18N
+//    private static final String RUNTIME_CONFIG_ENUM_VALUE = "enumValue"; // NOI18N
     
     // A list of runtime configurations that are not very useful for IDE users.
     private static final List<String> hiddenRuntimeConfigNames;
@@ -232,10 +232,10 @@ public class JBINode extends AppserverJBIMgmtContainerNode {
             String displayName = metaData.getProperty(RUNTIME_CONFIG_DISPLAY_NAME);
             String toolTip = metaData.getProperty(RUNTIME_CONFIG_TOOLTIP);
             String isStatic = metaData.getProperty(RUNTIME_CONFIG_IS_STATIC, "false"); // NOI18N
-            String isPassword = metaData.getProperty(RUNTIME_CONFIG_IS_PASSWORD, "false"); // NOI18N
-            String minValue = metaData.getProperty(RUNTIME_CONFIG_MIN_VALUE);
-            String maxValue = metaData.getProperty(RUNTIME_CONFIG_MAX_VALUE);
-            String enumValue = metaData.getProperty(RUNTIME_CONFIG_ENUM_VALUE);
+//            String isPassword = metaData.getProperty(RUNTIME_CONFIG_IS_PASSWORD, "false"); // NOI18N
+//            String minValue = metaData.getProperty(RUNTIME_CONFIG_MIN_VALUE);
+//            String maxValue = metaData.getProperty(RUNTIME_CONFIG_MAX_VALUE);
+//            String enumValue = metaData.getProperty(RUNTIME_CONFIG_ENUM_VALUE);
 
             MBeanAttributeInfo attrInfo = new MBeanAttributeInfo(
                     displayName,
@@ -243,28 +243,8 @@ public class JBINode extends AppserverJBIMgmtContainerNode {
                     toolTip,
                     true, !Boolean.parseBoolean(isStatic), false);
 
-            PropertySupport property;
-            if (minValue != null && maxValue != null) {
-                property = OldSchemaBasedConfigPropertySupportFactory.
-                        getIntegerPropertySupport(
-                        this, attr, attrInfo,
-                        Integer.parseInt(minValue),
-                        Integer.parseInt(maxValue));
-            } else if (enumValue != null) {
-                if (enumValue.startsWith("{")) {
-                    enumValue = enumValue.substring(1);
-                }
-                if (enumValue.endsWith("}")) {
-                    enumValue = enumValue.substring(0, enumValue.length() - 2);
-                }
-                property = OldSchemaBasedConfigPropertySupportFactory.
-                        getEnumeratedStringPropertySupport(
-                        this, attr, attrInfo,
-                        enumValue.split("\\s*,\\s*")); // NOI18N
-            } else {
-                property = JBIPropertySupportFactory.getPropertySupport(
+            PropertySupport property = JBIPropertySupportFactory.getPropertySupport(
                         this, attr, attrInfo);
-            }
             properties.add(property);
         }
 
@@ -366,7 +346,16 @@ public class JBINode extends AppserverJBIMgmtContainerNode {
 
         return new Attribute(loggerName, value);
     }
-
+    
+    protected boolean shouldProcessNotification(String sourceName, 
+            String sourceType, String eventType) {
+        return false;
+    }
+    
+    protected void processNotificationData(CompositeDataSupport data) {
+        // no-op
+    }
+    
     @Override
     public HelpCtx getHelpCtx() {
         return new HelpCtx(JBINode.class);

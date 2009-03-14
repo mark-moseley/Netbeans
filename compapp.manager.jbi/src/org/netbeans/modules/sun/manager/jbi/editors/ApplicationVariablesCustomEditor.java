@@ -52,26 +52,26 @@ import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
-import org.netbeans.modules.sun.manager.jbi.management.model.OldJBIComponentConfigurationDescriptor;
+import org.netbeans.modules.sun.manager.jbi.management.model.JBIComponentConfigurationDescriptor;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 
 /**
- * A custom editor for editing typed environment variables.
- * A typed environment variable is a triplet: [Name, Type, Value].
+ * A custom editor for editing typed application variables.
+ * A typed application variable is a triplet: [Name, Type, Value].
  * Four types are supported: STRING, NUMBER, BOOLEAN and PASSWORD.
  *
  * @author jqian
  */
-public class EnvironmentVariablesCustomEditor extends SimpleTabularDataCustomEditor {
+public class ApplicationVariablesCustomEditor extends SimpleTabularDataCustomEditor {
         
     public static final int NAME_COLUMN = 0;
     public static final int TYPE_COLUMN = 1;
     public static final int VALUE_COLUMN = 2;
             
-    public EnvironmentVariablesCustomEditor(SimpleTabularDataEditor editor,
+    public ApplicationVariablesCustomEditor(SimpleTabularDataEditor editor,
             String tableLabelText, String tableLabelDescription,
-            OldJBIComponentConfigurationDescriptor descriptor,
+            JBIComponentConfigurationDescriptor descriptor,
             boolean isWritable) {
         super(editor, tableLabelText, tableLabelDescription, 
                 descriptor, isWritable);
@@ -80,8 +80,8 @@ public class EnvironmentVariablesCustomEditor extends SimpleTabularDataCustomEdi
     @Override
     @SuppressWarnings("unchecked")
     protected Vector createRow() {
-        NewEnvironmentVariableTypeSelectionPanel typeSelectionPanel =
-                new NewEnvironmentVariableTypeSelectionPanel();
+        ApplicationVariableTypeSelectionPanel typeSelectionPanel =
+                new ApplicationVariableTypeSelectionPanel();
         
         DialogDescriptor dd = new DialogDescriptor(typeSelectionPanel,
                 "Select Environment Variable Type");

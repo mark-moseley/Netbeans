@@ -121,7 +121,10 @@ public class JBIMBeanTaskResultHandler {
         
         if (result.indexOf("<?xml") == -1) { // NOI18N
             // No XML, certain exception (IO) occurred during invoke()
-            if (result.indexOf("Exception") == -1) { // NOI18N
+            String lowerCaseResult = result.toLowerCase();
+            if (!lowerCaseResult.contains(" ") || // NOI18N // #156480 SA name, for example, when deployed successfully
+                    lowerCaseResult.indexOf("exception") == -1 &&
+                    lowerCaseResult.indexOf("error") == -1) { // NOI18N
                 return new Object[] {null, true};
             } else {
                 failed = true;

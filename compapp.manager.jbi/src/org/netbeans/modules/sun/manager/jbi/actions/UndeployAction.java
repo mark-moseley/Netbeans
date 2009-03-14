@@ -40,20 +40,15 @@
  */
 package org.netbeans.modules.sun.manager.jbi.actions;
 
-import java.util.HashSet;
-import java.util.Set;
 import javax.swing.Action;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
-import javax.swing.SwingUtilities;
-import org.netbeans.modules.sun.manager.jbi.nodes.Refreshable;
 import org.netbeans.modules.sun.manager.jbi.nodes.Undeployable;
 import org.openide.awt.Actions;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.openide.util.RequestProcessor;
 import org.openide.util.actions.NodeAction;
 import org.openide.util.actions.Presenter;
 import org.openide.util.actions.SystemAction;
@@ -66,41 +61,18 @@ import org.openide.util.actions.SystemAction;
 public abstract class UndeployAction extends NodeAction {
 
     protected void performAction(final Node[] activatedNodes) {
-        RequestProcessor.getDefault().post(new Runnable() {
-            public void run() {
-                try {
-                    // a set of nodes that need refreshing
-                    final Set<Node> parentNodes = new HashSet<Node>();
+        try {
+            for (Node node : activatedNodes) {
+                Lookup lookup = node.getLookup();
+                Undeployable undeployable = lookup.lookup(Undeployable.class);
 
-                    for (Node node : activatedNodes) {
-                        Lookup lookup = node.getLookup();
-                        Undeployable undeployable = lookup.lookup(Undeployable.class);
-
-                        if (undeployable != null) {
-                            Node parentNode = node.getParentNode();
-                            if (parentNode != null) {
-                                parentNodes.add(node.getParentNode());
-                            }
-                            undeployable.undeploy(isForceAction());
-                        }
-                    }
-
-                    SwingUtilities.invokeLater(new Runnable() {
-                        public void run() {
-                            for (Node parentNode : parentNodes) {
-                                final Refreshable refreshable =
-                                        parentNode.getLookup().lookup(Refreshable.class);
-                                if (refreshable != null) {
-                                    refreshable.refresh();
-                                }
-                            }
-                        }
-                    });
-                } catch (RuntimeException rex) {
-                    //gobble up exception
+                if (undeployable != null) {
+                    undeployable.undeploy(isForceAction());
                 }
             }
-        });
+        } catch (RuntimeException rex) {
+            //gobble up exception
+        }
     }
 
     protected boolean enable(Node[] activatedNodes) {
@@ -112,7 +84,7 @@ public abstract class UndeployAction extends NodeAction {
                 Undeployable undeployable =
                         node.getLookup().lookup(Undeployable.class);
                 try {
-                    if (undeployable != null && !undeployable.canUndeploy()) {
+                    if (undeployable != null && !undeployable.canUndeploy(isForceAction())) {
                         ret = false;
                         break;
                     }
@@ -125,6 +97,7 @@ public abstract class UndeployAction extends NodeAction {
         return ret;
     }
 
+    @Override
     protected boolean asynchronous() {
         return false;
     }

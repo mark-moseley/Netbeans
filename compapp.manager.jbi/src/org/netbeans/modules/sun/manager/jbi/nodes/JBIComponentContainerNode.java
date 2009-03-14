@@ -41,8 +41,8 @@
 package org.netbeans.modules.sun.manager.jbi.nodes;
 
 import com.sun.esb.management.api.installation.InstallationService;
+import com.sun.esb.management.api.notification.EventNotification;
 import com.sun.esb.management.common.ManagementRemoteException;
-import java.awt.Frame;
 import java.io.IOException;
 import org.netbeans.modules.sun.manager.jbi.management.JBIComponentType;
 import java.awt.Image;
@@ -62,6 +62,8 @@ import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import javax.management.Attribute;
 import javax.management.MBeanAttributeInfo;
+import javax.management.Notification;
+import javax.management.openmbean.CompositeDataSupport;
 import javax.swing.Action;
 import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
@@ -70,7 +72,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import org.netbeans.modules.sun.manager.jbi.GenericConstants;
 import org.netbeans.modules.sun.manager.jbi.management.JBIMBeanTaskResultHandler;
-import org.netbeans.modules.sun.manager.jbi.util.ProgressUI;
 import org.netbeans.modules.sun.manager.jbi.actions.InstallAction;
 import org.netbeans.modules.sun.manager.jbi.actions.RefreshAction;
 import org.netbeans.modules.sun.manager.jbi.management.AppserverJBIMgmtController;
@@ -85,12 +86,12 @@ import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.HelpCtx;
-import org.openide.windows.WindowManager;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
-import org.xml.sax.SAXException;
+
+import static org.netbeans.modules.sun.manager.jbi.NotificationConstants.*;
 
 /**
  * Container node for all the JBI Components (SE, BC, or Shared Library) 
@@ -105,11 +106,27 @@ public abstract class JBIComponentContainerNode
     
     private static Logger logger = Logger.getLogger("org.netbeans.modules.sun.manager.jbi.node.JBIComponentContainerNode"); // NOI18N
 
-
     public JBIComponentContainerNode(final AppserverJBIMgmtController controller,
             NodeType type, String name) {
         super(controller, type);
         setDisplayName(name);
+        
+        registerNotificationListener();
+    }
+        
+    protected boolean shouldProcessNotification(String sourceName, 
+            String sourceType, String eventType) {
+        return getNotificationSourceType().equals(sourceType) 
+                && (NOTIFICATION_EVENT_TYPE_INSTALLED.equals(eventType) 
+                || NOTIFICATION_EVENT_TYPE_UNINSTALLED.equals(eventType)); 
+    }
+    
+    protected void processNotificationData(CompositeDataSupport data) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                refresh();
+            }
+        });
     }
 
     @Override
@@ -133,11 +150,7 @@ public abstract class JBIComponentContainerNode
 
         super.refresh();
     }
-
-    /**
-     *
-     * @param busy
-     */
+    
     private void setBusy(boolean busy) {
         this.busy = busy;
         fireIconChange();
@@ -151,7 +164,7 @@ public abstract class JBIComponentContainerNode
         return null;
     }
 
-    public void install(boolean start) {
+    public void install(final boolean start) {
 
         InstallationService installationService = getInstallationService();
         assert installationService != null;
@@ -172,76 +185,65 @@ public abstract class JBIComponentContainerNode
                     selectedFiles[0].getParent());
         }
 
-        List<File> files = filterSelectedFiles(selectedFiles);
+        final List<File> files = filterSelectedFiles(selectedFiles);
         if (files.size() == 0) {
             return;
         }
 
-        String progressLabel = getInstallProgressMessageLabel();
-        String message = NbBundle.getMessage(
-                JBIComponentContainerNode.class, progressLabel);
-        final ProgressUI progressUI = new ProgressUI(message, false);
+        setBusy(true);
 
-        SwingUtilities.invokeLater(new Runnable() {
-
+        postToRequestProcessorThread(new Runnable() {
             public void run() {
-                setBusy(true);
-                progressUI.start();
-            }
-        });
+                try {
+                    for (File file : files) {
+                        final String jarFilePath = file.getAbsolutePath();
 
-        for (File file : files) {
-            final String jarFilePath = file.getAbsolutePath();
+                        try {
+                            String result = installComponent(jarFilePath);
 
-            try {
-                String result = installComponent(jarFilePath);
+                            if (result != null) {
+                                String lowerCaseResult = result.toLowerCase();
+                                if (!lowerCaseResult.contains("error") && // NOI18N
+                                        !lowerCaseResult.contains("warning") && // NOI18N
+                                        !lowerCaseResult.contains("exception") &&// NOI18N
+                                        !lowerCaseResult.contains("info")) {     // NOI18N
+                                    if (start) {
+                                        // Start component automatically only upon 
+                                        // successful installation.
+                                        // The successful installation result is the 
+                                        // component ID.
+                                        try {
+                                            String componentID = result;
+                                            RuntimeManagementServiceWrapper mgmtService =
+                                                    getRuntimeManagementServiceWrapper();
+                                            result = mgmtService.startComponent(
+                                                    componentID, SERVER_TARGET);
 
-                if (result != null) {
-                    String lowerCaseResult = result.toLowerCase();
-                    if (!lowerCaseResult.contains("error") && // NOI18N
-                            !lowerCaseResult.contains("warning") && // NOI18N
-                            !lowerCaseResult.contains("exception") &&// NOI18N
-                            !lowerCaseResult.contains("info")) {     // NOI18N
-                        if (start) {
-                            // Start component automatically only upon 
-                            // successful installation.
-                            // The successful installation result is the 
-                            // component ID.
-                            try {
-                                String componentID = result;
-                                RuntimeManagementServiceWrapper mgmtService =
-                                        getRuntimeManagementServiceWrapper();
-                                result = mgmtService.startComponent(
-                                        componentID, SERVER_TARGET);
-
-                                JBIMBeanTaskResultHandler.showRemoteInvokationResult(
-                                        GenericConstants.START_COMPONENT_OPERATION_NAME,
-                                        componentID, result);
-                            } catch (ManagementRemoteException e) {
-                                JBIMBeanTaskResultHandler.showRemoteInvokationResult(
-                                        GenericConstants.START_COMPONENT_OPERATION_NAME,
-                                        jarFilePath, e.getMessage());
+                                            JBIMBeanTaskResultHandler.showRemoteInvokationResult(
+                                                    GenericConstants.START_COMPONENT_OPERATION_NAME,
+                                                    componentID, result);
+                                        } catch (ManagementRemoteException e) {
+                                            JBIMBeanTaskResultHandler.showRemoteInvokationResult(
+                                                    GenericConstants.START_COMPONENT_OPERATION_NAME,
+                                                    jarFilePath, e.getMessage());
+                                        }
+                                    }
+                                } else {
+                                    // Failed to install
+                                    JBIMBeanTaskResultHandler.showRemoteInvokationResult(
+                                            GenericConstants.INSTALL_COMPONENT_OPERATION_NAME,
+                                            jarFilePath, result);
+                                }
                             }
+                        } catch (ManagementRemoteException e) {
+                            JBIMBeanTaskResultHandler.showRemoteInvokationResult(
+                                    GenericConstants.INSTALL_COMPONENT_OPERATION_NAME,
+                                    jarFilePath, e.getMessage());
                         }
-                    } else {
-                        // Failed to install
-                        JBIMBeanTaskResultHandler.showRemoteInvokationResult(
-                                GenericConstants.INSTALL_COMPONENT_OPERATION_NAME,
-                                jarFilePath, result);
                     }
+                } finally {
+                    setBusy(false);
                 }
-            } catch (ManagementRemoteException e) {
-                JBIMBeanTaskResultHandler.showRemoteInvokationResult(
-                        GenericConstants.INSTALL_COMPONENT_OPERATION_NAME,
-                        jarFilePath, e.getMessage());
-            }
-        }
-
-        SwingUtilities.invokeLater(new Runnable() {
-
-            public void run() {
-                progressUI.finish();
-                setBusy(false);
             }
         });
     }
@@ -337,6 +339,8 @@ public abstract class JBIComponentContainerNode
     protected abstract String getComponentTypeLabel();
 
     protected abstract JBIComponentType getComponentType();
+    
+    protected abstract String getNotificationSourceType();
 
     //==========================================================================
     /**
@@ -379,16 +383,12 @@ public abstract class JBIComponentContainerNode
                 Document jbiDoc = builder.parse(
                         new InputSource(new StringReader(jbiXml)));
 
-//                // TMP
-//                File tmpJbiFile = new File("C:\\Temp\\sun-http-binding-jbi.xml");
-//                jbiXml = getContent(tmpJbiFile);
-
                 // Get configuration descriptor from jbi.xml
                 final JBIComponentConfigurationDescriptor rootDescriptor =
                         JBIComponentConfigurationParser.parse(jbiDoc);
-                if (rootDescriptor != null) {
+                if (rootDescriptor != null && rootDescriptor.showDisplayAtInstallation(true)) {
                     String componentName = getComponentIDFromJbiDoc(jbiDoc);
-                    
+
                     // Show installation configuration dialog.
                     JBIComponentInstallationConfigurationDialog dialog =
                             new JBIComponentInstallationConfigurationDialog(
@@ -399,14 +399,17 @@ public abstract class JBIComponentContainerNode
                     if (dialog.isCancelled()) {
                         return null;
                     }
-                    
+
                     properties = dialog.getProperties();
-                    
+
                     logger.info("Install " + componentName + // NOI18N
                             " with these properties:" + properties); // NOI18N
                 }
             } catch (Exception ex) {
                 logger.severe(ex.getMessage());
+                NotifyDescriptor d = new NotifyDescriptor.Message(ex.getMessage(),
+                    NotifyDescriptor.ERROR_MESSAGE);
+                DialogDisplayer.getDefault().notify(d);
             }
 
             return installationService.installComponent(
@@ -506,6 +509,10 @@ public abstract class JBIComponentContainerNode
         protected JBIComponentType getComponentType() {
             return JBIComponentType.SERVICE_ENGINE;
         }
+        
+        protected String getNotificationSourceType() {
+            return NOTIFICATION_SOURCE_TYPE_SERVICE_ENGINE; 
+        }
 
         @Override
         public HelpCtx getHelpCtx() {
@@ -548,7 +555,11 @@ public abstract class JBIComponentContainerNode
         protected JBIComponentType getComponentType() {
             return JBIComponentType.BINDING_COMPONENT;
         }
-
+                
+        protected String getNotificationSourceType() {
+            return NOTIFICATION_SOURCE_TYPE_BINDING_COMPONENT;
+        }
+        
         @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(this.getClass());
@@ -605,6 +616,10 @@ public abstract class JBIComponentContainerNode
 
         protected JBIComponentType getComponentType() {
             return JBIComponentType.SHARED_LIBRARY;
+        }
+                
+        protected String getNotificationSourceType() {
+            return NOTIFICATION_SOURCE_TYPE_SHARED_LIBRARY;
         }
 
         @Override

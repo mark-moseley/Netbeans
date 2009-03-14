@@ -41,14 +41,11 @@
 
 package org.netbeans.modules.sun.manager.jbi.actions;
 
-import javax.swing.SwingUtilities;
 import org.netbeans.modules.sun.manager.jbi.nodes.Deployable;
-import org.netbeans.modules.sun.manager.jbi.nodes.Refreshable;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.openide.util.RequestProcessor;
 import org.openide.util.actions.NodeAction;
 
 /**
@@ -56,8 +53,7 @@ import org.openide.util.actions.NodeAction;
  * 
  * @author jqian
  */
-public abstract class DeployAction extends NodeAction {
-    
+public abstract class DeployAction extends NodeAction {    
     
     private boolean autoStart;
     
@@ -70,26 +66,11 @@ public abstract class DeployAction extends NodeAction {
         final Deployable deployable = lookup.lookup(Deployable.class);
         
         if (deployable != null) {
-            RequestProcessor.getDefault().post(new Runnable() {
-                public void run() {
-                    try {      
-                        deployable.deploy(autoStart);
-                        
-                        SwingUtilities.invokeLater(new Runnable() {
-                            public void run() {
-                                Refreshable refreshable =
-                                        lookup.lookup(Refreshable.class);
-                                if (refreshable != null){
-                                    refreshable.refresh();
-                                }
-                            }
-                        });
-                    } catch (RuntimeException rex) {
-                        //gobble up exception
-                    }
-                }
-            });
-            
+            try {      
+                deployable.deploy(autoStart);
+            } catch (RuntimeException rex) {
+                //gobble up exception
+            }
         }
     }
     
@@ -101,7 +82,6 @@ public abstract class DeployAction extends NodeAction {
     protected boolean asynchronous() {
         return false;
     }
-     
     
     public static class DeployOnly extends DeployAction {
 
