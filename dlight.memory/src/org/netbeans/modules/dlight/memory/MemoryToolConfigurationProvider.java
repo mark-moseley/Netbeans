@@ -51,13 +51,13 @@ import org.netbeans.modules.dlight.api.visualizer.VisualizerConfiguration;
 import org.netbeans.modules.dlight.dtrace.collector.DTDCConfiguration;
 import org.netbeans.modules.dlight.dtrace.collector.MultipleDTDCConfiguration;
 import org.netbeans.modules.dlight.perfan.SunStudioDCConfiguration;
+import org.netbeans.modules.dlight.perfan.SunStudioDCConfiguration.CollectedInfo;
 import org.netbeans.modules.dlight.spi.tool.DLightToolConfigurationProvider;
 import org.netbeans.modules.dlight.spi.util.MangledNameType;
 import org.netbeans.modules.dlight.tools.LLDataCollectorConfiguration;
 import org.netbeans.modules.dlight.util.Util;
 import org.netbeans.modules.dlight.visualizers.api.AdvancedTableViewVisualizerConfiguration;
 import org.openide.util.NbBundle;
-import org.openide.util.NbPreferences;
 
 /**
  *
@@ -65,25 +65,23 @@ import org.openide.util.NbPreferences;
  */
 public final class MemoryToolConfigurationProvider implements DLightToolConfigurationProvider {
 
-    private static final boolean useCollector =
-            Util.getBoolean("dlight.memory.collector", true); // NOI18N
-
+    private static final boolean dataCollectorsEnabled =
+            Util.getBoolean("dlight.memory.details", true); // NOI18N
     /**
      * This flag works only in the case we do NOT use collector.
      * If it is true, we use LL indicator data provider,
      * if it is false, we use DTrace-based indicator data provider
      */
     private static final boolean useLLIndicatorDataProvider =
-            Util.getBoolean("dlight.memory.LL", true); // NOI18N
-
-//    private static final boolean USE_SUNSTUDIO =
-//            Boolean.getBoolean("gizmo.mem.sunstudio"); // NOI18N
-    private static boolean USE_SUNSTUDIO = NbPreferences.forModule(DLightToolConfigurationProvider.class).getBoolean(SUNSTUDIO_COLLECTORS,  Boolean.getBoolean("gizmo.mem.sunstudio"));
+            Util.getBoolean("dlight.memory.LL", false); // NOI18N
+    private static final String SUNSTUDIO = "sunstudio"; // NOI18N
     private static final String TOOL_NAME = loc("MemoryTool.ToolName"); // NOI18N
     private static final Column totalColumn;
     private static final DataTableMetadata rawTableMetadata;
 //    /** this is for the case of using DTrace for indicator only  */
 //    private static final DataTableMetadata indicatorTableMetadata;
+    String collector = System.getProperty("dlight.memory.collector", "dtrace");//NOI188N
+
 
     static {
         final Column timestampColumn = new Column("timestamp", Long.class, loc("MemoryTool.ColumnName.timestamp"), null); // NOI18N
@@ -121,14 +119,11 @@ public final class MemoryToolConfigurationProvider implements DLightToolConfigur
     public DLightToolConfiguration create() {
         DLightToolConfiguration toolConfiguration = new DLightToolConfiguration(TOOL_NAME);
 
-        if (useCollector) {
-            if (USE_SUNSTUDIO) {
+        if (dataCollectorsEnabled) {
+            // Use either SunStudio or DTrace ...
+            if (collector.equals(SUNSTUDIO)) {
                 DataCollectorConfiguration dcc = initSunStudioDataCollectorConfiguration();
                 toolConfiguration.addDataCollectorConfiguration(dcc);
-            } else if (useLLIndicatorDataProvider) {
-                LLDataCollectorConfiguration lldcc = initLLDataCollectorConfiguration();
-                toolConfiguration.addDataCollectorConfiguration(lldcc);
-                toolConfiguration.addIndicatorDataProviderConfiguration(lldcc);
             } else {
                 MultipleDTDCConfiguration mdcc = initDtraceDataCollectorConfiguration();
                 toolConfiguration.addDataCollectorConfiguration(mdcc);
@@ -136,18 +131,23 @@ public final class MemoryToolConfigurationProvider implements DLightToolConfigur
                 toolConfiguration.addIndicatorDataProviderConfiguration(mdcc);
             }
         }
-        // TODO: replace with just "else" after fixing #159681 (It is impossible to use DTrace as indicator data provider)
-        if (!(useCollector && USE_SUNSTUDIO)) {
-            // AK: Disable indicator data provider until issue with USR1 signal is resolved;
-            // VK: (in other words: don't use LL monitor since it breaks collect with SIGUSR1)
-            // VK: if we use DTrace collector, it will act as indicator data provider as well!
-            // so we need separate collector only in the case we don't collect details at all
-            if (!useLLIndicatorDataProvider) {
+
+        if (collector.equals(SUNSTUDIO)) {
+            toolConfiguration.addIndicatorDataProviderConfiguration(
+                    initSunStudioIndicatorDataProviderConfiguration());
+        } else if (useLLIndicatorDataProvider) {
+            LLDataCollectorConfiguration lldcc = initLLDataCollectorConfiguration();
+//                toolConfiguration.addDataCollectorConfiguration(lldcc);
+            toolConfiguration.addIndicatorDataProviderConfiguration(lldcc);
+        } else {
+            if (!dataCollectorsEnabled) {
                 toolConfiguration.addIndicatorDataProviderConfiguration(
                         initDtraceIndicatorDataProviderConfiguration());
+            } else {
+                // This means that IndicatorDataProvider is already defined
             }
         }
-        
+
         toolConfiguration.addIndicatorConfiguration(initIndicatorConfiguration());
 
         return toolConfiguration;
@@ -170,6 +170,11 @@ public final class MemoryToolConfigurationProvider implements DLightToolConfigur
         return mdc;
     }
 
+    private IndicatorDataProviderConfiguration initSunStudioIndicatorDataProviderConfiguration() {
+        IndicatorDataProviderConfiguration result = new SunStudioDCConfiguration(CollectedInfo.MEMSUMMARY);
+        return result;
+    }
+
     private IndicatorDataProviderConfiguration initDtraceIndicatorDataProviderConfiguration() {
 
         DTDCConfiguration dataCollectorConfiguration =
@@ -182,6 +187,7 @@ public final class MemoryToolConfigurationProvider implements DLightToolConfigur
 
         MultipleDTDCConfiguration mdc = new MultipleDTDCConfiguration(dataCollectorConfiguration, "mem:"); // NOI18N
         return mdc;
+
     }
 
     private String getScriptFile() {
@@ -198,14 +204,19 @@ public final class MemoryToolConfigurationProvider implements DLightToolConfigur
 
     private IndicatorConfiguration initIndicatorConfiguration() {
         IndicatorMetadata indicatorMetadata = null;
-        indicatorMetadata = new IndicatorMetadata(useLLIndicatorDataProvider ?
-            LLDataCollectorConfiguration.MEM_TABLE.getColumns() : Arrays.asList(totalColumn));
+        if (collector.equals(SUNSTUDIO)) {
+            indicatorMetadata = new IndicatorMetadata(Arrays.asList(SunStudioDCConfiguration.c_leakSize));
+        } else if (useLLIndicatorDataProvider) {
+            indicatorMetadata = new IndicatorMetadata(LLDataCollectorConfiguration.MEM_TABLE.getColumns());
+        } else {
+            indicatorMetadata = new IndicatorMetadata(Arrays.asList(totalColumn));
+        }
 
         MemoryIndicatorConfiguration indicatorConfiguration =
-                new MemoryIndicatorConfiguration(indicatorMetadata, "total"); // NOI18N
+                new MemoryIndicatorConfiguration(indicatorMetadata); // NOI18N
 
-        if (useCollector) {
-            if (USE_SUNSTUDIO) {
+        if (dataCollectorsEnabled) {
+            if (collector.equals(SUNSTUDIO)) {
                 DataTableMetadata detailedViewTableMetadata =
                         SunStudioDCConfiguration.getMemTableMetadata(
                         SunStudioDCConfiguration.c_name,
@@ -226,7 +237,7 @@ public final class MemoryToolConfigurationProvider implements DLightToolConfigur
 
         List<Column> viewColumns = Arrays.asList(
                 new Column("func_name", MangledNameType.class, loc("MemoryTool.ColumnName.func_name"), null), // NOI18N
-                 new Column("leak", Long.class, loc("MemoryTool.ColumnName.leak"), null)); // NOI18N
+                new Column("leak", Long.class, loc("MemoryTool.ColumnName.leak"), null)); // NOI18N
 
         String sql =
                 "SELECT func.func_name as func_name, SUM(size) as leak " + // NOI18N
