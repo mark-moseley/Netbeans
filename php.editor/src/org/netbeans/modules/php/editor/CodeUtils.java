@@ -38,14 +38,17 @@
  */
 package org.netbeans.modules.php.editor;
 
-import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
-import org.netbeans.modules.gsf.api.CancellableTask;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.NameKind;
-import org.netbeans.modules.gsf.api.SourceModel;
-import org.netbeans.modules.gsf.api.SourceModelFactory;
-import org.netbeans.modules.gsf.api.annotations.CheckForNull;
+import java.util.logging.Logger;
+import org.netbeans.api.annotations.common.CheckForNull;
+import org.netbeans.modules.csl.spi.ParserResult;
+import org.netbeans.modules.parsing.api.ParserManager;
+import org.netbeans.modules.parsing.api.ResultIterator;
+import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.api.UserTask;
+import org.netbeans.modules.parsing.spi.ParseException;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
 import org.netbeans.modules.php.editor.index.IndexedConstant;
 import org.netbeans.modules.php.editor.index.IndexedFunction;
 import org.netbeans.modules.php.editor.index.PHPIndex;
@@ -64,6 +67,7 @@ import org.netbeans.modules.php.editor.parser.astnodes.FunctionDeclaration;
 import org.netbeans.modules.php.editor.parser.astnodes.FunctionInvocation;
 import org.netbeans.modules.php.editor.parser.astnodes.FunctionName;
 import org.netbeans.modules.php.editor.parser.astnodes.Identifier;
+import org.netbeans.modules.php.editor.parser.astnodes.InfixExpression;
 import org.netbeans.modules.php.editor.parser.astnodes.MethodDeclaration;
 import org.netbeans.modules.php.editor.parser.astnodes.MethodInvocation;
 import org.netbeans.modules.php.editor.parser.astnodes.Program;
@@ -82,6 +86,7 @@ public class CodeUtils {
     public static final String FUNCTION_TYPE_PREFIX = "@fn:";
     public static final String METHOD_TYPE_PREFIX = "@mtd:";
     public static final String STATIC_METHOD_TYPE_PREFIX = "@static.mtd:";
+    private static final Logger LOGGER = Logger.getLogger(CodeUtils.class.getName());
 
     private CodeUtils() {
     }
@@ -122,7 +127,16 @@ public class CodeUtils {
                 return scalar.getStringValue();
             } else if (name instanceof Variable) {
                 var = (Variable)name;
+                return extractVariableName(var);
+            } else if (name instanceof FieldAccess) {
+                var = ((FieldAccess)name).getField();
+                return extractVariableName(var);
+            } else if (name instanceof InfixExpression) {
+                //#157750
+                return null;
             }
+            LOGGER.fine("Cannot extract variable name of ReflectionVariable: " + name.getClass().toString());
+            return null;
         }
         if (var.getName() instanceof Identifier) {
             Identifier id = (Identifier) var.getName();
@@ -137,8 +151,11 @@ public class CodeUtils {
         } else if (var.getName() instanceof Variable) {
             Variable name = (Variable) var.getName();
             return extractVariableName(name);
+        } else if (var.getName() instanceof MethodInvocation){
+            // no variable name
+            return null; 
         }
-
+        assert false : var.getName().getClass().toString();
         return null;
     }
 
@@ -153,24 +170,21 @@ public class CodeUtils {
 
     private static String findClassNameEnclosingDeclaration(PHPParseResult context,
             IndexedConstant variable) {
-        if (context.getFile().getFileObject().equals(variable.getFileObject())){
+        if (context.getSnapshot().getSource().getFileObject().equals(variable.getFileObject())){
             return findClassNameEnclosingDeclaration(context.getProgram(), variable);
         }
 
-        SourceModel model = SourceModelFactory.getInstance().getModel(variable.getFileObject());
-
+        
         ClassNameExtractor task = new ClassNameExtractor(variable);
-
         try {
-            model.runUserActionTask(task, true);
-        } catch (IOException ex) {
+            ParserManager.parse(Collections.singleton(Source.create(variable.getFileObject())), task);
+        } catch (ParseException ex) {
             Exceptions.printStackTrace(ex);
         }
-
         return task.className;
     }
 
-    private static class ClassNameExtractor implements CancellableTask<CompilationInfo> {
+    private static class ClassNameExtractor extends UserTask {
         IndexedConstant variable;
         String className;
 
@@ -178,9 +192,9 @@ public class CodeUtils {
             this.variable = variable;
         }
 
-        public void cancel() {}
-
-        public void run(CompilationInfo parameter) throws Exception {
+        @Override
+        public void run(ResultIterator resultIterator) throws Exception {
+            ParserResult parameter = (ParserResult)resultIterator.getParserResult();
             Program program = Utils.getRoot(parameter);
             className = findClassNameEnclosingDeclaration(program, variable);
         }
@@ -214,7 +228,7 @@ public class CodeUtils {
 
                 String fname = rawType.substring(FUNCTION_TYPE_PREFIX.length());
 
-                for (IndexedFunction func : index.getFunctions(context, fname, NameKind.EXACT_NAME)) {
+                for (IndexedFunction func : index.getFunctions(context, fname, QuerySupport.Kind.EXACT)) {
                     varType = func.getReturnType();
                 }
             } else if (rawType.startsWith(STATIC_METHOD_TYPE_PREFIX)){
@@ -228,7 +242,7 @@ public class CodeUtils {
                 String methodName = parts[1];
 
                 for (IndexedFunction func : index.getAllMethods(context, className,
-                        methodName, NameKind.EXACT_NAME, Integer.MAX_VALUE)) {
+                        methodName, QuerySupport.Kind.EXACT, Integer.MAX_VALUE)) {
 
                     varType = func.getReturnType();
                 }
@@ -253,7 +267,7 @@ public class CodeUtils {
 
                 if (className != null) {
                     for (IndexedFunction func : index.getAllMethods(context, className,
-                            methodName, NameKind.EXACT_NAME, Integer.MAX_VALUE)) {
+                            methodName, QuerySupport.Kind.EXACT, Integer.MAX_VALUE)) {
 
                         varType = func.getReturnType();
                     }
@@ -268,12 +282,12 @@ public class CodeUtils {
         }
     }
 
-    public static String extractVariableTypeFromAssignment(Assignment assignment) {
+    public static String extractVariableType(Assignment assignment) {
         Expression rightSideExpression = assignment.getRightHandSide();
 
         if (rightSideExpression instanceof Assignment) {
             // handle nested assignments, e.g. $l = $m = new ObjectName;
-            return extractVariableTypeFromAssignment((Assignment) assignment.getRightHandSide());
+            return extractVariableType((Assignment) assignment.getRightHandSide());
         } else if (rightSideExpression instanceof Reference) {
             Reference ref = (Reference) rightSideExpression;
             rightSideExpression = ref.getExpression();
