@@ -60,6 +60,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.Dimension;
 import org.netbeans.modules.mercurial.HgException;
+import org.netbeans.modules.mercurial.HgModuleConfig;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.ui.diff.DiffSetupSource;
 import org.netbeans.modules.mercurial.ui.diff.Setup;
@@ -85,15 +86,20 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
     private List<RepositoryRevision> results;
     private SummaryView             summaryView;    
     private DiffResultsView         diffView;
-    
+    private boolean                 bOutSearch;
+    private boolean                 bIncomingSearch;
     private AbstractAction nextAction;
     private AbstractAction prevAction;
+    private SearchHistoryTopComponent.DiffResultsViewFactory diffViewFactory;
 
     /** Creates new form SearchHistoryPanel */
     public SearchHistoryPanel(File [] roots, SearchCriteriaPanel criteria) {
+        this.bOutSearch = false;
+        this.bIncomingSearch = false;
         this.roots = roots;
         this.repositoryUrl = null;
         this.criteria = criteria;
+        this.diffViewFactory = new SearchHistoryTopComponent.DiffResultsViewFactory();
         criteriaVisible = true;
         explorerManager = new ExplorerManager ();
         initComponents();
@@ -102,6 +108,8 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
     }
     
     public SearchHistoryPanel(String repositoryUrl, File localRoot, SearchCriteriaPanel criteria) {
+        this.bOutSearch = false;
+        this.bIncomingSearch = false;
         this.repositoryUrl = repositoryUrl;
         this.roots = new File[] { localRoot };
         this.criteria = criteria;
@@ -110,6 +118,56 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         initComponents();
         setupComponents();
         refreshComponents(true);
+    }
+
+    /**
+     * Sets the factory creating the appropriate DiffResultsView to display.
+     * @param fac factory creating the appropriate DiffResultsView to display. If null then a default factory will be created.
+     */
+    public void setDiffResultsViewFactory(SearchHistoryTopComponent.DiffResultsViewFactory fac) {
+        if (fac != null) {
+            this.diffViewFactory = fac;
+        }
+    }
+
+    public void disableFileChangesOption(boolean b) {
+        fileInfoCheckBox.setEnabled(false);
+        fileInfoCheckBox.setSelected(false);
+    }
+
+    void setOutSearch() {
+        criteria.setForOut();
+        bOutSearch = true;
+        tbSummary.setToolTipText(NbBundle.getMessage(SearchHistoryPanel.class,  "TT_OutSummary"));
+        showMergesChkBox.setToolTipText(NbBundle.getMessage(SearchHistoryPanel.class,  "TT_OutShowMerges"));
+        tbDiff.setToolTipText(NbBundle.getMessage(SearchHistoryPanel.class,  "TT_OutShowDiff"));
+    }
+
+    boolean isOutSearch() {
+        return bOutSearch;
+    }
+
+    boolean isShowMerges() {
+        return showMergesChkBox.isSelected();
+    }
+
+    boolean isShowInfo() {
+        return fileInfoCheckBox.isSelected();
+    }
+
+    
+    void setIncomingSearch() {
+        criteria.setForIncoming();
+        bIncomingSearch = true;
+        tbDiff.setVisible(false);
+        bNext.setVisible(false);
+        bPrev.setVisible(false);
+        showMergesChkBox.setToolTipText(NbBundle.getMessage(SearchHistoryPanel.class,  "TT_IncomingShowMerges"));
+        tbSummary.setToolTipText(NbBundle.getMessage(SearchHistoryPanel.class,  "TT_IncomingSummary"));
+    }
+    
+    boolean isIncomingSearch() {
+        return bIncomingSearch;
     }
 
     void setSearchCriteria(boolean b) {
@@ -176,6 +234,18 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         
         getActionMap().put("jumpNext", nextAction); // NOI18N
         getActionMap().put("jumpPrev", prevAction); // NOI18N
+        
+        showMergesChkBox.setSelected(HgModuleConfig.getDefault().getShowHistoryMerges());
+        if(roots.length == 1) {
+            File file = roots[0];
+            if(!file.isFile()) fileInfoCheckBox.setEnabled(false);
+        }
+        if(fileInfoCheckBox.isEnabled()) {
+            fileInfoCheckBox.setSelected(HgModuleConfig.getDefault().getShowFileInfo());
+        } else {
+            fileInfoCheckBox.setSelected(true);
+        }
+        showMergesChkBox.setOpaque(false);
     }
 
     public void actionPerformed(ActionEvent e) {
@@ -226,7 +296,7 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
                     resultsPanel.add(summaryView.getComponent());
                 } else {
                     if (diffView == null) {
-                        diffView = new DiffResultsView(this, results);
+                        diffView = diffViewFactory.createDiffResultsView(this, results);
                     }
                     resultsPanel.add(diffView.getComponent());
                 }
@@ -263,8 +333,9 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
     public String getSearchRepositoryRootUrl() throws HgException {
         if (repositoryUrl != null) return repositoryUrl;
         
-        File root = Mercurial.getInstance().getTopmostManagedParent(roots[0]);
-        return root.toString();
+        File root = Mercurial.getInstance().getRepositoryRoot(roots[0]);
+       
+        return root != null? root.toString(): null;
     }
 
     public File[] getRoots() {
@@ -389,8 +460,8 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         tbSummary = new javax.swing.JToggleButton();
         tbDiff = new javax.swing.JToggleButton();
         jSeparator2 = new javax.swing.JSeparator();
-        bNext = new javax.swing.JButton();
-        bPrev = new javax.swing.JButton();
+        jSeparator3 = new javax.swing.JToolBar.Separator();
+        showMergesChkBox = new javax.swing.JCheckBox();
         resultsPanel = new javax.swing.JPanel();
 
         setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 0, 8));
@@ -406,7 +477,8 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         gridBagConstraints.weightx = 1.0;
         add(searchCriteriaPanel, gridBagConstraints);
 
-        bSearch.setToolTipText("null");
+        java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/mercurial/ui/log/Bundle"); // NOI18N
+        bSearch.setToolTipText(bundle.getString("TT_Search")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 1;
@@ -427,9 +499,8 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
 
         buttonGroup1.add(tbSummary);
         tbSummary.setSelected(true);
-        java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/mercurial/ui/log/Bundle"); // NOI18N
         org.openide.awt.Mnemonics.setLocalizedText(tbSummary, bundle.getString("CTL_ShowSummary")); // NOI18N
-        tbSummary.setToolTipText("null");
+        tbSummary.setToolTipText(bundle.getString("TT_Summary")); // NOI18N
         tbSummary.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 onViewToggle(evt);
@@ -440,7 +511,7 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
 
         buttonGroup1.add(tbDiff);
         org.openide.awt.Mnemonics.setLocalizedText(tbDiff, bundle.getString("CTL_ShowDiff")); // NOI18N
-        tbDiff.setToolTipText("null");
+        tbDiff.setToolTipText(bundle.getString("TT_ShowDiff")); // NOI18N
         tbDiff.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 onViewToggle(evt);
@@ -452,12 +523,37 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         jSeparator2.setMaximumSize(new java.awt.Dimension(2, 32767));
         jToolBar1.add(jSeparator2);
         jToolBar1.add(bNext);
-        bNext.getAccessibleContext().setAccessibleName("null");
-        bNext.getAccessibleContext().setAccessibleDescription("null");
+        bNext.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_NextDifference")); // NOI18N
+        bNext.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "ACSD_NextDifference")); // NOI18N
 
         jToolBar1.add(bPrev);
-        bPrev.getAccessibleContext().setAccessibleName("null");
-        bPrev.getAccessibleContext().setAccessibleDescription("null");
+        bPrev.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_PrevDifference")); // NOI18N
+        bPrev.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "ACSD_PrevDifference")); // NOI18N
+
+        jToolBar1.add(jSeparator3);
+
+        showMergesChkBox.setSelected(true);
+        org.openide.awt.Mnemonics.setLocalizedText(showMergesChkBox, org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "CTL_ShowMerge")); // NOI18N
+        showMergesChkBox.setToolTipText(org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "TT_ShowMerges")); // NOI18N
+        showMergesChkBox.setHorizontalTextPosition(javax.swing.SwingConstants.RIGHT);
+        showMergesChkBox.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        showMergesChkBox.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent evt) {
+                showMergesChkBoxStateChanged(evt);
+            }
+        });
+        jToolBar1.add(showMergesChkBox);
+
+        org.openide.awt.Mnemonics.setLocalizedText(fileInfoCheckBox, org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "LBL_SearchHistoryPanel_AllInfo")); // NOI18N
+        fileInfoCheckBox.setToolTipText(org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "LBL_TT_SearchHistoryPanel_AllInfo")); // NOI18N
+        fileInfoCheckBox.setHorizontalTextPosition(javax.swing.SwingConstants.RIGHT);
+        fileInfoCheckBox.setVerticalTextPosition(javax.swing.SwingConstants.BOTTOM);
+        fileInfoCheckBox.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                fileInfoCheckBoxActionPerformed(evt);
+            }
+        });
+        jToolBar1.add(fileInfoCheckBox);
 
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridy = 3;
@@ -481,6 +577,14 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
     private void onViewToggle(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_onViewToggle
         refreshComponents(true);
     }//GEN-LAST:event_onViewToggle
+
+private void showMergesChkBoxStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_showMergesChkBoxStateChanged
+        HgModuleConfig.getDefault().setShowHistoryMerges( showMergesChkBox.isSelected());
+}//GEN-LAST:event_showMergesChkBoxStateChanged
+
+private void fileInfoCheckBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_fileInfoCheckBoxActionPerformed
+        HgModuleConfig.getDefault().setShowFileInfo( fileInfoCheckBox.isSelected() && fileInfoCheckBox.isEnabled());
+}//GEN-LAST:event_fileInfoCheckBoxActionPerformed
 
     public void insertUpdate(DocumentEvent e) {
         validateUserInput();
@@ -509,15 +613,18 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
     }    
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JButton bNext;
-    private javax.swing.JButton bPrev;
+    final javax.swing.JButton bNext = new javax.swing.JButton();
+    final javax.swing.JButton bPrev = new javax.swing.JButton();
     private javax.swing.JButton bSearch;
     private javax.swing.ButtonGroup buttonGroup1;
+    final javax.swing.JCheckBox fileInfoCheckBox = new javax.swing.JCheckBox();
     private javax.swing.JPanel jPanel1;
     private javax.swing.JSeparator jSeparator2;
+    private javax.swing.JToolBar.Separator jSeparator3;
     private javax.swing.JToolBar jToolBar1;
     private javax.swing.JPanel resultsPanel;
     private javax.swing.JPanel searchCriteriaPanel;
+    private javax.swing.JCheckBox showMergesChkBox;
     private javax.swing.JToggleButton tbDiff;
     private javax.swing.JToggleButton tbSummary;
     // End of variables declaration//GEN-END:variables
