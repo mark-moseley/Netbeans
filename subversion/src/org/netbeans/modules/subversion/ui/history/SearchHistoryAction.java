@@ -55,8 +55,6 @@ import javax.swing.*;
 import java.io.File;
 import java.util.*;
 import org.netbeans.modules.subversion.Subversion;
-import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
-import org.netbeans.modules.subversion.client.SvnClientFactory;
 
 /**
  * Opens Search History Component.
@@ -129,7 +127,7 @@ public class SearchHistoryAction extends ContextAction {
         c.setTime(date);
         c.add(Calendar.DATE, -1);
         Date from = c.getTime();
-        
+
         if (commitMessage != null && commitMessage.indexOf('\n') != -1) {
             commitMessage = commitMessage.substring(0, commitMessage.indexOf('\n'));
         }
@@ -139,6 +137,24 @@ public class SearchHistoryAction extends ContextAction {
         tc.open();
         tc.requestActive();
         tc.search();
+    }
+
+    /**
+     * Opens search panel with a diff view fixed on a line
+     * @param file file to search history for
+     * @param lineNumber number of a line to fix on
+     */
+    public static void openSearch(final File file, final int lineNumber) {
+        SearchHistoryTopComponent tc = new SearchHistoryTopComponent(file, new SearchHistoryTopComponent.DiffResultsViewFactory() {
+            @Override
+            DiffResultsView createDiffResultsView(SearchHistoryPanel panel, List<RepositoryRevision> results) {
+                return new DiffResultsViewForLine(panel, results, lineNumber);
+            }
+        });
+        String tcTitle = NbBundle.getMessage(SearchHistoryAction.class, "CTL_SearchHistory_Title", file.getName()); // NOI18N
+        tc.setDisplayName(tcTitle);
+        tc.open();
+        tc.requestActive();
     }
 
     private static Context getDefaultContext() {

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,6 +43,7 @@ package org.netbeans.modules.subversion.ui.history;
 
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import org.netbeans.modules.subversion.ui.history.SearchHistoryTopComponent.DiffResultsViewFactory;
 import org.openide.util.RequestProcessor;
 import org.openide.util.NbBundle;
 import org.openide.explorer.ExplorerManager;
@@ -64,6 +65,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.Dimension;
+import org.netbeans.modules.subversion.SvnModuleConfig;
 import org.tigris.subversion.svnclientadapter.SVNClientException;
 
 /**
@@ -79,7 +81,6 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
     
     private Divider                 divider;
     private Action                  searchAction;
-    private SearchExecutor          currentSearch;
     private RequestProcessor.Task   currentSearchTask;
 
     private boolean                 criteriaVisible;
@@ -87,6 +88,7 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
     private List<RepositoryRevision> results;
     private SummaryView             summaryView;    
     private DiffResultsView         diffView;
+    private SearchHistoryTopComponent.DiffResultsViewFactory diffViewFactory;
     
     private AbstractAction nextAction;
     private AbstractAction prevAction;
@@ -96,6 +98,7 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         this.roots = roots;
         this.repositoryUrl = null;
         this.criteria = criteria;
+        this.diffViewFactory = new SearchHistoryTopComponent.DiffResultsViewFactory();
         criteriaVisible = true;
         explorerManager = new ExplorerManager ();
         initComponents();
@@ -112,6 +115,21 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         initComponents();
         setupComponents();
         refreshComponents(true);
+    }
+
+    /**
+     * Sets the factory creating the appropriate DiffResultsView to display.
+     * @param fac factory creating the appropriate DiffResultsView to display. If null then a default factory will be created.
+     */
+    public void setDiffResultsViewFactory(DiffResultsViewFactory fac) {
+        if (fac != null) {
+            this.diffViewFactory = fac;
+        }
+    }
+
+    public void disableFileChangesOption(boolean b) {
+        fileInfoCheckBox.setEnabled(false);
+        fileInfoCheckBox.setSelected(false);
     }
 
     void setSearchCriteria(boolean b) {
@@ -178,12 +196,27 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         
         getActionMap().put("jumpNext", nextAction); // NOI18N
         getActionMap().put("jumpPrev", prevAction); // NOI18N
+
+        if(roots.length == 1) {
+            File file = roots[0];
+            if(!file.isFile()) fileInfoCheckBox.setEnabled(false);
+        }
+        if(fileInfoCheckBox.isEnabled()) {
+            fileInfoCheckBox.setSelected(SvnModuleConfig.getDefault().getShowFileAllInfo());
+        } else {
+            fileInfoCheckBox.setSelected(true);
+        }
     }
 
     public void actionPerformed(ActionEvent e) {
         if (e.getID() == Divider.DIVIDER_CLICKED) {
             criteriaVisible = !criteriaVisible;
             refreshComponents(false);
+        } else if (e.getSource() == fileInfoCheckBox && fileInfoCheckBox.isEnabled()) {
+            SvnModuleConfig.getDefault().setShowFileAllInfo(fileInfoCheckBox.isSelected());
+            diffView = null;
+            summaryView = null;
+            refreshComponents(true);
         }
     }
 
@@ -223,12 +256,32 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
             } else {
                 if (tbSummary.isSelected()) {
                     if (summaryView == null) {
+                        for (RepositoryRevision rev : results) {
+                            // set filter for revision events
+                            if (fileInfoCheckBox.isSelected()) {
+                                rev.sort(new RepositoryRevision.EventFullNameComparator());
+                                rev.setFilter(null);
+                            } else {
+                                // no need to sort now, since events for only one file are shown
+                                rev.setFilter(roots[0]);
+                            }
+                        }
                         summaryView = new SummaryView(this, results);
                     }
                     resultsPanel.add(summaryView.getComponent());
                 } else {
                     if (diffView == null) {
-                        diffView = new DiffResultsView(this, results);
+                        for (RepositoryRevision rev : results) {
+                            // set filter for revision events
+                            if (fileInfoCheckBox.isSelected()) {
+                                rev.sort(new RepositoryRevision.EventBaseNameComparator());
+                                rev.setFilter(null);
+                            } else {
+                                // no need to sort now, since events for only one file are shown
+                                rev.setFilter(roots[0]);
+                            }
+                        }
+                        diffView = diffViewFactory.createDiffResultsView(this, results);
                     }
                     resultsPanel.add(diffView.getComponent());
                 }
@@ -280,9 +333,7 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
             currentSearchTask.cancel();
         }
         setResults(null, true);
-        currentSearch = new SearchExecutor(this);
-        currentSearchTask = RequestProcessor.getDefault().create(currentSearch);
-        currentSearchTask.schedule(0);
+        currentSearchTask = RequestProcessor.getDefault().post(new SearchExecutor(this));
     }
     
     void executeSearch() {
@@ -377,7 +428,7 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
@@ -389,8 +440,7 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
         tbSummary = new javax.swing.JToggleButton();
         tbDiff = new javax.swing.JToggleButton();
         jSeparator2 = new javax.swing.JSeparator();
-        bNext = new javax.swing.JButton();
-        bPrev = new javax.swing.JButton();
+        jSeparator3 = new javax.swing.JToolBar.Separator();
         resultsPanel = new javax.swing.JPanel();
 
         setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 0, 8));
@@ -453,13 +503,19 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
 
         bNext.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/diff-next.png"))); // NOI18N
         jToolBar1.add(bNext);
-        bNext.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_NextDifference")); // NOI18N
+        bNext.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "ACSN_NextDifference")); // NOI18N
         bNext.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "ACSD_NextDifference")); // NOI18N
 
         bPrev.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/diff-prev.png"))); // NOI18N
         jToolBar1.add(bPrev);
-        bPrev.getAccessibleContext().setAccessibleName(bundle.getString("ACSN_PrevDifference")); // NOI18N
+        bPrev.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "ACSN_PrevDifference")); // NOI18N
         bPrev.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "ACSD_PrevDifference")); // NOI18N
+
+        jToolBar1.add(jSeparator3);
+
+        org.openide.awt.Mnemonics.setLocalizedText(fileInfoCheckBox, org.openide.util.NbBundle.getMessage(SearchHistoryPanel.class, "LBL_SearchHistoryPanel_AllInfo")); // NOI18N
+        fileInfoCheckBox.addActionListener(this);
+        jToolBar1.add(fileInfoCheckBox);
 
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridy = 3;
@@ -508,15 +564,17 @@ class SearchHistoryPanel extends javax.swing.JPanel implements ExplorerManager.P
             return;
         }        
         bSearch.setEnabled(true);
-    }    
-    
+    }
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JButton bNext;
-    private javax.swing.JButton bPrev;
+    final javax.swing.JButton bNext = new javax.swing.JButton();
+    final javax.swing.JButton bPrev = new javax.swing.JButton();
     private javax.swing.JButton bSearch;
     private javax.swing.ButtonGroup buttonGroup1;
+    final javax.swing.JCheckBox fileInfoCheckBox = new javax.swing.JCheckBox();
     private javax.swing.JPanel jPanel1;
     private javax.swing.JSeparator jSeparator2;
+    private javax.swing.JToolBar.Separator jSeparator3;
     private javax.swing.JToolBar jToolBar1;
     private javax.swing.JPanel resultsPanel;
     private javax.swing.JPanel searchCriteriaPanel;
