@@ -52,13 +52,16 @@ import java.util.zip.Adler32;
 import java.util.zip.Checksum;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.api.project.NativeProject;
+import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 import org.netbeans.modules.cnd.modelimpl.repository.ProjectSettingsValidatorKey;
 import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.spi.PersistentFactory;
 import org.netbeans.modules.cnd.repository.support.SelfPersistent;
+import org.netbeans.modules.cnd.utils.cache.FilePathCache;
 
 /**
  * When project restored, we should validate whether settings for each item 
@@ -137,7 +140,10 @@ public class ProjectSettingsValidator {
 	}
 	Key key = new ProjectSettingsValidatorKey(csmProject.getUniqueName().toString());
 	data = (Data) RepositoryUtils.get(key);
-	assert data != null : "Can not get project settings validator data by the key " + key; //NOI18N
+        if( data == null ) {
+            data = new Data();
+            DiagnosticExceptoins.register(new IllegalStateException("Can not get project settings validator data by the key " + key)); //NOI18N
+        }
     }
     
     public boolean exists(FileImpl fileImpl) {
@@ -186,30 +192,30 @@ public class ProjectSettingsValidator {
     
     private static class Data implements Persistent, SelfPersistent {
 	
-	private Map<String, Long> map;
+	private Map<CharSequence, Long> map;
 	
 	public Data() {
-	    map = new HashMap<String, Long>();
+	    map = new HashMap<CharSequence, Long>();
 	}
 	
-	public long getCrc(String name) {
-	    Long crc = map.get(name);
+	public long getCrc(CharSequence name) {
+	    Long crc = map.get(FilePathCache.getManager().getString(name));
 	    return crc == null ? 0 : crc.longValue();
 	}
 	
-	public boolean exists(String name) {
-	    return map.containsKey(name);
+	public boolean exists(CharSequence name) {
+	    return map.containsKey(FilePathCache.getManager().getString(name));
 	}
 	
-	public void setCrc(String name, long crc) {
-	    map.put(name, crc);
+	public void setCrc(CharSequence name, long crc) {
+	    map.put(FilePathCache.getManager().getString(name), crc);
 	}
 	
 	public Data(DataInput stream) throws IOException {
-	    map = new HashMap<String, Long>();
+	    map = new HashMap<CharSequence, Long>();
 	    int cnt = stream.readInt();
 	    for (int i = 0; i < cnt; i++) {
-		String name = stream.readUTF();
+		CharSequence name = PersistentUtils.readUTF(stream, FilePathCache.getManager());
 		long crc = stream.readLong();
 		map.put(name, crc);
 	    }
@@ -217,8 +223,8 @@ public class ProjectSettingsValidator {
 	
 	public void write(DataOutput stream ) throws IOException {
 	    stream.writeInt(map.size());
-	    for( Map.Entry<String, Long> entry : map.entrySet()) {
-		stream.writeUTF(entry.getKey());
+	    for( Map.Entry<CharSequence, Long> entry : map.entrySet()) {
+		PersistentUtils.writeUTF(entry.getKey(), stream);
 		stream.writeLong(entry.getValue().longValue());
 	    }
 	}
