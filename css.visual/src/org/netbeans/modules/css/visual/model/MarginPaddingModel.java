@@ -47,7 +47,7 @@
 
 package org.netbeans.modules.css.visual.model;
 
-import org.netbeans.modules.css.model.CssRuleContent;
+import org.netbeans.modules.css.editor.model.CssRuleContent;
 import javax.swing.DefaultComboBoxModel;
 
 /**
@@ -75,7 +75,7 @@ public class MarginPaddingModel {
 
     public static class WidthList extends DefaultComboBoxModel{
         public WidthList(){
-            addElement(CssRuleContent.NOT_SET);
+            addElement(Utils.NOT_SET);
             addElement("1"); //NOI18N
             addElement("2"); //NOI18N
             addElement("3"); //NOI18N
@@ -84,7 +84,7 @@ public class MarginPaddingModel {
             addElement("6"); //NOI18N
             addElement("8"); //NOI18N
             addElement("10"); //NOI18N
-            addElement(CssRuleContent.VALUE);
+            addElement(Utils.VALUE);
         }
     }
 
