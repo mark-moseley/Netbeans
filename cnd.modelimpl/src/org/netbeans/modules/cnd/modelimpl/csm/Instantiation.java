@@ -159,8 +159,11 @@ public /*abstract*/ class Instantiation<T extends CsmOffsetableDeclaration> impl
             return new Class((CsmClass)template, type);
         } else if (template instanceof CsmFunction) {
             return new Function((CsmFunction)template, type);
+        } else {
+            if (CndUtils.isDebugMode()) {
+                CndUtils.assertTrue(false, "Unknown class " + template.getClass() + " for template instantiation:" + template, Level.WARNING); // NOI18N
+            }
         }
-        assert false : "Unknown class for template instantiation:" + template; // NOI18N
         return template;
     }
     
@@ -588,7 +591,12 @@ public /*abstract*/ class Instantiation<T extends CsmOffsetableDeclaration> impl
 
         public CsmClass getCsmClass() {
             if (csmClass == null) {
-                csmClass = (CsmClass)Instantiation.create((CsmTemplate)declaration.getCsmClass(), getMapping());
+                CsmClass declClassifier = declaration.getCsmClass();
+                if (CsmKindUtilities.isTemplate(declClassifier)) {
+                    csmClass = (CsmClass)Instantiation.create((CsmTemplate)declClassifier, getMapping());
+                } else {
+                    csmClass = declClassifier;
+                }
             }
             return csmClass;
         }
