@@ -358,18 +358,21 @@ public class MiscUtils implements CommonConstants {
         String jdkVersionString = (String) jdkProperties.get("java.version"); // NOI18N
         String vmNameString = (String) jdkProperties.get("java.vm.name"); // NOI18N
 
-        if ((jdkVersionString == null) || (vmNameString == null)) { // probably not a platform for JDK
-
+        if (jdkVersionString == null || vmNameString == null) { // probably not a platform for JDK
             return false;
         }
 
-        return isSupported15or16or17(jdkVersionString);
+        if (isSupported15or16or17orCvm(jdkVersionString)) {
+            return true;
+        }
+        // CVM is recognized via java.vm.name system property
+        return isSupported15or16or17orCvm(vmNameString);
     }
 
     // This method is used for checking running JVM if supported.
     // jvmVersionString should be enough to decide that
     public static boolean isSupportedRunningJVMVersion(String jdkVersionString) {
-        return isSupported15or16or17(jdkVersionString);
+        return isSupported15or16or17orCvm(jdkVersionString);
     }
 
     public static void setVerbosePrint() {
@@ -432,12 +435,15 @@ public class MiscUtils implements CommonConstants {
             File tempDir = new File(System.getProperty("java.io.tmpdir")); // NOI18N
             File[] files = tempDir.listFiles();
 
-            for (int i = 0; i < files.length; i++) {
-                File f = files[i];
-                String fname = f.getName();
+            // check that tempDir exists
+            if (files != null) {
+                for (int i = 0; i < files.length; i++) {
+                    File f = files[i];
+                    String fname = f.getName();
 
-                if (fname.startsWith("NBProfiler") && fname.endsWith(".map")) { // NOI18N
-                    f.delete();
+                    if (fname.startsWith("NBProfiler") && (fname.endsWith(".map") || fname.endsWith(".ref"))) { // NOI18N
+                        f.delete();
+                    }
                 }
             }
         }
@@ -540,24 +546,21 @@ public class MiscUtils implements CommonConstants {
         return (new Date()).toString();
     }
 
-    private static boolean isSupported15or16or17(String jdkVersionString) {
+    private static boolean isSupported15or16or17orCvm(String jdkVersionString) {
         if (jdkVersionString.startsWith("1.7")) { // NOI18N
-
             return true;
         } else if (jdkVersionString.startsWith("1.6")) { // NOI18N
-
             return true;
         } else if (jdkVersionString.startsWith("1.5")) { // NOI18N
-
-            if (jdkVersionString.equals("1.5.0") || jdkVersionString.startsWith("1.5.0_01")
-                    || jdkVersionString.startsWith("1.5.0_02") || jdkVersionString.startsWith("1.5.0_03")) { // NOI18N
-
+            if (jdkVersionString.equals("1.5.0") || jdkVersionString.startsWith("1.5.0_01") ||
+                jdkVersionString.startsWith("1.5.0_02") || jdkVersionString.startsWith("1.5.0_03")) { // NOI18N
                 return false;
             } else {
                 return true;
             }
-        } else {
-            return false;
+        } else if (jdkVersionString.equals("CVM")) {
+            return true;
         }
+        return false;
     }
 }
