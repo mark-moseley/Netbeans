@@ -60,7 +60,6 @@ import javax.swing.*;
 import java.io.File;
 import java.util.*;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
-import org.netbeans.modules.subversion.client.SvnClientFactory;
 
 /**
  *
@@ -117,8 +116,13 @@ public class BlameAction extends ContextAction {
             
             final AnnotationBar ab = AnnotationBarManager.showAnnotationBar(currentPane);
             ab.setAnnotationMessage(NbBundle.getMessage(BlameAction.class, "CTL_AnnotationSubstitute")); // NOI18N;
-            
-            long revision = Subversion.getInstance().getStatusCache().getStatus(file).getEntry(file).getRevision().getNumber();                        
+
+            ISVNStatus status = Subversion.getInstance().getStatusCache().getStatus(file).getEntry(file);
+            if (status == null) {
+                // status could not be loaded, do not continnue
+                return;
+            }
+            long revision = status.getRevision().getNumber();
             
             SVNUrl repository;
             try {            
