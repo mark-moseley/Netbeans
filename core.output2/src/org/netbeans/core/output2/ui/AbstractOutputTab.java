@@ -65,8 +65,7 @@ public abstract class AbstractOutputTab extends JComponent implements Accessible
     private boolean inputVisible = false;
     private AbstractOutputPane outputPane;
     private Action[] actions = new Action[0];  
-    private JButton[] buttons = new JButton[0];
-    
+
     private Component toFocus;
     
     public AbstractOutputTab() {
@@ -82,7 +81,15 @@ public abstract class AbstractOutputTab extends JComponent implements Accessible
             ((OutputDocument)doc).setPane(outputPane);
         }
     }
-    
+
+    public AbstractOutputPane setOutputPane(AbstractOutputPane pane) {
+        AbstractOutputPane old = outputPane;
+        remove(outputPane);
+        outputPane = pane;
+        add(outputPane);
+        return old;
+    }
+
     /* Read accessible context
      * @return - accessible context
      */
@@ -143,35 +150,21 @@ public abstract class AbstractOutputTab extends JComponent implements Accessible
         return outputPane;
     }
 
-    public final void setToolbarActions (Action[] a) {
+    public final void setToolbarActions(Action[] a) {
         if (a == null || a.length == 0) {
             actions = new Action[0];
-            buttons = new JButton[0];
             return;
         }
         if (a.length > 5) {
-            throw new IllegalArgumentException ("No more than 5 actions allowed" //NOI18N
-                + "in the output window toolbar"); //NOI18N
+            throw new IllegalArgumentException("No more than 5 actions allowed" //NOI18N
+                    + "in the output window toolbar"); //NOI18N
         }
         actions = new Action[a.length];
-        buttons = new JButton[a.length];
-        for (int i=0; i < buttons.length; i++) {
+        for (int i = 0; i < a.length; i++) {
             actions[i] = a[i];
-            // mkleint - ignore the WeakAction referencing as it introduces
-            // additional non obvious contract to using the the toolbar actions.
-//            actions[i] = new WeakAction(a[i]);
-            installKeyboardAction (actions[i]);
-            buttons[i] = new JButton(actions[i]);
-            buttons[i].setBorderPainted(false);
-            buttons[i].setOpaque(false);
-            buttons[i].setText(null);
-            buttons[i].putClientProperty("hideActionText", Boolean.TRUE); //NOI18N
-            if (a[i].getValue (Action.SMALL_ICON) == null) {
-                throw new IllegalStateException ("No icon provided for " + a[i]); //NOI18N
-            }
+            installKeyboardAction(actions[i]);
         }
     }
-
 
     /**
      * Get the toolbar actions, if any, which have been supplied by the client.
@@ -251,9 +244,4 @@ public abstract class AbstractOutputTab extends JComponent implements Accessible
         getOutputPane().lockScroll();
         getOutputPane().ensureCaretPosition();
     }
-
-    JButton[] getToolbarButtons() {
-        return buttons;
-    }
-
 }
