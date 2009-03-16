@@ -58,12 +58,10 @@ public class ScriptingMeasureDialogsTest {
         System.setProperty("suitename", ScriptingMeasureDialogsTest.class.getCanonicalName());
         System.setProperty("suite", "UI Responsiveness Scripting Dialogs suite");
 
-        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(RubyPropertiesDialogTest.class)
+        suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingProjectsPropertiesDialogTest.class)
         .addTest(RailsGeneratorDialogTest.class)
         .addTest(RubyGemsDialogTest.class)
-        .addTest(PhpPropertiesDialogTest.class)
-        .addTest(AddJavaScriptLibraryDialogTest.class)
-        .enableModules(".*").clusters(".*").reuseUserDir(true)));
+        .enableModules(".*").clusters("websvccommon[0-9]|php[0-9]|ruby[0-9]|webcommon[0-9]|gsf[0-9]|enterprise[0-9]").reuseUserDir(true)));
                 
         return suite;
     }

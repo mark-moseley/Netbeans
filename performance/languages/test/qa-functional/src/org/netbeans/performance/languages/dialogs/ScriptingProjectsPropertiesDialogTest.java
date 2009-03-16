@@ -39,16 +39,17 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.performance.languages.menus;
+package org.netbeans.performance.languages.dialogs;
 
 import org.netbeans.modules.performance.utilities.PerformanceTestCase;
-import org.netbeans.performance.languages.Projects;
 import org.netbeans.performance.languages.setup.ScriptingSetup;
+import org.netbeans.performance.languages.Projects;
 
+import org.netbeans.jellytools.NbDialogOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.actions.PropertiesAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jemmy.operators.ComponentOperator;
-import org.netbeans.jemmy.operators.JPopupMenuOperator;
 import org.netbeans.junit.NbTestSuite;
 import org.netbeans.junit.NbModuleSuite;
 
@@ -56,90 +57,63 @@ import org.netbeans.junit.NbModuleSuite;
  *
  * @author mkhramov@netbeans.org
  */
-public class ScriptingProjectNodePopupTest extends  PerformanceTestCase {
+public class ScriptingProjectsPropertiesDialogTest extends PerformanceTestCase {
 
-    protected static Node dataObjectNode;
-    protected static ProjectsTabOperator projectsTab = null;
+    private Node testNode;
+    private String TITLE, projectName;
     
-    public ScriptingProjectNodePopupTest(String testName)
-    {
+    public ScriptingProjectsPropertiesDialogTest(String testName) {
         super(testName);
-        expectedTime = 100;
-    }
-    public ScriptingProjectNodePopupTest(String testName, String performanceDataName)
-    {
-        super(testName,performanceDataName);     
-        expectedTime = 100;
+        expectedTime = WINDOW_OPEN;          
     }
     
+    public ScriptingProjectsPropertiesDialogTest(String testName, String performanceDataName) {
+        super(testName,performanceDataName);
+        expectedTime = WINDOW_OPEN;      
+    }
+
     public static NbTestSuite suite() {
         NbTestSuite suite = new NbTestSuite();
         suite.addTest(NbModuleSuite.create(NbModuleSuite.createConfiguration(ScriptingSetup.class)
-             .addTest(ScriptingProjectNodePopupTest.class)
+             .addTest(ScriptingProjectsPropertiesDialogTest.class)
              .enableModules(".*").clusters(".*")));
         return suite;
     }
 
-    /**
-     * Selects node whose popup menu will be tested.
-     */
-    public void prepare() {
-        dataObjectNode.select();
-    }
-    
-    /**
-     * Directly sends mouse events causing popup menu displaying to the selected node.
-     * <p>Using Jemmy/Jelly to call popup can cause reselecting of node and more events
-     * than is desirable for this case.
-     */
-    public ComponentOperator open(){
-        /* it stopped to work after a while, see issue 58790
-        java.awt.Point p = dataObjectNode.tree().getPointToClick(dataObjectNode.getTreePath());
-        JPopupMenu menu = callPopup(dataObjectNode.tree(), p.x, p.y, java.awt.event.InputEvent.BUTTON3_MASK);
-        return new JPopupMenuOperator(menu);
-         */
-        
-        java.awt.Point point = dataObjectNode.tree().getPointToClick(dataObjectNode.getTreePath());
-        int button = dataObjectNode.tree().getPopupMouseButton();
-        dataObjectNode.tree().clickMouse(point.x, point.y, 1, button);
-        return new JPopupMenuOperator();
-    }
-    /**
-     * Closes the popup by sending ESC key event.
-     */
     @Override
-    public void close(){
-        //testedComponentOperator.pressKey(java.awt.event.KeyEvent.VK_ESCAPE);
-        // Above sometimes fails in QUEUE mode waiting to menu become visible.
-        // This pushes Escape on underlying JTree which should be always visible
-        dataObjectNode.tree().pushKey(java.awt.event.KeyEvent.VK_ESCAPE);
+    public void initialize() {
+        TITLE = org.netbeans.jellytools.Bundle.getStringTrimmed("org.netbeans.modules.php.project.ui.customizer.Bundle", "LBL_Customizer_Title", new String[]{projectName});       
+        testNode = (Node) new ProjectsTabOperator().getProjectRootNode(projectName);        
     }
     
-    public void testRubyProjectNodePopupMenu() {
-        testNode(getProjectNode(Projects.RUBY_PROJECT));        
-    }
-    
-    public void testRailsProjectNodePopupMenu() {
-        testNode(getProjectNode(Projects.RAILS_PROJECT));        
-    }
-    
-    public void testPHPProjectNodePopupMenu() {
-        testNode(getProjectNode(Projects.PHP_PROJECT));
+    @Override
+    public void prepare() {
     }
 
-    public void testScriptingProjectNodePopupMenu() {
-        testNode(getProjectNode(Projects.SCRIPTING_PROJECT));
+    @Override
+    public ComponentOperator open() {
+        new PropertiesAction().performPopup(testNode);
+        return new NbDialogOperator(TITLE);
     }
-
-    public void testNode(Node node){
-        dataObjectNode = node;
+    
+    public void testPhpProjectProperties() {
+        projectName = Projects.PHP_PROJECT;
         doMeasurement();
     }
-    
-    protected Node getProjectNode(String projectName) {
-        if(projectsTab==null)
-            projectsTab = new ProjectsTabOperator();
-        
-        return projectsTab.getProjectRootNode(projectName);
+
+    public void testRubyProjectProperties() {
+        projectName = Projects.RUBY_PROJECT;
+        doMeasurement();
     }
+
+    public void testRailsProjectProperties() {
+        projectName = Projects.RAILS_PROJECT;
+        doMeasurement();
+    }
+
+    public void testScriptingProjectProperties() {
+        projectName = Projects.SCRIPTING_PROJECT;
+        doMeasurement();
+    }
+
 }
