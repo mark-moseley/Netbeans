@@ -55,7 +55,6 @@ import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.junit.Log;
 import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbPerformanceTest;
-import org.netbeans.modules.java.source.usages.ClassIndexManager;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.api.RefactoringElement;
 import org.netbeans.modules.refactoring.api.RefactoringSession;
@@ -64,19 +63,31 @@ import org.netbeans.modules.refactoring.java.RetoucheUtils;
 import org.netbeans.modules.refactoring.java.api.WhereUsedQueryConstants;
 import org.openide.filesystems.FileObject;
 import org.openide.util.lookup.Lookups;
+import static org.netbeans.modules.refactoring.java.test.Utilities.*;
 
 /**
  * Test that all java-source instances are disposed at the end.
  *
  * @author Pavel Flaska
  */
-public class OpenDocumentsPerfTest extends RefPerfTestCase {
+public class FindSubclassesTest extends RefPerfTestCase {
 
-    public OpenDocumentsPerfTest(String name) {
+    public FindSubclassesTest(String name) {
         super(name);
     }
 
-    public void testOpenDocuments()
+    /**
+     * Set-up the services and project
+     */
+    @Override
+    protected void setUp() throws IOException, InterruptedException {
+        clearWorkDir();
+        String work = getWorkDirPath();
+        System.setProperty("netbeans.user", work);
+        projectDir = openProject("SimpleJ2SEApp", getDataDir());
+    }
+
+    public void testFindSub()
             throws IOException, InterruptedException, ExecutionException {
         // logging is used to obtain data about consumed time
         Logger timer = Logger.getLogger("TIMER.RefactoringSession");
@@ -87,28 +98,23 @@ public class OpenDocumentsPerfTest extends RefPerfTestCase {
         timer.setLevel(Level.FINE);
         timer.addHandler(getHandler());
 
-        ClassIndexManager.getDefault();
-        Thread.sleep(29000);
-        System.err.println("Starting...");
         Log.enableInstances(Logger.getLogger("TIMER"), "JavacParser", Level.FINEST);
-
-        FileObject testFile = getProjectDir().getFileObject("/src/bsh/This.java");
+        FileObject testFile = getProjectDir().getFileObject("/src/simplej2seapp/Main.java");
         JavaSource src = JavaSource.forFileObject(testFile);
         final WhereUsedQuery[] wuq = new WhereUsedQuery[1];
-        
-        src.runUserActionTask(new Task<CompilationController>() {
+        src.runWhenScanFinished(new Task<CompilationController>() {
 
             public void run(CompilationController controller) throws Exception {
+                System.err.println(controller.getClasspathInfo());
                 controller.toPhase(JavaSource.Phase.RESOLVED);
-                TypeElement klass = controller.getElements().getTypeElement("bsh.This");
-                TypeMirror mirror = klass.getInterfaces().get(1); // java.lang.Runnable
+                TypeElement klass = controller.getElements().getTypeElement("simplej2seapp.Main");
+                TypeMirror mirror = klass.getSuperclass();
                 Element object = controller.getTypes().asElement(mirror);
                 wuq[0] = new WhereUsedQuery(Lookups.singleton(TreePathHandle.create(object, controller)));
                 ClasspathInfo cpi = RetoucheUtils.getClasspathInfoFor(TreePathHandle.create(klass, controller));
                 wuq[0].getContext().add(cpi);
             }
         }, false);
-        
         wuq[0].putValue(WhereUsedQueryConstants.FIND_SUBCLASSES, true);
         RefactoringSession rs = RefactoringSession.create("Session");
         Problem p = wuq[0].preCheck();
@@ -123,32 +129,30 @@ public class OpenDocumentsPerfTest extends RefPerfTestCase {
         rs.doRefactoring(false);
         Collection<RefactoringElement> elems = rs.getRefactoringElements();
         StringBuilder sb = new StringBuilder();
-                sb.append("Symbol: '").append("java.lang.Runnable").append("'");
+                sb.append("Symbol: '").append("java.lang.Object").append("'");
         sb.append('\n').append("Number of usages: ").append(elems.size()).append('\n');
+        long prepare = getHandler().get("refactoring.prepare");
         try {
-            long prepare = getHandler().get("refactoring.prepare");
             NbPerformanceTest.PerformanceData d = new NbPerformanceTest.PerformanceData();
-            d.name = "refactoring.prepare"+" (" + "java.lang.Runnable" + ", usages:" + elems.size() + ")";
+            d.name = "refactoring.prepare"+" (" + "java.lang.Object" + ", usages:" + elems.size() + ")";
             d.value = prepare;
             d.unit = "ms";
             d.runOrder = 0;
             sb.append("Prepare phase: ").append(prepare).append(" ms.\n");
             Utilities.processUnitTestsResults(FindUsagesPerfTest.class.getCanonicalName(), d);
-            System.err.println("Time: " + prepare);
         } catch (Exception ex) {
             sb.append("Cannot collect usages: ").append(ex.getCause());
         }
         getLog().append(sb);
         System.err.println(sb);
-
-        src = null;
         wuq[0] = null;
+        src = null;
+
         System.gc(); System.gc();
-        
         Log.assertInstances("Some instances of parser were not GCed");
     }
 
     public static Test suite() throws InterruptedException {
-        return NbModuleSuite.create(NbModuleSuite.emptyConfiguration().addTest(OpenDocumentsPerfTest.class, "testOpenDocuments").gui(true));
+        return NbModuleSuite.create(NbModuleSuite.emptyConfiguration().addTest(FindSubclassesTest.class, "testFindSub").gui(false));
     }
 }
