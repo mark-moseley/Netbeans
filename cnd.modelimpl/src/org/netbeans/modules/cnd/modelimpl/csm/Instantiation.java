@@ -159,8 +159,11 @@ public /*abstract*/ class Instantiation<T extends CsmOffsetableDeclaration> impl
             return new Class((CsmClass)template, type);
         } else if (template instanceof CsmFunction) {
             return new Function((CsmFunction)template, type);
+        } else {
+            if (CndUtils.isDebugMode()) {
+                CndUtils.assertTrue(false, "Unknown class " + template.getClass() + " for template instantiation:" + template, Level.WARNING); // NOI18N
+            }
         }
-        assert false : "Unknown class for template instantiation:" + template; // NOI18N
         return template;
     }
     
@@ -588,7 +591,12 @@ public /*abstract*/ class Instantiation<T extends CsmOffsetableDeclaration> impl
 
         public CsmClass getCsmClass() {
             if (csmClass == null) {
-                csmClass = (CsmClass)Instantiation.create((CsmTemplate)declaration.getCsmClass(), getMapping());
+                CsmClass declClassifier = declaration.getCsmClass();
+                if (CsmKindUtilities.isTemplate(declClassifier)) {
+                    csmClass = (CsmClass)Instantiation.create((CsmTemplate)declClassifier, getMapping());
+                } else {
+                    csmClass = declClassifier;
+                }
             }
             return csmClass;
         }
@@ -794,6 +802,23 @@ public /*abstract*/ class Instantiation<T extends CsmOffsetableDeclaration> impl
                 CsmTemplateParameterType paramType = (CsmTemplateParameterType)type;
                 newType = instantiation.getMapping().get(paramType.getParameter());
                 if (newType != null) {
+                    CsmTemplateParameter p = paramType.getParameter();
+                    if (CsmKindUtilities.isTemplate(p)) {
+                        CsmType paramTemplateType = paramType.getTemplateType();
+                        if (paramTemplateType != null) {
+                            List<CsmType> paramInstParams = paramTemplateType.getInstantiationParams();
+                            if (paramInstParams != null && !paramInstParams.isEmpty()) {
+                                List<CsmType> newInstParams = newType.getInstantiationParams();
+                                if(newInstParams != null) {
+                                    for (CsmType csmType : paramInstParams) {
+                                        if(!newInstParams.contains(csmType)) {
+                                            newInstParams.add(csmType);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     origType = paramType.getTemplateType();
                 } else {
                     newType = type;
