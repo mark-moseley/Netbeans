@@ -44,22 +44,32 @@ made subject to such option by the copyright holder.
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
-            <code-name-base>org.netbeans.modules.websvc.clientapi</code-name-base>
+            <code-name-base>org.netbeans.modules.websvc.jaxws.lightapi</code-name-base>
             <module-dependencies>
                 <dependency>
-                    <code-name-base>org.apache.tools.ant.module</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>3</release-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.project.ant</code-name-base>
+                    <code-name-base>org.netbeans.modules.j2ee.dd</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
+                        <specification-version>1.12</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.j2ee.dd.webservice</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>1.9</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.j2ee.metadata</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>0</release-version>
+                        <specification-version>1.3</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -68,40 +78,7 @@ made subject to such option by the copyright holder.
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.websvc.jaxwsmodel</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.6</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.xml.xam</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.1</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.dialogs</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>6.2</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.execution</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>1.8.1</specification-version>
+                        <specification-version>1.9.1</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -109,15 +86,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.2</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.nodes</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>6.2</specification-version>
+                        <specification-version>6.4.1</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -125,15 +94,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.2</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.windows</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>6.19</specification-version>
+                        <specification-version>6.8.1</specification-version>
                     </run-dependency>
                 </dependency>
             </module-dependencies>
@@ -143,28 +104,20 @@ made subject to such option by the copyright holder.
                     <test-dependency>
                         <code-name-base>org.netbeans.modules.queries</code-name-base>
                     </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.websvc.jaxws.lightapi</code-name-base>
+                        <recursive/>
+                        <compile-dependency/>
+                    </test-dependency>
                 </test-type>
             </test-dependencies>
             <friend-packages>
-                <friend>org.netbeans.modules.e2e.end2end</friend>
-                <friend>org.netbeans.modules.j2ee.clientproject</friend>
-                <friend>org.netbeans.modules.j2ee.ejbjarproject</friend>
-                <friend>org.netbeans.modules.mobility.end2end</friend>
-                <friend>org.netbeans.modules.tcpmon.integration</friend>
-                <friend>org.netbeans.modules.visualweb.project.jsfproject</friend>
-                <friend>org.netbeans.modules.web.businessone</friend>
-                <friend>org.netbeans.modules.web.project</friend>
-                <friend>org.netbeans.modules.websvc.core</friend>
+                <friend>org.netbeans.modules.maven.jaxws</friend>
                 <friend>org.netbeans.modules.websvc.customization</friend>
-                <friend>org.netbeans.modules.websvc.jaxrpc</friend>
-                <friend>org.netbeans.modules.websvc.metro.model</friend>
-                <friend>org.netbeans.modules.websvc.rest</friend>
-                <friend>org.netbeans.modules.websvc.saas.codegen.j2ee</friend>
                 <friend>org.netbeans.modules.websvc.wsitconf</friend>
-                <package>org.netbeans.modules.websvc.api.client</package>
-                <package>org.netbeans.modules.websvc.api.jaxws.client</package>
-                <package>org.netbeans.modules.websvc.spi.client</package>
-                <package>org.netbeans.modules.websvc.spi.jaxws.client</package>
+                <friend>org.netbeans.modules.websvc.metro.model</friend>
+                <package>org.netbeans.modules.websvc.jaxws.light.api</package>
+                <package>org.netbeans.modules.websvc.jaxws.light.spi</package>
             </friend-packages>
         </data>
     </configuration>
