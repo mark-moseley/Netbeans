@@ -41,7 +41,7 @@
 
 package org.netbeans.modules.websvc.wsitconf.wsdlmodelext;
 
-import java.io.File;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -64,19 +64,32 @@ import org.netbeans.modules.websvc.api.jaxws.project.config.Client;
 import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
 import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
+import org.netbeans.modules.websvc.jaxws.light.api.JaxWsService;
 import org.netbeans.modules.websvc.jaxwsruntimemodel.JavaWsdlMapper;
 import org.netbeans.modules.websvc.wsitconf.util.UndoManagerHolder;
 import org.netbeans.modules.websvc.wsitconf.WSITEditor;
 import org.netbeans.modules.websvc.wsitconf.api.DesignerListenerProvider;
+import org.netbeans.modules.websvc.wsitconf.spi.SecurityProfile;
+import org.netbeans.modules.websvc.wsitconf.spi.SecurityProfileRegistry;
+import org.netbeans.modules.websvc.wsitconf.spi.WsitProvider;
+import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
+import org.netbeans.modules.websvc.wsitconf.ui.security.listmodels.ServiceProviderElement;
 import org.netbeans.modules.websvc.wsitconf.util.AbstractTask;
 import org.netbeans.modules.websvc.wsitconf.util.SourceUtils;
 import org.netbeans.modules.websvc.wsitconf.util.Util;
 import org.netbeans.modules.websvc.wsitmodelext.policy.Policy;
 import org.netbeans.modules.websvc.wsitmodelext.policy.PolicyReference;
+import org.netbeans.modules.websvc.wsitmodelext.security.proprietary.service.STSConfiguration;
+import org.netbeans.modules.websvc.wsitmodelext.security.proprietary.service.ServiceProvider;
 import org.netbeans.modules.xml.retriever.catalog.Utilities;
 import org.netbeans.modules.xml.wsdl.model.Binding;
+import org.netbeans.modules.xml.wsdl.model.BindingFault;
+import org.netbeans.modules.xml.wsdl.model.BindingInput;
+import org.netbeans.modules.xml.wsdl.model.BindingOperation;
+import org.netbeans.modules.xml.wsdl.model.BindingOutput;
 import org.netbeans.modules.xml.wsdl.model.Definitions;
 import org.netbeans.modules.xml.wsdl.model.Import;
+import org.netbeans.modules.xml.wsdl.model.Message;
 import org.netbeans.modules.xml.wsdl.model.Port;
 import org.netbeans.modules.xml.wsdl.model.Types;
 import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
@@ -147,17 +160,16 @@ public class WSITModelSupport {
         }
         return model;
     }
-    
+
     public static WSDLModel getModelForService(Service service, FileObject implClass, Project p, boolean create, Collection<FileObject> createdFiles) {
         try {
-            String wsdlUrl = service.getWsdlUrl();
+            String wsdlUrl = service.getLocalWsdlFile();
             if (wsdlUrl == null) { // WS from Java
-                if (implClass == null) {
-                    logger.log(Level.INFO, "Implementation class is null");
+                if ((implClass == null) || (!implClass.isValid() || implClass.isVirtual())) {
+                    logger.log(Level.INFO, "Implementation class is null or not valid, or just virtual: " + implClass + ", service: " + service);
                     return null;
                 }
-                JAXWSSupport supp = JAXWSSupport.getJAXWSSupport(implClass);
-                return getModelForServiceFromJava(implClass, supp, create, createdFiles);
+                return getModelForServiceFromJava(implClass, p, create, createdFiles);
             } else {
                 if (p == null) return null;
                 JAXWSSupport supp = JAXWSSupport.getJAXWSSupport(p.getProjectDirectory());
@@ -171,7 +183,7 @@ public class WSITModelSupport {
         return null;
     }
     
-    protected static WSDLModel getModelFromFO(FileObject wsdlFO, boolean editable) {
+    public static WSDLModel getModelFromFO(FileObject wsdlFO, boolean editable) {
         WSDLModel model = null;
         ModelSource ms = org.netbeans.modules.xml.retriever.catalog.Utilities.getModelSource(wsdlFO, editable);
         try {
@@ -179,15 +191,19 @@ public class WSITModelSupport {
             if (model != null) {
                 model.sync();
             }
-        } catch (IOException ex) {
-            ex.printStackTrace();
+        } catch (Exception ex) { // we need this, as we can't rely on wsdl model at all
+            logger.log(Level.INFO, null, ex);
         }
         return model;
+    }
+
+    public static WSDLModel getModelForClient(Project p, Client client, boolean create, Collection<FileObject> createdFiles) throws IOException {
+        return getModelForClient(p, URI.create(client.getWsdlUrl()), create, createdFiles);
     }
     
     /* Retrieves WSDL model for a WS client - always has a wsdl
      */
-    public static WSDLModel getModelForClient(Project p, Client client, boolean create, Collection<FileObject> createdFiles) throws IOException {
+    static WSDLModel getModelForClient(Project p, URI fileUri, boolean create, Collection<FileObject> createdFiles) throws IOException {
         
         WSDLModel model = null;
         FileObject srcFolder = WSITEditor.getClientConfigFolder(p);
@@ -196,7 +212,7 @@ public class WSITModelSupport {
         
         try {
             CatalogModel cm = Utilities.getCatalogModel(catalogms);
-            ModelSource originalms = cm.getModelSource(URI.create(client.getWsdlUrl()));
+            ModelSource originalms = cm.getModelSource(fileUri);
             FileObject originalWsdlFO = Utilities.getFileObject(originalms);
             WSDLModel originalwsdlmodel = getModelFromFO(originalWsdlFO, true);
             
@@ -271,7 +287,7 @@ public class WSITModelSupport {
         return model;
     }
     
-    private static void copyImports(final WSDLModel model, final FileObject srcFolder, Collection<FileObject> createdFiles) throws CatalogModelException {
+    static void copyImports(final WSDLModel model, final FileObject srcFolder, Collection<FileObject> createdFiles) throws CatalogModelException {
         
         FileObject modelFO = Utilities.getFileObject(model.getModelSource());
         
@@ -309,7 +325,7 @@ public class WSITModelSupport {
     /** Creates new empty main client configuration file
      *
      */
-    private static FileObject createMainConfig(FileObject folder, Collection<FileObject> createdFiles) {
+    static FileObject createMainConfig(FileObject folder, Collection<FileObject> createdFiles) {
         FileObject mainConfig = null;
         try {
             mainConfig = FileUtil.createData(folder, CONFIG_WSDL_CLIENT_PREFIX + "." + MAIN_CONFIG_EXTENSION); //NOI18N
@@ -353,13 +369,13 @@ public class WSITModelSupport {
     
     private static WSDLModel getModelForServiceFromWsdl(JAXWSSupport supp, Service service) throws IOException, Exception {
         String wsdlLocation = service.getLocalWsdlFile();
-        FileObject wsdlFO = supp.getLocalWsdlFolderForService(service.getName(),false).getFileObject(File.separator + wsdlLocation);
+        FileObject wsdlFO = supp.getLocalWsdlFolderForService(service.getName(),false).getFileObject(wsdlLocation);
         return getModelFromFO(wsdlFO, true);
     }
-    
+
     /* Retrieves WSDL model for a WS from Java - if config file exists, reuses that one, otherwise generates new one
      */
-    public static WSDLModel getModelForServiceFromJava(FileObject jc, JAXWSSupport supp, boolean create, Collection<FileObject> createdFiles) throws IOException {
+    public static WSDLModel getModelForServiceFromJava(FileObject jc, Project p, boolean create, Collection<FileObject> createdFiles) throws IOException {
         
         WSDLModel model = null;
         String configWsdlName = CONFIG_WSDL_SERVICE_PREFIX;
@@ -373,7 +389,9 @@ public class WSITModelSupport {
                 public void run(CompilationController controller) throws java.io.IOException {
                     controller.toPhase(JavaSource.Phase.ELEMENTS_RESOLVED);
                     SourceUtils sourceUtils = SourceUtils.newInstance(controller);
-                    result[0] = sourceUtils.getTypeElement().getQualifiedName().toString();
+                    if (sourceUtils != null) {
+                        result[0] = sourceUtils.getTypeElement().getQualifiedName().toString();
+                    }
                 }
             }, true);
             
@@ -382,21 +400,23 @@ public class WSITModelSupport {
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
         }
-        
+
+        WsitProvider wp = p.getLookup().lookup(WsitProvider.class);        
+        FileObject cfgFolder = wp.getConfigFilesFolder(false);
+
         // check whether config file already exists
-        if (supp.getWsdlFolder(true) != null) {
-            FileObject wsdlFO = supp.getWsdlFolder(true).getParent().getFileObject(configWsdlName, CONFIG_WSDL_EXTENSION);  //NOI18N
-            if ((wsdlFO != null) && (wsdlFO.isValid())) {   //NOI18N
+        if ((cfgFolder != null) && (cfgFolder.isValid())) {
+            FileObject wsdlFO = cfgFolder.getFileObject(configWsdlName, CONFIG_WSDL_EXTENSION);
+            if ((wsdlFO != null) && (wsdlFO.isValid())) {
                 return getModelFromFO(wsdlFO, true);
             }
         }
         
         if (create) {
             // config file doesn't exist - generate empty file
-            FileObject wsdlFolder = supp.getWsdlFolder(true).getParent();
-            FileObject wsdlFO = wsdlFolder.getFileObject(configWsdlName, CONFIG_WSDL_EXTENSION);   //NOI18N
+            FileObject wsdlFO = cfgFolder.getFileObject(configWsdlName, CONFIG_WSDL_EXTENSION);
             if ((wsdlFO == null) || !(FileUtil.toFile(wsdlFO).exists())) {
-                wsdlFO = wsdlFolder.createData(configWsdlName, CONFIG_WSDL_EXTENSION);  //NOI18N
+                wsdlFO = cfgFolder.createData(configWsdlName, CONFIG_WSDL_EXTENSION);
                 if (createdFiles != null) {
                     createdFiles.add(wsdlFO);
                 }
@@ -416,7 +436,7 @@ public class WSITModelSupport {
         return model;
     }
     
-    private static WSDLModel createModelFromFO(FileObject wsdlFO, FileObject jc) {
+    static WSDLModel createModelFromFO(FileObject wsdlFO, FileObject jc) {
         WSDLModel model = null;
         ModelSource ms = org.netbeans.modules.xml.retriever.catalog.Utilities.getModelSource(wsdlFO, true);
         try {
@@ -485,9 +505,20 @@ public class WSITModelSupport {
                             
                             List<String> faults = JavaWsdlMapper.getOperationFaults(jc, name);
                             for (String faultstr : faults) {
-                                org.netbeans.modules.xml.wsdl.model.Message fMsg = wcf.createMessage();
-                                fMsg.setName(faultstr);
-                                d.addMessage(fMsg);
+                                
+                                Collection<Message> msgs = d.getMessages();
+                                org.netbeans.modules.xml.wsdl.model.Message fMsg = null;
+                                for (Message msg : msgs) {
+                                    if (msg.getName().equals(faultstr)) {
+                                        fMsg = msg;
+                                        break;
+                                    }
+                                }
+                                if (fMsg == null) {
+                                    fMsg = wcf.createMessage();
+                                    fMsg.setName(faultstr);
+                                    d.addMessage(fMsg);
+                                }
                                 
                                 org.netbeans.modules.xml.wsdl.model.Fault fault = wcf.createFault();
                                 fault.setName(faultstr);
@@ -560,14 +591,30 @@ public class WSITModelSupport {
     public static boolean isServiceFromWsdl(Node node) {
         if (node != null) {
             Service service = node.getLookup().lookup(Service.class);
-            return isServiceFromWsdl(service);
+            if (service != null) {
+                return isServiceFromWsdl(service);
+            }
+            JaxWsService jaxService = node.getLookup().lookup(JaxWsService.class);
+            if ((jaxService != null) && (jaxService.isServiceProvider())) {
+                return isServiceFromWsdl(jaxService);
+            }
         }
         return false;
     }
-    
+
+    public static boolean isServiceFromWsdl(JaxWsService service) {
+        if (service != null) { //it is a service
+            String wsdlUrl = service.getLocalWsdl();
+            if (wsdlUrl != null) { // it is a web service from wsdl
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean isServiceFromWsdl(Service service) {
         if (service != null) { //it is a service
-            String wsdlUrl = service.getWsdlUrl();
+            String wsdlUrl = service.getLocalWsdlFile();
             if (wsdlUrl != null) { // it is a web service from wsdl
                 return true;
             }
@@ -686,4 +733,130 @@ public class WSITModelSupport {
         }
         return null;
     }
+
+    static void moveCurrentConfig(Binding b, ConfigVersion currentCfgVersion, ConfigVersion targetCfgVersion,
+                                  Project project) {
+        if (b == null) return;
+        
+        // First store the values
+        boolean addr = AddressingModelHelper.isAddressingEnabled(b);
+
+        // Transport
+        boolean mtom = TransportModelHelper.isMtomEnabled(b);
+        boolean tcp = TransportModelHelper.isTCPEnabled(b);
+        boolean fi = TransportModelHelper.isFIEnabled(b);
+        
+        // RM
+        RMModelHelper currentRMH = RMModelHelper.getInstance(currentCfgVersion);
+        boolean rm = currentRMH.isRMEnabled(b);
+        boolean ordered = currentRMH.isOrderedEnabled(b);
+        boolean flowControl = RMModelHelper.isFlowControl(b);
+        RMSequenceBinding seqBinding = RMSequenceBinding.getValue(currentCfgVersion, b);
+        RMDeliveryAssurance assurance = RMDeliveryAssurance.getValue(currentCfgVersion, b);
+        String bufSize = RMModelHelper.getMaxReceiveBufferSize(b);
+        String inactTimeout = currentRMH.getInactivityTimeout(b);
+
+        // Security
+        String profile = ProfilesModelHelper.getSecurityProfile(b);
+        boolean security = SecurityPolicyModelHelper.isSecurityEnabled(b);
+        boolean serviceDefaultsUsed = ProfilesModelHelper.isServiceDefaultSetupUsed(profile, b, project);
+        
+        // STS
+        boolean sts = ProprietarySecurityPolicyModelHelper.isSTSEnabled(b);
+        List<ServiceProviderElement> sProviderElems = new ArrayList();
+        String issuer = null;
+        String contract = null;
+        String lifetime = null;
+        boolean encKey = false;
+        boolean encToken = false;
+        if (sts) {
+            STSConfiguration stsConfig = ProprietarySecurityPolicyModelHelper.getSTSConfiguration(b);
+            List<ServiceProvider> sProviders = ProprietarySecurityPolicyModelHelper.getSTSServiceProviders(stsConfig);
+            for (ServiceProvider sP : sProviders) {
+                String spCertAlias = ProprietarySecurityPolicyModelHelper.getSPCertAlias(sP);
+                String spKeyType = ProprietarySecurityPolicyModelHelper.getSPKeyType(sP);
+                String spTokenType = ProprietarySecurityPolicyModelHelper.getSPTokenType(sP);
+                String endpoint = sP.getEndpoint();
+                ServiceProviderElement sElem = new ServiceProviderElement(endpoint, spCertAlias, spTokenType, spKeyType);
+                sProviderElems.add(sElem);
+            }
+            issuer = ProprietarySecurityPolicyModelHelper.getSTSIssuer(b);
+            lifetime = ProprietarySecurityPolicyModelHelper.getSTSLifeTime(b);
+            contract = ProprietarySecurityPolicyModelHelper.getSTSContractClass(b);
+            encKey = ProprietarySecurityPolicyModelHelper.getSTSEncryptKey(b);
+            encToken = ProprietarySecurityPolicyModelHelper.getSTSEncryptToken(b);
+        }
+        
+        PolicyModelHelper.removePolicyForElement(b);
+        
+        for (BindingOperation bo : b.getBindingOperations()) {
+            BindingInput bi = bo.getBindingInput();
+            BindingOutput bout = bo.getBindingOutput();
+            if (bi != null) {
+                PolicyModelHelper.removePolicyForElement(bi);
+            }
+            if (bout != null) {
+                PolicyModelHelper.removePolicyForElement(bout);
+            }
+            for (BindingFault bf : bo.getBindingFaults()) {
+                PolicyModelHelper.removePolicyForElement(bf);
+            }
+            PolicyModelHelper.removePolicyForElement(bo);
+        }
+
+        // --------------------
+        
+        PolicyModelHelper.getInstance(targetCfgVersion).createPolicy(b, addr);
+        
+        // Then apply them with the new values
+
+        // Transport
+        TransportModelHelper.enableMtom(b, mtom);
+        TransportModelHelper.enableFI(b, fi);
+        TransportModelHelper.enableTCP(b, tcp);
+        
+        // RM
+        if (rm) {
+            RMModelHelper targetRMH = RMModelHelper.getInstance(targetCfgVersion);
+            targetRMH.enableRM(b, true);
+            if (flowControl) targetRMH.enableFlowControl(b, flowControl);
+            if (ordered) targetRMH.enableOrdered(b, ordered);
+            if (bufSize != null) RMModelHelper.setMaxReceiveBufferSize(b, bufSize);
+            if (inactTimeout != null) targetRMH.setInactivityTimeout(b, inactTimeout);
+            if (seqBinding != null) seqBinding.set(targetCfgVersion, b);
+            if (assurance != null) assurance.set(targetCfgVersion, b);
+        }
+        
+        // Security
+        if (security) {
+            SecurityProfile p = SecurityProfileRegistry.getDefault().getProfile(profile);
+            if ((p != null) && (!p.isProfileSupported(project, b, sts))) {
+                ProfilesModelHelper.getInstance(targetCfgVersion).setSecurityProfile(b, ComboConstants.PROF_USERNAME, null, false);
+            } else {
+                ProfilesModelHelper.getInstance(targetCfgVersion).setSecurityProfile(b, profile, null, false);
+                if (serviceDefaultsUsed) {
+                    ProfilesModelHelper.setServiceDefaults(profile, b, project);
+                }
+            }
+        }
+        
+        // STS 
+        if (sts) {
+            ProprietarySecurityPolicyModelHelper psmh = ProprietarySecurityPolicyModelHelper.getInstance(targetCfgVersion);
+            psmh.enableSTS(b, sts);
+            ProprietarySecurityPolicyModelHelper.setSTSIssuer(b, issuer);
+            ProprietarySecurityPolicyModelHelper.setSTSContractClass(b, contract);
+            ProprietarySecurityPolicyModelHelper.setSTSLifeTime(b, lifetime);
+            ProprietarySecurityPolicyModelHelper.setSTSEncryptKey(b, encKey);
+            ProprietarySecurityPolicyModelHelper.setSTSEncryptToken(b, encToken);
+            STSConfiguration stsConfig = ProprietarySecurityPolicyModelHelper.getSTSConfiguration(b);
+            for (ServiceProviderElement spe : sProviderElems) {
+                ProprietarySecurityPolicyModelHelper.addSTSServiceProvider(stsConfig, spe, targetCfgVersion);
+            }
+        }
+
+        PolicyModelHelper.getInstance(targetCfgVersion).createPolicy(b, false); // this is needed so that the values are not lost
+        
+    }
+    
 }
