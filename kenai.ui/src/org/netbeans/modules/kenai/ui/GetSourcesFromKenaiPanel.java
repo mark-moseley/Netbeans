@@ -55,6 +55,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.PasswordAuthentication;
@@ -103,22 +105,29 @@ public class GetSourcesFromKenaiPanel extends javax.swing.JPanel {
         initComponents();
 
         refreshUsername();
-        setupCombo();
+
+        comboModel = new KenaiRepositoriesComboModel();
+        kenaiRepoComboBox.setModel(comboModel);
+        kenaiRepoComboBox.setRenderer(new KenaiFeatureCellRenderer());
+
+        updatePanelUI();
+        updateRepoPath();
+
+        //setupCombo();
         
     }
 
-    /** Creates new form GetFromKenaiPanel */
     public GetSourcesFromKenaiPanel() {
         this(null);
     }
 
-    GetSourcesInfo getSelectedSourcesInfo() {
-        StringTokenizer stok = new StringTokenizer(repoFolderTextField.getText(), ",");
-        ArrayList<String> tokens = new ArrayList<String>();
+    public GetSourcesInfo getSelectedSourcesInfo() {
+        StringTokenizer stok = new StringTokenizer(repoFolderTextField.getText(), ","); // NOI18N
+        ArrayList<String> repoFolders = new ArrayList<String>();
         while (stok.hasMoreTokens()) {
-            tokens.add(stok.nextToken());
+            repoFolders.add(stok.nextToken().trim());
         }
-        String relPaths[] = tokens.size() == 0 ? new String[] { "" } : tokens.toArray(new String[tokens.size()]);
+        String relPaths[] = repoFolders.size() == 0 ? new String[] { "" } : repoFolders.toArray(new String[repoFolders.size()]); // NOI18N
         return new GetSourcesInfo(((KenaiFeatureListItem) kenaiRepoComboBox.getSelectedItem()).feature,
                 localFolderTextField.getText(), relPaths);
     }
@@ -337,7 +346,9 @@ public class GetSourcesFromKenaiPanel extends javax.swing.JPanel {
             if (null != selProject && selProject.length > 0) {
                 KenaiProjectFeature features[] = selProject[0].getFeatures(KenaiFeature.SOURCE);
                 for (KenaiProjectFeature feature : features) {
-                    getComboModel().addElement(new KenaiFeatureListItem(selProject[0], feature));
+                    KenaiFeatureListItem item = new KenaiFeatureListItem(selProject[0], feature);
+                    comboModel.addElement(item);
+                    comboModel.setSelectedItem(item);
                 }
             }
         }
@@ -392,7 +403,67 @@ public class GetSourcesFromKenaiPanel extends javax.swing.JPanel {
         localFolderPathEdited = true;
     }//GEN-LAST:event_localFolderTextFieldKeyTyped
 
-    private class KenaiRepositoriesModel extends DefaultComboBoxModel {
+    private class KenaiRepositoriesComboModel extends DefaultComboBoxModel implements PropertyChangeListener {
+
+        public KenaiRepositoriesComboModel() {
+            Kenai.getDefault().addPropertyChangeListener(this);
+            if (prjAndFeature != null) {
+                try {
+                    KenaiProject prj = Kenai.getDefault().getProject(prjAndFeature.projectName);
+                    KenaiFeatureListItem item = new KenaiFeatureListItem(prj, prjAndFeature.feature);
+                    addElement(item);
+                    setSelectedItem(item);
+                } catch (KenaiException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+            if (Utilities.isUserLoggedIn()) {
+                addAllMyProjects();
+            }
+        }
+
+        private void addAllMyProjects() {
+            RequestProcessor.getDefault().post(new Runnable() {
+                public void run() {
+                    Iterator<KenaiProject> myProjectsIter = null;
+                    try {
+                        myProjectsIter = Kenai.getDefault().getMyProjects().iterator();
+                    } catch (KenaiException ex) {
+                        // XXX
+                        Exceptions.printStackTrace(ex);
+                    }
+                    if (myProjectsIter != null) {
+                        while (myProjectsIter.hasNext() ) {
+                            final KenaiProject project = myProjectsIter.next();
+                            KenaiProjectFeature features[] = project.getFeatures(KenaiFeature.SOURCE);
+                            for (final KenaiProjectFeature feature : features) {
+                                EventQueue.invokeLater(new Runnable() {
+                                    public void run() {
+                                        addElement(new KenaiFeatureListItem(project, feature));
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // listening for user login
+        public void propertyChange(PropertyChangeEvent evt) {
+            if (Kenai.PROP_LOGIN.equals(evt.getPropertyName())) {
+                PasswordAuthentication oldAuth = (PasswordAuthentication) evt.getOldValue();
+                PasswordAuthentication newAuth = (PasswordAuthentication) evt.getNewValue();
+                if (newAuth != null && !newAuth.equals(oldAuth)) {
+                    addAllMyProjects();
+                }
+            }
+        }
+
+    }
+
+
+    private class KenaiRepositoriesModel extends DefaultComboBoxModel implements PropertyChangeListener {
 
         public KenaiRepositoriesModel(final Iterator<KenaiProject> projects) {
             if (prjAndFeature != null) {
@@ -420,9 +491,14 @@ public class GetSourcesFromKenaiPanel extends javax.swing.JPanel {
             });
         }
 
+        // listening for user login
+        public void propertyChange(PropertyChangeEvent evt) {
+            
+        }
+
     }
 
-    static class KenaiFeatureListItem {
+    public static class KenaiFeatureListItem {
 
         KenaiProject project;
         KenaiProjectFeature feature;
@@ -439,7 +515,7 @@ public class GetSourcesFromKenaiPanel extends javax.swing.JPanel {
 
     }
 
-    static class GetSourcesInfo {
+    public static class GetSourcesInfo {
 
         public KenaiProjectFeature feature;
         public String localFolderPath;
@@ -526,35 +602,35 @@ public class GetSourcesFromKenaiPanel extends javax.swing.JPanel {
         }
     }
 
-    private void setupCombo() {
-        if (Utilities.isLoggedIn()) {
-            RequestProcessor.getDefault().post(new Runnable() {
-                public void run() {
-                    Iterator<KenaiProject> myProjectsIter = null;
-                    try {
-                        myProjectsIter = Kenai.getDefault().getMyProjects().iterator();
-                    } catch (KenaiException ex) {
-                        // XXX
-                        Exceptions.printStackTrace(ex);
-                    }
-                    final ComboBoxModel model = (ComboBoxModel) new KenaiRepositoriesModel(myProjectsIter);
-                    //setComboModel((DefaultComboBoxModel) new KenaiRepositoriesModel(myProjectsIter));
-                    EventQueue.invokeLater(new Runnable() {
-                        public void run() {
-                            kenaiRepoComboBox.setModel(model);
-                            updatePanelUI();
-                            updateRepoPath();
-                        }
-                    });
-                }
-            });
-        } else { // user not logged in
-            setComboModel(new DefaultComboBoxModel());
-        }
-
-        KenaiFeatureCellRenderer renderer = new KenaiFeatureCellRenderer();
-        kenaiRepoComboBox.setRenderer(renderer);
-    }
+//    private void setupCombo() {
+//        if (Utilities.isUserLoggedIn()) {
+//            RequestProcessor.getDefault().post(new Runnable() {
+//                public void run() {
+//                    Iterator<KenaiProject> myProjectsIter = null;
+//                    try {
+//                        myProjectsIter = Kenai.getDefault().getMyProjects().iterator();
+//                    } catch (KenaiException ex) {
+//                        // XXX
+//                        Exceptions.printStackTrace(ex);
+//                    }
+//                    final ComboBoxModel model = (ComboBoxModel) new KenaiRepositoriesModel(myProjectsIter);
+//                    //setComboModel((DefaultComboBoxModel) new KenaiRepositoriesModel(myProjectsIter));
+//                    EventQueue.invokeLater(new Runnable() {
+//                        public void run() {
+//                            kenaiRepoComboBox.setModel(model);
+//                            updatePanelUI();
+//                            updateRepoPath();
+//                        }
+//                    });
+//                }
+//            });
+//        } else { // user not logged in
+//            setComboModel(new DefaultComboBoxModel());
+//        }
+//
+//        KenaiFeatureCellRenderer renderer = new KenaiFeatureCellRenderer();
+//        kenaiRepoComboBox.setRenderer(renderer);
+//    }
 
     private synchronized void setComboModel(DefaultComboBoxModel model) {
         comboModel = model;

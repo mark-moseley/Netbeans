@@ -73,7 +73,9 @@ import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.modules.kenai.api.Kenai;
 import org.netbeans.modules.kenai.api.KenaiException;
+import org.netbeans.modules.kenai.api.KenaiFeature;
 import org.netbeans.modules.kenai.api.KenaiProject;
+import org.netbeans.modules.kenai.api.KenaiProjectFeature;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -117,7 +119,6 @@ public class KenaiSearchPanel extends JPanel {
         }
 
     }
-
     
     public KenaiProject getSelectedProject() {
         KenaiProjectSearchInfo searchInfo = (KenaiProjectSearchInfo) kenaiProjectsList.getSelectedValue();
@@ -294,7 +295,8 @@ public class KenaiSearchPanel extends JPanel {
                 }
                 if (projectsIterator != null && projectsIterator.hasNext()) {
                     // XXX createModel
-                    final ListModel listModel = new KenaiProjectsListModel(projectsIterator, searchPattern);
+                    final KenaiProjectsListModel listModel = new KenaiProjectsListModel(projectsIterator, searchPattern);
+                    setListModel(listModel);
                     EventQueue.invokeLater(new Runnable() {
                         public void run() {
                             kenaiProjectsList.setModel(listModel);
@@ -321,20 +323,72 @@ public class KenaiSearchPanel extends JPanel {
 
     }
 
+    private KenaiProjectsListModel listModel;
+
+    private synchronized void setListModel(KenaiProjectsListModel model) {
+        listModel = model;
+    }
+
+    private synchronized KenaiProjectsListModel getListModel() {
+        return listModel;
+    }
+
+    @Override
+    public void removeNotify() {
+        super.removeNotify();
+        // cancel running tasks
+        KenaiProjectsListModel model = getListModel();
+        if (model != null) {
+            model.cancel();
+        }
+    }
+
     // ----------
 
-    private static class KenaiProjectsListModel extends DefaultListModel {
+    private class KenaiProjectsListModel extends DefaultListModel implements Runnable {
 
-        public KenaiProjectsListModel(final Iterator<KenaiProject> projects, final String pattern) {
-            RequestProcessor.getDefault().post(new Runnable() {
-                public void run() {
-                    if (projects != null) {
-                        while(projects.hasNext()) {
-                            addElement(new KenaiProjectSearchInfo(projects.next(), pattern));
+        private Iterator<KenaiProject> projects;
+        private String pattern;
+
+        private RequestProcessor.Task task;
+
+        public KenaiProjectsListModel(Iterator<KenaiProject> projects, final String pattern) {
+            this.projects = projects;
+            this.pattern = pattern;
+            task = RequestProcessor.getDefault().post(this);
+        }
+
+        public void run() {
+            if (projects != null) {
+                while(projects.hasNext()) {
+                    KenaiProject project = projects.next();
+                    if (PanelType.OPEN.equals(panelType)) {
+                        addElement(new KenaiProjectSearchInfo(project, pattern));
+                    } else if (PanelType.BROWSE.equals(panelType)) {
+                        KenaiProjectFeature[] repos = project.getFeatures(KenaiFeature.SOURCE);
+                        for (KenaiProjectFeature repo : repos) {
+                            if (Utilities.SVN_REPO.equals(repo.getName()) || Utilities.HG_REPO.equals(repo.getName())) {
+                                addElement(new KenaiProjectSearchInfo(project, repo, pattern));
+                            }
                         }
                     }
+                    if (Thread.interrupted()) {
+                        return;
+                    }
                 }
-            });
+            }
+        }
+
+        public void cancel() {
+            task.cancel();
+        }
+
+    }
+
+    private static class KenaiRepositoriesListModel extends DefaultListModel {
+
+        public KenaiRepositoriesListModel() {
+            
         }
 
     }
@@ -342,10 +396,6 @@ public class KenaiSearchPanel extends JPanel {
     // ----------
 
     private class KenaiProjectsListRenderer implements ListCellRenderer {
-
-        public KenaiProjectsListRenderer() {
-
-        }
 
         public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             return new ListRendererPanel(list, ((KenaiProjectSearchInfo) value), index, isSelected, cellHasFocus, panelType);
@@ -358,10 +408,18 @@ public class KenaiSearchPanel extends JPanel {
     public static class KenaiProjectSearchInfo {
 
         public KenaiProject kenaiProject;
+        public KenaiProjectFeature kenaiFeature;
         public String searchPattern;
 
         public KenaiProjectSearchInfo(KenaiProject kprj, String ptrn) {
             kenaiProject = kprj;
+            searchPattern = ptrn;
+            kenaiFeature = null;
+        }
+
+        public KenaiProjectSearchInfo(KenaiProject kprj, KenaiProjectFeature ftr, String ptrn) {
+            kenaiProject = kprj;
+            kenaiFeature = ftr;
             searchPattern = ptrn;
         }
 
@@ -397,7 +455,8 @@ public class KenaiSearchPanel extends JPanel {
 
     private JPanel createProgressPanel() {
         JPanel panel = preparePanel();
-        progressHandle = ProgressHandleFactory.createHandle("Searching Kenai Projects...");
+        progressHandle = ProgressHandleFactory.createHandle(NbBundle.getMessage(KenaiSearchPanel.class,
+                "KenaiSearchPanel.progressLabel"));
         JComponent progressComponent = ProgressHandleFactory.createProgressComponent(progressHandle);
         JLabel progressLabel = ProgressHandleFactory.createMainLabelComponent(progressHandle);
         GridBagConstraints constraints = new GridBagConstraints();
