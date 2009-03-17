@@ -402,17 +402,21 @@ public final class HtmlRenderer {
                             g.drawChars(chars, 0, length, x, y);
                         } else {
                             Shape shape = g.getClip();
-
-                            if (s != null) {
-                                Area area = new Area(shape);
-                                area.intersect(new Area(new Rectangle(x, y, w, h)));
-                                g.setClip(area);
-                            } else {
-                                g.setClip(new Rectangle(x, y, w, h));
+                            // clip only if clipping is supported
+                            if (shape != null) {
+                                if (s != null) {
+                                    Area area = new Area(shape);
+                                    area.intersect(new Area(new Rectangle(x, y, w, h)));
+                                    g.setClip(area);
+                                } else {
+                                    g.setClip(new Rectangle(x, y, w, h));
+                                }
                             }
 
                             g.drawString("...", x, y);
-                            g.setClip(shape);
+                            if (shape != null) {
+                                g.setClip(shape);
+                            }
                         }
                     }
                 } else {
@@ -650,7 +654,8 @@ public final class HtmlRenderer {
                 }
 
                 if (done) {
-                    throw new IllegalArgumentException("HTML rendering failed on string \"" + s + "\"");
+                    throwBadHTML("Matching '>' not found", pos, chars);
+                    break;
                 }
 
                 if (inClosingTag) {
