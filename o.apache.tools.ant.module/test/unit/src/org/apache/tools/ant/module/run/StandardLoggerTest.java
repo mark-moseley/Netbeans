@@ -63,6 +63,8 @@ import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.WeakSet;
+import org.openide.windows.IOProvider;
+import org.openide.windows.InputOutput;
 import org.openide.windows.OutputEvent;
 import org.openide.windows.OutputListener;
 
@@ -115,7 +117,7 @@ public class StandardLoggerTest extends NbTestCase {
                                                             "...and an unrelated message",
             AntEvent.LOG_WARN, null, null, null));
         session.sendBuildFinished(makeAntEvent(realSession, null, -1, null, null, null));
-        List<Message> expectedMessages = Arrays.asList(new Message[] {
+        List<Message> expectedMessages = Arrays.asList(
             new Message("Stack trace in separate lines:", false, null),
             new Message("\tat Foo.java:3", false, new MockHyperlink("file:/src/Foo.java", "stack trace", 3, -1, -1, -1)),
             new Message("\tat Bar.java:5", false, new MockHyperlink("file:/src/Bar.java", "stack trace", 5, -1, -1, -1)),
@@ -123,8 +125,8 @@ public class StandardLoggerTest extends NbTestCase {
             new Message("\tat Quux.java:11", true, new MockHyperlink("file:/src/Quux.java", "stack trace", 11, -1, -1, -1)),
             new Message("\tat Baz.java:6", true, new MockHyperlink("file:/src/Baz.java", "stack trace", 6, -1, -1, -1)),
             new Message("...and an unrelated message", true, null),
-            new Message(NbBundle.getMessage(StandardLogger.class, "FMT_finished_target_printed", new Integer(0), new Integer(1)), false, null),
-        });
+            new Message(NbBundle.getMessage(StandardLogger.class, "FMT_finished_target_printed", new Integer(0), new Integer(1)), false, null)
+        );
         assertEquals("correct text printed", expectedMessages, session.messages);
     }
 
@@ -271,6 +273,10 @@ public class StandardLoggerTest extends NbTestCase {
 
         public OutputListener createStandardHyperlink(URL file, String message, int line1, int column1, int line2, int column2) {
             return new MockHyperlink(file.toExternalForm(), message, line1, column1, line2, column2);
+        }
+
+        public InputOutput getIO() {
+            return IOProvider.getDefault().getIO("", true);
         }
 
         public void println(String message, boolean err, OutputListener listener) {

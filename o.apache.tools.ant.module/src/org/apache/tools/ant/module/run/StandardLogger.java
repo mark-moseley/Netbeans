@@ -41,7 +41,9 @@
 
 package org.apache.tools.ant.module.run;
 
+import java.awt.Color;
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.MalformedURLException;
@@ -49,6 +51,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Stack;
 import java.util.StringTokenizer;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -59,12 +62,16 @@ import org.apache.tools.ant.module.spi.AntSession;
 import org.openide.awt.StatusDisplayer;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
+import org.openide.util.lookup.ServiceProvider;
+import org.openide.windows.IOColorLines;
+import org.openide.windows.InputOutput;
 import org.openide.windows.OutputListener;
 
 /**
  * Standard logger for producing Ant output messages.
  * @author Jesse Glick
  */
+@ServiceProvider(service=AntLogger.class, position=100)
 public final class StandardLogger extends AntLogger {
     
     private static final Logger ERR = Logger.getLogger(StandardLogger.class.getName());
@@ -106,7 +113,7 @@ public final class StandardLogger extends AntLogger {
      * <li>message
      * </ol>
      */
-    private static final Pattern HYPERLINK = Pattern.compile("\"?(.+?)\"?(?::|, line )(?:(\\d+):(?:(\\d+):(?:(\\d+):(\\d+):)?)?)? +(.+)"); // NOI18N
+    public static final Pattern HYPERLINK = Pattern.compile("\"?(.+?)\"?(?::|, line )(?:(\\d+):(?:(\\d+):(?:(\\d+):(\\d+):)?)?)? +(.+)"); // NOI18N
     
     /**
      * Data stored in the session.
@@ -230,7 +237,7 @@ public final class StandardLogger extends AntLogger {
             time = mockTotalTime;
         }
         if (t == null) {
-            session.println(formatMessageWithTime("FMT_finished_target_printed", time), false, null);
+            formatColoredMessageWithTime(session, "FMT_finished_target_printed", false, time);
             StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(StandardLogger.class, "FMT_finished_target_status", session.getDisplayName()));
         } else {
             if (isStopException(t.getCause())) {
@@ -260,10 +267,10 @@ public final class StandardLogger extends AntLogger {
                 }
             }
             if (isStopException(t)) {
-                event.getSession().println(formatMessageWithTime("FMT_target_stopped_printed", time), true, null);
+                formatColoredMessageWithTime(session, "FMT_target_stopped_printed", true, time);
                 StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(StandardLogger.class, "FMT_target_stopped_status", event.getSession().getDisplayName()));
             } else {
-                event.getSession().println(formatMessageWithTime("FMT_target_failed_printed", time), true, null); // #10305
+                formatColoredMessageWithTime(session, "FMT_target_failed_printed", true, time);
                 StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(StandardLogger.class, "FMT_target_failed_status", event.getSession().getDisplayName()));
             }
         }
@@ -287,11 +294,21 @@ public final class StandardLogger extends AntLogger {
      * Total time: {0} minutes
      *             {1} seconds
      */
-    private static String formatMessageWithTime(String key, long millis) {
+    private static void formatColoredMessageWithTime(AntSession session, String key, boolean error, long millis) {
         int secs = (int) (millis / 1000);
         int minutes = secs / 60;
         int seconds = secs % 60;
-        return NbBundle.getMessage(StandardLogger.class, key, minutes, seconds);
+        String msg = NbBundle.getMessage(StandardLogger.class, key, minutes, seconds);
+        InputOutput io = session.getIO();
+        if (IOColorLines.isSupported(io)) {
+            try {
+                IOColorLines.println(io, msg, error ? Color.RED : Color.GREEN);
+                return;
+            } catch (IOException x) {
+                ERR.log(Level.INFO, null, x);
+            }
+        }
+        session.println(msg, error, null);
     }
     
     @Override
@@ -319,8 +336,10 @@ public final class StandardLogger extends AntLogger {
         event.consume();
         AntSession session = event.getSession();
         String line = event.getMessage();
-        if (line.equals("Trying to override old definition of task java") && event.getLogLevel() == AntEvent.LOG_WARN) { // NOI18N
-            return; // #56341
+        if (line.startsWith("Trying to override old definition of ") && event.getLogLevel() == AntEvent.LOG_WARN) { // NOI18N
+            // #56341, #43968, and many other things in the IDE.
+            session.deliverMessageLogged(event, line, AntEvent.LOG_VERBOSE);
+            return;
         }
         ERR.log(Level.FINE, "Received message: {0}", line);
         if (line.indexOf('\n') != -1) {
@@ -369,9 +388,15 @@ public final class StandardLogger extends AntLogger {
                 }
             }
         }
-        OutputListener hyperlink = findHyperlink(session, line);
+        AtomicBoolean isHyperlink = new AtomicBoolean();
+        OutputListener hyperlink = findHyperlink(session, line, isHyperlink);
         if (hyperlink instanceof Hyperlink) {
             getSessionData(session).lastHyperlink = (Hyperlink) hyperlink;
+        }
+        if (!isHyperlink.get() && "java".equals(event.getTaskName()) &&
+                (event.getLogLevel() == AntEvent.LOG_WARN || event.getLogLevel() == AntEvent.LOG_INFO)) {
+            // stdout and stderr (except hyperlinks) is printed directly for java
+            return;
         }
         // XXX should translate tabs to spaces here as a safety measure (esp. since output window messes it up...)
         event.getSession().println(line, event.getLogLevel() <= AntEvent.LOG_WARN, hyperlink);
@@ -386,13 +411,15 @@ public final class StandardLogger extends AntLogger {
     /**
      * Possibly hyperlink a message logged event.
      */
-    private OutputListener findHyperlink(AntSession session, String line) {
+    private OutputListener findHyperlink(AntSession session, String line, AtomicBoolean isHyperlink) {
         Stack<File> cwd = getSessionData(session).currentDir;
         Matcher m = HYPERLINK.matcher(line);
         if (!m.matches()) {
+            isHyperlink.set(false);
             ERR.fine("does not look like a hyperlink");
             return null;
         }
+        isHyperlink.set(true);
         String path = m.group(1);
         File file;
         if (path.startsWith("file:")) {
