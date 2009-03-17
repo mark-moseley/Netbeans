@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.vmd.properties;
 
 import java.util.ArrayList;
@@ -52,7 +51,9 @@ import java.util.WeakHashMap;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.vmd.api.io.ActiveViewSupport;
 import org.netbeans.modules.vmd.api.io.DataEditorView;
+import org.netbeans.modules.vmd.api.io.DataObjectContext;
 import org.netbeans.modules.vmd.api.io.DesignDocumentAwareness;
+import org.netbeans.modules.vmd.api.io.ProjectUtils;
 import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.DesignDocument;
 import org.netbeans.modules.vmd.api.model.DesignEvent;
@@ -74,12 +75,13 @@ import org.openide.util.lookup.InstanceContent;
  */
 //TODO rename it to PropeertiesViewNodesManager or PropeertiesViewNodesController
 public final class PropertiesNodesManager implements DesignDocumentAwareness,
-                                                     DesignListener,
-                                                     ActiveDocumentSupport.Listener,
-                                                     ActiveViewSupport.Listener {
+        DesignListener,
+        ActiveDocumentSupport.Listener,
+        ActiveViewSupport.Listener {
 
     private static final WeakHashMap<DataEditorView, PropertiesNodesManager> INSTANCES = new WeakHashMap<DataEditorView, PropertiesNodesManager>();
     private static Comparator<DesignPropertyDescriptor> compareByDisplayName = new Comparator<DesignPropertyDescriptor>() {
+
         public int compare(DesignPropertyDescriptor descriptor1, DesignPropertyDescriptor descriptor2) {
             return descriptor1.getPropertyDisplayName().compareTo(descriptor2.getPropertyDisplayName());
         }
@@ -92,7 +94,6 @@ public final class PropertiesNodesManager implements DesignDocumentAwareness,
         }
         return INSTANCES.get(view);
     }
-
     private WeakHashMap<DataEditorView, InstanceContent> icMap;
     private Collection<InstanceContent> ics;
     private WeakHashMap<InstanceContent, WeakSet<Node>> nodesToRemoveMap;
@@ -115,7 +116,7 @@ public final class PropertiesNodesManager implements DesignDocumentAwareness,
 
     public void setDesignDocument(DesignDocument document) {
         if (document != null) {
-            this.document = document;
+            PropertiesNodesManager.this.document = document;
             document.getListenerManager().addDesignListener(this, new DesignEventFilter().setGlobal(true));
             ActiveDocumentSupport.getDefault().addActiveDocumentListener(this);
             ActiveViewSupport.getDefault().addActiveViewListener(this);
@@ -123,11 +124,39 @@ public final class PropertiesNodesManager implements DesignDocumentAwareness,
             ActiveDocumentSupport.getDefault().removeActiveDocumentListener(this);
             ActiveViewSupport.getDefault().removeActiveViewListener(this);
             this.document.getListenerManager().removeDesignListener(this);
+            this.document.getTransactionManager().readAccess(new Runnable() {
+
+                public void run() {
+                    DesignComponent root = PropertiesNodesManager.this.document.getRootComponent();
+                    for (DesignComponent c : root.getComponents()) {
+                        cleanUpAll(c);
+                    }
+                }
+            });
+
             this.document = null;
             view = null;
             propertySupportMap = null;
             sheetMap = null;
             nodesMap = null;
+        }
+    }
+
+    private void cleanUpAll(DesignComponent parent) {
+        for (final DesignComponent c : parent.getComponents()) {
+            Collection<? extends PropertiesPresenter> presenters = c.getPresenters(PropertiesPresenter.class);
+            for (PropertiesPresenter p : presenters) {
+                for (final DesignPropertyDescriptor pd : p.getDesignPropertyDescriptors()) {
+                    SwingUtilities.invokeLater(new Runnable() {
+
+                        public void run() {
+                            pd.getPropertyEditor().cleanUp(c);
+                        }
+                    });
+                }
+
+            }
+            cleanUpAll(c);
         }
     }
 
@@ -138,7 +167,16 @@ public final class PropertiesNodesManager implements DesignDocumentAwareness,
         }
         if (event.isStructureChanged()) {
             SwingUtilities.invokeLater(new Runnable() {
+
                 public void run() {
+                    if (document == null) {
+                        return;
+                    }
+
+                    DataObjectContext context = ProjectUtils.getDataObjectContextForDocument(document);
+                    if (context == null) {
+                        return;
+                    }
                     PropertiesNodesManager.this.updatePropertyEditorsValues(selectedComponents);
                     PropertiesNodesManager.this.updateSheet(selectedComponents);
                 }
@@ -162,6 +200,7 @@ public final class PropertiesNodesManager implements DesignDocumentAwareness,
             return;
         }
         document.getTransactionManager().readAccess(new Runnable() {
+
             public void run() {
                 repaintPropertiesWindow(document.getSelectedComponents());
             }
@@ -256,6 +295,7 @@ public final class PropertiesNodesManager implements DesignDocumentAwareness,
     public Sheet createSheet(final DesignComponent component) {
         final Sheet sheet = new Sheet();
         component.getDocument().getTransactionManager().readAccess(new Runnable() {
+
             public void run() {
                 List<DesignPropertyDescriptor> designerPropertyDescriptors;
                 List<String> categories;
@@ -348,6 +388,7 @@ public final class PropertiesNodesManager implements DesignDocumentAwareness,
 
     private void repaintPropertiesWindow(final Collection<DesignComponent> selectedComponents) {
         SwingUtilities.invokeLater(new Runnable() {
+
             public void run() {
                 if (view != null) {
                     PropertiesNodesManager.this.changeLookup(selectedComponents);

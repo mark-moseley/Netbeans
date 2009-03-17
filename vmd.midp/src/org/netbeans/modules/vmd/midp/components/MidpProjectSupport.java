@@ -162,8 +162,9 @@ public final class MidpProjectSupport {
         if (relativeResourcePath.startsWith("/")) { // NOI18N
             relativeResourcePath = relativeResourcePath.substring(1);
         }
-        
-        Map<FileObject, FileObject> matches = new WeakHashMap<FileObject, FileObject>();
+
+        // Fix for 144950 - [65cat] java.util.NoSuchElementException at java.util.WeakHashMap$HashIterator.nextEntry
+        Map<FileObject, FileObject> matches = new HashMap<FileObject, FileObject>();
         
         DataObjectContext context = ProjectUtils.getDataObjectContextForDocument(document);
         // document is not leaded yet
@@ -180,6 +181,9 @@ public final class MidpProjectSupport {
         assert (primaryFile != null);
         
         Project project = getProjectForDocument(document);
+        if (project == null || primaryFile == null || !primaryFile.isValid()) {
+            return new HashMap<FileObject, FileObject>(0);
+        }
         List<ClassPath> classPathList = getClassPath(project, primaryFile);
         
         assert(classPathList != null);
@@ -314,7 +318,6 @@ public final class MidpProjectSupport {
                 if (ext.equalsIgnoreCase(currentExt)) {
                     String relativePath = FileUtil.getRelativePath(root, current);
                     bank.put(current, "/" + relativePath); // NOI18N
-//                    System.out.println(current.getPath() + " -> " + "/" + relativePath); // NOI18N
                 }
             }
         }
