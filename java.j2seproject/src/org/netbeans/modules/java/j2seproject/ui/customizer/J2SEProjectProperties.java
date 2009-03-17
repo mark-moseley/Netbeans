@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -47,9 +47,11 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -67,12 +69,22 @@ import javax.swing.text.PlainDocument;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.api.project.ant.AntBuildExtender;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.java.api.common.classpath.ClassPathSupport;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
+import org.netbeans.modules.java.api.common.project.ui.ClassPathUiSupport;
+import org.netbeans.modules.java.api.common.project.ui.customizer.ClassPathListCellRenderer;
+import org.netbeans.modules.java.api.common.project.ui.customizer.SourceRootsUi;
+import org.netbeans.modules.java.api.common.ui.PlatformUiSupport;
+import org.netbeans.modules.java.api.common.util.CommonProjectUtils;
 import org.netbeans.modules.java.j2seproject.J2SEProject;
+import org.netbeans.modules.java.j2seproject.J2SEProjectType;
 import org.netbeans.modules.java.j2seproject.J2SEProjectUtil;
-import org.netbeans.modules.java.j2seproject.SourceRoots;
-import org.netbeans.modules.java.j2seproject.UpdateHelper;
-import org.netbeans.modules.java.j2seproject.classpath.ClassPathSupport;
 import org.netbeans.spi.java.project.support.ui.IncludeExcludeVisualizer;
+import org.netbeans.spi.java.project.support.ui.SharableLibrariesUtils;
+import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.GeneratedFilesHelper;
@@ -89,6 +101,7 @@ import org.openide.util.Mutex;
 import org.openide.util.MutexException;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
+import org.openide.util.lookup.Lookups;
 
 /**
  * @author Petr Hrebejk
@@ -100,6 +113,7 @@ public class J2SEProjectProperties {
     private static final Integer BOOLEAN_KIND_TF = new Integer( 0 );
     private static final Integer BOOLEAN_KIND_YN = new Integer( 1 );
     private static final Integer BOOLEAN_KIND_ED = new Integer( 2 );
+    private static final String COS_MARK = ".netbeans_automatic_build";     //NOI18N
     private Integer javacDebugBooleanKind;
     private Integer doJarBooleanKind;
     private Integer javadocPreviewBooleanKind;
@@ -107,12 +121,22 @@ public class J2SEProjectProperties {
     // Special properties of the project
     public static final String J2SE_PROJECT_NAME = "j2se.project.name"; // NOI18N
     public static final String JAVA_PLATFORM = "platform.active"; // NOI18N
+
+    // folowing properties have moved to ProjectProperties in java.api.common module:
+    //public static final String JAVAC_CLASSPATH = "javac.classpath"; // NOI18N
+    //public static final String RUN_CLASSPATH = "run.classpath"; // NOI18N
+    //public static final String JAVAC_TEST_CLASSPATH = "javac.test.classpath"; // NOI18N
+    //public static final String RUN_TEST_CLASSPATH = "run.test.classpath"; // NOI18N
+    //public static final String BUILD_CLASSES_DIR = "build.classes.dir"; // NOI18N
+    //public static final String BUILD_TEST_CLASSES_DIR = "build.test.classes.dir"; // NOI18N
+    //public static final String INCLUDES = "includes"; // NOI18N
+    //public static final String EXCLUDES = "excludes"; // NOI18N
+    //public static final String[] WELL_KNOWN_PATHS = new String[] {            
+    //public static final String ANT_ARTIFACT_PREFIX = "${reference."; // NOI18N
     
     // Properties stored in the PROJECT.PROPERTIES    
     public static final String DIST_DIR = "dist.dir"; // NOI18N
     public static final String DIST_JAR = "dist.jar"; // NOI18N
-    public static final String JAVAC_CLASSPATH = "javac.classpath"; // NOI18N
-    public static final String RUN_CLASSPATH = "run.classpath"; // NOI18N
     public static final String RUN_JVM_ARGS = "run.jvmargs"; // NOI18N
     public static final String RUN_WORK_DIR = "work.dir"; // NOI18N
     public static final String DEBUG_CLASSPATH = "debug.classpath"; // NOI18N
@@ -120,28 +144,27 @@ public class J2SEProjectProperties {
     public static final String MAIN_CLASS = "main.class"; // NOI18N
     public static final String JAVAC_SOURCE = "javac.source"; // NOI18N
     public static final String JAVAC_TARGET = "javac.target"; // NOI18N
-    public static final String JAVAC_TEST_CLASSPATH = "javac.test.classpath"; // NOI18N
     public static final String JAVAC_DEBUG = "javac.debug"; // NOI18N
     public static final String JAVAC_DEPRECATION = "javac.deprecation"; // NOI18N
     public static final String JAVAC_COMPILER_ARG = "javac.compilerargs";    //NOI18N
-    public static final String RUN_TEST_CLASSPATH = "run.test.classpath"; // NOI18N
     public static final String BUILD_DIR = "build.dir"; // NOI18N
-    public static final String BUILD_CLASSES_DIR = "build.classes.dir"; // NOI18N
-    public static final String BUILD_TEST_CLASSES_DIR = "build.test.classes.dir"; // NOI18N
     public static final String BUILD_TEST_RESULTS_DIR = "build.test.results.dir"; // NOI18N
     public static final String BUILD_CLASSES_EXCLUDES = "build.classes.excludes"; // NOI18N
     public static final String DIST_JAVADOC_DIR = "dist.javadoc.dir"; // NOI18N
     public static final String NO_DEPENDENCIES="no.dependencies"; // NOI18N
     public static final String DEBUG_TEST_CLASSPATH = "debug.test.classpath"; // NOI18N
     public static final String SOURCE_ENCODING="source.encoding"; // NOI18N
-    /** @since org.netbeans.modules.java.j2seproject/1 1.11 */
-    public static final String INCLUDES = "includes"; // NOI18N
-    /** @since org.netbeans.modules.java.j2seproject/1 1.11 */
-    public static final String EXCLUDES = "excludes"; // NOI18N
     /** @since org.netbeans.modules.java.j2seproject/1 1.12 */
     public static final String DO_DEPEND = "do.depend"; // NOI18N
     /** @since org.netbeans.modules.java.j2seproject/1 1.12 */
     public static final String DO_JAR = "do.jar"; // NOI18N
+    /** @since org.netbeans.modules.java.j2seproject/1 1.21 */
+    public static final String COMPILE_ON_SAVE = "compile.on.save"; // NOI18N
+    /** @since org.netbeans.modules.java.j2seproject/1 1.19 */
+    public static final String COMPILE_ON_SAVE_UNSUPPORTED_PREFIX = "compile.on.save.unsupported"; // NOI18N
+    
+    public static final String SYSTEM_PROPERTIES_RUN_PREFIX = "run-sys-prop."; // NOI18N
+    public static final String SYSTEM_PROPERTIES_TEST_PREFIX = "test-sys-prop."; // NOI18N
     
     public static final String JAVADOC_PRIVATE="javadoc.private"; // NOI18N
     public static final String JAVADOC_NO_TREE="javadoc.notree"; // NOI18N
@@ -164,21 +187,11 @@ public class J2SEProjectProperties {
     // Properties stored in the PRIVATE.PROPERTIES
     public static final String APPLICATION_ARGS = "application.args"; // NOI18N
     public static final String JAVADOC_PREVIEW="javadoc.preview"; // NOI18N
-
-    public static final String DEFAULT_LIBRARIES_FILENAME = "nblibraries.properties";
+    // Main build.xml location
+    public static final String BUILD_SCRIPT ="buildfile";      //NOI18N
     
-    // Well known paths
-    public static final String[] WELL_KNOWN_PATHS = new String[] {            
-            "${" + JAVAC_CLASSPATH + "}", 
-            "${" + JAVAC_TEST_CLASSPATH  + "}", 
-            "${" + RUN_CLASSPATH  + "}", 
-            "${" + RUN_TEST_CLASSPATH  + "}", 
-            "${" + BUILD_CLASSES_DIR  + "}", 
-            "${" + BUILD_TEST_CLASSES_DIR  + "}", 
-    };
-    
-    // XXX looks like there is some kind of API missing in ReferenceHelper?
-    public static final String ANT_ARTIFACT_PREFIX = "${reference."; // NOI18N
+    //NB 6.1 tracking of files modifications
+    public static final String TRACK_FILE_CHANGES="track.file.changes"; //NOI18N
 
     ClassPathSupport cs;
     
@@ -209,6 +222,7 @@ public class J2SEProjectProperties {
     ButtonModel JAVAC_DEPRECATION_MODEL; 
     ButtonModel JAVAC_DEBUG_MODEL;
     ButtonModel DO_DEPEND_MODEL;
+    ButtonModel COMPILE_ON_SAVE_MODEL;
     ButtonModel NO_DEPENDENCIES_MODEL;
     Document JAVAC_COMPILER_ARG_MODEL;
     
@@ -271,7 +285,7 @@ public class J2SEProjectProperties {
         this.evaluator = evaluator;
         this.refHelper = refHelper;
         this.genFileHelper = genFileHelper;
-        this.cs = new ClassPathSupport( evaluator, refHelper, updateHelper.getAntProjectHelper(), updateHelper, WELL_KNOWN_PATHS, ANT_ARTIFACT_PREFIX );
+        this.cs = new ClassPathSupport(evaluator, refHelper, updateHelper.getAntProjectHelper(), updateHelper, null);
                 
         privateGroup = new StoreGroup();
         projectGroup = new StoreGroup();
@@ -285,16 +299,16 @@ public class J2SEProjectProperties {
      */
     private void init() {
         
-        CLASS_PATH_LIST_RENDERER = new J2SEClassPathUi.ClassPathListCellRenderer(evaluator, project.getProjectDirectory());
+        CLASS_PATH_LIST_RENDERER = ClassPathListCellRenderer.createClassPathListRenderer(evaluator, project.getProjectDirectory());
         
         // CustomizerSources
-        SOURCE_ROOTS_MODEL = J2SESourceRootsUi.createModel( project.getSourceRoots() );
-        TEST_ROOTS_MODEL = J2SESourceRootsUi.createModel( project.getTestSourceRoots() );        
-        includes = evaluator.getProperty(INCLUDES);
+        SOURCE_ROOTS_MODEL = SourceRootsUi.createModel( project.getSourceRoots() );
+        TEST_ROOTS_MODEL = SourceRootsUi.createModel( project.getTestSourceRoots() );        
+        includes = evaluator.getProperty(ProjectProperties.INCLUDES);
         if (includes == null) {
             includes = "**"; // NOI18N
         }
-        excludes = evaluator.getProperty(EXCLUDES);
+        excludes = evaluator.getProperty(ProjectProperties.EXCLUDES);
         if (excludes == null) {
             excludes = ""; // NOI18N
         }
@@ -302,10 +316,10 @@ public class J2SEProjectProperties {
         // CustomizerLibraries
         EditableProperties projectProperties = updateHelper.getProperties( AntProjectHelper.PROJECT_PROPERTIES_PATH );                
         
-        JAVAC_CLASSPATH_MODEL = ClassPathUiSupport.createListModel(cs.itemsIterator(projectProperties.get(JAVAC_CLASSPATH)));
-        JAVAC_TEST_CLASSPATH_MODEL = ClassPathUiSupport.createListModel(cs.itemsIterator(projectProperties.get(JAVAC_TEST_CLASSPATH)));
-        RUN_CLASSPATH_MODEL = ClassPathUiSupport.createListModel(cs.itemsIterator(projectProperties.get(RUN_CLASSPATH)));
-        RUN_TEST_CLASSPATH_MODEL = ClassPathUiSupport.createListModel(cs.itemsIterator(projectProperties.get(RUN_TEST_CLASSPATH)));
+        JAVAC_CLASSPATH_MODEL = ClassPathUiSupport.createListModel(cs.itemsIterator(projectProperties.get(ProjectProperties.JAVAC_CLASSPATH)));
+        JAVAC_TEST_CLASSPATH_MODEL = ClassPathUiSupport.createListModel(cs.itemsIterator(projectProperties.get(ProjectProperties.JAVAC_TEST_CLASSPATH)));
+        RUN_CLASSPATH_MODEL = ClassPathUiSupport.createListModel(cs.itemsIterator(projectProperties.get(ProjectProperties.RUN_CLASSPATH)));
+        RUN_TEST_CLASSPATH_MODEL = ClassPathUiSupport.createListModel(cs.itemsIterator(projectProperties.get(ProjectProperties.RUN_TEST_CLASSPATH)));
         PLATFORM_MODEL = PlatformUiSupport.createPlatformComboBoxModel (evaluator.getProperty(JAVA_PLATFORM));
         PLATFORM_LIST_RENDERER = PlatformUiSupport.createPlatformListCellRenderer();
         JAVAC_SOURCE_MODEL = PlatformUiSupport.createSourceLevelComboBoxModel (PLATFORM_MODEL, evaluator.getProperty(JAVAC_SOURCE), evaluator.getProperty(JAVAC_TARGET));
@@ -327,6 +341,8 @@ public class J2SEProjectProperties {
         javacDebugBooleanKind = kind[0];
 
         DO_DEPEND_MODEL = privateGroup.createToggleButtonModel(evaluator, DO_DEPEND);
+
+        COMPILE_ON_SAVE_MODEL = privateGroup.createToggleButtonModel(evaluator, COMPILE_ON_SAVE);
 
         NO_DEPENDENCIES_MODEL = projectGroup.createInverseToggleButtonModel( evaluator, NO_DEPENDENCIES );
         JAVAC_COMPILER_ARG_MODEL = projectGroup.createStringDocument( evaluator, JAVAC_COMPILER_ARG );
@@ -385,32 +401,29 @@ public class J2SEProjectProperties {
     }
     
     public void save() {
-        try {                        
-            saveLibrariesLocation();
-            // Store properties 
-            boolean result = ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<Boolean>() {
-                final FileObject projectDir = updateHelper.getAntProjectHelper().getProjectDirectory();
-                public Boolean run() throws IOException {
-                    if ((genFileHelper.getBuildScriptState(GeneratedFilesHelper.BUILD_IMPL_XML_PATH,
-                        J2SEProject.class.getResource("resources/build-impl.xsl")) //NOI18N
-                        & GeneratedFilesHelper.FLAG_MODIFIED) == GeneratedFilesHelper.FLAG_MODIFIED) {  //NOI18N
-                        if (showModifiedMessage (NbBundle.getMessage(J2SEProjectProperties.class,"TXT_ModifiedTitle"))) {
-                            //Delete user modified build-impl.xml
-                            FileObject fo = projectDir.getFileObject(GeneratedFilesHelper.BUILD_IMPL_XML_PATH);
-                            if (fo != null) {
-                                fo.delete();
+        try {                   
+            if (regenerateBuild) {
+                saveLibrariesLocation();
+                // Store properties 
+                ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<Void>() {
+                    public Void run() throws IOException {
+                        storeProperties();
+                        //Delete COS mark
+                        if (!COMPILE_ON_SAVE_MODEL.isSelected()) {
+                            FileObject buildClasses = updateHelper.getAntProjectHelper().resolveFileObject(evaluator.getProperty(ProjectProperties.BUILD_CLASSES_DIR));
+                            if (buildClasses != null) {
+                                FileObject mark = buildClasses.getFileObject(COS_MARK);
+                                if (mark != null) {
+                                    final ActionProvider ap = project.getLookup().lookup(ActionProvider.class);
+                                    assert ap != null;
+                                    ap.invokeAction(ActionProvider.COMMAND_CLEAN, Lookups.fixed(project));
+                                }
                             }
                         }
-                        else {
-                            return false;
-                        }
+                        return null;
                     }
-                    storeProperties();
-                    return true;
-                }
-            });
-            // and save the project
-            if (result) {
+                });
+                // and save the project
                 ProjectManager.getDefault().saveProject(project);
             }
         } 
@@ -421,6 +434,31 @@ public class J2SEProjectProperties {
             ErrorManager.getDefault().notify( ex );
         }
     }
+
+    void checkModified () {
+        regenerateBuild = true;
+        if ((genFileHelper.getBuildScriptState(GeneratedFilesHelper.BUILD_IMPL_XML_PATH,
+            J2SEProject.class.getResource("resources/build-impl.xsl")) //NOI18N
+            & GeneratedFilesHelper.FLAG_MODIFIED) == GeneratedFilesHelper.FLAG_MODIFIED) {  //NOI18N
+            if (showModifiedMessage (NbBundle.getMessage(J2SEProjectProperties.class,"TXT_ModifiedTitle"))) {
+                //Delete user modified build-impl.xml
+                final FileObject projectDir = updateHelper.getAntProjectHelper().getProjectDirectory();
+                final FileObject fo = projectDir.getFileObject(GeneratedFilesHelper.BUILD_IMPL_XML_PATH);
+                if (fo != null) {
+                    try {
+                        fo.delete();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            else {
+                regenerateBuild = false;
+            }
+        }
+    }
+    //where
+    private volatile boolean regenerateBuild;
 
     private void saveLibrariesLocation() throws IOException, IllegalArgumentException {
         try {
@@ -447,10 +485,10 @@ public class J2SEProjectProperties {
         resolveProjectDependencies();
         
         // Encode all paths (this may change the project properties)
-        String[] javac_cp = cs.encodeToStrings( ClassPathUiSupport.getIterator( JAVAC_CLASSPATH_MODEL ) );
-        String[] javac_test_cp = cs.encodeToStrings( ClassPathUiSupport.getIterator( JAVAC_TEST_CLASSPATH_MODEL ) );
-        String[] run_cp = cs.encodeToStrings( ClassPathUiSupport.getIterator( RUN_CLASSPATH_MODEL ) );
-        String[] run_test_cp = cs.encodeToStrings( ClassPathUiSupport.getIterator( RUN_TEST_CLASSPATH_MODEL ) );
+        String[] javac_cp = cs.encodeToStrings( ClassPathUiSupport.getList( JAVAC_CLASSPATH_MODEL ) );
+        String[] javac_test_cp = cs.encodeToStrings( ClassPathUiSupport.getList( JAVAC_TEST_CLASSPATH_MODEL ) );
+        String[] run_cp = cs.encodeToStrings( ClassPathUiSupport.getList( RUN_CLASSPATH_MODEL ) );
+        String[] run_test_cp = cs.encodeToStrings( ClassPathUiSupport.getList( RUN_TEST_CLASSPATH_MODEL ) );
                 
         // Store source roots
         storeRoots( project.getSourceRoots(), SOURCE_ROOTS_MODEL );
@@ -490,13 +528,13 @@ public class J2SEProjectProperties {
         privateProperties.setProperty(JAVADOC_PREVIEW, encodeBoolean (JAVADOC_PREVIEW_MODEL.isSelected(), javadocPreviewBooleanKind));
                 
         // Save all paths
-        projectProperties.setProperty( JAVAC_CLASSPATH, javac_cp );
-        projectProperties.setProperty( JAVAC_TEST_CLASSPATH, javac_test_cp );
-        projectProperties.setProperty( RUN_CLASSPATH, run_cp );
-        projectProperties.setProperty( RUN_TEST_CLASSPATH, run_test_cp );
+        projectProperties.setProperty( ProjectProperties.JAVAC_CLASSPATH, javac_cp );
+        projectProperties.setProperty( ProjectProperties.JAVAC_TEST_CLASSPATH, javac_test_cp );
+        projectProperties.setProperty( ProjectProperties.RUN_CLASSPATH, run_cp );
+        projectProperties.setProperty( ProjectProperties.RUN_TEST_CLASSPATH, run_test_cp );
         
         //Handle platform selection and javac.source javac.target properties
-        PlatformUiSupport.storePlatform (projectProperties, updateHelper,PLATFORM_MODEL.getSelectedItem(), JAVAC_SOURCE_MODEL.getSelectedItem());
+        PlatformUiSupport.storePlatform (projectProperties, updateHelper, J2SEProjectType.PROJECT_CONFIGURATION_NAMESPACE, PLATFORM_MODEL.getSelectedItem(), JAVAC_SOURCE_MODEL.getSelectedItem());
                                 
         // Handle other special cases
         if ( NO_DEPENDENCIES_MODEL.isSelected() ) { // NOI18N
@@ -505,8 +543,8 @@ public class J2SEProjectProperties {
 
         projectProperties.putAll(additionalProperties);
 
-        projectProperties.put(INCLUDES, includes);
-        projectProperties.put(EXCLUDES, excludes);
+        projectProperties.put(ProjectProperties.INCLUDES, includes);
+        projectProperties.put(ProjectProperties.EXCLUDES, excludes);
         
         // Store the property changes into the project
         updateHelper.putProperties( AntProjectHelper.PROJECT_PROPERTIES_PATH, projectProperties );
@@ -530,10 +568,10 @@ public class J2SEProjectProperties {
         // Create a set of old and new artifacts.
         Set<ClassPathSupport.Item> oldArtifacts = new HashSet<ClassPathSupport.Item>();
         EditableProperties projectProperties = updateHelper.getProperties( AntProjectHelper.PROJECT_PROPERTIES_PATH );        
-        oldArtifacts.addAll( cs.itemsList( projectProperties.get( JAVAC_CLASSPATH ) ) );
-        oldArtifacts.addAll( cs.itemsList( projectProperties.get( JAVAC_TEST_CLASSPATH ) ) );
-        oldArtifacts.addAll( cs.itemsList( projectProperties.get( RUN_CLASSPATH ) ) );
-        oldArtifacts.addAll( cs.itemsList( projectProperties.get( RUN_TEST_CLASSPATH ) ) );
+        oldArtifacts.addAll( cs.itemsList( projectProperties.get( ProjectProperties.JAVAC_CLASSPATH ) ) );
+        oldArtifacts.addAll( cs.itemsList( projectProperties.get( ProjectProperties.JAVAC_TEST_CLASSPATH ) ) );
+        oldArtifacts.addAll( cs.itemsList( projectProperties.get( ProjectProperties.RUN_CLASSPATH ) ) );
+        oldArtifacts.addAll( cs.itemsList( projectProperties.get( ProjectProperties.RUN_TEST_CLASSPATH ) ) );
                    
         Set<ClassPathSupport.Item> newArtifacts = new HashSet<ClassPathSupport.Item>();
         newArtifacts.addAll( ClassPathUiSupport.getList( JAVAC_CLASSPATH_MODEL ) );
@@ -555,15 +593,7 @@ public class J2SEProjectProperties {
                     item.getType() == ClassPathSupport.Item.TYPE_JAR ) {
                 refHelper.destroyReference(item.getReference());
                 if (item.getType() == ClassPathSupport.Item.TYPE_JAR) {
-                    //oh well, how do I do this otherwise??
-                    EditableProperties ep = updateHelper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-                    if (item.getJavadocProperty() != null) {
-                        ep.remove(item.getJavadocProperty());
-                    }
-                    if (item.getSourceProperty() != null) {
-                        ep.remove(item.getSourceProperty());
-                    }
-                    updateHelper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
+                    item.removeSourceAndJavadoc(updateHelper);
                 }
             }
         }
@@ -576,7 +606,7 @@ public class J2SEProjectProperties {
             if (item.getType() == ClassPathSupport.Item.TYPE_LIBRARY) {
                 // remove helper property pointing to library jar if there is any
                 String prop = item.getReference();
-                prop = ClassPathSupport.getAntPropertyName(prop);
+                prop = CommonProjectUtils.getAntPropertyName(prop);
                 ep.remove(prop);
                 changed = true;
             }
@@ -777,6 +807,43 @@ public class J2SEProjectProperties {
     void storeIncludesExcludes(IncludeExcludeVisualizer v) {
         includes = v.getIncludePattern();
         excludes = v.getExcludePattern();
+    }
+
+    boolean makeSharable() {
+        List<String> libs = new ArrayList<String>();
+        List<String> jars = new ArrayList<String>();
+        collectLibs(JAVAC_CLASSPATH_MODEL, libs, jars);
+        collectLibs(JAVAC_TEST_CLASSPATH_MODEL, libs, jars);
+        collectLibs(RUN_CLASSPATH_MODEL, libs, jars);
+        collectLibs(RUN_TEST_CLASSPATH_MODEL, libs, jars);
+        libs.add("CopyLibs"); // #132201 - copylibs is integral part of j2seproject
+        String customTasksLibs = getProject().evaluator().getProperty(AntBuildExtender.ANT_CUSTOMTASKS_LIBS_PROPNAME);
+        if (customTasksLibs != null) {
+            String libIDs[] = customTasksLibs.split(",");
+            for (String libID : libIDs) {
+                libs.add(libID.trim());
+            }
+        }
+        return SharableLibrariesUtils.showMakeSharableWizard(getProject().getAntProjectHelper(),
+                getProject().getReferenceHelper(), libs, jars);
+    }
+    private void collectLibs(DefaultListModel model, List<String> libs, List<String> jarReferences) {
+        for (int i = 0; i < model.size(); i++) {
+            ClassPathSupport.Item item = (ClassPathSupport.Item) model.get(i);
+            if (item.getType() == ClassPathSupport.Item.TYPE_LIBRARY) {
+                if (!item.isBroken() && !libs.contains(item.getLibrary().getName())) {
+                    libs.add(item.getLibrary().getName());
+                }
+            }
+            if (item.getType() == ClassPathSupport.Item.TYPE_JAR) {
+                if (item.getReference() != null && item.getVariableBasedProperty() == null && !jarReferences.contains(item.getReference())) {
+                    //TODO reference is null for not yet persisted items.
+                    // there seems to be no way to generate a reference string without actually
+                    // creating and writing the property..
+                    jarReferences.add(item.getReference());
+                }
+            }
+        }
     }
 
 }
