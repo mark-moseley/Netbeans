@@ -56,8 +56,10 @@ public class CastUtils {
     
     public static boolean isCast(AST ast) {
 	switch( ast.getType() ) {
-	    case CPPTokenTypes.CSM_USER_TYPE_CAST:
+	    case CPPTokenTypes.CSM_USER_TYPE_CAST_DECLARATION:
 	    case CPPTokenTypes.CSM_USER_TYPE_CAST_DEFINITION:
+	    case CPPTokenTypes.CSM_USER_TYPE_CAST_TEMPLATE_DECLARATION:
+	    case CPPTokenTypes.CSM_USER_TYPE_CAST_TEMPLATE_DEFINITION:
 		return true;
 	    default:
 		return false;
@@ -86,6 +88,8 @@ public class CastUtils {
 		case CPPTokenTypes.AMPERSAND:
 		case CPPTokenTypes.STAR:
 		case CPPTokenTypes.LITERAL_const:
+                case CPPTokenTypes.LITERAL___const:    
+                case CPPTokenTypes.LITERAL___const__:
 		    sb.append(next.getText());
 		    break;
 		default:
@@ -118,32 +122,6 @@ public class CastUtils {
 		sb.append(text);
 	    }
 	}
-    }
-    
-    public static String[] getClassOrNspNames(AST ast) {
-	assert isCast(ast);
-	AST child = ast.getFirstChild();
-	if( child != null && child.getType() == CPPTokenTypes.ID ) {
-	    AST next = child.getNextSibling();
-	    if( next != null && next.getType() == CPPTokenTypes.SCOPE ) {
-		List<String> l = new ArrayList<String>();
-		l.add(child.getText());
-		begin:
-		for( next = next.getNextSibling(); next != null; next = next.getNextSibling() ) {
-		    switch( next.getType() ) {
-			case CPPTokenTypes.ID:
-			    l.add(next.getText());
-                            break;
-			case CPPTokenTypes.SCOPE:
-			    break; // do nothing
-			default:
-			    break begin;
-		    }
-		}
-		return (String[]) l.toArray(new String[l.size()]);
-	    }
-	}
-	return null;
     }
     
     public static boolean isMemberDefinition(AST ast) {

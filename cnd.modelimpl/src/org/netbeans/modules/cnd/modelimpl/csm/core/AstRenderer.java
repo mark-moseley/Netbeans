@@ -120,7 +120,8 @@ public class AstRenderer {
                 //nobreak!
                 case CPPTokenTypes.CSM_FUNCTION_RET_FUN_DECLARATION:
                 case CPPTokenTypes.CSM_FUNCTION_TEMPLATE_DECLARATION:
-                case CPPTokenTypes.CSM_USER_TYPE_CAST:
+                case CPPTokenTypes.CSM_USER_TYPE_CAST_DECLARATION:
+                case CPPTokenTypes.CSM_USER_TYPE_CAST_TEMPLATE_DECLARATION:
                     try {
                         FunctionImpl fi = new FunctionImpl(token, file, currentNamespace, !isRenderingLocalContext(), !isRenderingLocalContext());
                         container.addDeclaration(fi);
@@ -151,6 +152,7 @@ public class AstRenderer {
                 case CPPTokenTypes.CSM_FUNCTION_DEFINITION:
                 case CPPTokenTypes.CSM_FUNCTION_TEMPLATE_DEFINITION:
                 case CPPTokenTypes.CSM_USER_TYPE_CAST_DEFINITION:
+                case CPPTokenTypes.CSM_USER_TYPE_CAST_TEMPLATE_DEFINITION:
                     try {
                         if (isMemberDefinition(token)) {
                             container.addDeclaration(new FunctionDefinitionImpl(token, file, null, !isRenderingLocalContext(), !isRenderingLocalContext()));
@@ -372,7 +374,7 @@ public class AstRenderer {
                 name = child.getFirstChild();
             }
         } else if (child.getType() == CPPTokenTypes.CSM_TYPE_COMPOUND) {
-            if (child.getNextSibling() != null) {
+            if (!isAbstractDeclarator(child.getNextSibling())) {
                 return false;
             }
             name = child.getFirstChild();
@@ -391,20 +393,69 @@ public class AstRenderer {
         CsmAST csmAST = AstUtil.getFirstCsmAST(name);
 
         StringBuilder varName = new StringBuilder(name.getText());
-        while (name.getNextSibling() != null) {
-            name = name.getNextSibling();
+        AST next = name.getNextSibling();
+        while (next != null) {
+            next = skipTemplateParameters(next);
+            if(next == null) {
+                break;
+            }
+            name = next;
             varName.append(name.getText());
+            next = next.getNextSibling();
         }
 
         if (findVariableOrFunction) {
             return findVariable(varName, csmAST.getOffset()) || findFunction(varName, csmAST.getOffset());
         } else {
-            if (name.getNextSibling() != null) {
+            next = name.getNextSibling();
+            next = skipTemplateParameters(next);
+            if (next != null) {
                 return isScopedId(name);
             }
             return true;
         }
     }
+
+    private AST skipTemplateParameters(AST node) {
+        int depth = 0;
+        while (node != null) {
+            switch (node.getType()) {
+                case CPPTokenTypes.LESSTHAN:
+                    depth++;
+                    break;
+                case CPPTokenTypes.GREATERTHAN:
+                    depth--;
+                    if (depth == 0) {
+                        return node.getNextSibling();
+                    }
+                    break;
+                default:
+                    if(depth == 0) {
+                        return node;
+                    }
+            }
+            node = node.getNextSibling();
+        }
+        return null;
+    }
+
+    private boolean isAbstractDeclarator(AST node) {
+        if(node == null) {
+            return true;
+        }
+        if(node.getType() != CPPTokenTypes.LPAREN) {
+            return false;
+        }
+        node = node.getNextSibling();
+        if(node == null || node.getType() != CPPTokenTypes.RPAREN) {
+            return false;
+        }
+        if(node.getNextSibling() !=  null) {
+            return false;
+        }
+        return true;
+    }
+
 
     /**
      * Finds variable in globals and in the current file
@@ -848,7 +899,7 @@ public class AstRenderer {
     }
 
     protected CsmClassForwardDeclaration createForwardClassDeclaration(AST ast, MutableDeclarationsContainer container, FileImpl file, CsmScope scope) {
-        ClassForwardDeclarationImpl cfdi = new ClassForwardDeclarationImpl(ast, file);
+        ClassForwardDeclarationImpl cfdi = new ClassForwardDeclarationImpl(ast, file, !isRenderingLocalContext());
         if (container != null) {
             container.addDeclaration(cfdi);
         }
@@ -881,7 +932,7 @@ public class AstRenderer {
             case CPPTokenTypes.LITERAL_class:
             case CPPTokenTypes.LITERAL_struct:
             case CPPTokenTypes.LITERAL_union:
-                ClassForwardDeclarationImpl cfdi = new ClassForwardDeclarationImpl(ast, file);
+                ClassForwardDeclarationImpl cfdi = new ClassForwardDeclarationImpl(ast, file, !isRenderingLocalContext);
                 if (container != null) {
                     container.addDeclaration(cfdi);
                 }
@@ -974,7 +1025,7 @@ public class AstRenderer {
                         sb.append(namePart.getText());
                     }
                 }
-                return TextCache.getString(sb.toString());
+                return TextCache.getManager().getString(sb.toString());
             }
         }
         return "";
@@ -987,7 +1038,7 @@ public class AstRenderer {
                 List<CharSequence> l = new ArrayList<CharSequence>();
                 for (AST namePart = qid.getFirstChild(); namePart != null; namePart = namePart.getNextSibling()) {
                     if (templateDepth == 0 && namePart.getType() == CPPTokenTypes.ID) {
-                        l.add(NameCache.getString(namePart.getText()));
+                        l.add(NameCache.getManager().getString(namePart.getText()));
                     } else if (namePart.getType() == CPPTokenTypes.LESSTHAN) {
                         // the beginning of template parameters
                         templateDepth++;
@@ -1248,7 +1299,7 @@ public class AstRenderer {
                             break;
                     }
                 }
-                if (!hasVariables) {
+                if (!hasVariables && functionParameter) {
                     // unnamed parameter
                     processVariable(ast, ptrOperator, ast, typeAST/*tokType*/, namespaceContainer, container2, file, _static, false);
                 }
@@ -1499,6 +1550,7 @@ public class AstRenderer {
         }
         if (id.getType() == CPPTokenTypes.ID) {
             AST scope = id.getNextSibling();
+            scope = skipTemplateParameters(scope);
             if (scope != null && scope.getType() == CPPTokenTypes.SCOPE) {
                 return true;
             }
