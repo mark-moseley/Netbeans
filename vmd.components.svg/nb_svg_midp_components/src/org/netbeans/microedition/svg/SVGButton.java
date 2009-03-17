@@ -19,6 +19,7 @@
  */
 package org.netbeans.microedition.svg;
 
+import org.w3c.dom.svg.SVGLocatableElement;
 import org.w3c.dom.svg.SVGRGBColor;
 
 /**
@@ -32,21 +33,25 @@ import org.w3c.dom.svg.SVGRGBColor;
  *       &lt;rect x="1" y="1" rx="5" ry="5" width="81" height="31" fill="rgb(0,0,128)"/>
  *   &lt;g>
  *       &lt;text display="none">type=body&lt;/text>
- *       &lt;rect transform="matrix(1.060988,0.003826782,-0.003826782,1.060988,4.617886,1.9321077)"   
+ *       &lt;rect id="button_ok_body" transform="matrix(1.060988,0.003826782,-0.003826782,1.060988,4.617886,1.9321077)"   
  *           x="0" y="0" rx="5" ry="5" width="80" height="30" fill="rgb(176,196,222)" stroke="rgb(255,165,0)" stroke-width="0">
  *           &lt;animate attributeName="stroke-width" attributeType="XML" begin="button_ok.focusin" dur="0.25s" fill="freeze" to="2"/>
  *           &lt;animate attributeName="stroke-width" attributeType="XML" begin="button_ok.focusout" dur="0.25s" fill="freeze" to="0"/>
  *               &lt;!-- The third and fourth animation elements are used for animate button : on press, on release -->
- *           &lt;animate attributeName="fill" attributeType="XML" begin="indefinite" dur="0.25s" fill="freeze" to="rgb(156,176,202)"/>
- *           &lt;animate attributeName="fill" attributeType="XML" begin="indefinite" dur="0.25s" fill="freeze" to="rgb(176,196,222)"/>
+ *           &lt;animate id="button_ok_body_pressed" "attributeName="fill" attributeType="XML" begin="indefinite" dur="0.25s" fill="freeze" to="rgb(156,176,202)"/>
+ *           &lt;animate id="button_ok_body_released" attributeName="fill" attributeType="XML" begin="indefinite" dur="0.25s" fill="freeze" to="rgb(176,196,222)"/>
  *       &lt;/rect>
  *   &lt;/g>
- *   &lt;text x="24" y="23" fill="black" font-size="20">
+ *   &lt;g>
+ *       &lt;text id="button_ok_stext" x="24" y="23" fill="black" font-size="20">
+ *       OK&lt;/text>
  *       &lt;text display="none">type=shadow_text&lt;/text>
+ *   &lt;/g>
+ *   &lt;g>
+ *   &lt;text id="button_ok_text" x="23" y="21" fill="gray" font-size="20">
  *       OK&lt;/text>
- *       &lt;text x="23" y="21" fill="gray" font-size="20">
  *       &lt;text display="none">type=text&lt;/text>
- *       OK&lt;/text>
+ *   &lt;/g>
  *   &lt;/g>
  * </pre>
  * @author Pavel Benes
@@ -55,9 +60,15 @@ import org.w3c.dom.svg.SVGRGBColor;
 public class SVGButton extends SVGAbstractButton {
     
     private       SVGRGBColor         bodyColor;
+
+    private static final String STEXT = "stext";            // NOI18N
+    private static final String STEXT_SUFFIX = DASH+STEXT;  // NOI18N
     
     public SVGButton( SVGForm form, String elemId) {
         super(form, elemId);
+
+        myShadowText = (SVGLocatableElement) getElementById( getElement(),
+                getElement().getId() + STEXT_SUFFIX);
     }
         
     public void pressButton() { 
@@ -84,6 +95,7 @@ public class SVGButton extends SVGAbstractButton {
          */
         setSelected(false);
         super.releaseButton();
+        fireActionPerformed();
     }
     
     public boolean isSelected() {
@@ -93,9 +105,19 @@ public class SVGButton extends SVGAbstractButton {
     public void setSelected(boolean selected) {
         if ( isSelected != selected) {
             isSelected = selected;
-            fireActionPerformed();
         }
+    }
+
+    public void setText(String text){
+       super.setText(text);
+       if ( text == null ){
+           text ="";
+       }
+       if ( myShadowText != null ){
+            setTraitSafely(myShadowText, SVGTextField.TRAIT_TEXT, text.trim());
+       }
     }
     
     private       boolean             isSelected = false;
+    private       SVGLocatableElement myShadowText;
 }

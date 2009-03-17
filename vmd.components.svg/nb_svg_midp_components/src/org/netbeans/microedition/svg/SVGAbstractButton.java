@@ -31,14 +31,32 @@ import org.w3c.dom.svg.SVGLocatableElement;
  */
 public abstract class SVGAbstractButton extends SVGComponent {
     
-    protected static final String PRESSED  = "pressed";         // NOI18N
-    protected static final String RELEASED = "released";        // NOI18N
-    private static final String   BODY     = "body";            // NOI18N
+    protected static final String PRESSED       = "pressed";         // NOI18N
+    protected static final String RELEASED      = "released";        // NOI18N
+    
+    protected static final String PRESSED_SUFFIX = DASH+PRESSED;     // NOI18N
+    protected static final String RELEASED_SUFFIX= DASH +RELEASED;   // NOI18N
+    
+    private static final String   BODY           = "body";           // NOI18N
+    private static final String   BODY_SUFFIX    = DASH+BODY;        // NOI18N
     
     public SVGAbstractButton( SVGForm form, String elemId) {
         super(form, elemId);
-        myBodyElement = (SVGLocatableElement) getNestedElementByMeta( getElement(), 
+        
+        myBodyElement = (SVGLocatableElement) getElementById( getElement(),
+                getElement().getId() + BODY_SUFFIX);
+        if ( myBodyElement == null ){
+            myBodyElement = (SVGLocatableElement) getNestedElementByMeta( getElement(), 
                 TYPE, BODY );
+        }
+
+        myText = (SVGLocatableElement) getElementById( getElement(),
+                getElement().getId() + SVGTextField.TEXT_SUFFIX);
+        if ( myText== null ){
+            myText = (SVGLocatableElement) getNestedElementByMeta( getElement(),
+                    TYPE, SVGTextField.TEXT );
+        }
+        
         initAnimation();
     }
 
@@ -67,6 +85,22 @@ public abstract class SVGAbstractButton extends SVGComponent {
         }
     }
 
+    public String getText(){
+        if ( myText != null ){
+            return myText.getTrait( SVGTextField.TRAIT_TEXT );
+        }
+        return null;
+    }
+
+    public void setText(String text){
+       if ( text == null ){
+           text ="";
+       }
+       if ( myText != null ){
+            setTraitSafely(myText, SVGTextField.TRAIT_TEXT, text.trim());
+       }
+    }
+
     public abstract boolean isSelected();
     
     public abstract void setSelected( boolean isSelected);
@@ -77,6 +111,16 @@ public abstract class SVGAbstractButton extends SVGComponent {
     
     private void initAnimation() {
         if ( getBodyElement() != null ){
+            
+            myPressedAnimation = (SVGAnimationElement) getElementById( 
+                    getBodyElement(), getBodyElement().getId() +PRESSED_SUFFIX);
+            myReleasedAnimation = (SVGAnimationElement) getElementById( 
+                    getBodyElement(), getBodyElement().getId() +RELEASED_SUFFIX);
+            
+            if ( myPressedAnimation != null ){
+                return;
+            }
+            
             int count = 0;
             SVGElement animation = (SVGElement)
                 getBodyElement().getFirstElementChild();
@@ -107,6 +151,7 @@ public abstract class SVGAbstractButton extends SVGComponent {
     }
     
     private SVGLocatableElement myBodyElement;
+    private SVGLocatableElement myText;
     
     protected SVGAnimationElement myPressedAnimation;
     protected SVGAnimationElement myReleasedAnimation;

@@ -33,15 +33,18 @@ import org.w3c.dom.svg.SVGLocatableElement;
  *               &lt;set attributeName="visibility" attributeType="XML" begin="radio_male.focusin" fill="freeze" to="visible"/>
  *               &lt;set attributeName="visibility" attributeType="XML" begin="radio_male.focusout" fill="freeze" to="hidden"/>
  *           &lt;/rect>
- *           &lt;circle cx="11" cy="12" r="8" fill="white" stroke="black" stroke-width="2"/>
+ *           &lt;circle id="radio_male_dot" cx="11" cy="12" r="8" fill="white" stroke="black" stroke-width="2"/>
  *       &lt;g>
  *           &lt;text display="none">type=dot&lt;/text>
  *           &lt;circle cx="11" cy="12" r="4" fill="black" visibility="hidden"/>
- *       &lt;/g>
- *           &lt;text x="24" y="17" stroke="gray" font-size="15">Male&lt;/text>
+ *       &lt;g    
+ *          &lt;text id="radio_male_text" x="24" y="17" stroke="gray" font-size="15">
+ *          Male&lt;/text>
+ *          &lt;!-- Metadata information. Please don't edit. -->
+ *          &lt;text display="none">type=text&lt;/text>
  *       &lt;/g>
  *
- *       &lt;g id="radio_female" transform="translate(7,33)">
+ *       &lt;g> id="radio_female" transform="translate(7,33)">
  *       &lt;!-- Metadata information. Please don't edit. -->
  *       &lt;text display="none">type=radio&lt;/text>
  *
@@ -54,10 +57,13 @@ import org.w3c.dom.svg.SVGLocatableElement;
  *           &lt;!-- Metadata information. Please don't edit. -->
  *       &lt;text display="none">type=dot&lt;/text>
  *
- *       &lt;circle  cx="11" cy="12" r="4" fill="black" visibility="hidden"/>
- *       &lt;/g>
- *           &lt;text x="24" y="17" stroke="gray" font-size="15">Female&lt;/text>
- *       &lt;/g>
+ *       &lt;circle id="radio_female_dot" cx="11" cy="12" r="4" fill="black" visibility="hidden"/>
+ *       &lt;g>
+ *          &lt;text id="radio_female_text" x="24" y="17" stroke="gray" font-size="15">
+ *          Female&lt;/text>
+ *          &lt;!-- Metadata information. Please don't edit. -->
+ *          &lt;text display="none">type=text&lt;/text>
+ *       &lt/g>
  *   &lt;/g>
  * </pre>
  *
@@ -65,14 +71,31 @@ import org.w3c.dom.svg.SVGLocatableElement;
  * @author ads
  */
 public class SVGRadioButton extends SVGAbstractButton {
-    private static final String DOT      = "dot";           // NOI18N
+    
+    private static final String DOT         = "dot";           // NOI18N
+    private static final String DOT_SUFFIX  = DASH+DOT;        // NOI18N 
     
     public SVGRadioButton( SVGForm form, String elemId) {
         super(form, elemId);
-        myDotElement = (SVGLocatableElement) getNestedElementByMeta( getElement(), 
-                TYPE, DOT );
+        initNestedElements();
+        
         //isSelected = form.registerRadioButton(this);
         updateTrait();
+    }
+
+    /**
+     * 
+     */
+    private void initNestedElements() {
+        if ( getElement().getId() != null ){
+            myDotElement = (SVGLocatableElement) getElementById( getElement(), 
+                    getElement().getId() + DOT_SUFFIX );
+        }
+        if ( myDotElement == null ){
+            myDotElement = (SVGLocatableElement) getNestedElementByMeta( getElement(), 
+                    TYPE, DOT );
+        }
+        
     }
     
     public void setSelected( boolean selected) {
@@ -99,6 +122,6 @@ public class SVGRadioButton extends SVGAbstractButton {
                 isSelected ? TR_VALUE_VISIBLE : TR_VALUE_HIDDEN );
     }
     
-    private final SVGLocatableElement myDotElement;
+    private SVGLocatableElement myDotElement;
     private       boolean             isSelected;
 }
