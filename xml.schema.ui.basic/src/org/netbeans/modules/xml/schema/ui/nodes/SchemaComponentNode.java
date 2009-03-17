@@ -57,10 +57,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import javax.swing.Action;
+import javax.swing.SwingUtilities;
 import org.netbeans.modules.refactoring.api.ui.RefactoringActionsFactory;
 import org.netbeans.modules.xml.refactoring.spi.SharedUtils;
 
-//import org.netbeans.modules.xml.refactoring.actions.RefactorAction;
 import org.netbeans.modules.xml.refactoring.ui.ReferenceableProvider;
 import org.netbeans.modules.xml.schema.model.Annotation;
 import org.netbeans.modules.xml.schema.model.Documentation;
@@ -143,15 +143,10 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
         Highlighted, ReferenceableProvider, CountChildrenCookie,
         GetComponentCookie, GetSuperCookie, GotoCookie {
 
-    /**
-     *
-     *
-     */
     public SchemaComponentNode(SchemaUIContext context,
             SchemaComponentReference<T> reference, Children children) {
         this(context,reference,children,new InstanceContent());
     }
-    
     
     /**
      * Constructor HACK to allow creating of our own lookup
@@ -197,11 +192,10 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
         // destroy method.
         SchemaModel model = reference.get().getModel();
         if (model != null) {
-            weakModelListener=
-                    WeakListeners.propertyChange(this,model);
+            weakModelListener = WeakListeners.propertyChange(awtPCL, model);
             model.addPropertyChangeListener(weakModelListener);
             weakComponentListener = (ComponentListener) WeakListeners.create(
-                    ComponentListener.class, this, model);
+                    ComponentListener.class, awtCL, model);
             model.addComponentListener(weakComponentListener);
         }
         // Determine default names for the node
@@ -321,6 +315,7 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
      *
      *
      */
+    @Override
     public boolean equals(Object o) {
         // Without this, the tree view collapses when nodes are changed.
         if (o instanceof SchemaComponentNode) {
@@ -336,6 +331,7 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
      *
      *
      */
+    @Override
     public int hashCode() {
         // Without this, the tree view collapses when nodes are changed.
         return reference.hashCode();
@@ -388,7 +384,7 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
     protected boolean isEditable() {
         SchemaModel model = getReference().get().getModel();
         return model != null && model == getContext().getModel() && 
-				XAMUtils.isWritable(model);
+                XAMUtils.isWritable(model);
     }
     
     /**
@@ -407,8 +403,8 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
         if (component instanceof Named) {
             String name=((Named)component).getName();
             // Automatically keep the name in sync for named schema components.
-			_setName(name);
-			if(name==null||name.equals("")) name = component.getPeer().getLocalName();
+            _setName(name);
+            if(name==null||name.equals("")) name = component.getPeer().getLocalName();
             setDisplayName(name);
         }
     }
@@ -521,11 +517,11 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
         return getReference().get().getComponentType();
     }
 
-	// implementation of get super cookie
-	public SchemaComponent getSuper()
-	{
-		return getSuperDefinition();
-	}
+    // implementation of get super cookie
+    public SchemaComponent getSuper()
+    {
+        return getSuperDefinition();
+    }
   
     
     ////////////////////////////////////////////////////////////////////////////
@@ -637,8 +633,8 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
      *
      */
     private void _setName(String value) {
-		// prevent NPE from explorermanager
-		if(value==null) value="";
+        // prevent NPE from explorermanager
+        if(value==null) value="";
         super.setName(value);
     }
     
@@ -649,34 +645,35 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
      */
     @Override
             public void setName(String value) {
-		NamedReferenceable ref = getReferenceable();
-		if(ref==null)
-		{
-			_setName(value);
-			if (supportsRename())
-			{
-				try
-				{
-					getReference().get().getModel().startTransaction();
-					Nameable n = (Nameable)getReference().get();
-					n.setName(value);
-				}
-				finally
-				{
-    				getReference().get().getModel().endTransaction();
-				}
-			}
-		}
-		else
-		{
+        NamedReferenceable ref = getReferenceable();
+        if(ref==null)
+        {
+            _setName(value);
+            if (supportsRename())
+            {
+                try
+                {
+                    getReference().get().getModel().startTransaction();
+                    Nameable n = (Nameable)getReference().get();
+                    n.setName(value);
+                }
+                finally
+                {
+                    getReference().get().getModel().endTransaction();
+                }
+            }
+        }
+        else
+        {
             SharedUtils.locallyRenameRefactor((Nameable)ref, value);
-		}
+        }
     }
     
     /**
      * Checks for references to this component, and if none are found,
      * remove it from the model.
      */
+    @Override
     public void destroy() throws IOException {
         SchemaModel model = getReference().get().getModel();
         if(model == null) {
@@ -750,6 +747,7 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
                     "PROP_SchemaComponentNode_IDDesc"),
                     StringEditor.class
                     ){
+                @Override
                 public void setValue(Object o) throws
                         IllegalAccessException, InvocationTargetException {
                     if (o instanceof String) {
@@ -792,6 +790,7 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
                 }
                 public void setValue(Object val) throws IllegalAccessException,IllegalArgumentException,InvocationTargetException {
                 }
+                @Override
                 public PropertyEditor getPropertyEditor() {
                     return new StructurePropertyEditor();
                 }
@@ -871,6 +870,7 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
         return new NewTypesFactory();
     }
     
+    @Override
     public final NewType[] getNewTypes() {
         if(isEditable()) {
             return getNewTypesFactory().getNewTypes(getReference(), null);
@@ -887,61 +887,70 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
     ////////////////////////////////////////////////////////////////////////////
     
     public void childrenAdded(ComponentEvent evt) {
+        //
+        assert SwingUtilities.isEventDispatchThread();
+        //
         if (isValid()) {
-			if(evt.getSource() == getReference().get())
-			{
-				((RefreshableChildren) getChildren()).refreshChildren();
-			}
-			if(evt.getSource() == getReference().get() ||
-					evt.getSource() == getReference().get().getAnnotation())
-			{
-				updateShortDescription();
-			}
+            if(evt.getSource() == getReference().get())
+            {
+                ((RefreshableChildren) getChildren()).refreshChildren();
+            }
+            if(evt.getSource() == getReference().get() ||
+                    evt.getSource() == getReference().get().getAnnotation())
+            {
+                updateShortDescription();
+            }
         }
     }
     
     public void childrenDeleted(ComponentEvent evt) {
+        //
+        assert SwingUtilities.isEventDispatchThread();
+        //
         if (isValid()) {
-			if(evt.getSource() == getReference().get())
-			{
-				((RefreshableChildren) getChildren()).refreshChildren();
-			}
-			if(evt.getSource() == getReference().get() ||
-					evt.getSource() == getReference().get().getAnnotation())
-			{
-				updateShortDescription();
-			}
+            if(evt.getSource() == getReference().get())
+            {
+                ((RefreshableChildren) getChildren()).refreshChildren();
+            }
+            if(evt.getSource() == getReference().get() ||
+                    evt.getSource() == getReference().get().getAnnotation())
+            {
+                updateShortDescription();
+            }
         }
     }
     
     public void valueChanged(ComponentEvent evt) {
-		if (isValid())
-		{
-			T component = getReference().get();
-			if(evt.getSource() == component)
-			{
-				updateDisplayName();
-			}
-			Documentation d = null;
-			if(component instanceof Documentation)
-				d = (Documentation)component;
-			else if(component instanceof Annotation)
-			{
-				Annotation a = (Annotation)component;
-				if(!a.getDocumentationElements().isEmpty())
-					d = a.getDocumentationElements().iterator().next();
-			} 
-			else
-			{
-				Annotation a = component.getAnnotation();
-				if(a!=null && !a.getDocumentationElements().isEmpty())
-					d = a.getDocumentationElements().iterator().next();
-			}
-			if(evt.getSource()==d)
-			{
-				updateShortDescription();
-			}
-		}
+        //
+        assert SwingUtilities.isEventDispatchThread();
+        //
+        if (isValid())
+        {
+            T component = getReference().get();
+            if(evt.getSource() == component)
+            {
+                updateDisplayName();
+            }
+            Documentation d = null;
+            if(component instanceof Documentation)
+                d = (Documentation)component;
+            else if(component instanceof Annotation)
+            {
+                Annotation a = (Annotation)component;
+                if(!a.getDocumentationElements().isEmpty())
+                    d = a.getDocumentationElements().iterator().next();
+            } 
+            else
+            {
+                Annotation a = component.getAnnotation();
+                if(a!=null && !a.getDocumentationElements().isEmpty())
+                    d = a.getDocumentationElements().iterator().next();
+            }
+            if(evt.getSource()==d)
+            {
+                updateShortDescription();
+            }
+        }
     }
     
     /**
@@ -950,7 +959,11 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
      * Fires properties changed events if needed.
      * Subclasses override if needed.
      */
+    @Override
     public void propertyChange(PropertyChangeEvent event) {
+        //
+        assert SwingUtilities.isEventDispatchThread();
+        //
         if (isValid() && event.getSource() == getReference().get()) {
             try {
                 updateDisplayName();
@@ -1023,18 +1036,20 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
         return name;
     }
     
+    @Override
     public String getDisplayName() {
         String instanceName = getDefaultDisplayName();
         return instanceName.length()==0 ? instanceName : 
-	       instanceName + " " + "[" + getTypeDisplayName() + "]"; // NOI18N
+           instanceName + " " + "[" + getTypeDisplayName() + "]"; // NOI18N
     }
     
     public String getDefaultDisplayName() {
-	String instanceName = super.getDisplayName();
+    String instanceName = super.getDisplayName();
         return instanceName == null || instanceName.length() == 0
-	    ? "" : instanceName; 
+        ? "" : instanceName; 
     }
     
+    @Override
     public String getHtmlDisplayName() {
         String name = getDefaultDisplayName();
         // Need to escape any HTML meta-characters in the name.
@@ -1049,10 +1064,12 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
     
     private class StructurePropertyEditor extends PropertyEditorSupport
             implements ExPropertyEditor {
+        @Override
         public boolean supportsCustomEditor() {
             return true;
         }
         
+        @Override
         public java.awt.Component getCustomEditor() {
             return getCustomizer();
         }
@@ -1079,6 +1096,9 @@ public abstract class SchemaComponentNode<T extends SchemaComponent>
         new DesignGotoType(),
         new SuperGotoType(),
     };
+
+    private PropertyChangeListener awtPCL = new XAMUtils.AwtPropertyChangeListener(this);
+    private ComponentListener awtCL = new XAMUtils.AwtComponentListener(this);
 
     /**
      * Implement ReferenceableProvider

@@ -84,10 +84,11 @@ import org.netbeans.modules.xml.xam.spi.Validator.ResultItem;
 import org.netbeans.modules.xml.xam.ui.category.Category;
 import org.netbeans.modules.xml.xam.ui.category.CategoryPane;
 import org.netbeans.modules.xml.xam.ui.category.DefaultCategoryPane;
-import org.netbeans.modules.xml.xam.ui.search.SearchManager;
 import org.netbeans.modules.xml.xam.ui.multiview.ActivatedNodesMediator;
 import org.netbeans.modules.xml.xam.ui.multiview.CookieProxyLookup;
 import org.netbeans.modules.xml.xam.ui.undo.QuietUndoManager;
+import org.netbeans.modules.xml.search.api.SearchManager;
+import org.netbeans.modules.xml.xam.ui.XAMUtils;
 import org.openide.ErrorManager;
 import org.openide.actions.FindAction;
 import org.openide.explorer.ExplorerManager;
@@ -125,11 +126,15 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
     private transient JToolBar toolbar;
     private transient javax.swing.JLabel errorLabel = new javax.swing.JLabel();
     private ExplorerManager manager;
+    private ValidateAction validateAction;
+
+    private PropertyChangeListener awtPCL = new XAMUtils.AwtPropertyChangeListener(this);
 
     /**
      * Nullary constructor for deserialization.
      */
     public SchemaColumnViewMultiViewElement() {
+        super();
     }
 
     public SchemaColumnViewMultiViewElement(SchemaDataObject schemaDataObject) {
@@ -146,12 +151,12 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
 
     private void initialize() throws IOException {
         SchemaEditorSupport editor = schemaDataObject.getSchemaEditorSupport();
-    manager = new ExplorerManager();
+        manager = new ExplorerManager();
         // Install our own actions.
         CallbackSystemAction globalFindAction =
                 (CallbackSystemAction) SystemAction.get(FindAction.class);
         Object mapKey = globalFindAction.getActionMapKey();
-    ActionMap map = getActionMap();
+        ActionMap map = getActionMap();
         map.put(mapKey, new ColumnViewFindAction());
         map.put(DefaultEditorKit.copyAction, ExplorerUtils.actionCopy(manager));
         map.put(DefaultEditorKit.cutAction, ExplorerUtils.actionCut(manager));
@@ -204,7 +209,10 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
         addPropertyChangeListener("activatedNodes", nodesMediator);
         addPropertyChangeListener("activatedNodes", cpl);
         setLayout(new BorderLayout());
-        initUI(true);
+//        initUI(true);
+        //accessibility
+        this.getAccessibleContext().setAccessibleName(NbBundle.getMessage(SchemaColumnViewMultiViewElement.class,"LBL_SchemaColumnView"));
+        this.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(SchemaColumnViewMultiViewElement.class,"DSC_SchemaColumnView"));
     }
 
     public ExplorerManager getExplorerManager() {
@@ -216,6 +224,9 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
         if (!SchemaModel.STATE_PROPERTY.equals(property)) {
             return;
         }
+        //
+        assert SwingUtilities.isEventDispatchThread();
+        //
         State newState = (State)evt.getNewValue();
         if (newState == SchemaModel.State.VALID) {
             errorMessage = null;
@@ -229,12 +240,8 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
                     SchemaColumnViewMultiViewElement.class,
                     "MSG_NotWellformedSchema");
         }
-        //fix for IZ:116057
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                setActivatedNodes(new Node[] {schemaDataObject.getNodeDelegate()});
-            }
-        });
+
+        setActivatedNodes(new Node[] {schemaDataObject.getNodeDelegate()});
         emptyUI(errorMessage);
     }
 
@@ -251,7 +258,7 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
             schemaModel = editor.getModel();
             if (schemaModel != null) {
                 PropertyChangeListener pcl = WeakListeners.
-                        create(PropertyChangeListener.class, this, schemaModel);
+                        create(PropertyChangeListener.class, awtPCL, schemaModel);
                 schemaModel.addPropertyChangeListener(pcl);
             }
         } catch (IOException io) {
@@ -261,6 +268,7 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
         return schemaModel;
     }
 
+    @Override
     public int getPersistenceType() {
         return PERSISTENCE_NEVER;
     }
@@ -289,9 +297,9 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
     private boolean isSchemaValid() {
         SchemaEditorSupport editor = schemaDataObject.getSchemaEditorSupport();
         try {
-            SchemaModel schemaModel = editor.getModel();
-            if (schemaModel != null &&
-                    schemaModel.getState() == SchemaModel.State.VALID) {
+            SchemaModel sm = editor.getModel();
+            if (sm != null &&
+                    sm.getState() == SchemaModel.State.VALID) {
                 return true;
             }
         } catch (IOException io) {
@@ -306,22 +314,9 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
      * error message.
      */
     private void initUI() {
-        initUI(false);
-    }
-
-    private void initUI(boolean reloadOnModelInvalid) {
-        SchemaModel model = getSchemaModel();
-        if (model != null && model.getState() == SchemaModel.State.VALID) {
+        if (isSchemaValid()) {
             recreateUI();
             return;
-        }
-
-        if (model != null && reloadOnModelInvalid) {
-            forceResetDocument(model);
-            if (model.getState() == SchemaModel.State.VALID) {
-                recreateUI();
-                return;
-            }
         }
 
         // If it comes here, either the schema is not well-formed or invalid.
@@ -406,25 +401,42 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
         }
     }
     
+    @Override
     public void componentActivated() {
         super.componentActivated();
         addUndoManager();
         ExplorerUtils.activateActions(manager, true);
     }
 
+    @Override
     public void componentDeactivated() {
         super.componentDeactivated();
-    ExplorerUtils.activateActions(manager, false);
+        if(manager != null) {
+            ExplorerUtils.activateActions(manager, false);
+        }
     }
 
+    @Override
     public void componentOpened() {
         super.componentOpened();
     }
 
+    @Override
     public void componentClosed() {
         super.componentClosed();
+        if(categoryPane!= null) categoryPane.close();
+        if(toolbar!= null) toolbar.removeAll();
+        if(manager != null) {
+            ExplorerUtils.activateActions(manager, false);
+            manager = null;
+        }
+        toolbar = null;
+        validateAction = null;
+        schemaModel = null;
+        categoryPane = null;
     }
-
+    
+    @Override
     public void componentShowing() {
         super.componentShowing();
         initUI();
@@ -437,6 +449,7 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
         }
     }
 
+    @Override
     public void componentHidden() {
         super.componentHidden();
         if (categoryPane != null) {
@@ -448,6 +461,7 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
     }
 
     @SuppressWarnings("deprecation")
+    @Override
     public void requestFocus() {
         super.requestFocus();
         // For Help to work properly, need to take focus.
@@ -457,6 +471,7 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
     }
 
     @SuppressWarnings("deprecation")
+    @Override
     public boolean requestFocusInWindow() {
         boolean retVal = super.requestFocusInWindow();
         // For Help to work properly, need to take focus.
@@ -468,46 +483,47 @@ public class SchemaColumnViewMultiViewElement extends TopComponent
     
     public JComponent getToolbarRepresentation() {
         // This is called every time user switches between elements.
-        if (toolbar == null) {
-            try {
-                SchemaModel model = schemaDataObject
-                        .getSchemaEditorSupport().getModel();
-                if (model != null && model.getState() == SchemaModel.State.VALID) {
-                    toolbar = new JToolBar();
-                    toolbar.setFloatable(false);
-                    if (categoryPane != null) {
-                        toolbar.addSeparator();
-                        categoryPane.populateToolbar(toolbar);
-                    }
-                    // vlv: search
-                    SearchManager manager = SearchManager.getDefault();
-
-                    if (manager != null) {
-                      toolbar.addSeparator();
-                      toolbar.add(manager.getSearchAction());
-                    }
+        if(toolbar != null)
+            return toolbar;
+        try {
+            SchemaModel model = schemaDataObject
+                    .getSchemaEditorSupport().getModel();
+            if (model != null && model.getState() == SchemaModel.State.VALID) {
+                toolbar = new JToolBar();
+                toolbar.setFloatable(false);
+                if (categoryPane != null) {
                     toolbar.addSeparator();
-                    JButton validateButton = toolbar.add(new ValidateAction(model));
-                    validateButton.getAccessibleContext().setAccessibleName(""+
-                            validateButton.getAction().getValue(ValidateAction.NAME));
+                    categoryPane.populateToolbar(toolbar);
                 }
-            } catch (IOException ioe) {
-                // wait until the model is valid
+                toolbar.addSeparator();
+
+                // vlv: search
+                toolbar.add(SearchManager.getDefault().getSearchAction());
+                toolbar.addSeparator();
+
+                validateAction = new ValidateAction(model);
+                JButton validateButton = toolbar.add(validateAction);
+                validateButton.getAccessibleContext().setAccessibleName(""+
+                validateButton.getAction().getValue(ValidateAction.NAME));
             }
+        } catch (IOException ioe) {
+            // wait until the model is valid
         }
-        return toolbar;
+        return toolbar == null ? new JToolBar() : toolbar;
     }
 
+    @Override
     public UndoRedo getUndoRedo() {
-    return schemaDataObject.getSchemaEditorSupport().getUndoManager();
+        return schemaDataObject.getSchemaEditorSupport().getUndoManager();
     }
 
     public JComponent getVisualRepresentation() {
         return this;
     }
     
+    @Override
     public HelpCtx getHelpCtx() {
-    return new HelpCtx(SchemaColumnViewMultiViewDesc.class);
+        return new HelpCtx(SchemaColumnViewMultiViewDesc.class);
     }
 
     private class ColumnViewFindAction extends AbstractAction {
