@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,75 +34,86 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.repository.access;
+package org.netbeans.modules.cnd.modelimpl.csm.core;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
 import org.netbeans.modules.cnd.api.model.CsmProject;
-import org.netbeans.modules.cnd.api.project.NativeProject;
-import org.netbeans.modules.cnd.modelimpl.csm.core.ModelImpl;
-import org.netbeans.modules.cnd.modelimpl.platform.ModelSupport;
-import org.netbeans.modules.cnd.modelimpl.trace.NativeProjectProvider;
+import org.netbeans.modules.cnd.modelimpl.test.ModelImplBaseTestCase;
 import org.netbeans.modules.cnd.modelimpl.trace.TraceModelBase;
 
 /**
- *
+ * Test for #131967
  * @author Vladimir Kvashin
  */
-public class ChangingPropertiesTestCase extends RepositoryAccessTestBase {
+public class FakeRegistrationTest1 extends ModelImplBaseTestCase  {
 
     private final static boolean verbose;
     static {
-        verbose = true; // Boolean.getBoolean("test.library.changing.props.verbose");
+        verbose = Boolean.getBoolean("test.fake.reg.verbose");
         if( verbose ) {
             System.setProperty("cnd.modelimpl.timing", "true");
             System.setProperty("cnd.modelimpl.timing.per.file.flat", "true");
-            System.setProperty("cnd.repository.listener.trace", "true");
-            System.setProperty("cnd.trace.close.project", "true");
-	    //System.setProperty("cnd.repository.workaround.nulldata", "true");
         }
+        
+        System.setProperty("cnd.modelimpl.parser.threads", "1");
     }    
-
-    public ChangingPropertiesTestCase(String testName) {
-	super(testName);
+    
+    public FakeRegistrationTest1(String testName) {
+        super(testName);
     }
     
-    public void testRun() throws Exception {
-	
-	File projectRoot = getDataFile("quote_syshdr");
-	
-	int count = Integer.getInteger("test.library.changing.props.laps", 1000);
-	
-	final TraceModelBase traceModel = new  TraceModelBase(true);
-	traceModel.setUseSysPredefined(true);
-	traceModel.processArguments(projectRoot.getAbsolutePath());
+    public void testSimple() throws Exception {
+
+        File workDir = getWorkDir();
+        
+        File sourceFile = new File(workDir, "fake.cc");
+        File dummyFile1 = new File(workDir, "dummy1.cc");
+        File dummyFile2 = new File(workDir, "dummy2.cc");
+        File headerFile = new File(workDir, "fake.h");
+        
+        writeFile(sourceFile, " #include \"fake.h\"\n BEGIN\n int x;\n void QNAME () {}\n END \n");
+        writeFile(headerFile, " #define QNAME Qwe::foo\n  #define BEGIN\n #define END\n");
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 10000; i++) {
+            sb.append("#include \"fake.h\"\n");
+        }
+        writeFile(dummyFile1, sb.toString());
+        writeFile(dummyFile2, sb.toString());
+
+        TraceModelBase traceModel = new  TraceModelBase(true);
+
+	traceModel.processArguments(dummyFile1.getAbsolutePath(), sourceFile.getAbsolutePath(), dummyFile2.getAbsolutePath(), headerFile.getAbsolutePath());
+        
 	ModelImpl model = traceModel.getModel();
-	ModelSupport.instance().setModel(model);
 	final CsmProject project = traceModel.getProject();
-	
-	System.err.printf("Waiting parse...\n");
-	project.waitParse();
-	final NativeProject nativeProject = (NativeProject) project.getPlatformProject();
-	
-	// a simple timing
-	System.err.printf("Calculating parse time\n");
-	long parseTime = System.currentTimeMillis();
-	NativeProjectProvider.fireAllFilesChanged(nativeProject);
-	sleep(500); // otherwise
-	project.waitParse();
-	parseTime = System.currentTimeMillis() - parseTime;
-	System.err.printf("Parse time is %d ms\n", parseTime);
-	
-	for (int i = 0; i < count; i++) {
-	    System.err.printf("########## %s: processing project %s. Pass %d \n", getBriefClassName(), projectRoot.getAbsolutePath(), i);
-	    NativeProjectProvider.fireAllFilesChanged(nativeProject);
-	    long timeout = (long) (Math.random() * parseTime);
-	    System.err.printf("Sleeping %d ms\n", timeout);
-	    sleep(timeout);
-	    assertNoExceptions();
-	}
-	assertNoExceptions();
+        
+        FileImpl csmSource = (FileImpl) project.findFile(sourceFile.getAbsolutePath());
+        assert csmSource != null;
+
+        FileImpl csmHeader = (FileImpl) project.findFile(headerFile.getAbsolutePath());
+        assert csmHeader != null;
+
+        csmSource.scheduleParsing(true);
+        
+        writeFile(headerFile, " #define QNAME foo\n #define BEGIN class C {\n #define END };\n");
+        sleep(500);
+        csmHeader.markReparseNeeded(true);
+        csmSource.markReparseNeeded(true);
+        csmSource.scheduleParsing(true);
+        
+        project.waitParse();
+        sleep(500);
+        
+        assertNoExceptions();
+        
+        clearWorkDir();
     }
+
 }

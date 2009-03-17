@@ -42,71 +42,66 @@
 package org.netbeans.modules.cnd.repository.access;
 
 import java.io.File;
-import java.util.Collection;
-import java.util.List;
+import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmProject;
+import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.core.ModelImpl;
 import org.netbeans.modules.cnd.modelimpl.trace.TraceModelBase;
 
 /**
- * Tries to close project as soon as it is parsed -
- * while its libraries are still being parsed
+ * A test that reproduces the situation described in the IZ #124767
+ * http://www.netbeans.org/issues/show_bug.cgi?id=124767
  * @author Vladimir Kvashin
  */
-public class CloseProjectWhenParsingLib extends RepositoryAccessTestBase  {
+public class HugeCaches extends RepositoryAccessTestBase {
 
-    private final static boolean verbose;
     static {
-        verbose = true; // Boolean.getBoolean("test.library.access.verbose");
-        if( verbose ) {
-            System.setProperty("cnd.modelimpl.timing", "true");
-            System.setProperty("cnd.modelimpl.timing.per.file.flat", "true");
-            System.setProperty("cnd.repository.listener.trace", "true");
-            System.setProperty("cnd.trace.close.project", "true");
-	    System.setProperty("cnd.repository.workaround.nulldata", "true");
-        }
-    }    
+	System.setProperty("cnd.repository.trace.defragm", "true");
+	System.setProperty("cnd.repository.queue.maintenance", "10");
+    }
     
-    public CloseProjectWhenParsingLib(String testName) {
+    public HugeCaches(String testName) {
 	super(testName);
     }
     
     public void testRun() throws Exception {
 	
-	File projectRoot = getDataFile("quote_syshdr");
+	File projectRoot1 = getDataFile("quote_nosyshdr");
+	File projectRoot2 = getDataFile("../org");
 	
-	int count = Integer.getInteger("test.close.project.when.parsing.libs.laps", 2);
+	int count = Integer.getInteger("huge.caches.laps", 1000);
 	
 	final TraceModelBase traceModel = new  TraceModelBase(true);
 	traceModel.setUseSysPredefined(true);
-	traceModel.processArguments(projectRoot.getAbsolutePath());
+	traceModel.processArguments(projectRoot1.getAbsolutePath(), projectRoot2.getAbsolutePath());
 	ModelImpl model = traceModel.getModel();
 	
 	for (int i = 0; i < count; i++) {
-	    System.err.printf("%s: processing project %s. Pass %d \n", getBriefClassName(), projectRoot.getAbsolutePath(), i);
+	    System.err.printf("%s: processing project %s. Pass %d \n", getBriefClassName(), projectRoot1.getAbsolutePath(), i);
 	    final CsmProject project = traceModel.getProject();
-	    assertNoExceptions();
 	    project.waitParse();
-	    Collection<CsmProject> libs = project.getLibraries();
-	    // here is the key point:
-	    // if we wait until libs are parsed prior than resetting the project,
-	    // the assertion won't appear;
-	    // if we close project without persistence cleanup, 
-	    // the assertion won't appear either
-	    // waitLibsParsed(project);
-	    traceModel.resetProject(true);
-	    waitCloseAndClear(libs, traceModel);
+	    sleep(2000); // (i < 2 ? 2000 : 4000); // 12000);
+	    if( i > 0 &&  i % 20 == 0 ) {
+		System.err.printf("\n\nSleeping...\n");
+		sleep(15000);
+		System.err.printf("\nAwoke\n\n");
+	    }
+	    
+	    invalidateProjectFiles(project);
+	    //traceModel.resetProject(i < count/2);
 	    assertNoExceptions();
 	}
 	assertNoExceptions();
     }
     
-    private void waitCloseAndClear(Collection<CsmProject> libs, TraceModelBase traceModel) {
-        for( CsmProject lib : libs ) {
-	    lib.waitParse();
-	}
-        for( CsmProject lib : libs ) {
-	    traceModel.closeProject(lib, true);
+    private void invalidateProjectFiles(CsmProject project) {
+	for(CsmFile file : project.getAllFiles() ) {
+	    FileImpl impl = (FileImpl) file;
+	    impl.markReparseNeeded(false);
+	    try {
+		file.scheduleParsing(false);
+		//sleep(500);
+	    } catch ( InterruptedException e ) {}
 	}
     }
     

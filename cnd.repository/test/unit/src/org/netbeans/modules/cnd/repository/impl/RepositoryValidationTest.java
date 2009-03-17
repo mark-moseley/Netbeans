@@ -50,12 +50,17 @@ import org.netbeans.modules.cnd.test.BaseTestSuite;
 * @author Sergey Grinev
  */
 public class RepositoryValidationTest extends BaseTestSuite {
-    
+
+    static {
+        System.setProperty("cnd.modelimpl.parser.threads", "8");
+    }
+
     public RepositoryValidationTest() {
         super("Repository"); // NOI18N
         
         addTestSuite(RepositoryValidationGoldens.class);
         addTestSuite(RepositoryValidation.class);
+        addTestSuite(RepositoryValidation2.class);
     }
 
     public static Test suite() {
