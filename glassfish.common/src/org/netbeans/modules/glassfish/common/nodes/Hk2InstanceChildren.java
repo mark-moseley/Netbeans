@@ -39,73 +39,69 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.apt.utils;
+package org.netbeans.modules.glassfish.common.nodes;
 
-import antlr.Token;
-import antlr.TokenStream;
-import antlr.TokenStreamException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
+import java.util.Vector;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
+import org.netbeans.modules.glassfish.common.GlassfishInstance;
+import org.netbeans.modules.glassfish.spi.GlassfishModule.ServerState;
+import org.openide.nodes.Children;
+import org.openide.nodes.Node;
+import org.openide.util.Mutex;
+import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
+
 
 /**
- *
- * @author Vladimir Voskresensky
+ * 
+ * @author Peter Williams
  */
-public class APTBracketRecoveryFilter implements TokenStream {
-    private final TokenStream orig;
-    private int curlies = 0;
-    private int parens = 0;
-    private int squares = 0;
-    private int pos = -1;
-    private final List<Token> stack = new ArrayList<Token>(1000);
-    private Token last = null;
+public class Hk2InstanceChildren extends Children.Keys<Hk2ItemNode> implements Refreshable, ChangeListener {
     
-    ////////////////////////////////////////////////////////////////
-    // state machine:
-    // action + token to return
-    // stack\cur    {       }       (       )       [       ]
-    //            push     err={   push   err=(    push   err=[
-    //  {         push     pop     push   skip=)   push   skip=]
-    //  (         err=)    err=)   push   pop      push   err=)
-    // "!M"(      err=)    skip=}  push   pop      push   skip=]
-    //  [         err=]    err=]   push   err=]    push   pop
-    // "!M"[      err=]    skip=}  push   skip=}   push   pop
+    private GlassfishInstance serverInstance;
     
-    private boolean recoveryMode = false;
-    
-    public APTBracketRecoveryFilter(TokenStream orig) {
-        this.orig = orig;
+    Hk2InstanceChildren(GlassfishInstance instance) {
+        serverInstance = instance;
+        serverInstance.addChangeListener(WeakListeners.change(this, serverInstance));
     }
- 
-    public Token nextToken() throws TokenStreamException {
-        Token out;
-        if (recoveryMode) {
-            assert last != null;
-            out = checkToken(last);
-        } else {
-            last = orig.nextToken();
-            out = checkToken(last);
+
+    public void updateKeys(){
+        Vector<Hk2ItemNode> keys = new Vector<Hk2ItemNode>();
+        if(serverInstance.getServerState() == ServerState.RUNNING) {
+            keys.add(new Hk2ItemNode(serverInstance.getLookup(), 
+                    new Hk2ApplicationsChildren(serverInstance.getLookup()),
+                    NbBundle.getMessage(Hk2InstanceNode.class, "LBL_Apps"),
+                    Hk2ItemNode.J2EE_APPLICATION_FOLDER));
+            keys.add(new Hk2ItemNode(serverInstance.getLookup(), 
+                    new Hk2ResourceContainers(serverInstance.getLookup()),
+                    NbBundle.getMessage(Hk2InstanceNode.class, "LBL_Resources"),
+                    Hk2ItemNode.RESOURCES_FOLDER));
         }
-        return out;
-    }     
-
-    private Token checkToken(Token last) {
-        int matchedBracket = APTUtils.getMatchBracket(last.getType());
-        int topToken = peek().getType();
-        return null;
+        setKeys(keys);
     }
     
-    private Token createMatchedToken(Token base) {
-        return APTUtils.createAPTToken(base);
+    @Override
+    protected void addNotify() {
+        updateKeys();
     }
     
-    private Token peek() {
-        assert pos < stack.size();
-        return pos < 0 ? APTUtils.EOF_TOKEN : stack.get(pos);
+    @Override
+    protected void removeNotify() {
+        Collection<Hk2ItemNode> noKeys = java.util.Collections.emptySet();
+        setKeys(noKeys);
+    }
+    
+    protected org.openide.nodes.Node[] createNodes(Hk2ItemNode key) {
+        return new Node [] { key };
     }
 
-    private Token pop() {
-        assert pos >= 0;
-        return stack.remove(pos--);
+    public void stateChanged(ChangeEvent e) {
+        Mutex.EVENT.readAccess(new Runnable() {
+            public void run() {
+                updateKeys();
+            }
+        });
     }
 }
