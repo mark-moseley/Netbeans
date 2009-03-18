@@ -42,8 +42,13 @@
 package org.netbeans.modules.compapp.casaeditor.nodes;
 
 import java.awt.Image;
+import java.util.List;
+import org.netbeans.modules.compapp.casaeditor.model.casa.CasaConnection;
 import org.netbeans.modules.compapp.casaeditor.model.casa.CasaConsumes;
-import org.openide.util.Utilities;
+import org.netbeans.modules.compapp.casaeditor.model.casa.CasaEndpointRef;
+import org.netbeans.modules.compapp.casaeditor.model.casa.CasaWrapperModel;
+import org.netbeans.modules.compapp.casaeditor.nodes.actions.AddConnectionAction;
+import org.openide.util.ImageUtilities;
 
 /**
  *
@@ -51,18 +56,35 @@ import org.openide.util.Utilities;
  */
 public class ConsumesNode extends EndpointNode {
     
-    private static final Image ICON = Utilities.loadImage(
+    private static final Image ICON = ImageUtilities.loadImage(
             "org/netbeans/modules/compapp/casaeditor/nodes/resources/ConsumesNode.png");    // NOI18N
     
     public ConsumesNode(CasaConsumes component, CasaNodeFactory factory) {
         super(component, factory);
     }
     
+    @Override
     public Image getIcon(int type) {
         return ICON;
     }
     
+    @Override
     public Image getOpenedIcon(int type) {
         return ICON;
+    }
+
+    @Override
+    protected void updateAddConnectionActionState(AddConnectionAction action) {
+        // Disable the AddConnectionAction if this consume endpoint
+        // has already been connected.
+        CasaEndpointRef endpointRef = (CasaEndpointRef) getData();
+        CasaWrapperModel model = (CasaWrapperModel) endpointRef.getModel();
+        List<CasaConnection> liveConnections = model.getConnections(endpointRef, false);
+        
+        action.setEnabled(liveConnections.size() == 0);
+    }
+
+    protected String getConfigExtensionSubType() {
+        return "consume"; // NOI18N
     }
 }

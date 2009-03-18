@@ -57,6 +57,9 @@ import org.netbeans.api.visual.widget.Widget;
  */
 public class CasaBindingBadges {
     
+    private static final String SOAP_BINDING = "soap"; // NOI18N
+    private static final String SOAP12_BINDING = "soap12"; // NOI18N
+    
     public enum Badge {
         IS_EDITABLE(RegionUtilities.IMAGE_EDIT_16_ICON),
         WS_POLICY(RegionUtilities.IMAGE_WS_POLICY_16_ICON);
@@ -73,7 +76,7 @@ public class CasaBindingBadges {
     private Map<Badge, ImageWidget> mBadgeWidgets = new HashMap<Badge, ImageWidget>();
     
     
-    public CasaBindingBadges(Scene scene) {
+    public CasaBindingBadges(Scene scene, String bindingType) {
         mContainerWidget = new Widget(scene);
         mContainerWidget.setOpaque(false);
         mContainerWidget.setLayout(
@@ -84,14 +87,22 @@ public class CasaBindingBadges {
         mContainerWidget.addChild(emptyWidget);
         
         for (Badge badge : Badge.values()) {
-            ImageWidget badgeWidget = new ImageWidget(scene);
-            mBadgeWidgets.put(badge, badgeWidget);
-            mContainerWidget.addChild(badgeWidget);
+            // skip WSIT config for non-soap binding
+            if (bindingType.equalsIgnoreCase(SOAP_BINDING) ||
+                    bindingType.equalsIgnoreCase(SOAP12_BINDING) ||
+                    (badge != Badge.WS_POLICY)) {
+                ImageWidget badgeWidget = new ImageWidget(scene);
+                mBadgeWidgets.put(badge, badgeWidget);
+                mContainerWidget.addChild(badgeWidget);
+            }
         }
     }
     
     public void setBadge(Badge badge, boolean isActive) {
-        mBadgeWidgets.get(badge).setImage(isActive ? badge.getImage() : null);
+        ImageWidget imageWidget = mBadgeWidgets.get(badge);
+        if (imageWidget != null) {
+            imageWidget.setImage(isActive ? badge.getImage() : null);
+        }
     }
     
     public void setBadgePressed(Badge badge, boolean isPressed) {
@@ -100,6 +111,10 @@ public class CasaBindingBadges {
     
     public Rectangle getBadgeBoundsForParent(Badge badge, Widget parentWidget) {
         Widget widget = mBadgeWidgets.get(badge);
+        if (widget == null) {
+            return null;
+        }
+        
         Point location = widget.getLocation();
         Widget iterParent = widget.getParentWidget();
         while (iterParent != null && iterParent != parentWidget) {
