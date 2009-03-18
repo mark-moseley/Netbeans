@@ -4,7 +4,7 @@
     <welcome file="Welcome.html"></welcome>
     <license file="License.txt"></license>
     <background file="background.tif" scaling="none" alignment="topleft"></background>
-    <options allow-external-scripts="no" customize="never" rootVolumeOnly="false"></options>
+    <options allow-external-scripts="no" customize="allow" rootVolumeOnly="false"></options>
     <installation-check script="checkMemsize()"></installation-check>
     <volume-check script="checkSystemversion()"></volume-check>
     <script>
@@ -107,22 +107,25 @@ function checkChoiceUpgradeAction() {
 
     <choices-outline>
         <line choice="netbeans">
-            <line choice="baseide"></line>          
-            <line choice="webcommon"></line>
-            <line choice="php"></line>           
-        </line>            
+            <line choice="baseide"></line>
+            <line choice="javase"></line>
+            <line choice="javafx"></line>
+        </line>
     </choices-outline>
+   
     <choice id="netbeans" title="netbeans-title" description="netbeans-description" start_selected="true" start_enabled="true" start_visible="true"></choice>
     <choice id="baseide" title="baseide-title" description="baseide-description" start_selected="true" start_enabled="true" start_visible="true">
         <pkg-ref id="org.netbeans.ide"></pkg-ref>
-    </choice>      
-    <choice id="webcommon" title="webcommon-title" description="webcommon-description" start_selected="true" start_enabled="true" start_visible="true" selected="choices.webcommon.selected &amp;&amp; choices.baseide.selected" enabled="choices.baseide.selected">
-        <pkg-ref id="ident.pkg.webcommon"></pkg-ref>
     </choice>
-    <choice id="php" title="php-title" description="php-description" start_selected="true" start_enabled="true" start_visible="true">
-        <pkg-ref id="ident.pkg.php"></pkg-ref>
+    <choice id="javase" title="javase-title" description="javase-description" start_selected="true" start_enabled="true" start_visible="true" selected="choices.javase.selected &amp;&amp; choices.baseide.selected" enabled="choices.baseide.selected">
+        <pkg-ref id="ident.pkg.javase"></pkg-ref>
     </choice>
+    <choice id="javafx" title="javafx-title" description="javafx-description" start_selected="true" start_enabled="true" start_visible="true" selected="choices.javafx.selected &amp;&amp; choices.javase.selected" enabled="choices.javase.selected">
+        <pkg-ref id="ident.pkg.javafx"></pkg-ref>
+    </choice>
+    
     <pkg-ref id="org.netbeans.ide" version="0.0.0.0.1" installKBytes="@SIZE_BASEIDE@" auth="Root" onConclusion="None">file:./Contents/Packages/baseide.pkg</pkg-ref>
-    <pkg-ref id="ident.pkg.php" version="0.0.0.0.1" installKBytes="@SIZE_PHP@" auth="Root" onConclusion="None">file:./Contents/Packages/php.pkg</pkg-ref>
-    <pkg-ref id="ident.pkg.webcommon" version="0.0.0.0.1" installKBytes="@SIZE_WEBCOMMON@" auth="Root" onConclusion="None">file:./Contents/Packages/webcommon.pkg</pkg-ref>
+    <pkg-ref id="ident.pkg.javase" version="0.0.0.0.1" installKBytes="@SIZE_JAVASE@" auth="Root" onConclusion="None">file:./Contents/Packages/javase.pkg</pkg-ref>
+    <pkg-ref id="ident.pkg.javafx" version="0.0.0.0.1" installKBytes="@SIZE_JAVAFX@" auth="Root" onConclusion="None">file:./Contents/Packages/javafx.pkg</pkg-ref>
+ 
 </installer-gui-script>
