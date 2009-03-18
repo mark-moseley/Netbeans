@@ -171,10 +171,18 @@ public class ProjectBridge {
         if (pao instanceof ItemConfiguration) {
             ItemConfiguration conf = (ItemConfiguration)pao;
             MakeConfiguration makeConfiguration = (MakeConfiguration)item.getFolder().getConfigurationDescriptor().getConfs().getActive();
-            ItemConfiguration itemConfiguration = item.getItemConfiguration(makeConfiguration); //ItemConfiguration)makeConfiguration.getAuxObject(ItemConfiguration.getId(item.getPath()));
-            itemConfiguration.setCCCompilerConfiguration(conf.getCCCompilerConfiguration());
-            itemConfiguration.setCCompilerConfiguration(conf.getCCompilerConfiguration());
-            itemConfiguration.setCustomToolConfiguration(conf.getCustomToolConfiguration());
+            ItemConfiguration itemConfiguration = item.getItemConfiguration(makeConfiguration);
+            switch(itemConfiguration.getTool()) {
+                case Tool.CCCompiler:
+                    itemConfiguration.setCCCompilerConfiguration(conf.getCCCompilerConfiguration());
+                    break;
+                case Tool.CCompiler:
+                    itemConfiguration.setCCompilerConfiguration(conf.getCCompilerConfiguration());
+                    break;
+                case Tool.CustomTool:
+                    itemConfiguration.setCustomToolConfiguration(conf.getCustomToolConfiguration());
+                    break;
+            }
         }
     }
     
@@ -437,7 +445,7 @@ public class ProjectBridge {
     
     private CompilerSet getCompilerSet(){
         MakeConfiguration makeConfiguration = (MakeConfiguration)makeConfigurationDescriptor.getConfs().getActive();
-        return CompilerSetManager.getDefault(makeConfiguration.getDevelopmentHost().getName()).getCompilerSet(makeConfiguration.getCompilerSet().getValue());
+        return CompilerSetManager.getDefault(makeConfiguration.getDevelopmentHost().getExecutionEnvironment()).getCompilerSet(makeConfiguration.getCompilerSet().getValue());
     }
 
     public String getCygwinDrive(){
