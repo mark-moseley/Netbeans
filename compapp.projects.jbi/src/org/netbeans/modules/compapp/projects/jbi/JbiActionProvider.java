@@ -47,7 +47,6 @@ import java.util.Collection;
 import java.util.Collections;
 import org.netbeans.modules.compapp.projects.jbi.api.JbiProjectConstants;
 import org.netbeans.modules.compapp.projects.jbi.ui.customizer.JbiProjectProperties;
-import org.netbeans.modules.compapp.projects.jbi.ui.NoSelectedServerWarning;
 import org.netbeans.modules.compapp.jbiserver.JbiManager;
 import org.apache.tools.ant.module.api.support.ActionUtils;
 import org.netbeans.modules.compapp.projects.jbi.ui.customizer.VisualClassPathItem;
@@ -61,16 +60,12 @@ import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import java.io.IOException;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.awt.Dialog;
-import java.io.BufferedReader;
-import java.io.FileOutputStream;
-import java.io.FileReader;
+import java.io.*;
 import java.util.Arrays;
 import javax.swing.SwingUtilities;
 import org.netbeans.api.project.Project;
@@ -78,9 +73,6 @@ import org.netbeans.modules.compapp.projects.jbi.api.JbiBuildListener;
 import org.netbeans.modules.compapp.projects.jbi.api.JbiBuildTask;
 import org.netbeans.modules.compapp.projects.jbi.api.ProjectValidator;
 import org.netbeans.modules.compapp.test.ui.TestcaseNode;
-import org.netbeans.modules.j2ee.deployment.impl.ServerRegistry;
-import org.netbeans.modules.j2ee.deployment.impl.ServerString;
-import org.netbeans.modules.j2ee.deployment.impl.ServerTarget;
 import org.netbeans.modules.sun.manager.jbi.management.JBIMBeanTaskResultHandler;
 import org.netbeans.modules.sun.manager.jbi.management.wrapper.api.RuntimeManagementServiceWrapper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
@@ -240,10 +232,42 @@ public class JbiActionProvider implements ActionProvider {
                     DialogDisplayer.getDefault().notify(d);
                     return;
                     }*/
-
-                    if (!JbiManager.isSelectedServer(project)) {
+                    
+                    JbiProjectProperties properties = project.getProjectProperties();
+                    
+                    // 4/11/08 OSGi support
+                    Boolean osgiSupport = (Boolean) properties.get(JbiProjectProperties.OSGI_SUPPORT);
+                    // 02/04/09, IZ#153580, disable fuji deployment
+                    /*
+                    if (osgiSupport) {
+                        String osgiContainerDir = (String) properties.get(JbiProjectProperties.OSGI_CONTAINER_DIR);
+                        if (osgiContainerDir == null || osgiContainerDir.trim().length() == 0) {
+                            NotifyDescriptor d = new NotifyDescriptor.Message(
+                                    NbBundle.getMessage(JbiActionProvider.class,
+                                    "MSG_CHOOSE_OSGI_CONTAINER_FIRST"), // NOI18N
+                                    NotifyDescriptor.ERROR_MESSAGE);
+                            DialogDisplayer.getDefault().notify(d);
+                            return;
+                        }
+                    } else*/ if (!JbiManager.isSelectedServer(project)) {
                         return;
                     }
+                    
+                    // IZ#133733 Missing WSIT call back project when deploying CompApp                    
+                    if (command.equals(JbiProjectConstants.COMMAND_DEPLOY) ||
+                        command.equals(JbiProjectConstants.COMMAND_REDEPLOY)) {
+                        saveCasaChanges(project);
+
+                        // call WSIT Java Callback Project...
+                        String cbProjects = callWSITJavaCallbackProject(project);
+                        if (cbProjects != null) {
+                            if (p == null) {
+                                p = new Properties();
+                            }
+                            p.setProperty("WsitCallbackProjects", cbProjects);
+                        }
+                    }
+
                     if (!validateSubProjects()) {
                         return;
                     }
@@ -264,7 +288,6 @@ public class JbiActionProvider implements ActionProvider {
                                     AdministrationServiceHelper.getRuntimeManagementServiceWrapper(serverInstance);
                             mgmtServiceWrapper.clearServiceAssemblyStatusCache();
 
-                            JbiProjectProperties properties = project.getProjectProperties();
                             String saID = (String) properties.get(JbiProjectProperties.SERVICE_ASSEMBLY_ID);
                             ServiceAssemblyInfo saStatus = mgmtServiceWrapper.getServiceAssembly(saID, "server");
                             if (saStatus == null) { // not deployed
@@ -299,8 +322,8 @@ public class JbiActionProvider implements ActionProvider {
 
                     if (command.equals(JbiProjectConstants.COMMAND_JBICLEANCONFIG)) {
                         NotifyDescriptor d = new NotifyDescriptor.Confirmation(
-                                NbBundle.getMessage(JbiActionProvider.class, "MSG_CleanConfig"), // NOI18N
-                                NbBundle.getMessage(JbiActionProvider.class, "TTL_CleanConfig"), // NOI18N
+                                NbBundle.getMessage(JbiActionProvider.class, "MSG_CleanServiceAssembly"), // NOI18N
+                                NbBundle.getMessage(JbiActionProvider.class, "TTL_CleanServiceAssembly"), // NOI18N
                                 NotifyDescriptor.OK_CANCEL_OPTION);
                         if (DialogDisplayer.getDefault().notify(d) != NotifyDescriptor.OK_OPTION) {
                             return;
@@ -308,6 +331,15 @@ public class JbiActionProvider implements ActionProvider {
                     }
 
                     saveCasaChanges(project);
+
+                    // call WSIT Java Callback Project...
+                    String cbProjects = callWSITJavaCallbackProject(project);
+                    if (cbProjects != null) {
+                        if (p == null) {
+                            p = new Properties();
+                        }
+                        p.setProperty("WsitCallbackProjects", cbProjects);
+                    }
 
                     if (!validateSubProjects()) {
                         return;
@@ -321,33 +353,22 @@ public class JbiActionProvider implements ActionProvider {
                 }
 
 
-                final JbiBuildListener jbiBuildListener = getBuildListener(command);
+                JbiBuildListener jbiBuildListener = getBuildListener(command);
 
                 try {
-                    final ExecutorTask executorTask =
+                    ExecutorTask executorTask =
                             ActionUtils.runTarget(findBuildXml(), targetNames, p);
 
                     if (jbiBuildListener != null) {
-                        JbiBuildTask buildTask = new JbiBuildTask() {
-
-                            public boolean isFinished() {
-                                return executorTask.isFinished();
-                            }
-
-                            public int getResult() {
-                                return executorTask.result();
-                            }
-                        };
-                        jbiBuildListener.buildStarted(buildTask);
-
-                        executorTask.addTaskListener(new TaskListener() {
-
-                            public void taskFinished(Task task) {
-                                jbiBuildListener.buildCompleted(executorTask.result() == 0);
-                            }
-                        });
+                        jbiBuildListener.buildStarted();
                     }
 
+                    executorTask.waitFinished();
+                    
+                    if (jbiBuildListener != null) {
+                        jbiBuildListener.buildCompleted(executorTask.result() == 0);
+                    }
+                    
 //            if (command.equals(JbiProjectConstants.COMMAND_DEPLOY) || 
 //                    command.equals(JbiProjectConstants.COMMAND_JBICLEANCONFIG) || 
 //                    command.equals(JbiProjectConstants.COMMAND_JBIBUILD) || 
@@ -446,6 +467,34 @@ public class JbiActionProvider implements ActionProvider {
 
         return true;
     }
+
+    private String callWSITJavaCallbackProject(JbiProject project) {
+        // process cass and check for Java callback project setting...
+        List<String> cbProjects = CasaHelper.getWsitCallbackProjects(project);
+        String projects = null;
+        boolean first = true;
+        for (String pLoc : cbProjects) {
+            // System.out.println("Invoke building: "+pLoc);
+            File buildxml = new File(pLoc+"/build.xml"); // NOI18N
+            FileObject bfo = FileUtil.toFileObject(buildxml);
+            String[] targets = new String[] { "compile" }; // NOI18N
+            Properties p = null;
+            try {
+                ExecutorTask executorTask = ActionUtils.runTarget(bfo, targets, p);
+                if (!first) {
+                    projects += ";"+pLoc;  // NOI18N
+                } else {
+                    first = false;
+                    projects = pLoc;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        return projects;
+    }
+
 
     private void saveCasaChanges(JbiProject project) {
         // Save casa

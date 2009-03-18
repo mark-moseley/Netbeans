@@ -53,6 +53,7 @@ import org.netbeans.modules.compapp.projects.jbi.CasaConstants;
 import org.netbeans.modules.compapp.projects.jbi.descriptor.endpoints.model.Connection;
 import org.netbeans.modules.compapp.projects.jbi.descriptor.endpoints.model.Endpoint;
 import org.netbeans.modules.compapp.projects.jbi.descriptor.endpoints.model.PtConnection;
+import org.netbeans.modules.compapp.projects.jbi.descriptor.XmlUtil;
 import org.netbeans.modules.xml.wsdl.model.Definitions;
 import org.netbeans.modules.xml.wsdl.model.Port;
 import org.netbeans.modules.xml.wsdl.model.Service;
@@ -127,9 +128,10 @@ public class ConnectionResolver implements CasaConstants {
     /**
      * 
      * @param repo 
-     * @param oldCasaDocument 
+     * @param noBcAutoConnect   if true, then no connection involving BC endpoint
+     *                          is auto generated.
      */
-    public void resolveConnections(wsdlRepository repo,
+    public void resolveConnections(wsdlRepository repo, boolean noBcAutoConnect,
             Document oldCasaDocument) {
         
         // mapping portType QName to ptConnection
@@ -173,9 +175,14 @@ public class ConnectionResolver implements CasaConstants {
                         // 03/08/06 use the first one only...
                         provide = providers.get(0);
                         Connection con = new Connection(port, provide);
-                        addConnection(con, true, bcName);
-                        if (numProviders > 1) {
-                            dumpEndpoints(providers, "Provider");
+                        if (noBcAutoConnect) {
+                            log("INFO: The connection (" + con + ")"
+                                        + " is not auto-generated due to project setting.", Project.MSG_INFO);
+                        } else {
+                            addConnection(con, true, bcName);
+                            if (numProviders > 1) {
+                                dumpEndpoints(providers, "Provider");
+                            }
                         }
                     }
                     // loop thru consumers
@@ -190,7 +197,12 @@ public class ConnectionResolver implements CasaConstants {
                             addConnection(con);
                         } else {
                             Connection con = new Connection(consume, port);
-                            addConnection(con, false, bcName);
+                            if (noBcAutoConnect) {
+                                log("INFO: The connection (" + con + ")"
+                                        + " is not auto-generated due to project setting.", Project.MSG_INFO);
+                            } else {
+                                addConnection(con, false, bcName);
+                            }
                         }
                     }
                 }
@@ -262,19 +274,24 @@ public class ConnectionResolver implements CasaConstants {
                                     new QName(tns, sv.getName()),
                                     ptQName);
                             Connection con = new Connection(port, provide);
-                            addConnection(con, true, bcName);
+                            if (noBcAutoConnect) {
+                                log("INFO: The connection (" + con + ")"
+                                        + " is not auto-generated due to project setting.", Project.MSG_INFO);
+                            } else {
+                                addConnection(con, true, bcName);
+                            }
                         }
                     }
                 }
             }
         }
         
+        mergeCasaConnections(oldCasaDocument);
+
         if (showLog) {
             log("\n-----------------------------------\n");
 //            log(cc.dump());
         }
-        
-        mergeCasaConnections(oldCasaDocument);
     }
     
     private boolean isInConnectionList(List<Connection> connectionList, Connection connection) {
@@ -306,18 +323,18 @@ public class ConnectionResolver implements CasaConstants {
         removeConnection(connection);
         
         List<Connection>[] clist = bcConnections.get(bcName);
-        assert clist != null && clist[0] != null && clist[1] != null;
-                
-        if (isConsumeAPort) {
-            clist[0].remove(connection);
-        } else {
-            clist[1].remove(connection);
+        if (clist != null) {                
+            if (isConsumeAPort) {
+                clist[0].remove(connection);
+            } else {
+                clist[1].remove(connection);
+            }
+
+            // clear binding component that no longer has any connections
+            if (clist[0].size() == 0 && clist[1].size() == 0) {
+                bcConnections.remove(bcName);
+            }        
         }
-        
-        // clear binding component that no longer has any connections
-        if (clist[0].size() == 0 && clist[1].size() == 0) {
-            bcConnections.remove(bcName);
-        }        
     }
     
     private void addConnection(Connection connection) {
@@ -325,14 +342,61 @@ public class ConnectionResolver implements CasaConstants {
             connectionList.add(connection);
         }
     }
+
+    /**
+     * Adds a connection between two SE SU endpoints.
+     *
+     * @param overwrite whether to overwrite the old connection or suppress
+     *      the new connection when a connection sharing the same
+     *      consume endpoint already exists.
+     */
+    private void addConnection(Connection connection, boolean overwrite) {
+        if (!isInConnectionList(connectionList, connection)) {
+            if (overwrite) {
+                for (Connection conn : connectionList) {
+                    if (conn.getConsume().equals(connection.getConsume())) {
+                        log("INFO: An existing connection (" + conn +
+                                    ") is overwritten by a new connection (" + connection + ") which share the same consume endpoint.",
+                                    Project.MSG_INFO);
+                        connectionList.remove(conn);
+                        break;
+                    }
+                }
+                connectionList.add(connection);
+            } else {
+                for (Connection conn : connectionList) {
+                    if (conn.getConsume().equals(connection.getConsume())) {
+                        log("INFO: A new connection (" + connection +
+                                    ") is suppressed by an existing connection (" + conn + ") which share the same consume endpoint.",
+                                    Project.MSG_INFO);
+                        return;
+                    }
+                }
+                connectionList.add(connection);
+            }
+        }
+    }
     
     private void addConnection(Connection connection, 
             boolean isConsumeAPort, String bcName) {
         
-        addConnection(connection);
-        
+        addConnection(connection, isConsumeAPort, bcName, false);
+    }
+
+    /**
+     * Adds a connection involving a BC SU endpoint.
+     *
+     * @param overwrite whether to overwrite the old connection or suppress
+     *      the new connection when a connection sharing the same
+     *      consume endpoint already exists.
+     */
+    private void addConnection(Connection connection,
+            boolean isConsumeAPort, String bcName, boolean overwrite) {
+
+        addConnection(connection, overwrite);
+
         List<Connection>[] cmap = bcConnections.get(bcName);
-        
+
         List<Connection>[] clist;
         if (cmap != null) {
             clist = cmap;
@@ -342,7 +406,7 @@ public class ConnectionResolver implements CasaConstants {
             clist[1] = new ArrayList<Connection>();
             bcConnections.put(bcName, clist);
         }
-        
+
         if (isConsumeAPort) {
             if (!isInConnectionList(clist[0], connection)) {
                 Endpoint consume = connection.getConsume();
@@ -357,7 +421,7 @@ public class ConnectionResolver implements CasaConstants {
                         break;
                     }
                 }
-                
+
                 clist[0].add(connection);
             }
         } else {
@@ -366,8 +430,8 @@ public class ConnectionResolver implements CasaConstants {
             }
         }
     }
-        
-    private void mergeCasaConnections(final Document oldCasaDocument) {
+    
+    public void mergeCasaConnections(final Document oldCasaDocument) {
                 
         if (oldCasaDocument == null) {
             return;
@@ -390,16 +454,20 @@ public class ConnectionResolver implements CasaConstants {
             // mapping endpoint ID to bc name
             Map<String, String> endpointID2BCName = hashBcNames(bcsuNodeList);
             
-            for (int i = oldConnectionList.getLength() - 1; i >= 0; i--) {
+            // IZ#155165, command line build changes casa and other files
+            for (int i = 0; i < oldConnectionList.getLength(); i++) {
                 Element oldConnection = (Element) oldConnectionList.item(i);
                 String oldConnectionState = oldConnection.getAttribute(CASA_STATE_ATTR_NAME);
                 
                 // we are only interested in user-deleted and user-created connections
+                // 02/14/08, T.Li, this logic may cause problems, e.g.,
+                // if an "unchanged" connection can not be auto generated in the next build
+                /*
                 if (!oldConnectionState.equals(CASA_DELETED_ATTR_VALUE) &&
                         !oldConnectionState.equals(CASA_NEW_ATTR_VALUE)) {
                     continue;
                 }
-                
+                */
                 String cID = oldConnection.getAttribute(CASA_CONSUMER_ATTR_NAME);
                 String pID = oldConnection.getAttribute(CASA_PROVIDER_ATTR_NAME);
                 Endpoint c = CasaBuilder.getEndpoint(oldCasaDocument, cID);
@@ -425,24 +493,60 @@ public class ConnectionResolver implements CasaConstants {
                     if (cBcName == null && pBcName == null) {
                         removeConnection(con);
                     }
-                } else if (oldConnectionState.equals(CASA_NEW_ATTR_VALUE)) {
+                } else { // if (oldConnectionState.equals(CASA_NEW_ATTR_VALUE)) {
                     // Add user-created connections.
                     // (Note that it's possible that user-created connection
                     // have already been auto-generated during compapp rebuild.)
                     Connection con = new Connection(c, p);
                     
-                    // update bc's connection list..
-                    String cBcName = endpointID2BCName.get(cID);
-                    if (cBcName != null) {
-                        addConnection(con, true, cBcName);
-                    }
-                    String pBcName = endpointID2BCName.get(pID);
-                    if (pBcName != null) {
-                        addConnection(con, false, pBcName);
-                    }
+                    if (!isInConnectionList(connectionList, con)) {
+                        // update bc's connection list..
+                        String cBcName = endpointID2BCName.get(cID);
+                        if (cBcName != null) {
+                            addConnection(con, true, cBcName, true);
+                        }
+                        String pBcName = endpointID2BCName.get(pID);
+                        if (pBcName != null) {
+                            addConnection(con, false, pBcName, true);
+                        }
                     
-                    if (cBcName == null && pBcName == null) {
-                        addConnection(con);
+                        if (cBcName == null && pBcName == null) {
+                            addConnection(con, true);
+                        }
+                    }
+                }
+            }
+
+            // 02/06/07, tli, handle connection-less wsdl endpoints in CASA
+            // - add a loop connection for unconnected wsdl endpoints
+            // - filter out consumes/provides based on endpoint config extension
+            NodeList endpointList =
+                    oldCasaDocument.getElementsByTagName(CASA_ENDPOINT_ELEM_NAME);
+            NodeList portNodeList =
+                    oldCasaDocument.getElementsByTagName(CASA_PORT_ELEM_NAME);
+            List<String> deletedEndpoints = getDeletedEndpoints(portNodeList);
+
+            for (int i = 0; i < endpointList.getLength(); i++) {
+                Element endpoint = (Element) endpointList.item(i);
+                String name = endpoint.getAttribute(CASA_NAME_ATTR_NAME);
+                String bcName = endpointID2BCName.get(name);
+                if (bcName != null) { // a connection-less wsdl endpoint...
+                    String endpointName = endpoint.getAttribute(CASA_ENDPOINT_NAME_ATTR_NAME);
+                    QName serviceQName = XmlUtil.getAttributeNSName(
+                            endpoint, CASA_SERVICE_NAME_ATTR_NAME);
+                    QName interfaceQName = XmlUtil.getAttributeNSName(
+                            endpoint, CASA_INTERFACE_NAME_ATTR_NAME);
+                    Endpoint pt = new Endpoint(endpointName, serviceQName, interfaceQName);
+
+
+                    // skip all connected endpoints and non-wsdl endpoints...
+                    // IZ#128510, skip CASA endpoint that has been deleted
+                    if (isConnected(pt) || deletedEndpoints.contains(name)) {
+                        // skip these endpoints...
+                    } else {
+                        Connection con = new Connection(pt, pt);
+                        addConnection(con, true, bcName);
+                        addConnection(con, false, bcName);
                     }
                 }
             }
@@ -451,7 +555,34 @@ public class ConnectionResolver implements CasaConstants {
             log("ERROR: Problem merging new/deleted connections from old casa: " + e);
         }
     }
-        
+
+    /**
+     * Get the list of deleted endpoint IDs in CASA
+     *
+     * @param portNodeList port node list from CASA
+     * @return the list of deleted endpoint IDs
+     */
+    private List<String> getDeletedEndpoints(NodeList portNodeList) {
+        List<String> deleted = new ArrayList();
+        if (portNodeList != null) {
+            for (int i = 0; i < portNodeList.getLength(); i++) {
+                Element port = (Element) portNodeList.item(i);
+                String state = port.getAttribute(CASA_STATE_ATTR_NAME);
+                if (CASA_DELETED_ATTR_VALUE.equals(state)) {
+                    NodeList consumesNodeList = port.getElementsByTagName(CASA_CONSUMES_ELEM_NAME);
+                    if (consumesNodeList != null && consumesNodeList.getLength() == 1) {
+                        Element consumes = (Element) consumesNodeList.item(0);
+                        String endpointID = consumes.getAttribute(CASA_ENDPOINT_ATTR_NAME);
+                        deleted.add(endpointID);
+                    }
+                }
+            }
+        }
+
+        return deleted;
+    }
+
+
     /**
      * Maps endpoint ID to binding component name.
      */

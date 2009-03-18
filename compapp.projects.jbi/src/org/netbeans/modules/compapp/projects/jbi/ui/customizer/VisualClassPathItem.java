@@ -52,7 +52,9 @@ import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.modules.compapp.projects.jbi.api.JbiProjectConstants;
+import org.netbeans.modules.compapp.projects.jbi.api.POJOHelper;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -92,10 +94,10 @@ public class VisualClassPathItem {
     private static String RESOURCE_ICON_LIBRARY = "org/netbeans/modules/compapp/projects/jbi/ui/resources/libraries.gif"; // NOI18N
     private static String RESOURCE_ICON_ARTIFACT = "org/netbeans/modules/compapp/projects/jbi/ui/resources/projectDependencies.gif"; // NOI18N
     private static String RESOURCE_ICON_CLASSPATH = "org/netbeans/modules/compapp/projects/jbi/ui/resources/j2seProject.gif"; // NOI18N
-    private static Icon ICON_JAR = new ImageIcon(Utilities.loadImage(RESOURCE_ICON_JAR));
-    private static Icon ICON_LIBRARY = new ImageIcon(Utilities.loadImage(RESOURCE_ICON_LIBRARY));
-    private static Icon ICON_ARTIFACT = new ImageIcon(Utilities.loadImage(RESOURCE_ICON_ARTIFACT));
-    private static Icon ICON_CLASSPATH = new ImageIcon(Utilities.loadImage(RESOURCE_ICON_CLASSPATH));
+    private static Icon ICON_JAR = ImageUtilities.loadImageIcon(RESOURCE_ICON_JAR, false);
+    private static Icon ICON_LIBRARY = ImageUtilities.loadImageIcon(RESOURCE_ICON_LIBRARY, false);
+    private static Icon ICON_ARTIFACT = ImageUtilities.loadImageIcon(RESOURCE_ICON_ARTIFACT, false);
+    private static Icon ICON_CLASSPATH = ImageUtilities.loadImageIcon(RESOURCE_ICON_CLASSPATH, false);
     
     private int type;
     private Object cpElement;
@@ -154,12 +156,23 @@ public class VisualClassPathItem {
             
             // extract the JBI component type info
             String aType = aa.getType(); // e.x., CAPS.asa:sun-bpel-engine
+            //POJOSE:
+            if ( aType.equals("jar") && aa.getProject().getClass().getName().equals(JbiProjectConstants.JAVA_SE_PROJECT_CLASS_NAME) && 
+                    POJOHelper.getProjectProperty(aa.getProject(), JbiProjectConstants.POJO_PROJECT_PROPERTY) != null
+                    ) {
+                aType = JbiProjectConstants.POJO_SE_PROJECT_ANT_ARTIFACT_TYPE;
+                this.cpElement = new POJOAntArtifact(aa.getProject(), aa);
+            }
             int idx = aType.indexOf(':');
             if (idx > 0) {
                 asaType = aType.substring(idx + 1); 
             } else {
-                if (isJavaEEProjectAntArtifact(aa)){
+                // Get the appropriate AA. 
+                AntArtifact jaa = getJavaEEAntArtifact(aa);
+                if (jaa != null){
                     asaType = JbiProjectConstants.JAVA_EE_SE_COMPONENT_NAME;
+                    aa = jaa;
+                    this.cpElement = jaa;
                 }
             }
                         
@@ -228,6 +241,32 @@ public class VisualClassPathItem {
             }
          }
         return false;
+    }
+
+    private static AntArtifact getJavaEEAntArtifact(AntArtifact aa){
+        Project project = aa.getProject();
+        AntArtifact javaEEAntArtifact = null;
+         if ( project != null ) {
+            AntArtifactProvider prov = project.getLookup().lookup(AntArtifactProvider.class);
+            if (prov != null) {
+                AntArtifact[] artifacts = prov.getBuildArtifacts();
+                Iterator<String> artifactTypeItr = null;
+                String artifactType = null;
+                if (artifacts != null) {
+                    for (int i = 0; i < artifacts.length; i++) {
+                        artifactTypeItr = JbiProjectConstants.JAVA_EE_AA_TYPES.iterator();
+                        while (artifactTypeItr.hasNext()){
+                            artifactType = artifactTypeItr.next();
+                            if (artifacts[i].getType().startsWith(artifactType)) {
+                                javaEEAntArtifact = artifacts[i];
+                                return javaEEAntArtifact;
+                            }
+                        }
+                    }
+                }
+            }
+         }
+        return javaEEAntArtifact;
     }
     
     /**

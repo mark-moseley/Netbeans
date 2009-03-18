@@ -42,6 +42,7 @@
 package org.netbeans.modules.compapp.projects.jbi.ui;
 
 import javax.swing.Action;
+import org.netbeans.modules.compapp.projects.jbi.JbiProject;
 import org.netbeans.spi.project.ui.support.CommonProjectActions;
 //import org.netbeans.modules.j2ee.ejbjar.project.ui.ServerResourceNode;
 import org.netbeans.modules.compapp.projects.jbi.ui.customizer.JbiProjectProperties;
@@ -68,6 +69,8 @@ import org.openide.nodes.Children;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
 
+import org.openide.nodes.NodeAdapter;
+import org.openide.nodes.NodeEvent;
 import org.openide.util.NbBundle;
 
 import java.util.ArrayList;
@@ -77,6 +80,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.EventListenerList;
 import org.netbeans.api.queries.VisibilityQuery;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.ChangeableDataFilter;
 import org.openide.loaders.DataFilter;
 
@@ -98,6 +102,7 @@ class JbiViews {
      * @version 
      */
     static final class LogicalViewChildren extends Children.Keys implements FileChangeListener {
+        private static final String KEY_SVC_COMP_NODE = "SvcCompNode"; // NOI18N
         private static final String KEY_SOURCE_DIR = "srcDir"; // NOI18N
         private static final String KEY_DOC_BASE = "docBase"; // NOI18N
         private static final String KEY_JBIS = "jbiKey"; // NOI18N
@@ -128,9 +133,10 @@ class JbiViews {
         /**
          * DOCUMENT ME!
          */
+        @Override
         protected void addNotify() {
             super.addNotify();
-            projectDir.addFileChangeListener(this);
+            projectDir.addFileChangeListener(FileUtil.weakFileChangeListener(this, projectDir));
             createNodes();
         }
         
@@ -142,7 +148,7 @@ class JbiViews {
 //            if (docBaseDir != null) {
 //                l.add(KEY_DOC_BASE);
 //            }
-            
+            l.add(KEY_SVC_COMP_NODE);
             DataFolder srcDir = getFolder(JbiProjectProperties.SRC_DIR);
             
             if (srcDir != null) {
@@ -168,6 +174,7 @@ class JbiViews {
         /**
          * DOCUMENT ME!
          */
+        @Override
         protected void removeNotify() {
             setKeys(Collections.EMPTY_SET);
             projectDir.removeFileChangeListener(this);
@@ -239,6 +246,17 @@ class JbiViews {
                     DataObject sdo = DataObject.find(getSetupFolder());
                     n = null; // new ServerResourceNode(project); // sdo.getNodeDelegate());
                 } catch (org.openide.loaders.DataObjectNotFoundException dnfe) {
+                }
+            } else if (key == KEY_SVC_COMP_NODE) {
+                n = ServiceCompositionNode.createServiceCompositionNode((JbiProject) project);
+                if (n != null) {
+                    n.addNodeListener(new NodeAdapter() {
+
+                        @Override
+                        public void nodeDestroyed(NodeEvent ev) {
+                            refreshKey(KEY_SVC_COMP_NODE);
+                        }
+                    });
                 }
             }
             

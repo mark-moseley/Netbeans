@@ -42,6 +42,7 @@
 package org.netbeans.modules.compapp.projects.jbi.anttasks;
 
 import java.io.*;
+import java.net.URI;
 import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -72,6 +73,10 @@ import org.netbeans.modules.xml.xam.spi.Validation;
 import org.netbeans.modules.xml.xam.spi.Validation.ValidationType;
 import org.netbeans.modules.xml.xam.spi.Validator;
 import org.netbeans.modules.xml.xam.spi.Validator.ResultItem;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
@@ -79,7 +84,6 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import static org.netbeans.modules.compapp.projects.jbi.JbiConstants.*;
-import static org.netbeans.modules.compapp.projects.jbi.CasaConstants.*;
 
 
 /**
@@ -106,8 +110,13 @@ public class BuildServiceAssembly extends Task {
     private String projDirLoc;
     private String serviceUnitsDirLoc;
     private String jbiasaDirLoc;
+
+    // IZ#126214 Soap bc wsit callback handler projects
+    private String wsitCallbackProjects;
+    private static final String SOAP_BC = "sun-http-binding";
     
     private boolean saInternalRouting = true;
+    private boolean bcAutoConnect = true;
     
     // 03/26/07 Ignore Concreate WSDL ports in J2EE projects, T. Li
     private boolean ignoreJ2EEPorts = true;
@@ -131,7 +140,14 @@ public class BuildServiceAssembly extends Task {
      * DOCUMENT ME!
      */
     public static final String SU_CATALOGXML_PATH = "META-INF/catalog.xml"; // NOI18N
-    
+
+    public static final String XML_CATALOG_CATALOG = "catalog"; // NOI18N
+    public static final String XML_CATALOG_URN = "urn:oasis:names:tc:entity:xmlns:xml:catalog"; // NOI18N
+    public static final String XML_CATALOG_XMLNS = "xmlns"; // NOI18N
+    public static final String XML_CATALOG_PREFER = "prefer"; // NOI18N
+    public static final String XML_CATALOG_SYSTEM = "system"; // NOI18N
+    public static final String XML_CATALOG_NEXTCATALOG = "nextCatalog"; // NOI18N
+
     
     /**
      * Getter for the show log option
@@ -160,12 +176,14 @@ public class BuildServiceAssembly extends Task {
     public void execute() throws BuildException {
         showLog = showLogOption.equalsIgnoreCase("true");
         JarFile genericBCJar = null;
-                             
+
         Project p = this.getProject();
         String confDir = p.getProperty((JbiProjectProperties.META_INF));
         if ((confDir == null) || (confDir.length() < 1)) {
             return;
         }
+
+        wsitCallbackProjects = p.getProperty("WsitCallbackProjects"); // NOI18N
 
         String javaeeJars = p.getProperty(JbiProjectProperties.JBI_JAVAEE_JARS);
         String jars = p.getProperty((JbiProjectProperties.JBI_CONTENT_ADDITIONAL));
@@ -199,13 +217,26 @@ public class BuildServiceAssembly extends Task {
         // todo: set the default to false for now... 03/15/06
         // jbiRouting = getBooleanProperty(p.getProperty((JbiProjectProperties.JBI_ROUTING)), true);
         saInternalRouting = getBooleanProperty(p.getProperty((JbiProjectProperties.JBI_SA_INTERNAL_ROUTING)), true);
+        bcAutoConnect = getBooleanProperty(p.getProperty((JbiProjectProperties.JBI_ROUTING_BC_AUTOCONNECT)), true);
+
+        // 09.29.09, IZ#145136 update project catalog before validation of wsdls...
+        updateFromSUCatalog(catalogDirLoc, projDirLoc + "Catalog.xml");
 
         // create project wsdl repository...
+        try {
+            FileObject baseDirFO = FileUtil.toFileObject(p.getBaseDir());
+            if (baseDirFO != null) {
+                FileSystem fs = baseDirFO.getFileSystem();
+                fs.refresh(true);
+            }
+        } catch (Exception ex) {
+            Exceptions.printStackTrace(ex);
+        }
         mRepo = new wsdlRepository(p, this);
 
         log("Validating CompApp project...");
         validateCompAppProject();
-        
+
         try {   
             String jbiFileLoc = buildDir + "/META-INF/jbi.xml"; 
             String genericBCJarFileLoc = buildDir + "/BCDeployment.jar";       
@@ -223,9 +254,13 @@ public class BuildServiceAssembly extends Task {
             
             String asiFileLoc = confDirLoc + JbiProject.ASSEMBLY_INFO_FILE_NAME;
             loadAssemblyInfo(asiFileLoc);
+                      
+            CasaBuilder casaBuilder = new CasaBuilder(project, mRepo, this);
+            final Document oldCasaDocument = casaBuilder.getOldCasaDocument();
             
-            // generate the SE jar file list
-            // loop thru SE suprojects and copying SE deployment jars            
+            // Generate the SE jar file list
+            // Loop thru SE suprojects and copying/updating SE deployment jars            
+            log("Generating Service Engine Service Units...");
             List<String> srcJarPaths = getJarList(jars);
             List<String> javaEEJarPaths = getJarList(javaeeJars);
             List<String> saEEJarPaths = new ArrayList<String>();
@@ -251,18 +286,16 @@ public class BuildServiceAssembly extends Task {
                 } else {
                     String destJarPath = buildDir + File.separator + jarName;
                     //log("  copying Sub-Assembly: " + destJarPath);
-                    copyJarFile(srcJarPath, destJarPath);
+                    copyJarFileWithEndpointDecoration(srcJarPath, destJarPath,
+                            oldCasaDocument);
                 }
             }
-            
-            CasaBuilder casaBuilder = new CasaBuilder(project, mRepo, this);
-            final Document oldCasaDocument = casaBuilder.getOldCasaDocument();
             
             // Resolve connections
             log("Resolving connections...");
             ConnectionResolver connectionResolver = 
-                    new ConnectionResolver(this, showLog, saInternalRouting);          
-            connectionResolver.resolveConnections(mRepo, oldCasaDocument);            
+                    new ConnectionResolver(this, showLog, saInternalRouting);
+            connectionResolver.resolveConnections(mRepo, !bcAutoConnect, oldCasaDocument);
             
             // Write connections to connections.xml
             log("Writing connections out to connections.xml...");
@@ -316,7 +349,9 @@ public class BuildServiceAssembly extends Task {
             
             // Create the new CASA file (This depends on BC SU jbi.xml)
             log("Creating/Updating CASA...");
-            Document newCasaDocument = casaBuilder.createCasaDocument(jbiDocument);  
+            Document newCasaDocument = casaBuilder.createCasaDocument(jbiDocument);
+            //String s = new String(XmlUtil.writeToBytes(newCasaDocument));
+            //System.out.println("---------------\n"+s+"------------------\n");
             
             // Decorate BC SU jbi.xml and generate BC jar.
             for (String bcName : bcsuDescriptorBuilderMap.keySet()) {
@@ -329,18 +364,62 @@ public class BuildServiceAssembly extends Task {
                 // 1. copy BCjars for each needed BC
                 // 2. create jbi.xml
                 // boolean isCompAppWSDLNeeded = bcsUsingCompAppWsdl.contains(bcName);
-                createBCJar(bcJarMap.get(bcName), genericBCJar, 
-                        /*isCompAppWSDLNeeded,*/ bcsuDescriptorBuilder);
+
+                // IZ#126214, soap bc wist callback handler...
+                createBCJar(bcJarMap.get(bcName), genericBCJar,
+                        /*isCompAppWSDLNeeded,*/ bcsuDescriptorBuilder, bcName);
+            }            
+              
+            /*
+            // Generate the SE jar file list
+            // Loop thru SE suprojects and copying/updating SE deployment jars            
+            log("Generating Service Engine Service Units...");
+            List<String> srcJarPaths = getJarList(jars);
+            List<String> javaEEJarPaths = getJarList(javaeeJars);
+            List<String> saEEJarPaths = new ArrayList<String>();
+
+            for (String srcJarPath : srcJarPaths) {
+                if ((javaEEJarPaths != null) && (javaEEJarPaths.contains(srcJarPath))){
+                    srcJarPath = getLocalJavaEEJarPath(buildDir, srcJarPath);
+                    saEEJarPaths.add(srcJarPath);
+                    createEndpointsFrom(srcJarPath);
+                    continue;
+                }
+                
+                if ((srcJarPath.indexOf(':') < 0) && (!srcJarPath.startsWith("/"))) { // i.e., relative path
+                    srcJarPath = projDirLoc + srcJarPath;
+                }                
+                File srcJarFile = new File(srcJarPath);
+                
+                String jarName = getShortName(srcJarPath); // e.x.: SynchronousSample.jar
+                if (!srcJarFile.exists()) {
+                    log(" Error: Missing project Sub-Assembly: " + srcJarPath);
+                } else if (! suJarNames.contains(jarName)) {
+                    log(" Error: Cannot locate service unit for " + jarName);
+                } else {
+                    String destJarPath = buildDir + File.separator + jarName;
+                    //log("  copying Sub-Assembly: " + destJarPath);
+                    copyJarFileWithEndpointDecoration(srcJarPath, destJarPath,
+                            newCasaDocument);
+                }
             }
-                        
+            */
+            // )4/03/08, generated OSGi supported manifest.mf (minimum entries)
+            String osgisupport = p.getProperty(JbiProjectProperties.OSGI_SUPPORT);
+            String projName = p.getProperty(JbiProjectProperties.SERVICE_ASSEMBLY_ID);
+
+            // 02/04/09, IZ#153580, always generated OSGi manifest
+            //  if ((osgisupport != null) && osgisupport.equalsIgnoreCase("true")) {
+                generateOSGiManifest(buildMetaInfDir, projName);
+            // }
+
             // 9/12/07, filter out unconnected JavaEE endpoints
             log("Filtering Java EE Endpoints...");
 
             // 01/25/08, disabled, see IZ#115609 and 113026
             // filterJavaEEEndpoints(connectionResolver, saEEJarPaths, serviceUnitsDirLoc);
         } catch (Exception e) {
-            e.printStackTrace();
-            log("Build SA Failed: " + e.toString());
+            log("ERROR: " + e.toString(), Project.MSG_ERR);
         } finally {
             try {
                 if (genericBCJar != null) {
@@ -351,6 +430,36 @@ public class BuildServiceAssembly extends Task {
                 // ignore this..
             }
         }
+    }
+
+    private void generateOSGiManifest(File buildDir, String projName) {
+        if (buildDir == null) {
+            return;
+        }
+
+        if (projName == null) {
+            projName = "UnKnownApp";  // NOI18N
+        }
+        try {
+            String manText = "Bundle-Name: " + projName + "\n" +     // NOI18N
+                             "Bundle-SymbolicName: " + projName + "\n" +    // NOI18N
+                             "Bundle-ManifestVersion: 2\n" +      // NOI18N
+                             "Bundle-Version: 1.0.0";     // NOI18N
+
+            File file = new File(buildDir, "MANIFEST.MF");    // NOI18N
+            boolean success = file.createNewFile();
+            if (success) {
+                BufferedWriter out = new BufferedWriter(new FileWriter(file));
+                out.write(manText);
+                out.close();
+            } else {
+                // File already exists
+            }
+        } catch (IOException ex) {
+            log("Exception: A processing error occurred; " + ex);     // NOI18N
+        }
+
+
     }
 
     private List<String> getJarList(String commaSeparatedList){
@@ -376,6 +485,126 @@ public class BuildServiceAssembly extends Task {
         
         return bFlag;
     }
+
+    /**
+     * Update the CompApp project catalog to add/remove SE SU catalog entries
+     *
+     * @param suCatalogDirLoc
+     * @param prjCatalogFileLoc
+     */
+    private void updateFromSUCatalog(String suCatalogDirLoc, String prjCatalogFileLoc) {
+        File catalogDir = new File(suCatalogDirLoc);
+        if (!catalogDir.exists()) {  // no catalog...
+            return;
+        }
+
+        // 1. loop thru project subdirs
+        List<String> catalogFiles = new ArrayList<String>();
+        File[] children = catalogDir.listFiles();
+        if (children == null) {
+            return; // no children...
+        }
+
+        // updating catalog...
+        try {
+            for (File child : children) {
+                File catalogFile = new File(child, "catalog.xml"); // NOI18N;
+                if (catalogFile.exists()) {
+                    String catalogLoc = catalogFile.getAbsolutePath();
+                    catalogLoc = catalogLoc.replaceAll("\\\\", "/");
+                    int idx = catalogLoc.indexOf("src/jbiServiceUnits/META-INF"); // NOI18N
+                    catalogFiles.add(catalogLoc.substring(idx));
+                    // System.out.println("SU Catalog: "+catalogLoc);
+                }
+            }
+
+            if (catalogFiles.size() < 1) {
+                return; // no catalog..
+            }
+
+            boolean brandNewPrjCatalog = false;
+            File prjCatalog = new File(prjCatalogFileLoc);
+            if (!prjCatalog.exists()) { // create one...
+                prjCatalog.createNewFile();
+                brandNewPrjCatalog = true;
+            }
+
+            boolean fileUpdate = false;
+            // parse content one...
+            DocumentBuilderFactory fact = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = fact.newDocumentBuilder();
+            Document doc = null;
+            if (brandNewPrjCatalog) {
+                doc = createNewCatalogDocument(builder);
+            } else {
+                try {
+                    doc = builder.parse(prjCatalog);
+                } catch (Exception ex) {
+                    doc = createNewCatalogDocument(builder);
+                }
+            }
+
+            Element root = doc.getDocumentElement();
+            NodeList catalogNodes = doc.getElementsByTagName(XML_CATALOG_NEXTCATALOG); // NOI18N
+            for (int i = 0; i < catalogNodes.getLength(); i++) {
+                Element catalogNode = (Element) catalogNodes.item(i);
+                String catalog = catalogNode.getAttribute(XML_CATALOG_CATALOG); // NOI18N
+                //System.out.println("next Catalog: " + catalogFiles.contains(catalog) + ", " + catalog);
+                if (catalogFiles.contains(catalog)) { // OK, remove from List
+                    catalogFiles.remove(catalog);
+                } else { // remove from project catalog
+                    root.removeChild(catalogNode);
+                    fileUpdate = true;
+                }
+            }
+
+            // add new su catalogs...
+            for (String catalog : catalogFiles) {
+                Element elm = doc.createElement(XML_CATALOG_NEXTCATALOG);
+                elm.setAttribute(XML_CATALOG_CATALOG, catalog);
+                root.appendChild(elm);
+                fileUpdate = true;
+                //System.out.println("add Catalog: " + catalog);
+            }
+
+            if (fileUpdate) {
+                DOMSource src = new DOMSource(doc);
+                FileOutputStream fos = new FileOutputStream(prjCatalog);
+                StreamResult rest = new StreamResult(fos);
+                TransformerFactory transFact = TransformerFactory.newInstance();
+                Transformer transformer = transFact.newTransformer();
+                transformer.transform(src, rest);
+                fos.flush();
+                fos.close();
+            }
+        } catch (Exception ex) {
+            log("Exception: A processing error occurred; " + ex);
+        }
+    }
+
+    private Document createNewCatalogDocument(DocumentBuilder builder) {
+        Document doc = builder.newDocument();
+        Element elm = doc.createElement(XML_CATALOG_CATALOG);
+        elm.setAttribute(XML_CATALOG_XMLNS, XML_CATALOG_URN);
+        elm.setAttribute(XML_CATALOG_PREFER, XML_CATALOG_SYSTEM);
+        doc.appendChild(elm);
+        return doc;
+    }
+
+    private boolean isValid(File file) {
+        boolean validCatalog = false;
+        // parse content one...
+        try {
+            DocumentBuilderFactory fact = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = fact.newDocumentBuilder();
+            Document doc = builder.parse(file);
+            validCatalog = true;
+        } catch (Exception ex) {
+            // invalid catalog...
+            log("Skip Invalid SU Catalog:\n    "+file.getAbsolutePath()); 
+        }
+        return validCatalog;
+    }
     
     // catalogDirLoc: <compapp>/src/jbiServiceUnits/META-INF
     private void MergeSeJarCatalogs(String catalogDirLoc) { 
@@ -394,7 +623,10 @@ public class BuildServiceAssembly extends Task {
         for (File child : children) {
             File catalogFile = new File(child, "catalog.xml"); //SU_CATALOGXML_PATH);
             if (catalogFile.exists()) {
-                catalogFiles.add(catalogFile);
+                // check for valid catalog format...
+                if (isValid(catalogFile)) {
+                    catalogFiles.add(catalogFile);
+                }
             }
         }
         
@@ -455,12 +687,31 @@ public class BuildServiceAssembly extends Task {
         for (int i = 0; i < systemNodes.getLength(); i++) {
             Element systemNode = (Element) systemNodes.item(i);
             String uri = systemNode.getAttribute("uri");
-            if (uri != null && 
-                    // make sure the catalog data is along with the catalog.xml
-                    new File(sesuDir, uri).exists()) {
-                uri = sesuName + "/" + uri;
-                systemNode.setAttribute("uri", uri);
+            
+            if (uri != null) {
+//                // Tmp fix to make valid URI (#130092)
+//                uri = uri.replaceAll("\\\\", "/");
+                URI realUri = new URI(uri);
+                
+                if (realUri.getScheme() == null) {
+                    /*
+                    uri = "../" + sesuName + "/META-INF/" + uri;
+                    
+                    // correct the URI (get rid of "META-INF/../")
+                    uri = uri.replace("/META-INF/..", "");                    
+                    */
+                    
+                    uri = sesuName + "/" + uri;
+                    systemNode.setAttribute("uri", uri);
+                }
             }
+            
+//            if (uri != null && 
+//                    // make sure the catalog data is along with the catalog.xml
+//                    new File(sesuDir, uri).exists()) {
+//                uri = sesuName + "/" + uri;
+//                systemNode.setAttribute("uri", uri);
+//            }
         }
         
         return doc;
@@ -508,6 +759,9 @@ public class BuildServiceAssembly extends Task {
             dd.buildDOMTree(connectionResolver, saName, saDescription, casaDocument);
             dd.writeToFile(conFileLoc);
             
+            if (jbiDocument == null) {
+              return;
+            }
             NodeList sas = jbiDocument.getElementsByTagName("service-assembly");
             if ((sas != null) && (sas.getLength() > 0)) {
                 Element sa = (Element) sas.item(0);
@@ -571,52 +825,54 @@ public class BuildServiceAssembly extends Task {
      *
      * @param ciFileLoc    file location for ComponentInformation.xml
      */
-    private List<String> loadBindingComponentNames(String ciFileLoc) {
+    private List<String> loadBindingComponentNames(String ciFileLoc) throws Exception {
         List<String> ret = new ArrayList<String>();
         
-        try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setValidating(false);
-            
-            Document document =
-                    factory.newDocumentBuilder().parse(new File(ciFileLoc));
-            NodeList compInfoNodeList = document.getElementsByTagName("component-info");
-            
-            for (int i = 0, isize = compInfoNodeList.getLength(); i < isize; i++) {
-                Element compInfo = (Element) compInfoNodeList.item(i);
-                Element typeElement = (Element) compInfo.getElementsByTagName("type").item(0);                
-                String compType = typeElement.getFirstChild().getNodeValue();
-                if (compType.equalsIgnoreCase("binding")) {
-                    Element nameElement = (Element) compInfo.getElementsByTagName("name").item(0);
-                    String compName = nameElement.getFirstChild().getNodeValue();
-                    ret.add(compName);
-                }
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setValidating(false);
+
+        File ciFile = new File(ciFileLoc);
+        if (!ciFile.exists()) {
+            throw new FileNotFoundException(ciFileLoc + " is missing.");
+        }
+
+        Document document =
+                factory.newDocumentBuilder().parse(ciFile);
+        NodeList compInfoNodeList = document.getElementsByTagName("component-info");
+
+        for (int i = 0, isize = compInfoNodeList.getLength(); i < isize; i++) {
+            Element compInfo = (Element) compInfoNodeList.item(i);
+            Element typeElement = (Element) compInfo.getElementsByTagName("type").item(0);
+            String compType = typeElement.getFirstChild().getNodeValue();
+            if (compType.equalsIgnoreCase("binding")) {
+                Element nameElement = (Element) compInfo.getElementsByTagName("name").item(0);
+                String compName = nameElement.getFirstChild().getNodeValue();
+                ret.add(compName);
             }
-        } catch (Exception e) {
-            log(e.getMessage() + " : " + ciFileLoc);
         }
         
         return ret;
     }
     
-    private void loadAssemblyInfo(String asiFileLoc) {
-        try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setValidating(false);
-            factory.setNamespaceAware(true);
-            
-            jbiDocument = factory.newDocumentBuilder().parse(new File(asiFileLoc));
-            
-            // Load service unit jar names
-            suJarNames = new ArrayList<String>();
-            NodeList jarNodeList = jbiDocument.getElementsByTagName("artifacts-zip");
-            for (int i = 0, isize = jarNodeList.getLength(); i < isize; i++) {
-                Node jarNode = jarNodeList.item(i);
-                String jarName = jarNode.getFirstChild().getNodeValue();
-                suJarNames.add(jarName);
-            }
-        } catch (Exception e) {
-            log(e.getMessage() + " : " + asiFileLoc);
+    private void loadAssemblyInfo(String asiFileLoc) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setValidating(false);
+        factory.setNamespaceAware(true);
+
+        File asiFile = new File(asiFileLoc);
+        if (!asiFile.exists()) {
+            throw new FileNotFoundException(asiFileLoc + " is missing.");
+        }
+
+        jbiDocument = factory.newDocumentBuilder().parse(new File(asiFileLoc));
+
+        // Load service unit jar names
+        suJarNames = new ArrayList<String>();
+        NodeList jarNodeList = jbiDocument.getElementsByTagName("artifacts-zip");
+        for (int i = 0, isize = jarNodeList.getLength(); i < isize; i++) {
+            Node jarNode = jarNodeList.item(i);
+            String jarName = jarNode.getFirstChild().getNodeValue();
+            suJarNames.add(jarName);
         }
     }
     
@@ -747,8 +1003,9 @@ public class BuildServiceAssembly extends Task {
         
     }
     
-    private void copyJarFile(String inFile, String outFile)
-    throws Exception {
+    private void copyJarFileWithEndpointDecoration(String inFile, String outFile,
+            Document casaDocument)
+            throws Exception {
         byte[] buffer = new byte[1024];
         int bytesRead;
         
@@ -769,23 +1026,32 @@ public class BuildServiceAssembly extends Task {
                 String fileName = entry.getName().toLowerCase();
                 InputStream is = jar.getInputStream(entry);
                 copyJbiXml = false;
-                newJar.putNextEntry(entry);
                 
                 if (fileName.equalsIgnoreCase(SU_JBIXML_PATH)) {
                     // found existing jbi.xml
                     hasJbiXml = true;
                     copyJbiXml = true;
+                    newJar.putNextEntry(new JarEntry(entry.getName()));
+                } else { 
+                    newJar.putNextEntry(entry);
                 }
                 
                 while ((bytesRead = is.read(buffer)) != -1) {
-                    newJar.write(buffer, 0, bytesRead);
                     if (copyJbiXml) {
                         jbiXml += new String(buffer, 0, bytesRead, "UTF-8");
+                    } else {
+                        newJar.write(buffer, 0, bytesRead);                        
                     }
                 }
                 
                 is.close();
                 is = null;
+                
+                if (copyJbiXml) {
+                    Document jbiDoc = XmlUtil.createDocumentFromXML(true, jbiXml);
+                    ServiceUnitDescriptorEnhancer.decorateEndpoints(jbiDoc, casaDocument);
+                    newJar.write(XmlUtil.writeToBytes(jbiDoc));
+                }
             }
             
             // create a temp jbi.xml
@@ -798,7 +1064,7 @@ public class BuildServiceAssembly extends Task {
             }
             
         } catch (IOException ex) {
-            log("Operation aborted due to : " + ex);
+            log("ERROR: Operation aborted due to : " + ex, Project.MSG_ERR);
         } finally {
             try {
                 newJar.close();
@@ -913,12 +1179,13 @@ public class BuildServiceAssembly extends Task {
     private void createBCJar(String outFile,
             JarFile genericBCJar,
             /*boolean isCompAppWSDLNeeded,*/ 
-            BCSUDescriptorBuilder bcsuDescriptorBuilder)
+            BCSUDescriptorBuilder bcsuDescriptorBuilder,
+            String bcName)
             throws Exception {
         byte[] buffer = new byte[1024];
         int bytesRead;
         
-        String compAppWSDLFileName = getCompAppWSDLFileName();
+        //String compAppWSDLFileName = getCompAppWSDLFileName();
         
         JarOutputStream newJar = new JarOutputStream(new FileOutputStream(outFile));
         
@@ -929,15 +1196,18 @@ public class BuildServiceAssembly extends Task {
                 JarEntry jarEntry = jarEntries.nextElement();
                 InputStream is = genericBCJar.getInputStream(jarEntry);
                 
+                String jarEntryName = jarEntry.getName();
+                
                 // TODO: update casa wsdl entry in generic bc jar file.
-                if (jarEntry.getName().equals(compAppWSDLFileName)) {
+                //if (jarEntryName.equals(compAppWSDLFileName)) {
+                if (jarEntryName.toLowerCase().endsWith(".wsdl")) {
 //                    // Quick fix for J1: If the casa wsdl file doesn't contain 
 //                    // active endpoints, then we skip packaging the casa wsdl entry.
 //                    // (Future improvement: This rule should apply to all the 
 //                    // wsdl files.)
 //                    if (isCompAppWSDLNeeded) {
                     
-                    newJar.putNextEntry(new JarEntry(compAppWSDLFileName));
+                    newJar.putNextEntry(new JarEntry(jarEntryName));
                     
                     // HACK: remove "../jbiServiceUnits/" and "../jbiasa" from 
                     // import elements' location
@@ -957,7 +1227,12 @@ public class BuildServiceAssembly extends Task {
                     }
                     reader.close();
 //                    }
-                    
+                } else if (bcNames.contains(jarEntryName.substring(0, jarEntryName.length() - 1))) {
+                    // Skip (empty) BC SU directory, (for example, "sun-http-binding/")
+                    // which shouldn't go into the generic bc jar file in the 
+                    // first place.
+                } else if (jarEntryName.equals(".ignore")) {
+                    // Ignore ".ignore" entry.
                 } else {
                     
                     newJar.putNextEntry(jarEntry);
@@ -987,6 +1262,20 @@ public class BuildServiceAssembly extends Task {
                 }
                 in.close();
             }
+
+            // IZ#126214... add WSIT Callback java class to http-soap bc
+            if (SOAP_BC.equals(bcName) && (wsitCallbackProjects != null)) {
+                StringTokenizer st = new StringTokenizer(wsitCallbackProjects, ";"); // NOI18N
+                while (st.hasMoreTokens()) {
+                    String projLoc = st.nextToken();
+                    File buildDir = new File(projLoc + "/build/classes/"); // NOI18N
+                    if (buildDir.exists()) {
+                        String path = "";
+                        copyWsitCallbackClass(buildDir, newJar, path);
+                    }
+                }
+
+            }
             
         } catch (IOException ex) {
             log("Operation aborted due to : " + ex);
@@ -998,6 +1287,34 @@ public class BuildServiceAssembly extends Task {
                 // ignore this..
             }
         }
+    }
+
+    private void copyWsitCallbackClass(File file, JarOutputStream newJar, String path) {
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            String fname = file.getName();
+            String pname = fname.equals("classes") ? "" : path+fname+"/"; // NOI18N
+            for (int i=0; i<children.length; i++) {
+                copyWsitCallbackClass(children[i], newJar, pname);
+            }
+        } else {
+            String fname = path+file.getName();
+            try {
+                // System.out.println("COPYING: "+fname);
+                JarEntry classEntry = new JarEntry(fname);
+                newJar.putNextEntry(classEntry);
+                InputStream in = new FileInputStream(file);
+                byte[] buf = new byte[1024];
+                int len;
+                while ((len = in.read(buf)) > 0) {
+                    newJar.write(buf, 0, len);
+                }
+                in.close();
+            } catch (IOException ex) {
+                log("Copying " + fname + " failed due to :\n" + ex); // NOI18N
+            }
+        }
+
     }
     
     // TODO: Move me to a separate ant task when some mandatory change is 
