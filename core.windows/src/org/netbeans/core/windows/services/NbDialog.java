@@ -74,26 +74,29 @@ final class NbDialog extends NbPresenter {
 
     /** Geter for help.
     */
+    @Override
     protected HelpCtx getHelpCtx () {
         return ((DialogDescriptor)descriptor).getHelpCtx ();
     }
 
     /** Options align.
     */
+    @Override
     protected int getOptionsAlign () {
         return ((DialogDescriptor)descriptor).getOptionsAlign ();
     }
 
     /** Getter for button listener or null
     */
+    @Override
     protected ActionListener getButtonListener () {
         return ((DialogDescriptor)descriptor).getButtonListener ();
     }
 
     /** Closing options.
     */
+    @Override
     protected Object[] getClosingOptions () {
         return ((DialogDescriptor)descriptor).getClosingOptions ();
     }
-
 }
