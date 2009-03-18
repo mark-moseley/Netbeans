@@ -17,29 +17,24 @@
 # Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
 # Microsystems, Inc. All Rights Reserved.
 
+chown_dir=$1
+unpack_dir=$2
+jdk_home=$3
 set -e
 
-script_dir=`dirname "$0"`
+echo Changing ownership for $chown_dir
+chown -R root:admin "$chown_dir"
 
-jdk_home=`"$script_dir"/get_current_jdk.sh`
+echo Calling unpack200 in $unpack_dir
+cd "$unpack_dir"
+for x in `find . -name \*.jar.pack` ; do
+    jar=`echo $x | sed 's/jar.pack/jar/'`
+    if [ -f "$jar" ] ; then
+        continue
+    fi
+    $jdk_home/bin/unpack200 $x $jar
+    chmod `stat -f %Lp $x` $jar && touch -r $x $jar
+    rm $x
+done
 
-"$script_dir"/unpack200.sh "$2" "$2" "$jdk_home"
-
-cd "$2"
-cd ..
-
-glassfish_dir=`pwd`
-# http://www.netbeans.org/issues/show_bug.cgi?id=125358
-# run the jbi core installer first - temporary solution 
-#mv "$glassfish_dir/addons/jbi-core-installer.jar" "$glassfish_dir/jbi-core-installer.jar"
-#`"$script_dir"/get_current_jdk.sh`/bin/java -jar "$glassfish_dir/jbi-core-installer.jar" "$glassfish_dir" install
-#rm "$glassfish_dir/jbi-core-installer.jar"
-
-./bin/asadmin install-addon "$glassfish_dir/addons/jbi_components_installer.jar"
-
-"$script_dir"/perm.sh
-
-if [ -d "/Library/Receipts/openesb.pkg" ] ; then
-    rm -rf "/Library/Receipts/openesb.pkg"
-fi
-
+exit 0

@@ -23,23 +23,24 @@ script_dir=`dirname "$0"`
 
 jdk_home=`"$script_dir"/get_current_jdk.sh`
 
+. "$script_dir"/env.sh
+
+"$script_dir"/add_tc.sh "$NETBEANS_INSTALL_DIR" "$2"
+
 "$script_dir"/unpack200.sh "$2" "$2" "$jdk_home"
 
 cd "$2"
-cd ..
 
-glassfish_dir=`pwd`
-# http://www.netbeans.org/issues/show_bug.cgi?id=125358
-# run the jbi core installer first - temporary solution 
-#mv "$glassfish_dir/addons/jbi-core-installer.jar" "$glassfish_dir/jbi-core-installer.jar"
-#`"$script_dir"/get_current_jdk.sh`/bin/java -jar "$glassfish_dir/jbi-core-installer.jar" "$glassfish_dir" install
-#rm "$glassfish_dir/jbi-core-installer.jar"
+chmod -R a+r *
 
-./bin/asadmin install-addon "$glassfish_dir/addons/jbi_components_installer.jar"
+chmod a+w logs
 
 "$script_dir"/perm.sh
 
-if [ -d "/Library/Receipts/openesb.pkg" ] ; then
-    rm -rf "/Library/Receipts/openesb.pkg"
-fi
+#add Product ID
+"$script_dir"/addproduct_id.sh "TOMCAT"
 
+
+if [ -d "/Library/Receipts/tomcat.pkg" ] ; then
+    rm -rf "/Library/Receipts/tomcat.pkg"
+fi
