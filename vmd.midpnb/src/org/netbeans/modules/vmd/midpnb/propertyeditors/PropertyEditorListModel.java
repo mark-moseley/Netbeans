@@ -53,7 +53,6 @@ import javax.swing.JRadioButton;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
-import org.netbeans.modules.vmd.api.model.presenters.actions.DeletePresenter;
 import org.netbeans.modules.vmd.api.model.support.ArraySupport;
 import org.netbeans.modules.vmd.midp.components.MidpTypes;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorElement;
@@ -216,9 +215,15 @@ public final class PropertyEditorListModel extends PropertyEditorUserCode
     /* (non-Javadoc)
      * @see org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorElement#updateState(org.netbeans.modules.vmd.api.model.PropertyValue)
      */
-    public void updateState(PropertyValue value) {
+    public void updateState(final PropertyValue value) {
         if (value != null) {
-            myCustomEditor.setValue(value);
+            component.get().getDocument().getTransactionManager().readAccess(new Runnable() {
+
+                public void run() {
+                    myCustomEditor.setValue(value);
+                }
+            });
+            
         }
         myRadioButton.setSelected(!isCurrentValueAUserCodeType());
     }
@@ -239,6 +244,12 @@ public final class PropertyEditorListModel extends PropertyEditorUserCode
                     public void run() {
                         Integer index = -1;
                         List<PropertyValue> array = component.get().readProperty(SVGListCD.PROP_ELEMENTS).getArray();
+                        if (array != null) {
+                            index = array.size()-1;
+                        }
+                        if (index == myCustomEditor.getValue().size() - 1) {
+                            return;
+                        }
                         if (index < myCustomEditor.getValue().size() - 1) {
                             if (index == -1) {
                                 index = 0;
@@ -268,12 +279,11 @@ public final class PropertyEditorListModel extends PropertyEditorUserCode
                                     throw new IllegalArgumentException();
                                 }
                                 if (currentIndex > myCustomEditor.getValue().size() - 1) {
-                                    component.get().getDocument().deleteComponent(child);
                                     PropertyValue array_ = component.get().readProperty(SVGListCD.PROP_ELEMENTS);
                                     if (array != null) {
-                                        ArraySupport.remove(array_, child);
-                                        array = component.get().readProperty(SVGListCD.PROP_ELEMENTS).getArray();
+                                        ArraySupport.remove(component.get(),SVGListCD.PROP_ELEMENTS, child);
                                     }
+                                    component.get().getDocument().deleteComponent(child);
                                 }
                             }
                         }
