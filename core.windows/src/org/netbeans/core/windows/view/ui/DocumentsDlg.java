@@ -76,6 +76,7 @@ import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -292,6 +293,16 @@ public class DocumentsDlg extends JPanel implements PropertyChangeListener, Expl
         if (selNodes.length == 0) {
             return;
         }
+        //#70965 begin - select document previous to first closed document
+        int positionToSelectAfter = 0;
+        Node[] children = explorer.getRootContext().getChildren().getNodes();
+        for (int i = 0; i < children.length; i++) {
+            if (children[i] == selNodes[0]) {
+                positionToSelectAfter = Math.max(0, i - 1);
+                break;
+            }
+        }
+        //#70965 end
         for (int i = 0; i < selNodes.length; i++) {
             TopComponent tc = ((TopComponentNode) selNodes[i]).getTopComponent();
             tc.close();
@@ -315,7 +326,7 @@ public class DocumentsDlg extends JPanel implements PropertyChangeListener, Expl
             explorer.setRootContext(root);
             //#54656 begin
             try {
-                explorer.setSelectedNodes(new Node[] {root.getChildren().getNodes()[0]});
+                explorer.setSelectedNodes(new Node[]{root.getChildren().getNodes()[positionToSelectAfter]});
             } catch (PropertyVetoException exc) {
                 //mkleint - well, what can we do, I've never seen the selection being vetoed anyway.
             }
@@ -556,10 +567,15 @@ public class DocumentsDlg extends JPanel implements PropertyChangeListener, Expl
         
         public Image getIcon (int type) {
             Image image = tc.getIcon();
-            return image == null ? Utilities.loadImage("org/openide/resources/actions/empty.gif") : image; // NOI18N
+            return image == null ? ImageUtilities.loadImage("org/openide/resources/actions/empty.gif") : image; // NOI18N
         }
         
         public String getDescription() {
+            return tc.getToolTipText();
+        }
+
+        @Override
+        public String getShortDescription() {
             return tc.getToolTipText();
         }
         
