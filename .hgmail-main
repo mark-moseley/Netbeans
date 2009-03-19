@@ -1,0 +1,3 @@
+[usersubs]
+cvs@installer.netbeans.org=installer/*,reglib/*
+cvs@nbi.netbeans.org=nbi/*
