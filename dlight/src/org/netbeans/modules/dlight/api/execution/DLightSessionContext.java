@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,54 +34,68 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.memory;
 
-import java.util.List;
-import javax.swing.JComponent;
-import org.netbeans.modules.dlight.api.storage.DataRow;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata.Column;
-import org.netbeans.modules.dlight.spi.indicator.Indicator;
+package org.netbeans.modules.dlight.api.execution;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.netbeans.modules.dlight.api.impl.DLightSessionContextAccessor;
 
 /**
- * Mmory usage indicator
- * @author Vladimir Kvashin
+ * This class represents DLight Session context
+ * The following keys are supported:
+ * <ul>
+ * <li>executable</li>
+ *  <li>line</li>
+ *  <li>os</li>
+ *  <li>offset</li>
+ *  <li>useCollectors</li>
+ *  <li>collectors</li>
+ * </ul>
+ *
  */
-public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
+public final class DLightSessionContext {
+    private final Map<String, String> map;
 
-    private final MemoryIndicatorPanel panel;
-    //private final String colName;
-
-    public MemoryIndicator(MemoryIndicatorConfiguration configuration) {
-        super(configuration);
-        this.panel = new MemoryIndicatorPanel();
-      //  this.colName = configuration.getColName();
+    static{
+        DLightSessionContextAccessor.setDefault(new DLightSessionContextAccessorImpl());
     }
 
-    @Override
-    public JComponent getComponent() {
-        return panel;
+    private DLightSessionContext(){
+        map = new ConcurrentHashMap<String, String>();
     }
 
-    public void reset() {
+    public String get(String key){
+        return map.get(key);
     }
 
-    public void updated(List<DataRow> data) {
-        List<Column> columns = getMetadataColumns();
-        for (DataRow lastRow : data) {
-            List<String> colNames = lastRow.getColumnNames();
-            for (Column c: columns){
-                if (colNames.contains(c.getColumnName())){
-                    String value = lastRow.getStringValue(c.getColumnName()); //TODO: change to Long
-                    if (value != null){
-                        panel.setValue(Long.parseLong(value));
-                        //break;
-                    }
-                }
-            }
+    String put(String key, String value){
+        return map.put(key, value);
+    }
 
+    void clear(){
+        map.clear();
+    }
+
+    private static class DLightSessionContextAccessorImpl extends DLightSessionContextAccessor{
+
+        @Override
+        public void clear(DLightSessionContext context) {
+            context.clear();
         }
+
+        @Override
+        public String put(DLightSessionContext context, String key, String value) {
+            return context.put(key, value);
+        }
+
+        @Override
+        public DLightSessionContext newContext() {
+            return new DLightSessionContext();
+        }
+
     }
 }

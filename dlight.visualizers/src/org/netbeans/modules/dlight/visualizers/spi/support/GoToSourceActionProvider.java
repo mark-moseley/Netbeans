@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,54 +34,37 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.memory;
 
-import java.util.List;
-import javax.swing.JComponent;
+package org.netbeans.modules.dlight.visualizers.spi.support;
+
+import org.netbeans.modules.dlight.visualizers.spi.AdvancedTableViewVisualizerActionsProvider;
+import org.netbeans.modules.dlight.visualizers.api.*;
+import javax.swing.Action;
 import org.netbeans.modules.dlight.api.storage.DataRow;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata.Column;
-import org.netbeans.modules.dlight.spi.indicator.Indicator;
-
 
 /**
- * Mmory usage indicator
- * @author Vladimir Kvashin
+ *
+ * @author mt154047
  */
-public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
+public final class GoToSourceActionProvider implements AdvancedTableViewVisualizerActionsProvider{
 
-    private final MemoryIndicatorPanel panel;
-    //private final String colName;
-
-    public MemoryIndicator(MemoryIndicatorConfiguration configuration) {
-        super(configuration);
-        this.panel = new MemoryIndicatorPanel();
-      //  this.colName = configuration.getColName();
+    public boolean hasActions(DataRow row){
+        return false;
     }
 
-    @Override
-    public JComponent getComponent() {
-        return panel;
+    public Action[] getActions(DataRow row) {
+
+        //we should find the proper implementator which can provide
+        //ask if there are some services which can provide this info
+        throw new UnsupportedOperationException("Not supported yet.");
     }
 
-    public void reset() {
+    public AdvancedTableViewVisualizerActionsProvider getProviderFor(AdvancedTableViewVisualizerConfiguration configuration) {
+        //try to find someone who can give the information about source line
+        //throw new UnsupportedOperationException("Not supported yet.");
+        return this;
     }
 
-    public void updated(List<DataRow> data) {
-        List<Column> columns = getMetadataColumns();
-        for (DataRow lastRow : data) {
-            List<String> colNames = lastRow.getColumnNames();
-            for (Column c: columns){
-                if (colNames.contains(c.getColumnName())){
-                    String value = lastRow.getStringValue(c.getColumnName()); //TODO: change to Long
-                    if (value != null){
-                        panel.setValue(Long.parseLong(value));
-                        //break;
-                    }
-                }
-            }
-
-        }
-    }
 }

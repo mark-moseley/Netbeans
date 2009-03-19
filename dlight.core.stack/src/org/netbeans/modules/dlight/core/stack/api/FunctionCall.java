@@ -36,52 +36,34 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.memory;
-
-import java.util.List;
-import javax.swing.JComponent;
-import org.netbeans.modules.dlight.api.storage.DataRow;
-import org.netbeans.modules.dlight.api.storage.DataTableMetadata.Column;
-import org.netbeans.modules.dlight.spi.indicator.Indicator;
-
+package org.netbeans.modules.dlight.core.stack.api;
 
 /**
- * Mmory usage indicator
- * @author Vladimir Kvashin
+ * Function Call with metrics for function.
+ * As an example: you have the following
  */
-public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
+public abstract class FunctionCall{
+  private final Function function;
+  private final long offset;
 
-    private final MemoryIndicatorPanel panel;
-    //private final String colName;
+  protected FunctionCall(Function function) {
+    this(function, 0);
+  }
 
-    public MemoryIndicator(MemoryIndicatorConfiguration configuration) {
-        super(configuration);
-        this.panel = new MemoryIndicatorPanel();
-      //  this.colName = configuration.getColName();
-    }
+  protected FunctionCall(Function function, long offset) {
+    this.function = function;
+    this.offset = offset;
+  }
 
-    @Override
-    public JComponent getComponent() {
-        return panel;
-    }
+  public final Function getFunction() {
+    return function;
+  }
 
-    public void reset() {
-    }
+  public final long getOffset(){
+      return offset;
+  }
 
-    public void updated(List<DataRow> data) {
-        List<Column> columns = getMetadataColumns();
-        for (DataRow lastRow : data) {
-            List<String> colNames = lastRow.getColumnNames();
-            for (Column c: columns){
-                if (colNames.contains(c.getColumnName())){
-                    String value = lastRow.getStringValue(c.getColumnName()); //TODO: change to Long
-                    if (value != null){
-                        panel.setValue(Long.parseLong(value));
-                        //break;
-                    }
-                }
-            }
-
-        }
-    }
+  public abstract Object getMetricValue(FunctionMetric metric);
+  public abstract Object getMetricValue(String metric_id);
+  public abstract boolean hasMetric(String metric_id);
 }
