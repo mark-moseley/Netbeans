@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,59 +34,62 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.cnd.api.model.xref;
 
 import java.util.Collection;
-import java.util.Collections;
-import org.netbeans.modules.cnd.api.model.CsmClass;
+import java.util.Set;
+import org.netbeans.modules.cnd.api.model.CsmFunctionDefinition;
 import org.openide.util.Lookup;
 
 /**
- * entry point to resolve usages of types
+ *
  * @author Alexander Simon
  */
-public abstract class CsmTypeHierarchyResolver {
-    /** A dummy resolver that never returns any results.
+public abstract class CsmLabelResolver {
+    private static CsmLabelResolver DEFAULT = new Default();
+
+    /**
+     * Search for usage of referenced label.
+     * Return collection of labels in the function.
+     * Label name can be null. Service finds all labels in the function.
+     * If label name not null then service searches exact label references.
      */
-    private static final CsmTypeHierarchyResolver EMPTY = new Empty();
+    public abstract Collection<CsmReference> getLabels(CsmFunctionDefinition referencedFunction,
+            CharSequence label, Set<LabelKind> kinds);
     
-    /** default instance */
-    private static CsmTypeHierarchyResolver defaultResolver;
-    
-    protected CsmTypeHierarchyResolver() {
-    }
-    
-    /** Static method to obtain the resolver.
-     * @return the resolver
-     */
-    public static CsmTypeHierarchyResolver getDefault() {
-        /*no need for sync synchronized access*/
-        if (defaultResolver != null) {
-            return defaultResolver;
-        }
-        defaultResolver = Lookup.getDefault().lookup(CsmTypeHierarchyResolver.class);
-        return defaultResolver == null ? EMPTY : defaultResolver;
+    protected CsmLabelResolver() {
     }
     
     /**
-     * Get subtypes for referenced class.
-     * Return collection of class references that direct or inderect extend referenced class.
+     * Static method to obtain the CsmLabelResolver implementation.
+     * @return the selector
      */
-    public abstract Collection<CsmReference> getSubTypes(CsmClass referencedClass, boolean directSubtypesOnly);
+    public static CsmLabelResolver getDefault() {
+        return DEFAULT;
+    }
     
-    //
-    // Implementation of the default resolver
-    //
-    private static final class Empty extends CsmTypeHierarchyResolver {
-        Empty() {
+    public static enum LabelKind {
+        Definiton,
+        Reference,
+    }
+    /**
+     * Implementation of the default selector
+     */  
+    private static final class Default extends CsmLabelResolver {
+        private final Lookup.Result<CsmLabelResolver> res;
+        Default() {
+            res = Lookup.getDefault().lookupResult(CsmLabelResolver.class);
         }
 
         @Override
-        public Collection<CsmReference> getSubTypes(CsmClass referencedClass, boolean directSubtypesOnly) {
-            return Collections.<CsmReference>emptyList();
+        public Collection<CsmReference> getLabels(CsmFunctionDefinition referencedFunction, CharSequence label, Set<LabelKind> kinds) {
+            for (CsmLabelResolver selector : res.allInstances()) {
+                return selector.getLabels(referencedFunction, label, kinds);
+            }
+            return null;
         }
-    }    
+    }
 }

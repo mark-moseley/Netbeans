@@ -34,59 +34,90 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
+ * If you wish your version of this file to be governed by only the CDDL
+ * or only the GPL Version 2, indicate your decision by adding
+ * "[Contributor] elects to include this software in this distribution
+ * under the [CDDL or GPL Version 2] license." If you do not indicate a
+ * single choice of license, a recipient has the option to distribute
+ * your version of this file under either the CDDL, the GPL Version 2 or
+ * to extend the choice of license to its licensees as provided above.
+ * However, if you add GPL Version 2 code and therefore, elected the GPL
+ * Version 2 license, then the option applies only if the new code is
+ * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.cnd.api.model.services;
 
-package org.netbeans.modules.cnd.api.model.xref;
-
-import java.util.Collection;
-import java.util.Collections;
-import org.netbeans.modules.cnd.api.model.CsmClass;
+import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.openide.util.Lookup;
 
 /**
- * entry point to resolve usages of types
- * @author Alexander Simon
+ * Servise that checks visibility of CSM object and finds include that makes CSM object visible
+ * 
+ * @author Nick Krasilnikov
  */
-public abstract class CsmTypeHierarchyResolver {
+public abstract class CsmIncludeResolver {
+
     /** A dummy resolver that never returns any results.
      */
-    private static final CsmTypeHierarchyResolver EMPTY = new Empty();
-    
+    private static final CsmIncludeResolver EMPTY = new Empty();
     /** default instance */
-    private static CsmTypeHierarchyResolver defaultResolver;
-    
-    protected CsmTypeHierarchyResolver() {
+    private static CsmIncludeResolver defaultResolver;
+
+    protected CsmIncludeResolver() {
     }
-    
+
     /** Static method to obtain the resolver.
      * @return the resolver
      */
-    public static CsmTypeHierarchyResolver getDefault() {
+    public static CsmIncludeResolver getDefault() {
         /*no need for sync synchronized access*/
         if (defaultResolver != null) {
             return defaultResolver;
         }
-        defaultResolver = Lookup.getDefault().lookup(CsmTypeHierarchyResolver.class);
+        defaultResolver = Lookup.getDefault().lookup(CsmIncludeResolver.class);
         return defaultResolver == null ? EMPTY : defaultResolver;
     }
-    
+
     /**
-     * Get subtypes for referenced class.
-     * Return collection of class references that direct or inderect extend referenced class.
+     * Checks visibility of CSM object
+     * 
+     * @param currentFile - current file
+     * @param item - CSM object
+     * @return - visibility of CSM object
      */
-    public abstract Collection<CsmReference> getSubTypes(CsmClass referencedClass, boolean directSubtypesOnly);
-    
+    public abstract boolean isObjectVisible(CsmFile currentFile, CsmObject item);
+
+    /**
+     * Finds best include directive for CSM object in format 
+     * #include "file.h" or #include <file.h> or #include_next <file.h>
+     * 
+     * @param currentFile - current file
+     * @param item - CSM object
+     * @return - include directive string
+     */
+    public abstract String getIncludeDirective(CsmFile currentFile, CsmObject item);
+
     //
     // Implementation of the default resolver
     //
-    private static final class Empty extends CsmTypeHierarchyResolver {
+    private static final class Empty extends CsmIncludeResolver {
+
         Empty() {
         }
 
         @Override
-        public Collection<CsmReference> getSubTypes(CsmClass referencedClass, boolean directSubtypesOnly) {
-            return Collections.<CsmReference>emptyList();
+        public String getIncludeDirective(CsmFile currentFile, CsmObject item) {
+            return "";
         }
-    }    
+
+        @Override
+        public boolean isObjectVisible(CsmFile currentFile, CsmObject item) {
+            return false;
+        }
+    }
 }

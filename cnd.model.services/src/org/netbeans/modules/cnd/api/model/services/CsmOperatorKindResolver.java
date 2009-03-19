@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,59 +34,71 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.api.model.xref;
+package org.netbeans.modules.cnd.api.model.services;
 
-import java.util.Collection;
-import java.util.Collections;
-import org.netbeans.modules.cnd.api.model.CsmClass;
+import javax.swing.text.Document;
 import org.openide.util.Lookup;
 
 /**
- * entry point to resolve usages of types
+ *
  * @author Alexander Simon
  */
-public abstract class CsmTypeHierarchyResolver {
-    /** A dummy resolver that never returns any results.
+public abstract class CsmOperatorKindResolver {
+    /**
+     * default instance
      */
-    private static final CsmTypeHierarchyResolver EMPTY = new Empty();
+    private static CsmOperatorKindResolver DEFAULT = new Default();
     
-    /** default instance */
-    private static CsmTypeHierarchyResolver defaultResolver;
-    
-    protected CsmTypeHierarchyResolver() {
-    }
-    
-    /** Static method to obtain the resolver.
-     * @return the resolver
-     */
-    public static CsmTypeHierarchyResolver getDefault() {
-        /*no need for sync synchronized access*/
-        if (defaultResolver != null) {
-            return defaultResolver;
-        }
-        defaultResolver = Lookup.getDefault().lookup(CsmTypeHierarchyResolver.class);
-        return defaultResolver == null ? EMPTY : defaultResolver;
+    protected CsmOperatorKindResolver() {
     }
     
     /**
-     * Get subtypes for referenced class.
-     * Return collection of class references that direct or inderect extend referenced class.
+     * Static method to obtain the CsmOperatorKindResolver implementation.
+     * @return the resolver
      */
-    public abstract Collection<CsmReference> getSubTypes(CsmClass referencedClass, boolean directSubtypesOnly);
+    public static CsmOperatorKindResolver getDefault() {
+        return DEFAULT;
+    }
     
-    //
-    // Implementation of the default resolver
-    //
-    private static final class Empty extends CsmTypeHierarchyResolver {
-        Empty() {
+    public enum OperatorKind {
+        BINARY,
+        UNARY,
+        SEPARATOR,
+        TYPEMODIFIER,
+        UNKNOWN;
+    }
+    
+    /**
+     * Detect operator kind
+     * for example:
+     * Document a*b;
+     * Offset point to * (start position)
+     * Result is TypeModifier or Binary
+     * Possible requestes about:
+     * *, &, +, -, <, >.
+     */
+    public abstract OperatorKind getKind(Document doc, int offset);
+    
+    /**
+     * Implementation of the default resolver
+     */  
+    private static final class Default extends CsmOperatorKindResolver {
+        private final Lookup.Result<CsmOperatorKindResolver> res;
+        Default() {
+            res = Lookup.getDefault().lookupResult(CsmOperatorKindResolver.class);
         }
 
-        @Override
-        public Collection<CsmReference> getSubTypes(CsmClass referencedClass, boolean directSubtypesOnly) {
-            return Collections.<CsmReference>emptyList();
+        public OperatorKind getKind(Document doc, int offset) {
+            for (CsmOperatorKindResolver resolver : res.allInstances()) {
+                OperatorKind out = resolver.getKind(doc, offset);
+                if (out != OperatorKind.UNKNOWN) {
+                    return out;
+                }
+            }
+            return OperatorKind.UNKNOWN;
         }
-    }    
+    }
 }

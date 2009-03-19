@@ -44,8 +44,10 @@ package org.netbeans.modules.cnd.api.model.services;
 import java.util.Collections;
 import java.util.List;
 import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmInclude;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.openide.util.Lookup;
 
 /**
@@ -67,7 +69,8 @@ public abstract class CsmFileInfoQuery {
     /** Static method to obtain the resolver.
      * @return the resolver
      */
-    public static synchronized CsmFileInfoQuery getDefault() {
+    public static CsmFileInfoQuery getDefault() {
+        /*no need for sync synchronized access*/
         if (defaultResolver != null) {
             return defaultResolver;
         }
@@ -96,6 +99,31 @@ public abstract class CsmFileInfoQuery {
      */
     public abstract List<CsmReference> getMacroUsages(CsmFile file);
 
+    /**
+     * @return dwarf block offset or null if there are no dwarf blocks in file
+     */
+    public abstract CsmOffsetable getGuardOffset(CsmFile file);
+
+    /**
+     * @return native file item associated with model file
+     */
+    public abstract NativeFileItem getNativeFileItem(CsmFile file);
+    
+    /**
+     * 
+     * @param file header file (for sourse file result is empty list)
+     * @return list of include directives from source file to header file
+     */
+    public abstract List<CsmInclude> getIncludeStack(CsmFile file);
+
+    /**
+     * Attempts to get the version of a file.
+     * @param file - the file to get a version for.
+     * @return The file's version or 0 if the document does not
+     *   support versioning
+     */
+    public abstract long getFileVersion(CsmFile file);
+
     //
     // Implementation of the default query
     //
@@ -117,6 +145,25 @@ public abstract class CsmFileInfoQuery {
 
         public List<CsmReference> getMacroUsages(CsmFile file) {
             return Collections.<CsmReference>emptyList();
+        }
+
+        public CsmOffsetable getGuardOffset(CsmFile file) {
+            return null;
+        }
+
+        @Override
+        public NativeFileItem getNativeFileItem(CsmFile file) {
+            return null;
+        }
+
+        @Override
+        public List<CsmInclude> getIncludeStack(CsmFile file) {
+            return Collections.<CsmInclude>emptyList();
+        }
+
+        @Override
+        public long getFileVersion(CsmFile file) {
+            return 0;
         }
     } 
 }
