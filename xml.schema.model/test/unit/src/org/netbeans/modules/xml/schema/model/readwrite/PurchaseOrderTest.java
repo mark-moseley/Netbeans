@@ -48,20 +48,16 @@
 
 package org.netbeans.modules.xml.schema.model.readwrite;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.Iterator;
 import javax.swing.text.Document;
-import junit.framework.*;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.xml.schema.model.*;
-import org.netbeans.modules.xml.schema.model.impl.SchemaComponentFactoryImpl;
 import org.netbeans.modules.xml.schema.model.impl.SchemaImpl;
 import org.netbeans.modules.xml.schema.model.impl.SchemaModelImpl;
 import org.netbeans.modules.xml.schema.model.visitor.DefaultSchemaVisitor;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentComponent;
 import org.netbeans.modules.xml.xam.dom.NamedComponentReference;
-import org.openide.awt.UndoRedo.Empty;
 import org.w3c.dom.Text;
 /**
  *
@@ -351,19 +347,19 @@ public class PurchaseOrderTest extends NbTestCase {
         GlobalElement ge1 = factory.createGlobalElement();
         ge1.setName("my-auto-loan-application");
         LocalComplexType lct = factory.createLocalComplexType();
-        assertNotNull(lct.getPeer().getAttribute("xmlns:xsd"));
+        assertNotNull(lct.getPeer().getAttributeNode("xmlns:xsd"));
         ge1.setInlineType(lct);
-        assertNull(lct.getPeer().getAttribute("xmlns:xsd"));
+        assertNull(lct.getPeer().getAttributeNode("xmlns:xsd"));
         ComplexContent cc = factory.createComplexContent();
-        assertNotNull(cc.getPeer().getAttribute("xmlns:xsd"));
+        assertNotNull(cc.getPeer().getAttributeNode("xmlns:xsd"));
         lct.setDefinition(cc);
-        assertNull(cc.getPeer().getAttribute("xmlns:xsd"));
+        assertNull(cc.getPeer().getAttributeNode("xmlns:xsd"));
         
         model.startTransaction();
         model.getSchema().addElement(ge1);
         model.endTransaction();
         
-        assertNull(lct.getPeer().getAttribute("xmlns:xsd"));
-        assertNull(cc.getPeer().getAttribute("xmlns:xsd"));
+        assertNull(lct.getPeer().getAttributeNode("xmlns:xsd"));
+        assertNull(cc.getPeer().getAttributeNode("xmlns:xsd"));
     }
 }

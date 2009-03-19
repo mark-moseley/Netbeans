@@ -57,6 +57,7 @@ import org.netbeans.modules.xml.xam.EmbeddableRoot;
 import org.netbeans.modules.xml.xam.locator.CatalogModel;
 import org.netbeans.modules.xml.xam.locator.CatalogModelException;
 import org.netbeans.modules.xml.xam.ModelSource;
+import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.Element;
@@ -98,8 +99,11 @@ public abstract class AbstractDocumentComponent<C extends DocumentComponent<C>>
      * @return attribute value or null if the attribute is currently undefined
      */
     public String getAttribute(Attribute attr) {
-        return normalizeUndefinedAttributeValue(
-	    getPeer().getAttribute(attr.getName()));
+        Attr attrNode = getPeer().getAttributeNode(attr.getName());
+        if (attrNode == null) {
+            return null;
+        }
+        return normalizeUndefinedAttributeValue(attrNode.getValue());
     }
     
     /**
@@ -129,7 +133,8 @@ public abstract class AbstractDocumentComponent<C extends DocumentComponent<C>>
     abstract protected Object getAttributeValueOf(Attribute attr, String stringValue);
     
     /**
-     * Returns string value of the attribute from different namespace.
+     * Returns string value of the attribute from different namespace
+     * or null if the attribute is currently undefined.
      * If given QName has prefix, it will be ignored.
      * @param attr non-null QName represents the attribute name.
      * @return attribute value
@@ -140,8 +145,12 @@ public abstract class AbstractDocumentComponent<C extends DocumentComponent<C>>
         String namespace = attr.getNamespaceURI();
         String prefix = namespace == null ? null : lookupPrefix(namespace);
         String attrName = prefix == null ? name : prefix + ":" + name; //NOI18N
-        return normalizeUndefinedAttributeValue(
-	    getPeer().getAttribute(attrName));
+        //
+        Attr attrNode = getPeer().getAttributeNode(attrName);
+        if (attrNode == null) {
+            return null;
+        }
+        return normalizeUndefinedAttributeValue(attrNode.getValue());
     }
     
     /**
@@ -518,6 +527,8 @@ public abstract class AbstractDocumentComponent<C extends DocumentComponent<C>>
      * Declare prefix for given namespace (without any refactoring action).
      */
     public void addPrefix(String prefix, String namespace) {
+        if(namespace == null)
+            return;
         Attribute a = createPrefixAttribute(prefix);
         setAttribute(a.getName(), a, namespace);
     }
@@ -607,7 +618,6 @@ public abstract class AbstractDocumentComponent<C extends DocumentComponent<C>>
     
     protected void ensureValueNamespaceDeclared(String newNamespace, String oldNamespace, 
             String preferredPrefix) {
-        if (newNamespace == null) return;
         String prefix = null;
         if (oldNamespace != null) {
             prefix = lookupPrefix(oldNamespace);
