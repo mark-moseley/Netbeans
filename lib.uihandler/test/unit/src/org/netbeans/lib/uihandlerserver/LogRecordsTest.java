@@ -35,6 +35,7 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
@@ -234,23 +235,6 @@ public class LogRecordsTest extends NbTestCase {
         
     }
     
-    public void testCanReadEmpty() throws Exception {
-        InputStream is = getClass().getResourceAsStream("Empty.xml");
-        int cnt = 0;
-        TestHandler records = new TestHandler(is);
-        for (;;) {
-            LOG.log(Level.INFO, "Reading {0}th record", cnt);
-            LogRecord r = records.read();
-            if (r == null) {
-                break;
-            }
-            LOG.log(Level.INFO, "Read {0}th record", cnt);
-            cnt++;
-        }
-        is.close();
-        
-        assertEquals("No records", 0, cnt);
-    }
     public void testMakeSureItIsScannable() throws Exception {
         InputStream is = getClass().getResourceAsStream("NB1216449736.xml");
         int cnt = 0;
@@ -356,7 +340,7 @@ public class LogRecordsTest extends NbTestCase {
         }
         H h = new H();
         
-        CharSequence log = Log.enable("", Level.INFO);
+        CharSequence log = Log.enable("", Level.FINEST);
         LogRecords.scan(new ByteArrayInputStream(os.toByteArray()), h);
 
         assertEquals("One record", 1, h.cnt);
@@ -393,29 +377,6 @@ public class LogRecordsTest extends NbTestCase {
         assertEquals("The four amount of records", 5, h.cnt);
     }
 
-    public void testSurviveNumberFormatExc() throws Exception {
-        String what = "NB1101666645.1";
-        InputStream is = getClass().getResourceAsStream(what);
-        class H extends Handler {
-            int cnt;
-            
-            public void publish(LogRecord record) {
-                cnt++;
-            }
-
-            public void flush() {
-            }
-
-            public void close() throws SecurityException {
-            }
-        }
-        
-        H h = new H();
-        is = getClass().getResourceAsStream(what);
-        LogRecords.scan(is, h);
-        is.close();
-    }
-    
     public void testScanEmpty91974() throws Exception {
         String what = "uigestures-iz91974.xml";
         InputStream is = getClass().getResourceAsStream(what);
@@ -475,7 +436,12 @@ public class LogRecordsTest extends NbTestCase {
         
         H h = new H();
         is = getClass().getResourceAsStream(what);
-        LogRecords.scan(is, h);
+        try{
+            LogRecords.scan(is, h);
+            fail("IO Exception should be thrown");
+        }catch(IOException notif){
+            // OK
+        }
         is.close();
         
         assertEquals("The same amount of records", expectRecords, h.cnt);
@@ -654,5 +620,23 @@ public class LogRecordsTest extends NbTestCase {
             arr[i] = (byte)ch;
         }
         return new String(new String(arr, "utf-8").getBytes(),"utf-8");
+    }
+
+    LogRecord rec;
+    public void testNFE() throws IOException{
+        InputStream stream = getClass().getResourceAsStream("issue140886");
+        rec = null;
+        Handler h = new Handler(){
+            public void publish(LogRecord record) {
+                rec = record;
+            }
+            @Override public void flush() {}
+            @Override public void close() throws SecurityException {}
+        };
+        LogRecords.scan(stream, h);
+        assertNotNull("Whole file is parsed", rec);
+        assertEquals("UI_ACTION_EDITOR", rec.getMessage());
+        assertEquals(5, rec.getParameters().length);
+        
     }
 }
