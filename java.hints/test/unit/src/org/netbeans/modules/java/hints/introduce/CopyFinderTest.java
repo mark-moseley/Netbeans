@@ -29,6 +29,7 @@ package org.netbeans.modules.java.hints.introduce;
 
 import com.sun.source.util.TreePath;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.text.Document;
@@ -102,11 +103,11 @@ public class CopyFinderTest extends NbTestCase {
     }
     
     public void testSimple11() throws Exception {
-        performTest("package test; public class Test {public void test() {int[] i = new int[]; i = new int[]; i = new int[1];}}", 85 - 22, 94 - 22, 100 - 22, 109 - 22);
+        performTest("package test; public class Test {public void test() {int[] i = new int[0]; i = new int[0]; i = new int[1];}}", 85 - 22, 95 - 22, 101 - 22, 111 - 22);
     }
     
     public void testSimple12() throws Exception {
-        performTest("package test; public class Test {public void test() {int[] i = new int[1]; i = new int[1]; i = new int[];}}", 85 - 22, 95 - 22, 101 - 22, 111 - 22);
+        performTest("package test; public class Test {public void test() {int[] i = new int[1]; i = new int[1]; i = new int[0];}}", 85 - 22, 95 - 22, 101 - 22, 111 - 22);
     }
     
     public void testSimple13() throws Exception {
@@ -149,13 +150,14 @@ public class CopyFinderTest extends NbTestCase {
         SourceUtilsTestUtil.prepareTest(sourceRoot, buildRoot, cache);
         
         DataObject od = DataObject.find(data);
-        EditorCookie ec = od.getCookie(EditorCookie.class);
+        EditorCookie ec = od.getLookup().lookup(EditorCookie.class);
         
         assertNotNull(ec);
         
         doc = ec.openDocument();
         
         doc.putProperty(Language.class, JavaTokenId.language());
+        doc.putProperty("mimeType", "text/x-java");
         
         JavaSource js = JavaSource.forFileObject(data);
         
@@ -166,10 +168,10 @@ public class CopyFinderTest extends NbTestCase {
         assertNotNull(info);
     }
     
-    private CompilationInfo info;
+    protected CompilationInfo info;
     private Document doc;
     
-    private void performTest(String code, int start, int end, int... duplicates) throws Exception {
+    protected void performTest(String code, int start, int end, int... duplicates) throws Exception {
         assertTrue(duplicates.length % 2 == 0);
         
         prepareTest(code);
@@ -178,7 +180,7 @@ public class CopyFinderTest extends NbTestCase {
         
         assertNotNull(path);
 
-        List<TreePath> result = CopyFinder.computeDuplicates(info, path, new TreePath(info.getCompilationUnit()), new AtomicBoolean());
+        Collection<TreePath> result = computeDuplicates(path);
 
         //        assertEquals(f.result.toString(), duplicates.length / 2, f.result.size());
         
@@ -192,4 +194,9 @@ public class CopyFinderTest extends NbTestCase {
         
         assertTrue(Arrays.toString(dupes), Arrays.equals(duplicates, dupes));
     }
+
+    protected Collection<TreePath> computeDuplicates(TreePath path) {
+        return CopyFinder.computeDuplicates(info, path, new TreePath(info.getCompilationUnit()), new AtomicBoolean());
+    }
+
 }

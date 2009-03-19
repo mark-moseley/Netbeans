@@ -56,7 +56,7 @@ import org.netbeans.api.java.source.TestUtilities;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.java.JavaDataLoader;
-import org.netbeans.spi.editor.hints.Fix;
+import org.netbeans.modules.parsing.api.indexing.IndexingManager;
 import org.netbeans.spi.editor.hints.Fix;
 import org.openide.LifecycleManager;
 import org.openide.cookies.EditorCookie;
@@ -114,7 +114,14 @@ public abstract class ErrorHintsTestBase extends NbTestCase {
         
         doc = ec.openDocument();
         doc.putProperty(Language.class, JavaTokenId.language());
-        
+        doc.putProperty("mimeType", "text/x-java");
+
+        //XXX: takes a long time
+        //re-index, in order to find classes-living-elsewhere
+//        CountDownLatch latch = RepositoryUpdater.getDefault().scheduleCompilationAndWait(sourceRoot, sourceRoot);
+//        latch.await();
+        IndexingManager.getDefault().refreshIndexAndWait(sourceRoot.getURL(), null);
+
         JavaSource js = JavaSource.forFileObject(data);
         
         assertNotNull(js);
@@ -183,7 +190,7 @@ public abstract class ErrorHintsTestBase extends NbTestCase {
         prepareTest(fileName, code);
         
         TreePath path = info.getTreeUtilities().pathFor(pos);
-        
+
         List<Fix> fixes = computeFixes(info, pos, path);
         List<String> fixesNames = new LinkedList<String>();
         
