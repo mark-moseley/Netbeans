@@ -69,11 +69,11 @@ package org.netbeans.modules.uml.codegen.dataaccess.xmlbeans;
 
 import org.w3c.dom.*;
 import org.netbeans.modules.schema2beans.*;
-import java.beans.*;
 import java.util.*;
-import java.io.*;
 
 // BEGIN_NOI18N
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 public class TemplateFamilies extends org.netbeans.modules.schema2beans.BaseBean
     implements org.netbeans.modules.uml.codegen.dataaccess.xmlbeans.TemplateFamiliesInterface, org.netbeans.modules.uml.codegen.dataaccess.xmlbeans.CommonBean
@@ -105,7 +105,6 @@ public class TemplateFamilies extends org.netbeans.modules.schema2beans.BaseBean
         Node n = GraphManager.getElementNode("templateFamilies", doc);	// NOI18N
         if (n == null)
             throw new Schema2BeansException("Doc root not in the DOM graph");	// NOI18N
-        ;
         
         this.graphManager.setXmlDocument(doc);
         
@@ -224,7 +223,9 @@ public class TemplateFamilies extends org.netbeans.modules.schema2beans.BaseBean
     
     public static TemplateFamilies createGraph(java.io.File f) throws org.netbeans.modules.schema2beans.Schema2BeansException, java.io.IOException
     {
-        java.io.InputStream in = new java.io.FileInputStream(f);
+        FileObject fo=FileUtil.toFileObject(f);
+        java.io.InputStream in = fo.getInputStream();
+        //java.io.InputStream in = new java.io.FileInputStream(f);
         try
         {
             return createGraph(in, false);
@@ -262,36 +263,7 @@ public class TemplateFamilies extends org.netbeans.modules.schema2beans.BaseBean
     public void validate() throws org.netbeans.modules.schema2beans.ValidateException
     {
     }
-    
-    // Special serializer: output XML as serialization
-    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException
-    {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        write(baos);
-        String str = baos.toString();;
-        // System.out.println("str='"+str+"'");
-        out.writeUTF(str);
-    }
-    
-    // Special deserializer: read XML as deserialization
-    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException
-    {
-        try
-        {
-            init(comparators, runtimeVersion);
-            String strDocument = in.readUTF();
-            // System.out.println("strDocument='"+strDocument+"'");
-            ByteArrayInputStream bais = new ByteArrayInputStream(strDocument.getBytes());
-            Document doc = GraphManager.createXmlDocument(bais, false);
-            initOptions(Common.NO_DEFAULT_VALUES);
-            initFromNode(doc, Common.NO_DEFAULT_VALUES);
-        }
-        catch (Schema2BeansException e)
-        {
-            throw new RuntimeException(e);
-        }
-    }
-    
+        
     public void _setSchemaLocation(String location)
     {
         if (beanProp().getAttrProp("xsi:schemaLocation", true) == null)
@@ -335,6 +307,7 @@ public class TemplateFamilies extends org.netbeans.modules.schema2beans.BaseBean
         }
         
     }
+    @Override
     public String dumpBeanNode()
     {
         StringBuffer str = new StringBuffer();

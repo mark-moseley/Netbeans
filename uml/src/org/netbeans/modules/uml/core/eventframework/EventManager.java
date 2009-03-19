@@ -172,17 +172,12 @@ public class EventManager<Element>
 		// In c++, this function takes a boolean as a parameter, but it is only
 		// set to true in WorkspaceEventDispatcherImpl::FireWSProjectPreSave
 		// so I am not sure how this isn't causing problems in c++ as well
-		//
-		//for (int i = 0; i < m_listeners.size(); i++)
 		for (int i = m_listeners.size() - 1; i >= 0 ; i--)
 		{
 			try
 			{
-				//if (validateSink(obj);
-			    //System.out.println("--EventManager.notifyListeners() m_listeners.elementAt(i).get() = "+m_listeners.elementAt(i).get());
 				func.execute(m_listeners.elementAt(i).get());
 			}
-			
 			catch (Exception e)
 			{
 				ETSystem.out.println("Error in notifyListeners");
@@ -197,12 +192,10 @@ public class EventManager<Element>
 		
 		cleanUp();
 		// See above for comment
-		//for (int i = 0; i < m_listeners.size(); i++)
 		for (int i = m_listeners.size() - 1; i >= 0 ; i--)
 		{
 			try
 			{
-				//validateSink(obj);
 				func.execute(params, m_listeners.elementAt(i).get());
 			}
 			
@@ -221,18 +214,25 @@ public class EventManager<Element>
 		// this instance and cause some listeners to be skipped
 		// see other notifier methods in this class for exact same comments
 		// as this was a problem in the past but this loop wasn't touched
-		// for (int i = 0; i < m_listeners.size(); i++)
 		for (int i = m_listeners.size()-1; i > -1 ; i--)
 		{
 			try
 			{
-				//validateSink(obj);
 				func.execute(m_listeners.elementAt(i).get());
-				//check the result and if required call dispatchCancelEvent
-				
+                                //check the result and if required call dispatchCancelEvent
 				if (!func.isResultOK())
 				{
-					//DispatchCancelledEvent( i, event );
+                                    // We should notify every the listeners
+                                    // that have already accepted the change.
+                                    // However, since I do not have a use case
+                                    // to use this feature, and I do not have
+                                    // a test case to make sure I am not about
+                                    // to mess anything up, I am going to 
+                                    // comment this code out.  
+                                    // 
+                                    // If we ever need this feature simply 
+                                    // uncomment the following line.
+//                                    dispatchCancelledEvent( i, func );
 					break;
 				}
 			}
@@ -244,7 +244,6 @@ public class EventManager<Element>
 			}
 		}
 	}
-	
 	/**
 	 * @return
 	 */

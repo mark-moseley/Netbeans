@@ -38,61 +38,50 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.uml.drawingarea.persistence;
 
-/*
- * DrawingAreaModule.java
- *
- * Created on April 1, 2005, 4:23 PM
- */
-
-package org.netbeans.modules.uml.drawingarea;
-
-import org.netbeans.modules.uml.ui.products.ad.applicationcore.IADProduct;
-import org.netbeans.modules.uml.core.coreapplication.CoreProductManager;
-import org.netbeans.modules.uml.core.coreapplication.ICoreProductManager;
-import org.netbeans.modules.uml.core.coreapplication.IProductDescriptor;
-import org.netbeans.modules.uml.core.support.umlutils.ETList;
-
-import org.openide.modules.ModuleInstall;
+import java.io.File;
+import java.io.IOException;
+import org.netbeans.api.visual.graph.GraphScene;
+import org.netbeans.modules.uml.drawingarea.dataobject.UMLDiagramDataObject;
+import org.netbeans.modules.uml.drawingarea.view.DesignerScene;
+import org.openide.cookies.SaveCookie;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.loaders.DataObject;
 
 /**
  *
- * @author Administrator
+ * @author Jyothi
  */
-public class DrawingAreaModule extends ModuleInstall
-{
-   
-   /** Creates a new instance of DrawingAreaModule */
-   public DrawingAreaModule()
-   {
-   }
- 
+public class SaveDiagram implements SaveCookie {
 
-   //////////////////////////////////////////////////////////////////
-   // Helper Methods
-   
-   protected IADProduct getProduct()
-   {
-      IADProduct retVal = null;
-      
-      ICoreProductManager productManager = CoreProductManager.instance();
-      ETList<IProductDescriptor> pDesc = productManager.getProducts();
-      if((pDesc != null) && (pDesc.size() > 0))
-      {
-         for(IProductDescriptor descriptor : pDesc)
-         {
-            if(descriptor.getCoreProduct() instanceof IADProduct)
-            {
-               retVal = (IADProduct)descriptor.getCoreProduct();
-               break;
+    private DesignerScene scene;
+    private FileObject fileObj;    
+
+    public SaveDiagram(GraphScene graphScene, FileObject fo) {
+        this.scene = (DesignerScene) graphScene;
+        this.fileObj = fo;
+    }
+
+    public synchronized void save() throws IOException {
+        //custom logic to save uml diagrams
+        if (scene != null) {
+            
+            PersistenceManager pMgr = new PersistenceManager(fileObj);
+            pMgr.saveDiagram(scene);
+            
+            FileObject fobj = FileUtil.toFileObject(new File(scene.getDiagram().getProject().getFileName()));
+            DataObject dobj = DataObject.find(fobj);
+            SaveCookie sc = dobj.getCookie(SaveCookie.class);                
+            if (sc != null) {
+                sc.save();                    
             }
-         }
-      }
-      else
-      {
-          retVal = (IADProduct) productManager.getCoreProduct();
-      }
-      
-      return retVal;
-   }
+        }
+        //Remove the save cookie    
+        DataObject dobj = DataObject.find(fileObj);
+        if (dobj instanceof UMLDiagramDataObject) {
+            ((UMLDiagramDataObject)dobj).setDirty(false, scene);
+        }
+    }
 }

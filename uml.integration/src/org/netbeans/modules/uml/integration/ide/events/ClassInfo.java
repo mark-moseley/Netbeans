@@ -248,7 +248,7 @@ public class ClassInfo extends ElementInfo
         new ArrayList<IClassifier>();
         
     /** The enumeration's literals. */
-    private Vector mLiterals           = new Vector();
+    private Vector<LiteralInfo> mLiterals = new Vector<LiteralInfo>();
     
     /** The file that the class lives in. */
     private String  mFilename          = null;
@@ -319,7 +319,6 @@ public class ClassInfo extends ElementInfo
     }
     
     /* (non-Javadoc)
-     * @see com.embarcadero.integration.events.ElementInfo#getOwningProject()
      */
     public IProject getOwningProject()
     {
@@ -546,23 +545,58 @@ public class ClassInfo extends ElementInfo
         setSuperInterfaces(classifier);
         setSuperclass(classifier);
 
-        if (classifier instanceof IEnumeration)
-            setLiterals((IEnumeration)classifier);
+        if (classifier instanceof IEnumeration) {
+            if (mLiterals == null)
+                mLiterals = new Vector<LiteralInfo>();
+            else
+                mLiterals.clear();
+            setLiterals(classifier);
+        }
     }
     
-    public void setLiterals(IEnumeration en)
+    public void setLiterals(IClassifier en)
     {
-        if (mLiterals == null)
-            mLiterals = new Vector();
-
-        else
-            mLiterals.clear();
-        
-        for (Iterator iter = en.getLiterals().iterator(); iter.hasNext(); )
+        if (! (en instanceof IEnumeration)) 
         {
-            IEnumerationLiteral lit = (IEnumerationLiteral) iter.next();
-            mLiterals.add(new LiteralInfo(this, lit));
+            return;
         }
+        
+        ETList<IGeneralization> gens = en.getGeneralizations();
+        
+        if (gens != null) 
+        {
+            for(IGeneralization gen : gens) 
+            {
+                if (gen != null) 
+                {
+                    IClassifier general  = gen.getGeneral();
+                    if (general != null)
+                    {
+                        setLiterals(general);
+                    }               
+                }
+            }
+        }
+
+        ETList<IEnumerationLiteral> literals = ((IEnumeration)en).getLiterals();
+        for(IEnumerationLiteral lit : literals)
+        {
+            String name = lit.getName();
+            if (name != null) 
+            {
+                Iterator<LiteralInfo> iter = mLiterals.iterator();
+                while(iter.hasNext()) 
+                {
+                    LiteralInfo litInfo = iter.next(); 
+                    if (name.equals(litInfo.getName())) 
+                    {
+                        iter.remove();
+                    }
+                }
+                mLiterals.add(new LiteralInfo(this, lit));
+            }
+        }
+
     }
     
     public boolean isReferenceClass()
@@ -2781,7 +2815,6 @@ public class ClassInfo extends ElementInfo
 		    String name = m.getName();
 		    if (name != null && ! name.trim().equals("")) 
 		    {
-			//System.out.println("adding name = "+name);
 			attrNames.add(name);
 		    }
 		}
