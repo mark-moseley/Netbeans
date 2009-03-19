@@ -55,7 +55,7 @@ import java.awt.*;
  * @author David Kaspar
  */
 public class DevicePanel extends JPanel {
-    
+
     private static final Color BACKGROUND_COLOR = new Color(0xFBF9F3);
     
     private final ScreenDisplayPresenter dummyPresenter = new DummyDisplayPresenter();
@@ -176,6 +176,10 @@ public class DevicePanel extends JPanel {
     }
     
     public void reload() {
+
+        Component component = KeyboardFocusManager.getCurrentKeyboardFocusManager().
+                getFocusOwner();
+
         DesignComponent editedScreen = controller.getEditedScreen();
         ScreenDisplayPresenter presenter = editedScreen != null ? editedScreen.getPresenter(ScreenDisplayPresenter.class) : null;
         if (presenter == null)
@@ -183,16 +187,15 @@ public class DevicePanel extends JPanel {
         displayPanel.setVisible(false);
         displayPanel.removeAll();
         displayPanel.setPreferredSize(null);
-        
-        JComponent comp = presenter.getView();
-        displayPanel.add(comp, BorderLayout.CENTER);
+
+        displayPanel.add(presenter.getView(), BorderLayout.CENTER);
         displayPanel.setBackground(getDeviceInfo().getDeviceTheme().getColor(DeviceTheme.Colors.BACKGROUND));
         
         presenter.reload(getDeviceInfo());
         
         //due to issues in GridBagLayout which ignores minSize, we need to compute necessary height for component
         int requiredHeight = 0;
-        Component[] content = comp.getComponents();
+        Component[] content = presenter.getView().getComponents();
         for (Component jComponent : content) {
             requiredHeight += jComponent.getPreferredSize().getHeight();
             //            GridBagConstraints constrains = ((GridBagLayout)comp.getLayout()).getConstraints(jComponent);
@@ -213,12 +216,16 @@ public class DevicePanel extends JPanel {
         displayPanel.validate();
         
         topPanel.reload();
+
+        if ( component != null ){
+            component.requestFocusInWindow();
+        }
     }
     
     public DesignComponent getDesignComponentAt(Point point) {
         return getDesignComponentAt(controller.getEditedScreen(), this, point);
     }
-    
+
     private static DesignComponent getDesignComponentAt(DesignComponent component, JComponent parentView, Point point) {
         if (component == null)
             return null;
@@ -226,13 +233,19 @@ public class DevicePanel extends JPanel {
         if (presenter == null)
             return null;
         JComponent view = presenter.getView();
+        Point viewLocation = presenter.getLocation();
+        if (viewLocation != null && !viewLocation.equals(view.getLocation())){
+            view.setLocation(viewLocation);
+        }
         Component c = view;
         Point viewPoint = new Point(point);
         for (;;) {
-            if (c == null)
+            if (c == null) {
                 return null;
-            if (c == parentView)
+            }
+            if (c == parentView) {
                 break;
+            }
             Point childPoint = c.getLocation();
             viewPoint.x -= childPoint.x;
             viewPoint.y -= childPoint.y;
@@ -243,11 +256,18 @@ public class DevicePanel extends JPanel {
             if (ret != null)
                 return ret;
         }
-        return presenter.getSelectionShape().contains(viewPoint) ? presenter.getRelatedComponent() : null;
+        Shape shape = presenter.getSelectionShape();
+        if (shape != null && shape.contains(viewPoint)) {
+            return presenter.getRelatedComponent();
+        }
+        return null;
     }
     
-    public Point calculateTranslation(Container view) {
+    public Point calculateTranslation(Container view, Point viewLocation) {
         Point point = new Point();
+        if (viewLocation != null && !viewLocation.equals(view.getLocation())){
+            view.setLocation(viewLocation);
+        }
         for (;;) {
             if (view == null)
                 return null;
@@ -260,7 +280,7 @@ public class DevicePanel extends JPanel {
         }
         return point;
     }
-    
+
     //    /**
     //     * Helper debugging method for inspecting component's hiearchy
     //     */
