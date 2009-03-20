@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="javascript.editing" default="netbeans" basedir=".">
+
+    <import file="../nbbuild/templates/projectized.xml"/>
+
+    <target name="jar" depends="init,compile,jar-prep" unless="is.jar.uptodate">
+        <taskdef name="csljar" classname="org.netbeans.modules.csl.CslJar" classpath="${nb_all}/csl.api/anttask/build/cslanttask.jar:${nb_all}/nbbuild/nbantext.jar"/>
+         <csljar jarfile="${cluster}/${module.jar}" compress="${build.package.compress}" index="${build.package.index}" manifest="${manifest.mf}" stamp="${cluster}/.lastModified">
+            <fileset dir="${build.classes.dir}"/>
+        </csljar>
+    </target>
+
+    <target name="release" depends="projectized.release">
+        <!-- Generated JavaScript files for core libraries, used by code completion
+             etc. See the generatestubs project for details. -->
+        <unzip dest="build" src="external/jsstubs.zip"/>
+        <unzip dest="build" src="external/js-domstubs.zip"/>
+        <!-- XXX would not need to repack these if they did not use the jsstubs/ internal dir name: -->
+        <zip zipfile="${cluster}/jsstubs/allstubs.zip">
+            <fileset dir="build/jsstubs"/>
+        </zip>
+        <!-- XXX could use a release.* property if name were more predictable: -->
+        <unzip dest="${cluster}" src="external/preindexed.zip"/>
+    </target>
+
+</project>
