@@ -42,6 +42,7 @@
 package org.netbeans.modules.editor;
 
 import java.net.URL;
+import java.util.Collection;
 import javax.swing.JEditorPane;
 import javax.swing.JPanel;
 import javax.swing.text.Document;
@@ -63,11 +64,11 @@ public class NbEditorToolBarTest extends NbTestCase {
         super(testName);
     }
 
-    public boolean runInEQ() {
+    public @Override boolean runInEQ() {
         return true;
     }
 
-    protected void setUp() throws Exception {
+    protected @Override void setUp() throws Exception {
         super.setUp();
 
         clearWorkDir();
@@ -96,8 +97,7 @@ public class NbEditorToolBarTest extends NbTestCase {
         assertNotNull(docDataObject);
         editor.getDocument().putProperty(Document.StreamDescriptionProperty, docDataObject);
 
-        NbEditorToolBar toolbar = new NbEditorToolBar(editor);
-        Lookup actionContext = toolbar.createActionContext(editor);
+        Lookup actionContext = NbEditorToolBar.createActionContext(editor);
         assertNotNull(actionContext.lookup(Bar.class));
         assertNotNull(actionContext.lookup(Node.class));
         assertNull(actionContext.lookup(Foo.class));
@@ -117,15 +117,14 @@ public class NbEditorToolBarTest extends NbTestCase {
         assertNotNull(docDataObject);
         editor.getDocument().putProperty(Document.StreamDescriptionProperty, docDataObject);
 
-        NbEditorToolBar toolbar = new NbEditorToolBar(editor);
-        Lookup actionContext = toolbar.createActionContext(editor);
+        Lookup actionContext = NbEditorToolBar.createActionContext(editor);
         assertNotNull(actionContext.lookup(Node.class));
         assertNull(actionContext.lookup(Foo.class));
     }
 
     /**
      * Tests that the action context for the context-aware toolbar actions
-     * is null if there is no Lookup.Provider ancestor and no DataObject
+     * contains the editor pane if there is no Lookup.Provider ancestor and no DataObject
      * corresponding to the current document.
      */
     public void testActionContextNullWhenNoDataObject() {
@@ -134,9 +133,13 @@ public class NbEditorToolBarTest extends NbTestCase {
         editor.setEditorKit(new NbEditorKit());
         parent.add(editor);
 
-        NbEditorToolBar toolbar = new NbEditorToolBar(editor);
-        Lookup actionContext = toolbar.createActionContext(editor);
-        assertNull(actionContext);
+        Lookup actionContext = NbEditorToolBar.createActionContext(editor);
+        // changed when fixing #127757
+        //assertNull(actionContext);
+        assertNotNull(actionContext);
+        Collection<?> all = actionContext.lookupAll(Object.class);
+        assertEquals("Expecting singleton Lookup", 1, all.size());
+        assertSame("Expecting the editor pane", editor, all.iterator().next());
     }
 
     /**
@@ -154,8 +157,7 @@ public class NbEditorToolBarTest extends NbTestCase {
         parent.add(editor);
         editor.getDocument().putProperty(Document.StreamDescriptionProperty, docDataObject);
 
-        NbEditorToolBar toolbar = new NbEditorToolBar(editor);
-        Lookup actionContext = toolbar.createActionContext(editor);
+        Lookup actionContext = NbEditorToolBar.createActionContext(editor);
         assertNotNull(actionContext.lookup(Bar.class));
         assertNotNull(actionContext.lookup(Node.class));
         assertEquals(1, actionContext.lookup(new Lookup.Template(Node.class)).allInstances().size());
