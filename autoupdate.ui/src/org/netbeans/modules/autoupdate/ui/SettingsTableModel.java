@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -52,10 +52,8 @@ import java.util.Set;
 import java.util.logging.Logger;
 import javax.swing.table.AbstractTableModel;
 import org.netbeans.api.autoupdate.UpdateUnitProvider;
-import org.netbeans.api.autoupdate.UpdateUnitProvider;
 import org.netbeans.api.autoupdate.UpdateUnitProviderFactory;
 import org.openide.util.NbBundle;
-import org.openide.util.RequestProcessor;
 
 /**
  *
@@ -67,7 +65,7 @@ public class SettingsTableModel extends AbstractTableModel {
         "SettingsTable_NameColumn",
         /*"SettingsTable_URLColumn"*/
     };
-    
+
     private static final Class[] COLUMN_TYPES = new Class[] {
         Boolean.class,
         UpdateUnitProvider.class,
@@ -76,21 +74,21 @@ public class SettingsTableModel extends AbstractTableModel {
     private List<UpdateUnitProvider> updateProviders;
     private Set<String> originalProviders;
     private SettingsTab settingsTab = null;
-    
+
     private final Logger logger = Logger.getLogger ("org.netbeans.modules.autoupdate.ui.SettingsTableModel");
     /** Creates a new instance of SettingsTableModel */
     public SettingsTableModel () {
         refreshModel ();
     }
-    
+
     void setSettingsTab (SettingsTab settingsTab) {
         this.settingsTab = settingsTab;
     }
-    
+
     SettingsTab getSettingsTab () {
         return settingsTab;
     }
-        
+
     void refreshModel () {
         Set<String> oldValue = originalProviders;
         Set<String> newValue = new HashSet<String> ();
@@ -120,53 +118,45 @@ public class SettingsTableModel extends AbstractTableModel {
         }
         // check removed providers
         if (oldValue != null && ! oldValue.isEmpty () && ! newValue.containsAll (oldValue)) {
-            getSettingsTab ().setWaitingState (true);
-            Utilities.startAsWorkerThread (new Runnable () {
-                public void run () {
-                    try {
-                        getSettingsTab ().getPluginManager ().updateUnitsChanged ();
-                    } finally {
-                        getSettingsTab ().setWaitingState (false);
-                    }
-                }
-            });
+            getSettingsTab ().setNeedRefresh ();
         }
         updateProviders = new ArrayList<UpdateUnitProvider> (providers);
         originalProviders = newValue;
         sortAlphabetically (updateProviders);
         fireTableDataChanged ();
     }
-    
+
     public void remove (int rowIndex) {
         UpdateUnitProvider unitProvider = getUpdateUnitProvider (rowIndex);
         if (unitProvider != null) {
             UpdateUnitProviderFactory.getDefault ().remove (unitProvider);
         }
-        getSettingsTab ().getPluginManager ().updateUnitsChanged ();
+        getSettingsTab ().setNeedRefresh ();
+        getSettingsTab ().doLazyRefresh(null);
     }
-    
+
     public void add (String name, String displayName, URL url, boolean state) {
         final UpdateUnitProvider uup = UpdateUnitProviderFactory.getDefault ().create (name, displayName, url);
         uup.setEnable (state);
     }
-    
+
     public UpdateUnitProvider getUpdateUnitProvider (int rowIndex) {
         return (rowIndex >= 0 && rowIndex <  updateProviders.size ()) ? updateProviders.get (rowIndex) : null;
     }
-    
+
     @Override
     public boolean isCellEditable (int rowIndex, int columnIndex) {
         return columnIndex == 0;
     }
-    
+
     public int getRowCount () {
         return updateProviders.size ();
     }
-    
+
     public int getColumnCount () {
         return COLUMN_NAME_KEYS.length;
     }
-    
+
     @Override
     public void setValueAt (Object aValue, int rowIndex, int columnIndex) {
         final UpdateUnitProvider unitProvider = getUpdateUnitProvider (rowIndex);
@@ -176,41 +166,12 @@ public class SettingsTableModel extends AbstractTableModel {
             boolean newValue = ((Boolean) aValue).booleanValue ();
             if (oldValue != newValue) {
                 unitProvider.setEnable (newValue);
-                if (oldValue) {
-                    RequestProcessor.getDefault ().post (new Runnable () {
-                        public void run () {
-                            // was enabled and won't be more -> remove it from model
-                            getSettingsTab ().setWaitingState (true);
-                            Utilities.startAsWorkerThread (new Runnable () {
-                                public void run () {
-                                    try {
-                                        getSettingsTab ().getPluginManager ().updateUnitsChanged ();
-                                    } finally {
-                                        getSettingsTab ().setWaitingState (false);
-                                    }
-                                }
-                            });
-                        }
-                    });
-                } else {
-                    // was enabled and won't be more -> add it from model and read its content
-                    getSettingsTab ().setWaitingState (true);
-                    Utilities.startAsWorkerThread (new Runnable () {
-                        public void run () {
-                            try {
-                                Utilities.presentRefreshProvider (unitProvider, getSettingsTab ().getPluginManager (), false);
-                                getSettingsTab ().getPluginManager ().updateUnitsChanged ();
-                            } finally {
-                                getSettingsTab ().setWaitingState (false);
-                            }
-                        }
-                    });
-                }
+                getSettingsTab ().refreshProvider (unitProvider, false);
             }
             break;
         }
     }
-    
+
     public Object getValueAt (int rowIndex, int columnIndex) {
         Object retval = null;
         UpdateUnitProvider unitProvider = updateProviders.get (rowIndex);
@@ -223,12 +184,12 @@ public class SettingsTableModel extends AbstractTableModel {
         }
         return retval;
     }
-    
+
     @Override
     public Class<?> getColumnClass (int columnIndex) {
         return COLUMN_TYPES[columnIndex];
     }
-    
+
     @Override
     public String getColumnName (int columnIndex) {
         return NbBundle.getMessage (SettingsTableModel.class, COLUMN_NAME_KEYS[columnIndex]);
@@ -240,7 +201,7 @@ public class SettingsTableModel extends AbstractTableModel {
                 return COLL.compare(p1.getDisplayName(), p2.getDisplayName());
             }
         });
-        
+
     }
-    
+
 }
