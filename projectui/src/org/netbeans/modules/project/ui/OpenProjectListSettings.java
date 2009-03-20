@@ -229,7 +229,7 @@ public class OpenProjectListSettings {
     }
     
     public boolean isOpenAsMain() {        
-        return getPreferences().getBoolean( OPEN_AS_MAIN, true);
+        return getPreferences().getBoolean(OPEN_AS_MAIN, false);
     }
     
     public void setOpenAsMain( boolean openAsMain ) {
@@ -302,6 +302,9 @@ public class OpenProjectListSettings {
                 if (f.exists() && f.isDirectory()) {
                     return FileUtil.normalizeFile(f);
                 }
+            }
+            if (Boolean.getBoolean("netbeans.full.hack")) { // NOI18N
+                return FileUtil.normalizeFile(new File(System.getProperty("java.io.tmpdir", ""))); // NOI18N
             }
             File defaultDir = FileSystemView.getFileSystemView().getDefaultDirectory();
             if (defaultDir != null && defaultDir.exists() && defaultDir.isDirectory()) {
