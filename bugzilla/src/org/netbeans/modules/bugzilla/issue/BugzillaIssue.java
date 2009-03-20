@@ -585,7 +585,6 @@ public class BugzillaIssue extends Issue {
         return attachments.toArray(new Attachment[attachments.size()]);
     }
 
-
     void addAttachment(final File file, final String comment, final String desc, String contentType, final boolean patch) {
         assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt";
         final FileTaskAttachmentSource attachmentSource = new FileTaskAttachmentSource(file);
@@ -603,6 +602,7 @@ public class BugzillaIssue extends Issue {
         BugzillaCommand cmd = new BugzillaCommand() {
             @Override
             public void execute() throws CoreException, IOException, MalformedURLException {
+                refresh();
                 Bugzilla.getInstance().getClient(repository).postAttachment(
                                 getID(),
                                 comment,
@@ -611,6 +611,7 @@ public class BugzillaIssue extends Issue {
                                 patch,
                                 source,
                                 new NullProgressMonitor());
+                refresh(); // XXX to much refresh - is there no other way?
             }
         };
         repository.getExecutor().execute(cmd);
@@ -662,9 +663,7 @@ public class BugzillaIssue extends Issue {
 
     @Override
     public void attachPatch(File file, String description) {
-        refresh();
         addAttachment(file, null, description, null, true);
-        refresh();
     }
 
     void submitAndRefresh() {
@@ -739,7 +738,10 @@ public class BugzillaIssue extends Issue {
         public Comment(TaskAttribute a) {
             Date d = null;
             try {
-                d = CC_DATE_FORMAT.parse(a.getMappedAttribute(TaskAttribute.COMMENT_DATE).getValue());
+                String s = a.getMappedAttribute(TaskAttribute.COMMENT_DATE).getValue();
+                if(s != null && !s.trim().equals("")) {
+                    d = CC_DATE_FORMAT.parse(s);
+                }
             } catch (ParseException ex) {
                 Bugzilla.LOG.log(Level.SEVERE, null, ex);
             }
@@ -784,7 +786,10 @@ public class BugzillaIssue extends Issue {
             id = ta.getValue();
             Date d = null;
             try {
-                d = CC_DATE_FORMAT.parse(ta.getMappedAttribute(TaskAttribute.ATTACHMENT_DATE).getValues().get(0));// XXX value or values?
+                String s = ta.getMappedAttribute(TaskAttribute.ATTACHMENT_DATE).getValue();
+                if(s != null && !s.trim().equals("")) {
+                    d = CC_DATE_FORMAT.parse(s);
+                }
             } catch (ParseException ex) {
                 Bugzilla.LOG.log(Level.SEVERE, null, ex);
             }
