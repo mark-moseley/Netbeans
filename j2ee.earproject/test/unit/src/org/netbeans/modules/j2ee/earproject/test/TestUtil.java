@@ -90,13 +90,13 @@ public final class TestUtil {
     
     /** It is usually good idea to clear working directory before calling this method */
     public static void initLookup(NbTestCase test) throws Exception {
-        MockLookup.setInstances(new IFL());
+        MockLookup.setLayersAndInstances(new IFL());
         
         FileObject root = FileUtil.toFileObject(test.getWorkDir());
         FileObject systemDir = FileUtil.createFolder(root, "ud/system"); // NOI18N
         FileUtil.createFolder(systemDir, "J2EE/InstalledServers"); // NOI18N
         
-        Assert.assertNotNull(Repository.getDefault().getDefaultFileSystem().findResource("J2EE/InstalledServers").toString());;
+        Assert.assertNotNull(FileUtil.getConfigFile("J2EE/InstalledServers").toString());
     }
     
     private static boolean warned = false;
@@ -252,7 +252,7 @@ public final class TestUtil {
         Object[] instances = new Object[additionalLookupItems.length + appServerNeed.length];
         System.arraycopy(additionalLookupItems, 0, instances, 0, additionalLookupItems.length);
         System.arraycopy(appServerNeed, 0, instances, additionalLookupItems.length, appServerNeed.length);
-        MockLookup.setInstances(instances);
+        MockLookup.setLayersAndInstances(instances);
         
         File asRoot = null;
         if (System.getProperty("appserv.home") != null) { // NOI18N
@@ -260,7 +260,7 @@ public final class TestUtil {
         } else {
             asRoot = extractAppSrv(test.getWorkDir(), new File(test.getDataDir(), "SunAppServer.zip")); // NOI18N
         }
-        FileObject dir = Repository.getDefault().getDefaultFileSystem().findResource("J2EE/InstalledServers"); // NOI18N
+        FileObject dir = FileUtil.getConfigFile("J2EE/InstalledServers"); // NOI18N
         String name = FileUtil.findFreeFileName(dir, "instance", null); // NOI18N
         FileObject instanceFO = dir.createData(name);
         String serverID = "[" + asRoot.getAbsolutePath() + "]deployer:Sun:AppServer::localhost:4848"; // NOI18N
