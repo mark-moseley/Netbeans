@@ -43,6 +43,8 @@ package org.netbeans.modules.mobility.svgcore.options;
 
 import java.io.File;
 import java.util.prefs.Preferences;
+import org.netbeans.modules.mobility.svgcore.snippets.gradientlook.SVGSnipetsProviderGradient;
+import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 
 /**
@@ -53,7 +55,8 @@ public class SvgcoreSettings {
 
     private static SvgcoreSettings svgcoreSettings = null;
 
-    private static final String PROP_EDITOR_PATH    = "editorPath"; //NOI18N    
+    private static final String PROP_EDITOR_PATH    = "editorPath"; //NOI18N
+    private static final String PROP_CURRENT_SNIPPET    = "currentSnippet"; //NOI18N
     private static final String DEFAULT_EDITOR_PATH = "c:\\Program Files\\Ikivo\\Ikivo Animator\\IkivoAnimator.exe"; //NOI18N   
     private static final long   serialVersionUID    = 85176380568174L;   
     
@@ -68,15 +71,12 @@ public class SvgcoreSettings {
         }
     }
         
-    
     public static synchronized SvgcoreSettings getDefault() {
         if (svgcoreSettings == null) {
             svgcoreSettings = new SvgcoreSettings();
         }
         return svgcoreSettings;
     }
-    
-
     
     /**
      * Retrieve path to external editor executable
@@ -92,5 +92,21 @@ public class SvgcoreSettings {
      */
     public final void setExternalEditorPath(String path){
         prefs.put(PROP_EDITOR_PATH, path);
-    }    
+    }
+    
+    public final String getCurrentSnippet() {
+        String currentSnippet = prefs.get(PROP_CURRENT_SNIPPET, null);
+        if (currentSnippet == null) {
+            return NbBundle.getMessage(SVGSnipetsProviderGradient.class, "LBL_SNIPPET_DISPLAY_NAME");
+        }
+        return currentSnippet;
+    }
+
+    final void setCurrentSnippet(String currentSnippet) {
+        prefs.put(PROP_CURRENT_SNIPPET, currentSnippet);
+    }
+
+    
+
+
 }
