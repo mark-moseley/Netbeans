@@ -52,7 +52,7 @@ import org.netbeans.modules.editor.settings.storage.EditorTestLookup;
 import org.netbeans.spi.options.OptionsCategory;
 import org.netbeans.spi.options.OptionsPanelController;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.FolderLookup;
 import org.openide.util.Lookup;
@@ -73,6 +73,7 @@ public class EditorOptionsTest extends NbTestCase {
             new URL[] {
                 getClass().getClassLoader().getResource("org/netbeans/modules/options/editor/mf-layer.xml"),
                 getClass().getClassLoader().getResource("org/netbeans/modules/options/keymap/mf-layer.xml"),
+                getClass().getClassLoader().getResource("org/netbeans/modules/options/editor/test-layer.xml"),
             },
             getWorkDir(),
             new Object[] {},
@@ -163,6 +164,7 @@ public class EditorOptionsTest extends NbTestCase {
         while (it.hasNext ()) {
             OptionsPanelController pc = (OptionsPanelController) it.next ();
             JComponent c = pc.getComponent (masterLookup);
+            pc.update();
             pc.applyChanges ();
         }
     }
@@ -187,6 +189,7 @@ public class EditorOptionsTest extends NbTestCase {
         while (it.hasNext ()) {
             OptionsPanelController pc = (OptionsPanelController) it.next ();
             JComponent c = pc.getComponent (masterLookup);
+            pc.update();
             pc.cancel ();
         }
     }
@@ -243,8 +246,7 @@ public class EditorOptionsTest extends NbTestCase {
     }
 
     private List getCategories () {
-        FileObject fo = Repository.getDefault ().getDefaultFileSystem ().
-            findResource ("OptionsDialog");
+        FileObject fo = FileUtil.getConfigFile ("OptionsDialog");
         Lookup lookup = new FolderLookup (DataFolder.findFolder (fo)).
             getLookup ();
         return new ArrayList (lookup.lookup (
@@ -252,5 +254,3 @@ public class EditorOptionsTest extends NbTestCase {
         ).allInstances ());
     }
 }
-
-
