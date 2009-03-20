@@ -57,6 +57,7 @@ import org.openide.util.NbBundle;
 import org.xml.sax.Attributes;
 import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXNotRecognizedException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -84,6 +85,7 @@ public final class LogRecords {
         String formated = FORMATTER.format(rec);
         byte[] arr = formated.getBytes("utf-8");
         os.write(arr);
+        os.flush();
     }
 
     public static void scan(InputStream is, Handler h) throws IOException {
@@ -127,7 +129,11 @@ public final class LogRecords {
         f.setValidating(false);
         SAXParser p;
         try {
-            f.setFeature("http://apache.org/xml/features/continue-after-fatal-error", true); // NOI18N
+            try{
+                f.setFeature("http://apache.org/xml/features/continue-after-fatal-error", true); // NOI18N
+            }catch (SAXNotRecognizedException snre){
+                LOG.log(Level.INFO, null, snre);
+            }
             p = f.newSAXParser();
         } catch (ParserConfigurationException ex) {
             LOG.log(Level.SEVERE, null, ex);
@@ -144,11 +150,12 @@ public final class LogRecords {
             LOG.log(Level.WARNING, null, ex);
             throw (IOException)new IOException(ex.getMessage()).initCause(ex);
         } catch (InternalError error){
-            LOG.log(Level.WARNING, "INPUT FILE CORRUPTION", error);
+            LOG.log(Level.WARNING, "Input file corruption", error);
+            throw (IOException)new IOException(error.getMessage()).initCause(error);
         } catch (IOException ex) {
             throw ex;
         } catch (RuntimeException ex) {
-            LOG.log(Level.WARNING, "INPUT FILE CORRUPTION", ex);
+            LOG.log(Level.WARNING, "Input file corruption", ex);
         }
     }   
 
@@ -275,12 +282,12 @@ public final class LogRecords {
                 if (lev != null) {
                     LogRecord r = new LogRecord(parseLevel(lev), key != null && catalog != null ? key : msg);
                     try {
-                        r.setThreadID(Integer.parseInt(thread));
+                        r.setThreadID(parseInt(thread));
                     } catch (NumberFormatException ex) {
                         LOG.log(Level.WARNING, ex.getMessage(), ex);
                     }
-                    r.setSequenceNumber(Long.parseLong(seq));
-                    r.setMillis(Long.parseLong(millis));
+                    r.setSequenceNumber(parseLong(seq));
+                    r.setMillis(parseLong(millis));
                     r.setResourceBundleName(key);
                     if (catalog != null && key != null) {
                         r.setResourceBundleName(catalog);
@@ -315,7 +322,30 @@ public final class LogRecords {
             }
             
         }
-        
+
+        private long parseLong(String str){
+            if (str == null){
+                return 0l;
+            }
+            try{
+                return Long.parseLong(str);
+            }catch(NumberFormatException exc){
+                LOG.log(Level.INFO, exc.getMessage(), exc);
+                return 0l;
+            }
+        }
+
+        private int parseInt(String str){
+            if (str == null){
+                return 0;
+            }
+            try{
+                return Integer.parseInt(str);
+            }catch(NumberFormatException exc){
+                LOG.log(Level.INFO, exc.getMessage(), exc);
+                return 0;
+            }
+        }
         /** set first element of exceptions as a result of this calling and
          * recursively fill it's cause
          */
