@@ -42,6 +42,7 @@
 package org.netbeans.modules.mobility.end2end.util;
 
 import java.beans.PropertyChangeEvent;
+import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import javax.swing.event.ChangeEvent;
@@ -51,6 +52,7 @@ import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
+import org.netbeans.api.project.Project;
 import org.netbeans.modules.mobility.e2e.classdata.ClassData;
 import org.netbeans.modules.mobility.e2e.classdata.ClassDataRegistry;
 import org.netbeans.modules.mobility.e2e.classdata.MethodData;
@@ -95,6 +97,14 @@ public class ServiceNodeManager {
     static final String METHOD_ICON = "org/netbeans/spi/java/project/support/ui/packageBadge.gif"; //NIOI18N
     public final static String NODE_VALIDITY_ATTRIBUTE = "isValid"; //NOI18N
     public final static String NODE_SELECTION_ATTRIBUTE = "isSelected"; //NOI18N
+    
+    static final String INVALID_TYPE_OPERATION="TXT_InvalidTypeOperation"; //NOI18N
+    static final String INVALID_TYPES_OPERATION="TXT_InvalidTypesOperation"; //NOI18N
+    static final String INVALID_RETURN_TYPE="TXT_InvalidReturnType";//NOI18N
+    static final String INVALID_PARAMETER_TYPE = "TXT_InvalidParameterType";//NOI18N
+    static final String INVALID_PARAMETER_TYPES = "TXT_InvalidParameterTypes";//NOI18N
+    static final String HTML_WRAP = "HTML_Notification";//NOI18N
+    
     private static final WeakHashMap<MethodCheckedTreeBeanView, ProjectChildren> oldNodes = 
         new WeakHashMap<MethodCheckedTreeBeanView, ProjectChildren>();
 
@@ -134,7 +144,11 @@ public class ServiceNodeManager {
         }
 
         private Sources getSources() {
-            return ProjectUtils.getSources(Util.getServerProject(cfg));
+            Project project = Util.getServerProject(cfg);
+            if ( project == null ){
+                return null;
+            }
+            return ProjectUtils.getSources(project);
         }
 
         private volatile boolean running = false;
@@ -144,13 +158,20 @@ public class ServiceNodeManager {
                 run();
             }
             Sources sources = getSources();
+            if ( sources == null ){
+                return;
+            }
             ref1 = WeakListeners.change(this, sources);
             sources.addChangeListener(ref1);
         }
 
         @Override
         protected synchronized void removeNotify() {
-            getSources().removeChangeListener(ref1);
+            Sources sources = getSources();
+            if ( sources == null ){
+                return;
+            }
+            sources.removeChangeListener(ref1);
             synchronized (hookedListeners) {
                 removeListeners();
             }
@@ -206,31 +227,39 @@ public class ServiceNodeManager {
             running = true;
             try {
             Sources sources = getSources();
-            SourceGroup[] groups = sources.getSourceGroups( JavaProjectConstants.SOURCES_TYPE_JAVA );
+
             // Add all paths to the ClasspathInfo structure
             List<ClasspathInfo> classpaths = new ArrayList();
             HashMap<Object, Object> newHooks = new HashMap();
-            for (SourceGroup sg : sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA)) {
-                if (!sg.getName().equals("${test.src.dir}")) {
-                    classpaths.add(ClasspathInfo.create(sg.getRootFolder())); //NOI18N
-                    synchronized (hookedListeners) {
-                        PropertyChangeListener l = (PropertyChangeListener)hookedListeners.get(sg);
-                        if (l == null) {
-                            l = WeakListeners.propertyChange(this, sg);
-                            sg.addPropertyChangeListener(l);
-                            hookedListeners.put(sg, l);
+
+            if ( sources != null ) {
+                SourceGroup[] groups = sources.getSourceGroups(
+                    JavaProjectConstants.SOURCES_TYPE_JAVA );
+                    for (SourceGroup sg : groups) {
+                        if (!sg.getName().equals("${test.src.dir}")) {
+                            classpaths.add(ClasspathInfo.create(sg.getRootFolder())); //NOI18N
+                            synchronized (hookedListeners) {
+                                PropertyChangeListener l =
+                                        (PropertyChangeListener) hookedListeners.get(sg);
+                                if (l == null) {
+                                    l = WeakListeners.propertyChange(this, sg);
+                                    sg.addPropertyChangeListener(l);
+                                    hookedListeners.put(sg, l);
+                                }
+                                newHooks.put(sg, l);
+                            }
+                            FileObject root = sg.getRootFolder();
+                            addFCListener(root, newHooks);
+                            Enumeration<? extends FileObject> en = root.getChildren(true);
+                            while (en.hasMoreElements()) {
+                                FileObject fo = en.nextElement();
+                                if (fo.isFolder() || fo.getExt().equals("java")) {
+                                    addFCListener(fo, newHooks); //NOI18N
+                                }
+                            }
                         }
-                        newHooks.put(sg, l);
-                    }
-                    FileObject root = sg.getRootFolder();
-                    addFCListener(root, newHooks);
-                    Enumeration<? extends FileObject> en = root.getChildren(true);
-                    while(en.hasMoreElements()) {
-                        FileObject fo = en.nextElement();
-                        if (fo.isFolder() || fo.getExt().equals("java")) addFCListener(fo, newHooks); //NOI18N
                     }
                 }
-            }
             synchronized (hookedListeners) {
                 hookedListeners.keySet().removeAll(newHooks.keySet());
                 removeListeners();
@@ -387,7 +416,34 @@ public class ServiceNodeManager {
                 n.setDisplayName(nodeText.toString());
                 n.setIconBaseWithExtension(METHOD_ICON);
                 ClassData cd = activeProfileRegistry.getClassData(methodData.getParentClassName());
-                n.setValue(NODE_VALIDITY_ATTRIBUTE, cd != null && cd.getMethods().contains(methodData));
+                boolean isValid = cd != null && cd.getMethods().contains(methodData);
+                n.setValue(NODE_VALIDITY_ATTRIBUTE, isValid );
+                if ( cd!= null && !isValid ){
+                    List<MethodData> methods = cd.getInvalidMethods();
+                    for( MethodData method : methods ){
+                        if ( method.equalsFQN( methodData ) &&
+                                method.getReturnTypeAsText()!= null &&
+                                method.getReturnTypeAsText().equals(
+                                        methodData.getReturnTypeAsText()))
+                        {
+                            StringBuilder builder = new StringBuilder();
+                            List<MethodParameter> params = method.getInvalidParameters();
+                            for (MethodParameter param : params) {
+                                builder.append( param.getTypeAsString() );
+                                builder.append(", ");
+                            }
+                            String invalidParams = null;
+                            if ( builder.length() != 0 ){
+                                invalidParams = builder.substring( 0, 
+                                        builder.length()-2 );
+                            }
+                            setErrorMessage( n, method.isValidReturnType() ? null:
+                                    method.getReturnTypeAsText(),
+                                    invalidParams );
+                            break;
+                        }
+                    }
+                }
                 StringBuffer sb = new StringBuffer(methodData.getParentClassName());
                 sb.append('.').append(methodData.getName());
                 for (MethodParameter mp : methodData.getParameters()) {
@@ -395,6 +451,39 @@ public class ServiceNodeManager {
                 }
                 n.setValue(NODE_SELECTION_ATTRIBUTE, selectionSource.contains(sb.toString()) ? MultiStateCheckBox.State.SELECTED : MultiStateCheckBox.State.UNSELECTED);
                 return new Node[] {n};
+            }
+            
+            private void setErrorMessage( Node node , String returnType , 
+                    String paramList )
+            {
+                StringBuilder builder = new StringBuilder(
+                        NbBundle.getMessage(ServiceNodeManager.class,
+                                INVALID_TYPE_OPERATION));
+                builder.append(" ");
+                if ( returnType != null ){
+                    String retTypeMsg = MessageFormat.format( 
+                            NbBundle.getMessage(ServiceNodeManager.class,
+                            INVALID_RETURN_TYPE), returnType );
+                    builder.append( retTypeMsg );
+                }
+                if ( paramList != null ){
+                    if ( returnType != null ){
+                        builder.append( ", " );
+                    }
+                    if ( paramList.contains(",")){
+                        builder.append( NbBundle.getMessage(
+                                ServiceNodeManager.class, INVALID_PARAMETER_TYPES));
+                    }
+                    else {
+                        builder.append( NbBundle.getMessage(
+                                ServiceNodeManager.class, INVALID_PARAMETER_TYPE));
+                    }
+                    builder.append( " " );
+                    builder.append( paramList );
+                }
+                String toolTip = MessageFormat.format(NbBundle.getMessage(
+                        ServiceNodeManager.class,HTML_WRAP) , builder.toString() );
+                node.setShortDescription( toolTip );
             }
         }
 
