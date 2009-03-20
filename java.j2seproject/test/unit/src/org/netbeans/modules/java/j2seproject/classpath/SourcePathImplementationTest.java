@@ -62,11 +62,13 @@ import org.netbeans.api.project.TestUtil;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.modules.java.api.common.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.modules.java.j2seproject.J2SEProjectGenerator;
 import org.netbeans.modules.java.j2seproject.SourceRootsTest;
-import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
 import org.openide.util.Mutex;
+import org.openide.util.test.MockLookup;
 
 public class SourcePathImplementationTest extends NbTestCase {
 
@@ -86,6 +88,7 @@ public class SourcePathImplementationTest extends NbTestCase {
         scratch = TestUtil.makeScratchDir(this);
         projdir = scratch.createFolder("proj");
         J2SEProjectGenerator.setDefaultSourceLevel(new SpecificationVersion ("1.4"));   //NOI18N
+        MockLookup.setLayersAndInstances();
         helper = J2SEProjectGenerator.createProject(FileUtil.toFile(projdir),"proj",null,null,null); //NOI18N
         J2SEProjectGenerator.setDefaultSourceLevel(null);
         pm = ProjectManager.getDefault();
@@ -126,38 +129,8 @@ public class SourcePathImplementationTest extends NbTestCase {
         ClassPath cp = cps[0];
         List<ClassPath.Entry> entries = cp.entries();
         assertNotNull ("Entries can not be null", entries);
-        assertEquals ("There must be 2 src entries",2, entries.size());
+        assertEquals ("There must be 3 src entries",1, entries.size());
         assertEquals("There must be src root", entries.get(0).getRoot(), sources);
-        String buildDir = (String) J2SEProjectUtil.getEvaluatedProperty(pp,"${build.dir}");
-        assertNotNull ("There is no build.dir property", buildDir);
-        File f = new File (new File (pp.getAntProjectHelper().resolveFile(buildDir),"generated"),"wsclient");
-        URL url = f.toURI().toURL();
-        if (!f.exists()) {
-            url = new URL (url.toExternalForm() + "/");
-        }
-        assertEquals("There must be WSClient entry", entries.get(1).getURL(), url);
-        
-        ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<Void>() {
-            public Void run() throws Exception {
-                EditableProperties ep = pp.getAntProjectHelper().getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-                ep.put("build.dir","build2");   //NOI18N
-                pp.getAntProjectHelper().putProperties (AntProjectHelper.PROJECT_PROPERTIES_PATH,ep);
-                ProjectManager.getDefault().saveProject(pp);
-                return null;
-            }
-        });                
-        entries = cp.entries();
-        assertNotNull ("Entries can not be null", entries);
-        assertEquals ("There must be 2 src entries",2, entries.size());
-        assertEquals("There must be src root", entries.get(0).getRoot(), sources);
-        buildDir = (String) J2SEProjectUtil.getEvaluatedProperty(pp,"${build.dir}");
-        assertNotNull ("There is no build.dir property", buildDir);
-        f = new File (new File (pp.getAntProjectHelper().resolveFile(buildDir),"generated"),"wsclient");
-        url = f.toURI().toURL();
-        if (!f.exists()) {
-            url = new URL (url.toExternalForm() + "/");
-        }
-        assertEquals("There must be WSClient entry", entries.get(1).getURL(), url);
     }
 
     public void testIncludesExcludes() throws Exception {
@@ -178,8 +151,8 @@ public class SourcePathImplementationTest extends NbTestCase {
         tl.forbid(ClassPath.PROP_ROOTS);
         cp.addPropertyChangeListener(tl);
         EditableProperties ep = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-        ep.setProperty(J2SEProjectProperties.INCLUDES, "javax/swing/");
-        ep.setProperty(J2SEProjectProperties.EXCLUDES, "**/doc-files/");
+        ep.setProperty(ProjectProperties.INCLUDES, "javax/swing/");
+        ep.setProperty(ProjectProperties.EXCLUDES, "**/doc-files/");
         helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         pm.saveProject(pp);
         assertEquals(Collections.singleton(ClassPath.PROP_INCLUDES), tl.getEvents());
@@ -197,11 +170,11 @@ public class SourcePathImplementationTest extends NbTestCase {
         src1.mkdir();
         File src2 = new File(getWorkDir(), "src2");
         src2.mkdir();
-        AntProjectHelper h = J2SEProjectGenerator.createProject(new File(getWorkDir(), "prj"), "test", new File[] {src1, src2}, new File[0], null, null);
+        AntProjectHelper h = J2SEProjectGenerator.createProject(new File(getWorkDir(), "prj"), "test", new File[] {src1, src2}, new File[0], null, null, null);
         Project p = ProjectManager.getDefault().findProject(h.getProjectDirectory());
         FileOwnerQuery.markExternalOwner(src1.toURI(), p, FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
         ClassPath cp = ClassPath.getClassPath(FileUtil.toFileObject(src1), ClassPath.SOURCE);
-        assertNotNull(cp);
+        assertNotNull(cp);        
         assertEquals(2, cp.getRoots().length);
         ClassPath.Entry cpe2 = cp.entries().get(1);
         assertEquals(src2.toURI().toURL(), cpe2.getURL());
@@ -217,20 +190,20 @@ public class SourcePathImplementationTest extends NbTestCase {
         }
         L l = new L();
         cp.addPropertyChangeListener(l);
-        EditableProperties ep = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-        ep.setProperty(J2SEProjectProperties.INCLUDES, "whatever/");
+        EditableProperties ep = h.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
+        ep.setProperty(ProjectProperties.INCLUDES, "whatever/");
         h.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         ProjectManager.getDefault().saveProject(p);
         assertEquals(1, l.cnt);
         assertFalse(cpe2.includes("stuff/"));
         assertTrue(cpe2.includes("whatever/"));
-        ep.setProperty(J2SEProjectProperties.INCLUDES, "whateverelse/");
+        ep.setProperty(ProjectProperties.INCLUDES, "whateverelse/");
         h.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         ProjectManager.getDefault().saveProject(p);
         assertEquals(2, l.cnt);
         assertFalse(cpe2.includes("stuff/"));
         assertFalse(cpe2.includes("whatever/"));
-        ep.remove(J2SEProjectProperties.INCLUDES);
+        ep.remove(ProjectProperties.INCLUDES);
         h.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         ProjectManager.getDefault().saveProject(p);
         assertEquals(3, l.cnt);
