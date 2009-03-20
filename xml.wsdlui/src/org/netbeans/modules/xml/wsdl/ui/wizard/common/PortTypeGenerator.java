@@ -48,7 +48,7 @@
  * and open the template in the editor.
  */
 
-package org.netbeans.modules.xml.wsdl.ui.wizard;
+package org.netbeans.modules.xml.wsdl.ui.wizard.common;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -61,6 +61,9 @@ import org.netbeans.modules.xml.wsdl.model.Operation;
 import org.netbeans.modules.xml.wsdl.model.PortType;
 import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
+import org.netbeans.modules.xml.wsdl.ui.wizard.Command;
+import org.netbeans.modules.xml.wsdl.ui.wizard.OperationGenerator;
+import org.netbeans.modules.xml.wsdl.ui.wizard.PartnerLinkTypeGenerator;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentComponent;
 import org.openide.util.NbBundle;
 import org.w3c.dom.Comment;
@@ -122,7 +125,7 @@ public class PortTypeGenerator implements Command {
     public void execute() {
         if(mModel != null) {
             //portType
-            String portTypeName = (String) this.mConfigurationMap.get(WizardPortTypeConfigurationStep.PORTTYPE_NAME);
+            String portTypeName = (String) this.mConfigurationMap.get(WSDLWizardConstants.PORTTYPE_NAME);
             if (portTypeName == null) return;
             
             this.mPortType = mModel.getFactory().createPortType();
@@ -136,7 +139,7 @@ public class PortTypeGenerator implements Command {
             mImports.addAll(og.getImports());
             
             
-            Boolean autoGenPLT = (Boolean) mConfigurationMap.get(WizardPortTypeConfigurationStep.AUTOGEN_PARTNERLINKTYPE);
+            Boolean autoGenPLT = (Boolean) mConfigurationMap.get(WSDLWizardConstants.AUTOGEN_PARTNERLINKTYPE);
             if (autoGenPLT != null && !autoGenPLT) {
                 return;
             }
@@ -151,7 +154,7 @@ public class PortTypeGenerator implements Command {
                     WSDLComponent role = children.get(0);
                     Element pltElement = mPartnerLinkTypeElement.getPeer();
                     Element roleElement = role.getPeer();
-                    this.mComment = this.mModel.getAccess().getDocumentRoot().createComment(NbBundle.getMessage(PortTypeGenerator.class, "LBL_partnerLinkType_comment"));
+                    this.mComment = this.mModel.getAccess().getDocumentRoot().createComment(NbBundle.getMessage(PartnerLinkTypeGenerator.class, "LBL_partnerLinkType_comment"));
                     this.mModel.getAccess().insertBefore(pltElement, this.mComment, roleElement, (AbstractDocumentComponent) this.mPartnerLinkTypeElement);
                 }
             }
