@@ -50,9 +50,11 @@ import org.netbeans.lib.profiler.heap.JavaClass;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 
+import java.util.regex.Pattern;
 import org.netbeans.api.debugger.jpda.JPDAClassType;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 
@@ -63,12 +65,10 @@ import org.netbeans.api.debugger.jpda.JPDADebugger;
 public class HeapImpl implements Heap {
     
     private JPDADebugger debugger;
-    private InstanceNumberCollector instanceNumberCollector;
     
     /** Creates a new instance of HeapImpl */
     public HeapImpl(JPDADebugger debugger) {
         this.debugger = debugger;
-        this.instanceNumberCollector = new InstanceNumberCollector();
     }
     
     public JPDADebugger getDebugger() {
@@ -90,6 +90,10 @@ public class HeapImpl implements Heap {
         return javaClasses;
     }
     
+    public List getBiggestObjectsByRetainedSize(int number) {
+        return null;
+    }
+ 
     public Instance getInstanceByID(long id) {
          return null;
     }
@@ -106,6 +110,20 @@ public class HeapImpl implements Heap {
         return new JavaClassImpl(this, classes.get(0), classes.get(0).getInstanceCount());
     }
 
+    public Collection getJavaClassesByRegExp(String regexp) {
+        List<JPDAClassType> allClasses = debugger.getAllClasses();
+        Collection result = new ArrayList(256);
+        Pattern pattern = Pattern.compile(regexp);
+
+        for (JPDAClassType clazz : allClasses) {
+            if (pattern.matcher(clazz.getName()).matches()) {
+                result.add(new JavaClassImpl(this, clazz, clazz.getInstanceCount()));
+            }
+        }
+        return result;
+    }
+
+
     public Collection getGCRoots() {
         return Collections.emptyList();
     }
@@ -119,10 +137,6 @@ public class HeapImpl implements Heap {
         return null;
     }
 
-    public InstanceNumberCollector getInstanceNumberCollector() {
-        return instanceNumberCollector;
-    }
-    
     private static final class DebuggerHeapSummary implements HeapSummary {
         
         private JPDADebugger debugger;
@@ -131,15 +145,15 @@ public class HeapImpl implements Heap {
             this.debugger = debugger;
         }
         
-        public int getTotalLiveBytes() {
+        public long getTotalLiveBytes() {
             return -1;
         }
 
-        public int getTotalLiveInstances() {
+        public long getTotalLiveInstances() {
             long[] counts = debugger.getInstanceCounts(debugger.getAllClasses());
-            int sum = 0;
+            long sum = 0;
             for (long c : counts) {
-                sum += (int) c;
+                sum += c;
             }
             return sum;
         }
