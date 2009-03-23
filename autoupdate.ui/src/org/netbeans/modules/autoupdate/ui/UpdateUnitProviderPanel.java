@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -48,6 +48,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.prefs.Preferences;
 import javax.swing.JButton;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -110,15 +111,27 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
                 }
                 
                 private boolean isValid() {
-                    boolean isOk = getProviderName().length() > 0 && getProviderURL ().length () > 0;
+                    final String providerName = getProviderName();
+                    boolean isOk = providerName.length() > 0 && getProviderURL ().length () > 0;
                     if (isOk) {
-                        isOk = (isEdit && getProviderName().equals (originalName))
-                                || ! getNamesOfProviders ().contains (getProviderName ());
+                        isOk = (isEdit && providerName.equals (originalName))
+                                || ! getNamesOfProviders ().contains (providerName);
                     }
                     if (isOk) {
                         String s = getProviderURL ();
                         try {
                             new URI (s).toURL ();
+                            //#132506
+                            if(s.startsWith("http:") && !s.startsWith("http://")) {
+                                isOk = false;
+                            }
+                            if(isOk) {
+                                //workaround for Issue #160766
+                                //Use "_removed" here instead of UpdateUnitProviderImpl.REMOVED_MASK since is private and not in api/spi
+                                if( (providerName + "_removed").length() > Preferences.MAX_NAME_LENGTH) {
+                                    isOk = false;
+                                }
+                            }
                         } catch (MalformedURLException x) {
                             isOk = false;
                         } catch (URISyntaxException x) {
@@ -131,20 +144,36 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
                 }
             };
             focusNameListener = new FocusListener () {
+                int currentSelectionStart = 0;
+                int currentSelectionEnd = 0;
                 public void focusGained(FocusEvent e) {
-                    tfName.selectAll ();
+                    if (e.getOppositeComponent () != null) {
+                        tfName.selectAll ();
+                    } else {
+                        tfName.select (currentSelectionStart, currentSelectionEnd);
+                    }
                 }
                 public void focusLost(FocusEvent e) {
+                    currentSelectionStart = tfName.getSelectionStart ();
+                    currentSelectionEnd = tfName.getSelectionEnd ();
                     tfName.select (0, 0);
                 }
             };
             tfName.addFocusListener (focusNameListener);
             
             focusUrlListener = new FocusListener () {
+                int currentSelectionStart = 0;
+                int currentSelectionEnd = 0;
                 public void focusGained(FocusEvent e) {
-                    tfURL.selectAll ();
+                    if (e.getOppositeComponent () != null) {
+                        tfURL.selectAll ();
+                    } else {
+                        tfURL.select (currentSelectionStart, currentSelectionEnd);
+                    }
                 }
                 public void focusLost(FocusEvent e) {
+                    currentSelectionStart = tfURL.getSelectionStart ();
+                    currentSelectionEnd = tfURL.getSelectionEnd ();
                     tfURL.select (0, 0);
                 }
             };
