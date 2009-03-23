@@ -69,15 +69,14 @@ import org.openide.util.Lookup;
 public class Item implements NativeFileItem, PropertyChangeListener {
 
     private final String path;
-    private final String sortName;
+    //private final String sortName;
     private Folder folder;
     private File file = null;
-    private String id = null;
     private DataObject lastDataObject = null;
 
     public Item(String path) {
         this.path = path;
-        this.sortName = IpeUtils.getBaseName(path).toLowerCase();
+        //this.sortName = IpeUtils.getBaseName(path);
 //        int i = sortName.lastIndexOf("."); // NOI18N
 //        if (i > 0) {
 //            this.sortName = sortName.substring(0, i);
@@ -158,7 +157,8 @@ public class Item implements NativeFileItem, PropertyChangeListener {
     }
 
     public String getSortName() {
-        return sortName;
+        //return sortName;
+        return getName();
     }
 
     public String getName() {
@@ -186,6 +186,10 @@ public class Item implements NativeFileItem, PropertyChangeListener {
     }
 
     public void setFolder(Folder folder) {
+        if (folder == null && file == null) {
+            // store file in field. method getFile() will works after removing item
+            file = new File(getAbsPath());
+        }
         this.folder = folder;
         if (folder == null) { // Item is removed, let's clean up.
             synchronized (this) {
@@ -195,10 +199,6 @@ public class Item implements NativeFileItem, PropertyChangeListener {
                 }
             }
         }
-    }
-
-    public DataObject getLastDataObject() {
-        return lastDataObject;
     }
 
     public void propertyChange(PropertyChangeEvent evt) {
@@ -249,7 +249,7 @@ public class Item implements NativeFileItem, PropertyChangeListener {
         if (aPath != null) {
             return FileUtil.normalizeFile(new File(aPath));
         }
-        return null;
+        return file;
     }
 
     public File getCanonicalFile() {
@@ -264,10 +264,8 @@ public class Item implements NativeFileItem, PropertyChangeListener {
     }
 
     public String getId() {
-        if (id == null) {
-            id = "i-" + getPath(); // NOI18N
-        }
-        return id;
+        // ID of other objects shouldn't be like to path
+        return getPath();
     }
 
     public ItemConfiguration getItemConfiguration(Configuration configuration) {
@@ -340,6 +338,11 @@ public class Item implements NativeFileItem, PropertyChangeListener {
     }
 
     public DataObject getDataObject() {
+        synchronized (this) {
+            if (lastDataObject != null && lastDataObject.isValid()){
+                return lastDataObject;
+            }
+        }
         DataObject dataObject = null;
         FileObject fo = getFileObject();
         if (fo != null) {
@@ -350,10 +353,10 @@ public class Item implements NativeFileItem, PropertyChangeListener {
                 ErrorManager.getDefault().notify(e);
             }
         }
-        if (dataObject != lastDataObject) {
-            // DataObject can change without notification. We need to track this
-            // and properly attach/detach listeners.
-            synchronized (this) {
+        synchronized (this) {
+            if (dataObject != lastDataObject) {
+                // DataObject can change without notification. We need to track this
+                // and properly attach/detach listeners.
                 if (lastDataObject != null) {
                     lastDataObject.removePropertyChangeListener(this);
                 }
