@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javax.swing.SwingUtilities;
@@ -133,31 +134,8 @@ public class CompilerSetManager {
     private Task remoteInitialization;
     private static final Logger log = Logger.getLogger("cnd.remote.logger"); // NOI18N
 
-    /** TODO: deprecate and remove */
-    public static CompilerSetManager getDefault(String key) {
-        return getDefault(ExecutionEnvironmentFactory.getExecutionEnvironment(key), true);
-    }
-
     public static CompilerSetManager getDefault(ExecutionEnvironment env) {
         return getDefault(env, true);
-    }
-
-    /**
-     * Find or create a default CompilerSetManager for the given key. A default
-     * CSM is one which is active in the system. A non-default is one which gets
-     * created but has no affect unless its made default.
-     *
-     * For instance, the Build Tools tab (on C/C++ Tools->Options) creates a non-Default
-     * CSM and only makes it default if the OK button is pressed. If Cancel is pressed,
-     * it never becomes default.
-     *
-     * @param key Either user@host or localhost
-     * @return A default CompilerSetManager for the given key
-     *
-     * TODO: deprecate and remove
-     */
-    public static CompilerSetManager getDefault(String key, boolean runCompilerSetDataLoader) {
-        return getDefault(ExecutionEnvironmentFactory.getExecutionEnvironment(key), runCompilerSetDataLoader);
     }
 
     /**
@@ -214,7 +192,7 @@ public class CompilerSetManager {
     }
 
     public static CompilerSetManager getDefault() {
-        return getDefault(LOCALHOST);
+        return getDefault(ExecutionEnvironmentFactory.getLocalExecutionEnvironment());
     }
 
     /** Create a CompilerSetManager which may be registered at a later time via CompilerSetManager.setDefault() */
@@ -232,7 +210,7 @@ public class CompilerSetManager {
             // TODO: not remove, only replace now...
 //            for (CompilerSetManager oldCsm : managers.values()) {
 //                // erase old info
-//                getPreferences().remove(CSM + oldCsm.hkey + NO_SETS);
+//                getPreferences().remove(CSM + ExecutionEnvironmentFactory.getHostKey(oldCam.executionEnvironment) + NO_SETS);
 //            }
 //            managers.clear();
             for (CompilerSetManager csm : csms) {
@@ -387,6 +365,7 @@ public class CompilerSetManager {
         return state == State.STATE_COMPLETE;
     }
 
+    /** CAUTION: this is a slow method. It should NOT be called from the EDT thread */
     public synchronized void initialize(boolean save, boolean runCompilerSetDataLoader) {
         if (isUninitialized()) {
             log.fine("CSM.getDefault: Doing remote setup from EDT?" + SwingUtilities.isEventDispatchThread());
@@ -432,7 +411,7 @@ public class CompilerSetManager {
         }
     }
 
-    public void waitForCompletion() {
+    private void waitForCompletion() {
         while (isPending()) {
             try {
                 Thread.sleep(1000);
@@ -582,6 +561,11 @@ public class CompilerSetManager {
 
     private CompilerSet parseCompilerSetString(int platform, String data) {
         log.fine("CSM.initRemoteCompileSets: line = [" + data + "]");
+        // to emulate #158088
+        if (Boolean.getBoolean("cnd.remote.emulate.npe")) {
+            CompilerSet cs = null;
+            cs.addDirectory(data);
+        }
         int i1 = data.indexOf(';');
         int i2 = data.indexOf(';', i1 + 1);
         String flavor = data.substring(0, i1);
@@ -669,50 +653,60 @@ public class CompilerSetManager {
             if (wasOffline) {
                 CompilerSetReporter.report("CSM_Done"); //NOI18N
             }
-            remoteInitialization = RequestProcessor.getDefault().post(new Runnable() {
+            synchronized (this) {
+                remoteInitialization = RequestProcessor.getDefault().post(new Runnable() {
 
-                @SuppressWarnings("unchecked")
-                public void run() {
-                    CompilerSetReporter.report("CSM_ConfHost");//NOI18N
-                    provider.init(executionEnvironment); //NOI18N
-                    platform = provider.getPlatform();
-                    CompilerSetReporter.report("CSM_ValPlatf", true, PlatformTypes.toString(platform)); //NOI18N
-                    CompilerSetReporter.report("CSM_LFTC"); //NOI18N
-                    log.fine("CSM.initRemoteCompileSets: platform = " + platform);
-                    getPreferences().putInt(CSM + ExecutionEnvironmentFactory.getHostKey(executionEnvironment) +
-                            SET_PLATFORM, platform);
-                    while (provider.hasMoreCompilerSets()) {
-                        String data = provider.getNextCompilerSetData();
-                        CompilerSet cs = parseCompilerSetString(platform, data);
-                        if (cs != null) {
-                            CompilerSetReporter.report("CSM_Found", true, cs.getDisplayName(), cs.getDirectory());//NOI18N
-                            add(cs);
-                        } else if(CompilerSetReporter.canReport()) {
-                            CompilerSetReporter.report("CSM_Err", true, data);//NOI18N
+                    @SuppressWarnings("unchecked")
+                    public void run() {
+                        try {
+                            CompilerSetReporter.report("CSM_ConfHost");//NOI18N
+                            provider.init(executionEnvironment); //NOI18N
+                            platform = provider.getPlatform();
+                            CompilerSetReporter.report("CSM_ValPlatf", true, PlatformTypes.toString(platform)); //NOI18N
+                            CompilerSetReporter.report("CSM_LFTC"); //NOI18N
+                            log.fine("CSM.initRemoteCompileSets: platform = " + platform);
+                            getPreferences().putInt(CSM + ExecutionEnvironmentFactory.getHostKey(executionEnvironment) +
+                                    SET_PLATFORM, platform);
+                            while (provider.hasMoreCompilerSets()) {
+                                String data = provider.getNextCompilerSetData();
+                                CompilerSet cs = parseCompilerSetString(platform, data);
+                                if (cs != null) {
+                                    CompilerSetReporter.report("CSM_Found", true, cs.getDisplayName(), cs.getDirectory());//NOI18N
+                                    add(cs);
+                                } else if(CompilerSetReporter.canReport()) {
+                                    CompilerSetReporter.report("CSM_Err", true, data);//NOI18N
+                                }
+                            }
+                            completeCompilerSets(platform);
+                            log.fine("CSM.initRemoteCompilerSets: Found " + sets.size() + " compiler sets");
+                            if (sets.size() == 0) {
+                                CompilerSetReporter.report("CSM_Done_NF"); //NOI18N
+                            } else {
+                                CompilerSetReporter.report("CSM_Done_OK", true,  sets.size());//NOI18N
+                            }
+                            state = State.STATE_COMPLETE;
+                            CompilerSetReporter.report("CSM_Conigured");//NOI18N
+                            if (runCompilerSetDataLoader) {
+                                finishInitialization();
+                            }
+                        } catch (Throwable thr) {
+                            // otherwise STATE_PENDING hangs forever - see #158088
+                            state = State.STATE_UNINITIALIZED; //STATE_ERROR;
+                            log.log(Level.FINE, "Error initiaizing compiler set @" + hashCode() + //NOI18N
+                                " on " + executionEnvironment, thr);
+                            CompilerSetReporter.report("CSM_Fail");//NOI18N
+                            add(CompilerSet.createEmptyCompilerSet(PlatformTypes.PLATFORM_NONE));
                         }
                     }
-                    completeCompilerSets(platform);
-                    log.fine("CSM.initRemoteCompilerSets: Found " + sets.size() + " compiler sets");
-                    if (sets.size() == 0) {
-                        CompilerSetReporter.report("CSM_Done_NF"); //NOI18N
-                    } else {
-                        CompilerSetReporter.report("CSM_Done_OK", true,  sets.size());//NOI18N
-                    }
-                    state = State.STATE_COMPLETE;
 
-                    CompilerSetReporter.report("CSM_Conigured");//NOI18N
-                    if (runCompilerSetDataLoader) {
-                        finishInitialization();
-                    }
-                }
-
-            });
+                });
+            }
         } else {
             CompilerSetReporter.report("CSM_Fail");//NOI18N
             // create empty CSM
             log.fine("CSM.initRemoteCompilerSets: Adding empty CS to OFFLINE host " + executionEnvironment);
             add(CompilerSet.createEmptyCompilerSet(PlatformTypes.PLATFORM_NONE));
-            state = State.STATE_UNINITIALIZED;
+            state = State.STATE_UNINITIALIZED; //STATE_ERROR;
         }
     }
 
@@ -786,6 +780,11 @@ public class CompilerSetManager {
             }
             file = new File(dir, name + ".exe"); // NOI18N
             if (file.exists() && !file.isDirectory()) {
+                cs.addTool(executionEnvironment, name, file.getAbsolutePath(), kind);
+                return;
+            }
+            File file2 = new File(dir, name + ".exe.lnk"); // NOI18N
+            if (file2.exists() && !file2.isDirectory()) {
                 cs.addTool(executionEnvironment, name, file.getAbsolutePath(), kind);
                 return;
             }
@@ -967,10 +966,21 @@ public class CompilerSetManager {
             file = new File(dir, cmd);
             if (file.exists()) {
                 return file.getAbsolutePath();
+            } else {
+                if (Utilities.isWindows() && cmd.endsWith(".exe")){// NOI18N
+                    File file2 = new File(dir, cmd+".lnk");// NOI18N
+                    if (file2.exists()) {
+                        return file.getAbsolutePath();
+                    }
+                }
             }
             if (cmd2 != null) {
                 file = new File(dir, cmd2);
                 if (file.exists()) {
+                    return file.getAbsolutePath();
+                }
+                File file2 = new File(dir, cmd2+".lnk");// NOI18N
+                if (file2.exists()) {
                     return file.getAbsolutePath();
                 }
             }
@@ -978,7 +988,6 @@ public class CompilerSetManager {
         return null;
     }
 
-    /** TODO: deprecate and remove */
     private static void completeCompilerSet(ExecutionEnvironment env, CompilerSet cs, List<CompilerSet> sets) {
         if (cs.findTool(Tool.CCompiler) == null) {
             autoComplete(env, cs, sets, cs.getCompilerFlavor().getToolchainDescriptor().getC(), Tool.CCompiler);
@@ -1362,10 +1371,5 @@ public class CompilerSetManager {
 
     public ExecutionEnvironment getExecutionEnvironment() {
         return executionEnvironment;
-    }
-
-    /** TODO: deprecate and remove */
-    public String getHost() {
-        return ExecutionEnvironmentFactory.getHostKey(executionEnvironment);
     }
 }
