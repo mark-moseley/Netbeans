@@ -121,11 +121,15 @@ public class IssuePanel extends javax.swing.JPanel {
     }
 
     void reloadFormInAWT(final boolean force) {
-        EventQueue.invokeLater(new Runnable() {
-            public void run() {
-                reloadForm(force);
-            }
-        });
+        if (EventQueue.isDispatchThread()) {
+            reloadForm(force);
+        } else {
+            EventQueue.invokeLater(new Runnable() {
+                public void run() {
+                    reloadForm(force);
+                }
+            });
+        }
     }
 
     public void setIssue(BugzillaIssue issue) {
@@ -133,7 +137,7 @@ public class IssuePanel extends javax.swing.JPanel {
             issue.addPropertyChangeListener(new PropertyChangeListener() {
                 public void propertyChange(PropertyChangeEvent evt) {
                     if (Issue.EVENT_ISSUE_DATA_CHANGED.equals(evt.getPropertyName())) {
-                        reloadForm(false);
+                        reloadFormInAWT(false);
                     } else if (Issue.EVENT_ISSUE_SEEN_CHANGED.equals(evt.getPropertyName())) {
                         updateFieldStatuses();
                     }
@@ -427,6 +431,15 @@ public class IssuePanel extends javax.swing.JPanel {
                 submitButton.setEnabled(true);
                 messagePanel.setVisible(false);
             }
+        }
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (issue != null) {
+            // Hack - reset any previous modifications when the issue window is reopened
+            reloadForm(true);
         }
     }
     
