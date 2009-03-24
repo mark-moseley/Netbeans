@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -64,7 +64,9 @@ import org.openide.util.NbBundle;
 
 import org.netbeans.modules.dbschema.jdbcimpl.DDLBridge;
 import org.netbeans.modules.dbschema.jdbcimpl.ConnectionProvider;
-import org.openide.util.Exceptions;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
+import org.openide.WizardDescriptor;
 import org.openide.util.Mutex;
 import org.openide.util.RequestProcessor;
 
@@ -75,8 +77,8 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
 
     private final ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.dbschema.jdbcimpl.resources.Bundle"); //NOI18N
 
-    private LinkedList tables;
-    private LinkedList views;
+    private LinkedList<String> tables;
+    private LinkedList<String> views;
     private ConnectionProvider cp;
     private String schema;
     private String driver;
@@ -94,11 +96,11 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
     public DBSchemaTablesPanel(DBSchemaWizardData data, ArrayList list) {
         this.list = list;
         this.data = data;
-        tables = new LinkedList();
-        views = new LinkedList();
+        tables = new LinkedList<String>();
+        views = new LinkedList<String>();
         cp = null;
 
-        putClientProperty("WizardPanel_contentSelectedIndex", new Integer(2)); //NOI18N
+        putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(2)); //NOI18N
         setName(bundle.getString("TablesChooser")); //NOI18N
 
         initComponents();
@@ -131,7 +133,7 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
 
     protected boolean init() {
         
-        List handlers = new ArrayList();
+        List<Handler> handlers = new ArrayList<Handler>();
         Parameters params = new Parameters();
         
         boolean init = true;
@@ -146,6 +148,7 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
                     public void handle(Parameters params) {
                         uninit();
                     }
+                    @Override
                     public String getMessage() {
                         return NbBundle.getMessage(DBSchemaTablesPanel.class, "MSG_ClosingPrevious");
                     }
@@ -178,6 +181,7 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
                         conn = null;
                     }
                 }
+                @Override
                 public String getMessage() {
                     return NbBundle.getMessage(DBSchemaTablesPanel.class, "MSG_CheckingExisting");
                 }
@@ -187,11 +191,27 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
         handlers.add(new Handler() {
             public void handle(Parameters params) {
                 ConnectionManager.getDefault().showConnectionDialog(dbconn);
+                
+                // TODO - This is a workaround until we add an API to show
+                // connection dialog on the event thread that guarantees
+                // the connection will not be null
                 conn = dbconn.getJDBCConnection();
+                int count = 0;
+                while ( conn == null && count < 10 ) {
+                    try {
+                        Thread.sleep(1000);
+                    } catch ( InterruptedException e ) {
+                        break;
+                    }
+                    conn = dbconn.getJDBCConnection();
+                    count++;
+                }
             }
+            @Override
             public boolean getRunInEDT() {
                 return true;
             }
+            @Override
             public boolean isRunnable() {
                 return conn == null;
             }
@@ -261,7 +281,11 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
                         rs.close();
                     }
                 } catch (SQLException exc) {
-                    Exceptions.printStackTrace(exc);
+                    LOGGER.info (exc.getLocalizedMessage ());
+                    DialogDisplayer.getDefault ().notifyLater (
+                            new NotifyDescriptor.Message (
+                            NbBundle.getMessage (DBSchemaTablesPanel.class, "DBSchemaTablesPanel_SQLException", exc.getLocalizedMessage ()),
+                            NotifyDescriptor.WARNING_MESSAGE));
                 }
 
                 ((SortedListModel) jListAvailableTables.getModel()).clear();
@@ -284,10 +308,12 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
                 params.setResult(true);
             }
 
+            @Override
             public String getMessage() {
                 return NbBundle.getMessage(DBSchemaTablesPanel.class, "MSG_RetrievingTables");
             }
 
+            @Override
             public boolean isRunnable() {
                 return conn != null;
             }
@@ -672,7 +698,7 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
         jButtonRemoveAll.setEnabled(((SortedListModel) jListSelectedTables.getModel()).isEmpty() ? false : true);
     }
 
-    public boolean isValid() {
+    public boolean isInputValid() {
         if (jListSelectedTables.getModel().getSize() > 0)
             return true;
         else
@@ -721,6 +747,7 @@ public class DBSchemaTablesPanel extends JPanel implements ListDataListener {
             return true;
         }
         
+        @Override
         public String toString() {
             return "Handler[message='" + getMessage() + "',runInEDT=" + getRunInEDT() + ",runnable=" + isRunnable() + "]"; // NOI18N
         }
