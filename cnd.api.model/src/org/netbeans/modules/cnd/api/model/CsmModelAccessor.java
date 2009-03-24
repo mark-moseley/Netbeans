@@ -38,13 +38,11 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.api.model;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
-import org.netbeans.modules.cnd.api.model.util.WeakList;
+import org.openide.util.Cancellable;
 import org.openide.util.Lookup;
 
 /**
@@ -53,129 +51,84 @@ import org.openide.util.Lookup;
  */
 public final class CsmModelAccessor {
 
-    public interface CsmModelEx extends CsmModel {
-	public Iterator<CsmModelStateListener> getModelStateListeners();
-	public Iterator<CsmProgressListener> getProgressListeners();
-	public Iterator<CsmModelListener> getModelListeners();
-    }
-    
     // singleton instance of model
     private static CsmModel model;
     private static CsmModel dummy;
-    
-    private static WeakList<CsmModelStateListener> modelStateListeners = new WeakList<CsmModelStateListener>();
-    private static WeakList<CsmModelListener> modelListeners = new WeakList<CsmModelListener>();
-    private static WeakList<CsmProgressListener> progressListeners = new WeakList<CsmProgressListener>();
-    
     private static CsmModelStateListener stateListener = new CsmModelStateListener() {
+
         public void modelStateChanged(CsmModelState newState, CsmModelState oldState) {
-            if( newState == CsmModelState.UNLOADED ) {
-                model.removeModelStateListener(stateListener);
-		saveListeners();
+            if (newState == CsmModelState.OFF) {
+                CsmListeners.getDefault().removeModelStateListener(stateListener);
                 model = null;
             }
         }
     };
-    
-    private static void saveListeners() {
-	
-	if( model instanceof CsmModelEx ) {
-	    
-	    CsmModelEx modelEx = (CsmModelEx) model;
-	    
-	    modelStateListeners.clear();
-	    modelStateListeners.addAll(modelEx.getModelStateListeners());
-	    
-	    modelListeners.clear();
-	    modelListeners.addAll(modelEx.getModelListeners());
-	    
-	    progressListeners.clear();
-	    progressListeners.addAll(modelEx.getProgressListeners());
-	}
+
+    public static CsmModelState getModelState() {
+        CsmModel aModel = model;
+        return (aModel == null) ? CsmModelState.OFF : aModel.getState();
     }
-    
-    private static void restoreListeners() {
-	
-	for( CsmProgressListener l : progressListeners ) {
-	    model.addProgressListener(l);
-	}
-	progressListeners.clear();
-	
-	for( CsmModelListener l : modelListeners ) {
-	    model.addModelListener(l);
-	}
-	modelListeners.clear();
-	
-	for( CsmProgressListener l : progressListeners ) {
-	    model.addProgressListener(l);
-	}
-    }
-    
+
     private static class ModelStub implements CsmModel {
-	
-	public Collection<CsmProject> projects() {
-	    return Collections.<CsmProject>emptyList();
-	}
-	
-	public CsmProject getProject(Object id) {
-	    return null;
-	}
-	
-	public CsmFile findFile(CharSequence absPath) {
-	    return null;
-	}
-        
-        public CsmModelState getState() {
-            return CsmModelState.UNLOADED;
+
+        public Collection<CsmProject> projects() {
+            return Collections.<CsmProject>emptyList();
         }
 
-	public void enqueue(Runnable task) {}
-	
-	public void removeModelListener(CsmModelListener listener) {}
-	
-	public void addModelListener(CsmModelListener listener) {}
-	
-	
-	public void removeProgressListener(CsmProgressListener listener) {}
-	
-	public void addProgressListener(CsmProgressListener listener) {}
-	
-	public void enqueue(Runnable task, CharSequence name) {}
+        public CsmProject getProject(Object id) {
+            return null;
+        }
 
-        public void removeModelStateListener(CsmModelStateListener listener) {}
+        public CsmFile findFile(CharSequence absPath) {
+            return null;
+        }
 
-        public void addModelStateListener(CsmModelStateListener listener) {}
+        public CsmModelState getState() {
+            return CsmModelState.OFF;
+        }
+
+        public Cancellable enqueue(Runnable task, CharSequence name) {
+            return cancellableStub;
+        }
     }
-    
+    private static final Cancellable cancellableStub = new Cancellable() {
+
+        public boolean cancel() {
+            return true;
+        }
+    };
+
     /** Creates a new instance of CsmModelAccessor */
     private CsmModelAccessor() {
     }
+    private static final boolean TRACE_GET_MODEL = Boolean.getBoolean("trace.get.model");
 
     /**
      * Gets CsmModel using Lookup
      */
     public static CsmModel getModel() {
-        if( model == null ) {
-            synchronized(CsmModel.class ) {
-                if( model == null ) {
-                    model = (CsmModel) Lookup.getDefault().lookup(CsmModel.class);
-		    if( model == null ) {
-			return getStub();
-		    }
-                    else {
-                        model.addModelStateListener(stateListener);
-			restoreListeners();
+        if (TRACE_GET_MODEL) {
+            Thread.dumpStack();
+        }
+        if (model == null) {
+            synchronized (CsmModel.class) {
+                if (model == null) {
+                    model = Lookup.getDefault().lookup(CsmModel.class);
+                    if (model == null) {
+                        return getStub();
+                    } else {
+                        CsmListeners.getDefault().addModelStateListener(stateListener);
                     }
                 }
             }
         }
         return model;
-    }    
+    }
 
     private static CsmModel getStub() {
-	if( dummy == null ) {
-	    dummy = new ModelStub();
-	}
-	return dummy;
+        if (dummy == null) {
+            dummy = new ModelStub();
+        }
+        return dummy;
     }
 }
