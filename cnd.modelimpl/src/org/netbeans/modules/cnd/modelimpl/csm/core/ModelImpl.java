@@ -176,6 +176,9 @@ public class ModelImpl implements CsmModel, LowMemoryListener {
             boolean fireOpened = false;
             synchronized (lock) {
                 if (state != CsmModelState.ON) {
+                    if (TraceFlags.TRACE_MODEL_STATE) {
+                        System.err.println("project " + name + " wasn't added because model is " + state + "\n\t" + id);
+                    }
                     return null;
                 }
                 prj = obj2Project(id);
@@ -324,11 +327,7 @@ public class ModelImpl implements CsmModel, LowMemoryListener {
     private static final String modelTaskPrefix = "Code Model Request Processor"; // NOI18N
 
     public Cancellable enqueue(Runnable task, CharSequence name) {
-        return enqueue(RequestProcessor.getDefault(), task, clientTaskPrefix + " :" + name); // NOI18N
-    }
-
-    public Cancellable enqueue(Runnable task) {
-        return enqueue(RequestProcessor.getDefault(), task, clientTaskPrefix);
+        return enqueue(userTasksProcessor, task, clientTaskPrefix + " :" + name); // NOI18N
     }
 
     public static ModelImpl instance() {
@@ -641,10 +640,10 @@ public class ModelImpl implements CsmModel, LowMemoryListener {
     }
 
     private void cleanCaches() {
-        TextCache.dispose();
-        FilePathCache.dispose();
-        QualifiedNameCache.dispose();
-        NameCache.dispose();
+        TextCache.getManager().dispose();
+        FilePathCache.getManager().dispose();
+        QualifiedNameCache.getManager().dispose();
+        NameCache.getManager().dispose();
         UniqueNameCache.getManager().dispose();
         FileNameCache.getManager().dispose();
         ProjectNameCache.getManager().dispose();
@@ -662,4 +661,5 @@ public class ModelImpl implements CsmModel, LowMemoryListener {
     //private double fatalThreshold = 0.99;
     private final Set<Object> disabledProjects = new HashSet<Object>();
     private final RequestProcessor modelProcessor = new RequestProcessor("Code model request processor", 1); // NOI18N
+    private final RequestProcessor userTasksProcessor = new RequestProcessor("User model tasks processor", 4, true); // NOI18N
 }
