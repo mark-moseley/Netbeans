@@ -52,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -137,6 +138,8 @@ final class JUnitOutputReader {
 
     private JUnitTestcase testcase;
 
+    private Report report;
+
     enum State {DEFAULT, SUITE_STARTED, TESTCASE_STARTED, SUITE_FINISHED, TESTCASE_ISSUE};
 
     private State state = State.DEFAULT;
@@ -144,7 +147,8 @@ final class JUnitOutputReader {
     /** Creates a new instance of JUnitOutputReader */
     JUnitOutputReader(final AntSession session,
                       final AntSessionInfo sessionInfo,
-                      final Project project) {
+                      final Project project,
+                      final Properties props) {
         this.project = project;
         this.sessionType = sessionInfo.getSessionType();
         this.antScript = FileUtil.normalizeFile(session.getOriginatingScript());
@@ -153,8 +157,8 @@ final class JUnitOutputReader {
             FileObject fileObj = FileUtil.toFileObject(antScript);
             this.project = FileOwnerQuery.getOwner(fileObj);
         }
-        this.testSession = new JUnitTestSession("", this.project, sessionType, new JUnitTestRunnerNodeFactory());
-        testSession.setRerunHandler(new JUnitExecutionManager(session));
+        this.testSession = new JUnitTestSession("", this.project, sessionType, new JUnitTestRunnerNodeFactory()); //NOI18N
+        testSession.setRerunHandler(new JUnitExecutionManager(session, testSession, props));
     }
 
     Project getProject() {
@@ -567,7 +571,13 @@ final class JUnitOutputReader {
                     }
                 }
             }
-            manager.displayReport(testSession, testSession.getReport(lastSuiteTime));
+            if (report == null){
+                report = testSession.getReport(lastSuiteTime);
+            }else{
+                report.update(testSession.getReport(lastSuiteTime));
+            }
+            manager.displayReport(testSession, report, true);
+            report = null;
             lastSuiteTime = 0;
         }
 
@@ -617,6 +627,12 @@ final class JUnitOutputReader {
     }
 
     private void testCaseFinished(){
+        if (report == null){
+            report = testSession.getReport(0);
+        }else{
+            report.update(testSession.getReport(0));
+        }
+        manager.displayReport(testSession, report, false);
         state = State.SUITE_STARTED;
     }
 
