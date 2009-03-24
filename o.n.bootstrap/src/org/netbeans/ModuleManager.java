@@ -43,13 +43,16 @@ package org.netbeans;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.AllPermission;
 import java.security.CodeSource;
 import java.security.PermissionCollection;
 import java.security.Permissions;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -333,7 +336,7 @@ public final class ModuleManager {
 
     /** Get a classloader capable of loading from any
      * of the enabled modules or their declared extensions.
-     * Should be used as the result of TopManager.systemClassLoader.
+     * Normally used as {@link Thread#getContextClassLoader}.
      * Thread-safe.
      * @see #PROP_CLASS_LOADER
      */
@@ -418,10 +421,9 @@ public final class ModuleManager {
     }
 
     /** A classloader giving access to all the module classloaders at once. */
-    private static final class SystemClassLoader extends JarClassLoader {
+    private final class SystemClassLoader extends JarClassLoader {
 
         private final PermissionCollection allPermissions;
-        private boolean empty = true;
         int size;
 
         public SystemClassLoader(List<File> files, ClassLoader[] parents, Set<Module> modules) throws IllegalArgumentException {
@@ -446,6 +448,29 @@ public final class ModuleManager {
          */
         protected @Override PermissionCollection getPermissions(CodeSource cs) {
             return allPermissions;
+        }
+
+        private final Set<String> JRE_PROVIDED_FACTORIES = new HashSet<String>(Arrays.asList(
+                "META-INF/services/javax.xml.parsers.SAXParserFactory", // NOI18N
+                "META-INF/services/javax.xml.parsers.DocumentBuilderFactory", // NOI18N
+                "META-INF/services/javax.xml.transform.TransformerFactory", // NOI18N
+                "META-INF/services/javax.xml.validation.SchemaFactory")); // NOI18N
+        @Override
+        public InputStream getResourceAsStream(String name) {
+            if (JRE_PROVIDED_FACTORIES.contains(name)) {
+                // #146082: prefer JRE versions of JAXP factories when available.
+                // #147082: use empty file rather than null (~ delegation to ClassLoader.systemClassLoader) to work around JAXP #6723276
+                return new ByteArrayInputStream(new byte[0]);
+            } else {
+                return super.getResourceAsStream(name);
+            }
+        }
+
+        protected @Override boolean shouldDelegateResource(String pkg, ClassLoader parent) {
+            if ((parent == null || parent instanceof MainImpl.BootClassLoader) && !installer.shouldDelegateClasspathResource(pkg)) {
+                return false;
+            }
+            return super.shouldDelegateResource(pkg, parent);
         }
 
     }
@@ -579,7 +604,7 @@ public final class ModuleManager {
     }
 
     private void subCreate(Module m) throws DuplicateException {
-        Util.err.fine("created: " + m);
+        Util.err.log(Level.FINE, "created: {0}", m);
         Module old = get(m.getCodeNameBase());
         if (old != null) {
             throw new DuplicateException(old, m);
@@ -718,7 +743,7 @@ public final class ModuleManager {
      */
     public void enable(Set<Module> modules) throws IllegalArgumentException, InvalidException {
         assertWritable();
-        Util.err.fine("enable: " + modules);
+        Util.err.log(Level.FINE, "enable: {0}", modules);
         /* Consider eager modules:
         if (modules.isEmpty()) {
             return;
