@@ -43,7 +43,10 @@ package org.netbeans.core.startup.layers;
 
 import java.beans.PropertyVetoException;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.net.URI;
@@ -66,8 +69,9 @@ import org.openide.filesystems.Repository;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
 
+@org.openide.util.lookup.ServiceProvider(service=org.openide.filesystems.URLMapper.class)
 public class ArchiveURLMapper extends URLMapper {
-
+    private static boolean warningAlreadyReported = false;
     private static final String JAR_PROTOCOL = "jar";   //NOI18N
 
     private static Map<File,SoftReference<JarFileSystem>> mountRoots = new HashMap<File,SoftReference<JarFileSystem>>();
@@ -117,16 +121,19 @@ public class ArchiveURLMapper extends URLMapper {
             if (index>=0) {
                 try {
                     URI archiveFileURI = new URI(path.substring(0,index));
-                    if (!archiveFileURI.isAbsolute()  || archiveFileURI.isOpaque()) {
-                        return null; //Better than to throw IllegalArgumentException
+                    URL archiveFileURL;
+                    try {
+                        archiveFileURL = archiveFileURI.toURL();
+                    } catch (IllegalArgumentException x) {
+                        return null;
                     }
-                    FileObject fo = URLMapper.findFileObject (archiveFileURI.toURL());
+                    FileObject fo = URLMapper.findFileObject (archiveFileURL);
                     if (fo == null || fo.isVirtual()) {
                         return null;
                     }
                     File archiveFile = FileUtil.toFile (fo);
                     if (archiveFile == null) {
-                        return null;
+                        archiveFile = copyJAR(fo, archiveFileURI);
                     }
                     String offset = path.length()>index+2 ? URLDecoder.decode(path.substring(index+2),"UTF-8"): "";   //NOI18N
                     JarFileSystem fs = getFileSystem(archiveFile);
@@ -137,7 +144,12 @@ public class ArchiveURLMapper extends URLMapper {
                 } catch (IOException e) {                    
                     // Can easily happen if the JAR file is corrupt etc,
                     // it is better for user to log localized message than to dump stack
-                    ModuleLayeredFileSystem.err.log(Level.WARNING, null, e);
+                    if (warningAlreadyReported) {
+                        ModuleLayeredFileSystem.err.log(Level.INFO, null, e);
+                    } else {
+                        ModuleLayeredFileSystem.err.log(Level.WARNING, null, e);
+                        warningAlreadyReported = true;
+                    }
                 }
                 catch (URISyntaxException e) {
                     Exceptions.printStackTrace(e);
@@ -198,17 +210,13 @@ public class ArchiveURLMapper extends URLMapper {
             FileObject rootFo = FileUtil.toFileObject(root);
             if (rootFo != null) {
                 fcl = new FileChangeAdapter() {
-                    public void fileDeleted(FileEvent fe) {
+                    public @Override void fileDeleted(FileEvent fe) {
                         releaseMe(root);
                     }
-
-                public void fileRenamed(FileRenameEvent fe) {
-                        releaseMe(root);                    
-                }
-                    
-                    
-                    
-                };                                
+                    public @Override void fileRenamed(FileRenameEvent fe) {
+                        releaseMe(root);
+                    }
+                };
                 rootFo.addFileChangeListener(FileUtil.weakFileChangeListener(fcl, rootFo));
                 
             }
@@ -222,6 +230,30 @@ public class ArchiveURLMapper extends URLMapper {
                     mountRoots.remove(keyToRemove);                    
                 }
             }
+        }
+    }
+
+    private static final Map<URI,File> copiedJARs = new HashMap<URI,File>();
+    private File copyJAR(FileObject fo, URI archiveFileURI) throws IOException {
+        synchronized (copiedJARs) {
+            File copy = copiedJARs.get(archiveFileURI);
+            if (copy == null) {
+                copy = File.createTempFile("copy", "-" + archiveFileURI.toString().replaceFirst(".+/", "")); // NOI18N
+                copy.deleteOnExit();
+                InputStream is = fo.getInputStream();
+                try {
+                    OutputStream os = new FileOutputStream(copy);
+                    try {
+                        FileUtil.copy(is, os);
+                    } finally {
+                        os.close();
+                    }
+                } finally {
+                    is.close();
+                }
+                copiedJARs.put(archiveFileURI, copy);
+            }
+            return copy;
         }
     }
 
