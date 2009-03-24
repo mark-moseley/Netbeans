@@ -66,7 +66,6 @@ import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.Tool;
-import org.netbeans.modules.cnd.api.remote.PathMap;
 import org.netbeans.modules.cnd.makeproject.MakeOptions;
 import org.netbeans.modules.cnd.makeproject.api.PackagerDescriptor;
 import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
@@ -258,6 +257,8 @@ public class ConfigurationMakefileWriter {
 
         bw.write("# Macros\n"); // NOI18N
         bw.write("CND_PLATFORM=" + conf.getVariant() + "\n"); // NOI18N
+        bw.write("CND_CONF=" + conf.getName() + "\n"); // NOI18N
+        bw.write("CND_DISTDIR=" + MakeConfiguration.DIST_FOLDER + "\n"); // NOI18N
         bw.write("\n"); // NOI18N
 
         bw.write("# Include project Makefile\n"); // NOI18N
@@ -295,16 +296,18 @@ public class ConfigurationMakefileWriter {
         bw.write("\n"); // NOI18N
 
         if (conf.isQmakeConfiguration()) {
-            String qmakespec = compilerSet.getQmakeSpec(conf.getPlatform().getValue());
-            if (qmakespec == null) {
-                qmakespec = ""; // NOI18N
-            } else {
-                qmakespec = "-spec " + qmakespec + " "; // NOI18N
+            String qmakeSpec = conf.getQmakeConfiguration().getQmakeSpec().getValue();
+            if (qmakeSpec.length() == 0 && conf.getPlatform().getValue() == Platform.PLATFORM_MACOSX) {
+                // on Mac we force spec to macx-g++, otherwise qmake generates xcode project
+                qmakeSpec = compilerSet.getQmakeSpec(conf.getPlatform().getValue());
+            }
+            if (0 < qmakeSpec.length()) {
+                qmakeSpec = "-spec " + qmakeSpec + " "; // NOI18N
             }
             bw.write("nbproject/qt-${CONF}.mk: nbproject/qt-${CONF}.pro FORCE\n"); // NOI18N
             // It is important to generate makefile in current directory, and then move it to nbproject/.
             // Otherwise qmake will complain that sources are not found.
-            bw.write("\tqmake VPATH=. " + qmakespec + "-o qttmp-${CONF}.mk nbproject/qt-${CONF}.pro\n"); // NOI18N
+            bw.write("\tqmake VPATH=. " + qmakeSpec + "-o qttmp-${CONF}.mk nbproject/qt-${CONF}.pro\n"); // NOI18N
             bw.write("\tmv -f qttmp-${CONF}.mk nbproject/qt-${CONF}.mk\n"); // NOI18N
             if (conf.getPlatform().getValue() == Platform.PLATFORM_WINDOWS) {
                 // qmake uses backslashes on Windows, this code corrects them to forward slashes
@@ -620,20 +623,29 @@ public class ConfigurationMakefileWriter {
 
     private String getOutput(MakeConfiguration conf) {
         String output = conf.getOutputValue();
-        switch (conf.getConfigurationType().getValue()) {
-            case MakeConfiguration.TYPE_APPLICATION:
-            case MakeConfiguration.TYPE_QT_APPLICATION:
-                if (conf.getPlatform().getValue() == Platform.PLATFORM_WINDOWS &&
-                        !output.endsWith(".exe")) { // NOI18N
-                    output += ".exe"; // NOI18N
+        switch (conf.getPlatform().getValue()) {
+            case Platform.PLATFORM_WINDOWS:
+                switch (conf.getConfigurationType().getValue()) {
+                    case MakeConfiguration.TYPE_APPLICATION:
+                    case MakeConfiguration.TYPE_QT_APPLICATION:
+                        output = mangleAppnameWin(output);
+                        break;
                 }
                 break;
         }
         return conf.expandMacros(output);
     }
 
+    private String mangleAppnameWin(String original) {
+        if (original.endsWith(".exe")) { // NOI18N
+            return original;
+        } else {
+            return original + ".exe"; // NOI18N
+        }
+    }
+
     public static String getObjectDir(MakeConfiguration conf) {
-        return MakeConfiguration.BUILD_FOLDER + '/' + conf.getName() + '/' + "${CND_PLATFORM}"; // UNIX path // NOI18N
+        return MakeConfiguration.BUILD_FOLDER + '/' + "${CND_CONF}" + '/' + "${CND_PLATFORM}"; // UNIX path // NOI18N
     }
 
     private String getObjectFiles(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf) {
@@ -697,8 +709,8 @@ public class ConfigurationMakefileWriter {
         bw.write("# NOCDDL\n"); // NOI18N
         bw.write("#\n"); // NOI18N
         bw.write("CND_BASEDIR=`pwd`\n"); // NOI18N
-        bw.write("CND_BUILDDIR=build\n"); // NOI18N
-        bw.write("CND_DISTDIR=dist\n"); // NOI18N
+        bw.write("CND_BUILDDIR=" + MakeConfiguration.BUILD_FOLDER + "\n"); // NOI18N
+        bw.write("CND_DISTDIR=" + MakeConfiguration.DIST_FOLDER + "\n"); // NOI18N
 
         Configuration[] confs = projectDescriptor.getConfs().getConfs();
         for (int i = 0; i < confs.length; i++) {
@@ -707,6 +719,7 @@ public class ConfigurationMakefileWriter {
             bw.write("\n"); // NOI18N // NOI18N
             bw.write("CND_PLATFORM_" + makeConf.getName() + "=" + makeConf.getVariant()); // NOI18N
             bw.write("\n"); // NOI18N // NOI18N
+            // output artifact
             String outputPath = makeConf.expandMacros(makeConf.getOutputValue());
             String outputDir = IpeUtils.getDirName(outputPath);
             if (outputDir == null) {
@@ -718,6 +731,26 @@ public class ConfigurationMakefileWriter {
             bw.write("CND_ARTIFACT_NAME_" + makeConf.getName() + "=" + outputName); // NOI18N
             bw.write("\n"); // NOI18N
             bw.write("CND_ARTIFACT_PATH_" + makeConf.getName() + "=" + outputPath); // NOI18N
+            bw.write("\n"); // NOI18N
+            // packaging artifact
+            PackagerDescriptor packager = PackagerManager.getDefault().getPackager(makeConf.getPackagingConfiguration().getType().getValue());
+            outputPath = makeConf.expandMacros(makeConf.getPackagingConfiguration().getOutputValue());
+            if (!packager.isOutputAFolder()) {
+                outputDir = IpeUtils.getDirName(outputPath);
+                if (outputDir == null) {
+                    outputDir = ""; // NOI18N
+                }
+                outputName = IpeUtils.getBaseName(outputPath);
+            } else {
+                outputDir = outputPath;
+                outputPath = ""; // NOI18N
+                outputName = ""; // NOI18N
+            }
+            bw.write("CND_PACKAGE_DIR_" + makeConf.getName() + "=" + outputDir); // NOI18N
+            bw.write("\n"); // NOI18N
+            bw.write("CND_PACKAGE_NAME_" + makeConf.getName() + "=" + outputName); // NOI18N
+            bw.write("\n"); // NOI18N
+            bw.write("CND_PACKAGE_PATH_" + makeConf.getName() + "=" + outputPath); // NOI18N
             bw.write("\n"); // NOI18N
         }
     }
@@ -772,6 +805,8 @@ public class ConfigurationMakefileWriter {
         bw.write("# Macros\n"); // NOI18N
         bw.write("TOP=" + "`pwd`" + "\n"); // NOI18N
         bw.write("CND_PLATFORM=" + conf.getVariant() + "\n"); // NOI18N
+        bw.write("CND_CONF=" + conf.getName() + "\n"); // NOI18N
+        bw.write("CND_DISTDIR=" + MakeConfiguration.DIST_FOLDER + "\n"); // NOI18N
         bw.write("TMPDIR=" + tmpdir + "\n"); // NOI18N
         bw.write("TMPDIRNAME=" + tmpDirName + "\n"); // NOI18N
         String projectOutput = conf.getOutputValue();
