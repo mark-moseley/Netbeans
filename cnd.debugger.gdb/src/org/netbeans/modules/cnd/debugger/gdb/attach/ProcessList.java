@@ -45,7 +45,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.modules.cnd.api.utils.CppUtils;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
 import org.netbeans.modules.cnd.debugger.gdb.actions.AttachTableColumn;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -57,58 +57,109 @@ import org.openide.util.Utilities;
  * 
  * @author gordonp
  */
-final class ProcessList implements Runnable {
-    
-    public final static int PTYPE_UNINITIALIZED = -1;
-    public final static int PTYPE_STD = 0;
-    public final static int PTYPE_CYGWIN = 1;
-    
-    private int ptype = PTYPE_UNINITIALIZED;
-    private List<String> args;
-    private List<String> proclist;
-    private ProcessBuilder pb;
-    private BufferedReader reader;
-    private ProcessListReader plr;
-
-    protected ProcessList(ProcessListReader plr) {
-        this.plr = plr;
-        args = getProcessCommand();
-        pb = new ProcessBuilder(args);
-        pb.redirectErrorStream(true);
-        proclist = new ArrayList<String>();
-        RequestProcessor.getDefault().post(this);
+final class ProcessList {
+    private static enum PTYPE {
+        UNINITIALIZED,
+        NONE,
+        STD,
+        WINDOWS;
     }
-    
-    public void run() {
-        String line;
-        try {
-            Process process = pb.start();
-            reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            reader.readLine(); // read and ignore header line...
-            while ((line = reader.readLine()) != null) {
-                proclist.add(line);
+
+    private PTYPE ptype = PTYPE.UNINITIALIZED;
+    private final List<String> argsSimple = new ArrayList<String>();
+
+    protected ProcessList() {
+        if (Utilities.isWindows()) {
+            File file = new File(CompilerSetManager.getCygwinBase() + "/bin", "ps.exe"); // NOI18N
+            if (file.exists()) {
+                argsSimple.add(file.getAbsolutePath());
+                ptype = PTYPE.WINDOWS;
+            } else {
+                file = new File(CompilerSetManager.getMSysBase() + "/bin", "ps.exe"); // NOI18N
+                if (file.exists()) {
+                    argsSimple.add(file.getAbsolutePath());
+                    ptype = PTYPE.WINDOWS;
+                } else {
+                    ptype = PTYPE.NONE;
+                }
             }
-            plr.processListCallback(proclist);
-        } catch (IOException ioe) {
+        } else {
+            if (new File("/bin/ps").exists()) { // NOI18N
+                argsSimple.add("/bin/ps"); // NOI18N
+                argsSimple.add("-a"); // NOI18N
+                argsSimple.add("-o"); // NOI18N
+                if (Utilities.getOperatingSystem() == Utilities.OS_MAC) {
+                    argsSimple.add("user,pid,ppid,stime,time,command"); // NOI18N
+                } else {
+                    argsSimple.add("user,pid,ppid,stime,time,args"); // NOI18N
+                }
+                ptype = PTYPE.STD;
+            } else if (new File("/usr/bin/ps").exists()) { // NOI18N
+                argsSimple.add("/usr/bin/ps"); // NOI18N
+                argsSimple.add("-a"); // NOI18N
+                argsSimple.add("-o"); // NOI18N
+                argsSimple.add("user,pid,ppid,stime,time,args"); // NOI18N
+                ptype = PTYPE.STD;
+            } else {
+                ptype = PTYPE.NONE;
+            }
         }
     }
+
+    private void request(final ProcessListReader plr, final List<String> args) {
+        if (!argsSimple.isEmpty()) {
+            RequestProcessor.getDefault().post(new Runnable() {
+                public void run() {
+                    try {
+                        ProcessBuilder pb = new ProcessBuilder(args);
+                        pb.redirectErrorStream(true);
+                        Process process = pb.start();
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                        reader.readLine(); // read and ignore header line...
+                        List<String> proclist = new ArrayList<String>();
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            proclist.add(line);
+                        }
+                        plr.processListCallback(proclist);
+                    } catch (IOException ioe) {
+                        //do nothing
+                    }
+                }
+            });
+        }
+    }
+
+    void requestSimple(ProcessListReader plr) {
+        request(plr, argsSimple);
+    }
+
+    void requestFull(ProcessListReader plr) {
+        List<String> argsFull = new ArrayList<String>(argsSimple);
+        if (ptype == PTYPE.WINDOWS) {
+            argsFull.add("-W"); // NOI18N
+        } else if (ptype == PTYPE.STD) {
+            argsFull.add("-A"); // NOI18N
+        }
+        request(plr, argsFull);
+    }
     
-    protected int getPType() {
+    protected PTYPE getPType() {
         return ptype;
     }
     
     protected boolean isStd() {
-        return ptype == PTYPE_STD;
+        return ptype == PTYPE.STD;
     }
     
-    protected boolean isCygwin() {
-        return ptype == PTYPE_CYGWIN;
+    protected boolean isWindowsPsFound() {
+        return ptype == PTYPE.WINDOWS;
     }
-    
+
     protected List<AttachTableColumn> getColumnHeaders() {
         List<AttachTableColumn> headers = new ArrayList<AttachTableColumn>();
         
-        if (ptype == PTYPE_STD) {
+        if (ptype == PTYPE.STD) {
             headers.add(new AttachTableColumn("user",  // NOI18N
                     NbBundle.getMessage(ProcessList.class, "HDR_USER"))); // NOI18N
             headers.add(new AttachTableColumn("pid", // NOI18N
@@ -121,7 +172,7 @@ final class ProcessList implements Runnable {
                     NbBundle.getMessage(ProcessList.class, "HDR_TIME"))); // NOI18N
             headers.add(new AttachTableColumn("args", // NOI18N
                     NbBundle.getMessage(ProcessList.class, "HDR_ARGS"))); // NOI18N
-        } else if (ptype == PTYPE_CYGWIN) {
+        } else if (ptype == PTYPE.WINDOWS) {
             headers.add(new AttachTableColumn("uid",  // NOI18N
                     NbBundle.getMessage(ProcessList.class, "HDR_UID"))); // NOI18N
             headers.add(new AttachTableColumn("winpid", // NOI18N
@@ -134,51 +185,11 @@ final class ProcessList implements Runnable {
                     NbBundle.getMessage(ProcessList.class, "HDR_STIME"))); // NOI18N
             headers.add(new AttachTableColumn("args", // NOI18N
                     NbBundle.getMessage(ProcessList.class, "HDR_ARGS"))); // NOI18N
-            
         }
         return headers;
     }
     
     protected String getArgsHeader() {
         return NbBundle.getMessage(ProcessList.class, "HDR_ARGS");
-    }
-    
-    private List<String> getProcessCommand() {
-        List alist = new ArrayList<String>();
-        
-        if (Utilities.isWindows()) {
-            File file = new File(CppUtils.getCygwinBase() + "/bin", "ps.exe"); // NOI18N
-            if (file.exists()) {
-                alist.add(file.getAbsolutePath());
-                ptype = PTYPE_CYGWIN;
-            } else {
-                file = new File(CppUtils.getMSysBase() + "/bin", "ps.exe"); // NOI18N
-                if (file.exists()) {
-                    alist.add(file.getAbsolutePath());
-                    ptype = PTYPE_CYGWIN;
-                }
-            }
-        } else {
-            if (new File("/bin/ps").exists()) { // NOI18N
-                alist.add("/bin/ps"); // NOI18N
-                alist.add("-a"); // NOI18N
-                alist.add("-o"); // NOI18N
-                if (Utilities.getOperatingSystem() == Utilities.OS_MAC) {
-                    alist.add("user,pid,ppid,stime,time,command"); // NOI18N
-                } else {
-                    alist.add("user,pid,ppid,stime,time,args"); // NOI18N
-                }
-                ptype = PTYPE_STD;
-            } else {
-                if (new File("/usr/bin/ps").exists()) { // NOI18N
-                    alist.add("/usr/bin/ps"); // NOI18N
-                    alist.add("-a"); // NOI18N
-                    alist.add("-o"); // NOI18N
-                    alist.add("user,pid,ppid,stime,time,args"); // NOI18N
-                    ptype = PTYPE_STD;
-                }
-            }
-        }
-        return alist;
     }
 }
