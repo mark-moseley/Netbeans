@@ -40,6 +40,10 @@
 
 package org.netbeans.lib.profiler.utils;
 
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
 import org.netbeans.lib.profiler.global.CommonConstants;
 import org.netbeans.lib.profiler.global.Platform;
 import java.io.File;
@@ -197,7 +201,7 @@ public class MiscUtils implements CommonConstants {
                 continue;
             }
 
-            ArrayList paths = getPathComponents(sourcePath, true, workingDir);
+            List paths = getPathComponents(sourcePath, true, workingDir);
 
             for (int j = 0; j < paths.size(); j++) {
                 String path = (String) paths.get(j);
@@ -296,7 +300,7 @@ public class MiscUtils implements CommonConstants {
 
     /** For a string representing a class path, remove all entries that don't correspond to existing files, and return the remaining ones. */
     public static String getLiveClassPathSubset(String path, String workingDir) {
-        ArrayList liveComponents = getPathComponents(path, true, workingDir);
+        List liveComponents = getPathComponents(path, true, workingDir);
         StringBuffer buf = new StringBuffer(liveComponents.size() * 10);
 
         if (liveComponents.size() > 0) {
@@ -317,7 +321,7 @@ public class MiscUtils implements CommonConstants {
      * and returns only existing components. workingDir is needed in case the passed path has
      * a local form.
      */
-    public static ArrayList getPathComponents(String path, boolean doCheck, String workingDir) {
+    public static List getPathComponents(String path, boolean doCheck, String workingDir) {
         ArrayList list = new ArrayList();
 
         if (path != null) {
@@ -340,12 +344,48 @@ public class MiscUtils implements CommonConstants {
                 } else {
                     list.add(name);
                 }
+                if (name != null) {
+                    try {
+                        getClassPathFromManifest(name,list);
+                    } catch (URISyntaxException ex) {
+                        ex.printStackTrace();
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
+                }
             }
         }
 
         return list;
     }
 
+    private static void getClassPathFromManifest(String path,List pathList) throws IOException, URISyntaxException {
+        if (path.toLowerCase().endsWith(".jar")) {
+            JarFile jarFile = new JarFile(path);
+            Attributes attrs = jarFile.getManifest().getMainAttributes();
+            
+            if (attrs != null) {
+            String jarCp = attrs.getValue(Attributes.Name.CLASS_PATH);
+            
+                if (jarCp != null) {
+                    URL baseUrl = new File(path).toURL();
+                    StringTokenizer tokens = new StringTokenizer(jarCp);
+                    while(tokens.hasMoreTokens()) {
+                        String cp = tokens.nextToken();
+                        URL cpURL = new URL(baseUrl,cp);
+                        File cpFile = new File(cpURL.toURI());
+                        if (cpFile.exists()) {
+                            String pathName = cpFile.getAbsolutePath();
+
+                            pathList.add(pathName);
+                            getClassPathFromManifest(pathName,pathList);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     public static void setSilent(boolean silent) {
         printInfo = !silent;
     }
@@ -358,18 +398,21 @@ public class MiscUtils implements CommonConstants {
         String jdkVersionString = (String) jdkProperties.get("java.version"); // NOI18N
         String vmNameString = (String) jdkProperties.get("java.vm.name"); // NOI18N
 
-        if ((jdkVersionString == null) || (vmNameString == null)) { // probably not a platform for JDK
-
+        if (jdkVersionString == null || vmNameString == null) { // probably not a platform for JDK
             return false;
         }
 
-        return isSupported15or16or17(jdkVersionString);
+        if (isSupported15or16or17orCvm(jdkVersionString)) {
+            return true;
+        }
+        // CVM is recognized via java.vm.name system property
+        return isSupported15or16or17orCvm(vmNameString);
     }
 
     // This method is used for checking running JVM if supported.
     // jvmVersionString should be enough to decide that
     public static boolean isSupportedRunningJVMVersion(String jdkVersionString) {
-        return isSupported15or16or17(jdkVersionString);
+        return isSupported15or16or17orCvm(jdkVersionString);
     }
 
     public static void setVerbosePrint() {
@@ -415,7 +458,7 @@ public class MiscUtils implements CommonConstants {
     public static boolean containsDirectoryOnPath(String directory, String path) {
         String normalizedDirectory = new File(directory).getAbsolutePath().toLowerCase();
         String normalizedPath = new File(path).getAbsolutePath().toLowerCase();
-        ArrayList pathComponents = getPathComponents(normalizedPath, false, null);
+        List pathComponents = getPathComponents(normalizedPath, false, null);
 
         for (int i = 0; i < pathComponents.size(); i++) {
             if (normalizedDirectory.equals(pathComponents.get(i))) {
@@ -432,12 +475,15 @@ public class MiscUtils implements CommonConstants {
             File tempDir = new File(System.getProperty("java.io.tmpdir")); // NOI18N
             File[] files = tempDir.listFiles();
 
-            for (int i = 0; i < files.length; i++) {
-                File f = files[i];
-                String fname = f.getName();
+            // check that tempDir exists
+            if (files != null) {
+                for (int i = 0; i < files.length; i++) {
+                    File f = files[i];
+                    String fname = f.getName();
 
-                if (fname.startsWith("NBProfiler") && fname.endsWith(".map")) { // NOI18N
-                    f.delete();
+                    if (fname.startsWith("NBProfiler") && (fname.endsWith(".map") || fname.endsWith(".ref"))) { // NOI18N
+                        f.delete();
+                    }
                 }
             }
         }
@@ -540,24 +586,21 @@ public class MiscUtils implements CommonConstants {
         return (new Date()).toString();
     }
 
-    private static boolean isSupported15or16or17(String jdkVersionString) {
+    private static boolean isSupported15or16or17orCvm(String jdkVersionString) {
         if (jdkVersionString.startsWith("1.7")) { // NOI18N
-
             return true;
         } else if (jdkVersionString.startsWith("1.6")) { // NOI18N
-
             return true;
         } else if (jdkVersionString.startsWith("1.5")) { // NOI18N
-
-            if (jdkVersionString.equals("1.5.0") || jdkVersionString.startsWith("1.5.0_01")
-                    || jdkVersionString.startsWith("1.5.0_02") || jdkVersionString.startsWith("1.5.0_03")) { // NOI18N
-
+            if (jdkVersionString.equals("1.5.0") || jdkVersionString.startsWith("1.5.0_01") ||
+                jdkVersionString.startsWith("1.5.0_02") || jdkVersionString.startsWith("1.5.0_03")) { // NOI18N
                 return false;
             } else {
                 return true;
             }
-        } else {
-            return false;
+        } else if (jdkVersionString.equals("CVM")) {
+            return true;
         }
+        return false;
     }
 }
