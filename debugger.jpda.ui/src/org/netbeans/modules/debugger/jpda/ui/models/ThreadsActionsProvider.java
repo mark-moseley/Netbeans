@@ -59,6 +59,7 @@ import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.netbeans.spi.viewmodel.Models;
 import org.netbeans.spi.viewmodel.TreeModel;
 import org.openide.util.NbBundle;
+import org.openide.util.RequestProcessor;
 
 
 /**
@@ -66,16 +67,20 @@ import org.openide.util.NbBundle;
  */
 public class ThreadsActionsProvider implements NodeActionsProvider {
 
+    private Action SUSPEND_ACTION;
+    private Action RESUME_ACTION;
+    private Action INTERRUPT_ACTION;
+
     private Action MAKE_CURRENT_ACTION = Models.createAction (
         NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_ThreadAction_MakeCurrent_Label"),
         new Models.ActionPerformer () {
             public boolean isEnabled (Object node) {
-                if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).originalThread;
+                if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).getOriginalThread();
                 return debugger.getCurrentThread () != node;
             }
             
             public void perform (Object[] nodes) {
-                if (nodes[0] instanceof MonitorModel.ThreadWithBordel) nodes[0] = ((MonitorModel.ThreadWithBordel) nodes[0]).originalThread;
+                if (nodes[0] instanceof MonitorModel.ThreadWithBordel) nodes[0] = ((MonitorModel.ThreadWithBordel) nodes[0]).getOriginalThread();
                 ((JPDAThread) nodes [0]).makeCurrent ();
             }
         },
@@ -86,106 +91,113 @@ public class ThreadsActionsProvider implements NodeActionsProvider {
         NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_ThreadAction_GoToSource_Label"),
         new Models.ActionPerformer () {
             public boolean isEnabled (Object node) {
-                if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).originalThread;
+                if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).getOriginalThread();
                 return isGoToSourceSupported ((JPDAThread) node);
             }
             
             public void perform (Object[] nodes) {
-                if (nodes[0] instanceof MonitorModel.ThreadWithBordel) nodes[0] = ((MonitorModel.ThreadWithBordel) nodes[0]).originalThread;
+                if (nodes[0] instanceof MonitorModel.ThreadWithBordel) nodes[0] = ((MonitorModel.ThreadWithBordel) nodes[0]).getOriginalThread();
                 String language = DebuggerManager.getDebuggerManager ().
                     getCurrentSession ().getCurrentLanguage ();
-                SourcePath sp = (SourcePath) DebuggerManager.
-                    getDebuggerManager ().getCurrentEngine ().lookupFirst 
-                    (null, SourcePath.class);
+                SourcePath sp = DebuggerManager.getDebuggerManager().getCurrentEngine().lookupFirst(null, SourcePath.class);
                 sp.showSource ((JPDAThread) nodes [0], language);
             }
         },
         Models.MULTISELECTION_TYPE_EXACTLY_ONE
     );
 
-    private Action SUSPEND_ACTION = Models.createAction (
-        NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_ThreadAction_Suspend_Label"),
-        new Models.ActionPerformer () {
-            public boolean isEnabled (Object node) {
-                if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).originalThread;
-                if (node instanceof JPDAThread)
-                    return !((JPDAThread) node).isSuspended ();
-                else
-                    return true;
-            }
-            
-            public void perform (Object[] nodes) {
-                int i, k = nodes.length;
-                for (i = 0; i < k; i++) {
-                    Object node = (nodes[i] instanceof MonitorModel.ThreadWithBordel) ? 
-                            ((MonitorModel.ThreadWithBordel) nodes[i]).originalThread : nodes[i];
+    private Action createSUSPEND_ACTION(RequestProcessor requestProcessor) {
+        return Models.createAction (
+            NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_ThreadAction_Suspend_Label"),
+            new DebuggingActionsProvider.LazyActionPerformer (requestProcessor) {
+                public boolean isEnabled (Object node) {
+                    if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).getOriginalThread();
                     if (node instanceof JPDAThread)
-                        ((JPDAThread) node).suspend ();
+                        return !((JPDAThread) node).isSuspended ();
                     else
-                        ((JPDAThreadGroup) node).suspend ();
+                        return true;
                 }
-            }
-        },
-        Models.MULTISELECTION_TYPE_ALL
-    );
-
-    private Action RESUME_ACTION = Models.createAction (
-        NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_ThreadAction_Resume_Label"),
-        new Models.ActionPerformer () {
-            public boolean isEnabled (Object node) {
-                if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).originalThread;
-                if (node instanceof JPDAThread)
-                    return ((JPDAThread) node).isSuspended ();
-                else
-                    return true;
-            }
-            
-            public void perform (Object[] nodes) {
-                int i, k = nodes.length;
-                for (i = 0; i < k; i++) {
-                    Object node = (nodes[i] instanceof MonitorModel.ThreadWithBordel) ? 
-                            ((MonitorModel.ThreadWithBordel) nodes[i]).originalThread : nodes[i];
-                    if (node instanceof JPDAThread)
-                        ((JPDAThread) node).resume ();
-                    else
-                        ((JPDAThreadGroup) node).resume ();
-                }
-            }
-        },
-        Models.MULTISELECTION_TYPE_ALL
-    );
-        
-    private Action INTERRUPT_ACTION = Models.createAction (
-        NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_ThreadAction_Interrupt_Label"),
-        new Models.ActionPerformer () {
-            public boolean isEnabled (Object node) {
-                if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).originalThread;
-                if (node instanceof JPDAThread)
-                    return !((JPDAThread) node).isSuspended ();
-                else
-                    return false;
-            }
-            
-            public void perform (Object[] nodes) {
-                int i, k = nodes.length;
-                for (i = 0; i < k; i++) {
-                    Object node = (nodes[i] instanceof MonitorModel.ThreadWithBordel) ? 
-                            ((MonitorModel.ThreadWithBordel) nodes[i]).originalThread : nodes[i];
-                    if (node instanceof JPDAThread) {
-                        ((JPDAThread) node).interrupt();
+                public void run (Object[] nodes) {
+                    int i, k = nodes.length;
+                    for (i = 0; i < k; i++) {
+                        Object node = (nodes[i] instanceof MonitorModel.ThreadWithBordel) ?
+                                ((MonitorModel.ThreadWithBordel) nodes[i]).getOriginalThread() : nodes[i];
+                        if (node instanceof JPDAThread)
+                            ((JPDAThread) node).suspend ();
+                        else
+                            ((JPDAThreadGroup) node).suspend ();
                     }
                 }
-            }
-        },
-        Models.MULTISELECTION_TYPE_ALL
-    );
+            },
+            Models.MULTISELECTION_TYPE_ALL
+        );
+        
+    }
+
+    private Action createRESUME_ACTION(RequestProcessor requestProcessor) {
+        return Models.createAction (
+            NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_ThreadAction_Resume_Label"),
+            new DebuggingActionsProvider.LazyActionPerformer (requestProcessor) {
+                public boolean isEnabled (Object node) {
+                    if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).getOriginalThread();
+                    if (node instanceof JPDAThread)
+                        return ((JPDAThread) node).isSuspended ();
+                    else
+                        return true;
+                }
+
+                public void run (Object[] nodes) {
+                    int i, k = nodes.length;
+                    for (i = 0; i < k; i++) {
+                        Object node = (nodes[i] instanceof MonitorModel.ThreadWithBordel) ?
+                                ((MonitorModel.ThreadWithBordel) nodes[i]).getOriginalThread() : nodes[i];
+                        if (node instanceof JPDAThread)
+                            ((JPDAThread) node).resume ();
+                        else
+                            ((JPDAThreadGroup) node).resume ();
+                    }
+                }
+            },
+            Models.MULTISELECTION_TYPE_ALL
+        );
+    }
+        
+    private Action createINTERRUPT_ACTION(RequestProcessor requestProcessor) {
+        return Models.createAction (
+            NbBundle.getBundle(ThreadsActionsProvider.class).getString("CTL_ThreadAction_Interrupt_Label"),
+            new DebuggingActionsProvider.LazyActionPerformer (requestProcessor) {
+                public boolean isEnabled (Object node) {
+                    if (node instanceof MonitorModel.ThreadWithBordel) node = ((MonitorModel.ThreadWithBordel) node).getOriginalThread();
+                    if (node instanceof JPDAThread)
+                        return !((JPDAThread) node).isSuspended ();
+                    else
+                        return false;
+                }
+
+                public void run (Object[] nodes) {
+                    int i, k = nodes.length;
+                    for (i = 0; i < k; i++) {
+                        Object node = (nodes[i] instanceof MonitorModel.ThreadWithBordel) ?
+                                ((MonitorModel.ThreadWithBordel) nodes[i]).getOriginalThread() : nodes[i];
+                        if (node instanceof JPDAThread) {
+                            ((JPDAThread) node).interrupt();
+                        }
+                    }
+                }
+            },
+            Models.MULTISELECTION_TYPE_ALL
+        );
+    }
         
     private JPDADebugger debugger;
     
     
     public ThreadsActionsProvider (ContextProvider lookupProvider) {
-        debugger = (JPDADebugger) lookupProvider.
-            lookupFirst (null, JPDADebugger.class);
+        debugger = lookupProvider.lookupFirst(null, JPDADebugger.class);
+        RequestProcessor requestProcessor = lookupProvider.lookupFirst(null, RequestProcessor.class);
+        SUSPEND_ACTION = createSUSPEND_ACTION(requestProcessor);
+        RESUME_ACTION = createRESUME_ACTION(requestProcessor);
+        INTERRUPT_ACTION = createINTERRUPT_ACTION(requestProcessor);
     }
     
     public Action[] getActions (Object node) throws UnknownTypeException {
@@ -246,10 +258,7 @@ public class ThreadsActionsProvider implements NodeActionsProvider {
             getCurrentSession ().getCurrentLanguage ();
         if (!t.isSuspended ())
             return false;
-        String className = t.getClassName ();
-        SourcePath sp = (SourcePath) DebuggerManager.
-            getDebuggerManager ().getCurrentEngine ().lookupFirst 
-            (null, SourcePath.class);
+        SourcePath sp = DebuggerManager.getDebuggerManager().getCurrentEngine().lookupFirst(null, SourcePath.class);
         return sp.sourceAvailable (t, language, true);
     }
 }
