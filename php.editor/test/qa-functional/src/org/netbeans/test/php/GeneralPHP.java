@@ -41,12 +41,9 @@
 
 package org.netbeans.test.php;
 
-import java.awt.Point;
 import org.netbeans.jemmy.JemmyException;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jemmy.operators.JComboBoxOperator;
-import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.NewFileWizardOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
@@ -55,18 +52,12 @@ import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JDialogOperator;
 import org.netbeans.jemmy.operators.JListOperator;
 import org.netbeans.jemmy.operators.JPopupMenuOperator;
-import org.netbeans.jemmy.operators.JRadioButtonOperator;
-import javax.swing.ListModel;
-import org.netbeans.jemmy.operators.JMenuBarOperator;
-import org.netbeans.jemmy.operators.JTreeOperator;
-import org.netbeans.jellytools.MainWindowOperator;
 import java.awt.event.KeyEvent;
 import javax.swing.JEditorPane;
 import java.awt.Rectangle;
 import javax.swing.text.BadLocationException;
 import org.netbeans.jemmy.operators.JComboBoxOperator;
 import org.netbeans.jemmy.operators.JEditorPaneOperator;
-import org.netbeans.jemmy.operators.JTableOperator;
 import org.netbeans.jemmy.operators.JTextComponentOperator;
 import org.netbeans.jemmy.operators.Operator;
 import java.io.File;
@@ -81,6 +72,9 @@ import java.util.List;
  */
 
 public class GeneralPHP extends JellyTestCase {
+
+    // Okey, this is hack and should be removed later
+    protected boolean bRandomCheck = false;
     
     static final String PHP_CATEGORY_NAME = "PHP";
     static final String PHP_PROJECT_NAME = "PHP Application";
@@ -194,7 +188,7 @@ public class GeneralPHP extends JellyTestCase {
 
       // Set new port based URL here
       jdNew = new JDialogOperator( "New PHP Project" );
-      JTextComponentOperator jtUrl = new JTextComponentOperator( jdNew, 1 );
+      JTextComponentOperator jtUrl = new JTextComponentOperator( jdNew, 0 );
       String sUrl = jtUrl.getText( );
       System.out.println( "== Original: " + sUrl );
       sUrl = sUrl.replace( "localhost", "localhost:" + iPort );
@@ -348,7 +342,12 @@ public class GeneralPHP extends JellyTestCase {
 
     // Check code completion list
     if( -1 == sText.indexOf( sCheck ) )
-      fail( "Invalid completion: \"" + sText + "\", should be: \"" + sCheck + "\"" );
+    {
+      if( bRandomCheck )
+        fail( "Invalid completion, looks like issue #153062 still here: \"" + sText + "\", should be: \"" + sCheck + "\"" );
+      else
+        fail( "Invalid completion: \"" + sText + "\", should be: \"" + sCheck + "\"" );
+    }
   }
 
   protected void CheckResultRegex(
