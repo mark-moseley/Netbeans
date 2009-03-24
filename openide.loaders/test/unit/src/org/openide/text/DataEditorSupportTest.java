@@ -49,20 +49,31 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import javax.swing.JEditorPane;
-import javax.swing.text.StyledDocument;
 
 
+import javax.swing.text.Document;
+import junit.framework.AssertionFailedError;
+import junit.framework.Test;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.spi.queries.FileEncodingQueryImplementation;
-import org.openide.actions.*;
+import org.openide.cookies.CloseCookie;
 import org.openide.cookies.EditCookie;
 
+import org.openide.cookies.EditorCookie;
 import org.openide.cookies.OpenCookie;
+import org.openide.filesystems.FileAlreadyLockedException;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
+import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataNode;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectExistsException;
@@ -70,7 +81,6 @@ import org.openide.loaders.MultiDataObject;
 import org.openide.nodes.Children;
 import org.openide.nodes.CookieSet;
 import org.openide.nodes.Node;
-import org.openide.util.Exceptions;
 import org.openide.util.Mutex;
 import org.openide.util.io.NbMarshalledObject;
 import org.openide.util.Lookup;
@@ -95,16 +105,32 @@ public class DataEditorSupportTest extends NbTestCase {
     public DataEditorSupportTest(String s) {
         super(s);
     }
+
+    @Override
+    protected Level logLevel() {
+        return Level.FINE;
+    }
+
+    public static Test suite() {
+        Test t = null;
+//        t = new DataEditorSupportTest("testChangeFileWhileOpen");
+        if (t == null) {
+            t = new NbTestSuite(DataEditorSupportTest.class);
+        }
+        return t;
+    }
     
+    @Override
     protected void setUp () throws Exception {
         RUNNING = this;
         
         fs = org.openide.filesystems.FileUtil.createMemoryFileSystem ();
         org.openide.filesystems.Repository.getDefault ().addFileSystem (fs);
         org.openide.filesystems.FileObject root = fs.getRoot ();
-        fileObject = new MyFileObject (org.openide.filesystems.FileUtil.createData (root, "my.obj"));
+        fileObject = new MyFileObject (org.openide.filesystems.FileUtil.createData (root, "my" + getName() + ".obj"));
     }
     
+    @Override
     protected void tearDown () throws Exception {
         waitEQ ();
         
@@ -112,6 +138,7 @@ public class DataEditorSupportTest extends NbTestCase {
         org.openide.filesystems.Repository.getDefault ().removeFileSystem (fs);
     }
     
+    @Override
     protected boolean runInEQ() {
         return false;
     }
@@ -121,16 +148,114 @@ public class DataEditorSupportTest extends NbTestCase {
     }
 
     DES support () throws Exception {
-        DataObject obj = DataObject.find (fileObject);
+        DataObject tmpObj = DataObject.find (fileObject);
         
-        assertEquals ("My object was created", MyDataObject.class, obj.getClass ());
-        Object cookie = obj.getCookie (org.openide.cookies.OpenCookie.class);
+        assertEquals ("My object was created", MyDataObject.class, tmpObj.getClass ());
+        Object cookie = tmpObj.getCookie (org.openide.cookies.OpenCookie.class);
         assertNotNull ("Our object has this cookie", cookie);
         assertEquals ("It is my cookie", DES.class, cookie.getClass ());
         
         return (DES)cookie;
     }
-    
+
+    private static void assertLockFree(FileObject fo) throws Exception {
+        fo.lock().releaseLock();
+    }
+
+    public void testChangeFile() throws Exception {
+        obj = DataObject.find (fileObject);
+        DES sup = support ();
+        assertFalse ("It is closed now", sup.isDocumentLoaded ());
+
+        assertNotNull ("DataObject found", obj);
+
+        {
+            Document doc = sup.openDocument ();
+            assertTrue ("It is open now", support ().isDocumentLoaded ());
+
+            doc.insertString(0, "Ahoj", null);
+
+            EditorCookie s = (EditorCookie)sup;
+            assertNotNull("Modified, so it has cookie", s);
+            assertEquals(sup, s);
+
+            s.saveDocument();
+            assertLockFree(obj.getPrimaryFile());
+            
+            s.close();
+            
+            CloseCookie c = (CloseCookie)sup;
+            assertNotNull("Has close", c);
+            assertTrue("Close ok", c.close());
+
+            assertLockFree(obj.getPrimaryFile());
+        }
+
+
+        DataFolder target = DataFolder.findFolder(fs.getRoot().createFolder("target"));
+
+
+        obj.move(target);
+
+        {
+            EditorCookie ec = (EditorCookie)sup;
+            assertNotNull("Still has EditorCookie", ec);
+            Document doc = ec.openDocument ();
+            doc.insertString(0, "NewText", null);
+
+            EditorCookie s = (EditorCookie)sup;
+            assertNotNull("Modified, so it has cookie", s);
+
+            s.saveDocument();
+
+            assertLockFree(obj.getPrimaryFile());
+        }
+
+        
+    }
+
+    public void testChangeFileWhileOpen() throws Exception {
+        obj = DataObject.find (fileObject);
+        DES sup = support ();
+        assertFalse ("It is closed now", sup.isDocumentLoaded ());
+
+        assertNotNull ("DataObject found", obj);
+
+        {
+            Document doc = sup.openDocument ();
+            assertTrue ("It is open now", support ().isDocumentLoaded ());
+
+            doc.insertString(0, "Ahoj", null);
+
+            EditorCookie s = (EditorCookie)sup;
+            assertNotNull("Modified, so it has cookie", s);
+            assertEquals(sup, s);
+        }
+
+
+        DataFolder target = DataFolder.findFolder(fs.getRoot().createFolder("target"));
+
+
+        obj.move(target);
+
+        {
+            EditorCookie ec = (EditorCookie)sup;
+            assertNotNull("Still has EditorCookie", ec);
+            Document doc = ec.openDocument ();
+            doc.insertString(0, "NewText", null);
+
+            EditorCookie s = (EditorCookie)sup;
+            assertNotNull("Modified, so it has cookie", s);
+
+            s.saveDocument();
+
+            assertLockFree(obj.getPrimaryFile());
+        }
+
+
+    }
+
+
     /** holds the instance of the object so insane is able to find the reference */
     private DataObject obj;
     public void testItCanBeGCedIssue57565 () throws Exception {
@@ -155,13 +280,14 @@ public class DataEditorSupportTest extends NbTestCase {
         assertGC ("Can disappear", ref);
         assertGC ("And its lookup as well", refLkp);
         
-        
-        
+        assertLockFree(obj.getPrimaryFile());
     }
-    
+
+    @RandomlyFails // NB-Core-Build #1208
     public void testGetOpenedPanesWorksAfterDeserialization () throws Exception {
         doGetOpenedPanesWorksAfterDeserialization (-1);
     }
+    @RandomlyFails // NB-Core-Build #1434
     public void testGetOpenedPanesWorksAfterDeserializationIfTheFileGetsBig () throws Exception {
         doGetOpenedPanesWorksAfterDeserialization (1024 * 1024 * 10);
     }
@@ -176,6 +302,14 @@ public class DataEditorSupportTest extends NbTestCase {
         
         assertTrue(edSupport.messageName().indexOf('*') != -1);
         assertTrue(edSupport.messageHtmlName().indexOf('*') != -1);
+
+        try {
+            assertLockFree(fileObject);
+            fail("File shall be locked already");
+        } catch (FileAlreadyLockedException ex) {
+            // OK
+        }
+
     }
     
     private void doGetOpenedPanesWorksAfterDeserialization (int size) throws Exception {
@@ -189,7 +323,7 @@ public class DataEditorSupportTest extends NbTestCase {
         assertNotNull (panes);
         assertEquals ("One is there", 1, panes.length);
         
-        NbMarshalledObject obj = new NbMarshalledObject (ed);
+        NbMarshalledObject marshall = new NbMarshalledObject (ed);
         ed.close ();
         
         panes = getPanes();
@@ -200,7 +334,7 @@ public class DataEditorSupportTest extends NbTestCase {
         
         expectedSize = size;
         
-        ed = (CloneableEditor)obj.get ();
+        ed = (CloneableEditor)marshall.get ();
         
         DataObject newObj = DataObject.find (fileObject);
         
@@ -230,19 +364,76 @@ public class DataEditorSupportTest extends NbTestCase {
         assertNotNull(env.fileLock);
         env.fileLock.releaseLock();
     }
-    
-    public void testFileEncodingQuery () throws Exception {
-        DES des = support();
-        FileEncodingQueryImpl.getDefault().reset();
-        StyledDocument doc = des.openDocument();
-        assertEquals(des.getDataObject().getPrimaryFile(),FileEncodingQueryImpl.getDefault().getFile());
-        FileEncodingQueryImpl.getDefault().reset();
-        doc.insertString(doc.getLength(), " Added text.", null);
-        des.saveDocument();        
-        assertEquals(des.getDataObject().getPrimaryFile(),FileEncodingQueryImpl.getDefault().getFile());
-        assertEquals(" Added text.", content);
+
+    /** Tests that charset of saving document is not removed from cache by
+     * concurrent openDocument() call (see #160784). */
+    public void testSaveOpenConcurrent() throws Exception {
+        obj = DataObject.find(fileObject);
+        DES sup = support();
+        assertFalse("It is closed now", sup.isDocumentLoaded());
+        assertNotNull("DataObject found", obj);
+
+        Document doc = sup.openDocument();
+        assertTrue("It is open now", support().isDocumentLoaded());
+        doc.insertString(0, "Ahoj", null);
+        EditorCookie s = (EditorCookie) sup;
+        assertNotNull("Modified, so it has cookie", s);
+        assertEquals(sup, s);
+
+        Logger.getLogger(DataEditorSupport.class.getName()).setLevel(Level.FINEST);
+        Logger.getLogger(DataEditorSupport.class.getName()).addHandler(new OpeningHandler(sup));
+        s.saveDocument();
+        
+        assertLockFree(obj.getPrimaryFile());
+        s.close();
+        CloseCookie c = (CloseCookie) sup;
+        assertNotNull("Has close", c);
+        assertTrue("Close ok", c.close());
+        assertLockFree(obj.getPrimaryFile());
     }
-    
+
+    class OpeningHandler extends Handler {
+
+        private DES des;
+
+        public OpeningHandler(DES des) {
+            super();
+            this.des = des;
+        }
+
+        public synchronized void publish(LogRecord rec) {
+            if ("SaveImpl - charset put".equals(rec.getMessage())) {
+                Thread openingThread = new Thread(new Runnable() {
+
+                    public void run() {
+                        try {
+                            des.openDocument();
+                        } catch (IOException ex) {
+                            fail(ex.getMessage());
+                        }
+                    }
+                }, "Opening");
+                openingThread.start();
+                try {
+                    wait();
+                } catch (InterruptedException ex) {
+                    fail(ex.getMessage());
+                }
+            }
+            if ("openDocument - charset removed".equals(rec.getMessage())) {
+                notify();
+            }
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
     /** File object that let us know what is happening and delegates to certain
      * instance variables of the test.
      */
@@ -267,6 +458,7 @@ public class DataEditorSupportTest extends NbTestCase {
                 public ContentStream() {
                     openStreams = -1;
                 }
+                @Override
                 public void close () throws java.io.IOException {
                     if (openStreams != -1) {
                         IOException ex = new IOException("One output stream");
@@ -421,7 +613,7 @@ public class DataEditorSupportTest extends NbTestCase {
 
     /** Implementation of the DES */
     private static final class DES extends DataEditorSupport 
-    implements OpenCookie, EditCookie {
+    implements OpenCookie, CloseCookie, EditCookie, EditorCookie {
         public DES (DataObject obj, Env env) {
             super (obj, env);
         }
@@ -445,7 +637,11 @@ public class DataEditorSupportTest extends NbTestCase {
         }
 
         protected FileLock takeLock () throws IOException {
-            return super.getDataObject ().getPrimaryFile ().lock ();
+            if (getDataObject() instanceof MultiDataObject) {
+                return ((MultiDataObject)getDataObject()).getPrimaryEntry().takeLock();
+            } else {
+                return super.getDataObject ().getPrimaryFile ().lock ();
+            }
         }
         
     }
@@ -455,6 +651,7 @@ public class DataEditorSupportTest extends NbTestCase {
         private static FileEncodingQueryImpl instance;
         
         private FileObject file;
+        private Exception who;
         
         private FileEncodingQueryImpl () {
             
@@ -464,6 +661,7 @@ public class DataEditorSupportTest extends NbTestCase {
             InputStream is  = null;
             try {
                 this.file = file;
+                this.who = new Exception("Assigned from here");
                 byte[] arr = new byte[4096];
                 is = file.getInputStream();
                 is.read(arr);
@@ -483,6 +681,7 @@ public class DataEditorSupportTest extends NbTestCase {
         
         public void reset () {
             this.file = null;
+            this.who = new Exception("Cleaned from here");
         }
         
         public FileObject getFile () {
@@ -494,7 +693,15 @@ public class DataEditorSupportTest extends NbTestCase {
                 instance = new FileEncodingQueryImpl ();
             }
             return instance;
-        }                
+        }
+
+        private void assertFile(FileObject primaryFile) {
+            if (!primaryFile.equals(file)) {
+                AssertionFailedError afe = new AssertionFailedError("Files shall be the same:\nExpected:" + primaryFile + "\nReal    :" + file);
+                afe.initCause(who);
+                throw afe;
+            }
+        }
     }
 
     public static final class Lkp extends org.openide.util.lookup.AbstractLookup  {
@@ -534,6 +741,7 @@ public class DataEditorSupportTest extends NbTestCase {
         protected MultiDataObject createMultiObject(FileObject primaryFile) throws DataObjectExistsException, IOException {
             return new MyDataObject(this, primaryFile);
         }
+        @Override
         protected MultiDataObject.Entry createPrimaryEntry(MultiDataObject obj, FileObject primaryFile) {
             primary++;
             return new org.openide.loaders.FileEntry (obj, primaryFile);
@@ -543,13 +751,14 @@ public class DataEditorSupportTest extends NbTestCase {
     implements CookieSet.Factory {
         public MyDataObject(MyLoader l, FileObject folder) throws DataObjectExistsException {
             super(folder, l);
-            getCookieSet ().add (OpenCookie.class, this);
+            getCookieSet ().add (new Class[] { OpenCookie.class, CloseCookie.class, EditorCookie.class }, this);
         }
 
         public org.openide.nodes.Node.Cookie createCookie (Class klass) {
             return new DES (this, new MyEnv (this)); 
         }
         
+        @Override
         protected Node createNodeDelegate() {
             return new MyNode(this, Children.LEAF); 
         }
@@ -562,6 +771,7 @@ public class DataEditorSupportTest extends NbTestCase {
             super(obj, ch);
         }
         
+        @Override
         public String getHtmlDisplayName() {
             return "<b>" + getDisplayName() + "</b>";
         }
