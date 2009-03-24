@@ -161,11 +161,15 @@ public class CallStackActionsProvider implements NodeActionsProvider {
         }
     }
     
-    public void performDefaultAction (Object node) throws UnknownTypeException {
+    public void performDefaultAction (final Object node) throws UnknownTypeException {
         if (node == TreeModel.ROOT) 
             return;
         if (node instanceof CallStackFrame) {
-            makeCurrent ((CallStackFrame) node);
+            lookupProvider.lookupFirst(null, RequestProcessor.class).post(new Runnable() {
+                public void run() {
+                    makeCurrent ((CallStackFrame) node);
+                }
+            });
             return;
         }
         throw new UnknownTypeException (node);
@@ -191,9 +195,9 @@ public class CallStackActionsProvider implements NodeActionsProvider {
     }
     
     private void makeCurrent (final CallStackFrame frame) {
-        if (debugger.getCurrentCallStackFrame () != frame)
+        if (debugger.getCurrentCallStackFrame () != frame) {
             frame.makeCurrent ();
-        else
+        } else {
             SwingUtilities.invokeLater (new Runnable () {
                 public void run () {
                     String language = DebuggerManager.getDebuggerManager ().
@@ -202,5 +206,6 @@ public class CallStackActionsProvider implements NodeActionsProvider {
                     sp.showSource (frame, language);
                 }
             });
+        }
     }
 }
