@@ -44,7 +44,10 @@ package org.netbeans.modules.cnd.debugger.gdb.models;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.ref.WeakReference;
-import java.util.Vector;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.netbeans.api.debugger.Session;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.viewmodel.NodeModel;
@@ -55,6 +58,7 @@ import org.openide.util.NbBundle;
 
 import org.netbeans.modules.cnd.debugger.gdb.CallStackFrame;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
+import org.netbeans.modules.cnd.debugger.gdb.GdbVariable;
 
 
 /**
@@ -67,14 +71,14 @@ public class CallStackNodeModel implements NodeModel {
     public static final String CURRENT_CALL_STACK =
         "org/netbeans/modules/debugger/resources/callStackView/CurrentFrame"; // NOI18N
 
-    private GdbDebugger debugger;
-    private Session session;
-    private Vector listeners = new Vector();
+    private final GdbDebugger debugger;
+    private final Session session;
+    private final List<ModelListener> listeners = new CopyOnWriteArrayList<ModelListener>();
     
     
     public CallStackNodeModel(ContextProvider lookupProvider) {
-        debugger = (GdbDebugger) lookupProvider.lookupFirst(null, GdbDebugger.class);
-        session = (Session) lookupProvider.lookupFirst(null, Session.class);
+        debugger = lookupProvider.lookupFirst(null, GdbDebugger.class);
+        session = lookupProvider.lookupFirst(null, Session.class);
         new Listener(this, debugger);
     }
     
@@ -144,11 +148,9 @@ public class CallStackNodeModel implements NodeModel {
     }
     
     private void fireTreeChanged() {
-        Vector v = (Vector) listeners.clone();
-        int i, k = v.size();
-        for (i = 0; i < k; i++) {
-	    ((ModelListener) v.get(i)).modelChanged(null);
-	}
+        for (ModelListener listener : listeners) {
+            listener.modelChanged(null);
+        }
     }
 
     /** 
@@ -170,6 +172,24 @@ public class CallStackNodeModel implements NodeModel {
         if (functionName != null && !functionName.equals("??")) { // NOI18N
             // By default use function name
             csfName = functionName;
+
+            // add arguments
+            Collection<GdbVariable> args = csf.getArguments();
+            if (args != null) {
+                StringBuilder sb = new StringBuilder(csfName);
+                sb.append('(');
+                for (Iterator<GdbVariable> iter = args.iterator(); iter.hasNext();) {
+                    GdbVariable arg = iter.next();
+                    sb.append(arg.getName());
+                    sb.append('=');
+                    sb.append(arg.getValue());
+                    if (iter.hasNext()) {
+                        sb.append(',');
+                    }
+                }
+                sb.append(')');
+                csfName = sb.toString();
+            }
         } else if (csf.getAddr() != null) {  
             //If function name is not available, use address
             csfName= NbBundle.getMessage(CallStackNodeModel.class,
@@ -195,7 +215,7 @@ public class CallStackNodeModel implements NodeModel {
                         new Object[] { csfName, fileName, String.valueOf(ln) });
             }
 	}
-        return csfName.toString();
+        return csfName;
     }
             
     
@@ -207,17 +227,17 @@ public class CallStackNodeModel implements NodeModel {
      */
     private static class Listener implements PropertyChangeListener {
         
-        private WeakReference ref;
-        private GdbDebugger debugger;
+        private final WeakReference<CallStackNodeModel> ref;
+        private final GdbDebugger debugger;
         
         private Listener(CallStackNodeModel rm, GdbDebugger debugger) {
-            ref = new WeakReference(rm);
+            ref = new WeakReference<CallStackNodeModel>(rm);
             this.debugger = debugger;
             debugger.addPropertyChangeListener(GdbDebugger.PROP_CURRENT_CALL_STACK_FRAME, this);
         }
         
         private CallStackNodeModel getModel() {
-            CallStackNodeModel rm = (CallStackNodeModel) ref.get();
+            CallStackNodeModel rm = ref.get();
             if (rm == null) {
                 debugger.removePropertyChangeListener(GdbDebugger.PROP_CURRENT_CALL_STACK_FRAME, this);
             }
