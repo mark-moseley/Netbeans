@@ -45,6 +45,7 @@ import org.netbeans.lib.profiler.client.ClientUtils;
 import org.netbeans.lib.profiler.results.CCTNode;
 import org.netbeans.lib.profiler.utils.StringUtils;
 import org.netbeans.lib.profiler.utils.formatting.MethodNameFormatterFactory;
+import org.netbeans.lib.profiler.results.ExportDataDumper;
 import java.util.ResourceBundle;
 
 
@@ -61,8 +62,8 @@ import java.util.ResourceBundle;
 public class PresoObjAllocCCTNode implements CCTNode {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
-    private static final String VM_ALLOC_CLASS = "org.netbeans.lib.profiler.server.ProfilerRuntimeMemory"; // NOI18N
-    private static final String VM_ALLOC_METHOD = "traceVMObjectAlloc"; // NOI18N
+    public static final String VM_ALLOC_CLASS = "org.netbeans.lib.profiler.server.ProfilerRuntimeMemory"; // NOI18N
+    public static final String VM_ALLOC_METHOD = "traceVMObjectAlloc"; // NOI18N
     private static final String VM_ALLOC_TEXT = ResourceBundle.getBundle("org.netbeans.lib.profiler.results.memory.Bundle") // NOI18N
     .getString("PresoObjAllocCCTNode_VMAllocMsg"); // NOI18N
     public static final int SORT_BY_NAME = 1;
@@ -441,6 +442,79 @@ public class PresoObjAllocCCTNode implements CCTNode {
                 PresoObjAllocCCTNode tmpCh = children[j];
                 children[j] = children[j - 1];
                 children[j - 1] = tmpCh;
+            }
+        }
+    }
+
+    public void exportXMLData(ExportDataDumper eDD,String indent) {
+        String newline = System.getProperty("line.separator"); // NOI18N
+        StringBuffer result = new StringBuffer(indent+"<Node>"+newline); //NOI18N
+        result.append(indent+" <Name>"+replaceHTMLCharacters(getNodeName())+"<Name>"+newline); //NOI18N
+        result.append(indent+" <Parent>"+replaceHTMLCharacters((getParent()==null)?("none"):(((PresoObjAllocCCTNode)getParent()).getNodeName()))+"<Parent>"+newline); //NOI18N
+        result.append(indent+" <Bytes_Allocated>"+totalObjSize+"</Bytes_Allocated>"+newline); //NOI18N
+        result.append(indent+" <Objects_Allocated>"+nCalls+"</Objects_Allocated>"+newline); //NOI18N
+        eDD.dumpData(result); //dumps the current row
+        // children nodes
+        if (children!=null) {
+            for (int i = 0; i < getNChildren(); i++) {
+                children[i].exportXMLData(eDD, indent+" "); //NOI18N
+            }
+        }
+        result=new StringBuffer(indent+"</Node>"); //NOI18N
+        eDD.dumpData(result);
+    }
+
+    public void exportHTMLData(ExportDataDumper eDD, int depth) {
+        StringBuffer result = new StringBuffer("<tr><td class=\"method\"><pre class=\"method\">"); //NOI18N
+        for (int i=0; i<depth; i++) {
+            result.append("."); //NOI18N
+        }
+        result.append(replaceHTMLCharacters(getNodeName())+"</pre></td><td class=\"right\">"+totalObjSize+"</td><td class=\"right\">"+nCalls+"</td><td class=\"parent\"><pre class=\"parent\">"+replaceHTMLCharacters((getParent()==null)?("none"):(((PresoObjAllocCCTNode)getParent()).getNodeName()))+"</pre></td></tr>"); //NOI18N
+        eDD.dumpData(result); //dumps the current row
+        // children nodes
+        if (children!=null) {
+            for (int i = 0; i < children.length; i++) {
+                children[i].exportHTMLData(eDD, depth+1);
+            }
+        }
+    }
+
+    private String replaceHTMLCharacters(String s) {
+        StringBuffer sb = new StringBuffer();
+        int len = s.length();
+        for (int i = 0; i < len; i++) {
+          char c = s.charAt(i);
+          switch (c) {
+              case '<': sb.append("&lt;"); break; // NOI18N
+              case '>': sb.append("&gt;"); break; // NOI18N
+              case '&': sb.append("&amp;"); break; // NOI18N
+              case '"': sb.append("&quot;"); break; // NOI18N
+              default: sb.append(c); break;
+          }
+        }
+        return sb.toString();
+    }
+
+    public void exportCSVData(String separator, int depth, ExportDataDumper eDD) {
+        StringBuffer result = new StringBuffer();
+        String newLine = "\r\n"; // NOI18N
+        String quote = "\""; // NOI18N
+        String indent = " "; // NOI18N
+
+        // this node
+        result.append(quote);
+        for (int i=0; i<depth; i++) {
+            result.append(indent); // to simulate the tree structure in CSV
+        }
+        result.append(((nodeName==null)?(className):(nodeName)) + quote + separator);
+        result.append(quote+totalObjSize+quote+separator);
+        result.append(quote+nCalls+quote+separator);
+        result.append(quote+((getParent()==null)?("none"):(((PresoObjAllocCCTNode)getParent()).getNodeName()))+newLine); // NOI18N
+        eDD.dumpData(result); //dumps the current row
+        // children nodes
+        if (children!=null) {
+            for (int i = 0; i < children.length; i++) {
+                children[i].exportCSVData(separator, depth+1, eDD);
             }
         }
     }

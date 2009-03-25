@@ -41,6 +41,7 @@
 package org.netbeans.lib.profiler.ui.cpu;
 
 import org.netbeans.lib.profiler.global.CommonConstants;
+import org.netbeans.lib.profiler.results.ExportDataDumper;
 import org.netbeans.lib.profiler.results.cpu.CPUResultsSnapshot;
 import org.netbeans.lib.profiler.results.cpu.PrestimeCPUCCTNode;
 import org.netbeans.lib.profiler.ui.UIConstants;
@@ -69,6 +70,7 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumnModel;
+import org.netbeans.lib.profiler.results.cpu.PrestimeCPUCCTNodeFree;
 
 
 /**
@@ -117,8 +119,8 @@ public class ReverseCallGraphPanel extends SnapshotCPUResultsPanel implements Sc
     private AbstractTreeTableModel abstractTreeTableModel;
     private EnhancedTreeCellRenderer enhancedTreeCellRenderer = new MethodNameTreeCellRenderer();
     private ExtendedTreeTableModel treeTableModel;
-    private ImageIcon leafIcon = new ImageIcon(getClass().getResource("/org/netbeans/lib/profiler/ui/resources/reverseNode.png")); // NOI18N
-    private ImageIcon nodeIcon = new ImageIcon(getClass().getResource("/org/netbeans/lib/profiler/ui/resources/reverseNode.png")); // NOI18N
+    private ImageIcon leafIcon = new ImageIcon(ReverseCallGraphPanel.class.getResource("/org/netbeans/lib/profiler/ui/resources/reverseNode.png")); // NOI18N
+    private ImageIcon nodeIcon = new ImageIcon(ReverseCallGraphPanel.class.getResource("/org/netbeans/lib/profiler/ui/resources/reverseNode.png")); // NOI18N
     private int minNamesColumnWidth; // minimal width of classnames columns
 
     //~ Constructors -------------------------------------------------------------------------------------------------------------
@@ -136,6 +138,65 @@ public class ReverseCallGraphPanel extends SnapshotCPUResultsPanel implements Sc
         cornerButton = createHeaderPopupCornerButton(cornerPopup);
 
         setDefaultSorting();
+    }
+
+    public void exportData(int exportedFileType, ExportDataDumper eDD, String viewName) {
+        percentFormat.setMaximumFractionDigits(2);
+        percentFormat.setMinimumFractionDigits(2);
+        PrestimeCPUCCTNodeFree.setPercentFormat(percentFormat);
+        switch (exportedFileType) {
+            case 1: eDD.dumpData(getCSVHeader(",")); //NOI18N
+                    ((PrestimeCPUCCTNodeFree) abstractTreeTableModel.getRoot()).exportCSVData(",",exportedFileType, eDD);
+                    eDD.close();
+                    break;
+            case 2: eDD.dumpData(getCSVHeader(";")); //NOI18N
+                    ((PrestimeCPUCCTNodeFree)abstractTreeTableModel.getRoot()).exportCSVData(";", exportedFileType, eDD);
+                    eDD.close();
+                    break;
+            case 3: eDD.dumpData(getXMLHeader(viewName));
+                    ((PrestimeCPUCCTNodeFree)abstractTreeTableModel.getRoot()).exportXMLData(eDD, "  ");
+                    eDD.dumpDataAndClose(getXMLFooter());
+                    break;
+            case 4: eDD.dumpData(getHTMLHeader(viewName));
+                    ((PrestimeCPUCCTNodeFree)abstractTreeTableModel.getRoot()).exportHTMLData(eDD, 0);
+                    eDD.dumpDataAndClose(getHTMLFooter());
+                    break;
+        }
+        percentFormat.setMaximumFractionDigits(1);
+        percentFormat.setMinimumFractionDigits(0);
+    }
+
+    private StringBuffer getCSVHeader(String separator) {
+        String newLine = "\r\n"; // NOI18N
+        String quote = "\""; // NOI18N
+        StringBuffer result = new StringBuffer();
+        for (int i = 0; i < (columnCount); i++) {
+            result.append(quote+columnNames[i]+quote+separator);
+        }
+        result.append(newLine);
+        return result;
+    }
+
+    private StringBuffer getHTMLHeader(String viewName) {
+        StringBuffer result = new StringBuffer("<HTML><HEAD><meta http-equiv=\"Content-type\" content=\"text/html; charset=utf-8\" /><TITLE>"+viewName+"</TITLE><style type=\"text/css\">pre.method{overflow:auto;width:600;height:30;vertical-align:baseline}pre.parent{overflow:auto;width:400;height:30;vertical-align:baseline}td.method{text-align:left;width:600}td.parent{text-align:left;width:400}td.right{text-align:right;white-space:nowrap}</style></HEAD><BODY><table border=\"1\"><tr>"); // NOI18N
+        result.append("<th>"+columnNames[0]+"</th><th>"+columnNames[1]+"</th><th>"+columnNames[2]+"</th><th>"+columnNames[3]+"</th></tr>"); //NOI18N
+        return result;
+    }
+
+    private StringBuffer getHTMLFooter() {
+        return new StringBuffer("</TABLE></BODY></HTML>"); //NOI18N
+    }
+
+    private StringBuffer getXMLHeader(String viewName) {
+        String newline = System.getProperty("line.separator"); // NOI18N
+        StringBuffer result = new StringBuffer("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"+newline+"<ExportedView Name=\""+viewName+"\" type=\"tree\">"+newline+"<tree>"+newline); // NOI18N
+        return result;
+    }
+
+    private StringBuffer getXMLFooter() {
+        String newline = System.getProperty("line.separator"); // NOI18N
+        StringBuffer result = new StringBuffer("</tree>"+newline+"</ExportedView>"); // NOI18N
+        return result;
     }
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
