@@ -41,30 +41,40 @@ package org.netbeans.modules.vmd.midpnb.screen.display;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Shape;
-import javax.microedition.m2g.SVGImage;
-import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.screen.display.ScreenDeviceInfo;
 
 /**
  *
  * @author akorostelev
  */
-public class SVGLabelDisplayPresenter extends UpdatableSVGComponentDisplayPresenter {
+public class SVGSpinnerDisplayPresenter extends SVGComponentDisplayPresenter {
 
-    private static final String TITLE           = "text";            // NOI18N
-    
-    private static final String TITLE_SUFFIX    = DASH + TITLE;
-
-    // fix issue with null BBox returned by persejus for label.
-    // increase bbox height by SELECTION_SHAPE_EXTENSION
+    // fix issue with incorrect BBox returned by persejus for spinner.
+    // move bbox to the left and increase width by SELECTION_SHAPE_EXTENSION
     private static final int SELECTION_SHAPE_EXTENSION = 3;
 
     private Rectangle mySelectionRect = null;
+    private Point myLocationPoint = null;
 
     @Override
     public void reload(ScreenDeviceInfo deviceInfo) {
         super.reload(deviceInfo);
         mySelectionRect = null;
+        myLocationPoint = null;
+    }
+
+    @Override
+    public Point getLocation() {
+        if (myLocationPoint == null){
+            Point location = super.getLocation();
+            if (location != null){
+                myLocationPoint = location;
+                myLocationPoint.setLocation(
+                        location.getX() - SELECTION_SHAPE_EXTENSION,
+                        location.getY());
+            }
+        }
+        return myLocationPoint;
     }
 
     @Override
@@ -74,18 +84,14 @@ public class SVGLabelDisplayPresenter extends UpdatableSVGComponentDisplayPresen
             Shape shape = super.getSelectionShape();
             if (shape != null) {
                 mySelectionRect = shape.getBounds();
-                mySelectionRect.setSize((int) mySelectionRect.getWidth(),
-                        (int) mySelectionRect.getHeight() + SELECTION_SHAPE_EXTENSION);
+                mySelectionRect.setSize(
+                        (int) mySelectionRect.getWidth() + SELECTION_SHAPE_EXTENSION,
+                        (int) mySelectionRect.getHeight());
             }
         }
         return mySelectionRect;
     }
 
-    @Override
-    protected void reloadSVGComponent(SVGImage svgImage,
-            DesignComponent svgComponent, String componentId) {
 
-        updateText(svgImage, svgComponent, componentId, TITLE_SUFFIX);
-    }
 
 }
