@@ -162,7 +162,12 @@ public class JPDASupport implements DebuggerManagerListener {
 
     public static JPDASupport attach (String mainClass) throws IOException, 
     DebuggerStartException {
-        Process process = launchVM (mainClass, "", true);
+        return attach(mainClass, null);
+    }
+    
+    public static JPDASupport attach (String mainClass, String[] args) throws IOException, 
+    DebuggerStartException {
+        Process process = launchVM (mainClass, args, "", true);
         String line = readLine (process.getInputStream ());
         int port = Integer.parseInt (line.substring (line.lastIndexOf (':') + 1).trim ());
         ProcessIO pio = new ProcessIO (process);
@@ -285,6 +290,7 @@ public class JPDASupport implements DebuggerManagerListener {
                 sourceUrl
             });
             map.put ("sourcepath", cp);
+            map.put ("baseDir", new File(sourceRoot).getParentFile());
             return new Object[] { map };
         } catch (MalformedURLException ex) {
             //System.err.println("MalformedURLException: sourceRoot = '"+sourceRoot+"'.");
@@ -308,7 +314,8 @@ public class JPDASupport implements DebuggerManagerListener {
     }
     
     private static Process launchVM (
-        String mainClass, 
+        String mainClass,
+        String[] args,
         String connectorAddress, 
         boolean server
     ) throws IOException {
@@ -336,6 +343,12 @@ public class JPDASupport implements DebuggerManagerListener {
             cp.substring(0, cp.length() -1),
             mainClass
         };
+        if (args != null && args.length > 0) {
+            String[] arr = new String[cmdArray.length + args.length];
+            System.arraycopy(cmdArray, 0, arr, 0, cmdArray.length);
+            System.arraycopy(args, 0, arr, cmdArray.length, args.length);
+            cmdArray = arr;
+        }
 
         return Runtime.getRuntime ().exec (cmdArray);
     }
