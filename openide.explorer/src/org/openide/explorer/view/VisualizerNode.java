@@ -207,13 +207,11 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
         if (desc == UNKNOWN) {
             shortDescription = desc = node.getShortDescription();
         }
-        if (icon instanceof Image) {
-            String toolTip = ImageUtilities.getImageToolTip((Image) icon);
-            if (toolTip.length() > 0) {
-                StringBuilder str = new StringBuilder(128);
-                str.append("<html>").append(desc).append("<br>").append(toolTip).append("</html>");
-                desc = str.toString();
-            }
+        String toolTip = ImageUtilities.getImageToolTip(ImageUtilities.icon2Image(icon != null ? icon : getIcon(false, false)));
+        if (toolTip.length() > 0) {
+            StringBuilder str = new StringBuilder(128);
+            str.append("<html>").append(desc).append("<br>").append(toolTip).append("</html>");
+            desc = str.toString();
         }
         return desc;
     }
@@ -273,7 +271,6 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
             ch = Children.MUTEX.readAccess(
                     new Mutex.Action<VisualizerChildren>() {
                         public VisualizerChildren run() {
-                            int nodesCount = node.getChildren().getNodesCount();
                             List<Node> snapshot = node.getChildren().snapshot();
                             VisualizerChildren vc = new VisualizerChildren(VisualizerNode.this, snapshot);
                             notifyVisualizerChildrenChange(true, vc);
@@ -621,7 +618,7 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
     /** Loads default icon if not loaded. */
     private static Icon getDefaultIcon() {
         if (defaultIcon == null) {
-            defaultIcon = ImageUtilities.image2Icon(ImageUtilities.loadImage(DEFAULT_ICON));
+            defaultIcon = ImageUtilities.loadImageIcon(DEFAULT_ICON, false);
         }
         return defaultIcon;
     }
