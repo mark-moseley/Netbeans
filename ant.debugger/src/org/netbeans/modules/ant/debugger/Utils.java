@@ -47,13 +47,10 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.logging.Handler;
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.Caret;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.EditorKit;
 import javax.swing.text.StyledDocument;
@@ -61,7 +58,6 @@ import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import org.apache.tools.ant.module.api.support.TargetLister;
 import org.apache.tools.ant.module.spi.AntEvent;
-import org.apache.tools.ant.module.spi.TaskStructure;
 import org.openide.ErrorManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.LineCookie;
@@ -70,12 +66,8 @@ import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.nodes.Node;
 import org.openide.text.Annotatable;
-import org.openide.text.Annotation;
 import org.openide.text.Line;
-import org.openide.text.NbDocument;
-import org.openide.windows.TopComponent;
 import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
 import org.xml.sax.Locator;
@@ -97,7 +89,7 @@ public class Utils {
             
     private static Object currentLine;
     
-    static void markCurrent (final Object line) {
+    static synchronized void markCurrent (final Object line) {
         unmarkCurrent ();
         
         Annotatable[] annotatables = (Annotatable[]) line;
@@ -133,7 +125,7 @@ public class Utils {
         showLine (line);
     }
     
-    static void unmarkCurrent () {
+    static synchronized void unmarkCurrent () {
         if (currentLine != null) {
             
 //            ((DebuggerAnnotation) currentLine).detach ();
@@ -214,6 +206,7 @@ public class Utils {
             StyledDocument doc = editor.openDocument ();
             InputSource in = createInputSource 
                 (fileObject, editor, doc);
+            if (in == null) return null;
             SAXParserFactory factory = SAXParserFactory.newInstance ();
             SAXParser parser = factory.newSAXParser ();
             final int[] line = new int [4];
@@ -289,6 +282,7 @@ public class Utils {
             StyledDocument doc = editor.openDocument ();
             InputSource in = createInputSource 
                 (fileObject, editor, doc);
+            if (in == null) return null;
             SAXParserFactory factory = SAXParserFactory.newInstance ();
             SAXParser parser = factory.newSAXParser ();
             final int[] line = new int [4];
@@ -385,6 +379,7 @@ public class Utils {
     ) throws IOException, BadLocationException {
         final StringWriter w = new StringWriter (document.getLength ());
         final EditorKit kit = findKit (editor);
+        if (kit == null) return null;
         final IOException[] ioe = new IOException [1];
         final BadLocationException[] ble = new BadLocationException [1];
         document.render(new Runnable () {
@@ -433,7 +428,7 @@ public class Utils {
             } catch (InvocationTargetException ex) {
                 ErrorManager.getDefault().notify(ex.getTargetException());
             } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
+                Thread.currentThread().interrupt();
             }
             return ek[0];
         }
