@@ -138,6 +138,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
      * Creates diff panel and immediatelly starts loading...
      */
     public MultiDiffPanel(Context context, int initialType, String contextName) {
+        assert EventQueue.isDispatchThread();
         this.context = context;
         this.contextName = contextName;
         currentType = initialType;
@@ -153,6 +154,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
      * It hides All, Local, Remote toggles and file chooser combo.
      */
     public MultiDiffPanel(File file, String rev1, String rev2) {
+        assert EventQueue.isDispatchThread();
         context = null;
         contextName = file.getName();
         initComponents();
@@ -197,7 +199,13 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
      */
     void componentClosed() {
         setups = null;
-        cancelBackgroundTasks(); 
+        /**
+         * must disable these actions, otherwise key shortcuts would trigger them even after tab closure
+         * see #159266
+         */
+        prevAction.setEnabled(false);
+        nextAction.setEnabled(false);
+        cancelBackgroundTasks();
     }
 
     void requestActive() {
@@ -215,8 +223,8 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
         remoteToggle.addActionListener(this);
         allToggle.addActionListener(this);
         
-        commitButton.setToolTipText(NbBundle.getMessage(MultiDiffPanel.class, "MSG_CommitDiff_Tooltip", contextName));
-        updateButton.setToolTipText(NbBundle.getMessage(MultiDiffPanel.class, "MSG_UpdateDiff_Tooltip", contextName));
+        commitButton.setToolTipText(NbBundle.getMessage(MultiDiffPanel.class, "CTL_DiffPanel_Commit_Tooltip"));
+        updateButton.setToolTipText(NbBundle.getMessage(MultiDiffPanel.class, "CTL_DiffPanel_Update_Tooltip"));
         ButtonGroup grp = new ButtonGroup();
         grp.add(localToggle);
         grp.add(remoteToggle);
@@ -248,6 +256,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
     }
     
     private void refreshComponents() {
+        assert EventQueue.isDispatchThread();
         DiffController view = setups != null && currentModelIndex != -1 ? setups[currentModelIndex].getView() : null;
         int currentDifferenceIndex = view != null ? view.getDifferenceIndex() : -1;
         if (view != null) {
@@ -320,6 +329,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
     }
     
     private void setDiffIndex(int idx, int location) {
+        assert EventQueue.isDispatchThread();
         currentIndex = idx;
         DiffController view = null;
         
@@ -440,6 +450,18 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
 
     /** Next that is driven by visibility. It continues to next not yet visible difference. */
     private void onNextButton() {
+        assert setups != null : "setups is null";                       //NOI18N
+        assert setups[currentModelIndex] != null
+                        : "setups[" + currentModelIndex + "] is null";  //NOI18N
+        if ((setups == null) || (setups[currentModelIndex] == null)) {
+            EventQueue.invokeLater(new Runnable() {
+                public void run() {
+                    nextButton.setEnabled(false);
+                }
+            });
+            return;
+        }
+
         if (showingFileTable()) {
             currentIndex = fileTable.getSelectedIndex();
             currentModelIndex = fileTable.getSelectedModelIndex();
@@ -505,6 +527,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
 
 
     private void refreshSetups() {
+        assert EventQueue.isDispatchThread();
         if (dpt != null) {
             prepareTask.cancel();
         }
@@ -634,6 +657,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
     }
 
     private void onDiffTypeChanged() {
+        assert EventQueue.isDispatchThread();
         if (localToggle.isSelected()) {
             if (currentType == Setup.DIFFTYPE_LOCAL) return;
             currentType = Setup.DIFFTYPE_LOCAL;
@@ -662,6 +686,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
         }
 
         public void run() {
+            IOException exception = null;
             for (int i = 0; i < prepareSetups.length; i++) {
                 if (prepareSetups != setups) return;
                 try {
@@ -684,8 +709,21 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
                         }
                     });
                 } catch (IOException e) {
-                    Subversion.LOG.log(Level.SEVERE, null, e);
+                    Subversion.LOG.log(Level.INFO, null, e);
+                    if (exception == null) {
+                        // save only the first exception
+                        exception = e;
+                    }
                 }
+            }
+            if (exception != null) {
+                // notify user of the failure
+                final IOException e = exception;
+                EventQueue.invokeLater(new Runnable() {
+                    public void run() {
+                        SvnClientExceptionHandler.notifyException(e, false, true);
+                    }
+                });
             }
         }
     }
@@ -723,7 +761,7 @@ class MultiDiffPanel extends javax.swing.JPanel implements ActionListener, Versi
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
         controlsToolBar = new javax.swing.JToolBar();
