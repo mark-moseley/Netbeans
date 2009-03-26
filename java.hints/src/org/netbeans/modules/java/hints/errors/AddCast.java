@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,8 +42,10 @@
 package org.netbeans.modules.java.hints.errors;
 
 import com.sun.source.tree.ArrayAccessTree;
+import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
+import com.sun.source.tree.ConditionalExpressionTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.LiteralTree;
@@ -52,30 +54,24 @@ import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParameterizedTypeTree;
+import com.sun.source.tree.ParenthesizedTree;
 import com.sun.source.tree.ReturnTree;
-import com.sun.source.tree.Scope;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
+import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreeScanner;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.ExecutableType;
+import javax.lang.model.type.ErrorType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.ElementFilter;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.modules.editor.java.Utilities;
 import org.netbeans.modules.java.hints.spi.ErrorRule;
@@ -89,6 +85,12 @@ import static com.sun.source.tree.Tree.Kind.*;
  * @author Jan Lahoda
  */
 public final class AddCast implements ErrorRule<Void> {
+
+    private static final Set<String> ERROR_CODES = new HashSet<String>(Arrays.asList(
+            "compiler.err.prob.found.req", // NOI18N
+            "compiler.err.cant.apply.symbol", // NOI18N
+            "compiler.err.cant.resolve.location", // NOI18N
+            "compiler.err.cant.resolve.location.args")); // NOI18N
     
     static void computeType(CompilationInfo info, int offset, TypeMirror[] tm, ExpressionTree[] expression, Tree[] leaf) {
         TreePath path = info.getTreeUtilities().pathFor(offset + 1);
@@ -119,9 +121,12 @@ public final class AddCast implements ErrorRule<Void> {
                     parents = parents.getParentPath();
                 
                 if (parents != null) {
-                    expected = info.getTrees().getTypeMirror(new TreePath(parents, ((MethodTree) parents.getLeaf()).getReturnType()));
-                    found = ((ReturnTree) scope).getExpression();
-                    resolved = info.getTrees().getTypeMirror(new TreePath(path, found));
+                    Tree returnTypeTree = ((MethodTree) parents.getLeaf()).getReturnType();
+                    if (returnTypeTree != null) {
+                        expected = info.getTrees().getTypeMirror(new TreePath(parents, returnTypeTree));
+                        found = ((ReturnTree) scope).getExpression();
+                        resolved = info.getTrees().getTypeMirror(new TreePath(path, found));
+                    }
                 }
             }
             
@@ -138,28 +143,43 @@ public final class AddCast implements ErrorRule<Void> {
             
             if (expected != null && resolved != null) {
                 TypeMirror foundTM = info.getTrees().getTypeMirror(new TreePath(path, found));
-                
+
+                if (foundTM.getKind() == TypeKind.ERROR) {
+                    foundTM = info.getTrees().getOriginalType((ErrorType) foundTM);
+                }
+
+                if (resolved.getKind() == TypeKind.ERROR) {
+                    resolved = info.getTrees().getOriginalType((ErrorType) resolved);
+                }
+
                 if (foundTM.getKind() == TypeKind.EXECUTABLE) {
                     //XXX: ignoring executable, see AddCast9 for more information when this happens.
                 } else {
-                    if (   !info.getTypes().isAssignable(foundTM, expected)
-                        && info.getTypeUtilities().isCastable(resolved, expected)
-                           /*#85346: cast hint should not be proposed for error types:*/
-                        && foundTM.getKind() != TypeKind.ERROR
-                        && expected.getKind() != TypeKind.ERROR) {
-                        tm[0] = expected;
-                        expression[0] = found;
-                        leaf[0] = scope;
+                    if (info.getTypeUtilities().isCastable(resolved, expected)) {
+                        if (!info.getTypes().isAssignable(foundTM, expected)
+                                /*#85346: cast hint should not be proposed for error types:*/
+                                && foundTM.getKind() != TypeKind.ERROR
+                                && expected.getKind() != TypeKind.ERROR) {
+                            tm[0] = expected;
+                            expression[0] = found;
+                            leaf[0] = scope;
+                        }
+                    } else {
+                        tm[0] = null; //clean up, test136313
                     }
                 }
             }
             
             path = path.getParentPath();
         }
+        
+        if (tm[0] != null) {
+            tm[0] = org.netbeans.modules.java.hints.errors.Utilities.resolveCapturedType(info, tm[0]);
+        }
     }
-    
+
     public Set<String> getCodes() {
-        return new HashSet<String>(Arrays.asList("compiler.err.prob.found.req", "compiler.err.cant.apply.symbol", "compiler.err.cant.resolve.location")); // NOI18N
+        return ERROR_CODES;
     }
     
     public List<Fix> run(CompilationInfo info, String diagnosticKey, int offset, TreePath treePath, Data<Void> data) {
@@ -170,10 +190,11 @@ public final class AddCast implements ErrorRule<Void> {
         
         computeType(info, offset, tm, expression, leaf);
         
-        if (tm[0] != null) {
+        if (tm[0] != null && tm[0].getKind() != TypeKind.NULL) {
             int position = (int) info.getTrees().getSourcePositions().getStartPosition(info.getCompilationUnit(), expression[0]);
-            
-            result.add(new AddCastFix(info.getJavaSource(), new HintDisplayNameVisitor(info).scan(expression[0], null), Utilities.getTypeName(tm[0], false).toString(), position, expression[0].getKind().asInterface() == BinaryTree.class));
+            Class interf = expression[0].getKind().asInterface();
+            boolean wrapWithBrackets = interf == BinaryTree.class || interf == ConditionalExpressionTree.class;
+            result.add(new AddCastFix(info.getJavaSource(), new HintDisplayNameVisitor(info).scan(expression[0], null), Utilities.getTypeName(tm[0], false).toString(), position, wrapWithBrackets));
         }
         
         return result;
@@ -297,6 +318,18 @@ public final class AddCast implements ErrorRule<Void> {
             
             if (t.getKind() == Kind.ARRAY_ACCESS) {
                 return simpleName(((ArrayAccessTree) t).getExpression()) + "[]"; //NOI18N
+            }
+
+            if (t.getKind() == Kind.PARENTHESIZED) {
+                return "(" + simpleName(((ParenthesizedTree)t).getExpression()) + ")"; //NOI18N
+            }
+
+            if (t.getKind() == Kind.TYPE_CAST) {
+                return simpleName(((TypeCastTree)t).getType());
+            }
+
+            if (t.getKind() == Kind.ARRAY_TYPE) {
+                return simpleName(((ArrayTypeTree)t).getType());
             }
             
             throw new IllegalStateException("Currently unsupported kind of tree: " + t.getKind()); // NOI18N
