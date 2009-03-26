@@ -45,16 +45,20 @@ import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.Set;
 import javax.lang.model.element.*;
+import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.source.*;
-import org.netbeans.modules.refactoring.api.WhereUsedQuery;
 import org.netbeans.modules.refactoring.java.WhereUsedElement;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.api.ProgressEvent;
 import org.netbeans.modules.refactoring.api.WhereUsedQuery;
 import org.netbeans.modules.refactoring.java.RetoucheUtils;
+import org.netbeans.modules.refactoring.java.SourceUtilsEx;
 import org.netbeans.modules.refactoring.java.api.WhereUsedQueryConstants;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.openide.ErrorManager;
@@ -84,14 +88,31 @@ public class JavaWhereUsedQueryPlugin extends JavaRefactoringPlugin {
     
     @Override
     public Problem preCheck() {
-        if (!refactoring.getRefactoringSource().lookup(TreePathHandle.class).getFileObject().isValid()) {
+        TreePathHandle handle = refactoring.getRefactoringSource().lookup(TreePathHandle.class);
+        if (!handle.getFileObject().isValid() || RetoucheUtils.getElementKind(handle) == null) {
             return new Problem(true, NbBundle.getMessage(FindVisitor.class, "DSC_ElNotAvail")); // NOI18N
+        }
+        if (handle.getKind() == Tree.Kind.ARRAY_TYPE) {
+            return new Problem(true, NbBundle.getMessage(FindVisitor.class, "ERR_FindUsagesArrayType"));
         }
         return null;
     }
     
     private Set<FileObject> getRelevantFiles(final TreePathHandle tph) {
-        final ClasspathInfo cpInfo = getClasspathInfo(refactoring);
+        return getRelevantFiles(
+                tph,
+                getClasspathInfo(refactoring),
+                isFindSubclasses(),
+                isFindDirectSubclassesOnly(),
+                isFindOverridingMethods(),
+                isFindUsages()
+                );
+    }
+    
+    public static Set<FileObject> getRelevantFiles(
+            final TreePathHandle tph, final ClasspathInfo cpInfo,
+            final boolean isFindSubclasses, final boolean isFindDirectSubclassesOnly,
+            final boolean isFindOverridingMethods, final boolean isFindUsages) {
         final ClassIndex idx = cpInfo.getClassIndex();
         final Set<FileObject> set = new HashSet<FileObject>();
                 
@@ -111,12 +132,15 @@ public class JavaWhereUsedQueryPlugin extends JavaRefactoringPlugin {
             public void run(CompilationController info) throws Exception {
                 info.toPhase(JavaSource.Phase.RESOLVED);
                 final Element el = tph.resolveElement(info);
+                if (el == null) {
+                    throw new NullPointerException(String.format("#145291: Cannot resolve handle: %s\n%s", tph, info.getClasspathInfo())); // NOI18N
+                }
                 if (el.getKind().isField()) {
                     //get field references from index
                     set.addAll(idx.getResources(ElementHandle.create((TypeElement)el.getEnclosingElement()), EnumSet.of(ClassIndex.SearchKind.FIELD_REFERENCES), EnumSet.of(ClassIndex.SearchScope.SOURCE)));
                 } else if (el.getKind().isClass() || el.getKind().isInterface()) {
-                    if (isFindSubclasses()||isFindDirectSubclassesOnly()) {
-                        if (isFindDirectSubclassesOnly()) {
+                    if (isFindSubclasses || isFindDirectSubclassesOnly) {
+                        if (isFindDirectSubclassesOnly) {
                             //get direct implementors from index
                             EnumSet searchKind = EnumSet.of(ClassIndex.SearchKind.IMPLEMENTORS);
                             set.addAll(idx.getResources(ElementHandle.create((TypeElement)el), searchKind,EnumSet.of(ClassIndex.SearchScope.SOURCE)));
@@ -128,12 +152,12 @@ public class JavaWhereUsedQueryPlugin extends JavaRefactoringPlugin {
                         //get type references from index
                         set.addAll(idx.getResources(ElementHandle.create((TypeElement) el), EnumSet.of(ClassIndex.SearchKind.TYPE_REFERENCES, ClassIndex.SearchKind.IMPLEMENTORS),EnumSet.of(ClassIndex.SearchScope.SOURCE)));
                     }
-                } else if (el.getKind() == ElementKind.METHOD && isFindOverridingMethods()) {
+                } else if (el.getKind() == ElementKind.METHOD && isFindOverridingMethods) {
                     //Find overriding methods
                     TypeElement type = (TypeElement) el.getEnclosingElement();
                     set.addAll(getImplementorsRecursive(idx, cpInfo, type));
                 } 
-                if (el.getKind() == ElementKind.METHOD && isFindUsages()) {
+                if (el.getKind() == ElementKind.METHOD && isFindUsages) {
                     //get method references for method and for all it's overriders
                     Set<ElementHandle<TypeElement>> s = RetoucheUtils.getImplementorsAsHandles(idx, cpInfo, (TypeElement)el.getEnclosingElement());
                     for (ElementHandle<TypeElement> eh:s) {
@@ -164,23 +188,36 @@ public class JavaWhereUsedQueryPlugin extends JavaRefactoringPlugin {
         return set;
     }
     
-    private Set<FileObject> getImplementorsRecursive(ClassIndex idx, ClasspathInfo cpInfo, TypeElement el) {
-        Set<FileObject> set = new HashSet<FileObject>();
-        for (ElementHandle<TypeElement> e : RetoucheUtils.getImplementorsAsHandles(idx, cpInfo, el)) {
-            FileObject fo = SourceUtils.getFile(e, cpInfo);
-            assert fo != null : "issue 90196, Cannot find file for " + e + ". cpInfo=" + cpInfo;
-            set.add(fo);
+    private static Collection<FileObject> getImplementorsRecursive(ClassIndex idx, ClasspathInfo cpInfo, TypeElement el) {
+        Set<?> implementorsAsHandles = RetoucheUtils.getImplementorsAsHandles(idx, cpInfo, el);
+
+        @SuppressWarnings("unchecked")
+        Collection<FileObject> set = SourceUtilsEx.getFiles((Collection<ElementHandle<? extends Element>>) implementorsAsHandles, cpInfo);
+
+        // filter out files that are not on source path
+        ClassPath source = cpInfo.getClassPath(ClasspathInfo.PathKind.SOURCE);
+        Collection<FileObject> set2 = new ArrayList<FileObject>(set.size());
+        for (FileObject fo : set) {
+            if (source.contains(fo)) {
+                set2.add(fo);
+            }
         }
-        return set;
+        return set2;
     }
     
     //@Override
     public Problem prepare(final RefactoringElementsBag elements) {
+        fireProgressListenerStart(ProgressEvent.START, -1);
         Set<FileObject> a = getRelevantFiles(refactoring.getRefactoringSource().lookup(TreePathHandle.class));
-        fireProgressListenerStart(ProgressEvent.START, a.size());
-        processFiles(a, new FindTask(elements));
+        fireProgressListenerStep(a.size());
+        Problem problem = null;
+        try {
+            processFiles(a, new FindTask(elements));
+        } catch (IOException e) {
+            problem = createProblemAndLog(null, e);
+        }
         fireProgressListenerStop();
-        return null;
+        return problem;
     }
     
     @Override
@@ -257,8 +294,13 @@ public class JavaWhereUsedQueryPlugin extends JavaRefactoringPlugin {
                 ErrorManager.getDefault().log(ErrorManager.ERROR, "compiler.getCompilationUnit() is null " + compiler); // NOI18N
                 return;
             }
-            Element element = refactoring.getRefactoringSource().lookup(TreePathHandle.class).resolveElement(compiler);
-            assert element != null;
+            TreePathHandle handle = refactoring.getRefactoringSource().lookup(TreePathHandle.class);
+            Element element = handle.resolveElement(compiler);
+            if (element==null) {
+                ErrorManager.getDefault().log(ErrorManager.ERROR, "element is null for handle " + handle); // NOI18N
+                return;
+            }
+            
             Collection<TreePath> result = new ArrayList<TreePath>();
             if (isFindUsages()) {
                 FindUsagesVisitor findVisitor = new FindUsagesVisitor(compiler, refactoring.getBooleanValue(refactoring.SEARCH_IN_COMMENTS));
