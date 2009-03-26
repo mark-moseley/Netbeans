@@ -36,106 +36,74 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.cpu.impl;
+package org.netbeans.modules.dlight.sync;
 
-import org.netbeans.modules.dlight.util.DLightLogger;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
-import java.util.logging.Level;
-import javax.swing.*;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
 import org.netbeans.modules.dlight.api.storage.DataRow;
+import org.netbeans.modules.dlight.api.storage.DataTableMetadata.Column;
 import org.netbeans.modules.dlight.spi.indicator.Indicator;
 import org.netbeans.modules.dlight.util.DLightExecutorService;
 import org.netbeans.modules.dlight.util.UIThread;
 
 /**
- *
+ * Thread usage indicator
  * @author Vladimir Kvashin
  */
-class CpuIndicator extends Indicator<CpuIndicatorConfiguration> {
+public class SyncIndicator extends Indicator<SyncIndicatorConfiguration> {
+
     private final JButton b = new JButton("Repair...");//NOI18N
     private final JLabel label = new JLabel(getRepairActionProvider().getReason());
+    private SyncIndicatorPanel panel;
+    private final Set<String> acceptedColumnNames;
+    private int lastValue;
 
-    private CpuIndicatorPanel panel;
-    private Collection<ActionListener> listeners;
-    private int lastSysValue;
-    private int lastUsrValue;
-
-    CpuIndicator(CpuIndicatorConfiguration configuration) {
+    public SyncIndicator(SyncIndicatorConfiguration configuration) {
         super(configuration);
-        panel = new CpuIndicatorPanel();
+        this.acceptedColumnNames = new HashSet<String>();
+        for (Column column : getMetadataColumns()) {
+            acceptedColumnNames.add(column.getColumnName());
+        }
     }
 
     @Override
-    public JComponent getComponent() {
+    public synchronized JComponent getComponent() {
+        if (panel == null) {
+            panel = new SyncIndicatorPanel();
+        }
         return panel.getPanel();
     }
 
     public void reset() {
-        //graph.reset();
     }
 
-    @Override
-    public void updated(List<DataRow> data) {
-        for (DataRow row : data) {
-            if (DLightLogger.instance.isLoggable(Level.FINE)) {
-                DLightLogger.instance.fine("UPDATE: " + row.getData().get(0) + " " + row.getData().get(1));
-            }
-            Float usr = (Float) row.getData("utime"); // NOI18N
-            Float sys = (Float) row.getData("stime"); // NOI18N
-            if (usr != null && sys != null) {
-                lastSysValue = sys.intValue();
-                lastUsrValue = usr.intValue();
+    public void updated(List<DataRow> rows) {
+        for (DataRow row : rows) {
+            for (String column : row.getColumnNames()) {
+                if (acceptedColumnNames.contains(column)) {
+                    String value = row.getStringValue(column); //TODO: change to Long
+                    lastValue = (int) Float.parseFloat(value);
+                }
             }
         }
     }
 
     @Override
     protected void tick() {
-        panel.addData(lastSysValue, lastUsrValue);
-        panel.setSysValue(lastSysValue);
-        panel.setUsrValue(lastUsrValue);
-    }
-
-    /*package*/ void fireActionPerformed() {
-        ActionEvent ae = new ActionEvent(this, 0, null);
-        for (ActionListener al : getActionListeners()) {
-            al.actionPerformed(ae);
-        }
-    }
-
-    Collection<ActionListener> getActionListeners() {
-        synchronized (this) {
-            return (listeners == null) ? Collections.<ActionListener>emptyList() : new ArrayList<ActionListener>(listeners);
-        }
-    }
-
-    void addActionListener(ActionListener listener) {
-        synchronized (this) {
-            if (listeners == null) {
-                listeners = new ArrayList<ActionListener>();
-            }
-            listeners.add(listener);
-        }
-    }
-
-    void removeActionListener(ActionListener listener) {
-        synchronized (this) {
-            if (listeners != null) {
-                listeners.remove(listener);
-            }
-        }
+        panel.addData(lastValue);
     }
 
     @Override
     protected void repairNeeded(boolean needed) {
-            if (needed) {
+        if (needed) {
             b.setAlignmentX(JComponent.CENTER_ALIGNMENT);
             b.setAlignmentY(JComponent.CENTER_ALIGNMENT);
             label.setAlignmentX(JComponent.CENTER_ALIGNMENT);
@@ -157,7 +125,7 @@ class CpuIndicator extends Indicator<CpuIndicatorConfiguration> {
                             });
                             return status.booleanValue();
                         }
-                    }, "Click On Repair in CPU Indicator task");//NOI18N
+                    }, "Click On Repair in Sync Indicator task");//NOI18N
                 }
             });
             panel.getPanel().add(b);
