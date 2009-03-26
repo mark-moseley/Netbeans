@@ -62,19 +62,13 @@ public class CheckRenderer extends JPanel implements TreeCellRenderer {
         checkDim = new Dimension(old.width, old.height - 5);
     }
     
-    public CheckRenderer(boolean isQuery) {
+    public CheckRenderer(boolean isQuery, Color background) {
         setLayout(null);
         if (isQuery) {
             check = null;
         } else {
             add(check = new JCheckBox());
-            Color c = UIManager.getColor("Tree.textBackground"); //NOI18N
-            if (c == null) {
-                //May be null on GTK L&F
-                c = Color.WHITE;
-            }
-            check.setBackground(c); // NOI18N
-            Dimension dim = check.getPreferredSize();
+            check.setBackground(background);
             check.setPreferredSize(checkDim);
         }
     }
@@ -91,8 +85,7 @@ public class CheckRenderer extends JPanel implements TreeCellRenderer {
         renderer.setIcon (node.getIcon());
         stringDisplayer.setEnabled(!node.isDisabled());
         String toolTip = node.getToolTip();
-        if (toolTip!=null)
-            setToolTipText("<html>"+node.getToolTip()+"</html>"); // NOI18N
+        setToolTipText(toolTip);
         
         //HtmlRenderer does not tolerate null colors - real ones are needed to
         //ensure fg/bg always diverge enough to be readable
@@ -154,11 +147,12 @@ public class CheckRenderer extends JPanel implements TreeCellRenderer {
         if (stringDisplayer != null) {
             stringDisplayer.setFont(getFont());
         }
-        Dimension d_check = check == null ? new Dimension(0, checkDim.height) : 
-            check.getPreferredSize();
-            
-        Dimension d_label = stringDisplayer != null ? 
-            stringDisplayer.getPreferredSize() : new Dimension(0,0);
+        Dimension d_check = check == null ? null: check.getPreferredSize();
+        d_check = d_check == null ? new Dimension(0, checkDim.height) : d_check;
+
+        Dimension d_label = stringDisplayer == null
+                ? null : stringDisplayer.getPreferredSize();
+        d_label = d_label == null ? new Dimension(0, 0) : d_label;
             
         return new Dimension(d_check.width  + d_label.width, (d_check.height < d_label.height ? d_label.height : d_check.height));
     }
