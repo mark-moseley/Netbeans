@@ -23,9 +23,24 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * The Original Software is NetBeans. The Initial Developer of the Original
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Microsystems, Inc. All Rights Reserved.
+ *
+ * If you wish your version of this file to be governed by only the CDDL
+ * or only the GPL Version 2, indicate your decision by adding
+ * "[Contributor] elects to include this software in this distribution
+ * under the [CDDL or GPL Version 2] license." If you do not indicate a
+ * single choice of license, a recipient has the option to distribute
+ * your version of this file under either the CDDL, the GPL Version 2 or
+ * to extend the choice of license to its licensees as provided above.
+ * However, if you add GPL Version 2 code and therefore, elected the GPL
+ * Version 2 license, then the option applies only if the new code is
+ * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.web.refactoring;
+
+
+package org.netbeans.modules.groovy.refactoring;
 
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.util.TreePath;
@@ -51,11 +66,9 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.modules.j2ee.core.api.support.java.JavaIdentifiers;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.api.RenameRefactoring;
-import org.netbeans.spi.java.classpath.ClassPathProvider;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
@@ -266,16 +279,7 @@ public class RefactoringUtil {
                     public void run(CompilationController parameter) throws Exception {
                         parameter.toPhase(JavaSource.Phase.RESOLVED);
                         Element element = handle.resolveElement(parameter);
-
-                        // if the class is a generic then the <...> will also be
-                        // returned.  We just want the class name.
-                        String type = element.asType().toString();
-                        if(type.contains("<") == true)
-                        {
-                            type = type.substring(0, type.indexOf("<"));
-                        }
-                        result.add(type);
-//                        result.add(element.asType().toString());
+                        result.add(element.asType().toString());
                     }
                 }, true);
             } catch (IOException ioe) {
@@ -308,13 +312,4 @@ public class RefactoringUtil {
         return result[0];
 
     }
-    
-    /**
-     * @return true if the given <code>fo</code> represents
-     * a <code>package-info.java<code> file; false otherwise.
-     */
-    public static boolean isPackageInfo(FileObject fo) {
-        return "package-info.java".equals(fo.getNameExt()); //NOI18N
-    }
-
 }

@@ -98,7 +98,7 @@ public class RefactoringUtil {
             if (spp == null) continue;
             for (Object o : spp.getSubprojects()) {
                 Project sp = (Project) o;
-                if (sp == project) {
+                if (sp.equals(project) || project.equals(sp)) {
                     result.add(p);
                     break;
                 }
@@ -288,8 +288,17 @@ public class RefactoringUtil {
         FileObject parent = current.getParent();
         assert (parent != null) : "Source file has no parent folder";
         
-        if (newName == null || newName.trim().length() == 0 || 
-            parent.getFileObject(newName, current.getExt()) != null) 
+        boolean fileExists = false; 
+        FileObject obj = parent.getFileObject(newName, current.getExt());
+        if (obj != null) {
+            if (obj != current) {
+                fileExists = true;
+            } else if (obj.getName().equals(newName)) {
+                fileExists = true;
+            }
+        }
+            
+        if (newName == null || newName.trim().length() == 0 || fileExists) 
         {
             return new ErrorItem(model,
                     NbBundle.getMessage(RefactoringUtil.class, "MSG_NewNameDuplicate"),
