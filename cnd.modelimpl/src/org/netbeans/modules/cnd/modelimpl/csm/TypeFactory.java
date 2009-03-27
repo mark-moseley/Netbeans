@@ -45,6 +45,7 @@ import antlr.collections.AST;
 import java.util.ArrayList;
 import java.util.List;
 import org.netbeans.modules.cnd.api.model.*;
+import org.netbeans.modules.cnd.api.model.CsmOffsetable.Position;
 import org.netbeans.modules.cnd.modelimpl.csm.core.AstRenderer;
 import org.netbeans.modules.cnd.modelimpl.csm.core.OffsetableBase;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
@@ -235,7 +236,7 @@ public class TypeFactory {
                         for( AST namePart = tokFirstId; namePart != null; namePart = namePart.getNextSibling() ) {
                             if( templateDepth == 0 && namePart.getType() == CPPTokenTypes.ID ) {
                                 sb.append(namePart.getText());
-                                l.add(NameCache.getString(namePart.getText()));
+                                l.add(NameCache.getManager().getString(namePart.getText()));
                                 //l.add(namePart.getText());
                             } else if( namePart.getType() == CPPTokenTypes.LESSTHAN ) {
                                 // the beginning of template parameters
@@ -248,7 +249,7 @@ public class TypeFactory {
                                 if( templateDepth == 0) {
                                     if (namePart.getType() == CPPTokenTypes.SCOPE) {
                                         // We're done here, start filling nested type
-                                        type.classifierText = QualifiedNameCache.getString(sb);
+                                        type.classifierText = QualifiedNameCache.getManager().getString(sb);
                                         type.qname = l.toArray(new CharSequence[l.size()]);
                                         type = createType(namePart.getNextSibling(), file, ptrOperator, arrayDepth, TemplateUtils.checkTemplateType(type, scope), scope);
                                         break;
@@ -275,7 +276,7 @@ public class TypeFactory {
                             }
                         }
                         if (type.classifierText == null) {
-                            type.classifierText = QualifiedNameCache.getString(sb);
+                            type.classifierText = QualifiedNameCache.getManager().getString(sb);
                             type.qname = l.toArray(new CharSequence[l.size()]);
                         }
                     }
@@ -285,5 +286,149 @@ public class TypeFactory {
             }
         }
         return type;
+    }
+
+    public static CsmType createType(CsmType type, int pointerDepth, boolean reference, int arrayDepth, boolean _const) {
+        if(type.getPointerDepth() == pointerDepth &&
+            type.isReference() == reference &&
+            type.getArrayDepth() == arrayDepth &&
+            type.isConst() == _const) {
+            return type;
+        }
+        if(type instanceof NestedType) {
+            return new NestedType((NestedType)type, pointerDepth, reference, arrayDepth, _const);
+        }
+        if(type instanceof TypeFunPtrImpl) {
+            return new TypeFunPtrImpl((TypeFunPtrImpl)type, pointerDepth, reference, arrayDepth, _const);
+        }
+        if(type instanceof TemplateParameterTypeImpl) {
+            return new TemplateParameterTypeImpl((TemplateParameterTypeImpl)type, pointerDepth, reference, arrayDepth, _const);
+        }
+        if(type instanceof TypeImpl) {
+            return new TypeImpl((TypeImpl)type, pointerDepth, reference, arrayDepth, _const);
+        }
+        return new TypeWrapper(type, pointerDepth, reference, arrayDepth, _const);
+    }
+
+    public static CsmType createType(CsmType type, List<CsmType> instantiationParams) {
+        if(type instanceof NestedType) {
+            return new NestedType((NestedType)type, instantiationParams);
+        }
+        if(type instanceof TypeFunPtrImpl) {
+            return new TypeFunPtrImpl((TypeFunPtrImpl)type, instantiationParams);
+        }
+        if(type instanceof TemplateParameterTypeImpl) {
+            return new TemplateParameterTypeImpl((TemplateParameterTypeImpl)type, instantiationParams);
+        }
+        if(type instanceof TypeImpl) {
+            return new TypeImpl((TypeImpl)type, instantiationParams);
+        }
+        return type;
+    }
+
+    private static class TypeWrapper implements CsmType {
+        protected CsmType type;
+        protected int pointerDepth;
+        protected boolean reference;
+        protected int arrayDepth;
+        protected boolean _const;
+
+        public TypeWrapper(CsmType type, int pointerDepth, boolean reference, int arrayDepth, boolean _const) {
+            this.type = type;
+            this.pointerDepth = pointerDepth;
+            this.reference = reference;
+            this.arrayDepth = arrayDepth;
+            this._const = _const;
+        }
+
+        public CsmClassifier getClassifier() {
+            return type.getClassifier();
+        }
+
+        public CharSequence getClassifierText() {
+            return type.getClassifierText();
+        }
+
+        public boolean isInstantiation() {
+            return type.isInstantiation();
+        }
+
+        public List<CsmType> getInstantiationParams() {
+            return type.getInstantiationParams();
+        }
+
+        public int getArrayDepth() {
+            return arrayDepth;
+        }
+
+        public boolean isPointer() {
+            return pointerDepth > 0;
+        }
+
+        public int getPointerDepth() {
+            return pointerDepth;
+        }
+
+        public boolean isReference() {
+            return reference;
+        }
+
+        public boolean isConst() {
+            return _const;
+        }
+
+        public boolean isBuiltInBased(boolean resolveTypeChain) {
+            return type.isBuiltInBased(resolveTypeChain);
+        }
+
+        public boolean isTemplateBased() {
+            return type.isTemplateBased();
+        }
+
+        public CharSequence getCanonicalText() {
+            return getText();
+        }
+
+        public CsmFile getContainingFile() {
+            return type.getContainingFile();
+        }
+
+        public int getStartOffset() {
+            return type.getStartOffset();
+        }
+
+        public int getEndOffset() {
+            return type.getEndOffset();
+        }
+
+        public Position getStartPosition() {
+            return type.getStartPosition();
+        }
+
+        public Position getEndPosition() {
+            return type.getEndPosition();
+        }
+
+        public CharSequence getText() {
+            return format();
+        }
+
+        public String format() {
+            StringBuilder sb = new StringBuilder();
+	        if (isConst()) {
+                sb.append("const "); // NOI18N
+            }
+            sb.append(getClassifier().getQualifiedName());
+            for (int i = 0; i < getPointerDepth(); i++) {
+                sb.append('*'); // NOI18N
+            }
+            if (isReference()) {
+                sb.append('&'); // NOI18N
+            }
+            for (int i = 0; i < getArrayDepth(); i++) {
+                sb.append("[]"); // NOI18N
+            }
+            return sb.toString();
+        }
     }
 }

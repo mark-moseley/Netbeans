@@ -100,22 +100,10 @@ public class Utils {
         return sb.toString();
     }
       
-    public static String toString(String[] a) {
-        StringBuilder sb = new StringBuilder("["); // NOI18N
-        for (int i = 0; i < a.length; i++) {
-            if (i > 0) {
-                sb.append(','); // NOI18N
-            }
-            sb.append(a[i]);
-        }
-        sb.append(']'); // NOI18N
-        return sb.toString();
-    }
-    
     public static CharSequence[] splitQualifiedName(String qualified) {
         List<CharSequence> v = new ArrayList<CharSequence>();
         for (StringTokenizer t = new StringTokenizer(qualified, ": \t\n\r\f", false); t.hasMoreTokens(); ) {// NOI18N 
-            v.add(NameCache.getString(t.nextToken()));
+            v.add(NameCache.getManager().getString(t.nextToken()));
         }
         return v.toArray(new CharSequence[v.size()]);
     }   
@@ -203,6 +191,8 @@ public class Utils {
                 return "g"; // NOI18N
             case TEMPLATE_PARAMETER:
                 return "p"; // NOI18N
+            case SPECIALIZATION_PARAMETER:
+                return "z"; // NOI18N
             case CLASS_FRIEND_DECLARATION:
                 return "r"; // NOI18N
             case TEMPLATE_SPECIALIZATION:
