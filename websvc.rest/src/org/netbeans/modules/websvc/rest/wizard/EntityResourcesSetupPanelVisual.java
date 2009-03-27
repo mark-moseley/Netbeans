@@ -43,7 +43,6 @@ package org.netbeans.modules.websvc.rest.wizard;
 
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -55,15 +54,15 @@ import javax.swing.text.JTextComponent;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
-import org.netbeans.modules.websvc.rest.codegen.Constants;
 import org.netbeans.modules.websvc.rest.codegen.EntityResourcesGenerator;
+import org.netbeans.modules.websvc.rest.codegen.EntityResourcesGeneratorFactory;
 import org.netbeans.modules.websvc.rest.codegen.model.EntityResourceBeanModel;
 import org.netbeans.modules.websvc.rest.support.SourceGroupSupport;
 import org.netbeans.spi.java.project.support.ui.PackageView;
 import org.netbeans.spi.project.ui.templates.support.Templates;
-import org.openide.ErrorManager;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
@@ -339,13 +338,19 @@ private void resourcePackageComboBoxItemStateChanged(java.awt.event.ItemEvent ev
         
         FileObject targetFolder = Templates.getTargetFolder(settings);
         SourceGroup targetSourceGroup = null;
-        
+
         if (targetFolder == null) {
             targetSourceGroup = getSourceGroup();
             targetFolder = targetSourceGroup.getRootFolder();
         } else {
-            targetSourceGroup = SourceGroupSupport.findSourceGroupForFile(sourceGroups, targetFolder);
-            setSourceGroup(targetSourceGroup);
+            SourceGroup srcGroup = SourceGroupSupport.findSourceGroupForFile(sourceGroups, targetFolder);
+            if (srcGroup == null) {
+                targetSourceGroup = getSourceGroup();
+                targetFolder = targetSourceGroup.getRootFolder();
+            } else {
+                targetSourceGroup = srcGroup;
+                setSourceGroup(targetSourceGroup);
+            }
         }
         
         String targetPackage = SourceGroupSupport.getPackageForFolder(targetSourceGroup, targetFolder);
@@ -361,8 +366,14 @@ private void resourcePackageComboBoxItemStateChanged(java.awt.event.ItemEvent ev
     }
     
     public void store(WizardDescriptor settings) {
-        if (Templates.getTargetFolder(settings) == null) {
+        FileObject targetFolder = Templates.getTargetFolder(settings);
+        if (targetFolder == null) {
             Templates.setTargetFolder(settings, getSourceGroup().getRootFolder());
+        } else {
+            SourceGroup[] sourceGroups = SourceGroupSupport.getJavaSourceGroups(project);
+            if (SourceGroupSupport.findSourceGroupForFile(sourceGroups, targetFolder) == null) {
+                Templates.setTargetFolder(settings, getSourceGroup().getRootFolder());
+            }
         }
         
         settings.putProperty(WizardProperties.RESOURCE_PACKAGE, getResourcePackage());
@@ -397,8 +408,8 @@ private void resourcePackageComboBoxItemStateChanged(java.awt.event.ItemEvent ev
     
     private void updatePreview() {
         EntityResourceBeanModel model = (EntityResourceBeanModel) wizard.getProperty(WizardProperties.ENTITY_RESOURCE_MODEL);
-        EntityResourcesGenerator generator = new EntityResourcesGenerator(model,
-                getResourcePackage(), getConverterPackage());
+        EntityResourcesGenerator generator = EntityResourcesGeneratorFactory.newInstance(project);
+        generator.initialize(model,getResourcePackage(), getConverterPackage());
         Collection<String> previewClasses = generator.previewClasses();
         String previewText = "";        //NOI18N
         
