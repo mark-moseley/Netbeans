@@ -47,11 +47,10 @@ import java.io.ObjectInput;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 
+import java.util.prefs.Preferences;
 import javax.swing.*;
 import javax.swing.event.*;
 import org.openide.explorer.*;
@@ -63,6 +62,7 @@ import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.Mutex;
+import org.openide.util.NbPreferences;
 import org.openide.util.WeakListeners;
 import org.openide.windows.CloneableTopComponent;
 import org.openide.windows.Mode;
@@ -71,7 +71,7 @@ import org.openide.windows.WindowManager;
 
 /** Main explorer - the class remains here for backward compatibility
 * with older serialization protocol. Its responsibilty is also
-* to listen to the changes of "roots" nodes and open / close 
+* to listen to the changes of "roots" nodes and open / close
 * explorer's top components properly.
 *
 * @author Ian Formanek, David Simonek, Jaroslav Tulach
@@ -95,7 +95,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
     public static final int MIN_HEIGHT = 150;
     /** Default width of main explorer */
     public static final int DEFAULT_WIDTH = 350;
-    
+
     /** Mapping module tabs to their root node classes */
     private static Map<Node, ModuleTab> moduleTabs;
 
@@ -114,7 +114,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
         return ExplorerUtils.getHelpCtx (getActivatedNodes (),
                                          new HelpCtx (NbMainExplorer.class));
     }
-    
+
     /** Finds module tab in mapping of module tabs to their root node classes.
      * If it is not found it is added when parameter tc is not null. When parameter
      * tc is null new ModuleTab is created using default constructor. */
@@ -137,9 +137,9 @@ public final class NbMainExplorer extends CloneableTopComponent {
             }
         }
     }
-    
+
     /** Overriden to open all top components of main explorer and
-    * close this top component, as this top component exists only because of 
+    * close this top component, as this top component exists only because of
     * backward serialization compatibility.
     * Performed with delay, when WS is in consistent state. */
     @SuppressWarnings("deprecation")
@@ -187,7 +187,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
         if (toBeActivated == null) {
             toBeActivated = getRootPanel(rootsArray[0]);
         }
-        
+
         //Bugfix #9352 20 Feb 2001 by Marek Slama
         //requestFocus called directly on mode - it sets
         //deferred request so that requestFocus is performed
@@ -204,7 +204,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
                                            }
                                        }
                                    });*/
-        
+
         //Bugfix #9815: added check if toBeActivated is null before
         //request focus is called.
         //Bugfix #17956: Make sure that findMode is called after top component
@@ -270,7 +270,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
                 // workspace where some top compoents from main explorer
                 // are already opened
                 tc = createTC(r, false);
-                
+
                 for (Iterator iter2 = workspaces.iterator(); iter2.hasNext(); ) {
                     tc.open((org.openide.windows.Workspace)iter2.next());
                 }
@@ -314,7 +314,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
     //no way how to select given tab other than focused in split container.
     //It requires better solution.
     //Method changed from private to public so it can be used in DefaultCreator.
-    
+
     /** @return List of "root" nodes which has following structure:<br>
     * First goes repository, than root nodes added by modules and at last
     * runtime root node */
@@ -322,18 +322,16 @@ public final class NbMainExplorer extends CloneableTopComponent {
         NbPlaces places = NbPlaces.getDefault();
         // build the list of roots
         LinkedList<Node> result = new LinkedList<Node>();
-  
+
         //repository goes first
-/*         
+/*
         #47032:  Netbeans hangs for 30 seconds during startup - so commented out
-        Moreover there isn't any ExlorerTab dedicated to show this repository root. 
+        Moreover there isn't any ExlorerTab dedicated to show this repository root.
         result.add(RepositoryNodeFactory.getDefault().repository(DataFilter.ALL));
 */
-        
+
         // roots added by modules (javadoc etc...)
         result.addAll(Arrays.asList(places.roots()));
-        // runtime
-        result.add(places.environment());
 
         return result;
     }
@@ -345,38 +343,13 @@ public final class NbMainExplorer extends CloneableTopComponent {
         MainTab panel = null;
         NbPlaces places = NbPlaces.getDefault();
 
-        if (rc.equals(places.environment())) {
-            // default tabs
-            if (deserialize) {
-                TopComponent tc = WindowManager.getDefault().findTopComponent("runtime"); // NOI18N
-                if (tc != null) {
-                    if (tc instanceof MainTab) {
-                        panel = (MainTab) tc;
-                    } else {
-                        //Incorrect settings file?
-                        IllegalStateException exc = new IllegalStateException
-                        ("Incorrect settings file. Unexpected class returned." // NOI18N
-                        + " Expected:" + MainTab.class.getName() // NOI18N
-                        + " Returned:" + tc.getClass().getName()); // NOI18N
-                        Logger.getLogger(NbMainExplorer.class.getName()).log(Level.WARNING, null, exc);
-                        panel = MainTab.getDefaultMainTab();
-                    }
-                } else {
-                    panel = MainTab.getDefaultMainTab();
-                }
-            } else {
-                panel = MainTab.getDefaultMainTab();
-            }
-            panel.setRootContext(rc, false);
-        } else {
             // tabs added by modules
             //We cannot use findTopComponent here because we do not know unique
             //TC ID ie. proper deserialization of such TC will not work.
             panel = NbMainExplorer.findModuleTab(rc, null);
             panel.setRootContext(rc);
-        }
-        
-        
+
+
         rootsToTCs().put(rc, panel);
         return panel;
     }
@@ -400,6 +373,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
     /** Deserialize this top component, sets as default.
     * Provided provided here only for backward compatibility
     * with older serialization protocol */
+    @Override
     public void readExternal (ObjectInput in)
     throws IOException, ClassNotFoundException {
         super.readExternal(in);
@@ -421,7 +395,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
     //no way how to select given tab other than focused in split container.
     //It requires better solution.
     //Method changed from package to public so it can be used in DefaultCreator.
-    
+
     /** Finds the right panel for given node.
     * @return the panel or null if no such panel exists
     */
@@ -445,21 +419,8 @@ public final class NbMainExplorer extends CloneableTopComponent {
 
     /** @return The mode for main explorer on given workspace.
     * Creates explorer mode if no such mode exists on given workspace */
-    @SuppressWarnings("deprecation")
-    private static Mode explorerMode (org.openide.windows.Workspace workspace) {
-        Mode result = workspace.findMode("explorer"); // NOI18N
-        if (result == null) {
-            // create explorer mode on current workspace
-            String displayName = NbBundle.getBundle(NbMainExplorer.class).
-                                 getString("CTL_ExplorerTitle");
-            result = workspace.createMode(
-                         "explorer", // NOI18N
-                         displayName,
-                         NbMainExplorer.class.getResource(
-                             "/org/netbeans/core/resources/frames/explorer.gif" // NOI18N
-                         )
-                     );
-        }
+    private static Mode explorerMode() {
+        Mode result = WindowManager.getDefault().findMode("explorer"); // NOI18N
         return result;
     }
 
@@ -472,53 +433,65 @@ public final class NbMainExplorer extends CloneableTopComponent {
     public static class ExplorerTab extends org.netbeans.beaninfo.ExplorerPanel
         implements /*DeferredPerformer.DeferredCommand,*/ TopComponent.Cloneable {
         static final long serialVersionUID =-8202452314155464024L;
+        /** confirmDelete property name */
+        private static final String PROP_CONFIRM_DELETE = "confirmDelete"; // NOI18N
         /** composited view */
         protected TreeView view;
         /** listeners to the root context and IDE settings */
         private PropertyChangeListener weakRcL;
         private NodeListener weakNRcL;
-        private IDESettings ideSettings;
 
         private NodeListener rcListener;
         /** validity flag */
         private boolean valid = true;
         private boolean rootVis = true;
-        
+
         /** Used by ModuleTab to set persistence type according
          * root context node persistence ability. */
         protected int persistenceType = TopComponent.PERSISTENCE_ALWAYS;
-        
+
         public ExplorerTab () {
             super();
             // complete initialization of composited explorer actions
-            ideSettings = IDESettings.getInstance();
-            
-            getActionMap().put("delete", ExplorerUtils.actionDelete(getExplorerManager(), ideSettings.getConfirmDelete ())); 
-            
-            IDESettings.getPreferences().addPreferenceChangeListener(new PreferenceChangeListener() {
+
+            getActionMap().put("delete", ExplorerUtils.actionDelete(getExplorerManager(), getConfirmDelete()));
+
+            getPreferences().addPreferenceChangeListener(new PreferenceChangeListener() {
                 public void preferenceChange(PreferenceChangeEvent evt) {
-                    if (IDESettings.PROP_CONFIRM_DELETE.equals(evt.getKey())) {
-                        getActionMap().put("delete", ExplorerUtils.actionDelete(getExplorerManager(), ideSettings.getConfirmDelete ())); 
+                    if (PROP_CONFIRM_DELETE.equals(evt.getKey())) {
+                        getActionMap().put("delete", ExplorerUtils.actionDelete(getExplorerManager(), getConfirmDelete()));
                     }
                 }
             });
         }
-        
+
+        private static Preferences getPreferences() {
+            return NbPreferences.root().node("/org/netbeans/core");  //NOI18N
+        }
+
+        /** Getter for ConfirmDelete
+         * @param true if the user should asked for confirmation of object delete, false otherwise */
+        private static boolean getConfirmDelete() {
+            return getPreferences().getBoolean(PROP_CONFIRM_DELETE, true);//NOI18N
+        }
+
         /** Overriden to explicitely set persistence type of ExplorerTab
-         * to PERSISTENCE_ALWAYS 
+         * to PERSISTENCE_ALWAYS
          */
+        @Override
         public int getPersistenceType() {
             return TopComponent.PERSISTENCE_ALWAYS;
         }
 
         /** Initialize visual content of component */
+        @Override
         protected void componentShowing () {
             super.componentShowing ();
-            
+
             if (view == null) {
                 view = initGui ();
                 view.setRootVisible(rootVis);
-                
+
                 view.getAccessibleContext().setAccessibleName(NbBundle.getBundle(NbMainExplorer.class).getString("ACSN_ExplorerBeanTree"));
                 view.getAccessibleContext().setAccessibleDescription(NbBundle.getBundle(NbMainExplorer.class).getString("ACSD_ExplorerBeanTree"));
             }
@@ -528,6 +501,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
          * componentShowing if component is used outside window system.
          * Needed for proper initialization.
          */
+        @Override
         public void addNotify () {
             super.addNotify();
             if (WindowManager.getDefault().findMode(this) != null) {
@@ -535,17 +509,21 @@ public final class NbMainExplorer extends CloneableTopComponent {
             }
             componentShowing();
         }
-        
+
         /** Transfer focus to view. */
-        @SuppressWarnings("deprecation") public void requestFocus () {
+        @SuppressWarnings("deprecation")
+        @Override
+        public void requestFocus () {
             super.requestFocus();
             if (view != null) {
                 view.requestFocus();
             }
         }
-        
+
         /** Transfer focus to view. */
-        @SuppressWarnings("deprecation") public boolean requestFocusInWindow () {
+        @SuppressWarnings("deprecation")
+        @Override
+        public boolean requestFocusInWindow () {
             super.requestFocusInWindow();
             if (view != null) {
                 return view.requestFocusInWindow();
@@ -553,13 +531,14 @@ public final class NbMainExplorer extends CloneableTopComponent {
                 return false;
             }
         }
-        
+
         /** Initializes gui of this component. Subclasses can override
         * this method to install their own gui.
         * @return Tree view that will serve as main view for this explorer.
         */
         protected TreeView initGui () {
             TreeView view = new BeanTreeView();
+            view.setUseSubstringInQuickSearch(true);
             view.setDragSource (true);
             setLayout(new BorderLayout());
             add (view);
@@ -567,10 +546,11 @@ public final class NbMainExplorer extends CloneableTopComponent {
         }
 
         /** Ensures that component is valid before opening */
-        @SuppressWarnings("deprecation") public void open (org.openide.windows.Workspace workspace) {
+        @Override
+        public void open() {
             setValidRootContext();
-            
-            super.open(workspace);
+
+            super.open();
         }
 
         /** Sets new root context to view. Name, icon, tooltip
@@ -587,7 +567,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
             getExplorerManager().setRootContext(rc);
             initializeWithRootContext(rc);
         }
-        
+
         public void setRootContext(Node rc, boolean rootVisible) {
             rootVis = rootVisible;
             if (view != null) {
@@ -614,7 +594,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
         public Node getRootContext () {
             return getExplorerManager().getRootContext();
         }
-        
+
         /** Deserialization of ExploreTab, if subclass overwrites this method it
             MUST call scheduleValidation() */
         public Object readResolve() throws java.io.ObjectStreamException {
@@ -681,7 +661,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
                 rc.removePropertyChangeListener(weakRcL);
             }
             rc.addPropertyChangeListener(weakRcL);
-            
+
             if (weakNRcL == null) {
                 weakNRcL = org.openide.nodes.NodeOp.weakNodeListener (rcListener(), rc);
             }
@@ -690,7 +670,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
             }
             rc.addNodeListener(weakNRcL);
         }
-        
+
         // put a request for later validation
         // we must do this here, because of ExplorerManager's deserialization.
         // Root context of ExplorerManager is validated AFTER all other
@@ -699,16 +679,18 @@ public final class NbMainExplorer extends CloneableTopComponent {
             valid = false;
             setValidRootContext();
         }
-        
+
         /* Updated accessible name of the tree view */
+        @Override
         public void setName(String name) {
             super.setName(name);
             if (view != null) {
                 view.getAccessibleContext().setAccessibleName(name);
             }
         }
-        
+
         /* Updated accessible description of the tree view */
+        @Override
         public void setToolTipText(String text) {
             super.setToolTipText(text);
             if (view != null) {
@@ -726,14 +708,14 @@ public final class NbMainExplorer extends CloneableTopComponent {
             }
             return nue;
         }
-        
+
         /** Multi - purpose listener, listens to: <br>
         * 1) Changes of name, icon, short description of root context.
         * 2) Changes of IDE settings, namely delete confirmation settings */
         private final class RootContextListener extends Object implements NodeListener {
-            
+
             RootContextListener() {}
-            
+
             public void propertyChange (PropertyChangeEvent evt) {
                 String propName = evt.getPropertyName();
                 Object source = evt.getSource();
@@ -760,19 +742,21 @@ public final class NbMainExplorer extends CloneableTopComponent {
                     setToolTipText(n.getShortDescription());
                 }
             }
-            
+
             @SuppressWarnings("deprecation") public void nodeDestroyed(org.openide.nodes.NodeEvent nodeEvent) {
                 ExplorerTab.this.setCloseOperation(TopComponent.CLOSE_EACH);
                 ExplorerTab.this.close();
-            }            
-            
+            }
+
             public void childrenRemoved(org.openide.nodes.NodeMemberEvent e) {}
             public void childrenReordered(org.openide.nodes.NodeReorderEvent e) {}
             public void childrenAdded(org.openide.nodes.NodeMemberEvent e) {}
-            
+
         } // end of RootContextListener inner class
 
     } // end of ExplorerTab inner class
+
+    /** Special class for tabs added by modules to the main explorer */
 
     /** Tab of main explorer. Tries to dock itself to main explorer mode
     * before opening, if it's not docked already.
@@ -785,7 +769,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
         * when opening all tabs at once using NbMainExplorer.openRoots()
         */
         private static MainTab lastActivated;
-        
+
         private static MainTab DEFAULT;
 
         public static synchronized MainTab getDefaultMainTab() {
@@ -797,45 +781,30 @@ public final class NbMainExplorer extends CloneableTopComponent {
                 // deserialization, so we must wait for it
                 DEFAULT.scheduleValidation();
             }
-            
+
             return DEFAULT;
         }
-        
-        /** Creator/accessor method of Runtime tab singleton. Instance is properly
-         * deserialized by winsys.
-         */
-        public static MainTab findEnvironmentTab () {
-            return (MainTab)getExplorer().createTC(
-                NbPlaces.getDefault().environment(), true
-            );
-        }
-        
-        /** Creator/accessor method used ONLY by winsys for first time instantiation
-         * of Runtime tab. Use <code>findEnvironmentTab</code> to properly deserialize
-         * singleton instance.
-         */
-        public static MainTab createEnvironmentTab () {
-            return (MainTab)getExplorer().createTC(
-            NbPlaces.getDefault().environment(), false
-            );
-        }
-        
+
         /** Overriden to explicitely set persistence type of MainTab
          * to PERSISTENCE_ALWAYS */
+        @Override
         public int getPersistenceType() {
             return TopComponent.PERSISTENCE_ALWAYS;
         }
-        
+
+        @Override
         protected String preferredID () {
             return "runtime"; //NOI18N
         }
-        
+
+        @Override
         public HelpCtx getHelpCtx () {
             return ExplorerUtils.getHelpCtx (getExplorerManager ().getSelectedNodes (),
                     new HelpCtx (EnvironmentNode.class));
 	}
 
         /** Deserialization of RepositoryTab */
+        @Override
         public Object readResolve() throws java.io.ObjectStreamException {
             if (DEFAULT == null) {
                 DEFAULT = this;
@@ -843,27 +812,30 @@ public final class NbMainExplorer extends CloneableTopComponent {
             getDefaultMainTab().scheduleValidation();
             return getDefaultMainTab();
         }
-        
-        @SuppressWarnings("deprecation") public void open (org.openide.windows.Workspace workspace) {
-            org.openide.windows.Workspace realWorkspace = (workspace == null)
-                                      ? WindowManager.getDefault().getCurrentWorkspace()
-                                      : workspace;
-            Mode ourMode = realWorkspace.findMode(this);
+
+        @Override
+        public void open() {
+            Mode ourMode = WindowManager.getDefault().findMode(this);
             if (ourMode == null) {
-                explorerMode(realWorkspace).dockInto(this);
+                ourMode = explorerMode();
+                if (ourMode != null) {
+                    ourMode.dockInto(this);
+                }
             }
-            super.open(workspace);
+            super.open();
         }
 
         /** Called when the explored context changes.
         * Overriden - we don't want title to chnage in this style.
         */
+        @Override
         protected void updateTitle () {
             // empty to keep the title unchanged
         }
 
         /** Overrides superclass' version, remembers last activated
         * main tab */
+        @Override
         protected void componentActivated () {
             super.componentActivated();
             lastActivated = this;
@@ -871,6 +843,7 @@ public final class NbMainExplorer extends CloneableTopComponent {
 
         /** Registers root context in main explorer in addition to superclass'
         * version */
+        @Override
         protected void validateRootContext () {
             super.validateRootContext();
             registerRootContext(getExplorerManager().getRootContext());
@@ -885,31 +858,32 @@ public final class NbMainExplorer extends CloneableTopComponent {
         }
 
     } // end of MainTab inner class
-
-    /** Special class for tabs added by modules to the main explorer */
     public static class ModuleTab extends MainTab {
         static final long serialVersionUID =8089827754534653731L;
-        
+
         public ModuleTab() {
 //	    System.out.println("NbMainExplorer.ModuleTab");
         }
-                
-        
+
+
+        @Override
         public void setRootContext(Node root) {
             super.setRootContext(root);
             adjustComponentPersistence();
         }
-        
+
         /** Overriden to explicitely set persistence type of ModuleTab
          * to selected type */
+        @Override
         public int getPersistenceType() {
             return persistenceType;
         }
-        
+
         /** Throws deserialized root context and sets proper node found
         * in roots set as new root context for this top component.
         * The reason for such construction is to keep the uniquennes of
         * root context node after deserialization. */
+        @Override
         protected void validateRootContext () {
             // find proper node
             Class nodeClass = getExplorerManager().getRootContext().getClass();
@@ -922,17 +896,18 @@ public final class NbMainExplorer extends CloneableTopComponent {
                 }
             }
         }
-        
+
         /** Deserialization of ModuleTab */
+        @Override
         public Object readResolve() throws java.io.ObjectStreamException {
             Node root = getExplorerManager().getRootContext();
-            
+
             ModuleTab tc = NbMainExplorer.findModuleTab(root, this);
             if(tc == null) {
                 throw new java.io.InvalidObjectException(
                     "Cannot deserialize ModuleTab for node " + root); // NOI18N
             }
-            
+
             tc.scheduleValidation();
             return tc;
         }
@@ -941,9 +916,9 @@ public final class NbMainExplorer extends CloneableTopComponent {
 
     /** Listener on roots, listens to changes of roots content */
     private static final class RootsListener extends Object implements ChangeListener {
-        
+
         RootsListener() {}
-        
+
         public void stateChanged(ChangeEvent e) {
             NbMainExplorer.getExplorer().doOpen(null);
         }

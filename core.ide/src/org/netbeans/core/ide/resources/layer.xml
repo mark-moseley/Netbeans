@@ -4,7 +4,6 @@ DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
 Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
 
-
 The contents of this file are subject to the terms of either the GNU
 General Public License Version 2 only ("GPL") or the Common
 Development and Distribution License("CDDL") (collectively, the
@@ -41,105 +40,87 @@ Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.0//EN" "http://www.netbeans.org/dtds/filesystem-1_0.dtd">
-<!-- XML Layer for core-ide -->
 <filesystem>
-
     <folder name="Actions">
         <folder name="System">
             <file name="org-openide-actions-SaveAsTemplateAction.instance"/>
         </folder>
-    </folder>
-
-    <folder name="Services">
-        <folder name="IndentEngine">
-            <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/core/resources/indentEngines.gif"/>
-            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.Bundle"/>
-            <attr name="helpID" stringvalue="org.netbeans.core.services.IndentEngines"/>
+        <folder name="Window">
+            <file name="org-netbeans-core-ide-ServicesTabAction.instance">
+                <attr name="instanceCreate" methodvalue="org.openide.awt.Actions.alwaysEnabled"/>
+                <attr name="delegate" newvalue="org.netbeans.core.ide.ServicesTabAction"/>
+                <attr name="iconBase" stringvalue="org/netbeans/core/ide/resources/services.gif"/>
+                <attr name="displayName" bundlevalue="org.netbeans.core.ide.Bundle#CTL_ServicesTabAction"/>
+            </file>
         </folder>
+    </folder>
+    <folder name="Services">
         <folder name="MIMEResolver">
             <file name="plain-text-resolver.xml" url="plain-text-resolver.xml">
                 <attr name="position" intvalue="140"/>
             </file>
         </folder>
     </folder>
-    
-    <folder name="Templates">
-        <folder name="Services">
-            <folder name="IndentEngine">
-                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/core/resources/indentEngines.gif"/>
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.Bundle"/>
-            </folder>
-        </folder>
-    </folder>
-    
     <folder name="Menu">
-        <folder name="Edit">
-            <file name="Separator3.instance_hidden"/>
-            <file name="org-netbeans-core-actions-JumpNextAction.shadow_hidden"/>
-            <file name="org-netbeans-core-actions-JumpPrevAction.shadow_hidden"/>
-        </folder>
-        
         <folder name="GoTo">
             <file name="org-netbeans-core-actions-JumpNextAction.shadow">
                 <attr name="originalFile" stringvalue="Actions/System/org-netbeans-core-actions-JumpNextAction.instance"/>
                 <attr name="position" intvalue="2300"/>
             </file>
-            
             <file name="org-netbeans-core-actions-JumpPrevAction.shadow">
                 <attr name="originalFile" stringvalue="Actions/System/org-netbeans-core-actions-JumpPrevAction.instance"/>
                 <attr name="position" intvalue="2400"/>
             </file>
-            </folder>
-    </folder>
-    
-    <folder name="UI">
-    <!-- settings categories UI presentation -->
-        <folder name="Services">
-            <attr name="helpID" stringvalue="org.netbeans.core.ControlPanelNode"/>
-            
-            <folder name="IDEConfiguration"> <!-- PENDING rename to somethink like APP Settings or so -->
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.Bundle"/>
-
-                <folder name="LookAndFeel"> 
-                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.Bundle"/>
-                </folder>
-                
-            </folder>        
-            
-            <folder name="Editing">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.Bundle"/>
-                <file name="IndentationEngines.shadow">
-                        <attr name="originalFile" stringvalue="Services/IndentEngine"/>
-                </file>
-            </folder> <!-- EDITING -->
-        
         </folder>
-        
-        <folder name="Runtime">
-            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.Bundle"/>
-            <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/core/resources/environment.gif"/>
-        </folder> <!-- Runtime -->
-        
+        <folder name="Window">
+            <file name="org-netbeans-core-ide-ServicesTabAction.shadow">
+                <attr name="originalFile" stringvalue="Actions/Window/org-netbeans-core-ide-ServicesTabAction.instance"/>
+                <attr name="position" intvalue="400"/>
+            </file>
+        </folder>
     </folder>
-    
+    <folder name="UI">
+        <folder name="Runtime">
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.ide.resources.Bundle"/>
+            <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/core/ide/resources/services.gif"/>
+        </folder>
+    </folder>
     <folder name="Toolbars">
         <!-- remove workspace switcher and status line from toolbars for ide -->
-        <folder name="WorkspaceSwitcher_hidden">
-        </folder>
-        <folder name="StatusLine_hidden">
-        </folder>
-        
+        <folder name="WorkspaceSwitcher_hidden"/>
+        <folder name="StatusLine_hidden"/>
         <!-- specify toolbar config for ide, overrides configuration from core/ui.
              if you modify this file, please review
              org/netbeans/core/ui/resources/Standard.xml also, and sync
              the changes if appropriate -->
         <file name="Standard.xml" url="Standard.xml">
-            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.Bundle"/>
+            <attr name="position" intvalue="800"/>
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.ide.resources.Bundle"/>
         </file>
         <file name="Debugging.xml" url="Debugging.xml">
-            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.Bundle"/>
+            <attr name="position" intvalue="900"/>
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.ide.resources.Bundle"/>
         </file>
- 
-    </folder> <!-- Toolbars -->
-        
+        <!-- quick search enabled for ide in toolbar by default -->
+        <folder name="QuickSearch">
+            <attr name="position" intvalue="700"/>
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.core.ide.resources.Bundle"/>
+            <file name="org-netbeans-modules-quicksearch-QuickSearchAction.shadow">
+                <attr name="originalFile" stringvalue="Actions/Edit/org-netbeans-modules-quicksearch-QuickSearchAction.instance"/>
+                <attr name="position" intvalue="250"/>
+            </file>
+        </folder>
+    </folder>
+    <folder name="Windows2">
+        <folder name="Modes">
+            <folder name="explorer">
+                <file name="services.wstcref" url="services.wstcref">
+                    <attr name="position" intvalue="500"/>
+                </file>
+            </folder>
+        </folder>
+        <folder name="Components">
+            <file name="services.settings" url="services.settings"/>
+        </folder>
+    </folder>
 </filesystem>
