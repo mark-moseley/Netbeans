@@ -38,6 +38,7 @@
  */
 package org.netbeans.modules.dlight.spi.indicator;
 
+import javax.swing.event.ChangeEvent;
 import org.netbeans.modules.dlight.api.execution.DLightTarget;
 import org.netbeans.modules.dlight.api.execution.DLightTarget.State;
 import org.netbeans.modules.dlight.spi.impl.IndicatorActionListener;
@@ -48,6 +49,7 @@ import java.util.Collections;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
+import javax.swing.event.ChangeListener;
 import org.netbeans.modules.dlight.api.execution.DLightTargetListener;
 import org.netbeans.modules.dlight.api.indicator.IndicatorConfiguration;
 import org.netbeans.modules.dlight.api.indicator.IndicatorMetadata;
@@ -71,7 +73,7 @@ import org.netbeans.modules.dlight.api.visualizer.VisualizerConfiguration;
  *
  * @param <T> configuration indicator can be built on the base of
  */
-public abstract class Indicator<T extends IndicatorConfiguration> implements DLightTargetListener {
+public abstract class Indicator<T extends IndicatorConfiguration> implements DLightTargetListener, ChangeListener {
 
     private static final int PADDING = 2;
     private final Object lock = new Object();
@@ -80,6 +82,7 @@ public abstract class Indicator<T extends IndicatorConfiguration> implements DLi
     private String toolName;
     private final List<IndicatorActionListener> listeners;
     private final TickerListener tickerListener;
+    private IndicatorRepairActionProvider indicatorRepairActionProvider = null;
 
 
     static {
@@ -104,12 +107,36 @@ public abstract class Indicator<T extends IndicatorConfiguration> implements DLi
             }
         };
 
+    }
 
+    protected abstract void repairNeeded(boolean needed);
+
+    private void setRepairActionProviderFor(IndicatorRepairActionProvider repairActionProvider){
+        this.indicatorRepairActionProvider = repairActionProvider;
+        indicatorRepairActionProvider.addChangeListener(this);
+        repairNeeded(true);
     }
 
     public final int getPosition() {
         return position;
     }
+
+    protected final IndicatorRepairActionProvider getRepairActionProvider(){
+        return indicatorRepairActionProvider;
+    }
+
+    public void stateChanged(ChangeEvent e) {
+        if (indicatorRepairActionProvider == null || e.getSource() != indicatorRepairActionProvider){
+            return;
+        }
+        boolean needRepair = indicatorRepairActionProvider.needRepair();
+        if (!needRepair){
+            indicatorRepairActionProvider.removeChangeListener(this);
+        }
+        repairNeeded(indicatorRepairActionProvider.needRepair());
+    }
+
+
 
     public void targetStateChanged(DLightTarget source, State oldState, State newState) {
         switch (newState) {
@@ -237,43 +264,48 @@ public abstract class Indicator<T extends IndicatorConfiguration> implements DLi
     private static class IndicatorAccessorImpl extends IndicatorAccessor {
 
         @Override
-        public void setToolName(Indicator ind, String toolName) {
+        public void setToolName(Indicator<?> ind, String toolName) {
             ind.setToolName(toolName);
         }
 
         @Override
-        public List<Column> getMetadataColumns(Indicator indicator) {
+        public List<Column> getMetadataColumns(Indicator<?> indicator) {
             return indicator.getMetadataColumns();
         }
 
         @Override
-        public String getMetadataColumnName(Indicator indicator, int idx) {
+        public String getMetadataColumnName(Indicator<?> indicator, int idx) {
             return indicator.getMetadataColumnName(idx);
         }
 
         @Override
-        public List<VisualizerConfiguration> getVisualizerConfigurations(Indicator indicator) {
+        public List<VisualizerConfiguration> getVisualizerConfigurations(Indicator<?> indicator) {
             return indicator.getVisualizerConfigurations();
         }
 
         @Override
-        public void addIndicatorActionListener(Indicator indicator, IndicatorActionListener l) {
+        public void addIndicatorActionListener(Indicator<?> indicator, IndicatorActionListener l) {
             indicator.addIndicatorActionListener(l);
         }
 
         @Override
-        public void removeIndicatorActionListener(Indicator indicator, IndicatorActionListener l) {
+        public void removeIndicatorActionListener(Indicator<?> indicator, IndicatorActionListener l) {
             indicator.removeIndicatorActionListener(l);
         }
 
         @Override
-        public String getToolName(Indicator ind) {
+        public String getToolName(Indicator<?> ind) {
             return ind.toolName;
         }
 
         @Override
-        public void initMouseListener(Indicator indicator) {
+        public void initMouseListener(Indicator<?> indicator) {
             indicator.initMouseListener();
+        }
+
+        @Override
+        public void setRepairActionProviderFor(Indicator<?> indicator, IndicatorRepairActionProvider repairActionProvider) {
+            indicator.setRepairActionProviderFor(repairActionProvider);
         }
     }
 
