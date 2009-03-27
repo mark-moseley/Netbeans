@@ -41,6 +41,7 @@
 
 package org.netbeans.core;
 
+import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,16 +55,22 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Observable;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.KeyStroke;
 import javax.swing.text.Keymap;
 import org.openide.awt.StatusDisplayer;
 import org.openide.util.Mutex;
+import org.openide.util.actions.SystemAction;
+import org.openide.util.lookup.ServiceProvider;
 
 /** Implementation of standard key - action mappings.
 *
 * @author Dafe Simonek
 */
+@ServiceProvider(service=Keymap.class)
 public final class NbKeymap extends Observable implements Keymap, Comparator<KeyStroke> {
     /** Name of this keymap */
     String name;
@@ -84,7 +91,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public static KeyStroke[] getContext() {
-        return (KeyStroke[]) context.toArray(new KeyStroke[context.size()]);
+        return context.toArray(new KeyStroke[context.size()]);
     }
     
     public static void shiftContext(KeyStroke stroke) {
@@ -108,6 +115,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
            
     private final Action NO_ACTION = new KeymapAction(null, null);
+    private static final Logger LOG = Logger.getLogger(NbKeymap.class.getName());
     
     public Action createMapAction(Keymap k, KeyStroke stroke) {
         return new KeymapAction(k, stroke);
@@ -126,6 +134,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public Action getDefaultAction() {
+        LOG.log(Level.FINE, "getDefaultAction");
         if (defaultAction != null) {
             return defaultAction;
         }
@@ -133,6 +142,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public void setDefaultAction(Action a) {
+        LOG.log(Level.FINE, "setDefaultAction {0}", id(a));
         defaultAction = a;
         setChanged();
         notifyObservers();
@@ -143,6 +153,9 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public Action getAction(KeyStroke key) {
+        LOG.log(Level.FINE, "getAction {0}", key);
+        ShortcutsFolder.initKeyStroke(key);
+        
         Action a;
 
         KeyStroke[] ctx = getContext();
@@ -206,6 +219,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public KeyStroke[] getBoundKeyStrokes() {
+        LOG.log(Level.FINE, "getBoundKeyStrokes");
         int i = 0;
         KeyStroke[] keys = null;
         synchronized (this) {
@@ -218,6 +232,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public Action[] getBoundActions() {
+        LOG.log(Level.FINE, "getBoundActions");
         int i = 0;
         Action[] actionsArray = null;
         synchronized (this) {
@@ -230,6 +245,8 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public KeyStroke[] getKeyStrokesForAction(Action a) {
+        LOG.log(Level.FINE, "getKeyStrokesForAction {0}", id(a));
+
         Map<Action,List<KeyStroke>> localActions = actions;
         if (localActions == null) {
             localActions = buildReverseMapping ();
@@ -264,6 +281,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public synchronized boolean isLocallyDefined(KeyStroke key) {
+        LOG.log(Level.FINE, "isLocallyDefined {0}", key);
         return bindings.containsKey(key);
     }
 
@@ -291,6 +309,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     
     
     public void addActionForKeyStroke(KeyStroke key, Action a) {
+        LOG.log(Level.FINE, "addActionForKeyStroke {0} => {1}", new Object[] { key, id(a) });
         // Update reverse binding for old action too (#30455):
         Action old;
         synchronized (this) {
@@ -326,6 +345,8 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public void removeKeyStrokeBinding(KeyStroke key) {
+        LOG.log(Level.FINE, "removeKeyStrokeBinding {0}", key);
+
         Action a;
         synchronized (this) {
             a = bindings.remove(key);
@@ -337,6 +358,8 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public void removeBindings() {
+        LOG.log(Level.FINE, "removeBindings");
+
         Set<Action> actionsSet;
         synchronized (this) {
             actionsSet = new HashSet<Action>(bindings.values());
@@ -357,6 +380,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     }
 
     public void setResolveParent(Keymap parent) {
+        LOG.log(Level.FINE, "setResolveParent {0}", parent == null ? null : parent.getClass());
         this.parent = parent;
         setChanged();
         notifyObservers();
@@ -364,8 +388,16 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
 
     /** Returns string representation - can be looong.
     */
+    @Override
     public String toString() {
         return "Keymap[" + name + "]" + bindings; // NOI18N
+    }
+
+    private static Object id(Action a) {
+        if (a instanceof SystemAction) {
+            return a.getClass();
+        }
+        return a;
     }
     
     public static class SubKeymap implements Keymap {
@@ -437,7 +469,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
     
     }
     
-    public static class KeymapAction extends javax.swing.AbstractAction {
+    public static class KeymapAction extends AbstractAction {
         private Keymap keymap;
         private KeyStroke stroke;
 	
@@ -450,7 +482,7 @@ public final class NbKeymap extends Observable implements Keymap, Comparator<Key
             return keymap;
         }
         
-        public void actionPerformed(java.awt.event.ActionEvent e) {
+        public void actionPerformed(ActionEvent e) {
             if (stroke == null) { // NO_ACTION -> reset
                 resetContext();
             } else {
