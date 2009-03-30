@@ -72,12 +72,12 @@ import org.netbeans.modules.css.*;
  */
 public class CheckStyleAction extends BaseAction implements ErrorHandler, DocumentHandler {
     
-    public static final String checkStyleAction = "check-style"; // NOI18N
+    public static final String checkStyleAction =  NbBundle.getMessage(CheckStyleAction.class, "NAME_check_CSS"); // NOI18N
     
     public CheckStyleAction() {
         super(checkStyleAction);
             putValue("helpID", CheckStyleAction.class.getName()); // NOI18N
-            putValue(SHORT_DESCRIPTION, NbBundle.getMessage(CheckStyleAction.class, "NAME_check_CSS"));
+            putValue(SHORT_DESCRIPTION, checkStyleAction);
             putValue(ICON_RESOURCE_PROPERTY, "org/netbeans/modules/css/resources/checkStyleAction.gif"); // NOI18N
     }
     
@@ -86,14 +86,14 @@ public class CheckStyleAction extends BaseAction implements ErrorHandler, Docume
     private int warnings;
     
     private DataObject csso;
-    private CSSDisplayer disp;      //and its displayer
+    private CssDisplayer disp;      //and its displayer
     
     public void actionPerformed(ActionEvent evt, JTextComponent target) {
         
         failed = false;
         warnings = 0;
         
-        disp = new CSSDisplayer();
+        disp = new CssDisplayer();
         
         Parser parser = new org.w3c.flute.parser.Parser();
         parser.setErrorHandler(this);
