@@ -44,7 +44,9 @@ package org.netbeans.core;
 import java.awt.Dialog;
 import java.awt.Toolkit;
 import java.awt.Window;
+import java.io.File;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.text.MessageFormat;
@@ -56,9 +58,7 @@ import java.util.logging.Logger;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import javax.swing.JDialog;
-import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeListener;
-import org.netbeans.ModuleManager;
 import org.netbeans.TopSecurityManager;
 import org.netbeans.core.startup.MainLookup;
 import org.netbeans.core.startup.ModuleSystem;
@@ -67,6 +67,7 @@ import org.netbeans.core.ui.SwingBrowser;
 import org.openide.LifecycleManager;
 import org.openide.NotifyDescriptor;
 import org.openide.awt.HtmlBrowser;
+import org.openide.awt.StatusDisplayer;
 import org.openide.cookies.SaveCookie;
 import org.openide.loaders.DataObject;
 import org.openide.util.ChangeSupport;
@@ -80,6 +81,7 @@ import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Task;
 import org.openide.util.lookup.InstanceContent;
+import org.openide.util.lookup.ServiceProvider;
 import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
@@ -216,6 +218,7 @@ public abstract class NbTopManager {
     /**
      * Implementation of URL displayer, which shows documents in the configured web browser.
      */
+    @org.openide.util.lookup.ServiceProvider(service=org.openide.awt.HtmlBrowser.URLDisplayer.class)
     public static final class NbURLDisplayer extends HtmlBrowser.URLDisplayer {
         /** Default constructor for lookup. */
         public NbURLDisplayer() {}
@@ -237,26 +240,140 @@ public abstract class NbTopManager {
     /**
      * Default status displayer implementation; GUI is in StatusLine.
      */
+    @org.openide.util.lookup.ServiceProvider(service=org.openide.awt.StatusDisplayer.class)
     public static final class NbStatusDisplayer extends org.openide.awt.StatusDisplayer {
         /** Default constructor for lookup. */
         public NbStatusDisplayer() {}
         private final ChangeSupport cs = new ChangeSupport(this);
-        private String text = ""; // NOI18N
+        //list of status messages sorted by their importance in descending order
+        private List<WeakReference<MessageImpl>> messages = new ArrayList<WeakReference<MessageImpl>>(30);
+
+        private static int SURVIVING_TIME = Integer.getInteger("org.openide.awt.StatusDisplayer.DISPLAY_TIME", 5000);
+
         public void setStatusText(String text) {
-            synchronized (this) {
-                this.text = text;
-            }
-            cs.fireChange();
-            Logger.getLogger(NbStatusDisplayer.class.getName()).log(Level.FINE, "Status text updated: {0}", text);
+            //unimportant message are cleared automatically after some time
+            add( text, 0 ).clear(SURVIVING_TIME);
         }
+
+        @Override
+        public Message setStatusText(String text, int importance) {
+            if( importance <= 0 )
+                throw new IllegalArgumentException("Invalid importance value: " + importance);
+            return add( text, importance );
+        }
+        
         public synchronized String getStatusText() {
+            String text = null;
+            synchronized( this ) {
+                MessageImpl msg = getCurrent();
+                text = null == msg ? "" : msg.text;
+            }
             return text;
         }
+
         public void addChangeListener(ChangeListener l) {
             cs.addChangeListener(l);
         }
+
         public void removeChangeListener(ChangeListener l) {
             cs.removeChangeListener(l);
+        }
+
+        /**
+         * @return The most important status message in the list or null
+         */
+        private MessageImpl getCurrent() {
+            while( !messages.isEmpty() ) {
+                WeakReference<MessageImpl> ref = messages.get(0);
+                MessageImpl impl = ref.get();
+                if( null != impl ) {
+                    return impl;
+                } else {
+                    messages.remove(0);
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Add new status message and fire change event. The message won't show
+         * in the status line if there's already a message with higher importance.
+         * @param text Status line message
+         * @param importance Message importance
+         * @return New status Message
+         */
+        private MessageImpl add( String text, int importance ) {
+            MessageImpl newMsg = new MessageImpl(text, importance);
+            WeakReference<MessageImpl> newRef = new WeakReference<MessageImpl>(newMsg);
+            synchronized( this ) {
+                boolean added = false;
+                for( int i=0; i<messages.size() && !added; i++ ) {
+                    WeakReference<MessageImpl> ref = messages.get(0);
+                    MessageImpl impl = ref.get();
+                    if (impl == null)
+                        continue;
+                    if( impl.importance == importance ) {
+                        messages.set(i, newRef);
+                        added = true;
+                    } else if( impl.importance < importance ) {
+                        messages.add(i, newRef);
+                        added = true;
+                    }
+                }
+                if( !added ) {
+                    messages.add(newRef);
+                }
+            }
+            cs.fireChange();
+            Logger.getLogger(NbStatusDisplayer.class.getName()).log(Level.FINE, 
+                    "Status text updated: {0}, importance: {1}", new Object[] {text, Integer.valueOf(importance)} );
+            return newMsg;
+        }
+
+        /**
+         * Remove given message and fire change event. If there's a less important
+         * message in the list, it will show in status line.
+         * @param toRemove
+         */
+        private void remove( MessageImpl toRemove ) {
+            synchronized( this ) {
+                WeakReference<MessageImpl> refToRemove = null;
+                for( WeakReference<MessageImpl> ref : messages ) {
+                    if( toRemove == ref.get() ) {
+                        refToRemove = ref;
+                        break;
+                    }
+                }
+                if( null != refToRemove )
+                    messages.remove(refToRemove);
+            }
+            cs.fireChange();
+        }
+
+        /**
+         * Status line message which clears itself when garbage collected.
+         */
+        private class MessageImpl implements StatusDisplayer.Message, Runnable {
+            private final String text;
+            private final int importance;
+
+            public MessageImpl( String text, int importance ) {
+                this.text = text;
+                this.importance = importance;
+            }
+
+            public void clear(int timeInMillis) {
+                RequestProcessor.getDefault().post(this, timeInMillis);
+            }
+
+            @Override
+            protected void finalize() throws Throwable {
+                run();
+            }
+
+            public void run() {
+                remove( this );
+            }
         }
     }
 
@@ -309,6 +426,7 @@ public abstract class NbTopManager {
     /** Interface describing basic control over window system. 
      * @since 1.15 */
     public interface WindowSystem {
+        void init();
         void show();
         void hide();
         void load();
@@ -335,21 +453,47 @@ public abstract class NbTopManager {
         return false;
     }
 
+    private static class ExitActions implements Runnable {
+        private final int type;
+        ExitActions(int type) {
+            this.type = type;
+        }
 
+        public void run() {
+            switch (type) {
+                case 0: 
+                    doExit();
+                    break;
+                case 1:
+                    org.netbeans.CLIHandler.stopServer();
+                    final WindowSystem windowSystem = Lookup.getDefault().lookup(WindowSystem.class);
+                    boolean gui = org.netbeans.core.startup.CLIOptions.isGui();
+                    if (windowSystem != null && gui) {
+                        windowSystem.hide();
+                        windowSystem.save();
+                    }
+                    if (Boolean.getBoolean("netbeans.close.when.invisible")) {
+                        // hook to permit perf testing of time to *apparently* shut down
+                        TopSecurityManager.exit(0);
+                    }
+                    break;
+                case 2:
+                    if (!Boolean.getBoolean("netbeans.close.no.exit")) { // NOI18N
+                        TopSecurityManager.exit(0);
+                    }
+                    break;
+                default:
+                    throw new IllegalStateException("Type: " + type); // NOI18N
+            }
+        }
+    } // end of ExitActions
     
     private static boolean doingExit=false;
+    private static final Runnable DO_EXIT = new ExitActions(0);
     public static void exit ( ) {
         // #37160 So there is avoided potential clash between hiding GUI in AWT
         // and accessing AWTTreeLock from saving routines (winsys).
-        if(SwingUtilities.isEventDispatchThread()) {
-            doExit();
-        } else {
-            SwingUtilities.invokeLater(new Runnable() {
-                public void run() {
-                    doExit();
-                }
-            });
-        }
+        Mutex.EVENT.readAccess(DO_EXIT);
     }
     
     /**
@@ -367,29 +511,10 @@ public abstract class NbTopManager {
         // save all open files
         try {
             if ( System.getProperty ("netbeans.close") != null || ExitDialog.showDialog() ) {
-     
-                final WindowSystem windowSystem = Lookup.getDefault().lookup(WindowSystem.class);
-                
-                // #29831: hide frames between closing() and close()
-                Runnable hideFrames = new Runnable() {
-                    public void run() {
-                        org.netbeans.CLIHandler.stopServer ();
-                
-                        if(windowSystem != null) {
-                            windowSystem.hide();
-                            windowSystem.save();
-                        }
-                        if (Boolean.getBoolean("netbeans.close.when.invisible")) {
-                            // hook to permit perf testing of time to *apparently* shut down
-                            TopSecurityManager.exit(0);
-                        }
-                    }
-                };
-                
-                if (org.netbeans.core.startup.Main.getModuleSystem().shutDown(hideFrames)) {
+                if (org.netbeans.core.startup.Main.getModuleSystem().shutDown(new ExitActions(1))) {
                     try {
                         try {
-                            LoaderPoolNode.store();
+                            NbLoaderPool.store();
                         } catch (IOException ioe) {
                             Logger.getLogger(NbTopManager.class.getName()).log(Level.WARNING, null, ioe);
                         }
@@ -411,11 +536,7 @@ public abstract class NbTopManager {
                     // exit is dispatched through that proprietary queue and it
                     // can be refused by security check. So, we need to replan
                     // to RequestProcessor to avoid security problems.
-                    Task exitTask = new Task(new Runnable() {
-                        public void run() {
-                            TopSecurityManager.exit(0);
-                        }
-                    });
+                    Task exitTask = new Task(new ExitActions(2));
                     RequestProcessor.getDefault().post(exitTask);
                     exitTask.waitFinished();
                 }
@@ -429,6 +550,7 @@ public abstract class NbTopManager {
      * Default implementation of the lifecycle manager interface that knows
      * how to save all modified DataObject's, and to exit the IDE safely.
      */
+    @ServiceProvider(service=LifecycleManager.class, supersedes="org.netbeans.core.startup.ModuleLifecycleManager")
     public static final class NbLifecycleManager extends LifecycleManager {
         /** Default constructor for lookup. */
         public NbLifecycleManager() {}
@@ -444,10 +566,14 @@ public abstract class NbTopManager {
     public abstract ModuleSystem getModuleSystem();
     
     public static Lookup getModuleLookup() {
-        return org.netbeans.core.startup.Main.getModuleSystem().getManager().getModuleLookup();
+        Lookup l = Lookup.getDefault();
+        if (l instanceof MainLookup) {
+            l = org.netbeans.core.startup.Main.getModuleSystem().getManager().getModuleLookup();
+        }
+        return l;
     }
 
-    public static List getModuleJars() {
+    public static List<File> getModuleJars() {
         return org.netbeans.core.startup.Main.getModuleSystem().getModuleJars();
     }
 
