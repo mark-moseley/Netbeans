@@ -44,6 +44,8 @@ import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.Task;
 import org.netbeans.modules.java.BinaryElementOpen;
+import org.netbeans.modules.parsing.api.indexing.IndexingManager;
+import org.openide.ErrorManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.LineCookie;
 import org.openide.cookies.OpenCookie;
@@ -185,32 +187,40 @@ public final class ElementOpen {
     }
     
     private static int getOffset(FileObject fo, final ElementHandle<? extends Element> handle) throws IOException {
+        if (IndexingManager.getDefault().isIndexing()) {
+            ErrorManager.getDefault().log(ErrorManager.INFORMATIONAL, "Skipping location of element offset within file, Scannig in progress");
+            return 0; //we are opening @ 0 position. Fix #160478
+        }
+
         final int[]  result = new int[] {-1};
         
-        
         JavaSource js = JavaSource.forFileObject(fo);
-        js.runUserActionTask(new Task<CompilationController>() {
-            public void run(CompilationController info) {
-                try {
-                    info.toPhase(JavaSource.Phase.RESOLVED);
-                } catch (IOException ioe) {
-                    Exceptions.printStackTrace(ioe);
-                }
-                Element el = handle.resolve(info);                
-                if (el == null)
-                    throw new IllegalArgumentException();
-                
-                FindDeclarationVisitor v = new FindDeclarationVisitor(el, info);
-                
-                CompilationUnitTree cu = info.getCompilationUnit();
+        if (js != null) {
+            js.runUserActionTask(new Task<CompilationController>() {
+                public void run(CompilationController info) {
+                    try {
+                        info.toPhase(JavaSource.Phase.RESOLVED);
+                    } catch (IOException ioe) {
+                        Exceptions.printStackTrace(ioe);
+                    }
+                    Element el = handle.resolve(info);                
+                    if (el == null) {
+                        ErrorManager.getDefault().log(ErrorManager.ERROR, "Cannot resolve " + handle + ". " + info.getClasspathInfo());
+                        return;
+                    }
 
-                v.scan(cu, null);                
-                Tree elTree = v.declTree;
-                
-                if (elTree != null)
-                    result[0] = (int)info.getTrees().getSourcePositions().getStartPosition(cu, elTree);
-            }
-        },true);
+                    FindDeclarationVisitor v = new FindDeclarationVisitor(el, info);
+
+                    CompilationUnitTree cu = info.getCompilationUnit();
+
+                    v.scan(cu, null);                
+                    Tree elTree = v.declTree;
+
+                    if (elTree != null)
+                        result[0] = (int)info.getTrees().getSourcePositions().getStartPosition(cu, elTree);
+                }
+            },true);
+        }
         return result[0];
     }
     
