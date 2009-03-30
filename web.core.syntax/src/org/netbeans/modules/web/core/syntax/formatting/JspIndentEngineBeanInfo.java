@@ -46,7 +46,7 @@ import java.util.MissingResourceException;
 import org.netbeans.modules.editor.FormatterIndentEngineBeanInfo;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.editor.java.JavaIndentEngine;
-import org.netbeans.modules.web.core.syntax.JSPKit;
+import org.netbeans.modules.web.core.syntax.JspKit;
 import org.openide.util.NbBundle;
 
 /**
@@ -71,20 +71,20 @@ public class JspIndentEngineBeanInfo extends FormatterIndentEngineBeanInfo {
         return JspIndentEngine.class;
     }
 
-    protected String[] createPropertyNames() {
-        return NbEditorUtilities.mergeStringArrays(super.createPropertyNames(),
-            new String[] {
-                JspIndentEngine.JAVA_FORMAT_NEWLINE_BEFORE_BRACE_PROP,
-                JspIndentEngine.JAVA_FORMAT_SPACE_BEFORE_PARENTHESIS_PROP,
-                JspIndentEngine.JAVA_FORMAT_LEADING_STAR_IN_COMMENT_PROP,
-                JspIndentEngine.JAVA_FORMAT_STATEMENT_CONTINUATION_INDENT_PROP
-            }
-        );
-    }
+//    protected String[] createPropertyNames() {
+//        return NbEditorUtilities.mergeStringArrays(super.createPropertyNames(),
+//            new String[] {
+//                JspIndentEngine.JAVA_FORMAT_NEWLINE_BEFORE_BRACE_PROP,
+//                JspIndentEngine.JAVA_FORMAT_SPACE_BEFORE_PARENTHESIS_PROP,
+//                JspIndentEngine.JAVA_FORMAT_LEADING_STAR_IN_COMMENT_PROP,
+//                JspIndentEngine.JAVA_FORMAT_STATEMENT_CONTINUATION_INDENT_PROP
+//            }
+//        );
+//    }
 
     protected String getString(String key) {
         try {
-            return NbBundle.getMessage(JSPKit.class,key);
+            return NbBundle.getMessage(JspKit.class,key);
         } catch (MissingResourceException e) {
             try {
                 return NbBundle.getMessage(JavaIndentEngine.class,key);

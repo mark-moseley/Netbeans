@@ -55,16 +55,14 @@ import org.openide.text.ActiveEditorDrop;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 
-
-
 /**
  *
  * @author Libor Kotouc
  */
-public class JSPPaletteActions extends PaletteActions {
+public class JspPaletteActions extends PaletteActions {
     
     /** Creates a new instance of FormPaletteProvider */
-    public JSPPaletteActions() {
+    public JspPaletteActions() {
     }
 
     public Action[] getImportActions() {
@@ -98,14 +96,10 @@ public class JSPPaletteActions extends PaletteActions {
         public void actionPerformed(ActionEvent e) {
       
             ActiveEditorDrop drop = (ActiveEditorDrop) item.lookup(ActiveEditorDrop.class);
-//            if (drop == null) {
-//                String body = (String) item.lookup(String.class);
-//                drop = new JSPEditorDropDefault(body);
-//            }
             
             JTextComponent target = Utilities.getFocusedComponent();
             if (target == null) {
-                String msg = NbBundle.getMessage(JSPPaletteActions.class, "MSG_ErrorNoFocusedDocument");
+                String msg = NbBundle.getMessage(JspPaletteActions.class, "MSG_ErrorNoFocusedDocument");
                 DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(msg, NotifyDescriptor.ERROR_MESSAGE));
                 return;
             }
@@ -118,10 +112,12 @@ public class JSPPaletteActions extends PaletteActions {
             }
             
             try {
-                PaletteController pc = JSPPaletteFactory.getPalette();
+                PaletteController pc = JspPaletteFactory.getPalette();
                 pc.clearSelection();
             }
-            catch (IOException ioe) {} //should not occur
+            catch (IOException ioe) {
+                //should not occur
+            } 
         }
     }
     

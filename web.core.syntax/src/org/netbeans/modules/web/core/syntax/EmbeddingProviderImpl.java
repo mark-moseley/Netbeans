@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,61 +31,77 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.web.core.palette.items;
+package org.netbeans.modules.web.core.syntax;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.JTextComponent;
-import org.netbeans.modules.web.core.palette.JspPaletteUtilities;
-
+import javax.swing.text.Document;
+import org.netbeans.modules.parsing.api.Embedding;
+import org.netbeans.modules.parsing.api.Snapshot;
+import org.netbeans.modules.parsing.spi.EmbeddingProvider;
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.netbeans.modules.parsing.spi.SchedulerTask;
+import org.netbeans.modules.parsing.spi.TaskFactory;
+import org.netbeans.modules.parsing.spi.Scheduler;
+import org.openide.util.Exceptions;
 
 /**
  *
- * @author Libor Kotouc
+ * @author Jan Lahoda
  */
-public class SetProperty extends GetProperty {
+public class EmbeddingProviderImpl extends EmbeddingProvider {
 
-    private String value = "";
+    @Override
+    public List<Embedding> getEmbeddings(Snapshot snapshot) {
+        //XXX: should not use the document, I guess:
+        Document doc = snapshot.getSource().getDocument(false);
 
-    public SetProperty() {
+        if (doc == null) {
+            return Collections.emptyList();
+        }
+
+        SimplifiedJspServlet gen = new SimplifiedJspServlet(snapshot, doc);
+        
+        try {
+            gen.process();
+        } catch (BadLocationException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+        
+        Embedding e = gen.getVirtualClassBody();
+        
+        if (e != null) {
+            return Collections.singletonList(e);
+        } else {
+            return Collections.emptyList();
+        }
     }
 
     @Override
-    public boolean handleTransfer(JTextComponent targetComponent) {
-        allBeans = initAllBeans(targetComponent);
-        SetPropertyCustomizer c = new SetPropertyCustomizer(this, targetComponent);
-        boolean accept = c.showDialog();
-        if (accept) {
-            String body = createBody();
-            try {
-                JspPaletteUtilities.insert(body, targetComponent);
-            } catch (BadLocationException ble) {
-                accept = false;
-            }
+    public int getPriority() {
+        return 100;
+    }
+
+    @Override
+    public void cancel() {
+        //well...
+    }
+    
+    public static final class Factory extends TaskFactory {
+
+        @Override
+        public Collection<SchedulerTask> create(final Snapshot snapshot) {
+            return Collections.<SchedulerTask>singletonList(new EmbeddingProviderImpl());
         }
-
-        return accept;
+        
     }
 
-    private String createBody() {
-        String strBean = " name=\"\""; // NOI18N
-        if (getBeanIndex() == -1) {
-            strBean = " name=\"" + getBean() + "\""; // NOI18N
-        } else {
-            strBean = " name=\"" + allBeans.get(getBeanIndex()).getId() + "\""; // NOI18N
-        }
-        String strProperty = " property=\"" + getProperty() + "\""; // NOI18N
-        String strValue = " value=\"" + getValue() + "\""; // NOI18N
-        String sp = "<jsp:setProperty" + strBean + strProperty + strValue + " />"; // NOI18N
-        return sp;
-    }
-
-    public String getValue() {
-        return value;
-    }
-
-    public void setValue(String value) {
-        this.value = value;
-    }
 }

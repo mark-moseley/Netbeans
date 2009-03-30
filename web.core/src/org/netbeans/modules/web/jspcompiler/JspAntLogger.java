@@ -62,7 +62,8 @@ import org.openide.filesystems.FileUtil;
  * @author Petr Jiricka, Jesse Glick
  * @see "#42525"
  */
-public final class JSPAntLogger extends AntLogger {
+@org.openide.util.lookup.ServiceProvider(service=org.apache.tools.ant.module.spi.AntLogger.class, position=20)
+public final class JspAntLogger extends AntLogger {
     
     /**
      * Regexp matching the compilation error from JspC. Sample message could look like this:
@@ -77,45 +78,50 @@ public final class JSPAntLogger extends AntLogger {
     private static final String[] TASKS_OF_INTEREST = AntLogger.ALL_TASKS;
     
     private static final int[] LEVELS_OF_INTEREST = {
-        //AntEvent.LOG_DEBUG, // XXX is this needed?
-        //AntEvent.LOG_VERBOSE, // XXX is this needed?
         AntEvent.LOG_INFO, // XXX is this needed?
         AntEvent.LOG_WARN, // XXX is this needed?
         AntEvent.LOG_ERR, // XXX is this needed?
     };
     
-    private static final Logger ERR = Logger.getLogger(JSPAntLogger.class.getName());
+    private static final Logger ERR = Logger.getLogger(JspAntLogger.class.getName());
     private static final boolean LOGGABLE = ERR.isLoggable(Level.FINE);
     
     /** Default constructor for lookup. */
-    public JSPAntLogger() {
+    public JspAntLogger() {
     }
     
+    @Override
     public boolean interestedInSession(AntSession session) {
         return true;
     }
     
+    @Override
     public boolean interestedInAllScripts(AntSession session) {
         return true;
     }
     
+    @Override
     public String[] interestedInTargets(AntSession session) {
         return AntLogger.ALL_TARGETS;
     }
     
+    @Override
     public boolean interestedInScript(File script, AntSession session) {
         return true;
     }
     
+    @Override
     public String[] interestedInTasks(AntSession session) {
         return TASKS_OF_INTEREST;
     }
     
+    @Override
     public int[] interestedInLogLevels(AntSession session) {
         // XXX could exclude those in [INFO..ERR] greater than session.verbosity
         return LEVELS_OF_INTEREST;
     }
 
+    @Override
     public void messageLogged(AntEvent event) {
         AntSession session = event.getSession();
         int messageLevel = event.getLogLevel();
@@ -193,12 +199,6 @@ public final class JSPAntLogger extends AntLogger {
     }
     
     private static FileObject guessWebModuleOutputRoot(WebModule wm, FileObject fo) {
-        /*
-        File outputF = wm.getWebOutputRoot();
-        if (outputF != null) {
-            return FileUtil.toFileObject(outputF);
-        }
-        */
         FileObject potentialRoot = fo.getParent();
         while (potentialRoot != null) {
             if (potentialRoot.getFileObject("WEB-INF") != null) {

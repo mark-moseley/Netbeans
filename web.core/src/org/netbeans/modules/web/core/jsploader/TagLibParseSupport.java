@@ -43,19 +43,21 @@ package org.netbeans.modules.web.core.jsploader;
 
 import java.lang.ref.WeakReference;
 import java.lang.ref.SoftReference;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.web.core.jsploader.api.TagLibParseCookie;
 import org.netbeans.modules.web.core.syntax.spi.ErrorAnnotation;
+import org.netbeans.modules.web.jsps.parserapi.JspParserAPI.JspOpenInfo;
 import org.openide.util.RequestProcessor;
 import org.openide.util.RequestProcessor.Task;
 import org.openide.filesystems.FileObject;
 import org.netbeans.modules.web.jsps.parserapi.JspParserAPI;
 import org.netbeans.modules.web.jsps.parserapi.JspParserFactory;
 import org.netbeans.modules.web.jsps.parserapi.PageInfo;
-import org.netbeans.modules.web.core.syntax.spi.JSPColoringData;
+import org.netbeans.modules.web.core.syntax.spi.JspColoringData;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
@@ -80,7 +82,7 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
     private RequestProcessor.Task parsingTask = null;
     private static RequestProcessor requestProcessor;
 
-    private static final int WAIT_FOR_EDITOR_TIMEOUT = 15 * 1000; //15 seconds
+//    private static final int WAIT_FOR_EDITOR_TIMEOUT = 15 * 1000; //15 seconds
 
     /** Holds a reference to the JSP coloring data. */
     private WeakReference jspColoringDataRef;
@@ -106,7 +108,7 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
     /** Holds a strong reference to the parsing 'successful' data during an editor 
      * pane is opened for a JSP corresponding to this support. 
      */
-    private Object parseResultSuccessfulRefStrongReference = null;
+//    private Object parseResultSuccessfulRefStrongReference = null;
 
     //this field is used to try to catch the situation when someone calls the parser
     //before editor support is initialized - causing #49300
@@ -126,13 +128,13 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
     public TagLibParseSupport(FileObject jspFile) {
         this.jspFile = jspFile;
         //allow max 10 requests to run in parallel & have one RP for all taglib parsings
-        if(requestProcessor == null) requestProcessor = new RequestProcessor("background jsp parsing", 10); // NOI18N
-        //requestProcessor = RequestProcessor.getDefault();
+        if(requestProcessor == null)
+            requestProcessor = new RequestProcessor("background jsp parsing", 10); // NOI18N
         annotations = new ErrorAnnotation (jspFile);
     }
 
     /** Gets the tag library data relevant for the editor. */
-    public JSPColoringData getJSPColoringData() {
+    public JspColoringData getJSPColoringData() {
         // #120530 - do not start parsing
         return getJSPColoringData(false);
     }
@@ -148,13 +150,13 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
         return null;
     }
     
-    JSPColoringData getJSPColoringData(boolean prepare) {
+    JspColoringData getJSPColoringData(boolean prepare) {
         if (jspColoringDataRef != null) {
             Object o = jspColoringDataRef.get();
             if (o != null)
-                return (JSPColoringData)o;
+                return (JspColoringData)o;
         }
-        JSPColoringData jcd = new JSPColoringData(this);
+        JspColoringData jcd = new JspColoringData(this);
         jspColoringDataRef = new WeakReference(jcd);
         if (prepare) {
             prepare();
@@ -163,14 +165,12 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
     }
 
     /** Sets the dirty flag - if the document was modified after last parsing. */
-    void setDocumentDirty(boolean b) {
-        //synchronized (parseResultLock) {
-            documentDirty = b;
-        //}
+    public void setDocumentDirty(boolean b) {
+        documentDirty = b;
     }
 
     /** Tests the documentDirty flag. */
-    boolean isDocumentDirty() {
+    public boolean isDocumentDirty() {
         return documentDirty;
     }
 
@@ -178,7 +178,7 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
     * and parsing is not running yet.
       @return parsing task so caller may listen on its completion.
     */
-    Task autoParse() {
+    public Task autoParse() {
         //do not parse if it is not necessary
         //this is the BaseJspEditorSupport optimalization since the autoParse causes the webmodule
         //to be reparsed even if it has already been reparsed.
@@ -210,7 +210,7 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
         //debug #49300: print out current stacktrace when the editor support is not initialized yet
         if(!wasAnEditorPaneChangeEvent) 
             Exceptions.attachLocalizedMessage(new IllegalStateException(),
-                                              "The TagLibParseSupport.parseObject() is called before editor support is created!"); //NOI18N
+                  "The TagLibParseSupport.parseObject() is called before editor support is created!"); //NOI18N
         
         synchronized (parseResultLock) {
             RequestProcessor.Task t = parsingTask;
@@ -228,7 +228,6 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
         }
     }
     
-    
     //used for notifying the parsing thread (to start the parsing)
     void setEditorOpened(boolean editorOpened) {
         //mark that the an editor pane open event was fired
@@ -237,7 +236,7 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
         synchronized (parseResultLock) {
             if(!editorOpened) {
                 //clean the stronref to the parsing data when the editor is closed
-                parseResultSuccessfulRefStrongReference = null;
+//                parseResultSuccessfulRefStrongReference = null;
             }
         }
         
@@ -264,11 +263,16 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
             }
             JspParserAPI.JspOpenInfo info = (JspParserAPI.JspOpenInfo)jspOpenInfoRef.get(timestamp);
             if (info == null) {
-                info = JspParserFactory.getJspParser().getJspOpenInfo(jspFile, JspParserAccess.getJspParserWM (getWebModule (jspFile)), useEditor);
+                info = JspParserFactory.getJspParser().getJspOpenInfo(jspFile, getWebModule(jspFile), useEditor);
                 jspOpenInfoRef.put(info, timestamp);
             }
             return info;
         }
+    }
+    
+    public OpenInfo getOpenInfo(boolean preferCurrent, boolean useEditor) {
+        JspOpenInfo delegate = getCachedOpenInfo(preferCurrent, useEditor);
+        return OpenInfo.create(delegate.isXmlSyntax(), delegate.getEncoding());
     }
     
     public JspParserAPI.ParseResult getCachedParseResult(boolean successfulOnly, boolean preferCurrent) {
@@ -354,7 +358,7 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
                 
                 getJSPColoringData(false).parsingStarted();
                 
-                locResult = parser.analyzePage(jspFile, JspParserAccess.getJspParserWM (getWebModule (jspFile)), JspParserAPI.ERROR_IGNORE);
+                locResult = parser.analyzePage(jspFile, getWebModule(jspFile), JspParserAPI.ERROR_IGNORE);
                 assert locResult != null;
                 
                 synchronized (TagLibParseSupport.this.parseResultLock) {
@@ -364,7 +368,7 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
                         //hold a reference to the parsing data until last editor pane is closed
                         //motivation: the editor doesn't always hold a strogref to this object
                         //so the SoftRef is sometime cleaned even if there is an editor pane opened.
-                        parseResultSuccessfulRefStrongReference = locResult;
+//                        parseResultSuccessfulRefStrongReference = locResult;
                         //set icon withouth errors
                         if (hasError){
                             //remove all errors
@@ -378,17 +382,18 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
                     } else {
                         SwingUtilities.invokeLater(new Runnable() {
                             public void run() {
+                                ArrayList<ErrorAnnotation.ErrorInfo> errors = new ArrayList<ErrorAnnotation.ErrorInfo>(locResult.getErrors().length);
                                 for (int i = 0; i < locResult.getErrors().length; i ++){
                                     JspParserAPI.ErrorDescriptor err = locResult.getErrors()[i];
                                     if(checkError(err)) {
-                                        annotations.annotate(new ErrorAnnotation.ErrorInfo[] {
-                                            new ErrorAnnotation.ErrorInfo(translate(err.getErrorMessage()),
-                                                    err.getLine(),
-                                                    err.getColumn(),
-                                                    ErrorAnnotation.JSP_ERROR)
-                                        } );
+                                        errors.add(new ErrorAnnotation.ErrorInfo(translate(err.getErrorMessage()),
+                                                err.getLine(),
+                                                err.getColumn(),
+                                                ErrorAnnotation.JSP_ERROR));
                                     }
                                 }
+                                annotations.annotate(errors.toArray(new ErrorAnnotation.ErrorInfo[]{}));
+                                
                                 // set icon with error.
                                 if (!hasError){
                                     hasError = true;
@@ -418,11 +423,10 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
                         prefixMapper = pageInfo.getJspPrefixMapper();
                     }
                     getJSPColoringData(false).applyParsedData(pageInfo.getTagLibraries(), prefixMapper, 
-                                                              pageInfo.isELIgnored(), getCachedOpenInfo(false, false).isXmlSyntax(), 
-                                                              locResult.isParsingSuccess());
+                              pageInfo.isELIgnored(), getCachedOpenInfo(false, false).isXmlSyntax(), 
+                              locResult.isParsingSuccess());
                 }
             }
-            
             
         }
         
@@ -442,5 +446,4 @@ public class TagLibParseSupport implements org.openide.nodes.Node.Cookie, TagLib
         }
 
     }
-
 }

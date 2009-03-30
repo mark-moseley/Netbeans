@@ -40,37 +40,40 @@
  */
 
 package org.netbeans.modules.web.core.palette;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.JTextComponent;
-import org.openide.text.ActiveEditorDrop;
 
-
+import java.io.IOException;
+import org.netbeans.spi.palette.DragAndDropHandler;
+import org.netbeans.spi.palette.PaletteController;
+import org.netbeans.spi.palette.PaletteFactory;
+import org.openide.util.Lookup;
+import org.openide.util.datatransfer.ExTransferable;
 
 /**
  *
  * @author Libor Kotouc
  */
-public class JSPEditorDropDefault implements ActiveEditorDrop {
+public final class JspPaletteFactory {
 
-    String body;
+    public static final String JSP_PALETTE_FOLDER = "JSPPalette";
 
-    public JSPEditorDropDefault(String body) {
-        this.body = body;
-    }
+    private static PaletteController palette = null;
 
-    public boolean handleTransfer(JTextComponent targetComponent) {
-
-        if (targetComponent == null)
-            return false;
-
-        try {
-            JSPPaletteUtilities.insert(body, (JTextComponent)targetComponent);
-        }
-        catch (BadLocationException ble) {
-            return false;
-        }
+    public static PaletteController getPalette() throws IOException {
+        if (palette == null)
+            palette = PaletteFactory.createPalette(JSP_PALETTE_FOLDER, new JspPaletteActions(), null, new JspDragAndDropHandler());
         
-        return true;
+        return palette;
     }
+    
+    
+    private static class JspDragAndDropHandler extends DragAndDropHandler {
+        public JspDragAndDropHandler() {
+            super( true );
+        }
 
+        @Override
+        public void customize(ExTransferable t, Lookup item) {
+        }
+    }
 }
+

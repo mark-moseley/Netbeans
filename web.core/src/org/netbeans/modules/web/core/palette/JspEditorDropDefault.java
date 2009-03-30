@@ -40,29 +40,35 @@
  */
 
 package org.netbeans.modules.web.core.palette;
-import java.io.IOException;
-import org.netbeans.spi.palette.PaletteController;
-import org.netbeans.spi.palette.PaletteFactory;
 
-
+import javax.swing.text.BadLocationException;
+import javax.swing.text.JTextComponent;
+import org.openide.text.ActiveEditorDrop;
 
 /**
  *
  * @author Libor Kotouc
  */
+public class JspEditorDropDefault implements ActiveEditorDrop {
 
-public final class JSPPaletteFactory {
+    String body;
 
-    public static final String JSP_PALETTE_FOLDER = "JSPPalette";
-
-    private static PaletteController palette = null;
-
-    public static PaletteController getPalette() throws IOException {
-        if (palette == null)
-            palette = PaletteFactory.createPalette(JSP_PALETTE_FOLDER, new JSPPaletteActions());//, null, new JSPDragAndDropHandler());
-        
-        return palette;
+    public JspEditorDropDefault(String body) {
+        this.body = body;
     }
-    
-}
 
+    public boolean handleTransfer(JTextComponent targetComponent) {
+        if (targetComponent == null)
+            return false;
+
+        try {
+            JspPaletteUtilities.insert(body, (JTextComponent)targetComponent);
+        }
+        catch (BadLocationException ble) {
+            return false;
+        }
+        
+        return true;
+    }
+
+}

@@ -52,14 +52,15 @@ import org.openide.util.actions.CallableSystemAction;
  *
  * @author lk155162
  */
-public class JSPPaletteCustomizerAction extends CallableSystemAction {
+public class JspPaletteCustomizerAction extends CallableSystemAction {
 
     private static String name;
     
-    public JSPPaletteCustomizerAction () {
+    public JspPaletteCustomizerAction () {
         putValue("noIconInMenu", Boolean.TRUE); // NOI18N
     }
 
+    @Override
     protected boolean asynchronous() {
         return false;
     }
@@ -70,7 +71,7 @@ public class JSPPaletteCustomizerAction extends CallableSystemAction {
      */
     public String getName() {
         if (name == null)
-            name = NbBundle.getBundle(JSPPaletteCustomizerAction.class).getString("ACT_OpenJSPCustomizer"); // NOI18N
+            name = NbBundle.getBundle(JspPaletteCustomizerAction.class).getString("ACT_OpenJSPCustomizer"); // NOI18N
         
         return name;
     }
@@ -87,7 +88,7 @@ public class JSPPaletteCustomizerAction extends CallableSystemAction {
      */
     public void performAction() {
         try {
-            JSPPaletteFactory.getPalette().showCustomizer();
+            JspPaletteFactory.getPalette().showCustomizer();
         }
         catch (IOException ioe) {
             Logger.getLogger("global").log(Level.WARNING, null, ioe);
