@@ -57,11 +57,11 @@ import org.openide.awt.StatusDisplayer;
 
 // we depend on NetBeans editor stuff
 import org.netbeans.editor.*;
-import org.netbeans.editor.ext.*;
+import org.netbeans.modules.csl.editor.ToggleBlockCommentAction;
 import org.netbeans.modules.editor.*;
 
+import org.netbeans.modules.xml.text.XmlCommentHandler;
 import org.netbeans.modules.xml.text.completion.NodeSelector;
-import org.netbeans.modules.xml.text.completion.XMLCompletion;
 
 
 /**
@@ -101,45 +101,30 @@ public class XMLKit extends NbEditorKit implements org.openide.util.HelpCtx.Prov
     }
     
     /** Create new instance of syntax coloring parser */
+    @Override
     public Syntax createSyntax(Document doc) {
         return new XMLDefaultSyntax();
-//        return new JJEditorSyntax(
-//            new XMLSyntaxTokenManager(null).new Bridge(),
-//            new XMLSyntaxTokenMapper(),
-//            XMLTokenContext.contextPath
-//        );
     }
 
+    @Override
     public Document createDefaultDocument() {
         if(J2EE_LEXER_COLORING) {
-            Document doc = new XMLEditorDocument(this.getClass());
-            Object mimeType = doc.getProperty("mimeType"); //NOI18N
-            if (mimeType == null){
-                doc.putProperty("mimeType", getContentType()); //NOI18N
-            }
+            Document doc = new XMLEditorDocument(getContentType());
             doc.putProperty(Language.class, XMLTokenId.language());
             return doc;
         } else {
-            return new NbEditorDocument (this.getClass());
+            return super.createDefaultDocument();
         }
     }
 
 
     /** Create syntax support */
+    @Override
     public SyntaxSupport createSyntaxSupport(BaseDocument doc) {
         return new XMLSyntaxSupport(doc);
     }
     
-
-    public Completion createCompletion(ExtEditorUI extEditorUI) {
-        //return new org.netbeans.modules.xml.text.completion.XMLCompletion(extEditorUI);
-        return null;
-    }
-    
-    public Completion createCompletionForProvider(ExtEditorUI extEditorUI) {
-        return new XMLCompletion(extEditorUI);
-    }
-    
+    @Override
     public void install(JEditorPane c) {
         super.install(c);
         if (Boolean.getBoolean("netbeans.experimental.xml.nodeselectors")) {  // NOI18N
@@ -158,17 +143,18 @@ public class XMLKit extends NbEditorKit implements org.openide.util.HelpCtx.Prov
     }
 
     //??? +xml handling
-    public String getContentType() {
+    public @Override String getContentType() {
         return MIME_TYPE;
     }
 
     /**
      * Provide XML related actions.
      */
-    protected Action[] createActions() {
+    protected @Override Action[] createActions() {
         Action[] actions = new Action[] {
             new XMLCommentAction(),
             new XMLUncommentAction(),
+            new ToggleBlockCommentAction(new XmlCommentHandler()),
             new TestAction(),
         };
         return TextAction.augmentList(super.createActions(), actions);
@@ -358,8 +344,12 @@ public class XMLKit extends NbEditorKit implements org.openide.util.HelpCtx.Prov
         public XMLEditorDocument(Class kitClass) {
             super(kitClass);
         }
+
+        public XMLEditorDocument(String mimeType) {
+            super(mimeType);
+        }
         
-        public boolean addLayer(DrawLayer layer, int visibility) {
+        public @Override boolean addLayer(DrawLayer layer, int visibility) {
             //filter out the syntax layer adding
             if(!(layer instanceof DrawLayerFactory.SyntaxLayer)) {
                 return super.addLayer(layer, visibility);
