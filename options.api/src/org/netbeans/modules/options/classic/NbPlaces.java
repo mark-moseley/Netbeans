@@ -39,14 +39,12 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.core;
+package org.netbeans.modules.options.classic;
 
 import java.io.IOException;
 import javax.swing.event.ChangeListener;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.nodes.Node;
 import org.openide.util.ChangeSupport;
@@ -86,41 +84,10 @@ public final class NbPlaces extends Object {
         cs.fireChange();
     }
 
-    /** Environment node. Place for all transient information about
-    * the IDE.
-    */
-    public Node environment () {
-        return EnvironmentNode.find(EnvironmentNode.TYPE_ENVIRONMENT);
-    }
-
 
     /** Session node */
     public Node session () {
         return EnvironmentNode.find(EnvironmentNode.TYPE_SESSION); 
-    }
-
-    /** Root nodes.
-    */
-    public Node[] roots () {
-        return EnvironmentNode.find(EnvironmentNode.TYPE_ROOTS).getChildren ().getNodes (); 
-    }
-
-    /** Default folder for toolbars.
-    */
-    public DataFolder toolbars () {
-        return findSessionFolder ("Toolbars"); // NOI18N
-    }
-
-    /** Default folder for menus.
-    */
-    public DataFolder menus () {
-        return findSessionFolder ("Menu"); // NOI18N
-    }
-
-    /** Default folder for actions pool.
-    */
-    public DataFolder actions () {
-        return findSessionFolder ("Actions"); // NOI18N
     }
 
      /**
@@ -130,11 +97,10 @@ public final class NbPlaces extends Object {
      */
      public static DataFolder findSessionFolder (String name) {
         try {
-            FileSystem fs = Repository.getDefault().getDefaultFileSystem ();
-            FileObject fo = fs.findResource(name);
+            FileObject fo = FileUtil.getConfigFile(name);
             if (fo == null) {
                 // resource not found, try to create new folder
-                fo = FileUtil.createFolder(fs.getRoot(), name);
+                fo = FileUtil.createFolder(FileUtil.getConfigRoot(), name);
             }
             return DataFolder.findFolder(fo);
         } catch (IOException ex) {

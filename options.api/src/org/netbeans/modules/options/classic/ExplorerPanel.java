@@ -39,18 +39,17 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.beaninfo;
+package org.netbeans.modules.options.classic;
 
 import javax.swing.ActionMap;
+import javax.swing.JPanel;
 import javax.swing.text.DefaultEditorKit;
 import org.openide.explorer.ExplorerManager;
 import org.openide.explorer.ExplorerUtils;
-import org.openide.util.Lookup;
 
 /** Common panel to be used in core beaninfo and editors.
  */
-public class ExplorerPanel extends org.openide.windows.TopComponent
-implements ExplorerManager.Provider {
+public class ExplorerPanel extends JPanel implements ExplorerManager.Provider {
     private ExplorerManager manager = new ExplorerManager();
 
     public ExplorerPanel() {
@@ -60,8 +59,6 @@ implements ExplorerManager.Provider {
         map.put(DefaultEditorKit.cutAction, ExplorerUtils.actionCut(manager));
         map.put(DefaultEditorKit.pasteAction, ExplorerUtils.actionPaste(manager));
         map.put("delete", ExplorerUtils.actionDelete(manager, true));
-
-        associateLookup(ExplorerUtils.createLookup (manager, map));
     }
 
     public ExplorerManager getExplorerManager() {

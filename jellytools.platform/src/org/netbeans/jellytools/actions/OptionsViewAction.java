@@ -38,43 +38,35 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.jellytools.actions;
 
-package org.netbeans.core.projects;
+import org.netbeans.jellytools.Bundle;
 
-import java.lang.reflect.Modifier;
-import junit.framework.*;
-import org.netbeans.junit.*;
-import org.netbeans.core.projects.SettingChildren;
-import org.netbeans.core.projects.SettingChildren.FileStateProperty;
-
-/**
- *
- * @author <a href="mailto:adam.sotona@sun.com">Adam Sotona</a>
+/** Used to call "Tools|Options" main menu item. If called on MAC it uses IDE API to
+ * open Options.
+ * @see Action
  */
-public class FileStatePropertyTest extends NbTestCase {
+public class OptionsViewAction extends Action {
+    private static final String menu =
+        Bundle.getStringTrimmed("org.netbeans.core.ui.resources.Bundle",
+                                "Menu/Tools") +
+        "|" +
+        Bundle.getStringTrimmed("org.netbeans.modules.options.Bundle",
+                                "CTL_Options_Window_Action");
 
-    public FileStatePropertyTest(java.lang.String testName) {
-        super(testName);
-    }
-
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new NbTestSuite(FileStatePropertyTest.class));
+    /** Creates new instance. */    
+    public OptionsViewAction() {
+        super(menu, null, "org.netbeans.modules.options.OptionsWindowAction");
     }
     
-    /** This test assures compatibility with Jelly library.
-     * Please contact QA or any JellyTools developer in case of failure.
-     */    
-    public void testJellyCompatibility() {
-        try {
-            assertTrue("SettingChildren class is public", Modifier.isPublic(SettingChildren.class.getModifiers()));
-            assertTrue("FileStateProperty class is public", Modifier.isPublic(FileStateProperty.class.getModifiers()));
-            try {
-                new FileStateProperty("Modules-Layer").getValue();
-            } catch (NullPointerException npe) {}
-        } catch (Exception e) {
-            throw new AssertionFailedErrorException("JellyTools compatibility conflict, please contact QA or any JellyTools developer.", e);
+    /** performs action through main menu. If called on MAC it uses IDE API to
+     * open Options.
+     */
+    public void performMenu() {
+        if(System.getProperty("os.name").toLowerCase().indexOf("mac") > -1) { // NOI18N
+            performAPI();
+        } else {
+            super.performMenu();
         }
     }
-    
-    
 }
