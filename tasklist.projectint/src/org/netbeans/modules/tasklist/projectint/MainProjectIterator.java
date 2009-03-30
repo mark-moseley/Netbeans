@@ -51,6 +51,7 @@ import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.openide.filesystems.FileObject;
+import org.openide.util.Utilities;
 
 /**
  * Iterate all resources (files and folders) that are under the current main project
@@ -62,11 +63,9 @@ import org.openide.filesystems.FileObject;
 class MainProjectIterator implements Iterator<FileObject> {
     
     private Iterator<FileObject> iterator;
-    private Collection<FileObject> editedFiles;
     
     /** Creates a new instance of MainProjectIterator */
-    public MainProjectIterator( Collection<FileObject> editedFiles ) {
-        this.editedFiles = editedFiles;
+    public MainProjectIterator() {
     }
     
     public boolean hasNext() {
@@ -90,18 +89,23 @@ class MainProjectIterator implements Iterator<FileObject> {
     }
     
     protected Iterator<FileObject> createIterator() {
-        Project mainProject = OpenProjects.getDefault().getMainProject();
-        if( null == mainProject ) {
-            return new EmptyIterator();
+        boolean isMainProject = true;
+        Project currentProject = OpenProjects.getDefault().getMainProject();
+        if( null == currentProject ) {
+            isMainProject = false;
+            currentProject = MainProjectScanningScope.findCurrentProject();
+            if( null == currentProject )
+                return new EmptyIterator();
         }
         
         ArrayList<FileObject> roots = new ArrayList<FileObject>(10);
         
-        addProject( mainProject, roots );
+        addProject( currentProject, roots );
         
-        addDependantProjects( mainProject, roots );
+        if( isMainProject )
+            addDependantProjects( currentProject, roots );
         
-        return new FileObjectIterator( roots, editedFiles );
+        return new FileObjectIterator( roots );
     }
     
     private void addDependantProjects( Project mainProject, ArrayList<FileObject> roots ) {
