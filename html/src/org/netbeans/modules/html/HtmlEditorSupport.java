@@ -59,7 +59,7 @@ import javax.swing.text.EditorKit;
 import javax.swing.text.StyledDocument;
 import javax.swing.text.BadLocationException;
 import org.netbeans.api.queries.FileEncodingQuery;
-import org.netbeans.modules.html.palette.HTMLPaletteFactory;
+import org.netbeans.modules.html.palette.HtmlPaletteFactory;
 import org.netbeans.spi.palette.PaletteController;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -352,18 +352,20 @@ public final class HtmlEditorSupport extends DataEditorSupport implements OpenCo
         }
         
         void associatePalette(HtmlEditorSupport s) {
+            DataObject dataObject = s.getDataObject();
+            if(!dataObject.isValid()) {
+                return ;
+            }
             
-            Node nodes[] = { s.getDataObject().getNodeDelegate() };
+            Node nodes[] = { dataObject.getNodeDelegate() };
             InstanceContent instanceContent = new InstanceContent();
             associateLookup(new ProxyLookup(new Lookup[] { new AbstractLookup(instanceContent), nodes[0].getLookup()}));
             instanceContent.add(getActionMap());
             
             setActivatedNodes(nodes);
-            
-            DataObject dataObject = s.getDataObject();
             if (dataObject instanceof HtmlDataObject) {
                 try {
-                    PaletteController pc = HTMLPaletteFactory.getPalette();
+                    PaletteController pc = HtmlPaletteFactory.getPalette();
                     instanceContent.add(pc);
                 } catch (IOException ioe) {
                     //TODO exception handling

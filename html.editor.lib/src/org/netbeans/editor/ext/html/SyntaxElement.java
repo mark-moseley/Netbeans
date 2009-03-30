@@ -52,7 +52,7 @@ import org.openide.ErrorManager;
 /**This class is used during the analysis of the HTML code.
  *
  * It is an element of the dynamically created chain of other SyntaxElements.
- * The access to it is done through the HTMLSyntaxSupport, which also takes
+ * The access to it is done through the HtmlSyntaxSupport, which also takes
  * care of dynamically extending it when needed.
  *
  * @author  Petr Nejedly
@@ -76,14 +76,14 @@ public class SyntaxElement {
     
     private SyntaxElement previous;
     private SyntaxElement next;
-    private HTMLSyntaxSupport sup;
+    private HtmlSyntaxSupport sup;
     
     int offset;
     int length;
     int type;
     
     /** Creates new SyntaxElement */
-    public SyntaxElement(HTMLSyntaxSupport sup, int from, int to, int type ) {
+    public SyntaxElement(HtmlSyntaxSupport sup, int from, int to, int type ) {
         this.offset = from;
         this.length = to-from;
         this.type = type;
@@ -115,7 +115,16 @@ public class SyntaxElement {
     public SyntaxElement getPrevious() throws BadLocationException {
         if( previous == null ) {
             previous = sup.getPreviousElement( offset );
-            if( previous != null ) previous.next = this;
+            if( previous != null ) {
+                previous.next = this;
+//                if((previous.offset + previous.length) > offset) {
+//                    throw new IllegalStateException("Overlapping syntax elements found: " + this + "; previous: " + previous);
+//                }
+                if(previous.offset >= offset) {
+                    throw new IllegalStateException("Loop detected in SyntaxElement.getPrevious(): " + this + "; previous: " + previous);
+                }
+            }
+            
         }
         return previous;
     }
@@ -123,7 +132,16 @@ public class SyntaxElement {
     public SyntaxElement getNext() throws BadLocationException {
         if( next == null ) {
             next = sup.getNextElement( offset+length );
-            if( next != null ) next.previous = this;
+            if( next != null ) {
+                next.previous = this;
+                if(next.offset <= offset) {
+                    throw new IllegalStateException("Loop detected in SyntaxElement.getNext(): " + this + "; next: " + previous);
+                }
+//                if(next.offset <  (offset + length)) {
+//                    throw new IllegalStateException("Overlapping syntax elements found: " + this + "; next: " + previous);
+//                }
+                
+            }
         }
         return next;
     }
@@ -158,7 +176,7 @@ public class SyntaxElement {
          * @param doctypeFile system identifier for this DOCTYPE, if available.
          *  null otherwise.
          */
-        public Declaration( HTMLSyntaxSupport sup, int from, int to,
+        public Declaration( HtmlSyntaxSupport sup, int from, int to,
                 String doctypeRootElement,
                 String doctypePI, String doctypeFile
                 ) {
@@ -198,7 +216,7 @@ public class SyntaxElement {
     public static class Named extends SyntaxElement {
         String name;
         
-        public Named( HTMLSyntaxSupport sup, int from, int to, int type, String name ) {
+        public Named( HtmlSyntaxSupport sup, int from, int to, int type, String name ) {
             super( sup, from, to, type );
             this.name = name;
         }
@@ -216,11 +234,11 @@ public class SyntaxElement {
         private List<TagAttribute> attribs;
         private boolean empty = false;
         
-        public Tag(HTMLSyntaxSupport sup, int from, int to, String name, List<TagAttribute> attribs) {
+        public Tag(HtmlSyntaxSupport sup, int from, int to, String name, List<TagAttribute> attribs) {
             this(sup, from, to, name, attribs, false);
         }
         
-        public Tag(HTMLSyntaxSupport sup, int from, int to, String name, List attribs, boolean isEmpty ) {
+        public Tag(HtmlSyntaxSupport sup, int from, int to, String name, List attribs, boolean isEmpty ) {
             super( sup, from, to, TYPE_TAG, name );
             this.attribs = attribs;
             this.empty = isEmpty;
@@ -231,7 +249,7 @@ public class SyntaxElement {
         }
         
         public List<TagAttribute> getAttributes() {
-            return attribs;
+            return attribs == null ? Collections.EMPTY_LIST : attribs;
         }
         
         public TagAttribute getAttribute(String name) {
@@ -239,7 +257,7 @@ public class SyntaxElement {
         }
         
         public TagAttribute getAttribute(String name, boolean ignoreCase) {
-            for(TagAttribute ta : attribs) {
+            for(TagAttribute ta : getAttributes()) {
                 if(ta.getName().equals(name)) {
                     return ta;
                 }
@@ -251,7 +269,7 @@ public class SyntaxElement {
             StringBuffer ret = new StringBuffer( super.toString() );
             ret.append( " - {" );   // NOI18N
             
-            for( Iterator i = attribs.iterator(); i.hasNext(); ) {
+            for( Iterator i = getAttributes().iterator(); i.hasNext(); ) {
                 ret.append( i.next() );
                 ret.append( ", "  );    // NOI18N
             }
