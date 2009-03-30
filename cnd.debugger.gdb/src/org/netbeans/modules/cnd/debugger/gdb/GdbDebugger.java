@@ -98,6 +98,8 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration
 import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
 import org.netbeans.modules.cnd.settings.CppSettings;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.netbeans.modules.nativeexecution.api.NativeProcessBuilder;
+import org.netbeans.modules.nativeexecution.api.util.HostInfoUtils;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.debugger.DebuggerEngineProvider;
 import org.netbeans.spi.project.ProjectConfigurationProvider;
@@ -289,6 +291,7 @@ public class GdbDebugger implements PropertyChangeListener {
                 String pgm = null;
                 boolean isSharedLibrary = false;
                 final String path = getFullPath(baseDir, pae.getExecutable());
+                gdb.getLogger().logMessage("IDE: project executable: " + path); // NOI18N
 
                 programPID = lookupProvider.lookupFirst(null, Long.class);
                 if (((MakeConfiguration) pae.getConfiguration()).isDynamicLibraryConfiguration()) {
@@ -310,7 +313,7 @@ public class GdbDebugger implements PropertyChangeListener {
                     } else {
                         msg = NbBundle.getMessage(GdbDebugger.class, "ERR_CantAttach"); // NOI18N
                     }
-                    warnAndFinish(false, msg);
+                    warn(true, msg);
                     return; // since we've failed, a return here keeps us from sending more gdb commands
                 } else {
                     if (isSharedLibrary) {
@@ -329,29 +332,27 @@ public class GdbDebugger implements PropertyChangeListener {
                             if (isSolaris()) {
                                 gdb.file_symbol_file(path);
                             }
-                            setLoading();
                         } else if (isSharedLibrary && platform == PlatformTypes.PLATFORM_MACOSX) {
                             String addr = getMacDylibAddress(path, gdb.info_share(true).getResponse());
                             if (addr != null) {
                                 gdb.addSymbolFile(path, addr);
-                                setLoading();
                             } else {
-                                warnAndFinish(false, NbBundle.getMessage(GdbDebugger.class, "ERR_AttachValidationFailure")); // NOI18N
-                                return; // since we've failed, a return here keeps us from sending more gdb commands
+                                // see issue 135721, now we allow to attach even if no exe is found in loaded symbols and info
+                                warn(false, NbBundle.getMessage(GdbDebugger.class, "ERR_AttachValidationFailure")); // NOI18N
+                                //return; // since we've failed, a return here keeps us from sending more gdb commands
                             }
                         } else {
                             // 3) send an "info files" command to gdb. Its response should say what symbols
                             // are read.
-                            if (symbolsReadFromInfoFiles(gdb.info_files().getResponse(), path)) {
-                                setLoading();
-                            } else {
-                                warnAndFinish(false, NbBundle.getMessage(GdbDebugger.class, "ERR_AttachValidationFailure")); // NOI18N
-                                return; // since we've failed, a return here keeps us from sending more gdb commands
+                            if (!symbolsReadFromInfoFiles(gdb.info_files().getResponse(), path)) {
+                                warn(false, NbBundle.getMessage(GdbDebugger.class, "ERR_AttachValidationFailure")); // NOI18N
                             }
+                            // see issue 135721, now we allow to attach even if no exe is found in loaded symbols and info
+                            //warnAndFinish(false, NbBundle.getMessage(GdbDebugger.class, "ERR_AttachValidationFailure")); // NOI18N
+                            //return; // since we've failed, a return here keeps us from sending more gdb commands
                         }
-                    } else {
-                        setLoading();
                     }
+                    setLoading();
                 }
                 gdb.data_list_register_names("");
             } else {
@@ -446,15 +447,17 @@ public class GdbDebugger implements PropertyChangeListener {
             if (msg == null || msg.length() == 0) {
                 msg = NbBundle.getMessage(GdbDebugger.class, "ERR_UnSpecifiedStartError");
             }
-            warnAndFinish(false, msg);
+            warn(true, msg);
         }
     }
 
-    private void warnAndFinish(final boolean killTerm, final String msg) {
+    private void warn(final boolean finish, final String msg) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(msg));
-                finish(killTerm);
+                if (finish) {
+                    finish(false);
+                }
             }
         });
     }
@@ -728,7 +731,7 @@ public class GdbDebugger implements PropertyChangeListener {
 
     private String winpath(String path) {
         if (platform == PlatformTypes.PLATFORM_WINDOWS) {
-            return WinPath.cyg2win(path).replace("\\\\", "/").replace("\\", "/");
+            return WinPath.cyg2win(path).replace("\\\\", "/").replace("\\", "/"); // NOI18N
         } else {
             return path;
         }
@@ -1330,6 +1333,9 @@ public class GdbDebugger implements PropertyChangeListener {
         }
     }
 
+    private static final String KILL_PATH1 = "/usr/bin/kill";
+    private static final String KILL_PATH2 = "/bin/kill";
+
     /**
      * Send a kill command to the debuggee.
      *
@@ -1342,19 +1348,20 @@ public class GdbDebugger implements PropertyChangeListener {
             File f;
 
             if (platform == PlatformTypes.PLATFORM_WINDOWS) {
+                //TODO: Windows supported only locally for now
                 f = InstalledFileLocator.getDefault().locate("bin/GdbKillProc.exe", null, false); // NOI18N
                 if (f.exists()) {
                     killcmd.add(f.getAbsolutePath());
                 }
             } else {
-                f = new File("/usr/bin/kill"); // NOI18N
-                if (f.exists()) {
-                    killcmd.add(f.getAbsolutePath());
-                } else {
-                    f = new File("/bin/kill"); // NOI18N
-                    if (f.exists()) {
-                        killcmd.add(f.getAbsolutePath());
+                try {
+                    if (HostInfoUtils.fileExists(execEnv, KILL_PATH1)) {
+                        killcmd.add(KILL_PATH1);
+                    } else if (HostInfoUtils.fileExists(execEnv, KILL_PATH2)) {
+                        killcmd.add(KILL_PATH2);
                     }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
                 }
             }
             if (!killcmd.isEmpty()) {
@@ -1377,10 +1384,13 @@ public class GdbDebugger implements PropertyChangeListener {
                 killcmd.add(signalName);
 
                 killcmd.add(Long.toString(pid));
-                ProcessBuilder pb = new ProcessBuilder(killcmd);
+                NativeProcessBuilder npb = new NativeProcessBuilder(execEnv, killcmd.get(0));
+                String[] args = killcmd.subList(1, killcmd.size()).toArray(new String[killcmd.size()-1]);
+                // setArguments returns new builder instance, so it is necessary to reassign it...
+                npb = npb.setArguments(args);
                 try {
-                    pb.start();
-                } catch (IOException ex) {
+                    npb.call();
+                } catch (Exception ex) {
                     ex.printStackTrace();
                 }
                 gdb.getLogger().logMessage("External Command: " + killcmd.toString()); // NOI18N
