@@ -41,29 +41,19 @@
 
 package org.netbeans.modules.masterfs.filebasedfs.utils;
 
-import org.netbeans.modules.masterfs.filebasedfs.fileobjects.WriteLockUtils;
-import org.netbeans.modules.masterfs.filebasedfs.naming.NamingFactory;
-
-import javax.swing.filechooser.FileSystemView;
 import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import javax.swing.filechooser.FileSystemView;
+import org.netbeans.modules.masterfs.filebasedfs.fileobjects.WriteLockUtils;
 import org.netbeans.modules.masterfs.filebasedfs.naming.FileNaming;
+import org.netbeans.modules.masterfs.filebasedfs.naming.NamingFactory;
 import org.openide.filesystems.FileObject;
+
 
 public final class FileInfo {
     private static final FileSystemView FILESYSTEMVIEW = FileSystemView.getFileSystemView();
     private static boolean IS_WINDOWS = org.openide.util.Utilities.isWindows();
-
-    public static final int FLAG_isFile = 0;
-    public static final int FLAG_isDirectory = 1;
-    public static final int FLAG_exists = 2;
-    public static final int FLAG_isComputeNode = 3;
-    //public static final int FLAG_isWindowsFloppy = 4;
-    public static final int FLAG_isUnixSpecialFile = 5;
-    public static final int FLAG_isUNC = 6;    
-    public static final int FLAG_isFloppy = 7;
-    //public static final int FLAG_isWindows = 8;
-    public static final int FLAG_isConvertibleToFileObject = 9;
-
 
     private int isFile = -1;
     private int isDirectory = -1;
@@ -71,7 +61,6 @@ public final class FileInfo {
     private int isComputeNode = -1;
     private int isUnixSpecialFile = -1;
     private int isUNC = -1;    
-    private int isFloppy = -1;
     private int isConvertibleToFileObject = -1;
 
     private Integer id = null;        
@@ -81,7 +70,35 @@ public final class FileInfo {
     private FileInfo parent = null;
     private FileNaming fileNaming = null;
     private FileObject fObject = null;
-    
+
+    private static boolean getFileAttributesAvailable = false;
+    private static Method mGetBooleanAttributes;
+    private static int BA_DIRECTORY, BA_EXISTS;
+    private static Object fs;
+
+    static {
+        // Exposes the java.io.FileSystem class which by default has package access, in order to use its
+        // 'getBooleanAttributes' method to speed up access to file attributes. See
+        //  http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=5036988
+        try {
+            Class classFileSystem = Class.forName("java.io.FileSystem");  //NOI18N
+            mGetBooleanAttributes = classFileSystem.getDeclaredMethod("getBooleanAttributes", File.class);  //NOI18N
+            mGetBooleanAttributes.setAccessible(true);
+            Field fieldBA_EXISTS = classFileSystem.getDeclaredField("BA_EXISTS");  //NOI18N
+            fieldBA_EXISTS.setAccessible(true);
+            BA_EXISTS = (Integer) fieldBA_EXISTS.get(null);
+            Field fieldBA_DIRECTORY = classFileSystem.getDeclaredField("BA_DIRECTORY");  //NOI18N
+            fieldBA_DIRECTORY.setAccessible(true);
+            BA_DIRECTORY = (Integer) fieldBA_DIRECTORY.get(null);
+            Field fieldFs = File.class.getDeclaredField("fs");  //NOI18N
+            fieldFs.setAccessible(true);
+            fs = fieldFs.get(null);
+
+            getFileAttributesAvailable = true;
+        } catch (Exception e) {
+            // ignore
+        }
+    }
 
     public FileInfo(final File file, int exists) {
         this.file = file;
@@ -104,20 +121,25 @@ public final class FileInfo {
         return (isFile == 0) ? false : true;
     }
 
-
     public boolean isDirectory() {
         if (isDirectory == -1) {
-            isDirectory = (getFile().isDirectory()) ? 1 : 0;
+            if (!getFileAttributes()) {
+                // fallback when cannot get file attributes
+                isDirectory = getFile().isDirectory() ? 1 : 0;
+            }
         }
-        return (isDirectory == 0) ? false : true;
+        return isDirectory == 1;
     }
 
-
-    public boolean  exists() {
+    public boolean exists() {
         if (exists == -1) {
-            exists = (FileChangedManager.getInstance().exists(getFile())) ? 1 : 0;
+            if (!getFileAttributes()) {
+                // fallback when cannot get file attributes
+                exists = getFile().exists() ? 1 : 0;
+            }
+            FileChangedManager.getInstance().setExists(this);
         }
-        return (exists == 0) ? false : true;
+        return exists == 1;
     }
 
     public boolean isComputeNode() {
@@ -126,15 +148,6 @@ public final class FileInfo {
         }
 
         return (isComputeNode == 1) ? true : false;
-    }
-
-
-    // XXX this is identical to isFloppy, why is it here?
-    public boolean isWindowsFloppy() {
-        if (isFloppy == -1) {
-            isFloppy = (FileInfo.FILESYSTEMVIEW.isFloppyDrive(getFile())) ? 1 : 0;
-        }
-        return (isFloppy == 1) ? true : false;
     }
 
 
@@ -158,17 +171,6 @@ public final class FileInfo {
         return FileInfo.IS_WINDOWS;
     }
     
-    public boolean isFloppy() {
-        if (isFloppy == -1) {
-            isFloppy = (FileInfo.FILESYSTEMVIEW.isFloppyDrive(getFile())) ? 1 : 0;
-        }
-
-        return (isFloppy == 1) ? true : false;
-    }
-
-
-
-
     public boolean isConvertibleToFileObject() {
         if (isConvertibleToFileObject == -1) {
             isConvertibleToFileObject = (isSupportedFile() && exists()) ?  1 : 0;
@@ -179,8 +181,7 @@ public final class FileInfo {
 
     public boolean isSupportedFile() {
         return (!getFile().getName().equals(".nbattrs") &&
-                !WriteLockUtils.hasActiveLockFileSigns(getFile().getName()) &&
-                (getFile().getParent() != null || !isWindowsFloppy())) ;
+                !WriteLockUtils.hasActiveLockFileSigns(getFile().getName()));
     }
     
     public FileInfo getRoot() {
@@ -225,43 +226,6 @@ public final class FileInfo {
     public FileInfo getParent() {
         return parent;
     }
-    
-    public void setValueForFlag (int flag, boolean value) {
-        switch (flag) {
-            case FLAG_exists:
-                 exists = (value) ? 1 : 0;                
-                break;
-             case FLAG_isComputeNode:
-                 isComputeNode = (value) ? 1 : 0;
-                break;
-             case FLAG_isConvertibleToFileObject:
-                 isConvertibleToFileObject = (value) ? 1 : 0;                 
-                break;
-             case FLAG_isDirectory:
-                 isDirectory = (value) ? 1 : 0;                                  
-                break;
-             case FLAG_isFile:
-                 isFile = (value) ? 1 : 0;                                  
-                break;
-             case FLAG_isFloppy:
-                 isFloppy = (value) ? 1 : 0;                                  
-                break;                
-             case FLAG_isUNC:
-                 isUNC = (value) ? 1 : 0;                                  
-                break;
-             case FLAG_isUnixSpecialFile:
-                 isUnixSpecialFile = (value) ? 1 : 0;                                  
-                break;
-/*
-             case FLAG_isWindows:
-                 isWindows = (value) ? 1 : 0;                                  
-                break;
-             case FLAG_isWindowsFloppy:
-                 isWindowsFloppy = (value) ? 1 : 0;                                  
-                break;            
-*/
-        }
-    }
 
     public FileNaming getFileNaming() {
         return fileNaming;
@@ -279,8 +243,9 @@ public final class FileInfo {
         this.fObject = fObject;
     }
 
+    @Override
     public String toString() {
-    return getFile().toString();
+        return getFile().toString();
     }
 
     public static final String composeName(String name, String ext) {
@@ -299,5 +264,23 @@ public final class FileInfo {
         
         /** period at first position is not considered as extension-separator */
         return ((i <= 1) || (i == name.length())) ? "" : name.substring(i); // NOI18N
+    }
+
+    /**
+     * Pre-fetches values of exists and isDirectory at one disk access. Returns
+     * true if successfully sets isDirectory and exists, false otherwise.
+     */
+    private boolean getFileAttributes() {
+        if (getFileAttributesAvailable) {
+            try {
+                int ba = (Integer) mGetBooleanAttributes.invoke(fs, file);
+                isDirectory = (ba & BA_DIRECTORY) != 0 ? 1 : 0;
+                exists = (ba & BA_EXISTS) != 0 ? 1 : 0;
+                return true;
+            } catch (Exception e) {
+                // cannot get file attributes
+            }
+        }
+        return false;
     }
 }

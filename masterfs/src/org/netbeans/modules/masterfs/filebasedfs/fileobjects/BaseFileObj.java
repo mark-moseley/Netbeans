@@ -96,10 +96,10 @@ public abstract class BaseFileObj extends FileObject {
 
 
     protected BaseFileObj(final File file) {
-        this(file, NamingFactory.fromFile(file));
+        this(NamingFactory.fromFile(new FileInfo(file)));
     }
     
-    protected BaseFileObj(final File file, final FileNaming name) {
+    protected BaseFileObj(final FileNaming name) {
         this.fileName = name;
         versioningWeakListener = (FileChangeListener) WeakListeners.create(FileChangeListener.class, FileChangeListener.class, versioningListener, this);
         addFileChangeListener(versioningWeakListener);
@@ -197,7 +197,7 @@ public abstract class BaseFileObj extends FileObject {
             if (!stack.isEmpty()) {
                 retval.append('/');//NOI18N
             }
-        }                        
+        }
         return retval.toString();
     }
 
@@ -358,8 +358,12 @@ public abstract class BaseFileObj extends FileObject {
             }
         } else if (attrName.equals("ExistsParentNoPublicAPI")) {
             return getExistingParent() != null;
-        } 
-                
+        } else if (attrName.startsWith("ProvidedExtensions")) {  //NOI18N
+            // #158600 - delegate to ProvidedExtensions if attrName starts with ProvidedExtensions prefix
+            ProvidedExtensions extension = getProvidedExtensions();
+            return extension.getAttribute(getFileName().getFile(), attrName);
+        }
+   
         return BaseFileObj.attribs.readAttribute(getFileName().getFile().getAbsolutePath().replace('\\', '/'), attrName);//NOI18N
     }
 
@@ -786,10 +790,12 @@ public abstract class BaseFileObj extends FileObject {
             if (file.isDirectory()) {
                 // first of all delete whole content
                 final File[] arr = file.listFiles();
-                for (int i = 0; i < arr.length; i++) {
-                    final File f2Delete = arr[i];
-                    if (!deleteFolder(f2Delete)) {
-                        return false;
+                if (arr != null) {  // check for null in case of I/O errors
+                    for (int i = 0; i < arr.length; i++) {
+                        final File f2Delete = arr[i];
+                        if (!deleteFolder(f2Delete)) {
+                            return false;
+                        }
                     }
                 }
             }
