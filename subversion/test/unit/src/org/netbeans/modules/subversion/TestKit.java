@@ -27,7 +27,22 @@
  */
 package org.netbeans.modules.subversion;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.net.MalformedURLException;
 import java.util.Arrays;
+import org.netbeans.modules.subversion.client.SvnClientFactory;
+import org.netbeans.modules.subversion.util.SvnUtils;
+import org.netbeans.modules.subversion.utils.TestUtilities;
+import org.tigris.subversion.svnclientadapter.ISVNClientAdapter;
+import org.tigris.subversion.svnclientadapter.ISVNDirEntry;
+import org.tigris.subversion.svnclientadapter.ISVNInfo;
+import org.tigris.subversion.svnclientadapter.ISVNStatus;
+import org.tigris.subversion.svnclientadapter.SVNClientException;
+import org.tigris.subversion.svnclientadapter.SVNRevision;
+import org.tigris.subversion.svnclientadapter.SVNStatusKind;
+import org.tigris.subversion.svnclientadapter.SVNUrl;
 
 /**
  *
@@ -73,4 +88,112 @@ public class TestKit {
         return result;
     }
 
+    public static void initRepo(File repoDir, File path) throws MalformedURLException, IOException, InterruptedException, SVNClientException {                
+        ISVNDirEntry[] list;
+        SVNUrl repoUrl;
+        if(!repoDir.exists()) {
+            repoDir.mkdirs();            
+            String[] cmd = {"svnadmin", "create", repoDir.getAbsolutePath()};
+            Process p = Runtime.getRuntime().exec(cmd);
+            p.waitFor();   
+        } else {
+            repoUrl = new SVNUrl(TestUtilities.formatFileURL(repoDir));
+            list = getClient().getList(repoUrl, SVNRevision.HEAD, false);            
+            if(list != null) {
+                for (ISVNDirEntry entry : list) {
+                    if(entry.getPath().equals(path.getName())) {
+                        try {
+                            getClient().remove(new SVNUrl[] {repoUrl.appendPath(path.getName())}, "remove");
+                        } catch (SVNClientException e) {
+                            if(e.getMessage().indexOf("does not exist") < 0) {
+                                throw e;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    static ISVNClientAdapter getClient() throws SVNClientException {        
+        return SvnClientFactory.getInstance().createSvnClient();
+    }
+
+    public static void svnimport(File repoDir, File wc) throws SVNClientException, MalformedURLException {
+        ISVNClientAdapter client = getClient();
+        String url = TestUtilities.formatFileURL(repoDir);
+        SVNUrl repoUrl = new SVNUrl(url);
+        client.mkdir(repoUrl.appendPath(wc.getName()), "msg");        
+        client.checkout(repoUrl.appendPath(wc.getName()), wc, SVNRevision.HEAD, true);        
+        File[] files = wc.listFiles();
+        if(files != null) {
+            for (File file : files) {
+                if(!isMetadata(file)) {
+                    client.addFile(file);
+                }                
+            }
+            client.commit(new File[] {wc}, "commit", true);                    
+        }        
+    }        
+
+    public static void mkdirs(File repoDir, String folder) throws SVNClientException, MalformedURLException {
+        ISVNClientAdapter client = getClient();
+        String url = TestUtilities.formatFileURL(repoDir);
+        SVNUrl repoUrl = new SVNUrl(url);
+        repoUrl = repoUrl.appendPath(folder);
+        client.mkdir(repoUrl, true, "creating folder " + folder);
+    }
+
+    public static void commit(File folder) throws SVNClientException {
+        add(folder);
+        getClient().commit(new File[]{ folder }, "commit", true);
+    }
+
+    public static void delete(File file) throws SVNClientException {
+        getClient().remove(new File[]{ file }, true);
+    }
+    
+    public static void add(File file) throws SVNClientException {
+        ISVNStatus status = getSVNStatus(file);
+        if(status.getTextStatus().equals(SVNStatusKind.UNVERSIONED)) {
+            getClient().addFile(file);
+        }
+        if(file.isFile()) {
+            return; 
+        }
+        File[] files = file.listFiles();
+        if(files != null) {
+            for (File f : files) {
+                if(!isMetadata(f)) {
+                    add(f);
+                }
+            }            
+        }
+    }
+
+    public static void write(File file, String str) throws IOException {
+        FileWriter w = null;
+        try {
+            w = new FileWriter(file);
+            w.write(str);
+            w.flush();
+        } finally {
+            if (w != null) {
+                w.close();
+            }
+        }
+    }
+
+    public static ISVNStatus getSVNStatus(File file) throws SVNClientException {            
+        return getClient().getSingleStatus(file);        
+    }
+
+    public static ISVNInfo getSVNInfo(String url) throws SVNClientException, MalformedURLException {
+        return getClient().getInfo(new SVNUrl(url));
+    }
+
+    
+    static boolean isMetadata(File file) {     
+        return SvnUtils.isAdministrative(file) || SvnUtils.isPartOfSubversionMetadata(file);
+    }
 }
