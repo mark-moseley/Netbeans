@@ -88,7 +88,7 @@ import org.netbeans.swing.tabcontrol.TabData;
 import org.netbeans.swing.tabcontrol.TabDisplayer;
 import org.netbeans.swing.tabcontrol.TabbedContainer;
 import org.netbeans.swing.tabcontrol.TabbedContainerUI;
-import org.netbeans.swing.tabcontrol.WinsysInfoForTabbed;
+import org.netbeans.swing.tabcontrol.WinsysInfoForTabbedContainer;
 import org.netbeans.swing.tabcontrol.event.ArrayDiff;
 import org.netbeans.swing.tabcontrol.event.ComplexListDataEvent;
 import org.netbeans.swing.tabcontrol.event.ComplexListDataListener;
@@ -214,10 +214,18 @@ public class DefaultTabbedContainerUI extends TabbedContainerUI {
      *
      * @param c A JComponent, which must == the displayer field initialized in the constructor
      */
+    @Override
     public final void installUI(JComponent c) {
         assert c == container;
         container.setLayout(createLayout());
         contentDisplayer = createContentDisplayer();
+        if( "Aqua".equals(UIManager.getLookAndFeel().getID()) //NOI18N
+            && (container.getType() == TabbedContainer.TYPE_VIEW
+                || container.getType() == TabbedContainer.TYPE_SLIDING)
+                && !Boolean.getBoolean("nb.explorerview.aqua.defaultbackground")) { //NOI18N
+            contentDisplayer.setBackground(UIManager.getColor("NbExplorerView.background")); //NOI18N
+            contentDisplayer.setOpaque(true);
+        }
         tabDisplayer = createTabDisplayer();
         selectionListener = createSelectionListener();
         modelListener = createModelListener();
@@ -427,7 +435,7 @@ public class DefaultTabbedContainerUI extends TabbedContainerUI {
      */
     protected TabDisplayer createTabDisplayer() {
         TabDisplayer result = null;
-        WinsysInfoForTabbed winsysInfo = container.getWinsysInfo();
+        WinsysInfoForTabbedContainer winsysInfo = container.getContainerWinsysInfo();
         if (winsysInfo != null) {
             result = new TabDisplayer(
                     container.getModel(), container.getType(), winsysInfo);
