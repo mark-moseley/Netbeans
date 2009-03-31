@@ -66,6 +66,7 @@ import org.netbeans.modules.hudson.api.HudsonInstance;
 import org.netbeans.modules.hudson.api.HudsonJob;
 import org.netbeans.modules.hudson.api.HudsonJob.Color;
 import org.netbeans.modules.hudson.api.HudsonJobBuild;
+import org.netbeans.modules.hudson.api.HudsonMavenModuleBuild;
 import org.netbeans.modules.hudson.api.HudsonVersion;
 import org.netbeans.modules.hudson.api.HudsonView;
 import static org.netbeans.modules.hudson.constants.HudsonInstanceConstants.*;
@@ -421,9 +422,19 @@ public class HudsonInstanceImpl implements HudsonInstance, OpenableInBrowser {
     }
 
     /* access from HudsonJobBuildImpl */ FileSystem getArtifacts(final HudsonJobBuild build) {
-        return getFileSystemFromCache(artifacts, build.getJob().getName() + "/" + build.getNumber(), new Callable<RemoteFileSystem>() {
+        return getFileSystemFromCache(artifacts, build.getJob().getName() + "/" + build.getNumber(), new Callable<RemoteFileSystem>() { // NOI18N
             public RemoteFileSystem call() throws Exception {
                 return new RemoteFileSystem(build);
+            }
+        });
+    }
+
+    /* access from HudsonJobBuildImpl */ FileSystem getArtifacts(final HudsonMavenModuleBuild module) {
+        return getFileSystemFromCache(artifacts, module.getBuild().getJob().getName() + "/" + // NOI18N
+                module.getBuild().getNumber() + "/" + module.getName(), // NOI18N
+                new Callable<RemoteFileSystem>() {
+            public RemoteFileSystem call() throws Exception {
+                return new RemoteFileSystem(module);
             }
         });
     }
