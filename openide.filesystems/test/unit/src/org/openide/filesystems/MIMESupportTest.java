@@ -45,6 +45,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.lang.ref.WeakReference;
 import java.util.Date;
 import java.util.Enumeration;
@@ -78,31 +79,31 @@ public class MIMESupportTest extends NbTestCase {
 
     public void testFindMIMETypeCanBeGarbageCollected() throws IOException {
         FileObject fo = FileUtil.createData(FileUtil.createMemoryFileSystem().getRoot(), "Ahoj.bla");
-        
+
         String expResult = "content/unknown";
         String result = FileUtil.getMIMEType(fo);
         assertEquals("some content found", expResult, result);
-        
+
         WeakReference<FileObject> r = new WeakReference<FileObject>(fo);
         fo = null;
         assertGC("Can be GCed", r);
     }
-    
+
     public void testBehaviourWhemLookupResultIsChanging() throws Exception {
         MIMESupportTest.TestResolver testR = new MIMESupportTest.TestResolver("a/a");
         assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).isEmpty());
-        
+
         FileObject fo = FileUtil.createData(FileUtil.createMemoryFileSystem().getRoot(), "mysterious.lenka");
-        
+
         assertEquals("content/unknown",fo.getMIMEType());
-        
+
         lookup.setLookups(testR);
-        assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).contains(testR));        
+        assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).contains(testR));
         assertEquals(testR.getMime(),fo.getMIMEType());
-        
+
         testR = new MIMESupportTest.TestResolver("b/b");
         lookup.setLookups(testR);
-        assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).contains(testR));        
+        assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).contains(testR));
         assertEquals(testR.getMime(),fo.getMIMEType());
     }
 
@@ -110,7 +111,7 @@ public class MIMESupportTest extends NbTestCase {
         MIMESupportTest.TestResolver testR = new MIMESupportTest.TestResolver("a/a");
         assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).isEmpty());
         lookup.setLookups(testR);
-        assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).contains(testR));        
+        assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).contains(testR));
         AbstractFileSystem afs = new AbstractFileSystem() {
             @Override
             public String getDisplayName() {
@@ -177,8 +178,8 @@ public class MIMESupportTest extends NbTestCase {
         assertEquals("unreadable", fo.getMIMEType());
     }
 
-    private class TestResolver extends MIMEResolver {
-        private String mime;
+    private static final class TestResolver extends MIMEResolver {
+        private final String mime;
         private TestResolver(String mime) {            
             this.mime = mime;
         }
@@ -195,7 +196,101 @@ public class MIMESupportTest extends NbTestCase {
             return mime;
         }
     }
+
+    public void testWithinMimeTypes() throws Exception {
+        MIMESupportTest.TestExtResolver testResolverA = new MIMESupportTest.TestExtResolver("a", "a/a");
+        MIMESupportTest.TestExtResolver testResolverB = new MIMESupportTest.TestExtResolver("b", "b/b");
+        MIMESupportTest.TestExtResolver testResolverXML = new MIMESupportTest.TestExtResolver("xml", "xml/xml");
+        assertTrue(Lookup.getDefault().lookupAll(MIMEResolver.class).isEmpty());
+
+        lookup.setLookups(testResolverA, testResolverB, testResolverXML);
+        assertEquals(3, Lookup.getDefault().lookupAll(MIMEResolver.class).size());
+
+        FileObject fo = FileUtil.createData(FileUtil.createMemoryFileSystem().getRoot(), "file.a");
+        String mimeType = FileUtil.getMIMEType(fo, "b/b");
+        assertEquals("content/unknown", mimeType);
+        mimeType = FileUtil.getMIMEType(fo, "a/a");
+        assertEquals("a/a", mimeType);
+        mimeType = FileUtil.getMIMEType(fo);
+        assertEquals("a/a", mimeType);
+        mimeType = FileUtil.getMIMEType(fo, "b/b");
+        assertEquals("a/a", mimeType);
+
+        //#161340 - do not cache text/xml if it is falback value
+        FileObject fo1 = FileUtil.createData(FileUtil.createMemoryFileSystem().getRoot(), "file.xml");
+        mimeType = FileUtil.getMIMEType(fo1, "a/a");
+        assertEquals("Fallback for xml failed.", "text/xml", mimeType);
+        mimeType = FileUtil.getMIMEType(fo1);
+        assertEquals("Fallback MIME type for xml should not be cached.", "xml/xml", mimeType);
+    }
+
+    private static final class TestExtResolver extends MIMEResolver {
+        private final String ext;
+        private final String mime;
+        private TestExtResolver(String ext, String mime) {
+            super(mime);
+            this.ext = ext;
+            this.mime = mime;
+        }
+
+        public String findMIMEType(FileObject fo) {
+            if (fo.getExt().equals(ext)) {
+                return mime;
+            } else {
+                return null;
+            }
+        }
+    }
     
+    public void testDeclarativeMIMEResolvers() throws Exception {
+        FileObject resolver = FileUtil.createData(FileUtil.getConfigRoot(), "Services/MIMEResolver/r.xml");
+        resolver.setAttribute("position", 2);
+        OutputStream os = resolver.getOutputStream();
+        PrintStream ps = new PrintStream(os);
+        ps.println("<!DOCTYPE MIME-resolver PUBLIC '-//NetBeans//DTD MIME Resolver 1.0//EN' 'http://www.netbeans.org/dtds/mime-resolver-1_0.dtd'>");
+        ps.println("<MIME-resolver>");
+        ps.println(" <file>");
+        ps.println("  <ext name='foo'/>");
+        ps.println("  <resolver mime='text/x-foo'/>");
+        ps.println(" </file>");
+        ps.println("</MIME-resolver>");
+        os.close();
+        FileObject foo = FileUtil.createMemoryFileSystem().getRoot().createData("x.foo");
+        assertEquals("text/x-foo", foo.getMIMEType());
+        // Test changing a resolver:
+        os = resolver.getOutputStream();
+        ps = new PrintStream(os);
+        ps.println("<!DOCTYPE MIME-resolver PUBLIC '-//NetBeans//DTD MIME Resolver 1.0//EN' 'http://www.netbeans.org/dtds/mime-resolver-1_0.dtd'>");
+        ps.println("<MIME-resolver>");
+        ps.println(" <file>");
+        ps.println("  <ext name='foo'/>");
+        ps.println("  <resolver mime='text/x-foo2'/>");
+        ps.println(" </file>");
+        ps.println("</MIME-resolver>");
+        os.close();
+        foo = FileUtil.createMemoryFileSystem().getRoot().createData("x2.foo");
+        assertEquals("text/x-foo2", foo.getMIMEType());
+        // Test adding a resolver:
+        resolver = FileUtil.createData(FileUtil.getConfigRoot(), "Services/MIMEResolver/r2.xml");
+        resolver.setAttribute("position", 1);
+        os = resolver.getOutputStream();
+        ps = new PrintStream(os);
+        ps.println("<!DOCTYPE MIME-resolver PUBLIC '-//NetBeans//DTD MIME Resolver 1.0//EN' 'http://www.netbeans.org/dtds/mime-resolver-1_0.dtd'>");
+        ps.println("<MIME-resolver>");
+        ps.println(" <file>");
+        ps.println("  <ext name='foo'/>");
+        ps.println("  <resolver mime='text/x-foo3'/>");
+        ps.println(" </file>");
+        ps.println("</MIME-resolver>");
+        os.close();
+        foo = FileUtil.createMemoryFileSystem().getRoot().createData("x3.foo");
+        assertEquals("text/x-foo3", foo.getMIMEType());
+        // Test removing a resolver:
+        resolver.delete();
+        foo = FileUtil.createMemoryFileSystem().getRoot().createData("x4.foo");
+        assertEquals("text/x-foo2", foo.getMIMEType());
+    }
+
     public static class TestLookup extends ProxyLookup {
         public TestLookup() {
             super();
@@ -206,13 +301,15 @@ public class MIMESupportTest extends NbTestCase {
             setLookups(new Lookup[] {});
         }
         
-        private void setLookups(Object instance) {
-            setLookups(new Lookup[] {getInstanceLookup(instance)});
+        private void setLookups(Object... instances) {
+            setLookups(new Lookup[] {getInstanceLookup(instances)});
         }
         
-        private Lookup getInstanceLookup(final Object instance) {
+        private Lookup getInstanceLookup(final Object... instances) {
             InstanceContent instanceContent = new InstanceContent();
-            instanceContent.add(instance);
+            for(Object i : instances) {
+                instanceContent.add(i);
+            }
             Lookup instanceLookup = new AbstractLookup(instanceContent);
             return instanceLookup;
         }        
