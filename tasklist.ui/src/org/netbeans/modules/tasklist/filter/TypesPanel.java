@@ -77,14 +77,7 @@ final class TypesPanel extends JPanel {
     }
     
     public boolean isValueValid() {
-        boolean atLeastOneTypeSelected = false;
-        for( int i=0; i<providerState.length; i++ ) {
-            if( providerState[i] ) {
-                atLeastOneTypeSelected = true;
-                break;
-            }
-        }
-        return atLeastOneTypeSelected && checkVisibleLimit();
+        return checkVisibleLimit();
     }
 
     private void init() {
@@ -126,7 +119,6 @@ final class TypesPanel extends JPanel {
                 if( selIndex >= 0 ) {
                     ScannerDescriptor tp = providers.get( selIndex );
                     if( null != tp.getOptionsPath() ) {
-                        //TODO implement navigation into sub-panels in the options window
                         OptionsDisplayer.getDefault().open( tp.getOptionsPath() );
                     }
                 }
