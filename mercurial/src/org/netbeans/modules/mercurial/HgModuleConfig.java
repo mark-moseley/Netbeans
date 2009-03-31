@@ -42,11 +42,14 @@
 package org.netbeans.modules.mercurial;
 
 
+import java.awt.EventQueue;
+import java.io.IOException;
 import java.util.regex.Pattern;
 import java.util.*;
 import java.util.prefs.Preferences;
 import java.io.File;
 import java.net.InetAddress;
+import java.util.logging.Level;
 import org.netbeans.modules.mercurial.config.HgConfigFiles;
 //import org.netbeans.modules.mercurial.options.AnnotationExpression;
 import org.netbeans.modules.mercurial.ui.repository.RepositoryConnection;
@@ -54,6 +57,10 @@ import org.netbeans.modules.mercurial.util.HgCommand;
 import org.openide.util.NbPreferences;
 import org.netbeans.modules.versioning.util.TableSorter;
 import org.netbeans.modules.versioning.util.Utils;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
+import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 
 /**
  * Stores Mercurial module configuration.
@@ -73,7 +80,8 @@ public class HgModuleConfig {
     public static final String KEY_ANNOTATION_FORMAT        = "annotationFormat";                           // NOI18N
     public static final String SAVE_PASSWORD                = "savePassword";                               // NOI18N
     public static final String KEY_BACKUP_ON_REVERTMODS = "backupOnRevert";                               // NOI18N
-                            // NOI18N
+    public static final String KEY_SHOW_HITORY_MERGES = "showHistoryMerges";                               // NOI18N
+    private static final String KEY_SHOW_FILE_INFO = "showFileInfo";        // NOI18N
 
     private static final String RECENT_URL = "repository.recentURL";                                        // NOI18N
     private static final String SHOW_CLONE_COMPLETED = "cloneCompleted.showCloneCompleted";        // NOI18N  
@@ -113,6 +121,10 @@ public class HgModuleConfig {
     public Pattern [] getIgnoredFilePatterns() {
         return getDefaultFilePatterns();
     }
+
+    public boolean getShowFileInfo() {
+        return getPreferences().getBoolean(KEY_SHOW_FILE_INFO, false);
+    }
     
     public boolean isExcludedFromCommit(String path) {
         return getCommitExclusions().contains(path);
@@ -144,12 +156,29 @@ public class HgModuleConfig {
     public boolean getBackupOnRevertModifications() {
         return getPreferences().getBoolean(KEY_BACKUP_ON_REVERTMODS, true);
     }
-
+    
     public void setBackupOnRevertModifications(boolean bBackup) {
         getPreferences().putBoolean(KEY_BACKUP_ON_REVERTMODS, bBackup);
     }
     
+    public boolean getShowHistoryMerges() {
+        return getPreferences().getBoolean(KEY_SHOW_HITORY_MERGES, true);
+    }
+
+    public void setShowHistoryMerges(boolean bShowMerges) {
+        getPreferences().putBoolean(KEY_SHOW_HITORY_MERGES, bShowMerges);
+    }
+    
+    public void setShowFileInfo(boolean info) {
+        getPreferences().putBoolean(KEY_SHOW_FILE_INFO, info);
+    }
+
     public void setExecutableBinaryPath(String path) {
+        if(Utilities.isWindows() && path.endsWith(HgCommand.HG_COMMAND + HgCommand.HG_WINDOWS_EXE)){
+            path = path.substring(0, path.length() - (HgCommand.HG_COMMAND + HgCommand.HG_WINDOWS_EXE).length());
+        }else  if(path.endsWith(HgCommand.HG_COMMAND)){
+            path = path.substring(0, path.length() - HgCommand.HG_COMMAND.length());            
+        }
         getPreferences().put(KEY_EXECUTABLE_BINARY, path);
     }
 
@@ -184,31 +213,53 @@ public class HgModuleConfig {
      * or /etc/mercurial/hgrc 
      * or a default username if none is found.
      */
-    public String getUserName() {
-        userName = HgConfigFiles.getInstance().getUserName();
+    public String getSysUserName() {
+        userName = HgConfigFiles.getSysInstance().getSysUserName();
         if (userName.length() == 0) {
             String userId = System.getProperty("user.name"); // NOI18N
             String hostName;
             try {
                 hostName = InetAddress.getLocalHost().getHostName();
             } catch (Exception ex) {
-                return userName;
+                hostName = "localhost"; //NOI18N
             }
-            userName = userId + " <" + userId + "@" + hostName + ">"; // NOI18N
+            userName = userId + "@" + hostName; // NOI18N
         }
         return userName;
     }
 
-    public void addHgkExtension() {
-        HgConfigFiles.getInstance().setProperty("hgext.hgk", "");
+    public String getSysPushPath() {
+        return HgConfigFiles.getSysInstance().getSysPushPath();
     }
     
-    public void setUserName(String name) {
-        HgConfigFiles.getInstance().setUserName(name);
+    public String getSysPullPath() {
+        return HgConfigFiles.getSysInstance().getSysPullPath();
+    }
+
+    public void addHgkExtension() throws IOException {
+        HgConfigFiles hcf = HgConfigFiles.getSysInstance();
+        if (hcf.getException() == null) {
+            hcf.setProperty("hgext.hgk", "");
+        } else {
+            Mercurial.LOG.log(Level.WARNING, this.getClass().getName() + ": Cannot set hgext.hgk property"); // NOI18N
+            Mercurial.LOG.log(Level.INFO, null, hcf.getException());
+            throw hcf.getException();
+        }
+    }
+    
+    public void setUserName(String name) throws IOException {
+        HgConfigFiles hcf = HgConfigFiles.getSysInstance();
+        if (hcf.getException() == null) {
+            hcf.setUserName(name);
+        } else {
+            Mercurial.LOG.log(Level.WARNING, this.getClass().getName() + ": Cannot set username property"); // NOI18N
+            Mercurial.LOG.log(Level.INFO, null, hcf.getException());
+            throw hcf.getException();
+        }
     }
 
     public Boolean isUserNameValid(String name) {
-        if (userName == null) getUserName();
+        if (userName == null) getSysUserName();
         if (name.equals(userName)) return true;
         if (name.length() == 0) return true;
         return HgMail.isUserNameValid(name);
@@ -223,41 +274,100 @@ public class HgModuleConfig {
         return file.exists() && file.isFile();
     }
 
+    /**
+     *
+     * @param file
+     * @return null in case of a parsing error
+     */
     public Properties getProperties(File file) {
         Properties props = new Properties();
-        HgConfigFiles hgconfig = new HgConfigFiles(file); 
+        HgConfigFiles hgconfig = new HgConfigFiles(file);
+        if (hgconfig.getException() != null) {
+            Mercurial.LOG.log(Level.WARNING, this.getClass().getName() + ": cannot load configuration file"); // NOI18N
+            Mercurial.LOG.log(Level.INFO, null, hgconfig.getException());
+            notifyParsingError();
+            return null;
+        }
         String name = hgconfig.getUserName(false);
         if (name.length() == 0) 
-            name = getUserName();
+            name = getSysUserName();
         if (name.length() > 0) 
             props.setProperty("username", name); // NOI18N
+        else
+            props.setProperty("username", ""); // NOI18N
+        
         name = hgconfig.getDefaultPull(false);
+        if (name.length() == 0) 
+            name = getSysPullPath();
         if (name.length() > 0) 
             props.setProperty("default-pull", name); // NOI18N
+        else
+            props.setProperty("default-pull", ""); // NOI18N
+        
         name = hgconfig.getDefaultPush(false);
+        if (name.length() == 0) 
+            name = getSysPushPath();
         if (name.length() > 0) 
             props.setProperty("default-push", name); // NOI18N
+        else
+            props.setProperty("default-push", ""); // NOI18N
+        
         return props;
     }
 
-    public void clearProperties(File file, String section) {
-        getHgConfigFiles(file).clearProperties(section);
+    public void clearProperties(File file, String section) throws IOException {
+        HgConfigFiles hcf = getHgConfigFiles(file);
+        if (hcf.getException() == null) {
+            hcf.clearProperties(section);
+        } else {
+            Mercurial.LOG.log(Level.WARNING, this.getClass().getName() + ": cannot clear properties for {0}", new File[] {file}); // NOI18N
+            Mercurial.LOG.log(Level.INFO, null, hcf.getException());
+            throw hcf.getException();
+        }
     }
 
-    public void removeProperty(File file, String section, String name) {
-        getHgConfigFiles(file).removeProperty(section, name);
+    public void removeProperty(File file, String section, String name) throws IOException {
+        HgConfigFiles hcf = getHgConfigFiles(file);
+        if (hcf.getException() == null) {
+            hcf.removeProperty(section, name);
+        } else {
+            Mercurial.LOG.log(Level.WARNING, this.getClass().getName() + ": cannot remove property {0} for {1}", new Object[] {name, file}); // NOI18N
+            Mercurial.LOG.log(Level.INFO, null, hcf.getException());
+            throw hcf.getException();
+        }
     }
 
-    public void setProperty(File file, String name, String value) {
-        getHgConfigFiles(file).setProperty(name, value);
+    public void setProperty(File file, String name, String value) throws IOException {
+        HgConfigFiles hcf = getHgConfigFiles(file);
+        if (hcf.getException() == null) {
+            hcf.setProperty(name, value);
+        } else {
+            Mercurial.LOG.log(Level.WARNING, this.getClass().getName() + ": cannot set property {0}:{1} for {2}", new Object[] {name, value, file}); // NOI18N
+            Mercurial.LOG.log(Level.INFO, null, hcf.getException());
+            throw hcf.getException();
+        }
     }
 
-    public void setProperty(File file, String section, String name, String value, boolean allowEmpty) {
-        getHgConfigFiles(file).setProperty(section, name, value, allowEmpty);
+    public void setProperty(File file, String section, String name, String value, boolean allowEmpty) throws IOException {
+        HgConfigFiles hcf = getHgConfigFiles(file);
+        if (hcf.getException() == null) {
+            hcf.setProperty(section, name, value, allowEmpty);
+        } else {
+            Mercurial.LOG.log(Level.WARNING, this.getClass().getName() + ": cannot set property {0}:{1} for {2}", new Object[] {name, value, file}); // NOI18N
+            Mercurial.LOG.log(Level.INFO, null, hcf.getException());
+            throw hcf.getException();
+        }
     }
 
-    public void setProperty(File file, String section, String name, String value) {
-        getHgConfigFiles(file).setProperty(section, name, value);
+    public void setProperty(File file, String section, String name, String value) throws IOException {
+        HgConfigFiles hcf = getHgConfigFiles(file);
+        if (hcf.getException() == null) {
+            hcf.setProperty(section, name, value);
+        } else {
+            Mercurial.LOG.log(Level.WARNING, this.getClass().getName() + ": cannot set property {0}:{1} for {2}", new Object[] {name, value, file}); // NOI18N
+            Mercurial.LOG.log(Level.INFO, null, hcf.getException());
+            throw hcf.getException();
+        }
     }
 
     /*
@@ -269,7 +379,7 @@ public class HgModuleConfig {
 
     private HgConfigFiles getHgConfigFiles(File file) {
         if (file == null) {
-            return HgConfigFiles.getInstance();
+            return HgConfigFiles.getSysInstance();
         } else {
             return new HgConfigFiles(file); 
         }
@@ -409,6 +519,24 @@ public class HgModuleConfig {
 
     public void setCommitTableSorter(TableSorter sorter) {
         commitTableSorter = sorter;
+    }
+
+    /**
+     * Notifies user of parsing error.
+     */
+    public static void notifyParsingError() {
+        NotifyDescriptor nd = new NotifyDescriptor(
+                NbBundle.getMessage(HgModuleConfig.class, "MSG_ParsingError"), // NOI18N
+                NbBundle.getMessage(HgModuleConfig.class, "LBL_ParsingError"), // NOI18N
+                NotifyDescriptor.DEFAULT_OPTION,
+                NotifyDescriptor.ERROR_MESSAGE,
+                new Object[]{NotifyDescriptor.OK_OPTION, NotifyDescriptor.CANCEL_OPTION},
+                NotifyDescriptor.OK_OPTION);
+        if (EventQueue.isDispatchThread()) {
+            DialogDisplayer.getDefault().notify(nd);
+        } else {
+            DialogDisplayer.getDefault().notifyLater(nd);
+        }
     }
     
     // private methods ~~~~~~~~~~~~~~~~~~

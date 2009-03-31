@@ -42,6 +42,7 @@ package org.netbeans.modules.mercurial.ui.view;
 
 import org.netbeans.modules.versioning.spi.VCSContext;
 import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.mercurial.OutputLogger;
 import org.netbeans.modules.mercurial.HgException;
 import org.netbeans.modules.mercurial.util.HgCommand;
 import org.netbeans.modules.mercurial.util.HgUtils;
@@ -53,7 +54,10 @@ import java.io.File;
 import java.util.List;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
+import java.util.logging.Level;
+import org.netbeans.modules.mercurial.HgModuleConfig;
 import org.netbeans.modules.mercurial.config.HgConfigFiles;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -63,7 +67,7 @@ import org.openide.util.Utilities;
  * 
  * @author John Rice
  */
-public class ViewAction extends AbstractAction {
+public class ViewAction extends ContextAction {
     
     private final VCSContext context;
     private static final String HG_SCRIPTS_DIR = "scripts";
@@ -73,8 +77,7 @@ public class ViewAction extends AbstractAction {
         putValue(Action.NAME, name);
     }
     
-    public void actionPerformed(ActionEvent e) {
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()) return;
+    public void performAction(ActionEvent e) {
         final File root = HgUtils.getRootFile(context);
         if (root == null) return;
         String repository = root.getAbsolutePath();
@@ -87,9 +90,10 @@ public class ViewAction extends AbstractAction {
     }
 
     static void performView(File root) {
+        OutputLogger logger = OutputLogger.getLogger(root.getAbsolutePath());
         try {
-            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(ViewAction.class, "MSG_VIEW_TITLE")); // NOI18N
-            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(ViewAction.class, "MSG_VIEW_TITLE_SEP")); // NOI18N
+            logger.outputInRed(NbBundle.getMessage(ViewAction.class, "MSG_VIEW_TITLE")); // NOI18N
+            logger.outputInRed(NbBundle.getMessage(ViewAction.class, "MSG_VIEW_TITLE_SEP")); // NOI18N
 
             String hgkCommand = HgCommand.HGK_COMMAND;
             if(Utilities.isWindows()){ 
@@ -105,18 +109,15 @@ public class ViewAction extends AbstractAction {
             }else if(Utilities.isWindows()){
                 bHgkFound = HgUtils.isInUserPath(HG_SCRIPTS_DIR + File.separator + hgkCommand);                    
             }
-            boolean bHgkPropExists = HgConfigFiles.getInstance().containsProperty(
+            boolean bHgkPropExists = HgConfigFiles.getSysInstance().containsProperty(
                             HgConfigFiles.HG_EXTENSIONS, HgConfigFiles.HG_EXTENSIONS_HGK);
             
             if(!bHgkFound){
-                HgUtils.outputMercurialTabInRed(
+                logger.outputInRed(
                             NbBundle.getMessage(ViewAction.class, "MSG_VIEW_HGK_NOT_FOUND_INFO")); // NOI18N
-                HgUtils.outputMercurialTab(""); // NOI18N
-                JOptionPane.showMessageDialog(null,
-                        NbBundle.getMessage(ViewAction.class, "MSG_VIEW_HGK_NOT_FOUND"),// NOI18N
-                        NbBundle.getMessage(ViewAction.class, "MSG_VIEW_HGK_NOT_FOUND_TITLE"),// NOI18N
-                        JOptionPane.INFORMATION_MESSAGE);
-                return;
+                logger.output(""); // NOI18N
+                logger.outputInRed(NbBundle.getMessage(ViewAction.class, "MSG_VIEW_HGK_NOT_FOUND"));    // NOI18N
+                logger.outputInRed(NbBundle.getMessage(ViewAction.class, "MSG_VIEW_HGK_NOT_FOUND_TITLE"));  // NOI18N
             }
             if(!bHgkPropExists){
                 boolean bConfirmSetHgkProp = false;
@@ -124,32 +125,38 @@ public class ViewAction extends AbstractAction {
                         ViewAction.class, "MSG_VIEW_SETHGK_PROP_CONFIRM_TITLE", // NOI18N
                         "MSG_VIEW_SETHGK_PROP_CONFIRM_QUERY"); // NOI18N                
                 if (bConfirmSetHgkProp) {
-                    HgUtils.outputMercurialTabInRed(
+                    logger.outputInRed(
                             NbBundle.getMessage(ViewAction.class, "MSG_VIEW_SETHGK_PROP_DO_INFO")); // NOI18N
-                    HgConfigFiles.getInstance().setProperty(HgConfigFiles.HG_EXTENSIONS_HGK, ""); // NOI18N
-                }else{
-                    HgUtils.outputMercurialTabInRed(
+                    HgConfigFiles hcf = HgConfigFiles.getSysInstance();
+                    if (hcf.getException() == null) {
+                        hcf.setProperty(HgConfigFiles.HG_EXTENSIONS_HGK, ""); // NOI18N
+                    } else {
+                        Mercurial.LOG.log(Level.WARNING, ViewAction.class.getName() + ": Cannot set hgk property"); // NOI18N
+                        Mercurial.LOG.log(Level.INFO, null, hcf.getException());
+                        HgModuleConfig.notifyParsingError();
+                    }
+                } else {
+                    logger.outputInRed(
                             NbBundle.getMessage(ViewAction.class, "MSG_VIEW_NOTSETHGK_PROP_INFO")); // NOI18N
-                    HgUtils.outputMercurialTab(""); // NOI18N
+                    logger.output(""); // NOI18N
+                    logger.closeLog();
                     return;
                 }
             }
             
-            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(ViewAction.class, 
+            logger.outputInRed(NbBundle.getMessage(ViewAction.class, 
                     "MSG_VIEW_LAUNCH_INFO", root.getAbsolutePath())); // NOI18N
-            HgUtils.outputMercurialTab(""); // NOI18N
-            HgCommand.doView(root);
+            logger.output(""); // NOI18N
+            HgCommand.doView(root, logger);
         } catch (HgException ex) {
             NotifyDescriptor.Exception e = new NotifyDescriptor.Exception(ex);
             DialogDisplayer.getDefault().notifyLater(e);
+        } finally {
+            logger.closeLog();
         }
     }
 
     public boolean isEnabled() {
-        File root = HgUtils.getRootFile(context);
-        if (root == null)
-            return false;
-        else
-            return true;
+        return HgUtils.getRootFile(context) != null;
     } 
 }
