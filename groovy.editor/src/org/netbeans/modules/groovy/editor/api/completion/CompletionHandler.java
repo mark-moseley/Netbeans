@@ -52,6 +52,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -1770,15 +1771,17 @@ public class CompletionHandler implements CodeCompletionHandler {
         // todo: we don't handle single dots in the source. In that case we should
         // find the class we are living in. Disable it for now.
 
-        if (packageRequest.basePackage.length() == 0 &&
-            packageRequest.prefix.length() == 0 &&
-            packageRequest.fullString.equals(".")) {
+        if (packageRequest.basePackage.length() == 0
+                && packageRequest.prefix.length() == 0
+                && packageRequest.fullString.equals(".")) {
             return false;
         }
 
         // this is a new Something()| request for a constructor, which is handled in completeMethods.
 
-        if (request.ctx.before1 != null && request.ctx.before1.text().toString().equals("new") && request.prefix.length() > 0) {
+        if (request.ctx.before1 != null
+                && request.ctx.before1.text().toString().equals("new") // NOI18N
+                && request.prefix.length() > 0) {
             return false;
         }
 
@@ -1819,6 +1822,7 @@ public class CompletionHandler implements CodeCompletionHandler {
         }
 
 
+        Set<TypeHolder> addedTypes = new HashSet<TypeHolder>();
         // get the JavaSource for our file.
 
         final JavaSource javaSource = getJavaSourceFromRequest(request);
@@ -1839,7 +1843,7 @@ public class CompletionHandler implements CodeCompletionHandler {
                 LOG.log(Level.FINEST, "Number of types found:  {0}", stringTypelist.size());
 
                 for (TypeHolder singleType : stringTypelist) {
-                    addToProposalUsingFilter(proposals, request, singleType, onlyInterfaces);
+                    addToProposalUsingFilter(addedTypes, proposals, request, singleType, onlyInterfaces);
                 }
             }
 
@@ -1864,7 +1868,9 @@ public class CompletionHandler implements CodeCompletionHandler {
             FileObject fo = request.info.getSnapshot().getSource().getFileObject();
             if (fo != null) {
                 index = GroovyIndex.get(QuerySupport.findRoots(fo,
-                        Collections.singleton(ClassPath.SOURCE), null, null));
+                        Collections.singleton(ClassPath.SOURCE),
+                        Collections.<String>emptyList(),
+                        Collections.<String>emptyList()));
             }
 
             if (index != null) {
@@ -1879,31 +1885,29 @@ public class CompletionHandler implements CodeCompletionHandler {
 
                     List<TypeHolder> typelist = new ArrayList<TypeHolder>();
 
+                    // FIXME all classes in the index - this is performance defect
                     for (IndexedClass indexedClass : classes) {
                         LOG.log(Level.FINEST, "FQN classname from index : {0} ", indexedClass.getName());
 
                         // remove duplicates
 
                         ElementKind ek;
-
-                        if(indexedClass.getKind() == org.netbeans.modules.csl.api.ElementKind.CLASS){
+                        if (indexedClass.getKind() == org.netbeans.modules.csl.api.ElementKind.CLASS) {
                             ek = ElementKind.CLASS;
                         } else {
                             ek = ElementKind.INTERFACE;
                         }
 
-                        addIfNotInTypeHolderList(typelist, new TypeHolder(indexedClass.getName(), ek));
+                        addIfNotInTypeHolderList(typelist, new TypeHolder(indexedClass.getFqn(), ek));
                     }
 
                     for (TypeHolder type : typelist) {
-                        // now finally add to proposals
-                        addToProposalUsingFilter(proposals, request, type, onlyInterfaces);
+                        addToProposalUsingFilter(addedTypes, proposals, request, type, onlyInterfaces);
                     }
 
                 }
             }
         }
-
 
         List<String> localDefaultImports = new ArrayList<String>();
 
@@ -1926,8 +1930,8 @@ public class CompletionHandler implements CodeCompletionHandler {
                         ek = ElementKind.CLASS;
                     }
 
-
-                    addToProposalUsingFilter(proposals, request, new TypeHolder(importNode.getClassName(), ek), onlyInterfaces);
+                    addToProposalUsingFilter(addedTypes, proposals, request,
+                            new TypeHolder(importNode.getClassName(), ek), onlyInterfaces);
                 }
             }
 
@@ -1969,16 +1973,15 @@ public class CompletionHandler implements CodeCompletionHandler {
             LOG.log(Level.FINEST, "Number of types found:  {0}", typeList.size());
 
             for (TypeHolder element : typeList) {
-                // LOG.log(Level.FINEST, "Single Type : {0}", element.toString());
-                addToProposalUsingFilter(proposals, request, element, onlyInterfaces);
+                addToProposalUsingFilter(addedTypes, proposals, request, element, onlyInterfaces);
             }
         }
 
         // Adding two single classes per hand
-
-        addToProposalUsingFilter(proposals, request, new TypeHolder("java.math.BigDecimal", ElementKind.CLASS), onlyInterfaces);
-        addToProposalUsingFilter(proposals, request, new TypeHolder("java.math.BigInteger", ElementKind.CLASS), onlyInterfaces);
-
+        addToProposalUsingFilter(addedTypes, proposals, request,
+                new TypeHolder("java.math.BigDecimal", ElementKind.CLASS), onlyInterfaces);
+        addToProposalUsingFilter(addedTypes, proposals, request,
+                new TypeHolder("java.math.BigInteger", ElementKind.CLASS), onlyInterfaces);
         return true;
     }
 
@@ -1990,19 +1993,19 @@ public class CompletionHandler implements CodeCompletionHandler {
      * @param request
      * @param fqn
      */
-    void addToProposalUsingFilter(List<CompletionProposal> proposals, CompletionRequest request, TypeHolder type, boolean onlyInterfaces) {
+    void addToProposalUsingFilter(Set<TypeHolder> alreadyPresent, List<CompletionProposal> proposals,
+            CompletionRequest request, TypeHolder type, boolean onlyInterfaces) {
 
-        if((onlyInterfaces == true ) && (type.getKind() != ElementKind.INTERFACE)) {
+        if ((onlyInterfaces && (type.getKind() != ElementKind.INTERFACE)) || alreadyPresent.contains(type)) {
             return;
         }
 
         String typeName = NbUtilities.stripPackage(type.getName());
 
         if (typeName.toUpperCase(Locale.ENGLISH).startsWith(request.prefix.toUpperCase(Locale.ENGLISH))) {
-            // LOG.log(Level.FINEST, "Filter, Adding Type : {0}", type.getName());
+            alreadyPresent.add(type);
             proposals.add(new CompletionItem.TypeItem(typeName, anchor, type.getKind()));
         }
-
 
         return;
     }
@@ -2991,6 +2994,33 @@ public class CompletionHandler implements CodeCompletionHandler {
         public String getName() {
             return name;
         }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final TypeHolder other = (TypeHolder) obj;
+            if ((this.name == null) ? (other.name != null) : !this.name.equals(other.name)) {
+                return false;
+            }
+            if (this.kind != other.kind) {
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 3;
+            hash = 59 * hash + (this.name != null ? this.name.hashCode() : 0);
+            hash = 59 * hash + (this.kind != null ? this.kind.hashCode() : 0);
+            return hash;
+        }
+
     }
 
 }
