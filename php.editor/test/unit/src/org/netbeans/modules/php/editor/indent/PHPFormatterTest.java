@@ -75,6 +75,10 @@ public class PHPFormatterTest extends PHPTestBase {
         reformatFileContents("testfiles/formatting/continued_expression.php");
     }
 
+    public void testContinuedExpression2() throws Exception{
+        reformatFileContents("testfiles/formatting/continued_expression2.php");
+    }
+
     public void testIfelseNobrackets() throws Exception{
         reformatFileContents("testfiles/formatting/ifelse_nobrackets.php");
     }
@@ -93,6 +97,10 @@ public class PHPFormatterTest extends PHPTestBase {
 
     public void testSubsequentQuotes() throws Exception{
         reformatFileContents("testfiles/formatting/subsequentquotes.php");
+    }
+
+    public void testMultilineString() throws Exception{
+        reformatFileContents("testfiles/formatting/multiline_string.php");
     }
 
     public void test161049() throws Exception{
