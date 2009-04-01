@@ -46,7 +46,7 @@ CLASS OrderedStatic<class,class,Loki::NullType> (OrderedStatic<class,class,Loki:
             PARAMETERS:
                  [18:34/597-18:54/617]  TYPE: const &$unresolved$::OrderedStatic TEXT=const OrderedStatic&  [18:34/597-18:39/602]  INIT: null  SCOPE: operator = 
             RETURNS &$unresolved$::OrderedStatic TEXT=OrderedStatic&  [18:9/572-18:23/586]
-STRUCT RefCountedMTAdj<template<class,class>,class MX=LOKI_DEFAULT_MUTEX> (RefCountedMTAdj ) [21:5/632-32:6/1096] lcurly=765 SCOPE: $Global$ 
+STRUCT RefCountedMTAdj<template<class,class> class ThreadingModel,class MX=LOKI_DEFAULT_MUTEX> (RefCountedMTAdj ) [21:5/632-32:6/1096] lcurly=765 SCOPE: $Global$ 
     BASE CLASSES:
     MEMBERS:
         CLASS RefCountedMT<class P> (RefCountedMTAdj::RefCountedMT ) [25:9/775-31:10/1089] lcurly=876 SCOPE: RefCountedMTAdj 
@@ -55,7 +55,7 @@ STRUCT RefCountedMTAdj<template<class,class>,class MX=LOKI_DEFAULT_MUTEX> (RefCo
             MEMBERS:
                 TYPEDEF base_type  [28:13/890-28:69/946] TYPE: RefCountedMTAdj::ThreadingModel TEXT=ThreadingModel<RefCountedMT<P>,MX>  [28:21/898-28:58/935] SCOPE: RefCountedMT 
                 TYPEDEF CountType  [29:13/959-29:65/1011] TYPE: $unresolved$::base_type::IntType TEXT=base_type::IntType  [29:30/976-29:48/994] SCOPE: RefCountedMT 
-                TYPEDEF CountPtrType  [30:13/1024-30:68/1079] TYPE: *$unresolved$::base_type::IntType TEXT=CountType*  [30:30/1041-30:55/1066] SCOPE: RefCountedMT 
+                TYPEDEF CountPtrType  [30:13/1024-30:68/1079] TYPE: *RefCountedMTAdj::RefCountedMT::CountType TEXT=CountType*  [30:30/1041-30:55/1066] SCOPE: RefCountedMT 
 FUNCTION DEFINITION foo  [34:1/1099-38:2/1218] FunctionDDImpl SCOPE: $Global$ 
     SIGNATURE foo<class,class,class>(T,C)
     UNIQUE NAME f:foo<class,class,class>(T,C)
@@ -81,7 +81,7 @@ VARIABLE DEFINITION b [47:1/1283-47:20/1302]  TYPE: const int TEXT=const int  [4
 CLASS T<bool b> (T ) [49:1/1304-50:2/1333] lcurly=1330 SCOPE: $Global$ 
     BASE CLASSES:
     MEMBERS:
-TYPEDEF Z  [52:1/1336-52:24/1359] TYPE: T TEXT=T  [52:9/1344-52:21/1356] SCOPE: $Global$ 
+TYPEDEF Z  [52:1/1336-52:24/1359] TYPE: T TEXT=T<A::b == 1>  [52:9/1344-52:21/1356] SCOPE: $Global$ 
 FUNCTION DEFINITION parse_dot  [54:1/1361-58:2/1508] FunctionDDImpl SCOPE: $Global$ 
     SIGNATURE parse_dot<class>(ScannerT&)
     UNIQUE NAME f:parse_dot<class>(ScannerT&)
@@ -153,7 +153,7 @@ CLASS OrderedStatic<class,class,Loki::NullType> (OrderedStatic<class,class,Loki:
             PARAMETERS:
                  [18:34/597-18:54/617]  TYPE: const &$unresolved$::OrderedStatic TEXT=const OrderedStatic&  [18:34/597-18:39/602]  INIT: null  SCOPE: operator = 
             RETURNS &$unresolved$::OrderedStatic TEXT=OrderedStatic&  [18:9/572-18:23/586]
-STRUCT RefCountedMTAdj<template<class,class>,class MX=LOKI_DEFAULT_MUTEX> (RefCountedMTAdj ) [21:5/632-32:6/1096] lcurly=765 SCOPE: $Global$ 
+STRUCT RefCountedMTAdj<template<class,class> class ThreadingModel,class MX=LOKI_DEFAULT_MUTEX> (RefCountedMTAdj ) [21:5/632-32:6/1096] lcurly=765 SCOPE: $Global$ 
     BASE CLASSES:
     MEMBERS:
         CLASS RefCountedMT<class P> (RefCountedMTAdj::RefCountedMT ) [25:9/775-31:10/1089] lcurly=876 SCOPE: RefCountedMTAdj 
@@ -162,7 +162,7 @@ STRUCT RefCountedMTAdj<template<class,class>,class MX=LOKI_DEFAULT_MUTEX> (RefCo
             MEMBERS:
                 TYPEDEF base_type  [28:13/890-28:69/946] TYPE: RefCountedMTAdj::ThreadingModel TEXT=ThreadingModel<RefCountedMT<P>,MX>  [28:21/898-28:58/935] SCOPE: RefCountedMT 
                 TYPEDEF CountType  [29:13/959-29:65/1011] TYPE: $unresolved$::base_type::IntType TEXT=base_type::IntType  [29:30/976-29:48/994] SCOPE: RefCountedMT 
-                TYPEDEF CountPtrType  [30:13/1024-30:68/1079] TYPE: *$unresolved$::base_type::IntType TEXT=CountType*  [30:30/1041-30:55/1066] SCOPE: RefCountedMT 
+                TYPEDEF CountPtrType  [30:13/1024-30:68/1079] TYPE: *RefCountedMTAdj::RefCountedMT::CountType TEXT=CountType*  [30:30/1041-30:55/1066] SCOPE: RefCountedMT 
 FUNCTION DEFINITION foo  [34:1/1099-38:2/1218] FunctionDDImpl SCOPE: $Global$ 
     SIGNATURE foo<class,class,class>(T,C)
     UNIQUE NAME f:foo<class,class,class>(T,C)
@@ -186,7 +186,7 @@ CLASS A (A ) [42:1/1238-45:2/1280] lcurly=1245 SCOPE: $Global$
 CLASS T<bool b> (T ) [49:1/1304-50:2/1333] lcurly=1330 SCOPE: $Global$ 
     BASE CLASSES:
     MEMBERS:
-TYPEDEF Z  [52:1/1336-52:24/1359] TYPE: T TEXT=T  [52:9/1344-52:21/1356] SCOPE: $Global$ 
+TYPEDEF Z  [52:1/1336-52:24/1359] TYPE: T TEXT=T<A::b == 1>  [52:9/1344-52:21/1356] SCOPE: $Global$ 
 FUNCTION DEFINITION parse_dot  [54:1/1361-58:2/1508] FunctionDDImpl SCOPE: $Global$ 
     SIGNATURE parse_dot<class>(ScannerT&)
     UNIQUE NAME f:parse_dot<class>(ScannerT&)
