@@ -50,7 +50,6 @@ import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmEnum;
 import org.netbeans.modules.cnd.api.model.CsmField;
-import org.netbeans.modules.cnd.api.model.CsmFunction;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmParameter;
@@ -79,6 +78,7 @@ import org.netbeans.editor.BaseDocument;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.modules.cnd.api.model.CsmClassForwardDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmFunction;
 import org.netbeans.modules.cnd.api.model.CsmInclude;
 import org.netbeans.modules.cnd.api.model.CsmMethod;
 import org.netbeans.modules.cnd.api.model.CsmNamespaceAlias;
@@ -88,6 +88,7 @@ import org.netbeans.modules.cnd.api.model.CsmTemplateParameter;
 import org.netbeans.modules.cnd.api.model.deep.CsmLabel;
 import org.netbeans.modules.cnd.api.model.services.CsmFileInfoQuery;
 import org.netbeans.modules.cnd.api.model.services.CsmIncludeResolver;
+import org.netbeans.modules.cnd.api.model.services.CsmInstantiationProvider;
 import org.netbeans.modules.cnd.completion.cplusplus.CsmCompletionUtils;
 import org.netbeans.modules.cnd.editor.api.CodeStyle;
 import org.netbeans.modules.cnd.modelutil.CsmPaintComponent;
@@ -207,9 +208,14 @@ public abstract class CsmResultItem implements CompletionItem {
         ((CsmPaintComponent) renderComponent).paintComponent(g);
     }
 
-    protected static String getTypeName(CsmType typ) {
-//        return typ.format(false);
-        return typ.getText().toString();
+    protected static String getTypeName(CsmType type, boolean instantiateTypes) {
+        CharSequence text;
+        if (instantiateTypes) {
+            text = CsmInstantiationProvider.getDefault().getInstantiatedText(type);
+        } else {
+            text = type.getText();
+        }
+        return text.toString();
     }
 
     /**
@@ -307,19 +313,21 @@ public abstract class CsmResultItem implements CompletionItem {
         }
         toAdd = addText;
         if (substituteText(component, substOffset, component.getCaret().getDot() - substOffset, false)) {
-            CsmIncludeResolver inclResolver = CsmIncludeResolver.getDefault();
-            BaseDocument doc = (BaseDocument) component.getDocument();
-            Object ob = getAssociatedObject();
-            if (CsmKindUtilities.isCsmObject(ob)) {
-                CsmFile currentFile = CsmUtilities.getCsmFile(doc, false);
-                if (!inclResolver.isObjectVisible(currentFile, (CsmObject) ob)) {
-                    String include = inclResolver.getIncludeDirective(currentFile, (CsmObject) ob);
-                    if (include.length() != 0 && !isForwardDeclaration(component) && !isAlreadyIncluded(component, include)) {
-                        insertInclude(component, currentFile, include, include.charAt(include.length() - 1) == '>');
+            if (CsmCompletionUtils.isAutoInsertIncludeDirectives()) {
+                CsmIncludeResolver inclResolver = CsmIncludeResolver.getDefault();
+                BaseDocument doc = (BaseDocument) component.getDocument();
+                Object ob = getAssociatedObject();
+                if (CsmKindUtilities.isCsmObject(ob)) {
+                    CsmFile currentFile = CsmUtilities.getCsmFile(doc, false);
+                    if (!inclResolver.isObjectVisible(currentFile, (CsmObject) ob)) {
+                        String include = inclResolver.getIncludeDirective(currentFile, (CsmObject) ob);
+                        if (include.length() != 0 && !isForwardDeclaration(component) && !isAlreadyIncluded(component, include)) {
+                            insertInclude(component, currentFile, include, include.charAt(include.length() - 1) == '>');
+                        }
                     }
+                } else {
+                    System.err.println("not yet handled object " + ob);
                 }
-            } else {
-                System.err.println("not yet handled object " + ob);
             }
             return true;
         } else {
@@ -336,7 +344,8 @@ public abstract class CsmResultItem implements CompletionItem {
         ts.moveStart();
         while (ts.moveNext()) {
             if (ts.token().id().equals(CppTokenId.PREPROCESSOR_DIRECTIVE)) {
-                if (isIncludesEqual(include, ts.token().text().toString())) {
+                StringBuilder buf = new StringBuilder(ts.token().text());
+                if (isIncludesEqual(include, buf.toString())) {
                     return true;
                 }
             }
@@ -559,18 +568,18 @@ public abstract class CsmResultItem implements CompletionItem {
 
     public static class MacroResultItem extends CsmResultItem {
 
-        private String macName;
+        private CharSequence macName;
         private List params;
         private static CsmPaintComponent.MacroPaintComponent macroPaintComp = null;
 
         public MacroResultItem(CsmMacro mac, int priotity) {
             super(mac, priotity);
-            this.macName = mac.getName().toString();
+            this.macName = mac.getName();
             this.params = mac.getParameters();
         }
 
         private String getName() {
-            return macName;
+            return macName.toString();
         }
 
         private List getParams() {
@@ -589,7 +598,6 @@ public abstract class CsmResultItem implements CompletionItem {
             if (macroPaintComp == null) {
                 macroPaintComp = createPaintComponent();
             }
-            CsmMacro mac = (CsmMacro) getAssociatedObject();
             macroPaintComp.setName(getName());
             macroPaintComp.setParams(getParams());
             macroPaintComp.setSelected(isSelected);
@@ -599,16 +607,16 @@ public abstract class CsmResultItem implements CompletionItem {
 
     public static class TemplateParameterResultItem extends CsmResultItem {
 
-        private String parName;
+        private CharSequence parName;
         private static CsmPaintComponent.TemplateParameterPaintComponent parPaintComp = null;
 
         public TemplateParameterResultItem(CsmTemplateParameter par, int priotity) {
             super(par, priotity);
-            this.parName = par.getName().toString();
+            this.parName = par.getName();
         }
 
         private String getName() {
-            return parName;
+            return parName.toString();
         }
 
         public String getItemText() {
@@ -631,16 +639,16 @@ public abstract class CsmResultItem implements CompletionItem {
 
     public static class LabelResultItem extends CsmResultItem {
 
-        private String parName;
+        private CharSequence parName;
         private static CsmPaintComponent.LabelPaintComponent parPaintComp = null;
 
         public LabelResultItem(CsmLabel par, int priotity) {
             super(par, priotity);
-            this.parName = par.getLabel().toString();
+            this.parName = par.getLabel();
         }
 
         private String getName() {
-            return parName;
+            return parName.toString();
         }
 
         public String getItemText() {
@@ -663,11 +671,10 @@ public abstract class CsmResultItem implements CompletionItem {
 
     public abstract static class VariableResultItem extends CsmResultItem {
 
-        private String typeName;
+        private CharSequence typeName;
         private Color typeColor;
-        private String fldName;
+        private CharSequence fldName;
         private int modifiers;
-        private boolean isDeprecated;
         private static CsmPaintComponent.FieldPaintComponent fieldComponent = null;
         private static CsmPaintComponent.FieldPaintComponent globVarComponent = null;
         private static CsmPaintComponent.FieldPaintComponent localVarComponent = null;
@@ -675,14 +682,14 @@ public abstract class CsmResultItem implements CompletionItem {
 
         public VariableResultItem(CsmVariable fld, int priotity) {
             super(fld, priotity);
-            this.fldName = fld.getName().toString();
+            this.fldName = fld.getName();
             this.modifiers = convertCsmModifiers(fld);
-            this.typeName = getTypeName(fld.getType());
+            this.typeName = getTypeName(fld.getType(), false);
             this.typeColor = getTypeColor(fld.getType());
         }
 
         public String getItemText() {
-            return fldName;
+            return fldName.toString();
         }
 
         abstract protected CsmPaintComponent.FieldPaintComponent createPaintComponent();
@@ -714,8 +721,8 @@ public abstract class CsmResultItem implements CompletionItem {
                 }
                 comp = localVarComponent;
             }
-            comp.setTypeName(typeName);
-            comp.setName(fldName);
+            comp.setTypeName(typeName.toString());
+            comp.setName(fldName.toString());
             comp.setTypeColor(typeColor);
             comp.setModifiers(modifiers);
             comp.setSelected(isSelected);
@@ -726,8 +733,8 @@ public abstract class CsmResultItem implements CompletionItem {
 
     public static class FileLocalFunctionResultItem extends MethodResultItem {
 
-        public FileLocalFunctionResultItem(CsmFunction mtd, CsmCompletionExpression substituteExp, int priotity, boolean isDeclaration) {
-            super(mtd, substituteExp, priotity, isDeclaration);
+        public FileLocalFunctionResultItem(CsmFunction mtd, CsmCompletionExpression substituteExp, int priotity, boolean isDeclaration, boolean instantiateTypes) {
+            super(mtd, substituteExp, priotity, isDeclaration, instantiateTypes);
         }
 
         @Override
@@ -738,8 +745,8 @@ public abstract class CsmResultItem implements CompletionItem {
 
     public static class GlobalFunctionResultItem extends MethodResultItem {
 
-        public GlobalFunctionResultItem(CsmFunction mtd, CsmCompletionExpression substituteExp, int priotity, boolean isDeclaration) {
-            super(mtd, substituteExp, priotity, isDeclaration);
+        public GlobalFunctionResultItem(CsmFunction mtd, CsmCompletionExpression substituteExp, int priotity, boolean isDeclaration, boolean instantiateTypes) {
+            super(mtd, substituteExp, priotity, isDeclaration, instantiateTypes);
         }
 
         @Override
@@ -803,17 +810,17 @@ public abstract class CsmResultItem implements CompletionItem {
 
         private static CsmPaintComponent.MethodPaintComponent mtdComponent = null;
         private static CsmPaintComponent.MethodPaintComponent globFunComponent = null;
-        private String typeName;
+        private CharSequence typeName;
         private Color typeColor;
 
-        public MethodResultItem(CsmFunction mtd, CsmCompletionExpression substituteExp, int priotity, boolean isDeclaration) {
-            super(mtd, substituteExp, priotity, isDeclaration);
-            typeName = CsmResultItem.getTypeName(mtd.getReturnType());
+        public MethodResultItem(CsmFunction mtd, CsmCompletionExpression substituteExp, int priotity, boolean isDeclaration, boolean instantiateTypes) {
+            super(mtd, substituteExp, priotity, isDeclaration, instantiateTypes);
+            typeName = CsmResultItem.getTypeName(mtd.getReturnType(), instantiateTypes);
             typeColor = CsmResultItem.getTypeColor(mtd.getReturnType());
         }
 
         public String getTypeName() {
-            return typeName;
+            return typeName.toString();
         }
 
         public void setTypeName(String typeName) {
@@ -873,18 +880,18 @@ public abstract class CsmResultItem implements CompletionItem {
         private static CsmPaintComponent.ConstructorPaintComponent ctrComponent = null;
         private int activeParameterIndex = -1;
         private int varArgIndex = -1;
-        private final String mtdName;
+        private final CharSequence mtdName;
 
-        public ConstructorResultItem(CsmFunction ctr, CsmCompletionExpression substituteExp, int priority, boolean isDeclaration) {
+        public ConstructorResultItem(CsmFunction ctr, CsmCompletionExpression substituteExp, int priority, boolean isDeclaration, boolean instantiateTypes) {
             super(ctr, priority);
             this.ctr = ctr;
             this.substituteExp = substituteExp;
             this.isDeclaration = isDeclaration;
             this.modifiers = convertCsmModifiers(ctr);
             if (CsmKindUtilities.isTemplate(ctr)) {
-                mtdName = ((CsmTemplate) ctr).getDisplayName().toString();
+                mtdName = ((CsmTemplate) ctr).getDisplayName();
             } else {
-                mtdName = ctr.getName().toString();
+                mtdName = ctr.getName();
             }
             int i = 0;
             for (Object prm : ctr.getParameters()) {
@@ -898,10 +905,8 @@ public abstract class CsmResultItem implements CompletionItem {
                     params.add(new ParamStr("", "", ((CsmParameter) prm).getName().toString(), true, KEYWORD_COLOR)); //NOI18N
                     varArgIndex = i;
                 } else {
-                    // XXX may be need full name as the first param
-                    // FIXUP: too expensive to call getClassifier here!
-                    String strFullName = type.getText().toString();// type.getClassifier().getName();
-                    params.add(new ParamStr(strFullName, type.getText().toString(), ((CsmParameter) prm).getName().toString(), false, TYPE_COLOR /*getTypeColor(type.getClassifier())*/));
+                    String typeName = getTypeName(type, instantiateTypes);
+                    params.add(new ParamStr(typeName, typeName, ((CsmParameter) prm).getName().toString(), false, TYPE_COLOR /*getTypeColor(type.getClassifier())*/));
                 }
                 i++;
             }
@@ -938,7 +943,7 @@ public abstract class CsmResultItem implements CompletionItem {
 
         public String getName() {
             // TODO review the output
-            return mtdName;
+            return mtdName.toString();
         }
 
         public List getParams() {
@@ -963,7 +968,7 @@ public abstract class CsmResultItem implements CompletionItem {
         public List<String> createParamsList() {
             List<String> ret = new ArrayList<String>();
             for (Iterator it = getParams().iterator(); it.hasNext();) {
-                StringBuffer sb = new StringBuffer();
+                StringBuilder sb = new StringBuilder();
                 ParamStr ps = (ParamStr) it.next();
                 sb.append(ps.getSimpleTypeName());
                 if (ps.isVarArg()) {
@@ -1192,18 +1197,16 @@ public abstract class CsmResultItem implements CompletionItem {
 
     public static class NamespaceAliasResultItem extends CsmResultItem {
 
-        private CsmNamespaceAlias alias;
-        private String aliasName;
+        private CharSequence aliasName;
         private static CsmPaintComponent.NamespaceAliasPaintComponent aliasComponent;
 
         public NamespaceAliasResultItem(CsmNamespaceAlias alias, boolean displayFullNamespacePath, int priotity) {
             super(alias, priotity);
-            this.alias = alias;
-            this.aliasName = alias.getAlias().toString();
+            this.aliasName = alias.getAlias();
         }
 
         public String getItemText() {
-            return alias.getAlias().toString();
+            return aliasName.toString();
         }
 
         protected CsmPaintComponent.NamespaceAliasPaintComponent createPaintComponent() {
@@ -1215,7 +1218,7 @@ public abstract class CsmResultItem implements CompletionItem {
                 aliasComponent = createPaintComponent();
             }
             aliasComponent.setSelected(isSelected);
-            aliasComponent.setAliasName(aliasName);
+            aliasComponent.setAliasName(aliasName.toString());
             return aliasComponent;
         }
     }
@@ -1224,14 +1227,14 @@ public abstract class CsmResultItem implements CompletionItem {
 
         private boolean displayFullNamespacePath;
         private CsmNamespace pkg;
-        private String pkgName;
+        private CharSequence pkgName;
         private static CsmPaintComponent.NamespacePaintComponent pkgComponent;
 
         public NamespaceResultItem(CsmNamespace pkg, boolean displayFullNamespacePath, int priotity) {
             super(pkg, priotity);
             this.pkg = pkg;
             this.displayFullNamespacePath = displayFullNamespacePath;
-            this.pkgName = pkg.getName().toString();
+            this.pkgName = pkg.getName();
         }
 
         public String getItemText() {
@@ -1247,7 +1250,7 @@ public abstract class CsmResultItem implements CompletionItem {
                 pkgComponent = createPaintComponent();
             }
             pkgComponent.setSelected(isSelected);
-            pkgComponent.setNamespaceName(pkgName);
+            pkgComponent.setNamespaceName(pkgName.toString());
             pkgComponent.setDisplayFullNamespacePath(displayFullNamespacePath);
             return pkgComponent;
         }
@@ -1256,9 +1259,7 @@ public abstract class CsmResultItem implements CompletionItem {
     public static class EnumResultItem extends CsmResultItem {
 
         private CsmEnum enm;
-        private boolean isInterface;
         private int classDisplayOffset;
-        private boolean isDeprecated;
         private boolean displayFQN;
         private static CsmPaintComponent.EnumPaintComponent enumComponent = null;
 
@@ -1308,7 +1309,6 @@ public abstract class CsmResultItem implements CompletionItem {
 
         private CsmEnumerator enmtr;
         private int enumDisplayOffset;
-        private boolean isDeprecated;
         private boolean displayFQN;
         private static CsmPaintComponent.EnumeratorPaintComponent enumtrComponent = null;
 
@@ -1359,9 +1359,7 @@ public abstract class CsmResultItem implements CompletionItem {
 
         private CsmClass cls;
         private CsmDeclaration.Kind kind;
-        private boolean isInterface;
         private int classDisplayOffset;
-        private boolean isDeprecated;
         private boolean displayFQN;
         private static CsmPaintComponent.ClassPaintComponent clsComponent = null;
         private static CsmPaintComponent.StructPaintComponent structComponent = null;
@@ -1522,7 +1520,6 @@ public abstract class CsmResultItem implements CompletionItem {
 
         private CsmTypedef def;
         private int defDisplayOffset;
-        private boolean isDeprecated;
         private boolean displayFQN;
         private static CsmPaintComponent.TypedefPaintComponent defComponent = null;
 
