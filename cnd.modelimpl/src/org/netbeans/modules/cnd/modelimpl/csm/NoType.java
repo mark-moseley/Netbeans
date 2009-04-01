@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm;
 
+import java.util.Collections;
+import java.util.List;
 import org.netbeans.modules.cnd.api.model.*;
 
 /**
@@ -51,20 +53,20 @@ public class NoType implements CsmType {
 
     private static final NoType instance = new NoType();
 
-    private Position position = new Position() {
-
-        public int getOffset() {
-            return 0;
-        }
-
-        public int getLine() {
-            return 0;
-        }
-
-        public int getColumn() {
-            return 0;
-        }
-    };
+//    private Position position = new Position() {
+//
+//        public int getOffset() {
+//            return 0;
+//        }
+//
+//        public int getLine() {
+//            return 0;
+//        }
+//
+//        public int getColumn() {
+//            return 0;
+//        }
+//    };
     
     /** prevents external creation */
     private NoType() {
@@ -82,11 +84,11 @@ public class NoType implements CsmType {
         return false;
     }
     
-    public String getText() {
+    public CharSequence getText() {
         return "";
     }
     
-    public String getCanonicalText() {
+    public CharSequence getCanonicalText() {
 	return "";
     }
     
@@ -116,6 +118,22 @@ public class NoType implements CsmType {
 
     public CsmClassifier getClassifier() {
         return null;
+    }
+
+    public List<CsmSpecializationParameter> getInstantiationParams() {
+        return Collections.emptyList();
+    }
+
+    public boolean isInstantiation() {
+        return false;
+    }
+
+    public boolean isTemplateBased() {
+        return false;
+    }
+
+    public CharSequence getClassifierText() {
+        return "";
     }
 
     public int getArrayDepth() {
