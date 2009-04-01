@@ -41,13 +41,17 @@
 
 package org.openide.text;
 
-
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.*;
+import java.util.concurrent.Callable;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.border.Border;
+import javax.swing.border.EmptyBorder;
 import javax.swing.text.*;
 import org.openide.awt.UndoRedo;
 import org.openide.cookies.EditorCookie;
@@ -60,6 +64,11 @@ import org.openide.windows.*;
 public class CloneableEditor extends CloneableTopComponent implements CloneableEditorSupport.Pane {
     private static final String HELP_ID = "editing.editorwindow"; // !!! NOI18N
     static final long serialVersionUID = -185739563792410059L;
+
+    private static final RequestProcessor RP = new RequestProcessor("org.openide.text Editor Initialization");
+    
+    /** Thread for postprocessing work in CloneableEditor.DoInitialize.initRest */
+    private static final RequestProcessor RPPostprocessing = new RequestProcessor("org.openide.text Document Postprocessing");
 
     /** editor pane  */
     protected JEditorPane pane;
@@ -74,6 +83,8 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
      * and initialization time. */
     private int cursorPosition = -1;
 
+    private StringBuffer sb = new StringBuffer(1024);
+
     // #20647. More important custom component.
 
     /** Custom editor component, which is used if specified by document
@@ -81,7 +92,10 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
      * @see NbDocument.CustomEditor#createEditor */
     private Component customComponent;
     private JToolBar customToolbar;
-
+    private DoInitialize doInitialize;
+    
+    private static final Logger LOG = Logger.getLogger("org.openide.text.CloneableEditor"); // NOI18N
+    
     /** For externalization of subclasses only  */
     public CloneableEditor() {
         this(null);
@@ -97,6 +111,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
 
         updateName();
         _setCloseOperation();
+        setMinimumSize(new Dimension(10, 10));
     }
     @SuppressWarnings("deprecation")
     private void _setCloseOperation() {
@@ -114,6 +129,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
 
     /** Overriden to explicitely set persistence type of CloneableEditor
      * to PERSISTENCE_ONLY_OPENED */
+    @Override
     public int getPersistenceType() {
         return TopComponent.PERSISTENCE_ONLY_OPENED;
     }
@@ -124,6 +140,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
      * then that it used, else general help on the editor is provided.
      * @return context help
      */
+    @Override
     public HelpCtx getHelpCtx() {
         Object kit = support.cesKit();
         HelpCtx fromKit = kit == null ? null : HelpCtx.findHelp(kit);
@@ -140,6 +157,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
      * Adds scheduling of "emptying" editor pane and removing all sub components.
      * {@inheritDoc}
      */
+    @Override
     public boolean canClose() {
         boolean result = super.canClose();
         return result;
@@ -147,6 +165,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
 
     /** Overrides superclass method. In case it is called first time,
      * initializes this <code>CloneableEditor</code>. */
+    @Override
     protected void componentShowing() {
         super.componentShowing();
         initialize();
@@ -172,29 +191,64 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
         this.pane = tmp;
         this.initialized = true;
         
-        new DoInitialize(tmp);
+        this.doInitialize = new DoInitialize(tmp);
     }
 
     
     final static Logger TIMER = Logger.getLogger("TIMER"); // NOI18N
-    final boolean NEW_INITIALIZE = Boolean.getBoolean("org.openide.text.CloneableEditor.newInitialize"); // NOI18N
+    
+    final boolean newInitialize() {
+        if (Boolean.getBoolean("org.openide.text.CloneableEditor.oldInitialize")) { // NOI18N
+            return false;
+        }
+        return !Boolean.TRUE.equals(getClientProperty("oldInitialize")); // NOI18N
+    }
 
-    class DoInitialize implements Runnable {
+    class DoInitialize implements Runnable, ActionListener {
         private final QuietEditorPane tmp;
         private Document doc;
         private RequestProcessor.Task task;
         private int phase;
         private EditorKit kit;
+        private JComponent tmpComp;
+        /** Flag to avoid never ending wait in initDocument. It is to handle case
+         *  when someone closes document ie. sets doc to null between initNonVisual
+         *  and initDocument issue #136601.
+         */
+        private boolean initialized = false;
+        /** Flag to avoid recursive call of initVisual. */
+        private boolean isInInitVisual = false;
 
         public DoInitialize(QuietEditorPane tmp) {
             this.tmp = tmp;
-            if (NEW_INITIALIZE) {
-                task = CloneableEditorSupport.RP.create(this);
-                task.setPriority(Thread.MIN_PRIORITY);
+            this.tmpComp = initLoading();
+            new Timer(1000, this).start();
+            if (newInitialize()) {
+                task = RP.create(this);
+                task.setPriority(Thread.MIN_PRIORITY + 2);
                 task.schedule(0);
             } else {
                 run();
             }
+        }
+        
+        private JComponent initLoading() {
+            setLayout(new BorderLayout());
+
+            JLabel loadingLbl = new JLabel(NbBundle.getMessage(CloneableEditor.class, "LBL_EditorLoading")); // NOI18N
+            loadingLbl.setOpaque(true);
+            loadingLbl.setHorizontalAlignment(SwingConstants.CENTER);
+            loadingLbl.setBorder(new EmptyBorder(new Insets(11, 11, 11, 11)));
+            loadingLbl.setVisible(false);
+            add(loadingLbl, BorderLayout.CENTER);
+            
+            return loadingLbl;
+        }
+
+        public void actionPerformed(ActionEvent e) {
+            tmpComp.setVisible(true);
+            Timer t = (Timer)e.getSource();
+            t.stop();
         }
         
         @SuppressWarnings("fallthrough")
@@ -203,15 +257,21 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
             
             int phaseNow = phase;
             switch (phase++) {
-            case 0: 
+            case 0:
                 initNonVisual();
-                if (NEW_INITIALIZE) {
+                if (newInitialize()) {
                     WindowManager.getDefault().invokeWhenUIReady(this);
                     break;
                 }
             case 1:
+                if (CloneableEditor.this.pane != this.tmp) {
+                    //#138686: Cancel initialization when TC was closed in the meantime
+                    //and pane is null or even different instance
+                    phase = Integer.MAX_VALUE;
+                    break;
+                }
                 initVisual();
-                if (NEW_INITIALIZE) {
+                if (newInitialize()) {
                     task.schedule(1000);
                     break;
                 }
@@ -225,7 +285,8 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
             long howLong = System.currentTimeMillis() - now;
             if (TIMER.isLoggable(Level.FINE)) {
                 String thread = SwingUtilities.isEventDispatchThread() ? "AWT" : "RP"; // NOI18N
-                Object who = doc.getProperty(Document.StreamDescriptionProperty);
+                Document d = doc;
+                Object who = d == null ? null : d.getProperty(Document.StreamDescriptionProperty);
                 if (who == null) {
                     who = support.messageName();
                 }
@@ -237,15 +298,32 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
         }
             
         private void initNonVisual() {
+            if (LOG.isLoggable(Level.FINE)) {
+                LOG.log(Level.FINE,"DoInitialize.initNonVisual Enter"
+                + " Time:" + System.currentTimeMillis()
+                + " Thread:" + Thread.currentThread().getName()
+                + " ce:[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                + " support:[" + Integer.toHexString(System.identityHashCode(support)) + "]"
+                + " Name:" + CloneableEditor.this.getName());
+            }
             Task prepareTask = support.prepareDocument();
-
-            // load the doc synchronously
+            assert prepareTask != null : "Failed to get prepareTask";
             prepareTask.waitFinished();
-
-            doc = support.getDocument();
-    
-            setLayout(new BorderLayout());
-
+            Throwable ex = support.getPrepareDocumentRuntimeException();
+            if (ex instanceof CloneableEditorSupport.DelegateIOExc) {
+                if ("org.openide.text.DataEditorSupport$Env$ME".equals(ex.getCause().getClass().getName())) {
+                    if (ex.getCause() instanceof UserQuestionException) {
+                        UserQuestionException e = (UserQuestionException) ex.getCause();
+                        try {
+                            e.confirmed();
+                        } catch (IOException ioe) {
+                        }
+                        prepareTask = support.prepareDocument();
+                        assert prepareTask != null : "Failed to get prepareTask";
+                        prepareTask.waitFinished();
+                    }
+                }
+            }
             // Init action map: cut,copy,delete,paste actions.
             javax.swing.ActionMap am = getActionMap();
 
@@ -260,15 +338,80 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
             paneMap.put(DefaultEditorKit.copyAction, getAction(DefaultEditorKit.copyAction));
             paneMap.put("delete", getAction(DefaultEditorKit.deleteNextCharAction)); // NOI18N
             paneMap.put(DefaultEditorKit.pasteAction, getAction(DefaultEditorKit.pasteAction));
+
+
+            EditorKit k = support.cesKit();
+            if (newInitialize() && k instanceof Callable) {
+                try {
+                    ((Callable) k).call();
+                } catch (Exception e) {
+                    Exceptions.printStackTrace(e);
+                }
+            }
             
-            kit = support.cesKit();
+            synchronized (this) {
+                try {
+                    doc = support.openDocument();
+                } catch (IOException exc) {
+                    LOG.log(Level.INFO,"Failed to open document",exc);
+                }
+                kit = k;
+                sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                + " -- CloneableEditor.DoInitialize.initNonVisual"
+                + " name:" + getName()
+                + " SET kit:" + kit
+                + " Thread:[" + Thread.currentThread().getName() + "]");
+                initialized = true;
+                if (LOG.isLoggable(Level.FINE)) {
+                    LOG.log(Level.FINE,"DoInitialize.initNonVisual doc and kit are set"
+                    + " Time:" + System.currentTimeMillis()
+                    + " Thread:" + Thread.currentThread().getName()
+                    + " ce:[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                    + " this:[" + Integer.toHexString(System.identityHashCode(this)) + "]"
+                    + " support:[" + Integer.toHexString(System.identityHashCode(support)) + "]"
+                    + " Name:" + CloneableEditor.this.getName()
+                    + " doc:" + doc
+                    + " kit:" + kit);
+                    LOG.log(Level.FINE,"DoInitialize.initNonVisual Call notifyAll"
+                    + " Time:" + System.currentTimeMillis()
+                    + " Thread:" + Thread.currentThread().getName()
+                    + " [" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                    + " Name:" + CloneableEditor.this.getName());
+                }
+                notifyAll();
+            }
         }
         
         private void initCustomEditor() {
+            sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+            + " -- CloneableEditor.DoInitialize.initCustomEditor"
+            + " name:" + getName()
+            + " Thread:[" + Thread.currentThread().getName() + "]" + " ENTER");
             if (doc instanceof NbDocument.CustomEditor) {
                 NbDocument.CustomEditor ce = (NbDocument.CustomEditor) doc;
-                customComponent = ce.createEditor(tmp);
-
+                sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                + " -- CloneableEditor.DoInitialize.initCustomEditor"
+                + " tmp:" + tmp.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(tmp)));
+                sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                + " -- CloneableEditor.DoInitialize.initCustomEditor"
+                + " tmp.ui:" + tmp.getUI().getClass().getName());
+                try {
+                    customComponent = ce.createEditor(tmp);
+                } catch (NullPointerException ex) {
+                    Logger logger = Logger.getLogger("org.netbeans.ui.text");   // NOI18N
+                    LogRecord rec = new LogRecord(Level.INFO, "LOG_CLONEABLE_EDITOR");   // NOI18N
+                    rec.setLoggerName(logger.getName());
+                    String log;
+                    if (tmp instanceof QuietEditorPane) {
+                        log = ((QuietEditorPane) tmp).getLog();
+                    } else {
+                        log = "Pane is not QuietEditorPane";
+                    }
+                    rec.setParameters(new Object [] {sb.toString(), log});
+                    logger.log(rec);
+                    throw new IllegalStateException("Unexpected UI class:" + tmp.getUI().getClass().getName(), ex);
+                }
+                
                 if (customComponent == null) {
                     throw new IllegalStateException(
                         "Document:" + doc // NOI18N
@@ -294,14 +437,95 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
             }            
         }
         
-        private void initVisual() {
+        private boolean initDocument() {
+            EditorKit k;
+            Document d;
+            synchronized (this) {
+                for (;;) {
+                    d = doc;
+                    k = kit;
+                    if (initialized) {
+                        break;
+                    }
+                    try {
+                        if (LOG.isLoggable(Level.FINE)) {
+                            LOG.log(Level.FINE,"DoInitialize.initDocument Starting wait"
+                            + " Time:" + System.currentTimeMillis()
+                            + " Thread:" + Thread.currentThread().getName()
+                            + " ce:[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                            + " this:[" + Integer.toHexString(System.identityHashCode(this)) + "]"
+                            + " support:[" + Integer.toHexString(System.identityHashCode(support)) + "]"
+                            + " Name:" + CloneableEditor.this.getName()
+                            + " doc:" + doc
+                            + " kit:" + kit);
+                        }
+                        wait();
+                        if (LOG.isLoggable(Level.FINE)) {
+                            LOG.log(Level.FINE,"DoInitialize.initDocument Wait finished"
+                            + " Thread:" + Thread.currentThread().getName()
+                            + " ce:[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                            + " this:[" + Integer.toHexString(System.identityHashCode(this)) + "]"
+                            + " support:[" + Integer.toHexString(System.identityHashCode(support)) + "]"
+                            + " Name:" + CloneableEditor.this.getName()
+                            + " doc:" + doc
+                            + " kit:" + kit);
+                        }
+                    } catch (InterruptedException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                }
+            }
+            if (tmp.getDocument() == doc) {
+                return false;
+            }
+            sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+            + " -- CloneableEditor.DoInitialize.initDocument INVOKE tmp.setEditorKit(kit)"
+            + " kit:" + kit
+            + " Thread:[" + Thread.currentThread().getName() + "]");
             tmp.setEditorKit(kit);
+            // #132669, do not fire prior setting the kit, which by itself sets a bogus document, etc.
+            // if this is a problem please revert the change and initialize QuietEditorPane.working = FIRE
+            // and reopen #132669
+            tmp.setWorking(QuietEditorPane.FIRE);
             tmp.setDocument(doc);
-            
-            // the following two shall be done out of AWT:
+            sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+            + " -- CloneableEditor.DoInitialize.initDocument"
+            + " RETURN TRUE"
+            + " Thread:[" + Thread.currentThread().getName() + "]");
+            return true;
+        }
+        
+        final void initVisual() {
+            //Do not allow recursive call
+            if (isInInitVisual) {
+                return;
+            }
+            isInInitVisual = true;
+            // wait for document and init it
+            if (!initDocument()) {
+                isInInitVisual = false;
+                return;
+            }
+            sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+            + " -- CloneableEditor.DoInitialize.initVisual"
+            + " name:" + getName()
+            + " ENTER"
+            + " Thread:[" + Thread.currentThread().getName() + "]");
+            if (LOG.isLoggable(Level.FINE)) {
+                /*Exception ex = new Exception();
+                StringWriter sw = new StringWriter(500);
+                PrintWriter pw = new PrintWriter(sw);
+                ex.printStackTrace(pw);*/
+                LOG.log(Level.FINE,"DoInitialize.initVisual Enter"
+                + " Time:" + System.currentTimeMillis()
+                + " Thread:" + Thread.currentThread().getName()
+                + " ce:[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                + " this:[" + Integer.toHexString(System.identityHashCode(this)) + "]"
+                + " support:[" + Integer.toHexString(System.identityHashCode(support)) + "]"
+                + " Name:" + CloneableEditor.this.getName());
+                //+ " " + sw.toString());
+            }
             initCustomEditor();
-            initDecoration();
-            
             if (customComponent != null) {
                 add(support.wrapEditorComponent(customComponent), BorderLayout.CENTER);
             } else { // not custom editor
@@ -312,11 +536,13 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
                 add(support.wrapEditorComponent(noBorderPane), BorderLayout.CENTER);
             }
 
+            initDecoration();
             if (customToolbar != null) {
                 Border b = (Border) UIManager.get("Nb.Editor.Toolbar.border"); //NOI18N
                 customToolbar.setBorder(b);
                 add(customToolbar, BorderLayout.NORTH);
             }
+            remove(tmpComp);
 
             tmp.setWorking(QuietEditorPane.ALL);
 
@@ -328,12 +554,29 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
                     caret.setDot(cursorPosition);
                 }
             }
+            ActionMap p = getActionMap().getParent();
+            getActionMap().setParent(null);
+            getActionMap().setParent(p);
+            //#134910: If editor TopComponent is already activated request focus
+            //to it again to get focus to correct subcomponent eg. QuietEditorPane which
+            //is added above.
+            if (CloneableEditor.this.equals(getRegistry().getActivated())) {
+                requestFocusInWindow();
+            }
+            isInInitVisual = false;
         }
         
         private void initRest() {
-            support.ensureAnnotationsLoaded();
+            //#132662 Post this task to another worker private thread
+            //to avoid deadlock.
+            RPPostprocessing.post(new Runnable() {
+                public void run() {
+                    support.ensureAnnotationsLoaded();
+                }
+            });
         }
     } // end of DoInitialize
+    @Override
     protected CloneableTopComponent createClonedObject() {
         return support.createCloneableTopComponent();
     }
@@ -343,6 +586,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
      * {@link org.openide.cookies.EditorCookie.Observable#PROP_OPENED_PANES}
      * property change on their own.
      */
+    @Override
     protected void componentOpened() {
         super.componentOpened();
 
@@ -358,17 +602,26 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
      * {@link org.openide.cookies.EditorCookie.Observable#PROP_OPENED_PANES}
      * property change on their own.
      */
+    @Override
     protected void componentClosed() {
         SwingUtilities.invokeLater(
             new Runnable() {
                 public void run() {
+                    sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                    + " -- CloneableEditor.componentClosed.run ENTER");
                     // #23486: pane could not be initialized yet.
-                    // #114608 - commenting out setting of the empty document and null kit
-//                    if (pane != null) {
+                    if (pane != null) {
+                        // #114608 - commenting out setting of the empty document
 //                        Document doc = support.createStyledDocument(pane.getEditorKit());
 //                        pane.setDocument(doc);
-//                        pane.setEditorKit(null);
-//                    }
+                        
+                        // #138611 - this calls kit.deinstall, which is what our kits expect,
+                        // calling it with null does not impact performance, because the pane
+                        // will not create new document and typically nobody listens on "editorKit" prop change
+                        sb.append("\n[" + Integer.toHexString(System.identityHashCode(CloneableEditor.this)) + "]"
+                        + " -- CloneableEditor.componentClosed.run INVOKE pane.setEditorKit(null)");
+                        pane.setEditorKit(null);
+                    }
 
                     removeAll();
                     customComponent = null;
@@ -388,30 +641,10 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
         }
     }
 
-    /** Overrides superclass version. Opens top component only if
-     * it is in valid state.
-     * (Editor top component may become invalid after deserialization).<br>
-     * Also tries to open all other top components which are docked
-     * in editor mode on given workspace, but not visible.<br>
-     */
-    @SuppressWarnings("deprecation")
-    public void open(Workspace workspace) {
-        if (discard()) {
-            Logger.getAnonymousLogger().warning(
-                "Can not open " + this + " component," // NOI18N
-                 +" its support environment is not valid" // NOI18N
-                 +" [support=" + support + ", env=" // NOI18N
-                 +((support == null) ? null : support.cesEnv()) + "]"
-            ); // NOI18N
-        } else {
-            dockIfNeeded();
-            super.open(workspace);
-        }
-    }
-
     /** When closing last view, also close the document.
      * @return <code>true</code> if close succeeded
      */
+    @Override
     protected boolean closeLast() {
         if (!support.canClose()) {
             // if we cannot close the last window
@@ -431,6 +664,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
     /** The undo/redo manager of the support.
      * @return the undo/redo manager shared by all editors for this support
      */
+    @Override
     public UndoRedo getUndoRedo() {
         return support.getUndoRedo();
     }
@@ -449,9 +683,14 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
             Class<? extends SystemAction> c = Class.forName("org.openide.actions.FileSystemAction", true, l).asSubclass(SystemAction.class); // NOI18N
             SystemAction ra = SystemAction.findObject(c, true);
 
-            Action[] a2 = new Action[a.length + 1];
+            Class<? extends SystemAction> c2 = Class.forName("org.netbeans.modules.diff.DiffAction", true, l).asSubclass(SystemAction.class); // NOI18N
+            SystemAction ra2 = SystemAction.findObject(c2, true);           
+            
+            Action[] a2 = new Action[a.length + 2];
             System.arraycopy(a, 0, a2, 0, a.length);
             a2[a.length] = ra;
+            a2[a.length + 1] = ra2;
+
             return a2;
         } catch (Exception ex) {
             // ok, we no action like this I guess
@@ -462,33 +701,40 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
 
     /** Transfer the focus to the editor pane.
      */
-    @SuppressWarnings("deprecation")
+    @Deprecated
+    @Override
     public void requestFocus() {
         super.requestFocus();
 
-        if ((customComponent != null) && !SwingUtilities.isDescendingFrom(pane, customComponent)) {
-            customComponent.requestFocus();
-        } else if (pane != null) {
-            pane.requestFocus();
+        if (pane != null) {
+            if ((customComponent != null) && !SwingUtilities.isDescendingFrom(pane, customComponent)) {
+                customComponent.requestFocus();
+            } else {
+                pane.requestFocus();
+            }
         }
     }
 
     /** Transfer the focus to the editor pane.
      */
-    @SuppressWarnings("deprecation")
+    @Deprecated
+    @Override
     public boolean requestFocusInWindow() {
         super.requestFocusInWindow();
 
-        if ((customComponent != null) && !SwingUtilities.isDescendingFrom(pane, customComponent)) {
-            return customComponent.requestFocusInWindow();
-        } else if (pane != null) {
-            return pane.requestFocusInWindow();
+        if (pane != null) {
+            if ((customComponent != null) && !SwingUtilities.isDescendingFrom(pane, customComponent)) {
+                return customComponent.requestFocusInWindow();
+            } else {
+                return pane.requestFocusInWindow();
+            }
         }
 
         return false;
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
+    @Override
     public boolean requestDefaultFocus() {
         if ((customComponent != null) && !SwingUtilities.isDescendingFrom(pane, customComponent)) {
             return customComponent.requestFocusInWindow();
@@ -501,6 +747,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
 
     // XXX is this method really needed?
     /** @return Preferred size of editor top component  */
+    @Override
     public Dimension getPreferredSize() {
         @SuppressWarnings("deprecation")
         Rectangle bounds = WindowManager.getDefault().getCurrentWorkspace().getBounds();
@@ -535,6 +782,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
     /** Overrides superclass method. Remembers last selected component of
      * support belonging to this component.
      * @see #componentDeactivated */
+    @Override
     protected void componentActivated() {
         support.setLastSelected(this);
     }
@@ -567,6 +815,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
     }
 
     // override for simple and consistent IDs
+    @Override
     protected String preferredID() {
         final CloneableEditorSupport ces = cloneableEditorSupport();
 
@@ -577,6 +826,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
         return "";
     }
 
+    @Override
     public void writeExternal(ObjectOutput out) throws IOException {
         super.writeExternal(out);
 
@@ -631,6 +881,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
         out.writeObject(new Integer(pos));
     }
 
+    @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         super.readExternal(in);
 
@@ -663,6 +914,7 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
      * @throws ObjectStreamException When problem during serialization occures.
      * @throws NotSerializableException When this <code>CloneableEditor</code>
      *               is invalid and doesn't want to be serialized. */
+    @Override
     protected Object writeReplace() throws ObjectStreamException {
         if (discard()) {
             throw new NotSerializableException("Serializing component is invalid: " + this); // NOI18N
@@ -694,33 +946,6 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
     private boolean discard() {
         return (support == null) || !support.cesEnv().isValid();
     }
-
-    /** Dock this top component to editor mode if it is not docked
-     * in some mode at this time  */
-    private void dockIfNeeded() {
-        // dock into editor mode if possible
-        Mode ourMode = WindowManager.getDefault().findMode(this);
-        if( null == ourMode ) {
-            //dock into 'editor' mode to avoid being tagged as a pre-version-4.0 
-            //TopComponent that is allowed to be drag and dropped outside the editor area
-            
-            //first check the active mode as it might be a floating editor window
-            TopComponent activeTc = TopComponent.getRegistry().getActivated();
-            if( null != activeTc ) {
-                ourMode = WindowManager.getDefault().findMode( activeTc );
-                if( !WindowManager.getDefault().isEditorMode( ourMode ) )
-                    ourMode = null;
-            }
-            if( null == ourMode )
-                ourMode = WindowManager.getDefault().findMode( "editor" );
-            if( null != ourMode ) {
-                 ourMode.dockInto( this );
-            } else {
-                //should not happen - editor mode is always defined
-                Logger.getAnonymousLogger().warning("The window system cannot find the default editor mode." );
-            }
-        }
-    }
     
     //
     // Implements the CloneableEditorSupport.Pane interface
@@ -730,8 +955,12 @@ public class CloneableEditor extends CloneableTopComponent implements CloneableE
     }
 
     public JEditorPane getEditorPane() {
+        assert SwingUtilities.isEventDispatchThread();
         initialize();
-
+        DoInitialize d = doInitialize;
+        if (d != null && !Thread.holdsLock(support.getLock())) {
+            d.initVisual();
+        }
         return pane;
     }
 
