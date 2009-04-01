@@ -42,6 +42,8 @@ package org.netbeans.api.java.source;
 
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.code.Types;
+import java.util.List;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 /**Various utilities related to the {@link TypeMirror}s.
@@ -67,11 +69,46 @@ public final class TypeUtilities {
      * @param t1 cast from type
      * @param t2 cast to type
      * @return true if and only if type t1 can be cast to t2 without a compile time error
+     * @throws IllegalArgumentException if the 't1' is of {@link TypeKind#EXECUTABLE EXACUTABLE},
+     *         {@link TypeKind#PACKAGE PACKAGE}, {@link TypeKind#NONE NONE}, or {@link TypeKind#OTHER OTHER} kind
      * 
      * @since 0.6
      */
     public boolean isCastable(TypeMirror t1, TypeMirror t2) {
-        return Types.instance(info.impl.getJavacTask().getContext()).isCastable((Type) t1, (Type) t2);
+        switch(t1.getKind()) {
+            case EXECUTABLE:
+            case PACKAGE:
+            case NONE:
+            case OTHER:
+                throw new IllegalArgumentException();
+            default:
+                return Types.instance(info.impl.getJavacTask().getContext()).isCastable((Type) t1, (Type) t2);
+        }
+    }
+    
+    /**
+     * Substitute all occurrences of a type in 'from' with the corresponding type
+     * in 'to' in 'type'. 'from' and 'to' lists have to be of the same length.
+     * 
+     * @param type in which the types should be substituted
+     * @param from types to substitute
+     * @param to   substitute to types
+     * @return type corresponding to input 'type' with all references to any type from 'from'
+     *         replaced with a corresponding type from 'to'
+     * @throws IllegalArgumentException if the 'from' and 'to' lists are not of the same length
+     * @since 0.36
+     */
+    public TypeMirror substitute(TypeMirror type, List<? extends TypeMirror> from, List<? extends TypeMirror> to) {
+        if (from.size() != to.size()) {
+            throw new IllegalArgumentException();
+        }
+        com.sun.tools.javac.util.List<Type> l1 = com.sun.tools.javac.util.List.nil();
+        for (TypeMirror typeMirror : from)
+            l1 = l1.prepend((Type)typeMirror);
+        com.sun.tools.javac.util.List<Type> l2 = com.sun.tools.javac.util.List.nil();
+        for (TypeMirror typeMirror : to)
+            l2 = l2.prepend((Type)typeMirror);
+        return Types.instance(info.impl.getJavacTask().getContext()).subst((Type)type, l1, l2);
     }
     
 }
