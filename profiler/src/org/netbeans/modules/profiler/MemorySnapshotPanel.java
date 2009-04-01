@@ -42,6 +42,7 @@ package org.netbeans.modules.profiler;
 
 import org.netbeans.api.project.Project;
 import org.netbeans.lib.profiler.common.Profiler;
+import org.netbeans.lib.profiler.results.ExportDataDumper;
 import org.netbeans.lib.profiler.results.ResultsSnapshot;
 import org.netbeans.lib.profiler.results.memory.AllocMemoryResultsSnapshot;
 import org.netbeans.lib.profiler.results.memory.LivenessMemoryResultsSnapshot;
@@ -54,8 +55,8 @@ import org.netbeans.modules.profiler.actions.FindNextAction;
 import org.netbeans.modules.profiler.actions.FindPreviousAction;
 import org.netbeans.modules.profiler.ui.FindDialog;
 import org.openide.actions.FindAction;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -67,6 +68,8 @@ import java.util.Date;
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.lib.profiler.results.memory.PresoObjAllocCCTNode;
+import org.netbeans.lib.profiler.utils.VMUtils;
 import org.netbeans.modules.profiler.ui.Utils;
 
 
@@ -77,25 +80,21 @@ import org.netbeans.modules.profiler.ui.Utils;
  * @author Ian Formanek
  */
 public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener, SnapshotResultsWindow.FindPerformer,
-                                                                  SaveViewAction.ViewProvider {
+                                                                  SaveViewAction.ViewProvider, ExportAction.ExportProvider {
     //~ Inner Classes ------------------------------------------------------------------------------------------------------------
 
     private class SnapshotActionsHandler implements MemoryResUserActionsHandler {
         //~ Methods --------------------------------------------------------------------------------------------------------------
 
         public void showSourceForMethod(String className, String methodName, String methodSig) {
-            if (className.length() == 1) {
-                if (BOOLEAN_CODE.equals(className) || CHAR_CODE.equals(className) || BYTE_CODE.equals(className)
-                        || SHORT_CODE.equals(className) || INT_CODE.equals(className) || LONG_CODE.equals(className)
-                        || FLOAT_CODE.equals(className) || DOUBLE_CODE.equals(className)) {
-                    // primitive type
-                    Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
-
-                    return;
-                }
-            }
-
-            NetBeansProfiler.getDefaultNB().openJavaSource(project, className, methodName, methodSig);
+            // Check if primitive type/array
+            if ((methodName == null && methodSig == null) && (VMUtils.isVMPrimitiveType(className) ||
+                 VMUtils.isPrimitiveType(className))) Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
+            // Check if allocated by reflection
+            else if (PresoObjAllocCCTNode.VM_ALLOC_CLASS.equals(className) && PresoObjAllocCCTNode.VM_ALLOC_METHOD.equals(methodName))
+                     Profiler.getDefault().displayWarning(CANNOT_SHOW_REFLECTION_SRC_MSG);
+            // Display source
+            else NetBeansProfiler.getDefaultNB().openJavaSource(project, className, methodName, methodSig);
         }
 
         public void showStacksForClass(int selectedClassId, int sortingColumn, boolean sortingOrder) {
@@ -123,12 +122,9 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
     private static final String FIND_ACTION_TOOLTIP = NbBundle.getMessage(MemorySnapshotPanel.class,
                                                                            "MemorySnapshotPanel_FindActionTooltip"); // NOI18N
                                                                                                                      // -----
-    private static final ImageIcon MEMORY_RESULTS_TAB_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/memoryResultsTab.png") // NOI18N
-    );
-    private static final ImageIcon INFO_TAB_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/infoTab.png") // NOI18N
-    );
-    private static final ImageIcon STACK_TRACES_TAB_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/stackTracesTab.png") // NOI18N
-    );
+    private static final ImageIcon MEMORY_RESULTS_TAB_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/memoryResultsTab.png", false); //NOI18N
+    private static final ImageIcon INFO_TAB_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/infoTab.png", false); //NOI18N
+    private static final ImageIcon STACK_TRACES_TAB_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/stackTracesTab.png", false); //NOI18N
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -201,7 +197,7 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
         toolBar.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
 
         toolBar.add(saveAction = new SaveSnapshotAction(ls));
-        toolBar.add(new ExportSnapshotAction(ls));
+        toolBar.add(new ExportAction(this,ls));
         toolBar.add(new SaveViewAction(this));
 
         toolBar.addSeparator();
@@ -323,10 +319,8 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
             return true;
         } else if (tabs.getSelectedComponent() == reversePanel) {
             return reversePanel.hasView();
-        } else if (tabs.getSelectedComponent() == infoPanel) {
-            return true;
         }
-
+        
         return false;
     }
 
@@ -339,7 +333,7 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
             }
 
             memoryPanel.setFindString(findString);
-            reversePanel.setFindString(findString);
+            if (reversePanel != null) reversePanel.setFindString(findString);
 
             if (!memoryPanel.findFirst()) {
                 NetBeansProfiler.getDefaultNB().displayInfoAndWait(STRING_NOT_FOUND_MSG);
@@ -370,7 +364,7 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
                 }
 
                 memoryPanel.setFindString(findString);
-                reversePanel.setFindString(findString);
+                if (reversePanel != null) reversePanel.setFindString(findString);
             }
 
             if (!memoryPanel.findNext()) {
@@ -404,7 +398,7 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
                 }
 
                 memoryPanel.setFindString(findString);
-                reversePanel.setFindString(findString);
+                if (reversePanel != null) reversePanel.setFindString(findString);
             }
 
             if (!memoryPanel.findPrevious()) {
@@ -480,5 +474,30 @@ public class MemorySnapshotPanel extends SnapshotPanel implements ChangeListener
         findActionPresenter.setEnabled(findEnabled);
         findPreviousPresenter.setEnabled(findEnabled);
         findNextPresenter.setEnabled(findEnabled);
+    }
+
+    public void exportData(int exportedFileType, ExportDataDumper eDD) {
+        if (tabs.getSelectedComponent() == memoryPanel) {
+            if (memoryPanel instanceof SnapshotAllocResultsPanel) {
+                ((SnapshotAllocResultsPanel)memoryPanel).exportData(exportedFileType, eDD, MEMORY_RESULTS_TAB_NAME);
+            } else if (memoryPanel instanceof SnapshotLivenessResultsPanel) {
+                ((SnapshotLivenessResultsPanel)memoryPanel).exportData(exportedFileType, eDD, MEMORY_RESULTS_TAB_NAME);
+            } 
+        } else if (tabs.getSelectedComponent() == reversePanel) {
+            reversePanel.exportData(exportedFileType, eDD, STACK_TRACES_TAB_NAME);
+        }
+    }
+
+    public boolean hasLoadedSnapshot() {
+        return !(snapshot==null);
+    }
+
+    public boolean hasExportableView() {
+        if (tabs.getSelectedComponent() == memoryPanel) {
+            return true;
+        } else if (tabs.getSelectedComponent() == reversePanel) {
+            return reversePanel.hasView();
+        }
+        return false;
     }
 }
