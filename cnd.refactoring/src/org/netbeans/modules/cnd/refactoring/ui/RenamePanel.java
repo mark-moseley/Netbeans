@@ -75,9 +75,9 @@ public class RenamePanel extends JPanel implements CustomRefactoringPanel {
         this.parent = parent;
         this.origObject = origObject;
         initComponents();
-        String labelText = "<html><font style=\"color: red\"><br>&nbsp;WARNING: This feature is in development and inaccurate!<br>" + //NOI18N
-                "&nbsp;Use Preview to check renamed objects</font></html>"; // NOI18N        
-        jPanel1.add(new JLabel(labelText));
+//        String labelText = "<html><font style=\"color: red\"><br>&nbsp;WARNING: This feature is in development and inaccurate!<br>" + //NOI18N
+//                "&nbsp;Use Preview to check renamed objects</font></html>"; // NOI18N
+//        jPanel1.add(new JLabel(labelText));
         updateReferencesCheckBox.setVisible(showUpdateReferences);
         nameField.setEnabled(editable);
         //parent.setPreviewEnabled(false);
@@ -97,8 +97,9 @@ public class RenamePanel extends JPanel implements CustomRefactoringPanel {
     
     private boolean initialized = false;
     public void initialize() {
-        if (initialized)
-            return ;
+        if (initialized) {
+            return;
+        }
         //put initialization code here
         initialized = true;
         CsmObject resolvedObject = CsmRefactoringUtils.getReferencedElement(this.origObject);
@@ -264,13 +265,14 @@ textCheckBox.addItemListener(new java.awt.event.ItemListener() {
         return nameField.getText();
     }
     
-    public boolean searchJavadoc() {
+    public boolean searchInComments() {
         return textCheckBox.isSelected();
     }
     
     public boolean isUpdateReferences() {
-        if (updateReferencesCheckBox.isVisible() && updateReferencesCheckBox.isSelected())
+        if (updateReferencesCheckBox.isVisible() && updateReferencesCheckBox.isSelected()) {
             return false;
+        }
         return true;
     }
 
