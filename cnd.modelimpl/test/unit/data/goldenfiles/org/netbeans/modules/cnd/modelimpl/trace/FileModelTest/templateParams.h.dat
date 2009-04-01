@@ -46,7 +46,7 @@ CLASS OrderedStatic<class,class,Loki::NullType> (OrderedStatic<class,class,Loki:
             PARAMETERS:
                  [18:34/597-18:54/617]  TYPE: const &$unresolved$::OrderedStatic TEXT=const OrderedStatic&  [18:34/597-18:39/602]  INIT: null  SCOPE: operator = 
             RETURNS &$unresolved$::OrderedStatic TEXT=OrderedStatic&  [18:9/572-18:23/586]
-STRUCT RefCountedMTAdj<template<class,class>,class MX=LOKI_DEFAULT_MUTEX> (RefCountedMTAdj ) [21:5/632-32:6/1096] lcurly=765 SCOPE: $Global$ 
+STRUCT RefCountedMTAdj<template<class,class> class ThreadingModel,class MX=LOKI_DEFAULT_MUTEX> (RefCountedMTAdj ) [21:5/632-32:6/1096] lcurly=765 SCOPE: $Global$ 
     BASE CLASSES:
     MEMBERS:
         CLASS RefCountedMT<class P> (RefCountedMTAdj::RefCountedMT ) [25:9/775-31:10/1089] lcurly=876 SCOPE: RefCountedMTAdj 
@@ -55,7 +55,7 @@ STRUCT RefCountedMTAdj<template<class,class>,class MX=LOKI_DEFAULT_MUTEX> (RefCo
             MEMBERS:
                 TYPEDEF base_type  [28:13/890-28:69/946] TYPE: RefCountedMTAdj::ThreadingModel TEXT=ThreadingModel<RefCountedMT<P>,MX>  [28:21/898-28:58/935] SCOPE: RefCountedMT 
                 TYPEDEF CountType  [29:13/959-29:65/1011] TYPE: $unresolved$::base_type::IntType TEXT=base_type::IntType  [29:30/976-29:48/994] SCOPE: RefCountedMT 
-                TYPEDEF CountPtrType  [30:13/1024-30:68/1079] TYPE: *$unresolved$::base_type::IntType TEXT=CountType*  [30:30/1041-30:55/1066] SCOPE: RefCountedMT 
+                TYPEDEF CountPtrType  [30:13/1024-30:68/1079] TYPE: *RefCountedMTAdj::RefCountedMT::CountType TEXT=CountType*  [30:30/1041-30:55/1066] SCOPE: RefCountedMT 
 FUNCTION DEFINITION foo  [34:1/1099-38:2/1218] FunctionDDImpl SCOPE: $Global$ 
     SIGNATURE foo<class,class,class>(T,C)
     UNIQUE NAME f:foo<class,class,class>(T,C)
@@ -92,7 +92,7 @@ FUNCTION DEFINITION parse_dot  [54:1/1361-58:2/1508] FunctionDDImpl SCOPE: $Glob
     STATEMENT COMPOUND  [56:27/1471-58:2/1508] SCOPE: parse_dot 
         STATEMENT RETURN  [57:5/1477-57:34/1506] SCOPE: Stmt  [56:27/1471-58:2/1508] text: 'return ch_p('.').parse(scan);'
 TYPEDEF null_tl  [60:1/1510-60:40/1549] TYPE: $unresolved$::MakeTypelist::Result TEXT=MakeTypelist::Result  [60:9/1518-60:31/1540] SCOPE: $Global$ 
-TYPEDEF ClassList  [62:1/1551-66:19/1612] TYPE: $unresolved$::Loki::Seq::Type TEXT=Loki::Seq::Type  [62:9/1559-66:8/1601] SCOPE: $Global$ 
+TYPEDEF ClassList  [62:1/1551-66:19/1612] TYPE: $unresolved$::Loki::Seq::Type TEXT=Loki::Seq<Foo,Boo>::Type  [62:9/1559-66:8/1601] SCOPE: $Global$ 
 ENUM level_type [69:1/1675-71:2/1707] SCOPE: $Global$ 
     ONE
     TWO
@@ -153,7 +153,7 @@ CLASS OrderedStatic<class,class,Loki::NullType> (OrderedStatic<class,class,Loki:
             PARAMETERS:
                  [18:34/597-18:54/617]  TYPE: const &$unresolved$::OrderedStatic TEXT=const OrderedStatic&  [18:34/597-18:39/602]  INIT: null  SCOPE: operator = 
             RETURNS &$unresolved$::OrderedStatic TEXT=OrderedStatic&  [18:9/572-18:23/586]
-STRUCT RefCountedMTAdj<template<class,class>,class MX=LOKI_DEFAULT_MUTEX> (RefCountedMTAdj ) [21:5/632-32:6/1096] lcurly=765 SCOPE: $Global$ 
+STRUCT RefCountedMTAdj<template<class,class> class ThreadingModel,class MX=LOKI_DEFAULT_MUTEX> (RefCountedMTAdj ) [21:5/632-32:6/1096] lcurly=765 SCOPE: $Global$ 
     BASE CLASSES:
     MEMBERS:
         CLASS RefCountedMT<class P> (RefCountedMTAdj::RefCountedMT ) [25:9/775-31:10/1089] lcurly=876 SCOPE: RefCountedMTAdj 
@@ -162,7 +162,7 @@ STRUCT RefCountedMTAdj<template<class,class>,class MX=LOKI_DEFAULT_MUTEX> (RefCo
             MEMBERS:
                 TYPEDEF base_type  [28:13/890-28:69/946] TYPE: RefCountedMTAdj::ThreadingModel TEXT=ThreadingModel<RefCountedMT<P>,MX>  [28:21/898-28:58/935] SCOPE: RefCountedMT 
                 TYPEDEF CountType  [29:13/959-29:65/1011] TYPE: $unresolved$::base_type::IntType TEXT=base_type::IntType  [29:30/976-29:48/994] SCOPE: RefCountedMT 
-                TYPEDEF CountPtrType  [30:13/1024-30:68/1079] TYPE: *$unresolved$::base_type::IntType TEXT=CountType*  [30:30/1041-30:55/1066] SCOPE: RefCountedMT 
+                TYPEDEF CountPtrType  [30:13/1024-30:68/1079] TYPE: *RefCountedMTAdj::RefCountedMT::CountType TEXT=CountType*  [30:30/1041-30:55/1066] SCOPE: RefCountedMT 
 FUNCTION DEFINITION foo  [34:1/1099-38:2/1218] FunctionDDImpl SCOPE: $Global$ 
     SIGNATURE foo<class,class,class>(T,C)
     UNIQUE NAME f:foo<class,class,class>(T,C)
@@ -197,7 +197,7 @@ FUNCTION DEFINITION parse_dot  [54:1/1361-58:2/1508] FunctionDDImpl SCOPE: $Glob
     STATEMENT COMPOUND  [56:27/1471-58:2/1508] SCOPE: parse_dot 
         STATEMENT RETURN  [57:5/1477-57:34/1506] SCOPE: Stmt  [56:27/1471-58:2/1508] text: 'return ch_p('.').parse(scan);'
 TYPEDEF null_tl  [60:1/1510-60:40/1549] TYPE: $unresolved$::MakeTypelist::Result TEXT=MakeTypelist::Result  [60:9/1518-60:31/1540] SCOPE: $Global$ 
-TYPEDEF ClassList  [62:1/1551-66:19/1612] TYPE: $unresolved$::Loki::Seq::Type TEXT=Loki::Seq::Type  [62:9/1559-66:8/1601] SCOPE: $Global$ 
+TYPEDEF ClassList  [62:1/1551-66:19/1612] TYPE: $unresolved$::Loki::Seq::Type TEXT=Loki::Seq<Foo,Boo>::Type  [62:9/1559-66:8/1601] SCOPE: $Global$ 
 ENUM level_type [69:1/1675-71:2/1707] SCOPE: $Global$ 
     ONE
     TWO
