@@ -4,8 +4,15 @@
 <%-- completion for JSP directives --%>
 <%--CC
 <%@|
-<%@ include %>
-<%@ include  %>
+<%@ include % >
+<%@include  %>
+--%>
+
+<%-- completion for issue 160459   --%>
+<%--CC
+<%@   |
+<%@ include % >
+<%@include  %>
 --%>
 
 <%-- completion for JSP attributes --%>
