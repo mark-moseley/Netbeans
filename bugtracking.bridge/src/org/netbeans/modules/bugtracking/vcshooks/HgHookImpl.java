@@ -39,7 +39,6 @@
 
 package org.netbeans.modules.bugtracking.vcshooks;
 
-import org.netbeans.modules.bugtracking.bridge.BugtrackingOwnerSupport;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
@@ -49,6 +48,8 @@ import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JPanel;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.bugtracking.util.BugtrackingOwnerSupport;
 import org.netbeans.modules.bugtracking.util.BugtrackingUtil;
 import org.netbeans.modules.bugtracking.spi.Issue;
 import org.netbeans.modules.bugtracking.spi.Repository;
@@ -76,8 +77,23 @@ public class HgHookImpl extends HgHook {
     @Override
     public HgHookContext beforeCommit(HgHookContext context) throws IOException {
         if(context.getFiles().length == 0) {
+
+            Project singleProject = BugtrackingOwnerSupport.getMainOrSingleProject();
+            if (singleProject != null) {
+                BugtrackingOwnerSupport.getInstance().setLooseAssociation(
+                        singleProject,
+                        panel.getSelectedRepository());
+            }
+
             LOG.warning("calling hg beforeCommit for zero files");               // NOI18N
             return null;
+        }
+
+        Repository selectedRepository = panel.getSelectedRepository();
+        if (selectedRepository != null) {
+            BugtrackingOwnerSupport.getInstance().setFirmAssociations(
+                    context.getFiles(),
+                    selectedRepository);
         }
 
         File file = context.getFiles()[0];
@@ -185,7 +201,7 @@ public class HgHookImpl extends HgHook {
         File file = context.getFiles()[0];
         LOG.log(Level.FINE, "push hook start for " + file);
 
-        Repository repo = BugtrackingOwnerSupport.getInstance().getRepository(file);
+        Repository repo = BugtrackingOwnerSupport.getInstance().getRepository(file, true);
         if(repo == null) {
             LOG.log(Level.FINE, " could not find repository for " + file);      // NOI18N
             return;
@@ -215,7 +231,10 @@ public class HgHookImpl extends HgHook {
         Repository[] repos = BugtrackingUtil.getKnownRepositories();
         if(context.getFiles().length == 0) {
             LOG.warning("creating hg hook component for zero files");           // NOI18N
-            panel = new HookPanel(repos, null);
+            Repository repoToSelect
+                    = BugtrackingOwnerSupport.getInstance()
+                      .getRepository(BugtrackingOwnerSupport.ContextType.ALL_PROJECTS);
+            panel = new HookPanel(repos, repoToSelect);
         } else {
             File file = context.getFiles()[0];
             Repository repoToSelect = BugtrackingOwnerSupport.getInstance().getRepository(file, false);
