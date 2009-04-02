@@ -70,7 +70,6 @@ import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.modules.groovy.editor.api.AstUtilities;
 import org.netbeans.modules.groovy.editor.api.GroovyUtils;
 import org.netbeans.modules.groovy.editor.api.GroovyCompilerErrorID;
-import org.netbeans.modules.groovy.editor.api.elements.AstRootElement;
 import org.netbeans.modules.parsing.api.Task;
 import org.netbeans.modules.parsing.spi.ParseException;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
@@ -78,6 +77,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 import java.util.logging.Logger;
 import java.util.logging.Level;
+import org.codehaus.groovy.control.CompilationFailedException;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.lexer.Token;
@@ -98,7 +98,7 @@ import org.openide.filesystems.URLMapper;
  *
  * @author Martin Adamek
  */
-class GroovyParser extends Parser {
+public class GroovyParser extends Parser {
 
     private static final Logger LOG = Logger.getLogger(GroovyParser.class.getName());
 
@@ -170,8 +170,8 @@ class GroovyParser extends Parser {
         waitJavaScanFinished = shouldWait;
     }
 
-    protected GroovyParserResult createParseResult(Snapshot snapshot, AstRootElement rootElement, ErrorCollector errorCollector) {
-        GroovyParserResult parserResult = new GroovyParserResult(this, snapshot, rootElement, errorCollector);
+    protected GroovyParserResult createParseResult(Snapshot snapshot, ModuleNode rootNode, ErrorCollector errorCollector) {
+        GroovyParserResult parserResult = new GroovyParserResult(this, snapshot, rootNode, errorCollector);
         return parserResult;
     }
 
@@ -595,8 +595,7 @@ class GroovyParser extends Parser {
         if (module != null) {
             context.sanitized = sanitizing;
             // FIXME parsing API
-            AstRootElement astRootElement = new AstRootElement(context.snapshot.getSource().getFileObject(), module);
-            GroovyParserResult r = createParseResult(context.snapshot, astRootElement, compilationUnit.getErrorCollector());
+            GroovyParserResult r = createParseResult(context.snapshot, module, compilationUnit.getErrorCollector());
             r.setSanitized(context.sanitized, context.sanitizedRange, context.sanitizedContents);
             return r;
         } else {
@@ -826,20 +825,21 @@ class GroovyParser extends Parser {
             this.path = path;
         }
 
-//        @Override
-//        protected Class<?> findClass(String name) throws ClassNotFoundException {
-//            // if it is a class (java or compiled groovy) it is resolved via java infr.
-//            // if it is groovy it is resolved with resource loader with compile unit
-//            throw new ClassNotFoundException();
-//        }
-//
-//        @Override
-//        public Class loadClass(String name, boolean lookupScriptFiles,
-//                boolean preferClassOverScript, boolean resolve) throws ClassNotFoundException, CompilationFailedException {
-//            // if it is a class (java or compiled groovy) it is resolved via java infr.
-//            // if it is groovy it is resolved with resource loader with compile unit
-//            throw new ClassNotFoundException();
-//        }
+        @Override
+        public Class loadClass(String name, boolean lookupScriptFiles,
+                boolean preferClassOverScript, boolean resolve) throws ClassNotFoundException, CompilationFailedException {
+
+            boolean assertsEnabled = false;
+            assert assertsEnabled = true;
+            if (assertsEnabled) {
+                Class clazz = super.loadClass(name, lookupScriptFiles, preferClassOverScript, resolve);
+                assert false : "Class " + clazz + " loaded by GroovyClassLoader";
+            }
+
+            // if it is a class (java or compiled groovy) it is resolved via java infr.
+            // if it is groovy it is resolved with resource loader with compile unit
+            throw new ClassNotFoundException();
+        }
 
         @Override
         public GroovyResourceLoader getResourceLoader() {
