@@ -58,7 +58,6 @@ import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.classpath.GlobalPathRegistry;
 import org.netbeans.api.java.project.JavaProjectConstants;
@@ -179,7 +178,7 @@ public final class NbModuleProject implements Project {
         }
         FileBuiltQueryImplementation fileBuilt = helper.createGlobFileBuiltQuery(
                 eval,from.toArray(new String[0]), to.toArray(new String[0]));
-        final SourcesHelper sourcesHelper = new SourcesHelper(helper, eval);
+        SourcesHelper sourcesHelper = new SourcesHelper(this, helper, eval);
         // Temp build dir is always internal; NBM build products go elsewhere, but
         // difficult to predict statically exactly what they are!
         // XXX would be good to mark at least the module JAR as owned by this project
@@ -204,11 +203,7 @@ public final class NbModuleProject implements Project {
                     /* XXX should schema incl. display name? */entry.getKey().getNameExt(), null, null);
         }
         // #56457: support external source roots too.
-        ProjectManager.mutex().postWriteRequest(new Runnable() {
-            public void run() {
-                sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
-            }
-        });
+        sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
         lookup = createLookup(new Info(), aux, helper, fileBuilt, sourcesHelper);
     }
 
@@ -221,7 +216,7 @@ public final class NbModuleProject implements Project {
     }
 
     private Lookup createLookup(ProjectInformation info, AuxiliaryConfiguration aux, AntProjectHelper helper, FileBuiltQueryImplementation fileBuilt, final SourcesHelper sourcesHelper) {
-        Lookup baseLookup = Lookups.fixed(
+        Object[] basicContent = new Object[] {
             this,
             info,
             aux,
@@ -246,7 +241,6 @@ public final class NbModuleProject implements Project {
             sourcesHelper.createSources(),
             new AntArtifactProviderImpl(this, helper, evaluator()),
             new CustomizerProviderImpl(this, getHelper(), evaluator()),
-            new SuiteProviderImpl(),
             typeProvider,
             new PrivilegedTemplatesImpl(),
             new ModuleProjectClassPathExtender(this),
@@ -256,7 +250,15 @@ public final class NbModuleProject implements Project {
             UILookupMergerSupport.createPrivilegedTemplatesMerger(),
             UILookupMergerSupport.createRecommendedTemplatesMerger(),
             new TemplateAttributesProvider(getHelper(), getModuleType() == NbModuleType.NETBEANS_ORG),
-            new FileEncodingQueryImpl());
+            new FileEncodingQueryImpl()
+        };
+        Object[] lookupContent = basicContent;
+        if (getModuleType() == NbModuleType.SUITE_COMPONENT) {
+            lookupContent = new Object[basicContent.length + 1];
+            System.arraycopy(basicContent, 0, lookupContent, 0, basicContent.length);
+            lookupContent[basicContent.length] = new SuiteProviderImpl();
+        }
+        Lookup baseLookup = Lookups.fixed(lookupContent);
         return  LookupProviderSupport.createCompositeLookup(baseLookup, "Projects/org-netbeans-modules-apisupport-project/Lookup"); //NOI18N
     }
 
@@ -481,8 +483,14 @@ public final class NbModuleProject implements Project {
     
     public ModuleList getModuleList() throws IOException {
         NbPlatform p = getPlatform(false);
-        if (p == null) {
+        if (p == null || ! p.isValid()) {
             // #67148: have to use something... (and getEntry(codeNameBase) will certainly fail!)
+
+            // TODO dealing with nonexistent platforms probably not complete / 100% correct yet,
+            // see #61227; but project with unresolved platform may also load as result
+            // of suite-chaining; perhaps resolve already in loadProject
+            Util.err.log(ErrorManager.WARNING, "Project in " + FileUtil.getFileDisplayName(getProjectDirectory()) // NOI18N
+                    + " is missing its platform '" + evaluator().getProperty("nbplatform.active") + "', switching to default platform");    // NOI18N
             NbPlatform p2 = NbPlatform.getDefaultPlatform();
             return ModuleList.getModuleList(getProjectDirectoryFile(), p2 != null ? p2.getDestDir() : null);
         }
@@ -771,7 +779,7 @@ public final class NbModuleProject implements Project {
     public void refreshBuildScripts(boolean checkForProjectXmlModified, NbPlatform customPlatform) throws IOException {
         String buildImplPath =
                     customPlatform.getHarnessVersion() <= NbPlatform.HARNESS_VERSION_65
-                    && eval.getProperty(SuiteProperties.CLUSTER_PATH_PROPERTY) == null
+                    || eval.getProperty(SuiteProperties.CLUSTER_PATH_PROPERTY) == null
                     ? "build-impl-65.xsl" : "build-impl.xsl";    // NOI18N
         genFilesHelper.refreshBuildScript(
                 GeneratedFilesHelper.BUILD_IMPL_XML_PATH,

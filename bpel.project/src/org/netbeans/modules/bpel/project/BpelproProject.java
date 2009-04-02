@@ -34,15 +34,11 @@ import java.util.HashMap;
 import java.util.Set;
 import java.util.logging.Logger;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
-import org.openide.cookies.SaveCookie;
-import org.openide.loaders.DataObject;
-import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
@@ -50,11 +46,11 @@ import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileLock;
 import org.netbeans.modules.compapp.projects.base.spi.JbiArtifactProvider;
-import org.netbeans.modules.compapp.projects.base.ui.IcanproCustomizerProvider;
 import org.netbeans.modules.compapp.projects.base.ui.customizer.IcanproProjectProperties;
+import org.netbeans.modules.bpel.model.api.support.Utils;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.queries.FileEncodingQuery;
-import org.netbeans.modules.bpel.project.ui.IcanproLogicalViewProvider;
+import org.netbeans.modules.bpel.project.ui.ProjectLogicalViewProvider;
 import org.netbeans.modules.compapp.projects.base.queries.IcanproProjectEncodingQueryImpl;
 import org.netbeans.modules.compapp.projects.base.ui.IcanproXmlCustomizerProvider;
 import org.netbeans.modules.xml.catalogsupport.DefaultProjectCatalogSupport;
@@ -73,9 +69,9 @@ import org.netbeans.spi.project.ui.ProjectOpenedHook;
 import org.netbeans.spi.queries.FileBuiltQueryImplementation;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
-import org.openide.util.Utilities;
 import org.openide.util.lookup.Lookups;
 import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
@@ -85,6 +81,7 @@ import org.netbeans.modules.xml.retriever.catalog.CatalogEntry;
 import org.netbeans.modules.xml.retriever.catalog.CatalogWriteModel;
 import org.netbeans.modules.xml.retriever.catalog.CatalogWriteModelFactory;
 import org.netbeans.modules.xml.xam.locator.CatalogModelException;
+import org.netbeans.spi.project.support.ant.AntBasedProjectRegistration;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -94,11 +91,18 @@ import org.w3c.dom.Text;
 /**
  * @author Chris Webster
  */
+@AntBasedProjectRegistration(
+    type=BpelproProjectType.TYPE,
+    iconResource="org/netbeans/modules/bpel/project/resources/bpelProject.png",
+    sharedNamespace=BpelproProjectType.PROJECT_CONFIGURATION_NAMESPACE,
+    sharedName=BpelproProjectType.PROJECT_CONFIGURATION_NAME,
+    privateNamespace=BpelproProjectType.PRIVATE_CONFIGURATION_NAMESPACE,
+    privateName=BpelproProjectType.PRIVATE_CONFIGURATION_NAME
+)
 public final class BpelproProject implements Project, AntProjectListener, ProjectPropertyProvider {
-    private static final Icon PROJECT_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/bpel/project/resources/bpelProject.png")); // NOI18N
-    public static final String SOURCES_TYPE_BPELPRO = "BIZPRO";
+    private static final Icon PROJECT_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/bpel/project/resources/bpelProject.png", false); // NOI18N
+
     public static final String ARTIFACT_TYPE_JBI_ASA = "CAPS.asa";
-    
     public static final String MODULE_INSTALL_NAME = "modules/org-netbeans-modules-bpel-project.jar";
     public static final String MODULE_INSTALL_CBN = "org.netbeans.modules.bpel.project";
     public static final String MODULE_INSTALL_DIR = "module.install.dir";
@@ -160,23 +164,19 @@ public final class BpelproProject implements Project, AntProjectListener, Projec
                 new String[] {"${src.dir}/*.java"}, // NOI18N
                 new String[] {"${build.classes.dir}/*.class"} // NOI18N
         );
-        final SourcesHelper sourcesHelper = new SourcesHelper(helper, evaluator());
-        String webModuleLabel = org.openide.util.NbBundle.getMessage(IcanproCustomizerProvider.class, "LBL_Node_EJBModule"); //NOI18N
-        String srcJavaLabel = org.openide.util.NbBundle.getMessage(IcanproCustomizerProvider.class, "LBL_Node_Sources"); //NOI18N
+        SourcesHelper sourcesHelper = new SourcesHelper(this, helper, evaluator());
+        String webModuleLabel = org.openide.util.NbBundle.getMessage(ProjectLogicalViewProvider.class, "LBL_Node_EJBModule"); //NOI18N
+        String srcJavaLabel = org.openide.util.NbBundle.getMessage(ProjectLogicalViewProvider.class, "LBL_Node_Sources"); //NOI18N
         
-        sourcesHelper.addPrincipalSourceRoot("${"+IcanproProjectProperties.SOURCE_ROOT+"}", webModuleLabel, /*XXX*/null, null);
-        sourcesHelper.addPrincipalSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}", srcJavaLabel, /*XXX*/null, null);
+        sourcesHelper.addPrincipalSourceRoot("${"+IcanproProjectProperties.SOURCE_ROOT+"}", webModuleLabel, null, null);
+        sourcesHelper.addPrincipalSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}", srcJavaLabel, null, null);
         
-        sourcesHelper.addTypedSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}", SOURCES_TYPE_BPELPRO, srcJavaLabel, /*XXX*/null, null);
+        sourcesHelper.addTypedSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}", Utils.SOURCES_TYPE_BPELPRO, srcJavaLabel, /*XXX*/null, null);
         sourcesHelper.addTypedSourceRoot("${"+IcanproProjectProperties.SRC_DIR+"}",
                 org.netbeans.modules.xml.catalogsupport.ProjectConstants.SOURCES_TYPE_XML,
                 srcJavaLabel, null, null);
         
-        ProjectManager.mutex().postWriteRequest(new Runnable() {
-            public void run() {
-                sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
-            }
-        });
+        sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
         return Lookups.fixed(new Object[] {
             new Info(),
             aux,
@@ -184,9 +184,9 @@ public final class BpelproProject implements Project, AntProjectListener, Projec
             helper,
             spp,
             new BpelproActionProvider( this, helper, refHelper ),
-            new IcanproLogicalViewProvider(this, helper, evaluator(), spp, refHelper),
+            new ProjectLogicalViewProvider(this, helper, evaluator(), spp, refHelper),
 //            new BpelProjectCustomizerProvider(this),
-//            new IcanproCustomizerProvider(this, helper, refHelper, 
+//            new ProjectLogicalViewProvider(this, helper, refHelper, 
 //                    BpelproProjectType.PROJECT_CONFIGURATION_NAMESPACE),
             new IcanproXmlCustomizerProvider(this, helper, refHelper,
                     BpelproProjectType.PROJECT_CONFIGURATION_NAMESPACE),
@@ -402,7 +402,7 @@ public final class BpelproProject implements Project, AntProjectListener, Projec
                   return null;
               }
           });
-          if (IcanproLogicalViewProvider.hasBrokenLinks(helper, refHelper)) {
+          if (ProjectLogicalViewProvider.hasBrokenLinks(helper, refHelper)) {
               BrokenReferencesSupport.showAlert();
           }
             
