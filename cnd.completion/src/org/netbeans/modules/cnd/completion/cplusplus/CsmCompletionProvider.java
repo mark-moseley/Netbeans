@@ -81,7 +81,7 @@ public class CsmCompletionProvider implements CompletionProvider {
             return 0;
         }
         final int dot = component.getCaret().getDot();
-        if (CsmCompletionQuery.checkCondition(component.getDocument(), dot)) {
+        if (CsmCompletionQuery.checkCondition(component.getDocument(), dot, false)) {
             try {
                 if (CompletionSupport.needShowCompletionOnText(component, typedText)) {
                     return COMPLETION_QUERY_TYPE;
@@ -94,6 +94,10 @@ public class CsmCompletionProvider implements CompletionProvider {
     }
 
     public CompletionTask createTask(int queryType, JTextComponent component) {
+        CompletionSupport sup = CompletionSupport.get(component);
+        if (sup == null) {
+            return null;
+        }
         final int dot = component.getCaret().getDot();
         // disable code templates for smart mode of completion
         //CsmCodeTemplateFilter.enableAbbreviations(((queryType & COMPLETION_ALL_QUERY_TYPE) == COMPLETION_ALL_QUERY_TYPE));
@@ -102,7 +106,7 @@ public class CsmCompletionProvider implements CompletionProvider {
             System.err.println("createTask called on " + dot); // NOI18N
         }
         // do not work together with include completion
-        if (CsmCompletionQuery.checkCondition(component.getDocument(), dot)) {
+        if (CsmCompletionQuery.checkCondition(component.getDocument(), dot, false)) {
             if ((queryType & COMPLETION_QUERY_TYPE) == COMPLETION_QUERY_TYPE) {
                 return new AsyncCompletionTask(new Query(dot, queryType), component);
             } else if (queryType == DOCUMENTATION_QUERY_TYPE) {
@@ -244,7 +248,7 @@ public class CsmCompletionProvider implements CompletionProvider {
             if (!hide) {
                 creationCaretOffset = caretOffset;
                 NbCsmCompletionQuery query = (NbCsmCompletionQuery) getCompletionQuery(null, queryScope, null);
-                NbCsmCompletionQuery.CsmCompletionResult res = query.query(component, caretOffset);
+                NbCsmCompletionQuery.CsmCompletionResult res = query.query(component, caretOffset, true);
                 if (res == null || (res.getItems().isEmpty() && (queryScope == CsmCompletionQuery.QueryScope.SMART_QUERY))) {
                     // switch to global context
                     if (TRACE) {
@@ -254,7 +258,7 @@ public class CsmCompletionProvider implements CompletionProvider {
                     if (res == null || res.isSimpleVariableExpression()) {
                         // try once more for non dereferenced expressions
                         query = (NbCsmCompletionQuery) getCompletionQuery(null, queryScope, null);
-                        res = query.query(component, caretOffset);
+                        res = query.query(component, caretOffset, true);
                     }
                     if (TRACE) {
                         System.err.println("query switched to global" + getTestState()); // NOI18N
@@ -401,7 +405,7 @@ public class CsmCompletionProvider implements CompletionProvider {
             BaseDocument bdoc = (BaseDocument) doc;
             //NbCsmCompletionQuery.CsmCompletionResult res = null;// (NbCsmCompletionQuery.CsmCompletionResult)query.tipQuery(component, caretOffset, bdoc.getSyntaxSupport(), false);
 //            NbCsmCompletionQuery query = new NbCsmCompletionQuery();
-            NbCsmCompletionQuery.CsmCompletionResult res = query.query(component, caretOffset, true, false);
+            NbCsmCompletionQuery.CsmCompletionResult res = query.query(component, caretOffset, true, false, true);
             if (res != null) {
                 queryCaretOffset = caretOffset;
                 List<List<String>> list = new ArrayList<List<String>>();
