@@ -38,81 +38,72 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.bugtracking.ui.issue;
+package org.netbeans.modules.bugtracking.ui.query;
 
 import org.openide.util.actions.SystemAction;
 import org.openide.util.HelpCtx;
 
 import java.awt.event.ActionEvent;
 import javax.swing.SwingUtilities;
-import org.netbeans.modules.bugtracking.spi.Issue;
+import org.netbeans.modules.bugtracking.spi.Query;
 import org.netbeans.modules.bugtracking.spi.Repository;
 import org.netbeans.modules.bugtracking.util.BugtrackingOwnerSupport;
 import org.openide.util.NbBundle;
+import org.openide.windows.TopComponent;
+import org.openide.windows.WindowManager;
 
 /**
  * 
- * @author Tomas Stupka
+ * @author Maros Sandor
  */
-public class IssueAction extends SystemAction {
+public class QueryAction extends SystemAction {
 
-    public IssueAction() {
+    public QueryAction() {
         setIcon(null);
         putValue("noIconInMenu", Boolean.TRUE); // NOI18N
     }
 
     public String getName() {
-        return NbBundle.getMessage(IssueAction.class, "CTL_IssueAction");
+        return NbBundle.getMessage(QueryAction.class, "CTL_QueryAction");
     }
 
     public HelpCtx getHelpCtx() {
-        return new HelpCtx(IssueAction.class);
+        return new HelpCtx(QueryAction.class);
     }
 
     public void actionPerformed(ActionEvent ev) {
-        openQuery();
-    }
-
-    public static void openQuery() {
         openQuery(null);
     }
 
-    public static void openQuery(Repository givenRepository) {
-        final Repository repository;
-        final boolean repositoryGiven;
-
-        if (givenRepository != null) {
-            repository = givenRepository;
-            repositoryGiven = true;
-        } else {
-            repository = BugtrackingOwnerSupport.getInstance()
-                         .getRepository(BugtrackingOwnerSupport.ContextType
-                                        .SELECTED_FILE_AND_ALL_PROJECTS);
-            repositoryGiven = false;
-        }
-
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                IssueTopComponent tc = new IssueTopComponent();
-                tc.initNewIssue(repository, !repositoryGiven);
-                tc.open();
-                tc.requestActive();
-            }
-        });
+    public static void openQuery(Query query) {
+        Repository repository = BugtrackingOwnerSupport.getInstance()
+                                .getRepository(BugtrackingOwnerSupport.ContextType
+                                               .SELECTED_FILE_AND_ALL_PROJECTS) ;
+        openQuery(query, repository);
     }
 
-    public static void openIssue(final Issue issue, final Repository repository,
-                                 final boolean suggestedSelectionOnly) {
+    public static void openQuery(final Query query, final Repository repository) {
+        openQueryIntern(query, repository, false);
+    }
+
+    public static void openKenaiQuery(final Query query, final Repository repository) {
+        openQueryIntern(query, repository, true);
+    }
+
+    private static void openQueryIntern(final Query query, final Repository repository, final boolean forKenai) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                IssueTopComponent tc = null;
-                if(issue != null) {
-                    tc = IssueTopComponent.find(issue);
+                TopComponent tc = null;
+                if(query != null) {
+                    tc = QueryTopComponent.find(query);
                 }
                 if(tc == null) {
-                    tc = new IssueTopComponent();
+                    if(forKenai) {
+                        tc = QueryTopComponent.forKenai(query, repository);
+                    } else {
+                        tc = new QueryTopComponent(query, repository);
+                    }
                 }
-                tc.initNewIssue(repository, suggestedSelectionOnly);
                 if(!tc.isOpened()) {
                     tc.open();
                 }
@@ -121,10 +112,13 @@ public class IssueAction extends SystemAction {
         });
     }
 
-    public static void closeIssue(final Issue issue) {
+    public static void closeQuery(final Query query) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                IssueTopComponent tc = IssueTopComponent.find(issue);
+                TopComponent tc = null;
+                if(query != null) {
+                    tc = WindowManager.getDefault().findTopComponent(query.getDisplayName());
+                }
                 if(tc != null) {
                     tc.close();
                 }
