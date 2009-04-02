@@ -93,7 +93,7 @@ public class WSCustomizationView extends SectionView{
     
     /** Creates a new instance of WSCustomizationView */
     public WSCustomizationView(InnerPanelFactory factory, Set<WSDLModel> models ,
-            Definitions primaryDefinitions) {
+            Definitions primaryDefinitions, boolean isLight) {
         super(factory);
         this.models = models;
         this.primaryDefinitions = primaryDefinitions;
@@ -104,8 +104,10 @@ public class WSCustomizationView extends SectionView{
         
         //create Definitions node
         Node definitionsNode = new DefinitionsNode(this, primaryDefinitions);
-        
-        addSection(new SectionPanel(this, definitionsNode, primaryDefinitions), false); //NOI18N
+        SectionPanel definitionsPanel = new SectionPanel(this, definitionsNode, primaryDefinitions);
+        definitionsPanel.setTitle(NbBundle.getMessage(WSCustomizationView.class,
+                "TITLE_GLOBAL_CUSTOMIZATION"));
+        addSection(definitionsPanel, false); //NOI18N
         
         //add the port types section
         Children portTypeChildren = new Children.Array();
@@ -118,7 +120,7 @@ public class WSCustomizationView extends SectionView{
         Node portTypeNodeContainer = new SectionContainerNode(portTypeChildren);
         portTypeNodeContainer.setName(ID_PORT_TYPE);
         portTypeNodeContainer.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
-                "TITLE_PORTTYPES"));
+                "LBL_PORTTYPES"));
         
         SectionContainer portTypesCont =
                 new SectionContainer(this,portTypeNodeContainer,
@@ -145,7 +147,7 @@ public class WSCustomizationView extends SectionView{
         Node operationNodeContainer = new SectionContainerNode(opChildren);
         operationNodeContainer.setName(ID_PORT_TYPE_OPERATION);
         operationNodeContainer.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
-                "TITLE_PORTTYPE_OPERATIONS"));
+                "LBL_PORTTYPE_OPERATIONS"));
         
         SectionContainer operationCont =
                 new SectionContainer(this,operationNodeContainer,
@@ -172,7 +174,7 @@ public class WSCustomizationView extends SectionView{
         Node faultNodeContainer = new SectionContainerNode(faultChildren);
         faultNodeContainer.setName(ID_PORT_TYPE_OPERATION_FAULT);
         faultNodeContainer.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
-                "TITLE_PORTTYPE_FAULTS"));
+                "LBL_PORTTYPE_FAULTS"));
         
         SectionContainer faultCont =
                 new SectionContainer(this,faultNodeContainer,
@@ -199,7 +201,7 @@ public class WSCustomizationView extends SectionView{
         Node bindingNodeContainer = new SectionContainerNode(bindingChildren);
         bindingNodeContainer.setName(ID_BINDING);
         bindingNodeContainer.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
-                "TITLE_BINDINGS"));
+                "LBL_BINDINGS"));
         
         SectionContainer bindingCont =
                 new SectionContainer(this,bindingNodeContainer,
@@ -226,7 +228,7 @@ public class WSCustomizationView extends SectionView{
         Node bindingOpNodeContainer = new SectionContainerNode(bindingOpChildren);
         bindingOpNodeContainer.setName(ID_BINDING_OPERATION);
         bindingOpNodeContainer.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
-                "TITLE_BINDING_OPERATIONS"));
+                "LBL_BINDING_OPERATIONS"));
         
         SectionContainer bindingOpCont =
                 new SectionContainer(this,bindingOpNodeContainer,
@@ -252,7 +254,7 @@ public class WSCustomizationView extends SectionView{
         Node serviceNodeContainer = new SectionContainerNode(serviceChildren);
         serviceNodeContainer.setName(ID_SERVICE);
         serviceNodeContainer.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
-                "TITLE_SERVICES"));
+                "LBL_SERVICES"));
         
         SectionContainer servicesCont =
                 new SectionContainer(this,serviceNodeContainer,
@@ -278,7 +280,7 @@ public class WSCustomizationView extends SectionView{
         Node portNodeContainer = new SectionContainerNode(portChildren);
         portNodeContainer.setName(ID_PORT);
         portNodeContainer.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
-                "TITLE_PORTS"));
+                "LBL_PORTS"));
         
         SectionContainer portCont =
                 new SectionContainer(this,portNodeContainer,
@@ -293,16 +295,25 @@ public class WSCustomizationView extends SectionView{
             i++;
         }
         addSection(portCont, false);
-        
-        ExternalBindingNode externalBindingNode = new ExternalBindingNode(Children.LEAF);
-        externalBindingNode.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
-                "TITLE_EXTERNAL_BINDING_FILES"));
-        addSection(new SectionPanel(this, externalBindingNode, new BindingKey()), false);
-        rootChildren.add(new Node[] {definitionsNode, portTypeNodeContainer,
-        operationNodeContainer, faultNodeContainer,
-        bindingNodeContainer, bindingOpNodeContainer,
-        serviceNodeContainer, portNodeContainer,
-        externalBindingNode});
+        if (!isLight) {
+            ExternalBindingNode externalBindingNode = new ExternalBindingNode(Children.LEAF);
+            externalBindingNode.setDisplayName(NbBundle.getMessage(WSCustomizationView.class,
+                    "LBL_EXTERNAL_BINDING_FILES"));
+            SectionPanel externalBindingPanel = new SectionPanel(this, externalBindingNode, new BindingKey());
+            externalBindingPanel.setTitle(NbBundle.getMessage(WSCustomizationView.class,
+                    "TITLE_EXTERNAL_BINDING_FILES"));
+            addSection(externalBindingPanel, false);
+            rootChildren.add(new Node[] {definitionsNode, portTypeNodeContainer,
+            operationNodeContainer, faultNodeContainer,
+            bindingNodeContainer, bindingOpNodeContainer,
+            serviceNodeContainer, portNodeContainer,
+            externalBindingNode});
+        } else {
+            rootChildren.add(new Node[] {definitionsNode, portTypeNodeContainer,
+            operationNodeContainer, faultNodeContainer,
+            bindingNodeContainer, bindingOpNodeContainer,
+            serviceNodeContainer, portNodeContainer});
+        }
         setRoot(root);
     }
     
