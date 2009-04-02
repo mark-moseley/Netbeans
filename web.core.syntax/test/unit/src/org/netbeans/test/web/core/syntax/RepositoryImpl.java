@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.html.editor.test;
+package org.netbeans.test.web.core.syntax;
 
 import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.openide.filesystems.FileSystem;
@@ -68,15 +68,9 @@ public class RepositoryImpl extends Repository {
         try
         {
             FileSystem writeFs = FileUtil.createMemoryFileSystem();
-            FileSystem htmlFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/html/mf-layer.xml"));
-            FileSystem htmlEditotFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/html/editor/resources/layer.xml"));
-            FileSystem htmlEditorLibFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/html/editor/resources/layer.xml"));
-            FileSystem lexerLayerFS = new XMLFileSystem(HTMLTokenId.class.getClassLoader().getResource("org/netbeans/lib/html/lexer/layer.xml"));
-            FileSystem cssEditorFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/css/resources/layer.xml"));
-            FileSystem jsEditorFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/javascript/editing/layer.xml"));
-            return new MultiFileSystem(new FileSystem[] { writeFs, lexerLayerFS, htmlFs, 
-                                                          htmlEditotFs, htmlEditorLibFs,
-                                                          cssEditorFs, jsEditorFs});
+            FileSystem layerFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/web/core/syntax/resources/layer.xml"));
+            FileSystem lexerLayerFS = new XMLFileSystem(HTMLTokenId.class.getClassLoader().getResource("org/netbeans/lib/jsp/lexer/layer.xml"));
+            return new MultiFileSystem(new FileSystem[] { writeFs, lexerLayerFS, layerFs });
         } catch (SAXException e) {
             return null;
         }

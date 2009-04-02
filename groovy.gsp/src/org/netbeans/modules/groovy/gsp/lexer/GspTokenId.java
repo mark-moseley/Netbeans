@@ -39,54 +39,57 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.ruby.rhtml.lexer.api;
+package org.netbeans.modules.groovy.gsp.lexer;
 
-import org.netbeans.modules.ruby.rhtml.lexer.RhtmlLexer;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.Map;
-import org.netbeans.modules.ruby.lexer.RubyTokenId;
 import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.InputAttributes;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.api.lexer.LanguagePath;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenId;
+import org.netbeans.modules.groovy.editor.api.lexer.GroovyTokenId;
 import org.netbeans.spi.lexer.LanguageEmbedding;
 import org.netbeans.spi.lexer.LanguageHierarchy;
 import org.netbeans.spi.lexer.Lexer;
 import org.netbeans.spi.lexer.LexerRestartInfo;
 
 /**
- * Token Ids for Embedded Ruby (RHTML)
+ * Token Ids for Embedded Groovy (GSP)
  *
  * @todo Worry about trim mode - See section 22.1 of Agile Web Development With Rails
  * 
  * @author Marek Fukala
  * @author Tor Norbye
+ * @author Martin Adamek
  */
 
-public enum RhtmlTokenId implements TokenId {
+public enum GspTokenId implements TokenId {
 
     HTML("html"),
     /** Contents inside <%# %> */
-    RUBYCOMMENT("comment"),
+    GROOVYCOMMENT("comment"),
     /** Contents inside <%= %> */
-    RUBY_EXPR("ruby"),
+    GROOVY_EXPR("groovy"),
     /** Contents inside <% %> */
-    RUBY("ruby"),
+    GROOVY("groovy"),
     /** <% or %> */
-    DELIMITER("ruby-delimiter"); // Note - referenced in LexUtilities
+    DELIMITER("groovy-delimiter"), // Note - referenced in LexUtilities
+    /** <g: and </g: */
+    GTAG("gtag"),
+    ERROR("gsp_error");
 
-    public static final String MIME_TYPE = "application/x-httpd-eruby"; // NOI18N
+    public static final String MIME_TYPE = "text/x-gsp"; // NOI18N
     
     private final String primaryCategory;
     
-    public static boolean isRuby(TokenId id) {
-        return id == RUBY || id == RUBY_EXPR || id == RUBYCOMMENT;
+    public static boolean isGroovy(TokenId id) {
+        return id == GROOVY || id == GROOVY_EXPR || id == GROOVYCOMMENT;
     }
 
-    RhtmlTokenId(String primaryCategory) {
+    GspTokenId(String primaryCategory) {
         this.primaryCategory = primaryCategory;
     }
 
@@ -95,40 +98,40 @@ public enum RhtmlTokenId implements TokenId {
     }
 
     // Token ids declaration
-    private static final Language<RhtmlTokenId> language = new LanguageHierarchy<RhtmlTokenId>() {
-        protected Collection<RhtmlTokenId> createTokenIds() {
-            return EnumSet.allOf(RhtmlTokenId.class);
+    private static final Language<GspTokenId> language = new LanguageHierarchy<GspTokenId>() {
+        protected Collection<GspTokenId> createTokenIds() {
+            return EnumSet.allOf(GspTokenId.class);
         }
         
         @Override
-        protected Map<String,Collection<RhtmlTokenId>> createTokenCategories() {
+        protected Map<String,Collection<GspTokenId>> createTokenCategories() {
             return null;
         }
         
-        public Lexer<RhtmlTokenId> createLexer(LexerRestartInfo<RhtmlTokenId> info) {
-            return new RhtmlLexer(info);
+        public Lexer<GspTokenId> createLexer(LexerRestartInfo<GspTokenId> info) {
+            return new GspLexer(info);
         }
         
         @Override
-        protected LanguageEmbedding<? extends TokenId> embedding(Token<RhtmlTokenId> token,
+        protected LanguageEmbedding<? extends TokenId> embedding(Token<GspTokenId> token,
                                   LanguagePath languagePath, InputAttributes inputAttributes) {
             switch(token.id()) {
                 case HTML:
                     return LanguageEmbedding.create(HTMLTokenId.language(), 0, 0, true);
-                case RUBY_EXPR:
-                case RUBY:
-                    return LanguageEmbedding.create(RubyTokenId.language(), 0, 0, false);
+                case GROOVY_EXPR:
+                case GROOVY:
+                    return LanguageEmbedding.create(GroovyTokenId.language(), 0, 0, false);
                 default:
                     return null;
             }
         }
         
         public String mimeType() {
-            return RhtmlTokenId.MIME_TYPE;
+            return GspTokenId.MIME_TYPE;
         }
     }.language();
     
-    public static Language<RhtmlTokenId> language() {
+    public static Language<GspTokenId> language() {
         return language;
     }
 }

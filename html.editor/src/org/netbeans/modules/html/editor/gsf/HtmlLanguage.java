@@ -38,47 +38,83 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-package org.netbeans.modules.html.editor.test;
+package org.netbeans.modules.html.editor.gsf;
 
 import org.netbeans.api.html.lexer.HTMLTokenId;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.MultiFileSystem;
-import org.openide.filesystems.Repository;
-import org.openide.filesystems.XMLFileSystem;
-import org.xml.sax.SAXException;
+import org.netbeans.api.lexer.Language;
+import org.netbeans.modules.csl.api.CodeCompletionHandler;
+import org.netbeans.modules.csl.api.KeystrokeHandler;
+import org.netbeans.modules.csl.api.SemanticAnalyzer;
+import org.netbeans.modules.csl.api.StructureScanner;
+import org.netbeans.modules.csl.spi.CommentHandler;
+import org.netbeans.modules.csl.spi.DefaultLanguageConfig;
+import org.netbeans.modules.parsing.spi.Parser;
 
-/**
- * Repository whose getDefaultFileSystem returns a writeable FS containing
- * the layer of the html editor module. It is put in the default lookup,
- * thus it is returned by Repository.getDefault().
- *
- * @author Andrei Badea, Marek Fukala
- */
-public class RepositoryImpl extends Repository {
+public class HtmlLanguage extends DefaultLanguageConfig {
     
-    private XMLFileSystem system;
-    
-    public RepositoryImpl() {
-        super(createDefFs());
+    public HtmlLanguage() {
+    }
+
+    @Override
+    public CommentHandler getCommentHandler() {
+        return new HtmlCommentHandler();
+    }
+
+    @Override
+    public Language getLexerLanguage() {
+        return HTMLTokenId.language();
+    }
+
+    @Override
+    public boolean isIdentifierChar(char c) {
+        return Character.isLetter(c);
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "HTML";
     }
     
-    private static FileSystem createDefFs() {
-        try
-        {
-            FileSystem writeFs = FileUtil.createMemoryFileSystem();
-            FileSystem htmlFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/html/mf-layer.xml"));
-            FileSystem htmlEditotFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/html/editor/resources/layer.xml"));
-            FileSystem htmlEditorLibFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/html/editor/resources/layer.xml"));
-            FileSystem lexerLayerFS = new XMLFileSystem(HTMLTokenId.class.getClassLoader().getResource("org/netbeans/lib/html/lexer/layer.xml"));
-            FileSystem cssEditorFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/css/resources/layer.xml"));
-            FileSystem jsEditorFs = new XMLFileSystem(RepositoryImpl.class.getClassLoader().getResource("org/netbeans/modules/javascript/editing/layer.xml"));
-            return new MultiFileSystem(new FileSystem[] { writeFs, lexerLayerFS, htmlFs, 
-                                                          htmlEditotFs, htmlEditorLibFs,
-                                                          cssEditorFs, jsEditorFs});
-        } catch (SAXException e) {
-            return null;
-        }
+    @Override
+    public String getPreferredExtension() {
+        return "html"; // NOI18N
     }
+
+    // Service registrations
+    
+    @Override
+    public boolean isUsingCustomEditorKit() {
+        return true;
+    }
+
+    @Override
+    public Parser getParser() {
+        return new HtmlGSFParser();
+    }
+
+    @Override
+    public boolean hasStructureScanner() {
+        return true;
+    }
+
+    @Override
+    public StructureScanner getStructureScanner() {
+        return new HtmlStructureScanner();
+    }
+
+    @Override
+    public SemanticAnalyzer getSemanticAnalyzer() {
+        return new HtmlSemanticAnalyzer();
+    }
+
+    @Override
+    public CodeCompletionHandler getCompletionHandler() {
+        return null;
+    }
+
+    @Override
+    public KeystrokeHandler getKeystrokeHandler() {
+        return new HtmlKeystrokeHandler();
+    }
+
 }

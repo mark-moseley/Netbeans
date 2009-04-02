@@ -45,10 +45,9 @@ import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.BaseKit;
-import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.editor.NbEditorDocument;
-import org.netbeans.modules.editor.html.HTMLKit;
+import org.netbeans.modules.html.editor.HtmlKit;
 
 /**
  * Common ancestor for all test classes.
@@ -57,10 +56,6 @@ import org.netbeans.modules.editor.html.HTMLKit;
  */
 public class TestBase extends NbTestCase {
 
-    static {
-        MockServices.setServices(new Class[] {RepositoryImpl.class});
-    }
-
     private static final String PROP_MIME_TYPE = "mimeType"; //NOI18N
     
     public TestBase(String name) {
@@ -68,8 +63,8 @@ public class TestBase extends NbTestCase {
     }
 
     protected BaseDocument createDocument() {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
-        doc.putProperty(PROP_MIME_TYPE, BaseKit.getKit(HTMLKit.class).getContentType());
+        NbEditorDocument doc = new NbEditorDocument(HtmlKit.class);
+        doc.putProperty(PROP_MIME_TYPE, BaseKit.getKit(HtmlKit.class).getContentType());
         doc.putProperty(Language.class, HTMLTokenId.language()); //hack for LanguageManager - shoudl be removed
         
         return doc;
