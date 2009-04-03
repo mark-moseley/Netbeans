@@ -52,7 +52,10 @@ Contributor(s): Andrei Badea, Leon Chiver
             <!-- attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.project.ui.Bundle" / -->
             <file name="org-netbeans-modules-jumpto-type-GoToType.instance">
                 <attr name="instanceClass" stringvalue="org.netbeans.modules.jumpto.type.GoToTypeAction"/>
-            </file>            
+            </file>
+            <file name="org-netbeans-modules-jumpto-symbol-GoToSymbol.instance">
+                <attr name="instanceClass" stringvalue="org.netbeans.modules.jumpto.symbol.GoToSymbolAction"/>
+            </file>
         </folder>
         <folder name="Tools">
             <file name="org-netbeans-modules-jumpto-file-FileSearchAction.instance"/>
@@ -71,7 +74,10 @@ Contributor(s): Andrei Badea, Leon Chiver
                 <attr name="originalFile" stringvalue="Actions/Edit/org-netbeans-modules-jumpto-type-GoToType.instance"/>
                 <attr name="position" intvalue="150"/>
             </file>
-            
+            <file name="org-netbeans-modules-jumpto-symbol-GoToSymbol.shadow">
+                <attr name="originalFile" stringvalue="Actions/Edit/org-netbeans-modules-jumpto-symbol-GoToSymbol.instance"/>
+                <attr name="position" intvalue="151"/>
+            </file>
                         
                             
         </folder>
@@ -91,21 +97,12 @@ Contributor(s): Andrei Badea, Leon Chiver
     </folder>
     -->
     
-    <!-- folder name="Editors">
-      <folder name="text">
-          <folder name="x-java">
-              <folder name="Popup">
-                  <folder name="goto">
-                      <attr name="position" intvalue="900"/>
-                        <file name="org-netbeans-modules-jumpto-type-GoToType.shadow">
-                          <attr name="originalFile" stringvalue="Actions/Edit/org-netbeans-modules-jumpto-type-GoToType.instance"/>
-                          <attr name="position" intvalue="600"/>
-                        </file>
-                      </folder>
-              </folder>
-          </folder>
-      </folder>
-    </folder -->
+    
+    <folder name="Editors">
+        <file name="org-netbeans-modules-jumpto-file-FileIndexer$Factory.instance">
+            <attr name="instaceOf" stringvalue="org.netbeans.modules.parsing.spi.indexing.CustomIndexerFactory"/>
+        </file>
+    </folder>
 
     <folder name="OptionsDialog">
         <!-- This is highly suspicious, but it was this way in java/source - Hrebejk, can you check this? -->
@@ -118,4 +115,12 @@ Contributor(s): Andrei Badea, Leon Chiver
         </folder>
     </folder>
     
+    <folder name="QuickSearch">
+        <folder name="GoToType">
+            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.jumpto.resources.Bundle"/>
+            <attr name="command" stringvalue="t"/>
+            <attr name="position" intvalue="300"/>
+            <file name="org-netbeans-modules-jumpto-quicksearch-JavaTypeSearchProvider.instance"/>
+        </folder>            
+    </folder>
 </filesystem>

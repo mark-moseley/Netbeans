@@ -46,21 +46,22 @@
 package org.netbeans.modules.jumpto.file;
 
 import java.awt.Color;
-import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.Action;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.KeyStroke;
+import javax.swing.ListCellRenderer;
 import javax.swing.ListModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.text.BadLocationException;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
-import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.modules.jumpto.SearchHistory;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
@@ -68,26 +69,24 @@ import org.openide.util.NbBundle;
  *
  * @author  Petr Hrebejk, Andrei Badea
  */
-public class FileSearchPanel extends javax.swing.JPanel implements ActionListener, LazyListModel.Filter {
+public class FileSearchPanel extends javax.swing.JPanel implements ActionListener {
     
     private static final int BRIGHTER_COLOR_COMPONENT = 10;    
-    private FileSearch search;
-    private Project currentProject;
-    private FileSearchAction action;
+    private final ContentProvider contentProvider;
+    private final Project currentProject;
     private boolean containsScrollPane;
     
     private JLabel messageLabel;
-    
-            
-    private FileDescription.Renderer renderer;
-    
-    public FileSearchPanel(FileSearchAction action) {
-        this.action = action;
-        this.search = new FileSearch( this );
-        currentProject = FileSearchAction.findCurrentProject(); 
-        if ( currentProject == null ) {
-            currentProject = OpenProjects.getDefault().getMainProject();
-        }
+    private String oldText;
+    /* package */ long time;
+
+    private FileDescription selectedFile;
+
+    private final SearchHistory searchHistory;
+
+    public FileSearchPanel(ContentProvider contentProvider, Project currentProject) {
+        this.contentProvider = contentProvider;
+        this.currentProject = currentProject;
         
         initComponents();        
         
@@ -120,102 +119,80 @@ public class FileSearchPanel extends javax.swing.JPanel implements ActionListene
         mainProjectCheckBox.addActionListener(this);
         caseSensitiveCheckBox.addActionListener(this);
         hiddenFilesCheckBox.addActionListener(this);
+        hiddenFilesCheckBox.setVisible(false);
         
-        renderer = new FileDescription.Renderer( resultList );
-        resultList.setCellRenderer( renderer );
+        resultList.setCellRenderer( contentProvider.getListCellRenderer( resultList ) );
+        contentProvider.setListModel( this, null );
                 
         fileNameTextField.getDocument().addDocumentListener(new DocumentListener() {
             public void changedUpdate(DocumentEvent e) {
-                updateFileName();
+                update();
             }
             
             public void insertUpdate(DocumentEvent e) {
-                updateFileName();
+                update();
             }
             
             public void removeUpdate(DocumentEvent e) {
-                updateFileName();
+                update();
             }
         });
-        
+
+        searchHistory = new SearchHistory(FileSearchPanel.class, fileNameTextField);
+    }
+
+    @Override
+    public void removeNotify() {
+        searchHistory.saveHistory();
+        super.removeNotify();
     }
   
     //Good for setting model form any thread  
-    public void setModel( final boolean keepSelection, final boolean stillSearching) {
-        
-        final ListModel m = search.createModel(isCaseSensitive(), isPreferedProject(), isShowHiddenFiles(), stillSearching);
-        
-        renderer.setColorPrefered( isPreferedProject() );
-        
+    public void setModel( final ListModel model ) {
+        // XXX measure time here
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                
-                //final ListModel m = search.createModel(isCaseSensitive(), isPreferedProject(), isShowHiddenFiles(), stillSearching);
-                int currentSelection = -1;
-                Rectangle visibleRect = null;
-                
-                if ( keepSelection ) {
-                    currentSelection = resultList.getSelectedIndex();
-                    visibleRect = resultList.getVisibleRect();
-                }
-
-                resultList.setModel(m); // XXX Nothing found
-                
-                if ( m.getSize() > 0 ) {
-                    setListPanelContent(null, false);
-                    action.getOpenButton().setEnabled(true);
-                    resultList.setSelectedIndex(0);
-                    resultList.ensureIndexIsVisible(0);
-                }
-                else {
-                    action.getOpenButton().setEnabled(false);
-                    if ( fileNameTextField.getText().trim().length() == 0 || 
-                         RegexpFileFilter.onlyContainsWildcards(fileNameTextField.getText().trim())) {
-                        setListPanelContent(null, false);
-                    }
-                    else if (stillSearching) {
-                        setListPanelContent( NbBundle.getMessage(FileSearchPanel.class, "TXT_SearchingOtherProjects"), true ); // NOI18N
-                    } else {
-                        setListPanelContent( NbBundle.getMessage(FileSearchPanel.class, "TXT_NoTypesFound"), false ); // NOI18N
-                    }
-                }
-                
-                if ( currentSelection != -1 && visibleRect != null) {
-                    resultList.scrollRectToVisible(visibleRect);
-                    resultList.setSelectedIndex(currentSelection);
-                }
-            }
-        });        
+               if (model.getSize() > 0 || getText() == null || getText().trim().length() == 0 ) {
+                   resultList.setModel(model);
+                   resultList.setSelectedIndex(0);
+                   ((FileDescription.Renderer) resultList.getCellRenderer()).setColorPrefered(isPreferedProject());
+                   setListPanelContent(null,false);
+                   if ( time != -1 ) {
+                       FileSearchAction.LOGGER.fine("Real search time " + (System.currentTimeMillis() - time) + " ms.");
+                       time = -1;
+                   }
+               }
+               else {
+                   setListPanelContent( NbBundle.getMessage(FileSearchPanel.class, "TXT_NoTypesFound") ,false ); // NOI18N
+               }
+           }
+       });
     }
 
-    public FileSearch getSearch() {
-        return search;
-    }
-   
-    public Project[] getProjects() {        
-        return OpenProjects.getDefault().getOpenProjects();
-    }
-    
-    public void openSelectedItems() {
-        Object[] selectedValues = resultList.getSelectedValues();
-        if ( selectedValues != null ) {
-            for(Object v : selectedValues) {
-                if ( v instanceof FileDescription) {
-                    ((FileDescription)v).open();
-                }
-            }
-        }        
-    }
-
-    public Project getPreferedProject() {
-        if ( !isPreferedProject() ) {
-            return null;
-        }
-        else {
-            return currentProject; 
-        }
-        
-    }
+//    public Project[] getProjects() {
+//        return OpenProjects.getDefault().getOpenProjects();
+//    }
+//
+//    public void openSelectedItems() {
+//        Object[] selectedValues = resultList.getSelectedValues();
+//        if ( selectedValues != null ) {
+//            for(Object v : selectedValues) {
+//                if ( v instanceof FileDescription) {
+//                    ((FileDescription)v).open();
+//                }
+//            }
+//        }
+//    }
+//
+//    public Project getPreferedProject() {
+//        if ( !isPreferedProject() ) {
+//            return null;
+//        }
+//        else {
+//            return currentProject;
+//        }
+//
+//    }
     
     void setListPanelContent( String message, boolean waitIcon ) {
         
@@ -240,46 +217,34 @@ public class FileSearchPanel extends javax.swing.JPanel implements ActionListene
        }                
     }
     
-    private boolean isShowHiddenFiles() {
+    public boolean isShowHiddenFiles() {
         return hiddenFilesCheckBox.isSelected();
     }
     
-    private boolean isPreferedProject() {
+    public boolean isPreferedProject() {
         return mainProjectCheckBox.isSelected();
     }
     
-    private boolean isCaseSensitive() {
+    public boolean isCaseSensitive() {
         return caseSensitiveCheckBox.isSelected();
     }
     
-    private void updateFileName() {
-        
-        String fieldText = fileNameTextField.getText().trim();
-        
-        if ( fieldText.length() == 0 || RegexpFileFilter.onlyContainsWildcards(fieldText)) {   // Empty reset everything
-            search.newSearchResults(null);
-            setModel(false, false);            
+    private void update() {
+        time = System.currentTimeMillis();
+        String text = getText();
+        if ( oldText == null || oldText.trim().length() == 0 || !text.startsWith(oldText) ) {
+            setListPanelContent(NbBundle.getMessage(FileSearchPanel.class, "TXT_Searching"),true); // NOI18N
         }
-        else {            
-            if ( search.isNewSearchNeeded(fieldText) ) {
-                // We have to do the search again
-                // search.setCurrentPrefix( null );
-                setListPanelContent(NbBundle.getMessage(FileSearchPanel.class, "TXT_Searching"), true); // NOI18N            
-                search.search(fieldText, false);
-            }
-            else {
-                // We don't need to restart the search reset the model
-                search.setCurrentPrefix( fieldText );                
-                //setModel( false, false );
-            }
-        }
+        oldText = text;
+        contentProvider.setListModel(this, text);
     }
-        
-    void cleanup() {
-        if ( search != null ) {
-            search.cancel( true );
-        }
-    }
+
+//
+//    void cleanup() {
+//        if ( search != null ) {
+//            search.cancel( true );
+//        }
+//    }
     
     /** This method is called from within the constructor to
      * initialize the form.
@@ -311,11 +276,12 @@ public class FileSearchPanel extends javax.swing.JPanel implements ActionListene
         org.openide.awt.Mnemonics.setLocalizedText(fileNameLabel, org.openide.util.NbBundle.getMessage(FileSearchPanel.class, "CTL_FileName")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
+        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         gridBagConstraints.insets = new java.awt.Insets(0, 0, 4, 0);
         add(fileNameLabel, gridBagConstraints);
 
-        fileNameTextField.setFont(new java.awt.Font("Monospaced", 0, 12));
+        fileNameTextField.setFont(new java.awt.Font("Monospaced", 0, getFontSize()));
         fileNameTextField.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 fileNameTextFieldActionPerformed(evt);
@@ -347,15 +313,15 @@ public class FileSearchPanel extends javax.swing.JPanel implements ActionListene
 
         resultScrollPane.setBorder(null);
 
-        resultList.setFont(new java.awt.Font("Monospaced", 0, 12));
-        resultList.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
-            public void valueChanged(javax.swing.event.ListSelectionEvent evt) {
-                resultListValueChanged(evt);
-            }
-        });
+        resultList.setFont(new java.awt.Font("Monospaced", 0, getFontSize()));
         resultList.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseReleased(java.awt.event.MouseEvent evt) {
                 resultListMouseReleased(evt);
+            }
+        });
+        resultList.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+            public void valueChanged(javax.swing.event.ListSelectionEvent evt) {
+                resultListValueChanged(evt);
             }
         });
         resultScrollPane.setViewportView(resultList);
@@ -373,7 +339,6 @@ public class FileSearchPanel extends javax.swing.JPanel implements ActionListene
 
         org.openide.awt.Mnemonics.setLocalizedText(caseSensitiveCheckBox, org.openide.util.NbBundle.getMessage(FileSearchPanel.class, "LBL_CaseSensitive")); // NOI18N
         caseSensitiveCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        caseSensitiveCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         add(caseSensitiveCheckBox, gridBagConstraints);
@@ -381,7 +346,6 @@ public class FileSearchPanel extends javax.swing.JPanel implements ActionListene
 
         org.openide.awt.Mnemonics.setLocalizedText(hiddenFilesCheckBox, org.openide.util.NbBundle.getMessage(FileSearchPanel.class, "LBL_HiddenFiles")); // NOI18N
         hiddenFilesCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        hiddenFilesCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         gridBagConstraints.insets = new java.awt.Insets(0, 8, 0, 0);
@@ -390,9 +354,9 @@ public class FileSearchPanel extends javax.swing.JPanel implements ActionListene
 
         org.openide.awt.Mnemonics.setLocalizedText(mainProjectCheckBox, org.openide.util.NbBundle.getMessage(FileSearchPanel.class, "LBL_PreferMainProject")); // NOI18N
         mainProjectCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        mainProjectCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
+        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.insets = new java.awt.Insets(0, 8, 0, 0);
@@ -419,9 +383,9 @@ public class FileSearchPanel extends javax.swing.JPanel implements ActionListene
     }// </editor-fold>//GEN-END:initComponents
 
 private void fileNameTextFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_fileNameTextFieldActionPerformed
-    if (!resultList.isSelectionEmpty()) {
-        action.closeDialog();
-        openSelectedItems();        
+    if (contentProvider.hasValidContent()) {
+        contentProvider.closeDialog();
+        setSelectedFile();
     }
 }//GEN-LAST:event_fileNameTextFieldActionPerformed
 
@@ -488,8 +452,8 @@ private void resultListValueChanged(javax.swing.event.ListSelectionEvent evt) {/
         }
         
         if (isListScrollAction) {
-            Action action = resultList.getActionMap().get(actionKey);
-            action.actionPerformed(new ActionEvent(resultList, 0, (String)actionKey));
+            Action a = resultList.getActionMap().get(actionKey);
+            a.actionPerformed(new ActionEvent(resultList, 0, (String)actionKey));
             evt.consume();
         }
     }//GEN-LAST:event_fileNameTextFieldKeyPressed
@@ -509,9 +473,6 @@ private void resultListValueChanged(javax.swing.event.ListSelectionEvent evt) {/
     // End of variables declaration//GEN-END:variables
     
     public void actionPerformed(ActionEvent e) {
-        
-        setModel( false, false );
-        
         if ( e.getSource() == caseSensitiveCheckBox ) {
             FileSearchOptions.setCaseSensitive(caseSensitiveCheckBox.isSelected());
         }
@@ -521,17 +482,57 @@ private void resultListValueChanged(javax.swing.event.ListSelectionEvent evt) {/
         else if ( e.getSource() == mainProjectCheckBox ) {            
             FileSearchOptions.setPreferMainProject(isPreferedProject());            
         }
+
+        update();
     }
-   
-    public boolean accept(Object obj) {
-        if ( obj instanceof FileDescription ) {
-            FileDescription fd = (FileDescription)obj;
-            return isShowHiddenFiles() ? true : fd.isVisible();
-        }            
-        return true;
+    
+    private String getText() {
+        try {
+            String text = fileNameTextField.getDocument().getText(0, fileNameTextField.getDocument().getLength());
+            return text;
+        } catch( BadLocationException ex ) {
+            return null;
+        }
     }
 
-    public void scheduleUpdate(Runnable run) {
-        SwingUtilities.invokeLater( run );
+    private int getFontSize () {
+        return this.resultList.getFont().getSize();
+    }        
+    
+    public void setSelectedFile() {
+        selectedFile = ((FileDescription) resultList.getSelectedValue());
     }
+
+    public FileDescription getSelectedFile() {
+        return selectedFile;
+    }
+
+   public Project getCurrentProject() {
+       return currentProject;
+   }
+
+//    public boolean accept(Object obj) {
+//        if ( obj instanceof FileDescription ) {
+//            FileDescription fd = (FileDescription)obj;
+//            return isShowHiddenFiles() ? true : fd.isVisible();
+//        }
+//        return true;
+//    }
+//
+//    public void scheduleUpdate(Runnable run) {
+//        SwingUtilities.invokeLater( run );
+//    }
+
+    public static interface ContentProvider {
+
+        public ListCellRenderer getListCellRenderer( JList list );
+
+        public void setListModel( FileSearchPanel panel, String text );
+
+        public void closeDialog();
+
+        public boolean hasValidContent ();
+
+    }
+
 }
