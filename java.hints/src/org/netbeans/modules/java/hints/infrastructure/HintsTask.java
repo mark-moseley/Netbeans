@@ -40,36 +40,39 @@
  */
 package org.netbeans.modules.java.hints.infrastructure;
 
-import com.sun.source.tree.AnnotationTree;
+import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.ClassTree;
-import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
-import java.util.prefs.Preferences;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
-import javax.management.AttributeValueExp;
 import javax.swing.text.Document;
+import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.support.CancellableTreePathScanner;
 import org.netbeans.editor.GuardedDocument;
 import org.netbeans.editor.MarkBlock;
 import org.netbeans.editor.MarkBlockChain;
-import org.netbeans.modules.java.editor.semantic.ScanningCancellableTask;
 import org.netbeans.modules.java.hints.options.HintsSettings;
 import org.netbeans.modules.java.hints.spi.AbstractHint;
 import org.netbeans.modules.java.hints.spi.TreeRule;
@@ -81,29 +84,101 @@ import org.openide.util.Exceptions;
  *
  * @author Jan Lahoda
  */
-public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
+public class HintsTask implements CancellableTask<CompilationInfo> {
     
-    public HintsTask() {
+    private AtomicBoolean cancel = new AtomicBoolean();
+    private List<ErrorDescription> currentHints = new LinkedList<ErrorDescription>();
+    
+    private Map<Kind, List<TreeRule>> presetHints;
+    
+    public HintsTask() {}
+    
+    public HintsTask(List<TreeRule> hints) {
+        presetHints = new  EnumMap<Kind, List<TreeRule>>(Kind.class);
+        
+        for (TreeRule r : hints) {
+            for (Kind k : r.getTreeKinds()) {
+                List<TreeRule> rules = presetHints.get(k);
+                
+                if (rules == null) {
+                    presetHints.put(k, rules = new  LinkedList<TreeRule>());
+                }
+                
+                rules.add(r);
+            }
+        }
+    }
+    
+    public List<ErrorDescription> computeHints(CompilationInfo info) {
+        return computeHints(info, new TreePath(info.getCompilationUnit()));
+    }
+    
+    private List<ErrorDescription> computeHints(CompilationInfo info, TreePath startAt) {
+        Map<Kind, List<TreeRule>> hints = presetHints != null ? presetHints : RulesManager.getInstance().getHints(false);
+        
+        if (hints.isEmpty()) {
+            return Collections.<ErrorDescription>emptyList();
+        }
+        
+        List<ErrorDescription> errors = new  LinkedList<ErrorDescription>();
+        
+        new ScannerImpl(info, cancel, hints).scan(startAt, errors);
+        
+        return errors;
     }
     
     public void run(CompilationInfo info) throws Exception {
-        resume();
+        cancel.set(false);
         
-        Map<Kind, List<TreeRule>> hints = RulesManager.getInstance().getHints(false);
+        long startTime = System.currentTimeMillis();
         
-        if (hints.isEmpty()) {
-            HintsController.setErrors(info.getFileObject(), HintsTask.class.getName(), Collections.<ErrorDescription>emptyList());
-            return ;
+        TreePath changedMethod = info.getChangedTree();
+        
+        if (changedMethod != null) {
+            MethodTree method = (MethodTree) changedMethod.getLeaf();
+            BlockTree block = method.getBody();
+            int start = (int) info.getTrees().getSourcePositions().getStartPosition(info.getCompilationUnit(), block);
+            int end = (int) info.getTrees().getSourcePositions().getEndPosition(info.getCompilationUnit(), block);
+            List<ErrorDescription> errors = new LinkedList<ErrorDescription>(currentHints);
+
+            for (Iterator<ErrorDescription> it = errors.iterator(); it.hasNext();) {
+                ErrorDescription ed = it.next();
+                int edStart = ed.getRange().getBegin().getOffset();
+                int edEnd = ed.getRange().getEnd().getOffset();
+
+                if (edStart >= start && edEnd <= end) {
+                    it.remove();
+                }
+            }
+
+            errors = computeHints(info, changedMethod);
+
+            if (cancel.get()) {
+                return;
+            }
+            
+            currentHints = errors;
+
+            HintsController.setErrors(info.getFileObject(), HintsTask.class.getName(), errors);
+        } else {
+            List<ErrorDescription> result = computeHints(info);
+
+            if (cancel.get()) {
+                return;
+            }
+
+            currentHints = result;
+
+            HintsController.setErrors(info.getFileObject(), HintsTask.class.getName(), result);
         }
         
-        List<ErrorDescription> result = new ArrayList<ErrorDescription>();
+        long endTime = System.currentTimeMillis();
         
-        scan(new ScannerImpl(info, hints), info.getCompilationUnit(), result);
-        
-        if (isCancelled())
-            return ;
-        
-        HintsController.setErrors(info.getFileObject(), HintsTask.class.getName(), result);
+        Logger.getLogger("TIMER").log(Level.FINE, "HintsTask", new Object[] {info.getFileObject(), endTime - startTime});
+    }
+    
+    public void cancel() {
+        cancel.set(true);
     }
     
     private static final class ScannerImpl extends CancellableTreePathScanner<Void, List<ErrorDescription>> {
@@ -112,7 +187,8 @@ public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
         private CompilationInfo info;
         private Map<Kind, List<TreeRule>> hints;
         
-        public ScannerImpl(CompilationInfo info, Map<Kind, List<TreeRule>> hints) {
+        public ScannerImpl(CompilationInfo info, AtomicBoolean cancel, Map<Kind, List<TreeRule>> hints) {
+            super(cancel);
             this.info = info;
             this.hints = hints;
         }
@@ -150,7 +226,9 @@ public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
                 }
             }
         }
-        
+
+        private static final Set<Tree.Kind> SUPPRESS_ELEMENTS = EnumSet.of(Kind.CLASS, Kind.METHOD, Kind.VARIABLE);
+
         @Override
         public Void scan(Tree tree, List<ErrorDescription> p) {
             if (tree == null)
@@ -158,8 +236,14 @@ public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
             
             TreePath tp = new TreePath(getCurrentPath(), tree);
             Kind k = tree.getKind();
-            
-            runAndAdd(tp, hints.get(k), p);
+
+            if(SUPPRESS_ELEMENTS.contains(k)) {
+                pushSuppressWarrnings(tp);
+                runAndAdd(tp, hints.get(k), p);
+                suppresWarnings.pop();
+            } else {
+                runAndAdd(tp, hints.get(k), p);
+            }
             
             if (isCanceled()) {
                 return null;
@@ -182,7 +266,7 @@ public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
 
         @Override
         public Void visitMethod(MethodTree tree, List<ErrorDescription> arg1) {
-            pushSuppressWarrnings();
+            pushSuppressWarrnings(getCurrentPath());
             Void r = super.visitMethod(tree, arg1);
             suppresWarnings.pop();
             return r;
@@ -190,7 +274,7 @@ public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
 
         @Override
         public Void visitClass(ClassTree tree, List<ErrorDescription> arg1) {
-            pushSuppressWarrnings();
+            pushSuppressWarrnings(getCurrentPath());
             Void r = super.visitClass(tree, arg1);
             suppresWarnings.pop();
             return r;
@@ -198,17 +282,17 @@ public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
 
         @Override
         public Void visitVariable(VariableTree tree, List<ErrorDescription> arg1) {
-            pushSuppressWarrnings();
+            pushSuppressWarrnings(getCurrentPath());
             Void r = super.visitVariable(tree, arg1);
             suppresWarnings.pop();
             return r;
         }
         
-        private void pushSuppressWarrnings( ) {
+        private void pushSuppressWarrnings(TreePath tp) {
             Set<String> current = suppresWarnings.size() == 0 ? null : suppresWarnings.peek();
             Set<String> nju = current == null ? new HashSet<String>() : new HashSet<String>(current);
             
-            Element e = info.getTrees().getElement(getCurrentPath());
+            Element e = info.getTrees().getElement(tp);
             
             if ( e != null) {
                 for (AnnotationMirror am : e.getAnnotationMirrors()) {
@@ -249,8 +333,7 @@ public class HintsTask extends ScanningCancellableTask<CompilationInfo> {
                 int end = (int) info.getTrees().getSourcePositions().getEndPosition(info.getCompilationUnit(), tree.getLeaf());
                 GuardedDocument gdoc = (GuardedDocument) doc;
                 MarkBlockChain guardedBlockChain = gdoc.getGuardedBlockChain();
-
-                if ((guardedBlockChain.compareBlock(start, end) & MarkBlock.INSIDE) != 0) {
+                if (guardedBlockChain.compareBlock(start, end) == MarkBlock.INNER) {
                     return true;
                 }
             }
