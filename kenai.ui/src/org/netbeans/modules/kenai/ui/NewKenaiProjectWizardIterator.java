@@ -55,7 +55,7 @@ import javax.swing.event.ChangeListener;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.kenai.api.Kenai;
-import org.netbeans.modules.kenai.api.KenaiErrorMessage;
+import org.netbeans.modules.kenai.api.KenaiException;
 import org.netbeans.modules.kenai.api.KenaiException;
 import org.netbeans.modules.kenai.api.KenaiFeature;
 import org.netbeans.modules.kenai.api.KenaiProject;
@@ -215,17 +215,20 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
                         final File localFile = new File(newPrjScmLocal);
                         if (Utilities.SVN_REPO.equals(featureService)) {
                             if (isShareExistingFolder) {
+                                String initialRevision = NbBundle.getMessage(NewKenaiProjectWizardIterator.class, "NewKenaiProject.initialRevision", newPrjTitle);
                                 String dirName = activeNode.getLookup().lookup(Project.class).getProjectDirectory().getName();
                                     final String remoteDir = scmLoc.toASCIIString().concat("/" + dirName);
                                 try {
-                                    Subversion.mkdir(remoteDir,passwdAuth.getUserName(), new String(passwdAuth.getPassword()), "Initial revision");
+                                    Subversion.mkdir(remoteDir,passwdAuth.getUserName(), new String(passwdAuth.getPassword()), initialRevision);
                                 } catch (IOException io) {
                                     Exceptions.printStackTrace(io);
                                 }
                                 Subversion.checkoutRepositoryFolder(remoteDir, new String[]{"."},localFile,
                                         passwdAuth.getUserName(), new String(passwdAuth.getPassword()), true, false);
                                 if (autoCommit) {
-                                    Subversion.commit(new File[]{localFile}, passwdAuth.getUserName(), new String(passwdAuth.getPassword()), "Initial revision");
+                                    handle.progress(NbBundle.getMessage(NewKenaiProjectWizardIterator.class,
+                                    "NewKenaiProject.progress.repositoryCommit"));
+                                    Subversion.commit(new File[]{localFile}, passwdAuth.getUserName(), new String(passwdAuth.getPassword()), initialRevision);
                                 }
                             } else {
                                 Subversion.checkoutRepositoryFolder(scmLoc.toASCIIString(), new String[]{"."},localFile,
@@ -329,8 +332,8 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
 
     private String getErrorMessage(KenaiException kex, String prepend) {
         String errMsg = null;
-        if (kex instanceof KenaiErrorMessage) {
-            KenaiErrorMessage kem = (KenaiErrorMessage) kex;
+        if (kex instanceof KenaiException) {
+            KenaiException kem = (KenaiException) kex;
             Map<String,String> errMap = kem.getErrors();
             StringBuffer sb = new StringBuffer();
             if (prepend != null) {
