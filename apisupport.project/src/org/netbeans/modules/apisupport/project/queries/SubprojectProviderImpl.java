@@ -46,10 +46,13 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
+import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.ant.AntArtifactQuery;
 import org.netbeans.modules.apisupport.project.NbModuleProject;
@@ -90,6 +93,7 @@ public final class SubprojectProviderImpl implements SubprojectProvider {
         Element data = project.getPrimaryConfigurationData();
         Element moduleDependencies = Util.findElement(data,
             "module-dependencies", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
+        assert moduleDependencies != null : "Malformed metadata in " + project;
         for (Element dep : Util.findSubElements(moduleDependencies)) {
             /* Probably better to open runtime deps too. TBD.
             if (Util.findElement(dep, "build-prerequisite", // NOI18N
@@ -107,7 +111,7 @@ public final class SubprojectProviderImpl implements SubprojectProvider {
             }
             File moduleProjectDirF = module.getSourceLocation();
             if (moduleProjectDirF == null) {
-                Util.err.log(ErrorManager.WARNING, "Warning - could not find sources for dependent module " + cnb + " for " + project);
+                // Do not log, this is pretty normal.
                 continue;
             }
             FileObject moduleProjectDir = FileUtil.toFileObject(moduleProjectDirF);
@@ -123,7 +127,7 @@ public final class SubprojectProviderImpl implements SubprojectProvider {
                 }
                 s.add(moduleProject);
             } catch (IOException e) {
-                Util.err.notify(e);
+                Logger.getLogger(SubprojectProviderImpl.class.getName()).log(Level.INFO, "Could not load dependent module " + cnb + " for " + project, e);
             }
         }
         // #63824: consider also artifacts found in ${cp.extra} and/or <class-path-extension>s
@@ -156,6 +160,10 @@ public final class SubprojectProviderImpl implements SubprojectProvider {
                 File jar = project.getHelper().resolveFile(pieces[i]);
                 Project owner = FileOwnerQuery.getOwner(jar.toURI());
                 if (owner != null) {
+                    if (ProjectUtils.getInformation(owner).getName().equals("org.netbeans.modules.apisupport.harness")) {
+                        // cp.extra=${nb_all}/apisupport.harness/external/openjdk-javac-6-b12.jar is not a real dep
+                        continue;
+                    }
                     s.add(owner);
                 }
             }
