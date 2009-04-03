@@ -46,6 +46,8 @@ import org.openide.util.NbBundle;
 import java.util.*;
 import java.io.Serializable;
 import java.io.File;
+import java.util.logging.Level;
+import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
 import org.tigris.subversion.svnclientadapter.ISVNStatus;
 import org.tigris.subversion.svnclientadapter.SVNClientException;
 import org.tigris.subversion.svnclientadapter.SVNNodeKind;
@@ -236,9 +238,6 @@ public class FileInformation implements Serializable {
     private static final String STATUS_VERSIONED_DELETEDLOCALLY_EXT = "E"; // NOI18N
     private static final String STATUS_VERSIONED_ADDEDLOCALLY_EXT = "A"; // NOI18N
 
-    // for debuging purposes
-    private final Exception origin;
-
     /**
      * For deserialization purposes only.
      */ 
@@ -246,7 +245,6 @@ public class FileInformation implements Serializable {
         status = 0;
         propStatus = 0;
         isDirectory = false;
-        origin = new RuntimeException("allocated at:"); // NOI18N
     }
 
     private FileInformation(int status, int propStatus, ISVNStatus entry, boolean isDirectory) {
@@ -254,7 +252,6 @@ public class FileInformation implements Serializable {
         this.propStatus = propStatus;
         this.entry = entry;
         this.isDirectory = isDirectory;
-        origin = new RuntimeException("allocated at:"); // NOI18N
     }
 
     FileInformation(int status, ISVNStatus entry) {
@@ -301,7 +298,10 @@ public class FileInformation implements Serializable {
         try {
             entry = Subversion.getInstance().getClient(true).getSingleStatus(file);
         } catch (SVNClientException e) {
-            // no entry for this file, ignore
+            // at least log the exception
+            if (!SvnClientExceptionHandler.isTooOldClientForWC(e.getMessage())) {
+                Subversion.LOG.log(Level.INFO, null, e);
+            }
         }
     }    
 
