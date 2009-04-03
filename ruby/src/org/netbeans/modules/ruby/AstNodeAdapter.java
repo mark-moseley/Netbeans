@@ -46,23 +46,23 @@ import java.util.List;
 
 import javax.swing.tree.TreeNode;
 
-import org.jruby.ast.ClassNode;
-import org.jruby.ast.Colon2Node;
-import org.jruby.ast.ConstDeclNode;
-import org.jruby.ast.DefnNode;
-import org.jruby.ast.DefsNode;
-import org.jruby.ast.GlobalVarNode;
-import org.jruby.ast.ModuleNode;
-import org.jruby.ast.NewlineNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.ParserResult;
+import org.jrubyparser.SourcePosition;
+import org.jrubyparser.ast.ClassNode;
+import org.jrubyparser.ast.Colon2Node;
+import org.jrubyparser.ast.ConstDeclNode;
+import org.jrubyparser.ast.DefnNode;
+import org.jrubyparser.ast.DefsNode;
+import org.jrubyparser.ast.GlobalVarNode;
+import org.jrubyparser.ast.ModuleNode;
+import org.jrubyparser.ast.NewlineNode;
+import org.jrubyparser.ast.Node;
+import org.jrubyparser.ast.INameNode;
 import org.openide.util.Enumerations;
 
 
 /** For debugging only (used by the AST Viewer */
-@SuppressWarnings("unchecked")
-class AstNodeAdapter implements ParserResult.AstTreeNode {
+class AstNodeAdapter implements TreeNode {
+
     private static final boolean HIDE_NEWLINE_NODES = false;
     private final Node node;
     private final AstNodeAdapter parent;
@@ -83,7 +83,7 @@ class AstNodeAdapter implements ParserResult.AstTreeNode {
             addChildren(childList, node);
             children = childList.toArray(new AstNodeAdapter[childList.size()]);
         } else {
-            List<Node> subnodes = (List<Node>)node.childNodes();
+            List<Node> subnodes = node.childNodes();
             children = new AstNodeAdapter[subnodes.size()];
 
             int index = 0;
@@ -95,7 +95,7 @@ class AstNodeAdapter implements ParserResult.AstTreeNode {
     }
 
     private void addChildren(List<AstNodeAdapter> children, Node node) {
-        List<Node> subnodes = (List<Node>)node.childNodes();
+        List<Node> subnodes = node.childNodes();
 
         for (Node child : subnodes) {
             if (child instanceof NewlineNode) {
@@ -154,16 +154,25 @@ class AstNodeAdapter implements ParserResult.AstTreeNode {
         return Enumerations.array(children);
     }
 
+    @Override
     public String toString() {
+        if (node.getPosition() == SourcePosition.INVALID_POSITION) {
+            return "INVALID_POSITION";
+        }
+
         StringBuilder sb = new StringBuilder();
 
         sb.append("<html>");
         sb.append(node.toString());
         sb.append("<i>");
         sb.append(" (");
-        sb.append(getStartOffset());
-        sb.append("-");
-        sb.append(getEndOffset());
+        if (node.isInvisible()) {
+            sb.append("INVISIBLE");
+        } else {
+            sb.append(getStartOffset());
+            sb.append("-");
+            sb.append(getEndOffset());
+        }
         sb.append(") ");
         sb.append("</i>");
 
@@ -213,7 +222,12 @@ class AstNodeAdapter implements ParserResult.AstTreeNode {
     }
 
     public int getStartOffset() {
-        if (node.getPosition() != null) {
+        if (node.isInvisible()) {
+            return -1;
+        }
+        if (node.getPosition() == SourcePosition.INVALID_POSITION) {
+            return -1;
+        } else if (node.getPosition() != null) {
             return node.getPosition().getStartOffset();
         } else {
             return -1;
@@ -221,7 +235,12 @@ class AstNodeAdapter implements ParserResult.AstTreeNode {
     }
 
     public int getEndOffset() {
-        if (node.getPosition() != null) {
+        if (node.isInvisible()) {
+            return -1;
+        }
+        if (node.getPosition() == SourcePosition.INVALID_POSITION) {
+            return -1;
+        } else if (node.getPosition() != null) {
             return node.getPosition().getEndOffset();
         } else {
             return -1;

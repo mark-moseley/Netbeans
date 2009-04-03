@@ -2,21 +2,21 @@ package org.netbeans.modules.ruby.elements;
 
 import java.util.Set;
 
-import org.jruby.ast.ClassNode;
-import org.jruby.ast.Colon2Node;
-import org.jruby.ast.Colon3Node;
-import org.jruby.ast.Node;
-import org.jruby.ast.SClassNode;
-import org.jruby.ast.types.INameNode;
-import org.netbeans.api.gsf.ElementKind;
-
+import org.jrubyparser.ast.ClassNode;
+import org.jrubyparser.ast.Colon3Node;
+import org.jrubyparser.ast.Node;
+import org.jrubyparser.ast.SClassNode;
+import org.jrubyparser.ast.INameNode;
+import org.netbeans.modules.csl.api.ElementKind;
+import org.netbeans.modules.csl.spi.ParserResult;
 
 public class AstClassElement extends AstElement implements ClassElement {
+    
     private String fqn;
     private Set<String> includes;
 
-    public AstClassElement(Node node) {
-        super(node);
+    public AstClassElement(ParserResult info, Node node) {
+        super(info, node);
     }
 
     @Override
@@ -48,6 +48,7 @@ public class AstClassElement extends AstElement implements ClassElement {
         return name;
     }
 
+    @Override
     public String getFqn() {
         if (fqn == null) {
             return getName();

@@ -41,25 +41,25 @@
 package org.netbeans.modules.ruby;
 
 import java.util.List;
-import org.jruby.ast.ArgsCatNode;
-import org.jruby.ast.ArgsNode;
-import org.jruby.ast.ArgumentNode;
-import org.jruby.ast.ArrayNode;
-import org.jruby.ast.CallNode;
-import org.jruby.ast.DefnNode;
-import org.jruby.ast.DefsNode;
-import org.jruby.ast.FCallNode;
-import org.jruby.ast.ListNode;
-import org.jruby.ast.LocalAsgnNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.SplatNode;
-import org.jruby.ast.VCallNode;
+import org.jrubyparser.ast.ArgsCatNode;
+import org.jrubyparser.ast.ArgsNode;
+import org.jrubyparser.ast.ArgumentNode;
+import org.jrubyparser.ast.ArrayNode;
+import org.jrubyparser.ast.CallNode;
+import org.jrubyparser.ast.DefnNode;
+import org.jrubyparser.ast.DefsNode;
+import org.jrubyparser.ast.FCallNode;
+import org.jrubyparser.ast.ListNode;
+import org.jrubyparser.ast.LocalAsgnNode;
+import org.jrubyparser.ast.Node;
+import org.jrubyparser.ast.SplatNode;
+import org.jrubyparser.ast.VCallNode;
 
 
 /**
  * The arity of a method is the number of arguments it takes.
  *
- * JRuby already has an Arity class (org.jruby.runtime.Arity), but
+ * JRuby already has an Arity class (org.jrubyparser.runtime.Arity), but
  * it doesn't have all we need - such as a maximum number of arguments.
  *
  * @todo I handle optional arguments and splats (*), but what about blocks?
@@ -123,7 +123,6 @@ public final class Arity {
         return getCallArity(call).min > 0;
     }
     
-    @SuppressWarnings(value = "unchecked")
     private void initializeFromCall(Node node) {
         if (node instanceof FCallNode) {
             Node argsNode = ((FCallNode)node).getArgsNode();
@@ -147,7 +146,9 @@ public final class Arity {
             ArgsNode args = (ArgsNode)node;
 
             if (args != null) {
-                int value = args.getArity().getValue();
+//                int value = args.getArity().getValue();
+                //XXX: jruby-parser
+                int value = args.getMaxArgumentsCount();
 
                 if (value < 0) {
                     value = -(1 + value);
@@ -169,12 +170,18 @@ public final class Arity {
             List<Node> children = node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 initializeFromCall(child);
             }
         } else if (node instanceof ListNode) {
             List<Node> children = node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 if (AstUtilities.isCall(child)) {
                     min++;
 
@@ -205,13 +212,12 @@ public final class Arity {
         }
     }
 
-    @SuppressWarnings(value = "unchecked")
     public static Arity getDefArity(Node method) {
         assert method instanceof DefsNode || method instanceof DefnNode;
 
         Arity arity = new Arity(0, 0);
 
-        List<Node> nodes = (List<Node>)method.childNodes();
+        List<Node> nodes = method.childNodes();
 
         for (Node c : nodes) {
             if (c instanceof ArgsNode) {
@@ -228,31 +234,30 @@ public final class Arity {
         }
     }
 
-    @SuppressWarnings(value = "unchecked")
     private void initializeFromDef(Node node) {
         if (node instanceof ArgsNode) {
             ArgsNode argsNode = (ArgsNode)node;
 
-            if (argsNode.getArgs() != null) {
-                initializeFromDef(argsNode.getArgs());
+            if (argsNode.getPre() != null) {
+                initializeFromDef(argsNode.getPre());
             }
 
-            if (argsNode.getOptArgs() != null) {
-                initializeFromDef(argsNode.getOptArgs());
+            if (argsNode.getOptional() != null) {
+                initializeFromDef(argsNode.getOptional());
             }
             
-            if (argsNode.getBlockArgNode() != null) {
+            if (argsNode.getBlock() != null) {
                 if (max < Integer.MAX_VALUE) {
                     max++;
                 }
             }
 
-            if (argsNode.getRestArg() > 0) {
+            if (argsNode.getRest() != null) {
                 max = Integer.MAX_VALUE;
             }
 
             // TODO: Block arg node. Not sure how this should affect arity.
-            //argsNode.getBlockArgNode()
+            //argsNode.getBlock()
         } else if (node instanceof ArgumentNode) {
             min++;
             max++;
@@ -262,6 +267,9 @@ public final class Arity {
             List<Node> children = node.childNodes();
 
             for (Node child : children) {
+                if (child.isInvisible()) {
+                    continue;
+                }
                 initializeFromDef(child);
             }
         }
