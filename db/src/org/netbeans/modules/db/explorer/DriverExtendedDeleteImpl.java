@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -23,15 +23,14 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.db.explorer;
 
 import java.io.IOException;
 import java.text.MessageFormat;
-import java.util.ResourceBundle;
 import org.netbeans.api.db.explorer.JDBCDriver;
-import org.netbeans.modules.db.explorer.infos.DriverNodeInfo;
+import org.netbeans.modules.db.explorer.node.DriverNode;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.explorer.ExtendedDelete;
@@ -43,6 +42,7 @@ import org.openide.util.NbBundle;
  *
  * @author Andrei Badea
  */
+@org.openide.util.lookup.ServiceProvider(service=org.openide.explorer.ExtendedDelete.class)
 public class DriverExtendedDeleteImpl implements ExtendedDelete {
 
     public DriverExtendedDeleteImpl() {
@@ -77,11 +77,11 @@ public class DriverExtendedDeleteImpl implements ExtendedDelete {
     private static JDBCDriver[] getJDBCDrivers(Node[] nodes) {
         JDBCDriver[] jdbcDrivers = new JDBCDriver[nodes.length];
         for (int i = 0; i < nodes.length; i++) {
-            DriverNodeInfo driverInfo = (DriverNodeInfo)nodes[i].getLookup().lookup(DriverNodeInfo.class);
+            DriverNode driverInfo = nodes[i].getLookup().lookup(DriverNode.class);
             if (driverInfo == null) {
                 return null;
             }
-            jdbcDrivers[i] = driverInfo.getJDBCDriver();
+            jdbcDrivers[i] = driverInfo.getDatabaseDriver().getJDBCDriver();
             if (jdbcDrivers[i] == null) {
                 return null;
             }
@@ -115,16 +115,15 @@ public class DriverExtendedDeleteImpl implements ExtendedDelete {
     }
 
     private static boolean canDeleteDrivers(JDBCDriver[] jdbcDrivers, DatabaseConnection firstConnection) {
-        ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle"); // NOI18N
         String message, title;
         if (jdbcDrivers.length == 1) {
-            String format = bundle.getString("MSG_ConfirmDeleteDriver"); // NOI18N
+            String format = NbBundle.getMessage (DriverExtendedDeleteImpl.class, "MSG_ConfirmDeleteDriver"); // NOI18N
             message = MessageFormat.format(format, new Object[] { jdbcDrivers[0].getDisplayName(), firstConnection.getDatabaseConnection().getDisplayName() });
-            title = bundle.getString("MSG_ConfirmDeleteDriverTitle"); // NOI18N
+            title = NbBundle.getMessage (DriverExtendedDeleteImpl.class, "MSG_ConfirmDeleteDriverTitle"); // NOI18N
         } else {
-            String format = bundle.getString("MSG_ConfirmDeleteDrivers"); // NOI18N
+            String format = NbBundle.getMessage (DriverExtendedDeleteImpl.class, "MSG_ConfirmDeleteDrivers"); // NOI18N
             message = MessageFormat.format(format, new Object[] { new Integer(jdbcDrivers.length) });
-            title = bundle.getString("MSG_ConfirmDeleteDriversTitle"); // NOI18N
+            title = NbBundle.getMessage (DriverExtendedDeleteImpl.class, "MSG_ConfirmDeleteDriversTitle"); // NOI18N
         }
         return DialogDisplayer.getDefault().notify(new NotifyDescriptor.Confirmation(message, title, NotifyDescriptor.YES_NO_OPTION)) == NotifyDescriptor.YES_OPTION;
     }

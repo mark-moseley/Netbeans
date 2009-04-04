@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,8 +42,6 @@
 package org.netbeans.modules.db.explorer.dlg;
 
 import java.awt.BorderLayout;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.Vector;
 import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
@@ -53,7 +51,6 @@ import org.netbeans.api.progress.ProgressHandleFactory;
 import org.openide.util.NbBundle;
 
 import org.netbeans.modules.db.explorer.DatabaseConnection;
-import org.openide.util.RequestProcessor;
 
 public class SchemaPanel extends javax.swing.JPanel {
 
@@ -94,16 +91,14 @@ public class SchemaPanel extends javax.swing.JPanel {
     }
 
     private void initAccessibility() {
-        schemaLabel.getAccessibleContext().setAccessibleDescription(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_SchemaDialogTextA11yDesc")); //NOI18N
-        schemaComboBox.getAccessibleContext().setAccessibleName(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_SchemaDialogTextComboBoxA11yName")); //NOI18N
-        commentTextArea.getAccessibleContext().setAccessibleName(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_SchemaPanelCommentA11yName")); //NOI18N
-        commentTextArea.getAccessibleContext().setAccessibleDescription(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_SchemaPanelCommentA11yDesc")); //NOI18N
-        connectProgressPanel.getAccessibleContext().setAccessibleName(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_ConnectionProgressBarA11yName")); //NOI18N
-        connectProgressPanel.getAccessibleContext().setAccessibleDescription(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_ConnectionProgressBarA11yDesc")); //NOI18N
-        schemaButton.getAccessibleContext().setAccessibleName(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_GetSchemasButtonA11yName")); //NOI18N
-        schemaButton.getAccessibleContext().setAccessibleDescription(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_GetSchemasButtonA11yDesc")); //NOI18N
-        this.getAccessibleContext().setAccessibleName(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_GetSchemasPanelA11yName")); //NOI18N
-        this.getAccessibleContext().setAccessibleDescription(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_GetSchemasPanelA11yDesc")); //NOI18N
+        schemaLabel.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (SchemaPanel.class, "ACS_SchemaDialogTextA11yDesc")); //NOI18N
+        schemaComboBox.getAccessibleContext().setAccessibleName(NbBundle.getMessage (SchemaPanel.class, "ACS_SchemaDialogTextComboBoxA11yName")); //NOI18N
+        commentTextArea.getAccessibleContext().setAccessibleName(NbBundle.getMessage (SchemaPanel.class, "ACS_SchemaPanelCommentA11yName")); //NOI18N
+        commentTextArea.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (SchemaPanel.class, "ACS_SchemaPanelCommentA11yDesc")); //NOI18N
+        connectProgressPanel.getAccessibleContext().setAccessibleName(NbBundle.getMessage (SchemaPanel.class, "ACS_ConnectionProgressBarA11yName")); //NOI18N
+        connectProgressPanel.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (SchemaPanel.class, "ACS_ConnectionProgressBarA11yDesc")); //NOI18N
+        this.getAccessibleContext().setAccessibleName(NbBundle.getMessage (SchemaPanel.class, "ACS_GetSchemasPanelA11yName")); //NOI18N
+        this.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (SchemaPanel.class, "ACS_GetSchemasPanelA11yDesc")); //NOI18N
     }
 
     /** This method is called from within the constructor to
@@ -118,19 +113,16 @@ public class SchemaPanel extends javax.swing.JPanel {
         commentTextArea = new javax.swing.JTextArea();
         schemaLabel = new javax.swing.JLabel();
         schemaComboBox = new javax.swing.JComboBox();
-        schemaButton = new javax.swing.JButton();
         connectProgressPanel = new javax.swing.JPanel();
         progressMessageLabel = new javax.swing.JLabel();
         progressContainerPanel = new javax.swing.JPanel();
-
-        FormListener formListener = new FormListener();
 
         setLayout(new java.awt.GridBagLayout());
 
         commentTextArea.setEditable(false);
         commentTextArea.setFont(javax.swing.UIManager.getFont("Label.font"));
         commentTextArea.setLineWrap(true);
-        commentTextArea.setText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("MSG_SchemaPanelComment")); // NOI18N
+        commentTextArea.setText(org.openide.util.NbBundle.getMessage(SchemaPanel.class, "MSG_SchemaPanelComment")); // NOI18N
         commentTextArea.setWrapStyleWord(true);
         commentTextArea.setDisabledTextColor(javax.swing.UIManager.getColor("Label.foreground"));
         commentTextArea.setEnabled(false);
@@ -142,7 +134,7 @@ public class SchemaPanel extends javax.swing.JPanel {
         add(commentTextArea, gridBagConstraints);
 
         schemaLabel.setLabelFor(schemaComboBox);
-        org.openide.awt.Mnemonics.setLocalizedText(schemaLabel, NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("SchemaDialogText")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(schemaLabel, org.openide.util.NbBundle.getMessage(SchemaPanel.class, "SchemaDialogText")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 1;
@@ -151,7 +143,7 @@ public class SchemaPanel extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(5, 12, 0, 0);
         add(schemaLabel, gridBagConstraints);
 
-        schemaComboBox.setToolTipText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_SchemaDialogTextComboBoxA11yDesc")); // NOI18N
+        schemaComboBox.setToolTipText(org.openide.util.NbBundle.getMessage(SchemaPanel.class, "ACS_SchemaDialogTextComboBoxA11yDesc")); // NOI18N
         schemaComboBox.setEnabled(false);
         schemaComboBox.setPrototypeDisplayValue("wwwwwwwwww");
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -160,21 +152,10 @@ public class SchemaPanel extends javax.swing.JPanel {
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.weighty = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(5, 5, 0, 0);
+        gridBagConstraints.insets = new java.awt.Insets(5, 5, 0, 5);
         add(schemaComboBox, gridBagConstraints);
 
-        org.openide.awt.Mnemonics.setLocalizedText(schemaButton, NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("SchemaDialogGetButton")); // NOI18N
-        schemaButton.setToolTipText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_GetSchemasButtonA11yDesc")); // NOI18N
-        schemaButton.addActionListener(formListener);
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 2;
-        gridBagConstraints.gridy = 1;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.weighty = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(5, 5, 0, 11);
-        add(schemaButton, gridBagConstraints);
-
-        connectProgressPanel.setToolTipText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ACS_ConnectionProgressBarA11yDesc")); // NOI18N
+        connectProgressPanel.setToolTipText(org.openide.util.NbBundle.getMessage(SchemaPanel.class, "ACS_ConnectionProgressBarA11yDesc")); // NOI18N
         connectProgressPanel.setLayout(new java.awt.BorderLayout(0, 5));
 
         org.openide.awt.Mnemonics.setLocalizedText(progressMessageLabel, " ");
@@ -194,41 +175,7 @@ public class SchemaPanel extends javax.swing.JPanel {
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.insets = new java.awt.Insets(12, 12, 11, 11);
         add(connectProgressPanel, gridBagConstraints);
-    }
-
-    // Code for dispatching events from components to event handlers.
-
-    private class FormListener implements java.awt.event.ActionListener {
-        FormListener() {}
-        public void actionPerformed(java.awt.event.ActionEvent evt) {
-            if (evt.getSource() == schemaButton) {
-                SchemaPanel.this.schemaButtonActionPerformed(evt);
-            }
-        }
     }// </editor-fold>//GEN-END:initComponents
-
-    private void schemaButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_schemaButtonActionPerformed
-        schemaComboBox.setEnabled(false);
-        schemaComboBox.removeAllItems();
-
-        Connection con = dbcon.getConnection();
-        try {
-            if (con == null || con.isClosed())
-                dbcon.connect();
-            else {
-                RequestProcessor.getDefault().post(new Runnable() {
-                    public void run() {
-                        mediator.fireConnectionStarted();
-                        mediator.retrieveSchemas(SchemaPanel.this, dbcon, dbcon.getUser());
-                        mediator.fireConnectionFinished();
-                    }
-                });
-            }
-        } catch (SQLException exc) {
-            //isClosed() method failed, try to connect
-            dbcon.connect();
-        }
-    }//GEN-LAST:event_schemaButtonActionPerformed
 
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
@@ -236,26 +183,38 @@ public class SchemaPanel extends javax.swing.JPanel {
     private javax.swing.JPanel connectProgressPanel;
     private javax.swing.JPanel progressContainerPanel;
     private javax.swing.JLabel progressMessageLabel;
-    private javax.swing.JButton schemaButton;
     private javax.swing.JComboBox schemaComboBox;
     private javax.swing.JLabel schemaLabel;
     // End of variables declaration//GEN-END:variables
 
     public String getSchema() {
         Object schema = schemaComboBox.getSelectedItem();
-        if (schema != null && !schema.toString().equals(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("TXT_NoSchema"))) //NOI18N
+        if (schema != null && !schema.toString().equals(NbBundle.getMessage (SchemaPanel.class, "TXT_NoSchema"))) //NOI18N
             return schema.toString();
         else
             return null;
     }
 
+    /**
+     * Determine if there are any schemas available
+     * 
+     * @return true if there are schemas, false otherwise
+     */
+    public boolean schemasAvailable()
+    {
+        // the schema combo box is enabled if there are schemas
+        boolean available = schemaComboBox.isEnabled();
+        
+        return available;
+    }
+    
     public boolean setSchemas(Vector items, String schema) {
         schemaComboBox.removeAllItems();
         for (int i = 0; i < items.size(); i++)
             schemaComboBox.addItem(items.elementAt(i));
 
         if (items.size() == 0) {
-            schemaComboBox.addItem(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("TXT_NoSchema")); //NOI18N
+            schemaComboBox.addItem(NbBundle.getMessage (SchemaPanel.class, "TXT_NoSchema")); //NOI18N
             schemaComboBox.setEnabled(false);
         } else
             schemaComboBox.setEnabled(true);
@@ -290,8 +249,7 @@ public class SchemaPanel extends javax.swing.JPanel {
                 progressComponent = ProgressHandleFactory.createProgressComponent(progressHandle);
                 progressContainerPanel.add(progressComponent, BorderLayout.CENTER);
                 progressHandle.start();
-                progressMessageLabel.setText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ConnectionProgress_Connecting"));
-                schemaButton.setEnabled(false);
+                progressMessageLabel.setText(NbBundle.getMessage (SchemaPanel.class, "ConnectionProgress_Connecting"));
             }
         });
     }
@@ -300,24 +258,33 @@ public class SchemaPanel extends javax.swing.JPanel {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 progressMessageLabel.setText(message);
-                schemaButton.setEnabled(false);
             }
         });
     }
 
+    /**
+     * Terminates the use of the progress bar.
+     */
+    public void terminateProgress()
+    {
+        stopProgress(false);
+    }
+    
     private void stopProgress(final boolean connected) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                progressHandle.finish();
-                progressContainerPanel.remove(progressComponent);
-                // without this, the removed progress component remains painted on its parent... why?
-                progressContainerPanel.repaint();
-                if (connected) {
-                    progressMessageLabel.setText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ConnectionProgress_Established"));
-                } else {
-                    progressMessageLabel.setText(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("ConnectionProgress_Failed"));
+                if (progressHandle != null)
+                {
+                    progressHandle.finish();
+                    progressContainerPanel.remove(progressComponent);
+                    // without this, the removed progress component remains painted on its parent... why?
+                    progressContainerPanel.repaint();
+                    if (connected) {
+                        progressMessageLabel.setText(NbBundle.getMessage (SchemaPanel.class, "ConnectionProgress_Established"));
+                    } else {
+                        progressMessageLabel.setText(NbBundle.getMessage (SchemaPanel.class, "ConnectionProgress_Failed"));
+                    }
                 }
-                schemaButton.setEnabled(true);
             }
         });
     }

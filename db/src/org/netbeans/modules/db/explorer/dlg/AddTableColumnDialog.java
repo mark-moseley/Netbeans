@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,31 +41,60 @@
 
 package org.netbeans.modules.db.explorer.dlg;
 
-import java.sql.*;
-import java.awt.*;
-import java.awt.event.*;
-import java.util.*;
-import java.beans.*;
+import java.awt.Dialog;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.lang.reflect.InvocationTargetException;
+import java.sql.ResultSet;
+import java.util.Enumeration;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.MissingResourceException;
+import java.util.Vector;
+import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.*;
-import javax.swing.border.*;
+import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.TitledBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
 import org.netbeans.api.db.explorer.DatabaseException;
-import org.openide.*;
-import org.openide.util.NbBundle;
-import org.netbeans.lib.ddl.impl.*;
-import org.netbeans.lib.ddl.util.*;
+import org.netbeans.lib.ddl.DDLException;
+import org.netbeans.lib.ddl.impl.DriverSpecification;
+import org.netbeans.lib.ddl.impl.Specification;
+import org.netbeans.modules.db.explorer.DatabaseConnection;
 import org.netbeans.modules.db.explorer.DbUtilities;
-import org.netbeans.modules.db.util.*;
-import org.netbeans.modules.db.explorer.infos.*;
-import org.netbeans.modules.db.explorer.nodes.*;
+import org.netbeans.modules.db.explorer.node.TableNode;
+import org.netbeans.modules.db.util.TextFieldValidator;
+import org.netbeans.modules.db.util.ValidableTextField;
+import org.openide.DialogDescriptor;
+import org.openide.DialogDisplayer;
+import org.openide.NotificationLineSupport;
+import org.openide.NotifyDescriptor;
 import org.openide.awt.Mnemonics;
+import org.openide.util.NbBundle;
+
 
 public class AddTableColumnDialog {
-    static final Logger LOGGER = 
-            Logger.getLogger(AddTableColumnDialog.class.getName());
+    static final Logger LOGGER = Logger.getLogger(AddTableColumnDialog.class.getName());
     boolean result = false;
+    private DialogDescriptor descriptor = null;
+    private NotificationLineSupport statusLine;
     Dialog dialog = null;
     Specification spec;
     AddTableColumnDDL ddl;
@@ -78,15 +107,23 @@ public class AddTableColumnDialog {
     JComboBox coltypecombo, idxcombo;
     JCheckBox pkcheckbox, ixcheckbox, checkcheckbox, nullcheckbox, uniquecheckbox;
     DataModel dmodel = new DataModel();
-    private ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle"); //NOI18N
 
-    public AddTableColumnDialog(final Specification spe, final DatabaseNodeInfo nfo) throws DatabaseException {
+    public AddTableColumnDialog(final Specification spe, final TableNode nfo) throws DatabaseException {
         spec = spe;
         try {
-            String table = (String)nfo.get(DatabaseNode.TABLE);
-            String schema = (String)nfo.get(DatabaseNodeInfo.SCHEMA);
-            DriverSpecification drvSpec = nfo.getDriverSpecification();
-            ddl = new AddTableColumnDDL(spec, drvSpec, schema, table);
+            String tableName = nfo.getName();
+            String schemaName = nfo.getSchemaName();
+            String catName = nfo.getCatalogName();
+
+            if (schemaName == null) {
+                schemaName = catName;
+            } else if (catName == null) {
+                catName = schemaName;
+            }
+
+            DriverSpecification drvSpec = nfo.getLookup().lookup(DatabaseConnection.class).getConnector().getDriverSpecification(catName);
+            
+            ddl = new AddTableColumnDDL(spec, drvSpec, schemaName, tableName);
 
             JLabel label;
             JPanel pane = new JPanel();
@@ -101,8 +138,8 @@ public class AddTableColumnDialog {
             // Column name
 
             label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("AddTableColumnName")); //NOI18N
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddTableColumnNameA11yDesc"));
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnName")); //NOI18N
+            label.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnNameA11yDesc"));
             con = new GridBagConstraints ();
             con.gridx = 0;
             con.gridy = 0;
@@ -126,15 +163,26 @@ public class AddTableColumnDialog {
             colnamefield = new JTextField(35);
             colnamefield.setName(ColumnItem.NAME);
             colnamefield.addFocusListener(fldlistener);
-            colnamefield.setToolTipText(bundle.getString("ACS_AddTableColumnNameTextFieldA11yDesc"));
-            colnamefield.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddTableColumnNameTextFieldA11yName"));
+            colnamefield.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnNameTextFieldA11yDesc"));
+            colnamefield.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnNameTextFieldA11yName"));
             label.setLabelFor(colnamefield);
             pane.add(colnamefield, con);
+            colnamefield.getDocument().addDocumentListener(new DocumentListener() {
+                public void insertUpdate(DocumentEvent e) {
+                    validate();
+                }
+                public void removeUpdate(DocumentEvent e) {
+                    validate();
+                }
+                public void changedUpdate(DocumentEvent e) {
+                    validate();
+                }
+            });
 
             // Column type
 
             Map tmap = spec.getTypeMap();
-            Vector ttab = new Vector(tmap.size());
+            Vector<TypeElement> ttab = new Vector<TypeElement> (tmap.size());
             Iterator iter = tmap.keySet().iterator();
             while (iter.hasNext()) {
                 String iterkey = (String)iter.next();
@@ -147,8 +195,8 @@ public class AddTableColumnDialog {
             dmodel.addRow(item);
 
             label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("AddTableColumnType")); //NOI18N
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddTableColumnTypeA11yDesc"));
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnType")); //NOI18N
+            label.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnTypeA11yDesc"));
             con = new GridBagConstraints ();
             con.gridx = 0;
             con.gridy = 1;
@@ -172,16 +220,16 @@ public class AddTableColumnDialog {
             coltypecombo = new JComboBox(ttab);
             coltypecombo.addActionListener(new ComboBoxListener(dmodel));
             coltypecombo.setName(ColumnItem.TYPE);
-            coltypecombo.setToolTipText(bundle.getString("ACS_AddTableColumnTypeComboBoxA11yDesc"));
-            coltypecombo.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddTableColumnTypeComboBoxA11yName"));
+            coltypecombo.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnTypeComboBoxA11yDesc"));
+            coltypecombo.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnTypeComboBoxA11yName"));
             label.setLabelFor(coltypecombo);
             pane.add(coltypecombo, con);
 
             // Column size
 
             label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("AddTableColumnSize")); //NOI18N
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddTableColumnSizeA11yDesc"));
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnSize")); //NOI18N
+            label.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnSizeA11yDesc"));
             con = new GridBagConstraints ();
             con.gridx = 0;
             con.gridy = 2;
@@ -205,16 +253,16 @@ public class AddTableColumnDialog {
             colsizefield = new ValidableTextField(new TextFieldValidator.integer());
             colsizefield.setName(ColumnItem.SIZE);
             colsizefield.addFocusListener(intfldlistener);
-            colsizefield.setToolTipText(bundle.getString("ACS_AddTableColumnSizeTextFieldA11yDesc"));
-            colsizefield.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddTableColumnSizeTextFieldA11yName"));
+            colsizefield.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnSizeTextFieldA11yDesc"));
+            colsizefield.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnSizeTextFieldA11yName"));
             label.setLabelFor(colsizefield);
             pane.add(colsizefield, con);
 
             // Column scale
 
             label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("AddTableColumnScale")); //NOI18N
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddTableColumnScaleA11yDesc"));
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnScale")); //NOI18N
+            label.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnScaleA11yDesc"));
             con = new GridBagConstraints ();
             con.gridx = 2;
             con.gridy = 2;
@@ -238,16 +286,16 @@ public class AddTableColumnDialog {
             colscalefield = new ValidableTextField(new TextFieldValidator.integer());
             colscalefield.setName(ColumnItem.SCALE);
             colscalefield.addFocusListener(intfldlistener);
-            colscalefield.setToolTipText(bundle.getString("ACS_AddTableColumnScaleTextFieldA11yDesc"));
-            colscalefield.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddTableColumnScaleTextFieldA11yName"));
+            colscalefield.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnScaleTextFieldA11yDesc"));
+            colscalefield.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnScaleTextFieldA11yName"));
             label.setLabelFor(colscalefield);
             pane.add(colscalefield, con);
 
             // Column default value
 
             label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("AddTableColumnDefault")); //NOI18N
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddTableColumnDefaultA11yDesc"));
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnDefault")); //NOI18N
+            label.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnDefaultA11yDesc"));
             con = new GridBagConstraints ();
             con.gridx = 0;
             con.gridy = 3;
@@ -271,8 +319,8 @@ public class AddTableColumnDialog {
             defvalfield = new JTextField(35);
             defvalfield.setName(ColumnItem.DEFVAL);
             defvalfield.addFocusListener(fldlistener);
-            defvalfield.setToolTipText(bundle.getString("ACS_AddTableColumnDefaultTextFieldA11yDesc"));
-            defvalfield.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddTableColumnDefaultTextFieldA11yName"));
+            defvalfield.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnDefaultTextFieldA11yDesc"));
+            defvalfield.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnDefaultTextFieldA11yName"));
             label.setLabelFor(defvalfield);
             layout.setConstraints(defvalfield, con);
             pane.add(defvalfield);
@@ -280,7 +328,7 @@ public class AddTableColumnDialog {
             // Check subpane
 
             JPanel subpane = new JPanel();
-            subpane.setBorder(new TitledBorder(bundle.getString("AddTableColumnConstraintsTitle"))); //NOI18N
+            subpane.setBorder(new TitledBorder(NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnConstraintsTitle"))); //NOI18N
             GridBagLayout sublayout = new GridBagLayout();
             subpane.setLayout(sublayout);
 
@@ -296,10 +344,10 @@ public class AddTableColumnDialog {
             con.weightx = 0.0;
             con.weighty = 0.0;
             pkcheckbox = new JCheckBox();
-            Mnemonics.setLocalizedText(pkcheckbox, bundle.getString("AddTableColumnConstraintPKTitle")); //NOI18N
+            Mnemonics.setLocalizedText(pkcheckbox, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnConstraintPKTitle")); //NOI18N
             pkcheckbox.setName(ColumnItem.PRIMARY_KEY);
             pkcheckbox.addActionListener(cbxlistener);
-            pkcheckbox.setToolTipText(bundle.getString("ACS_AddTableColumnConstraintPKTitleA11yDesc"));
+            pkcheckbox.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnConstraintPKTitleA11yDesc"));
             subpane.add(pkcheckbox, con);
 
             con = new GridBagConstraints ();
@@ -312,10 +360,10 @@ public class AddTableColumnDialog {
             con.weightx = 0.0;
             con.weighty = 0.0;
             uniquecheckbox = new JCheckBox();
-            Mnemonics.setLocalizedText(uniquecheckbox, bundle.getString("AddTableColumnConstraintUniqueTitle")); //NOI18N
+            Mnemonics.setLocalizedText(uniquecheckbox, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnConstraintUniqueTitle")); //NOI18N
             uniquecheckbox.setName(ColumnItem.UNIQUE);
             uniquecheckbox.addActionListener(cbxlistener);
-            uniquecheckbox.setToolTipText(bundle.getString("ACS_AddTableColumnConstraintUniqueTitleA11yDesc"));
+            uniquecheckbox.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnConstraintUniqueTitleA11yDesc"));
             subpane.add(uniquecheckbox, con);
 
             con = new GridBagConstraints ();
@@ -328,10 +376,10 @@ public class AddTableColumnDialog {
             con.weightx = 0.0;
             con.weighty = 0.0;
             nullcheckbox = new JCheckBox();
-            Mnemonics.setLocalizedText(nullcheckbox, bundle.getString("AddTableColumnConstraintNullTitle")); //NOI18N
+            Mnemonics.setLocalizedText(nullcheckbox, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnConstraintNullTitle")); //NOI18N
             nullcheckbox.setName(ColumnItem.NULLABLE);
             nullcheckbox.addActionListener(cbxlistener);
-            nullcheckbox.setToolTipText(bundle.getString("ACS_AddTableColumnConstraintNullTitleA11yDesc"));
+            nullcheckbox.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnConstraintNullTitleA11yDesc"));
             subpane.add(nullcheckbox, con);
 
             // Insert subpane
@@ -350,7 +398,8 @@ public class AddTableColumnDialog {
             // are there primary keys?
             boolean isPK = false;
             try {
-                drvSpec.getPrimaryKeys(table);
+                drvSpec.getPrimaryKeys(tableName);
+
                 ResultSet rs = drvSpec.getResultSet();
 
                 if( rs != null ) {
@@ -375,10 +424,10 @@ public class AddTableColumnDialog {
             con.weightx = 0.0;
             con.weighty = 0.0;
             ixcheckbox = new JCheckBox();
-            Mnemonics.setLocalizedText(ixcheckbox, bundle.getString("AddTableColumnIndexName")); //NOI18N
+            Mnemonics.setLocalizedText(ixcheckbox, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnIndexName")); //NOI18N
             ixcheckbox.setName(ColumnItem.INDEX);
             ixcheckbox.addActionListener(cbxlistener);
-            ixcheckbox.setToolTipText(bundle.getString("ACS_AddTableColumnIndexNameA11yDesc"));
+            ixcheckbox.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnIndexNameA11yDesc"));
             pane.add(ixcheckbox, con);
 
             ixmap = ddl.getIndexMap();
@@ -393,10 +442,10 @@ public class AddTableColumnDialog {
             con.insets = new java.awt.Insets (12, 12, 0, 0);
             con.weightx = 1.0;
             con.weighty = 0.0;
-            idxcombo = new JComboBox(new Vector(ixmap.keySet()));
-            idxcombo.setToolTipText(bundle.getString("ACS_AddTableColumnIndexNameComboBoxA11yDesc"));
-            idxcombo.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddTableColumnIndexNameComboBoxA11yName"));
-            idxcombo.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddTableColumnIndexNameComboBoxA11yDesc"));
+            idxcombo = new JComboBox(ixmap.keySet().toArray ());
+            idxcombo.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnIndexNameComboBoxA11yDesc"));
+            idxcombo.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnIndexNameComboBoxA11yName"));
+            idxcombo.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnIndexNameComboBoxA11yDesc"));
             //idxcombo.setSelectedIndex(0);
             pane.add(idxcombo, con);
 
@@ -412,10 +461,10 @@ public class AddTableColumnDialog {
             con.weightx = 0.0;
             con.weighty = 0.0;
             checkcheckbox = new JCheckBox();
-            Mnemonics.setLocalizedText(checkcheckbox, bundle.getString("AddTableColumnConstraintCheckTitle")); //NOI18N
+            Mnemonics.setLocalizedText(checkcheckbox, NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumnConstraintCheckTitle")); //NOI18N
             checkcheckbox.setName(ColumnItem.CHECK);
             checkcheckbox.addActionListener(cbxlistener);
-            checkcheckbox.setToolTipText(bundle.getString("ACS_AddTableColumnCheckTitleA11yDesc"));
+            checkcheckbox.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnCheckTitleA11yDesc"));
             pane.add(checkcheckbox, con);
 
             con = new GridBagConstraints ();
@@ -430,9 +479,9 @@ public class AddTableColumnDialog {
             checkfield = new JTextArea(3, 35);
             checkfield.setName(ColumnItem.CHECK_CODE);
             checkfield.addFocusListener(fldlistener);
-            checkfield.setToolTipText(bundle.getString("ACS_AddTableColumnCheckTextAreaA11yDesc"));
-            checkfield.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddTableColumnCheckTextAreaA11yName"));
-            checkfield.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddTableColumnCheckTextAreaA11yDesc"));
+            checkfield.setToolTipText(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnCheckTextAreaA11yDesc"));
+            checkfield.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnCheckTextAreaA11yName"));
+            checkfield.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnCheckTextAreaA11yDesc"));
             JScrollPane spane = new JScrollPane(checkfield);
             pane.add(spane, con);
 
@@ -484,8 +533,7 @@ public class AddTableColumnDialog {
                       }
                       result = validate();
                       if ( ! result ) {
-                          String msg = bundle.getString(
-                              "EXC_InsufficientAddColumnInfo");
+                          String msg = NbBundle.getMessage (AddTableColumnDialog.class, "EXC_InsufficientAddColumnInfo");
                           DialogDisplayer.getDefault().notify(
                                 new NotifyDescriptor.Message(msg, 
                                     NotifyDescriptor.ERROR_MESSAGE));
@@ -493,17 +541,24 @@ public class AddTableColumnDialog {
                       }
 
                       colname = colnamefield.getText();
-                      ColumnItem citem = (ColumnItem)dmodel.getData().elementAt(0);
-                      String indexName = (String)idxcombo.getSelectedItem();
+                      final ColumnItem citem = (ColumnItem)dmodel.getData().elementAt(0);
+                      final String indexName = (String)idxcombo.getSelectedItem();
                       boolean wasException;
                       try {
-                          wasException = ddl.execute(colname, citem, indexName);
-                      } catch ( Exception e ) {
-                        LOGGER.log(Level.WARNING, null, e);
-                          
-                        DbUtilities.reportError(bundle.getString(
-                            "ERR_UnableToAddColumn"), e.getMessage());
-                        return;
+                          wasException = DbUtilities.doWithProgress(null, new Callable<Boolean>() {
+                              public Boolean call() throws Exception {
+                                  return ddl.execute(colname, citem, indexName);
+                              }
+                          });
+                      } catch (InvocationTargetException e) {
+                          Throwable cause = e.getCause();
+                          if (cause instanceof DDLException) {
+                              DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(e.getMessage(), NotifyDescriptor.ERROR_MESSAGE));
+                          } else {
+                              LOGGER.log(Level.INFO, null, cause);
+                              DbUtilities.reportError(NbBundle.getMessage (AddTableColumnDialog.class, "ERR_UnableToAddColumn"), e.getMessage());
+                          }
+                          return;
                       }
 
                       // was execution of commands with or without exception?
@@ -517,15 +572,17 @@ public class AddTableColumnDialog {
                   }
               };
 
-            pane.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddTableColumnDialogA11yDesc"));
+            pane.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddTableColumnDialog.class, "ACS_AddTableColumnDialogA11yDesc"));
                   
-            DialogDescriptor descriptor = new DialogDescriptor(pane, bundle.getString("AddColumnDialogTitle"), true, listener); //NOI18N
+            descriptor = new DialogDescriptor(pane, NbBundle.getMessage (AddTableColumnDialog.class, "AddColumnDialogTitle"), true, listener); //NOI18N
             // inbuilt close of the dialog is only after CANCEL button click
             // after OK button is dialog closed by hand
             Object [] closingOptions = {DialogDescriptor.CANCEL_OPTION};
             descriptor.setClosingOptions(closingOptions);
+            statusLine = descriptor.createNotificationLineSupport();
             dialog = DialogDisplayer.getDefault().createDialog(descriptor);
             dialog.setResizable(true);
+            validate();
         } catch (MissingResourceException e) {
             e.printStackTrace();
         }
@@ -537,19 +594,37 @@ public class AddTableColumnDialog {
     }
 
     private boolean validate() {
-        Vector cols = dmodel.getData();
-        String colname = colnamefield.getText();
-        if (colname == null || colname.length()<1)
+        String columnName = colnamefield.getText();
+        if (columnName == null || columnName.length() < 1) {
+            statusLine.setInformationMessage(NbBundle.getMessage (AddTableColumnDialog.class, "AddTableColumn_EmptyColName"));
+            updateOK(false);
             return false;
+        }
 
-        Enumeration colse = cols.elements();
-        while(colse.hasMoreElements())
-            if (!((ColumnItem)colse.nextElement()).validate())
+        statusLine.clearMessages();
+        updateOK(true);
+
+        Enumeration colse = dmodel.getData().elements();
+        while(colse.hasMoreElements()) {
+            ColumnItem ci = (ColumnItem)colse.nextElement();
+            if (!ci.validate()) {
+                // Model is updated only after focus from a field is lost...
+                // ... so we cannot test this here ...
+                // statusLine.setErrorMessage(bundle.getString("AddTableColumn_InvalidColInfo")+ci.getName());
+                // updateOK(false);
                 return false;
+            }
+        }
 
         return true;
     }
 
+    private void updateOK(boolean valid) {
+        if (descriptor != null) {
+            descriptor.setValid(valid);
+        }
+    }
+    
     public String getColumnName() {
         return colname;
     }

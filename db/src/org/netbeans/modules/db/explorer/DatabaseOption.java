@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,27 +41,23 @@
 
 package org.netbeans.modules.db.explorer;
 
+import java.beans.PropertyChangeSupport;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.net.URL;
-import java.util.Enumeration;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
 import java.util.jar.JarFile;
 import org.netbeans.api.db.explorer.DatabaseException;
 import org.netbeans.api.db.explorer.JDBCDriver;
 import org.netbeans.api.db.explorer.JDBCDriverManager;
-import org.netbeans.modules.db.explorer.infos.DatabaseNodeInfo;
-import org.netbeans.modules.db.explorer.nodes.DatabaseNode;
 import org.netbeans.modules.db.util.DriverListUtil;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
-import org.openide.options.SystemOption;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
@@ -69,37 +65,34 @@ import org.openide.util.NbBundle;
 * These connections will be restored at startup, drivers will be placed in Drivers
 * directory owned by Database node.
 */
-public class DatabaseOption extends SystemOption {
-    
+public class DatabaseOption {
+     /** The support for firing property changes */
+    private PropertyChangeSupport propertySupport;
+
     private static boolean debugMode;
     private static Vector drivers;
     private static Vector connections;
-    private static int fetchlimit = 100;
-    private static int fetchstep = 200;
-    private static boolean autoConn = true;
-
     public static final String PROP_DEBUG_MODE = "debugMode"; //NOI18N
+    private static DatabaseOption INSTANCE = new DatabaseOption();
 
     static final long serialVersionUID =-13629330831657810L;
     
-    public DatabaseOption() {
+    private DatabaseOption() {
         super();
         drivers = new Vector();
         connections = new Vector();
         debugMode = false;
+        propertySupport = new PropertyChangeSupport(this);
         
         deleteAdaptorsFolder();
     }
 
-    /** Returns vector of registered drivers */
-    public Vector getAvailableDrivers() {
-        if (drivers.size() == 0) {
-            //get serialized drivers
-            Map xxx = (Map) DatabaseNodeInfo.getGlobalNodeInfo(DatabaseNode.DRIVER_LIST);
-            drivers = createDrivers(xxx);
-        }
-        
-        return drivers;
+    public static DatabaseOption getDefault() {
+        return INSTANCE;
+     }
+
+    public PropertyChangeSupport getPropertySupport() {
+        return propertySupport;
     }
 
     public boolean getDebugMode() {
@@ -111,7 +104,7 @@ public class DatabaseOption extends SystemOption {
             return;
         
         debugMode = flag;
-        firePropertyChange(PROP_DEBUG_MODE, !debugMode ? Boolean.TRUE : Boolean.FALSE, debugMode ? Boolean.TRUE : Boolean.FALSE);
+        propertySupport.firePropertyChange(PROP_DEBUG_MODE, !debugMode ? Boolean.TRUE : Boolean.FALSE, debugMode ? Boolean.TRUE : Boolean.FALSE);
     }
 
     /** Sets vector of available drivers.
@@ -134,25 +127,24 @@ public class DatabaseOption extends SystemOption {
     }
 
     public void save() {
-        firePropertyChange(null, null, null);
+        propertySupport.firePropertyChange(null, null, null);
     }
 
     /** Name of the option */
     public String displayName() {
-        return NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("OptionName"); //NOI18N
+        return NbBundle.getMessage (DatabaseOption.class, "OptionName"); //NOI18N
     }
 
     /** Description of object */
+    @Override
     public String toString() {
         return (drivers != null ? drivers.size() : 0) + " drivers, " + (connections != null ? connections.size() : 0) + " connections"; //NOI18N
     }
-    
-    /** Writes data
+
+     /** Writes data
     * @param out ObjectOutputStream
     */
     public void writeExternal(ObjectOutput out) throws IOException {
-        super.writeExternal(out);
-        
         out.writeObject(null);
         out.writeObject(getConnections());
     }
@@ -161,45 +153,21 @@ public class DatabaseOption extends SystemOption {
     * @param in ObjectInputStream
     */
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-        super.readExternal(in);
-        
         drivers = (Vector) in.readObject();
         if (drivers != null)
             lookForDrivers();
 
         connections = (Vector) in.readObject();
     }
-        
-    private Vector createDrivers(Map drvMap) {
-        Vector def = (Vector) drvMap.get("defaultdriverlist"); //NOI18N
-        Vector rvec = null;
-        if (def != null && def.size() > 0) {
-            rvec = new Vector(def.size());
-            Enumeration defe = def.elements();
-            while (defe.hasMoreElements()) {
-                Object rit = defe.nextElement();
-                String name = (String) ((Map)rit).get("name"); //NOI18N
-                String drv = (String) ((Map)rit).get("driver"); //NOI18N
-                String prefix = (String) ((Map)rit).get("prefix"); //NOI18N
-                String adaptor = (String) ((Map)rit).get("adaptor"); //NOI18N
-                rit = new DatabaseDriver(name, drv, prefix, adaptor);
-                if (rit != null)
-                    rvec.add(rit);
-            }
-        } else
-            rvec = new Vector();
-        
-        return rvec;
-    }
-    
+
     private void lookForDrivers() {
         StringBuffer sb = new StringBuffer();
         sb.append(File.separator);
-        sb.append("lib");
+        sb.append("lib"); // NOI18N
         sb.append(File.separator);
-        sb.append("ext");
+        sb.append("ext"); // NOI18N
         String libext = sb.toString();        
-        String nbhome = System.getProperty("netbeans.home");
+        String nbhome = System.getProperty("netbeans.home"); // NOI18N
         
         preinstallDrivers(nbhome + libext);
     }
@@ -244,7 +212,7 @@ public class DatabaseOption extends SystemOption {
     }
     
     private void deleteAdaptorsFolder() {    
-        FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource("Database"); //NOI18N
+        FileObject fo = FileUtil.getConfigFile("Database"); //NOI18N
         try {
             if (fo != null)
                 fo.delete();

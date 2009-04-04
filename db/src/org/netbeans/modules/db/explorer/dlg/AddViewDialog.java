@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,29 +43,33 @@ package org.netbeans.modules.db.explorer.dlg;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.util.NbBundle;
 import org.openide.NotifyDescriptor;
-import org.netbeans.lib.ddl.impl.CreateView;
 import org.netbeans.lib.ddl.impl.Specification;
 import org.netbeans.lib.ddl.*;
-import org.netbeans.modules.db.explorer.infos.DatabaseNodeInfo;
 import org.netbeans.modules.db.explorer.*;
 import org.openide.awt.Mnemonics;
 
 public class AddViewDialog {
+
+    private static final Logger LOGGER = Logger.getLogger(AddIndexDialog.class.getName());
+
     boolean result = false;
     Dialog dialog = null;
     JTextField namefld;
     JTextArea tarea;
 
-    public AddViewDialog(final Specification spec, final DatabaseNodeInfo info) {
+    public AddViewDialog(final Specification spec, final String schemaName) {
         try {
-            ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle"); //NOI18N
             JPanel pane = new JPanel();
             pane.setBorder(new EmptyBorder(new Insets(5,5,5,5)));
             GridBagLayout layout = new GridBagLayout();
@@ -75,8 +79,8 @@ public class AddViewDialog {
             // Index name
 
             JLabel label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("AddViewName"));
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddViewNameA11yDesc"));
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage (AddViewDialog.class, "AddViewName"));
+            label.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddViewDialog.class, "ACS_AddViewNameA11yDesc"));
             con.anchor = GridBagConstraints.WEST;
             con.insets = new java.awt.Insets (2, 2, 2, 2);
             con.gridx = 0;
@@ -92,8 +96,8 @@ public class AddViewDialog {
             con.gridy = 0;
             con.insets = new java.awt.Insets (2, 2, 2, 2);
             namefld = new JTextField(35);
-            namefld.setToolTipText(bundle.getString("ACS_AddViewNameTextFieldA11yDesc"));
-            namefld.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddViewNameTextFieldA11yName"));
+            namefld.setToolTipText(NbBundle.getMessage (AddViewDialog.class, "ACS_AddViewNameTextFieldA11yDesc"));
+            namefld.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddViewDialog.class, "ACS_AddViewNameTextFieldA11yName"));
             label.setLabelFor(namefld);
             layout.setConstraints(namefld, con);
             pane.add(namefld);
@@ -101,8 +105,8 @@ public class AddViewDialog {
             // Items list title
 
             label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("AddViewLabel"));
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddViewLabelA11yDesc"));
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage (AddViewDialog.class, "AddViewLabel"));
+            label.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddViewDialog.class, "ACS_AddViewLabelA11yDesc"));
             con.weightx = 0.0;
             con.anchor = GridBagConstraints.WEST;
             con.insets = new java.awt.Insets (2, 2, 2, 2);
@@ -115,8 +119,8 @@ public class AddViewDialog {
             // Editor list
 
             tarea = new JTextArea(5,50);
-            tarea.setToolTipText(bundle.getString("ACS_AddViewTextAreaA11yDesc"));
-            tarea.getAccessibleContext().setAccessibleName(bundle.getString("ACS_AddViewTextAreaA11yName"));
+            tarea.setToolTipText(NbBundle.getMessage (AddViewDialog.class, "ACS_AddViewTextAreaA11yDesc"));
+            tarea.getAccessibleContext().setAccessibleName(NbBundle.getMessage (AddViewDialog.class, "ACS_AddViewTextAreaA11yName"));
             label.setLabelFor(tarea);
 
             con.weightx = 1.0;
@@ -136,26 +140,36 @@ public class AddViewDialog {
                     if (event.getSource() == DialogDescriptor.OK_OPTION) {
                         
                         try {
-                            boolean wasException = AddViewDDL.addView(spec, 
-                                    (String)info.get(DatabaseNodeInfo.SCHEMA), 
-                                    getViewName(), getViewCode());
-                            
+                            boolean wasException = DbUtilities.doWithProgress(null, new Callable<Boolean>() {
+                                public Boolean call() throws Exception {
+                                    return AddViewDDL.addView(spec, 
+                                            schemaName,
+                                            getViewName(), getViewCode());
+                                }
+                            });
+
                             result = !wasException;
                             
                             if (!wasException) {
                                 dialog.setVisible(false);
                                 dialog.dispose();
                             }
-                        } catch (Exception e) {
-                            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(e.getMessage(), NotifyDescriptor.ERROR_MESSAGE));
+                        } catch (InvocationTargetException e) {
+                            Throwable cause = e.getCause();
+                            if (cause instanceof DDLException) {
+                                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(e.getMessage(), NotifyDescriptor.ERROR_MESSAGE));
+                            } else {
+                                LOGGER.log(Level.INFO, null, cause);
+                                DbUtilities.reportError(NbBundle.getMessage (AddViewDialog.class, "ERR_UnableToCreateView"), e.getMessage());
+                            }
                         }
                     }
                 }
             };
 
-            pane.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_AddViewDialogA11yDesc")); //NOI18N
+            pane.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (AddViewDialog.class, "ACS_AddViewDialogA11yDesc")); //NOI18N
 
-            DialogDescriptor descriptor = new DialogDescriptor(pane, bundle.getString("AddViewTitle"), true, listener); //NOI18N
+            DialogDescriptor descriptor = new DialogDescriptor(pane, NbBundle.getMessage (AddViewDialog.class, "AddViewTitle"), true, listener); //NOI18N
             // inbuilt close of the dialog is only after CANCEL button click
             // after OK button is dialog closed by hand
             Object [] closingOptions = {DialogDescriptor.CANCEL_OPTION};

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,6 +31,10 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.db.explorer.dataview;
@@ -63,11 +61,10 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
-import java.text.MessageFormat;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.ResourceBundle;
+import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.Vector;
 import javax.swing.AbstractListModel;
@@ -85,9 +82,8 @@ import javax.swing.MutableComboBoxModel;
 import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 import org.netbeans.api.db.explorer.DatabaseException;
-import org.netbeans.modules.db.explorer.infos.ColumnNodeInfo;
-import org.netbeans.modules.db.explorer.infos.DatabaseNodeInfo;
-import org.netbeans.modules.db.explorer.nodes.ConnectionNode;
+import org.netbeans.modules.db.explorer.DatabaseConnection;
+import org.netbeans.modules.db.explorer.node.ColumnNode;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.awt.Mnemonics;
@@ -104,42 +100,43 @@ import org.openide.util.datatransfer.MultiTransferObject;
 import org.openide.windows.TopComponent;
 
 public class DataViewWindow extends TopComponent {
-    
+
     // TODO: remove this class, replace by the SQL editor
-    
+
     private JTextArea queryarea;
     private JTable jtable;
     private DataModel dbadaptor;
     private JComboBox rcmdscombo;
     private JLabel status;
-    private ResourceBundle bundle;
-    private Node node;
     private JPopupMenu tablePopupMenu;
+
+    private DatabaseConnection connection;
+
     static final long serialVersionUID = 6855188441469780252L;
 
-    public DataViewWindow(DatabaseNodeInfo info, String query) throws SQLException {
-        node = info.getNode();
+    public DataViewWindow(DatabaseConnection connection, String query) throws SQLException {
+        //this.info = info;
+        this.connection = connection;
 
-        bundle = NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle"); //NOI18N
+        this.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewWindowA11yDesc")); //NOI18N
 
-        this.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewWindowA11yDesc")); //NOI18N
+        //DatabaseNodeInfo tempInfo = info;
+        //while(!(tempInfo instanceof ConnectionNodeInfo))
+        //    tempInfo = tempInfo.getParent();
 
-        Node tempNode = node;
-        while(!(tempNode instanceof ConnectionNode))
-            tempNode = tempNode.getParentNode();
-
-        String title = tempNode.getDisplayName();
+        String title = connection.getName(); //tempInfo.getDisplayName();
         int idx = title.indexOf(" ["); //NOI18N
         title = title.substring(0, idx);
         setName(title);
-        setToolTipText(bundle.getString("CommandEditorTitle") + " " + tempNode.getDisplayName()); //NOI18N
+        setToolTipText(NbBundle.getMessage (DataViewWindow.class, "CommandEditorTitle") + " " + // NOI18N
+                title);
 
         GridBagLayout layout = new GridBagLayout();
         GridBagConstraints con = new GridBagConstraints ();
         setLayout (layout);
 
         // Data model
-        dbadaptor = new DataModel(info);
+        dbadaptor = new DataModel(connection);
 
         // Query area and button
         JPanel subpane = new JPanel();
@@ -157,8 +154,8 @@ public class DataViewWindow extends TopComponent {
         subcon.insets = new Insets (0, 0, 5, 0);
         subcon.anchor = GridBagConstraints.SOUTH;
         JLabel queryLabel = new JLabel();
-        Mnemonics.setLocalizedText(queryLabel, bundle.getString("QueryLabel"));
-        queryLabel.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewQueryLabelA11yDesc"));
+        Mnemonics.setLocalizedText(queryLabel, NbBundle.getMessage (DataViewWindow.class, "QueryLabel"));
+        queryLabel.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewQueryLabelA11yDesc"));
         sublayout.setConstraints(queryLabel, subcon);
         subpane.add(queryLabel);
 
@@ -173,9 +170,9 @@ public class DataViewWindow extends TopComponent {
         queryarea.setLineWrap(true);
         queryarea.setWrapStyleWord(true);
         queryarea.setDropTarget(new DropTarget(queryarea, new ViewDropTarget()));
-        queryarea.getAccessibleContext().setAccessibleName(bundle.getString("ACS_DataViewTextAreaA11yName")); //NOI18N
-        queryarea.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewTextAreaA11yDesc")); //NOI18N
-        queryarea.setToolTipText(bundle.getString("ACS_DataViewTextAreaA11yDesc")); //NOI18N
+        queryarea.getAccessibleContext().setAccessibleName(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewTextAreaA11yName")); //NOI18N
+        queryarea.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewTextAreaA11yDesc")); //NOI18N
+        queryarea.setToolTipText(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewTextAreaA11yDesc")); //NOI18N
         queryLabel.setLabelFor(queryarea);
 
         JScrollPane scrollpane = new JScrollPane(queryarea);
@@ -193,8 +190,8 @@ public class DataViewWindow extends TopComponent {
         subcon.insets = new Insets (0, 0, 5, 5);
         subcon.anchor = GridBagConstraints.CENTER;
         JLabel comboLabel = new JLabel();
-        Mnemonics.setLocalizedText(comboLabel, bundle.getString("HistoryLabel")); //NOI18N
-        comboLabel.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewHistoryLabelA11yDesc")); //NOI18N
+        Mnemonics.setLocalizedText(comboLabel, NbBundle.getMessage (DataViewWindow.class, "HistoryLabel")); //NOI18N
+        comboLabel.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewHistoryLabelA11yDesc")); //NOI18N
         sublayout.setConstraints(comboLabel, subcon);
         subpane.add(comboLabel);
 
@@ -208,9 +205,9 @@ public class DataViewWindow extends TopComponent {
         subcon.insets = new Insets (0, 0, 5, 5);
         subcon.anchor = GridBagConstraints.SOUTH;
         rcmdscombo = new JComboBox(new ComboModel());
-        rcmdscombo.getAccessibleContext().setAccessibleName(bundle.getString("ACS_DataViewComboBoxA11yName")); //NOI18N
-        rcmdscombo.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewComboBoxA11yDesc")); //NOI18N
-        rcmdscombo.setToolTipText(bundle.getString("ACS_DataViewComboBoxA11yDesc")); //NOI18N
+        rcmdscombo.getAccessibleContext().setAccessibleName(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewComboBoxA11yName")); //NOI18N
+        rcmdscombo.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewComboBoxA11yDesc")); //NOI18N
+        rcmdscombo.setToolTipText(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewComboBoxA11yDesc")); //NOI18N
         comboLabel.setLabelFor(rcmdscombo);
         sublayout.setConstraints(rcmdscombo, subcon);
         subpane.add(rcmdscombo);
@@ -232,8 +229,8 @@ public class DataViewWindow extends TopComponent {
         subcon.fill = GridBagConstraints.HORIZONTAL;
         subcon.anchor = GridBagConstraints.SOUTH;
         final JButton fetchbtn = new JButton();
-        Mnemonics.setLocalizedText(fetchbtn, bundle.getString("ExecuteButton"));
-        fetchbtn.setToolTipText(bundle.getString("ACS_ExecuteButtonA11yDesc")); //NOI18N
+        Mnemonics.setLocalizedText(fetchbtn, NbBundle.getMessage (DataViewWindow.class, "ExecuteButton"));
+        fetchbtn.setToolTipText(NbBundle.getMessage (DataViewWindow.class, "ACS_ExecuteButtonA11yDesc")); //NOI18N
         sublayout.setConstraints(fetchbtn, subcon);
         subpane.add(fetchbtn);
         fetchbtn.addActionListener(new ActionListener() {
@@ -263,7 +260,7 @@ public class DataViewWindow extends TopComponent {
         subcon.anchor = GridBagConstraints.SOUTH;
         status = new JLabel(" "); //NOI18N
         status.setBorder(new javax.swing.border.LineBorder(java.awt.Color.gray));
-        status.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewStatusLabelA11yDesc")); //NOI18N
+        status.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewStatusLabelA11yDesc")); //NOI18N
         sublayout.setConstraints(status, subcon);
         subpane.add(status);
 
@@ -282,20 +279,20 @@ public class DataViewWindow extends TopComponent {
         subcon2.insets = new Insets (5, 0, 0, 0);
         subcon2.anchor = GridBagConstraints.SOUTH;
         JLabel tableLabel = new JLabel();
-        Mnemonics.setLocalizedText(tableLabel, bundle.getString("ResultsLabel"));
-        tableLabel.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewResultsLabelA11yDesc")); //NOI18N
+        Mnemonics.setLocalizedText(tableLabel, NbBundle.getMessage (DataViewWindow.class, "ResultsLabel"));
+        tableLabel.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewResultsLabelA11yDesc")); //NOI18N
         sublayout2.setConstraints(tableLabel, subcon2);
         subpane2.add(tableLabel);
 
         // content popup menu on table with results
         tablePopupMenu = new JPopupMenu ();
-        JMenuItem miCopyValue = new JMenuItem (bundle.getString ("CopyCellValue")); //NOI18N
+        JMenuItem miCopyValue = new JMenuItem (NbBundle.getMessage (DataViewWindow.class, "CopyCellValue")); //NOI18N
         miCopyValue.addActionListener(new ActionListener () {
             public void actionPerformed (ActionEvent e) {
                 try {
                     Object o = jtable.getValueAt(jtable.getSelectedRow(), jtable.getSelectedColumn());
                     String output = (o != null) ? o.toString () : ""; //NOI18N
-                    ExClipboard clipboard = (ExClipboard) Lookup.getDefault().lookup (ExClipboard.class);
+                    ExClipboard clipboard = Lookup.getDefault ().lookup (ExClipboard.class);
                     StringSelection strSel = new StringSelection (output);
                     clipboard.setContents (strSel, strSel);
                 } catch (ArrayIndexOutOfBoundsException exc) {
@@ -304,7 +301,7 @@ public class DataViewWindow extends TopComponent {
         });
         tablePopupMenu.add (miCopyValue);
 
-        JMenuItem miCopyRowValues = new JMenuItem (bundle.getString ("CopyRowValues")); //NOI18N
+        JMenuItem miCopyRowValues = new JMenuItem (NbBundle.getMessage (DataViewWindow.class, "CopyRowValues")); //NOI18N
         miCopyRowValues.addActionListener(new ActionListener () {
             public void actionPerformed (ActionEvent e) {
                 try {
@@ -328,7 +325,7 @@ public class DataViewWindow extends TopComponent {
                             }
                             output.append ('\n'); //NOI18N
                         }
-                        ExClipboard clipboard = (ExClipboard) Lookup.getDefault().lookup (ExClipboard.class);
+                        ExClipboard clipboard = Lookup.getDefault ().lookup (ExClipboard.class);
                         StringSelection strSel = new StringSelection (output.toString ());
                         clipboard.setContents (strSel, strSel);
                     }
@@ -341,12 +338,13 @@ public class DataViewWindow extends TopComponent {
         // Table with results
         //      TableSorter sorter = new TableSorter();
         jtable = new JTable(dbadaptor/*sorter*/);
-        jtable.getAccessibleContext().setAccessibleName(bundle.getString("ACS_DataViewTableA11yName")); //NOI18N
-        jtable.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewTableA11yDesc")); //NOI18N
-        jtable.setToolTipText(bundle.getString("ACS_DataViewTableA11yDesc")); //NOI18N
+        jtable.getAccessibleContext().setAccessibleName(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewTableA11yName")); //NOI18N
+        jtable.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewTableA11yDesc")); //NOI18N
+        jtable.setToolTipText(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewTableA11yDesc")); //NOI18N
         jtable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         //    	sorter.addMouseListenerToHeaderInTable(table);
         jtable.addMouseListener (new MouseAdapter () {
+            @Override
             public void mouseReleased (MouseEvent e) {
                 if (e.getButton() == MouseEvent.BUTTON3) {
                     int row = jtable.rowAtPoint (e.getPoint ());
@@ -398,23 +396,25 @@ public class DataViewWindow extends TopComponent {
         layout.setConstraints(split, con);
         add(split);
     }
-    
+
     /**Overriden to provide preferred value
      * for unique TopComponent Id returned by getID. Returned value is used as starting
      * value for creating unique TopComponent ID.
      * Value should be preferably unique, but need not be.
      * @since 4.13
      */
+    @Override
     protected String preferredID() {
         return getName();
     }
-    
+
     /** Overriden to explicitely set persistence type of DataViewWindow
      * to PERSISTENCE_NEVER */
+    @Override
     public int getPersistenceType() {
         return TopComponent.PERSISTENCE_NEVER;
     }
-    
+
     /** Returns query used by panel.
     */
     public String getCommand() {
@@ -439,8 +439,9 @@ public class DataViewWindow extends TopComponent {
             ret = true;
         } catch (Exception exc) {
             ret = false;
-            status.setText(bundle.getString("CommandFailed")); //NOI18N
-            org.openide.DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(bundle.getString("DataViewFetchErrorPrefix") + exc.getMessage(), NotifyDescriptor.ERROR_MESSAGE)); //NOI18N
+            status.setText(NbBundle.getMessage (DataViewWindow.class, "CommandFailed")); //NOI18N
+            org.openide.DialogDisplayer.getDefault().notify(
+                    new NotifyDescriptor.Message(NbBundle.getMessage (DataViewWindow.class, "DataViewFetchErrorPrefix") + exc.getMessage(), NotifyDescriptor.ERROR_MESSAGE)); //NOI18N
         }
 
         return ret;
@@ -504,6 +505,7 @@ public class DataViewWindow extends TopComponent {
             shortCommand = getShortCommand();
         }
 
+        @Override
         public String toString() {
             return shortCommand;
         }
@@ -512,11 +514,19 @@ public class DataViewWindow extends TopComponent {
             return command;
         }
 
+        @Override
         public boolean equals(Object obj) {
             if (obj instanceof RecentCommand)
                 return ((RecentCommand)obj).getShortCommand().equals(shortCommand);
 
             return super.equals(obj);
+        }
+
+        @Override
+        public int hashCode () {
+            int hash = 7;
+            hash = 17 * hash + (this.shortCommand != null ? this.shortCommand.hashCode () : 0);
+            return hash;
         }
 
         /**
@@ -537,15 +547,15 @@ public class DataViewWindow extends TopComponent {
     }
 
     class ComboModel extends AbstractListModel implements MutableComboBoxModel{
-        Vector commands;
+        Vector<Object> commands;
         Object selected;
 
         static final long serialVersionUID =-5831993904798984334L;
         public ComboModel() {
-            this(new Vector(1));
+            this(new Vector<Object> (1));
         }
 
-        public ComboModel(Vector elems) {
+        public ComboModel(Vector<Object> elems) {
             commands = elems;
         }
 
@@ -608,14 +618,14 @@ public class DataViewWindow extends TopComponent {
         public void dragExit (DropTargetEvent dte) {
         }
 
-        private ColumnNodeInfo getNodeInfo(Transferable t) {
+        private ColumnNode getNode(Transferable t) {
             Node n = NodeTransfer.node(t, NodeTransfer.MOVE);
             if (n != null)
-                return (ColumnNodeInfo)n.getCookie(ColumnNodeInfo.class);
+                return (ColumnNode)n;
 
             n = NodeTransfer.node(t, NodeTransfer.COPY);
             if (n != null)
-                return (ColumnNodeInfo)n.getCookie(ColumnNodeInfo.class);
+                return (ColumnNode)n;
 
             return null;
         }
@@ -629,19 +639,19 @@ public class DataViewWindow extends TopComponent {
             try {
                 DataFlavor multiFlavor = new DataFlavor (
                     "application/x-java-openide-multinode;class=org.openide.util.datatransfer.MultiTransferObject", // NOI18N
-                        NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("transferFlavorsMultiFlavorName"),
+                        NbBundle.getMessage (DataViewWindow.class, "transferFlavorsMultiFlavorName"),
                         MultiTransferObject.class.getClassLoader());
 
                 if (t.isDataFlavorSupported(multiFlavor)) {
                     MultiTransferObject mobj = (MultiTransferObject)t.getTransferData(ExTransferable.multiFlavor);
                     int count = mobj.getCount();
                     int tabidx = 0;
-                    HashMap tabidxmap = new HashMap();
+                    Map<String, Integer> tabidxmap = new HashMap<String, Integer> ();
                     for (int i = 0; i < count; i++) {
-                        ColumnNodeInfo nfo = getNodeInfo(mobj.getTransferableAt(i));
+                        ColumnNode nfo = getNode(mobj.getTransferableAt(i));
                         if (nfo != null) {
-                            String tablename = nfo.getTable();
-                            Integer tableidx = (Integer)tabidxmap.get(tablename);
+                            String tablename = nfo.getParentName();
+                            Integer tableidx = tabidxmap.get (tablename);
                             if (tableidx == null) tabidxmap.put(tablename, tableidx = new Integer(tabidx++));
                             if (buff.length()>0) buff.append(", "); //NOI18N
                             buff.append("t"+tableidx+"."+nfo.getName()); //NOI18N
@@ -659,8 +669,8 @@ public class DataViewWindow extends TopComponent {
                     query = "select "+buff.toString()+" from "+frombuff.toString(); //NOI18N
 
                 } else {
-                    ColumnNodeInfo nfo = getNodeInfo(t);
-                    if (nfo != null) query = "select "+nfo.getName()+" from "+nfo.getTable(); //NOI18N
+                    ColumnNode nfo = getNode(t);
+                    if (nfo != null) query = "select "+nfo.getName()+" from "+nfo.getParentName(); //NOI18N
                 }
 
                 if (query != null)
@@ -672,7 +682,7 @@ public class DataViewWindow extends TopComponent {
     }
 
     class DataModel extends AbstractTableModel {
-        DatabaseNodeInfo node_info;
+        DatabaseConnection connection;
         Vector coldef = new Vector();
         Vector data = new Vector();
         boolean editable = false;
@@ -680,8 +690,8 @@ public class DataViewWindow extends TopComponent {
         static final long serialVersionUID =7729426847826999963L;
 
         /** Constructor */
-        public DataModel(DatabaseNodeInfo node_info) throws SQLException {
-            this.node_info = node_info;
+        public DataModel(DatabaseConnection conn) throws SQLException {
+            connection = conn;
         }
 
         /** Executes command
@@ -693,15 +703,15 @@ public class DataViewWindow extends TopComponent {
                 return;
             }
 
-            status.setText(bundle.getString("CommandRunning")); //NOI18N
+            status.setText(NbBundle.getMessage (DataViewWindow.class, "CommandRunning")); //NOI18N
 
             Connection con;
             Statement stat;
             try {
-                con = node_info.getConnection();
+                con = connection.getConnection();
                 stat = con.createStatement();
             } catch ( Exception exc ) {
-                String message = MessageFormat.format(bundle.getString("EXC_ConnectionError"), new String[] {exc.getMessage()}); // NOI18N
+                String message = NbBundle.getMessage (DataViewWindow.class, "EXC_ConnectionError", exc.getMessage()); // NOI18N
                 throw new DatabaseException(message);
             }
 
@@ -714,13 +724,13 @@ public class DataViewWindow extends TopComponent {
 
                 int cols = mdata.getColumnCount();
                 // Bug : 5083676
-                // Data is getting cleared and modified in a independent thread , while the swing 
-                // thread tries to render the table. Hence this sometimes results in a 
+                // Data is getting cleared and modified in a independent thread , while the swing
+                // thread tries to render the table. Hence this sometimes results in a
                 // ArrayIndexOutOfBoundsException
                 // Creating two 'work' vectors here and populating required changes in these
                 // Then replacing the model vectors with these.
-                Vector coldefWork = new Vector();
-                Vector dataWork = new Vector();
+                Vector<ColDef> coldefWork = new Vector<ColDef> ();
+                Vector<Vector<Object>> dataWork = new Vector<Vector<Object>> ();
                 for(int column = 1; column <= cols; column++) {
                     boolean writable;
                     try {
@@ -741,40 +751,39 @@ public class DataViewWindow extends TopComponent {
 //                int step = RootNode.getOption().getFetchStep();
                 int limit = 100;
                 int step = 200;
-                
-                String cancel = bundle.getString("DataViewCancelButton"); //NOI18N
-                String nextset = bundle.getString("DataViewNextFetchButton"); //NOI18N
-                String allset = bundle.getString("DataViewAllFetchButton"); //NOI18N
-                
+
+                String cancel = NbBundle.getMessage (DataViewWindow.class, "DataViewCancelButton"); //NOI18N
+                String nextset = NbBundle.getMessage (DataViewWindow.class, "DataViewNextFetchButton"); //NOI18N
+                String allset = NbBundle.getMessage (DataViewWindow.class, "DataViewAllFetchButton"); //NOI18N
+
                 JButton fetchNext = new JButton();
                 Mnemonics.setLocalizedText(fetchNext, nextset);
-                fetchNext.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewNextFetchButtonA11yDesc")); //NOI18N
+                fetchNext.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewNextFetchButtonA11yDesc")); //NOI18N
 
                 JButton fetchAll = new JButton();
                 Mnemonics.setLocalizedText(fetchAll, allset);
-                fetchAll.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewAllFetchButtonA11yDesc")); //NOI18N
+                fetchAll.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewAllFetchButtonA11yDesc")); //NOI18N
 
                 JButton no = new JButton();
                 Mnemonics.setLocalizedText(no, cancel);
-                no.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_DataViewCancelButtonA11yDesc")); //NOI18N
-                
+                no.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (DataViewWindow.class, "ACS_DataViewCancelButtonA11yDesc")); //NOI18N
+
                 String message;
                 NotifyDescriptor ndesc;
                 while (rs.next()) {
-                    Vector row = new Vector(cols);
+                    Vector<Object> row = new Vector<Object> (cols);
                     for (int column = 1; column <= cols; column++)
                         row.add(rs.getObject(column));
                     dataWork.addElement(row);
 
                     // Catch row count
                     if (++rcounter >= limit) {
-                        
-                        message = MessageFormat.format(bundle.getString("DataViewMessage"), new Object[] {
-                            new Integer(rcounter),
-                            new Integer(step)
-                        }); //NOI18N
-                        ndesc = new NotifyDescriptor(message, bundle.getString("FetchDataTitle"), NotifyDescriptor.YES_NO_CANCEL_OPTION, NotifyDescriptor.QUESTION_MESSAGE, new Object[] {fetchNext, fetchAll, no}, NotifyDescriptor.CANCEL_OPTION); //NOI18N
-                        
+
+                        message = NbBundle.getMessage (DataViewWindow.class, "DataViewMessage", //NOI18N
+                                rcounter,
+                                step);
+                        ndesc = new NotifyDescriptor(message, NbBundle.getMessage (DataViewWindow.class, "FetchDataTitle"), NotifyDescriptor.YES_NO_CANCEL_OPTION, NotifyDescriptor.QUESTION_MESSAGE, new Object[] {fetchNext, fetchAll, no}, NotifyDescriptor.CANCEL_OPTION); //NOI18N
+
                         Object ret = DialogDisplayer.getDefault().notify(ndesc);
                         if (fetchAll.equals(ret)) {
                             limit = Integer.MAX_VALUE;
@@ -789,7 +798,7 @@ public class DataViewWindow extends TopComponent {
                         }
                     }
                 }
-                
+
                 // Replace model in the swing event thread
                 // Alternative is to lock on the instance and assign it.
                 final Vector assignData = dataWork;
@@ -809,31 +818,40 @@ public class DataViewWindow extends TopComponent {
                     data = assignData;
                 }
                  */
-                rs.close();               
+                rs.close();
                 //fireTableChanged(null);
             } else {
-                if (command.toLowerCase().startsWith("delete") || command.toLowerCase().startsWith("insert") || command.toLowerCase().startsWith("update")) //NOI18N
+                if (command.toLowerCase().startsWith("delete") ||
+                        command.toLowerCase().startsWith("insert") ||
+                        command.toLowerCase().startsWith("update")) //NOI18N
                     stat.executeUpdate(command);
                 else {
                     stat.execute(command);
 
                     //refresh DBExplorer nodes
-                    while (!(node instanceof ConnectionNode))
-                        node = node.getParentNode();
-                    Enumeration nodes = node.getChildren().nodes();
-                    while (nodes.hasMoreElements())
-                        ((DatabaseNodeInfo)((Node)nodes.nextElement()).getCookie(DatabaseNodeInfo.class)).refreshChildren();
+                    //while (!(info instanceof ConnectionNodeInfo)) {
+                    //    info = info.getParent();
+                    //}
+                    connection.notifyChange();
+
+                    /*
+                    Vector<DatabaseNodeInfo> children = info.getChildren();
+                    for (DatabaseNodeInfo child : children ) {
+                        child.refreshChildren();
+                    }
+                    */
                 }
             }
-            status.setText(bundle.getString("CommandExecuted")); //NOI18N
+            status.setText(NbBundle.getMessage (DataViewWindow.class, "CommandExecuted")); //NOI18N
             stat.close();
         }
 
         /** Returns column name
         * @param column Column index
         */
+        @Override
         public String getColumnName(int column) {
-            synchronized (coldef) {
+            synchronized (DataModel.this) {
                 if (column < coldef.size()) {
                     String cname = ((ColDef)coldef.elementAt(column)).getName();
                     return cname;
@@ -846,8 +864,9 @@ public class DataViewWindow extends TopComponent {
         /** Returns column renderer/editor class
         * @param column Column index
         */
+        @Override
         public Class getColumnClass(int column) {
-            synchronized (coldef) {
+            synchronized (DataModel.this) {
                 if (column < coldef.size()) {
                     int coltype = ((ColDef)coldef.elementAt(column)).getDataType();
                     switch (coltype) {
@@ -871,8 +890,9 @@ public class DataViewWindow extends TopComponent {
 
         /** Returns true, if cell is editable
         */
+        @Override
         public boolean isCellEditable(int row, int column) {
-            synchronized (coldef) {
+            synchronized (DataModel.this) {
                 if (!editable)
                     return false;
 
@@ -886,7 +906,7 @@ public class DataViewWindow extends TopComponent {
         /** Returns colun count
         */
         public int getColumnCount() {
-            synchronized (coldef) {
+            synchronized (DataModel.this) {
                 return coldef.size();
             }
         }
@@ -894,7 +914,7 @@ public class DataViewWindow extends TopComponent {
         /** Returns row count
         */
         public int getRowCount() {
-            synchronized (data) {
+            synchronized (DataModel.this) {
                 return data.size();
             }
         }
@@ -902,7 +922,7 @@ public class DataViewWindow extends TopComponent {
         /** Returns value at specified position
         */
         public Object getValueAt(int aRow, int aColumn) {
-            synchronized (data) {
+            synchronized (DataModel.this) {
                 Vector row = new Vector();
                 if (aRow < data.size())
                     row = (Vector) data.elementAt(aRow);
@@ -927,8 +947,9 @@ public class DataViewWindow extends TopComponent {
             }
         }
 
+        @Override
         public void setValueAt(Object value, int row, int column) {
-            synchronized (coldef) {
+            synchronized (DataModel.this) {
                 int enucol = 0;
                 StringBuffer where = new StringBuffer();
                 Enumeration enu = coldef.elements();
@@ -947,6 +968,7 @@ public class DataViewWindow extends TopComponent {
         }
     }
 
+    @Override
     protected Object writeReplace() throws ObjectStreamException {
         return null;
     }
