@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -45,6 +45,7 @@ import java.util.Collections;
 import com.sun.source.tree.*;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.type.TypeKind;
@@ -118,6 +119,11 @@ public class BodyStatementTest extends GeneratorTestMDRCompat {
 //        suite.addTest(new BodyStatementTest("test112290_1"));
 //        suite.addTest(new BodyStatementTest("test112290_2"));
 //        suite.addTest(new BodyStatementTest("test112290_3"));
+//        suite.addTest(new BodyStatementTest("test126460a"));
+//        suite.addTest(new BodyStatementTest("test126460b"));
+//        suite.addTest(new BodyStatementTest("test126460c"));
+//        suite.addTest(new BodyStatementTest("test159671a"));
+//        suite.addTest(new BodyStatementTest("test159671b"));
         return suite;
     }
 
@@ -2527,6 +2533,231 @@ public class BodyStatementTest extends GeneratorTestMDRCompat {
         assertEquals(golden, res);
     }
     
+    public void test126460a() throws Exception {
+        testFile = new File(getWorkDir(), "Test.java");
+        TestUtilities.copyStringToFile(testFile, 
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method() {\n" +
+            "        java.util.List<String> l = null;\n" +
+            "        assert l.get(0) == 12;\n" +
+            "    }\n" +
+            "}\n");
+        
+         String golden = 
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method() {\n" +
+            "        java.util.List<String> l = null;\n" +
+            "        String name = l.get(0);\n" +
+            "        assert name == 12;\n" +
+            "    }\n" +
+            "}\n";
+                 
+        JavaSource testSource = JavaSource.forFileObject(FileUtil.toFileObject(testFile));
+        Task<WorkingCopy> task = new Task<WorkingCopy>() {
+
+            public void run(WorkingCopy workingCopy) throws java.io.IOException {
+                workingCopy.toPhase(Phase.RESOLVED);
+                TreeMaker make = workingCopy.getTreeMaker();
+                ClassTree clazz = (ClassTree) workingCopy.getCompilationUnit().getTypeDecls().get(0);
+                MethodTree method = (MethodTree) clazz.getMembers().get(1);
+                BlockTree block = method.getBody();
+                AssertTree ass = (AssertTree) block.getStatements().get(1);
+                BinaryTree cond = (BinaryTree) ass.getCondition();
+                workingCopy.rewrite(cond.getLeftOperand(), make.Identifier("name"));
+                MethodInvocationTree mit = make.MethodInvocation(Collections.<ExpressionTree>emptyList(), make.MemberSelect(make.Identifier("l"), "get"), Collections.singletonList(make.Literal(0)));
+                BlockTree nueBlock = make.insertBlockStatement(block, 1, make.Variable(make.Modifiers(EnumSet.noneOf(Modifier.class)), "name", make.Identifier("String"), mit));
+                workingCopy.rewrite(block, nueBlock);
+            }
+            
+        };
+        testSource.runModificationTask(task).commit();
+        String res = TestUtilities.copyFileToString(testFile);
+        System.err.println(res);
+        assertEquals(golden, res);
+    }
+    
+    public void test126460b() throws Exception {
+        testFile = new File(getWorkDir(), "Test.java");
+        TestUtilities.copyStringToFile(testFile, 
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method(int ada) {\n" +
+            "        java.util.List<String> l = null;\n" +
+            "        assert l.get(0) == 12;\n" +
+            "    }\n" +
+            "}\n");
+        
+         String golden = 
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method(int ada) {\n" +
+            "        java.util.List<String> l = null;\n" +
+            "        String name = l.get(0);\n" +
+            "        assert name == 12 : ada;\n" +
+            "    }\n" +
+            "}\n";
+                 
+        JavaSource testSource = JavaSource.forFileObject(FileUtil.toFileObject(testFile));
+        Task<WorkingCopy> task = new Task<WorkingCopy>() {
+
+            public void run(WorkingCopy workingCopy) throws java.io.IOException {
+                workingCopy.toPhase(Phase.RESOLVED);
+                TreeMaker make = workingCopy.getTreeMaker();
+                ClassTree clazz = (ClassTree) workingCopy.getCompilationUnit().getTypeDecls().get(0);
+                MethodTree method = (MethodTree) clazz.getMembers().get(1);
+                BlockTree block = method.getBody();
+                AssertTree ass = (AssertTree) block.getStatements().get(1);
+                BinaryTree cond = (BinaryTree) ass.getCondition();
+                workingCopy.rewrite(cond.getLeftOperand(), make.Identifier("name"));
+                workingCopy.rewrite(ass, make.Assert(ass.getCondition(), make.Identifier("ada")));
+                MethodInvocationTree mit = make.MethodInvocation(Collections.<ExpressionTree>emptyList(), make.MemberSelect(make.Identifier("l"), "get"), Collections.singletonList(make.Literal(0)));
+                BlockTree nueBlock = make.insertBlockStatement(block, 1, make.Variable(make.Modifiers(EnumSet.noneOf(Modifier.class)), "name", make.Identifier("String"), mit));
+                workingCopy.rewrite(block, nueBlock);
+            }
+            
+        };
+        testSource.runModificationTask(task).commit();
+        String res = TestUtilities.copyFileToString(testFile);
+        System.err.println(res);
+        assertEquals(golden, res);
+    }
+    
+    public void test126460c() throws Exception {
+        testFile = new File(getWorkDir(), "Test.java");
+        TestUtilities.copyStringToFile(testFile, 
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method(int ada) {\n" +
+            "        java.util.List<String> l = null;\n" +
+            "        assert l.get(0) == 12 : ada;\n" +
+            "    }\n" +
+            "}\n");
+        
+         String golden = 
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method(int ada) {\n" +
+            "        java.util.List<String> l = null;\n" +
+            "        String name = l.get(0);\n" +
+            "        assert name == 12;\n" +
+            "    }\n" +
+            "}\n";
+                 
+        JavaSource testSource = JavaSource.forFileObject(FileUtil.toFileObject(testFile));
+        Task<WorkingCopy> task = new Task<WorkingCopy>() {
+
+            public void run(WorkingCopy workingCopy) throws java.io.IOException {
+                workingCopy.toPhase(Phase.RESOLVED);
+                TreeMaker make = workingCopy.getTreeMaker();
+                ClassTree clazz = (ClassTree) workingCopy.getCompilationUnit().getTypeDecls().get(0);
+                MethodTree method = (MethodTree) clazz.getMembers().get(1);
+                BlockTree block = method.getBody();
+                AssertTree ass = (AssertTree) block.getStatements().get(1);
+                BinaryTree cond = (BinaryTree) ass.getCondition();
+                workingCopy.rewrite(cond.getLeftOperand(), make.Identifier("name"));
+                workingCopy.rewrite(ass, make.Assert(ass.getCondition(), null));
+                MethodInvocationTree mit = make.MethodInvocation(Collections.<ExpressionTree>emptyList(), make.MemberSelect(make.Identifier("l"), "get"), Collections.singletonList(make.Literal(0)));
+                BlockTree nueBlock = make.insertBlockStatement(block, 1, make.Variable(make.Modifiers(EnumSet.noneOf(Modifier.class)), "name", make.Identifier("String"), mit));
+                workingCopy.rewrite(block, nueBlock);
+            }
+            
+        };
+        testSource.runModificationTask(task).commit();
+        String res = TestUtilities.copyFileToString(testFile);
+        System.err.println(res);
+        assertEquals(golden, res);
+    }
+    
+    public void test159671a() throws Exception {
+        testFile = new File(getWorkDir(), "Test.java");
+        TestUtilities.copyStringToFile(testFile,
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method(int p) {\n" +
+            "        assert p == 0 : \"p == 0\";\n" +
+            "    }\n" +
+            "}\n");
+
+         String golden =
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method(int p) {\n" +
+            "        assert p == 0;\n" +
+            "    }\n" +
+            "}\n";
+
+        JavaSource testSource = JavaSource.forFileObject(FileUtil.toFileObject(testFile));
+        Task<WorkingCopy> task = new Task<WorkingCopy>() {
+
+            public void run(WorkingCopy workingCopy) throws java.io.IOException {
+                workingCopy.toPhase(Phase.RESOLVED);
+                TreeMaker make = workingCopy.getTreeMaker();
+                ClassTree clazz = (ClassTree) workingCopy.getCompilationUnit().getTypeDecls().get(0);
+                MethodTree method = (MethodTree) clazz.getMembers().get(1);
+                BlockTree block = method.getBody();
+                AssertTree ass = (AssertTree) block.getStatements().get(0);
+                AssertTree nue = make.Assert(ass.getCondition(), null);
+                workingCopy.rewrite(ass, nue);
+            }
+
+        };
+        testSource.runModificationTask(task).commit();
+        String res = TestUtilities.copyFileToString(testFile);
+        System.err.println(res);
+        assertEquals(golden, res);
+    }
+
+    public void test159671b() throws Exception {
+        testFile = new File(getWorkDir(), "Test.java");
+        TestUtilities.copyStringToFile(testFile,
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method(int p) {\n" +
+            "        assert p == 0;\n" +
+            "    }\n" +
+            "}\n");
+
+         String golden =
+            "package personal;\n" +
+            "\n" +
+            "public class Test {\n" +
+            "    public Object method(int p) {\n" +
+            "        assert p == 0 : \"p == 0\";\n" +
+            "    }\n" +
+            "}\n";
+
+        JavaSource testSource = JavaSource.forFileObject(FileUtil.toFileObject(testFile));
+        Task<WorkingCopy> task = new Task<WorkingCopy>() {
+
+            public void run(WorkingCopy workingCopy) throws java.io.IOException {
+                workingCopy.toPhase(Phase.RESOLVED);
+                TreeMaker make = workingCopy.getTreeMaker();
+                ClassTree clazz = (ClassTree) workingCopy.getCompilationUnit().getTypeDecls().get(0);
+                MethodTree method = (MethodTree) clazz.getMembers().get(1);
+                BlockTree block = method.getBody();
+                AssertTree ass = (AssertTree) block.getStatements().get(0);
+                AssertTree nue = make.Assert(ass.getCondition(), make.Literal("p == 0"));
+                workingCopy.rewrite(ass, nue);
+            }
+
+        };
+        testSource.runModificationTask(task).commit();
+        String res = TestUtilities.copyFileToString(testFile);
+        System.err.println(res);
+        assertEquals(golden, res);
+    }
+
     // methods not used in this test.
     String getGoldenPckg() {
         return "";
