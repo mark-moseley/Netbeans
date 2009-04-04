@@ -347,7 +347,10 @@ public final class VisualPropertySupport {
     }
     
     protected static String readValue( final JComboBox comboBox ) {
-        return comboBox.getSelectedItem().toString();
+        Object selectedItem = comboBox.getSelectedItem();
+        if (selectedItem == null)
+            return null;
+        return selectedItem.toString();
     }
     
     protected static Integer readValue( final JSlider slider ) {
@@ -444,7 +447,6 @@ public final class VisualPropertySupport {
         // Implementation of document listener ---------------------------------
         
         public void changedUpdate( final DocumentEvent e ) {
-            
             final Document document = e.getDocument();
             final String propertyName = (String)component2property.get( document );
             if( propertyName != null ) {
