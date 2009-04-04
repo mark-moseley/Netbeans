@@ -38,51 +38,78 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import org.openide.nodes.PropertySupport;
 import org.netbeans.modules.cnd.makeproject.api.configurations.StringConfiguration;
 
-public class StringNodeProp extends PropertySupport {
+public class StringNodeProp extends PropertySupport<String> {
+
     private StringConfiguration stringConfiguration;
     private String def = null;
+    private boolean canWrite = true;
 
     public StringNodeProp(StringConfiguration stringConfiguration, String txt1, String txt2, String txt3) {
         super(txt1, String.class, txt2, txt3, true, true);
         this.stringConfiguration = stringConfiguration;
     }
-    
+
     public StringNodeProp(StringConfiguration stringConfiguration, String def, String txt1, String txt2, String txt3) {
         super(txt1, String.class, txt2, txt3, true, true);
         this.stringConfiguration = stringConfiguration;
         this.def = def;
     }
-    
-    public String getHtmlDisplayName() {
-        if (stringConfiguration.getModified())
-            return "<b>" + getDisplayName(); // NOI18N
-        else
-            return null;
+
+    public StringNodeProp(StringConfiguration stringConfiguration, String def, boolean canWrite, String txt1, String txt2, String txt3) {
+        super(txt1, String.class, txt2, txt3, true, canWrite);
+        this.stringConfiguration = stringConfiguration;
+        this.def = def;
     }
-    
-    public Object getValue() {
+
+    @Override
+    public String getHtmlDisplayName() {
+        if (stringConfiguration.getModified()) {
+            return "<b>" + getDisplayName(); // NOI18N
+        }
+        else {
+            return null;
+        }
+    }
+
+    public String getValue() {
         return stringConfiguration.getValueDef(def);
     }
-    
-    public void setValue(Object v) {
-        stringConfiguration.setValue((String)v);
+
+    public void setValue(String v) {
+        stringConfiguration.setValue(v);
     }
-    
+
+    @Override
     public void restoreDefaultValue() {
         stringConfiguration.reset();
     }
-    
+
+    @Override
     public boolean supportsDefaultValue() {
         return true;
     }
-    
+
+    @Override
     public boolean isDefaultValue() {
         return !stringConfiguration.getModified();
+    }
+    
+    public void setDefaultValue(String def) {
+        this.def = def;
+        stringConfiguration.setDefaultValue(def);
+    }
+
+    @Override
+    public boolean canWrite() {
+        return canWrite;
+    }
+
+    public void setCanWrite(boolean v) {
+        canWrite = v;
     }
 }
