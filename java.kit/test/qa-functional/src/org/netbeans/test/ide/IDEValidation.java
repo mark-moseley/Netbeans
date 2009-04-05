@@ -117,7 +117,6 @@ import org.netbeans.jemmy.operators.WindowOperator;
 import org.netbeans.jemmy.util.PNGEncoder;
 
 import org.netbeans.junit.Log;
-import org.netbeans.junit.NbTestSuite;
 import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
@@ -129,38 +128,12 @@ import org.openide.windows.WindowManager;
  * @author Jiri.Skrivanek@sun.com
  */
 public class IDEValidation extends JellyTestCase {
-    
+
     /** Need to be defined because of JUnit */
     public IDEValidation(String name) {
         super(name);
     }
 
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new IDEValidation("testInitGCProjects"));
-        suite.addTest(new IDEValidation("testMainMenu"));
-        suite.addTest(new IDEValidation("testHelp"));
-        suite.addTest(new IDEValidation("testOptions"));
-        suite.addTest(new IDEValidation("testOptionsClassicView"));
-        suite.addTest(new IDEValidation("testNewProject"));
-        // sample project must exist before testShortcuts
-        suite.addTest(new IDEValidation("testShortcuts"));
-        suite.addTest(new IDEValidation("testNewFile"));
-        suite.addTest(new IDEValidation("testCVSLite"));
-        suite.addTest(new IDEValidation("testProjectsView"));
-        suite.addTest(new IDEValidation("testFilesView"));
-        suite.addTest(new IDEValidation("testEditor"));
-        suite.addTest(new IDEValidation("testBuildAndRun"));
-        suite.addTest(new IDEValidation("testDebugging"));
-        suite.addTest(new IDEValidation("testDebuggingMayFail"));
-        suite.addTest(new IDEValidation("testJUnit"));
-        suite.addTest(new IDEValidation("testXML"));
-        suite.addTest(new IDEValidation("testDb"));
-        suite.addTest(new IDEValidation("testWindowSystem"));
-        suite.addTest(new IDEValidation("testPlugins"));
-        return suite;
-    }
-    
     /** Setup called before every test case. */
     @Override
     public void setUp() {
@@ -190,7 +163,17 @@ public class IDEValidation extends JellyTestCase {
     
     
     public void testWriteAccess() throws Exception {
-        CountingSecurityManager.assertCounts("No writes during startup", 0);
+        String msg = "No writes during startup.\n" +
+            "Writing any files to disk during start is inefficient and usualy unnecessary.\n" +
+            "Consider using declarative registration in your layer.xml file, or delaying\n" +
+            "the initialization of the whole subsystem till it is really used.\n" +
+            "In case it is necessary to perform the write, you can modify the\n" +
+            "'allowed-file-write.txt' file in ide.kit module. More details at\n" +
+            "http://wiki.netbeans.org/FitnessViaWhiteAndBlackList";
+
+        CountingSecurityManager.assertCounts(msg, 0);
+        // disable further collecting of
+        CountingSecurityManager.initialize("non-existent", CountingSecurityManager.Mode.CHECK_READ, null);
     }
 
     /** Test creation of java project. 
@@ -390,7 +373,7 @@ public class IDEValidation extends JellyTestCase {
      */
     public void testDb() {
         // "Databases"
-        String databasesLabel = Bundle.getString("org.netbeans.modules.db.resources.Bundle", "RootNode_DISPLAYNAME");
+        String databasesLabel = Bundle.getString("org.netbeans.modules.db.explorer.node.Bundle", "RootNode_DISPLAYNAME");
         Node databasesNode = new Node(RuntimeTabOperator.invoke().getRootNode(), databasesLabel);
         // "Please wait..."
         String waitNodeLabel = Bundle.getString("org.openide.nodes.Bundle", "LBL_WAIT");
@@ -405,13 +388,13 @@ public class IDEValidation extends JellyTestCase {
             log("Timeout expired: "+e.getMessage());
         }
         // "Drivers"
-        String driversLabel = Bundle.getString("org.netbeans.modules.db.resources.Bundle", "DriverListNode_DISPLAYNAME");
+        String driversLabel = Bundle.getString("org.netbeans.modules.db.explorer.node.Bundle", "DriverListNode_DISPLAYNAME");
         Node driversNode = new Node(RuntimeTabOperator.invoke().getRootNode(), databasesLabel+"|"+driversLabel);
         // "Add Driver ..."
-        String addDriverItem = Bundle.getString("org.netbeans.modules.db.resources.Bundle", "AddNewDriver");
+        String addDriverItem = Bundle.getString("org.netbeans.modules.db.explorer.action.Bundle", "AddNewDriver");
         // open a dialog to add a new JDBC driver
         new ActionNoBlock(null, addDriverItem).perform(driversNode);
-        String addDriverTitle = Bundle.getString("org.netbeans.modules.db.resources.Bundle", "AddDriverDialogTitle");
+        String addDriverTitle = Bundle.getString("org.netbeans.modules.db.explorer.action.Bundle", "AddDriverDialogTitle");
         new NbDialogOperator(addDriverTitle).cancel();
         
         // wait until the wait node dismiss and after that start waiting for JDBC_ODBC Bridge node
@@ -428,10 +411,10 @@ public class IDEValidation extends JellyTestCase {
             // node JDBC-ODBC Bridge should be present always but not on mac
             Node jdbcOdbcNode = new Node(driversNode, "JDBC-ODBC Bridge"); // NOI18N
             // "Connect Using ..."
-            String connectUsingItem = Bundle.getString("org.netbeans.modules.db.resources.Bundle", "ConnectUsing");
+            String connectUsingItem = Bundle.getString("org.netbeans.modules.db.explorer.action.Bundle", "ConnectUsing");
             // open a dialog to create a new connection
             new ActionNoBlock(null, connectUsingItem).perform(jdbcOdbcNode);
-            String newDatabaseConnectionTitle = Bundle.getString("org.netbeans.modules.db.resources.Bundle", "NewConnectionDialogTitle");
+            String newDatabaseConnectionTitle = Bundle.getString("org.netbeans.modules.db.explorer.dlg.Bundle", "NewConnectionDialogTitle");
             new NbDialogOperator(newDatabaseConnectionTitle).cancel();
         }
     }
@@ -1058,15 +1041,6 @@ public class IDEValidation extends JellyTestCase {
         }
     }
 	
-	public void testDebuggingMayFail() {
-	    try {
-	        testDebugging();
-		}
-		catch (Throwable t) {
-            log(t.getClass().getName()+": "+t.getMessage());
-		}
-	}
-
      /** Test Options  
       * - open Options window from main menu Tools|Options
       * - select General category
@@ -1430,11 +1404,9 @@ public class IDEValidation extends JellyTestCase {
         Log.enableInstances(Logger.getLogger("TIMER"), "TextDocument", Level.FINEST);
     }
 
-// XXX: the following two tests were commented out because of the csl.api & related changes
-//    public void testGCDocuments() throws Exception {
-//        WatchProjects.assertTextDocuments();
-//    }
-// ---------------------------------------------------------------
+    public void testGCDocuments() throws Exception {
+        WatchProjects.assertTextDocuments();
+    }
     
     public void testGCProjects() throws Exception {
         WatchProjects.assertProjects();
@@ -1442,27 +1414,6 @@ public class IDEValidation extends JellyTestCase {
 
     public void testReflectionUsage() throws Exception {
         CountingSecurityManager.assertReflection(0, "allowed-reflection.txt");
-    }
-    
-    public void testBlacklistedClassesHandler() throws Exception {
-        BlacklistedClassesHandler bcHandler = BlacklistedClassesHandlerSingleton.getBlacklistedClassesHandler();
-        assertNotNull("BlacklistedClassesHandler should be available", bcHandler);
-        if (bcHandler.isGeneratingWhitelist()) {
-            bcHandler.saveWhiteList(getLog("whitelist.txt"));
-        }
-        try {
-            if (bcHandler.hasWhitelistStorage()) {
-                bcHandler.saveWhiteList();
-                bcHandler.saveWhiteList(getLog("whitelist.txt"));
-                bcHandler.reportDifference(getLog("diff.txt"));
-                assertTrue(bcHandler.reportViolations(getLog("violations.xml")) 
-                        + bcHandler.reportDifference(), bcHandler.noViolations());
-            } else {
-                assertTrue(bcHandler.reportViolations(getLog("violations.xml")), bcHandler.noViolations());
-            }
-        } finally {
-            bcHandler.unregister();
-        }        
     }
     
     /** Closes help window if any. It should not stay open between test cases.
