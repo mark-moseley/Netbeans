@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,59 +38,13 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+
 package org.netbeans.modules.php.project.connections.ui;
 
-import org.netbeans.modules.php.project.connections.TransferFile;
-import org.netbeans.modules.php.project.util.PhpProjectUtils;
-
 /**
- * @author Radek Matous
+ * @author Jiri Rechtacek
  */
-public class TransferFileUnit {
-
-    private final TransferFile transferFile;
-    private boolean isMarked;
-
-    public TransferFileUnit(TransferFile transferFile, boolean isMarked) {
-        this.transferFile = transferFile;
-        this.isMarked = isMarked;
-    }
-
-    static int compare(TransferFileUnit o1, TransferFileUnit o2) {
-        return o1.getTransferFile().getRelativePath().compareTo(o2.getTransferFile().getRelativePath());
-    }
-
-    protected TransferFile getTransferFile() {
-        return transferFile;
-    }
-
-    public boolean isMarked() {
-        return isMarked;
-    }
-
-    public void setMarked(boolean isMarked) {
-        this.isMarked = isMarked;
-    }
-
-    public Integer getId() {
-        return getTransferFile().hashCode();
-    }
-
-    public boolean canBeMarked() {
-        return true;
-    }
-
-    public final boolean isVisible(final String filter) {
-        return getTransferFile().isFile()
-                && (!PhpProjectUtils.hasText(filter) || getDisplayName().toLowerCase().contains(filter));
-    }
-
-    String getDisplayName() {
-        return getTransferFile().getRelativePath();
-    }
-
-    @Override
-    public String toString() {
-        return getDisplayName();
-    }
+public interface TransferFileTableChangeListener {
+    void updateUnitsChanged();
+    void filterChanged();
 }
