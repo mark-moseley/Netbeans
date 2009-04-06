@@ -42,9 +42,10 @@ package org.netbeans.modules.kenai.ui;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.MalformedURLException;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import org.netbeans.modules.kenai.api.Kenai;
@@ -96,8 +97,8 @@ public class ProjectAccessorImpl extends ProjectAccessor {
             }
             return l;
         } catch (KenaiException ex) {
-            Exceptions.printStackTrace(ex);
-            return Collections.emptyList();
+            Logger.getLogger(ProjectAccessorImpl.class.getName()).log(Level.INFO, "getMyProject() failed", ex);
+            return null;
         }
     }
 
@@ -106,7 +107,8 @@ public class ProjectAccessorImpl extends ProjectAccessor {
         try {
             return new ProjectHandleImpl(kenai.getProject(projectId,force));
         } catch (KenaiException ex) {
-            throw new RuntimeException(ex);
+            Logger.getLogger(ProjectAccessorImpl.class.getName()).log(Level.INFO, "getProject() " + projectId + " failed", ex);
+            return null;
         }
     }
 
@@ -141,18 +143,26 @@ public class ProjectAccessorImpl extends ProjectAccessor {
 
     @Override
     public ActionListener getOpenWikiAction(ProjectHandle project) {
-        KenaiFeature[] wiki = ((ProjectHandleImpl)project).getKenaiProject().getFeatures(Type.WIKI);
-        if (wiki.length==1) {
-            return new URLDisplayerAction(wiki[0].getDisplayName(), wiki[0].getWebLocation());
+        try {
+            KenaiFeature[] wiki = ((ProjectHandleImpl) project).getKenaiProject().getFeatures(Type.WIKI);
+            if (wiki.length == 1) {
+                return new URLDisplayerAction(wiki[0].getDisplayName(), wiki[0].getWebLocation());
+            }
+        } catch (KenaiException kenaiException) {
+            Exceptions.printStackTrace(kenaiException);
         }
         return null;
     }
 
     @Override
     public ActionListener getOpenDownloadsAction(ProjectHandle project) {
-        KenaiFeature[] wiki = ((ProjectHandleImpl)project).getKenaiProject().getFeatures(Type.DOWNLOADS);
-        if (wiki.length==1) {
-            return new URLDisplayerAction(wiki[0].getDisplayName(), wiki[0].getWebLocation());
+        try {
+            KenaiFeature[] wiki = ((ProjectHandleImpl) project).getKenaiProject().getFeatures(Type.DOWNLOADS);
+            if (wiki.length == 1) {
+                return new URLDisplayerAction(wiki[0].getDisplayName(), wiki[0].getWebLocation());
+            }
+        } catch (KenaiException kenaiException) {
+            Exceptions.printStackTrace(kenaiException);
         }
         return null;
     }
