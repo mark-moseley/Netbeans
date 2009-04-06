@@ -40,28 +40,57 @@
  */
 package org.netbeans.modules.php.project.connections.ui;
 
-import java.util.List;
-import org.openide.util.NbBundle;
+import org.netbeans.modules.php.project.connections.TransferFile;
+import org.netbeans.modules.php.project.util.PhpProjectUtils;
 
 /**
  * @author Radek Matous
  */
-public class TransferFileUploadModel extends TransferFileTableModel {
-    private static final long serialVersionUID = 32124271678426974L;
+public class TransferFileUnit {
 
-    public TransferFileUploadModel(List<TransferFileUnit> fileUnits) {
-        setData(fileUnits);
+    private final TransferFile transferFile;
+    private boolean isMarked;
+
+    public TransferFileUnit(TransferFile transferFile, boolean isMarked) {
+        this.transferFile = transferFile;
+        this.isMarked = isMarked;
     }
 
-    protected Type getType() {
-        return TransferFileTableModel.Type.UPLOAD;
+    static int compare(TransferFileUnit o1, TransferFileUnit o2) {
+        return o1.getTransferFile().getRelativePath().compareTo(o2.getTransferFile().getRelativePath());
     }
 
-    protected String getTabTitle() {
-        return NbBundle.getMessage(TransferFileUploadModel.class, "FileConfirmationTableModel_Upload_Title");
+    protected TransferFile getTransferFile() {
+        return transferFile;
     }
 
-    protected String getFirstColumnName() {
-        return NbBundle.getMessage(TransferFileUploadModel.class, "FileConfirmationTableModel_Columns_Upload");
+    public boolean isMarked() {
+        return isMarked;
+    }
+
+    public void setMarked(boolean marked) {
+        this.isMarked = marked;
+    }
+
+    public Integer getId() {
+        return getTransferFile().hashCode();
+    }
+
+    public boolean canBeMarked() {
+        return true;
+    }
+
+    public final boolean isVisible(final String filter) {
+        return getTransferFile().isFile()
+                && (!PhpProjectUtils.hasText(filter) || getDisplayName().toLowerCase().contains(filter));
+    }
+
+    String getDisplayName() {
+        return getTransferFile().getRelativePath();
+    }
+
+    @Override
+    public String toString() {
+        return getDisplayName();
     }
 }

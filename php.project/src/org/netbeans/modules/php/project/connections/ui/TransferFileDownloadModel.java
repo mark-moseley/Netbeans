@@ -46,22 +46,22 @@ import org.openide.util.NbBundle;
 /**
  * @author Radek Matous
  */
-public class TransferFileUploadModel extends TransferFileTableModel {
-    private static final long serialVersionUID = 32124271678426974L;
+public class TransferFileDownloadModel extends TransferFileTableModel {
+    private static final long serialVersionUID = 24074635121725824L;
 
-    public TransferFileUploadModel(List<TransferFileUnit> fileUnits) {
+    public TransferFileDownloadModel(List<TransferFileUnit> fileUnits) {
         setData(fileUnits);
     }
 
     protected Type getType() {
-        return TransferFileTableModel.Type.UPLOAD;
+        return TransferFileTableModel.Type.DOWNLOAD;
     }
 
     protected String getTabTitle() {
-        return NbBundle.getMessage(TransferFileUploadModel.class, "FileConfirmationTableModel_Upload_Title");
+        return NbBundle.getMessage(TransferFileDownloadModel.class, "FileConfirmationTableModel_Download_Title");
     }
 
     protected String getFirstColumnName() {
-        return NbBundle.getMessage(TransferFileUploadModel.class, "FileConfirmationTableModel_Columns_Upload");
+        return NbBundle.getMessage(TransferFileDownloadModel.class, "FileConfirmationTableModel_Columns_Download");
     }
 }
