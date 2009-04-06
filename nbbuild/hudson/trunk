@@ -13,20 +13,11 @@ then
     cd $dir
 fi
 
-DIST=$PWD/nbbuild/dist
-rm -rf $DIST/
-
-# XXX should use hg id as the build number; timestamp is useless!
-
 # YYYYMMDDhhmmss timestamp
 BUILDNUMBER=`echo $BUILD_ID | tr -d _-` 
 BUILDNUM=$BUILD_TAG
 
 ant -Dbuildnum=$BUILDNUM -Dbuildnumber=$BUILDNUMBER verify-libs-and-licenses build-nozip || exit 
-
-# we can't afford to run build-nbms in hudson builds, on deadlock.netbeans.org it takes 6 minutes from a typical 15 min build run
-# mkdir -p $DIST/nbms
-# ant -Dbuildnum=$BUILD_ID build-nbms -Dmoduleconfig=all -Dbase.nbm.target.dir=${DIST}/nbms || exit
 
 cd nbbuild
 rm -f netbeans/nb.cluster.*
@@ -35,75 +26,7 @@ rm -f netbeans/nb.cluster.*
 # Do not delete. It contains 'hg id' of repository in time of build.
 #rm -f netbeans/build_info
 
-BASENAME=netbeans-$BUILDNUM
-
-mkdir -p $DIST/zip/moduleclusters
-
-#Pack the distributions
-ant zip-cluster-config -Dcluster.config=full -Dzip.name=$DIST/zip/$BASENAME.zip || exit 1
-
-#ant zip-cluster-config -Dcluster.config=platform -Dzip.name=$DIST/zip/$BASENAME-platform.zip || exit 1
-ant zip-cluster-config -Dcluster.config=basic -Dzip.name=$DIST/zip/$BASENAME-javase.zip || exit 1
-ant zip-cluster-config -Dcluster.config=standard -Dzip.name=$DIST/zip/$BASENAME-java.zip || exit 1
-ant zip-cluster-config -Dcluster.config=ruby -Dzip.name=$DIST/zip/$BASENAME-ruby.zip || exit 1
-ant zip-cluster-config -Dcluster.config=php -Dzip.name=$DIST/zip/$BASENAME-php.zip || exit 1
-ant zip-cluster-config -Dcluster.config=cnd -Dzip.name=$DIST/zip/$BASENAME-cpp.zip || exit 1
-
-cd netbeans
-expat='extra|testtools'
-for c in platform ide java apisupport harness enterprise profiler ruby mobility soa xml cnd identity gsf php groovy; do
-    find * | egrep "^$c[0-9]*/" | zip -q $DIST/zip/moduleclusters/$BASENAME-$c.zip -@ || exit
-    expat="$expat|$c[0-9]*"
-done
-find * | egrep -v "^($expat)(/|$)" | zip -q $DIST/zip/moduleclusters/$BASENAME-nb6.0-etc.zip -@ || exit
-
-cp -p $DIST/zip/moduleclusters/$BASENAME-platform.zip $DIST/zip/
-
-cd ../..
-generated=nbbuild/build/generated
-rm -rf $generated
-ant generate-golden-files generate-files-layout index-layer-paths || exit
-cp -v nbbuild/netbeans/THIRDPARTYLICENSE-generated.txt $generated/external-libraries.txt || exit
-prev_generated=../lastSuccessful/archive/$generated
-if [ -d $prev_generated ]; then
-    diff -r -U 25 $prev_generated $generated > $generated.diff
-    if [ -s $generated.diff ]; then
-        (echo "http://deadlock.netbeans.org/hudson/job/$JOB_NAME/$BUILD_NUMBER/changes"; echo "http://deadlock.netbeans.org/hudson/job/$JOB_NAME/$BUILD_NUMBER/artifact/$generated/"; echo; cat $generated.diff) | mail -s "Golden file changes in $JOB_NAME build #$BUILD_NUMBER" api-changes@netbeans.org
-    fi
-fi
-
-sigtest_prev=`pwd`/../lastSuccessful/archive/nbbuild/build/sigtest/snapshot
-
-echo SigTest: Checking All Changes
-ant -Dsigtest.basedir=$sigtest_prev check-sigtests
-for report in `pwd`/nbbuild/build/sigtest/check-snapshot/*; do
-  if ! expr "$report" : ".*/TESTS-.*" && grep 'failures="1"' $report >/dev/null; then
-    sigtest_email=`cat $report | grep "^email:" | grep -v nbm.domain | cut -c 8-`
-    if [ -z "$sigtest_email" ]; then
-      sigtest_email="api-changes@netbeans.org"
-    fi
-    content=`cat $report`
-    (
-        echo "Code changes:";
-        echo "http://deadlock.netbeans.org/hudson/job/$JOB_NAME/$BUILD_NUMBER/changes"; 
-        echo "API changes:";
-        echo "http://deadlock.netbeans.org/hudson/job/$JOB_NAME/$BUILD_NUMBER/artifact/nbbuild/build/sigtest/check-snapshot/html/index.html"; 
-        echo "Failure output is available as StdErr output of sigtest test for appropriate module.";
-#                echo "http://deadlock.netbeans.org/hudson/job/$JOB_NAME/$BUILD_NUMBER/artifact/$sigtest_out/`basename $report`"; 
-        echo; 
-        expr "$content" : ".*CDATA\[\(.*\)\]\].*"
-    ) | mail -s "`basename $report` - sigchanges in $JOB_NAME build #$BUILD_NUMBER" $sigtest_email
-  fi
-done
-echo SigTest: Checking All Changes Done
-
-echo SigTest: Generating Golden Files
-ant gen-sigtests || exit 1
-echo SigTest: Generating Golden Files Done
-
-echo SigTest: Incompatible Changes
-ant check-sigtests-release -Dfail.on.error=false
-echo SigTest: Incompatible Changes Done
+cd ..
 
 # Try to build all tests in the system to make sure they at least compile.
 ant -Dtest.fail.on.error=false build-test-dist
@@ -114,13 +37,6 @@ TESTS_RESULT_DIR="`pwd`/nbbuild/build/test/results"
 JDK_TESTS=/opt/jdk1.5.0_14
 # standard NetBeans unit and UI validation tests
 ant commit-validation
-# Init application server for tests
-sh -x `dirname $0`/initAppserver.sh
-# Mobility UI validation tests
-ant -f mobility.project/build.xml -Dtest.config=uicommit -Dtest-qa-functional-sys-prop.wtk.dir=/hudson -Dbuild.test.qa-functional.results.dir=$TESTS_RESULT_DIR -Dcontinue.after.failing.tests=true test
-# J2EE validation tests
-#-Dbuild.test.qa-functional.results.dir=$TESTS_RESULT_DIR
-ant -f j2ee.kit/build.xml -Dtest.config=uicommit -Dcontinue.after.failing.tests=true -Dtest-qa-functional-sys-prop.com.sun.aas.installRoot=/hudson/workdir/jobs/trunk/testappsrv/glassfish test
 
 echo TESTS STARTED: $TESTS_STARTED
 echo TESTS FINISHED: `date`
