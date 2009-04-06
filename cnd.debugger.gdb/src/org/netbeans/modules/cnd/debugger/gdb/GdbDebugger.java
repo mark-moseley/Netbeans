@@ -48,6 +48,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -254,7 +255,9 @@ public class GdbDebugger implements PropertyChangeListener {
             baseDir = pae.getConfiguration().getBaseDir().replace("\\", "/");  // NOI18N
             profile = (GdbProfile) pae.getConfiguration().getAuxObject(GdbProfile.GDB_PROFILE_ID);
             conType = execEnv.isLocal() ? pae.getProfile().getConsoleType().getValue() : RunProfile.CONSOLE_TYPE_OUTPUT_WINDOW;
-            platform = (pae.getConfiguration()).getPlatform().getValue();
+            // See IZ 161592: we do not care what platform we have in project configuration
+            // we use real platform instead
+            platform = HostInfoProvider.getDefault().getPlatform(execEnv);
             if (platform != PlatformTypes.PLATFORM_WINDOWS && conType != RunProfile.CONSOLE_TYPE_OUTPUT_WINDOW && pae.getType() != DEBUG_ATTACH) {
                 termpath = pae.getProfile().getTerminalPath();
             }
@@ -436,7 +439,7 @@ public class GdbDebugger implements PropertyChangeListener {
                 }
             }
         } catch (Exception ex) {
-            log.log(Level.WARNING, "GdbDebugger.startDebugger: Exception during start: ", ex);
+            log.log(Level.INFO, "GdbDebugger.startDebugger: Exception during start: ", ex);
             if (startupTimer != null) {
                 startupTimer.cancel();
             }
@@ -485,12 +488,7 @@ public class GdbDebugger implements PropertyChangeListener {
 
     private final void checkGdbVersion() {
         if (!versionPeculiarity.isSupported()) {
-            SwingUtilities.invokeLater(new Runnable() {
-                public void run() {
-                    DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(NbBundle.getMessage(GdbDebugger.class,
-                                "ERR_UnsupportedVersion", gdbVersion))); // NOI18N
-                }
-            });
+            warn(false, NbBundle.getMessage(GdbDebugger.class, "ERR_UnsupportedVersion", gdbVersion));  // NOI18N
         }
     }
 
@@ -725,18 +723,22 @@ public class GdbDebugger implements PropertyChangeListener {
     public boolean comparePaths(String path1, String path2) {
         path1 = path1.trim();
         path2 = path2.trim();
+        // we need to convert paths to unix-like style, so that normalization works correctly
         if (platform == PlatformTypes.PLATFORM_WINDOWS) {
-            return winpath(path1).toLowerCase().equals(winpath(path2).toLowerCase());
+            path1 = WinPath.win2cyg(path1).toLowerCase();
+            path2 = WinPath.win2cyg(path2).toLowerCase();
+        }
+        // see isssue 152489, normalization is required to correctly compare paths with ..
+        try {
+            String norPath1 = new URI(path1).normalize().getPath();
+            String norPath2 = new URI(path2).normalize().getPath();
+            // use normalized paths only if both paths have been normalized correctly
+            path1 = norPath1;
+            path2 = norPath2;
+        } catch (Exception e) {
+            // do nothing
         }
         return path1.equals(path2);
-    }
-
-    private String winpath(String path) {
-        if (platform == PlatformTypes.PLATFORM_WINDOWS) {
-            return WinPath.cyg2win(path).replace("\\\\", "/").replace("\\", "/"); // NOI18N
-        } else {
-            return path;
-        }
     }
 
     private boolean symbolsReadFromInfoFiles(String results, String exepath) {
@@ -761,7 +763,7 @@ public class GdbDebugger implements PropertyChangeListener {
      */
     private boolean compareExePaths(String exe1, String exe2) {
         if (platform == PlatformTypes.PLATFORM_WINDOWS) {
-            return comparePaths(normalizeWindowsExe(exe1), normalizeWindowsExe(exe2));
+            return comparePaths(removeExe(exe1), removeExe(exe2));
         } else if (platform == PlatformTypes.PLATFORM_MACOSX) {
             return exe1.toLowerCase().equals(exe2.toLowerCase());
         } else {
@@ -769,7 +771,7 @@ public class GdbDebugger implements PropertyChangeListener {
         }
     }
 
-    private static String normalizeWindowsExe(String exe) {
+    private static String removeExe(String exe) {
         if (exe.endsWith(".exe")) { // NOI18N
             return exe.substring(0, exe.length() - 4);
         }
@@ -1695,15 +1697,7 @@ public class GdbDebugger implements PropertyChangeListener {
             } else if (reason.equals("shlib-event")) { // NOI18N
                 checkSharedLibs();
             } else if (reason.equals("signal-received")) { // NOI18N
-                if (getState() == State.RUNNING) {
-                    String tid = map.get("thread-id"); // NOI18N
-                    if (tid != null && !tid.equals(currentThreadID)) {
-                        currentThreadID = tid;
-                    }
-                    sig = map.get("signal-name"); // NOI18N
-                    gdb.stack_list_frames();
-                    setStopped();
-                }
+                signalReceived(map);
             } else if (reason.equals("function-finished") && dlopenPending) { // NOI18N
                 dlopenPending = false;
                 checkSharedLibs(); // Windows (after non-user -exec-finish after non-user breakpoint in dlopen)
@@ -1723,6 +1717,43 @@ public class GdbDebugger implements PropertyChangeListener {
         } else {
             gdb.stack_list_frames();
             setStopped();
+        }
+    }
+
+    private void signalReceived(Map<String, String> map) {
+        String signal = map.get("signal-name"); // NOI18N
+        if (getState() == State.RUNNING) {
+            String tid = map.get("thread-id"); // NOI18N
+            if (tid != null && !tid.equals(currentThreadID)) {
+                currentThreadID = tid;
+            }
+            sig = signal; // NOI18N
+            gdb.stack_list_frames();
+            setStopped();
+        }
+        
+        String STOP = NbBundle.getMessage(GdbDebugger.class, "TXT_DISCARD_STOP");
+        String CONTINUE = NbBundle.getMessage(GdbDebugger.class, "TXT_DISCARD_CONTINUE");
+        String PASS = NbBundle.getMessage(GdbDebugger.class, "TXT_PASS_CONTINUE");
+        // see IZ:160393 - inform user about signals
+        NotifyDescriptor nd = new NotifyDescriptor(
+                NbBundle.getMessage(GdbDebugger.class, "ERR_SignalReceived", map.get("signal-name"), map.get("signal-meaning")), // NOI18N
+                NbBundle.getMessage(GdbDebugger.class, "LBL_SignalReceived"),
+                NotifyDescriptor.DEFAULT_OPTION,
+                NotifyDescriptor.INFORMATION_MESSAGE,
+                new String[]{STOP,CONTINUE,PASS},
+                STOP
+                );
+        Object res = DialogDisplayer.getDefault().notify(nd);
+        if (res == STOP) {
+            // we stop anyway
+            gdb.handle(signal, GdbProxy.HandleAction.nopass);
+        } else if (res == CONTINUE) {
+            gdb.handle(signal, GdbProxy.HandleAction.nopass);
+            gdb.exec_continue();
+        } else if (res == PASS) {
+            gdb.handle(signal, GdbProxy.HandleAction.pass);
+            gdb.exec_continue();
         }
     }
 
