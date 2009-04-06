@@ -166,6 +166,12 @@ public class SwingLayoutBuilder {
         try {
             GroupLayout layout = new GroupLayout(container);
             container.setLayout(layout);
+
+            // Issue 123320
+            for (Component comp : componentIDMap.values()) {
+                container.add(comp);
+            }
+
             GroupLayout.Group[] layoutGroups = new GroupLayout.Group[2];
             // with multiple roots add the highest roots first so the components appear at the top
             for (int i=containerLC.getLayoutRootCount()-1; i >= 0; i--) {
@@ -314,8 +320,17 @@ public class SwingLayoutBuilder {
                     min = Math.min(pref, min);
                     max = Math.max(pref, max);
                     if (group instanceof GroupLayout.SequentialGroup) {
-                        ((GroupLayout.SequentialGroup)group).add(min, pref, max);
+                        if (pref < 0) { // survive invalid pref size (#159536)
+                            ((GroupLayout.SequentialGroup)group)
+                                    .addPreferredGap(LayoutStyle.RELATED, GroupLayout.DEFAULT_SIZE, max);
+                        } else {
+                            ((GroupLayout.SequentialGroup)group).add(min, pref, max);
+                        }
                     } else {
+                        if (pref < 0) { // survive invalid pref size (#159536)
+                            pref = 0;
+                            min = 0;
+                        }
                         ((GroupLayout.ParallelGroup)group).add(min, pref, max);
                     }
                 }
@@ -371,7 +386,8 @@ public class SwingLayoutBuilder {
                                 convertSize(interval.getPreferredSize(designMode), interval) :
                                 GroupLayout.PREFERRED_SIZE;
                 break;
-            default: assert (size >= 0); convertedSize = size; break;
+            default: convertedSize = (size >= 0) ? size : GroupLayout.DEFAULT_SIZE;
+                     break;
         }
         return convertedSize;
     }
