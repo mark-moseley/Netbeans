@@ -18,19 +18,20 @@ http://java.sun.com/jsf/html
 End cursor position = 529
 [<%@include file="/META-INF/|"%>, context.xml, <%@include file="/META-INF/context.xml"%>, 624]
 context.xml
+emptyFile
 End cursor position = 663
-[<c:v|, < c:view >, <c:view, 765]
+[<c:v|, c:view, <c:view, 761]
 < c:validateDoubleRange >
 < c:validateLength >
 < c:validateLongRange >
-< c:validator />
-< c:valueChangeListener />
+< c:validator / >
+< c:valueChangeListener / >
 < c:verbatim >
 < c:view >
-End cursor position = 773
-[<c:view |, locale, <c:view locale="", 868]
+End cursor position = 769
+[<c:view |, locale, <c:view locale="", 864]
 afterPhase
 beforePhase
 locale
 renderKitId
-End cursor position = 885
+End cursor position = 881
