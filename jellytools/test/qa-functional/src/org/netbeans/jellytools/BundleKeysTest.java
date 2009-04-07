@@ -40,21 +40,38 @@
  */
 package org.netbeans.jellytools;
 
-import java.util.Enumeration;
-import java.util.MissingResourceException;
-import java.util.Properties;
-import java.util.ResourceBundle;
-import java.util.StringTokenizer;
-import junit.framework.*;
-import org.netbeans.junit.*;
+import junit.framework.Test;
+
 
 /**
  * Test of all resurce bundle keys used in Jelly2
  * @author <a href="mailto:adam.sotona@sun.com">Adam Sotona</a>
  */
-public class BundleKeysTest extends NbTestCase {
+public class BundleKeysTest extends TestBundleKeys {
 
-    String keys;
+    
+    public static String propertiesName = "org/netbeans/jellytools/BundleKeysTest.properties";
+
+    public BundleKeysTest(String bundleName) {
+        this(bundleName, null);
+    }
+    /** Constructor required by JUnit.
+     * @param testName method name to be used as testcase
+     */
+    public BundleKeysTest(String bundleName, String keys) {
+        super(bundleName);
+        this.keys=keys;
+    }
+
+    protected ClassLoader getDescendantClassLoader()
+    {
+        return BundleKeysTest.class.getClassLoader();
+    }
+
+    protected String getPropertiesName()
+    {
+        return propertiesName;
+    }
 
     /** Use for internal test execution inside IDE
      * @param args command line arguments
@@ -63,47 +80,10 @@ public class BundleKeysTest extends NbTestCase {
         junit.textui.TestRunner.run(suite());
     }
     
-    /** Method used for explicit testsuite definition
-     * @return  created suite
-     */
     public static Test suite() {
-        TestSuite suite = new NbTestSuite();
-        try {
-            Properties props=new Properties();
-            props.load(BundleKeysTest.class.getClassLoader().getResourceAsStream("org/netbeans/jellytools/BundleKeysTest.properties"));
-            Enumeration bundles=props.keys();
-            String bundle;
-            while (bundles.hasMoreElements()) {
-                bundle=(String)bundles.nextElement();
-                suite.addTest(new BundleKeysTest(bundle, props.getProperty(bundle)));
-            }
-        } catch (Exception e) {}
-        return suite;
+        return prepareSuite(BundleKeysTest.class, propertiesName);
     }
     
-    /** Constructor required by JUnit.
-     * @param testName method name to be used as testcase
-     */
-    public BundleKeysTest(String bundleName, String keys) {
-        super(bundleName);
-        this.keys=keys;
-    }
     
-    protected void runTest() throws Throwable {
-        ResourceBundle bundle=ResourceBundle.getBundle(getName());
-        StringTokenizer tok=new StringTokenizer(keys, ",");
-        String key="";
-        String missing="";
-        int mis=0;
-        while (tok.hasMoreTokens()) try {
-            key=tok.nextToken();
-            bundle.getObject(key);
-        } catch (MissingResourceException mre) {
-            missing+=key+" ";
-            mis++;
-        }
-        if (mis>0)
-            throw new AssertionFailedError("Missing "+String.valueOf(mis)+" key(s): "+missing);
-    }
-   
+      
 }

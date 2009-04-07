@@ -59,6 +59,20 @@ import org.netbeans.junit.NbTestSuite;
  */
 public class PropertyTest extends JellyTestCase {
     
+    
+    public static final String[] tests = new String[] {
+        "testGetName",
+        "testGetValue",
+        "testGetShortDescription",
+        "testOpenEditor",
+        "testSetDefaultValue",
+        "testGetRendererName",
+        "testCanEditAsText",
+        "testIsEnabled",
+        "testClose"/*,
+        there is no print settings! "testSetValue"*/
+    };
+    
     /** Use for internal test execution inside IDE
      * @param args command line arguments
      */
@@ -69,19 +83,9 @@ public class PropertyTest extends JellyTestCase {
     /** Method used for explicit testsuite definition
      * @return  created suite
      */
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new PropertyTest("testGetName"));
-        suite.addTest(new PropertyTest("testGetValue"));
-        suite.addTest(new PropertyTest("testGetShortDescription"));
-        suite.addTest(new PropertyTest("testOpenEditor"));
-        suite.addTest(new PropertyTest("testSetDefaultValue"));
-        suite.addTest(new PropertyTest("testGetRendererName"));
-        suite.addTest(new PropertyTest("testCanEditAsText"));
-        suite.addTest(new PropertyTest("testIsEnabled"));
-        suite.addTest(new PropertyTest("testClose"));
-        suite.addTest(new PropertyTest("testSetValue"));
-        return suite;
+    public static NbTestSuite suite() {        
+        return (NbTestSuite) createModuleTest(PropertyTest.class, 
+        tests);
     }
     
     private static Property property;
@@ -99,6 +103,7 @@ public class PropertyTest extends JellyTestCase {
     /** Open property sheet and find sample property. */
     protected void setUp() throws Exception {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         if(property == null) {
             // opens properties window
             Node sample1 = new Node(new SourcePackagesNode("SampleProject"), "sample1");  // NOI18N
@@ -188,14 +193,16 @@ public class PropertyTest extends JellyTestCase {
     }
     
     /** Test of setValue method */
+    //TODO write a new setValue test
+    /*
     public void testSetValue() {
         OptionsOperator optionsOperator = OptionsOperator.invoke();
         optionsOperator.switchToClassicView();
         // "IDE Configuration|System|Print Settings"
         String printSettingsPath = 
-                Bundle.getString("org.netbeans.core.Bundle", "UI/Services/IDEConfiguration")+"|"+
-                Bundle.getString("org.netbeans.core.Bundle", "UI/Services/IDEConfiguration/System")+"|"+
-                Bundle.getString("org.netbeans.core.Bundle", "Services/org-openide-text-PrintSettings.settings");
+                Bundle.getString("org.netbeans.core.ui.resources.Bundle", "UI/Services/IDEConfiguration")+"|"+
+                Bundle.getString("org.netbeans.core.ui.resources.Bundle", "UI/Services/IDEConfiguration/System")+"|"+
+                Bundle.getString("org.netbeans.core.ui.resources.Bundle", "Services/org-openide-text-PrintSettings.settings");
         PropertySheetOperator printPso = optionsOperator.getPropertySheet(printSettingsPath);
         try{
             // test boolean property
@@ -226,5 +233,5 @@ public class PropertyTest extends JellyTestCase {
         } finally {
             printPso.close();
         }
-    }
+    }*/
 }
