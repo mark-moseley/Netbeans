@@ -41,24 +41,18 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm.deep;
 
-import java.util.*;
 
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.deep.*;
 
-import org.netbeans.modules.cnd.modelimpl.csm.*;
 
 import antlr.collections.AST;
-import org.netbeans.modules.cnd.modelimpl.parser.CsmAST;
-import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 
 /**
  * Implements CsmExpressionStatement
  * @author Vladimir Kvashin
  */
 public class ExpressionStatementImpl extends StatementBase implements CsmExpressionStatement {
-    
-    private ExpressionBase expression;
     
     public ExpressionStatementImpl(AST ast, CsmFile file, CsmScope scope) {
         super(ast, file, scope);
@@ -69,6 +63,6 @@ public class ExpressionStatementImpl extends StatementBase implements CsmExpress
     }
 
     public CsmExpression getExpression() {
-        return expression;
+        return null;
     }
 }
