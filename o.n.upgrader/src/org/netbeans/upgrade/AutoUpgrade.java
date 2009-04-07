@@ -51,6 +51,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
+import javax.swing.JDialog;
 import javax.swing.JOptionPane;
 import org.netbeans.upgrade.systemoptions.Importer;
 
@@ -60,7 +61,6 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.LocalFileSystem;
 import org.openide.filesystems.MultiFileSystem;
-import org.openide.filesystems.Repository;
 import org.openide.filesystems.XMLFileSystem;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.util.NbBundle;
@@ -72,6 +72,8 @@ import org.xml.sax.SAXException;
  */
 public final class AutoUpgrade {
 
+    private static File importFile;
+
     public static void main (String[] args) throws Exception {
         String[] version = new String[1];
         File sourceFolder = checkPrevious (version, VERSION_TO_CHECK);
@@ -79,8 +81,14 @@ public final class AutoUpgrade {
             if (!showUpgradeDialog (sourceFolder)) {
                 throw new org.openide.util.UserCancelException ();
             }
-            doUpgrade (sourceFolder, version[0]);
-            //support for non standard configuration files
+            File netBeansDir = InstalledFileLocator.getDefault().locate("modules", null, false).getParentFile().getParentFile();  //NOI18N
+            importFile = new File(netBeansDir, "etc/netbeans.import");  //NOI18N
+            // less than 6.5 or import file dosn't exist
+            if (version[0].compareTo("6.5") < 0 || !importFile.exists()) {  //NOI18N
+                doUpgrade (sourceFolder, version[0]);
+            }
+            // Till 6.1 support for non standard configuration files and since
+            // 6.5 it is standard way of import.
             doNonStandardUpgrade(sourceFolder, version[0]);
             //#75324 NBplatform settings are not imported
             upgradeBuildProperties(sourceFolder, version);
@@ -90,33 +98,19 @@ public final class AutoUpgrade {
     }
 
     //#75324 NBplatform settings are not imported
-    private static void upgradeBuildProperties(final File sourceFolder, final String[] version) throws  IOException {
-        try {   
-            //TODO: review and implement less version specific
-            if (version[0].startsWith("2_")) {//CREATOR
-                File userdir = new File(System.getProperty("netbeans.user", ""));//NOI18N
-                Copy.appendSelectedLines(new File(sourceFolder,"build.properties"), //NOI18N
-                        userdir,new String[] {".*"});                
-            } else if (Float.parseFloat(version[0]) >= 5.0 ) {//NOI18N
-                File userdir = new File(System.getProperty("netbeans.user", ""));//NOI18N
-                String[] regexForSelection = new String[] {
-                    "^nbplatform[.](?!default[.]netbeans[.]dest[.]dir).+[.].+=.+$"//NOI18N
-                };
-                Copy.appendSelectedLines(new File(sourceFolder,"build.properties"), //NOI18N
-                        userdir,regexForSelection);
-            }            
-        } catch(NumberFormatException nex) {
-            return;
-        }
+    private static void upgradeBuildProperties(final File sourceFolder, final String[] version) throws IOException {
+        File userdir = new File(System.getProperty("netbeans.user", ""));//NOI18N
+        String[] regexForSelection = new String[]{
+            "^nbplatform[.](?!default[.]netbeans[.]dest[.]dir).+[.].+=.+$"//NOI18N
+        };
+        Copy.appendSelectedLines(new File(sourceFolder, "build.properties"), //NOI18N
+                userdir, regexForSelection);
     }
 
-    private static final String CREATOR = ".Creator/2_1"; //NOI18N
-    private static final String VISUALWEB_REPRESENTATION = "modules/org-netbeans-modules-visualweb-insync.jar";//NOI18N
-    
     // the order of VERSION_TO_CHECK here defines the precedence of imports
     // the first one will be choosen for import
     final static private List VERSION_TO_CHECK = 
-            Arrays.asList (new String[] { ".netbeans/5.5.1",".netbeans/5.5",".netbeans/5.0",CREATOR });//NOI18N
+            Arrays.asList (new String[] { ".netbeans/6.5", ".netbeans/6.1", ".netbeans/6.0", ".netbeans/5.5.1", ".netbeans/5.5" });//NOI18N
 
             
     static private File checkPrevious (String[] version, final List versionsToCheck) {        
@@ -129,12 +123,6 @@ public final class AutoUpgrade {
             String ver;
             while (it.hasNext () && sourceFolder == null) {
                 ver = (String) it.next ();
-                if (ver.equals(CREATOR)) {//NOI18N
-                    final boolean visualWebPresent = InstalledFileLocator.getDefault().locate(VISUALWEB_REPRESENTATION, null, false) != null;
-                    if (!visualWebPresent) {
-                        continue;
-                    }
-                }                
                 sourceFolder = new File (userHomeFile.getAbsolutePath (), ver);
                 
                 if (sourceFolder.isDirectory ()) {
@@ -156,20 +144,16 @@ public final class AutoUpgrade {
             JOptionPane.QUESTION_MESSAGE,
             JOptionPane.YES_NO_OPTION
         );
-        javax.swing.JDialog d = p.createDialog (
-            null,
-            NbBundle.getMessage (AutoUpgrade.class, "MSG_Confirmation_Title") // NOI18N
-        );
-        d.setModal (true);
+        JDialog d = Util.createJOptionDialog(p, NbBundle.getMessage (AutoUpgrade.class, "MSG_Confirmation_Title"));
         d.setVisible (true);
 
         return new Integer (JOptionPane.YES_OPTION).equals (p.getValue ());
     }
-    
+
     static void doUpgrade (File source, String oldVersion) 
     throws java.io.IOException, java.beans.PropertyVetoException {        
         File userdir = new File(System.getProperty ("netbeans.user", "")); // NOI18N
-        
+
         java.util.Set includeExclude;
         try {
             Reader r = new InputStreamReader (
@@ -206,10 +190,8 @@ public final class AutoUpgrade {
             
             old = (xmlfs != null) ? createLayeredSystem(lfs, xmlfs) : lfs;
         }
-        org.openide.filesystems.FileSystem mine = Repository.getDefault ().
-            getDefaultFileSystem ();
         
-        Copy.copyDeep (old.getRoot (), mine.getRoot (), includeExclude, PathTransformation.getInstance(oldVersion));
+        Copy.copyDeep (old.getRoot (), FileUtil.getConfigRoot (), includeExclude, PathTransformation.getInstance(oldVersion));
         
     }
     
@@ -221,8 +203,15 @@ public final class AutoUpgrade {
         File userdir = new File(System.getProperty("netbeans.user", "")); // NOI18N        
         java.util.Set includeExclude;
         try {
-            InputStream is = AutoUpgrade.class.getResourceAsStream("nonstandard" + oldVersion);
-            if (is == null) return;
+            InputStream is;
+            if (oldVersion.compareTo("6.5") < 0 || !importFile.exists()) {  //NOI18N
+                // less than 6.5
+                is = AutoUpgrade.class.getResourceAsStream("nonstandard" + oldVersion); // NOI18N
+                if (is == null) return;
+            } else {
+                // 6.5 or greater
+                is = new FileInputStream(importFile);
+            }
             Reader r = new InputStreamReader(is, "utf-8"); // NOI18N
             includeExclude = IncludeExclude.create(r);
             r.close();
@@ -257,45 +246,4 @@ public final class AutoUpgrade {
         return old;
     }
     
-    private static List<FileObject> getFiles (
-        FileObject      folder,
-        int             depth,
-        String          fileName,
-        String          extension
-    ) {
-        if (depth == 0) {
-            FileObject result = folder.getFileObject (fileName, extension);
-            if (result == null) return Collections.emptyList();
-            return Collections.singletonList (result);
-        }
-        Enumeration<? extends FileObject> en = folder.getChildren (false);
-        List<FileObject> result = new ArrayList<FileObject> ();
-        while (en.hasMoreElements ()) {
-            FileObject fo = en.nextElement ();
-            if (!fo.isFolder ()) continue;
-            result.addAll (getFiles (fo, depth - 1, fileName, extension));
-        }
-        return result;
-    }
-    
-    private static void copy (FileObject sourceDir, FileObject destDir) 
-    throws IOException {
-        Enumeration en = sourceDir.getData (false);
-        while (en.hasMoreElements ()) {
-            FileObject fo = (FileObject) en.nextElement ();
-            if (fo.isFolder ()) {
-                FileObject newDestDir = destDir.createFolder (fo.getName ());
-                copy (fo, newDestDir);
-            } else {
-                try {
-                    FileObject destFile = FileUtil.copyFile 
-                            (fo, destDir, fo.getName (), fo.getExt ());
-                    FileUtil.copyAttributes (fo, destFile);
-                } catch (IOException ex) {    
-                    if (!fo.getNameExt ().endsWith ("_hidden"))
-                        throw ex;    
-                }
-            }
-        }
-    }
 }
