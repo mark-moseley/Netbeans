@@ -41,16 +41,12 @@
 
 package org.netbeans.modules.cnd.modelimpl.csm.deep;
 
-import java.util.*;
 
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.deep.*;
 
-import org.netbeans.modules.cnd.modelimpl.csm.*;
 
 import antlr.collections.AST;
-import org.netbeans.modules.cnd.modelimpl.parser.CsmAST;
-import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 
 /**
  * CsmReturnStatement implementation
@@ -58,8 +54,6 @@ import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
  */
 public class ReturnStatementImpl extends StatementBase implements CsmReturnStatement {
 
-    private ExpressionBase expression;
-    
     public ReturnStatementImpl(AST ast, CsmFile file, CsmScope scope) {
         super(ast, file, scope);
     }
@@ -69,7 +63,7 @@ public class ReturnStatementImpl extends StatementBase implements CsmReturnState
     } 
 
     public CsmExpression getReturnExpression() {
-        return expression;
+        return null;
     }
    
 }
