@@ -139,7 +139,8 @@ public class ProfilerInterface implements CommonConstants {
                                                                           // for take heap dump
 
                     Class.forName("java.lang.reflect.InvocationTargetException"); // NOI18N
-                    Class.forName("java.lang.InterruptedException");
+                    Class.forName("java.lang.InterruptedException");    // NOI18N
+                    Class.forName("java.util.zip.Deflater");    // NOI18N compressed remote profiling
                 } catch (ClassNotFoundException e) {
                     e.printStackTrace(System.err);
                 }
@@ -211,11 +212,20 @@ public class ProfilerInterface implements CommonConstants {
 
         private static void computeRootWildcard() {
             rootClassNameWildcard = new boolean[rootClassNames.length];
+            rootClassNamePackageWildcard = new boolean[rootClassNames.length];
 
             for (int i = 0; i < rootClassNames.length; i++) {
                 int nameLen = rootClassNames[i].length();
                 rootClassNameWildcard[i] = (nameLen == 0) // default package wildcard
                                            || (rootClassNames[i].charAt(nameLen - 1) == '.'); // ends with "." // NOI18N
+                if (!rootClassNameWildcard[i]) {
+                    if (rootClassNames[i].charAt(nameLen - 1) == '*') { // package wild card - instrument all classes including subpackages
+                        rootClassNames[i] = rootClassNames[i].substring(0,nameLen - 1); // remove *
+                        rootClassNameWildcard[i] = true;
+                        rootClassNamePackageWildcard[i] = true;
+                    }
+                }
+//                System.out.println("Root "+rootClassNames[i]+" wild "+rootClassNameWildcard[i]+" package "+rootClassNamePackageWildcard[i]);
             }
         }
     }
@@ -260,6 +270,7 @@ public class ProfilerInterface implements CommonConstants {
     private static Thread initInstrumentationThread;
     private static String[] rootClassNames;
     private static boolean[] rootClassNameWildcard;
+    private static boolean[] rootClassNamePackageWildcard;
 
     // For statistics
     static int nClassLoads;
@@ -711,8 +722,10 @@ public class ProfilerInterface implements CommonConstants {
 
             if (rootClassNameWildcard[i]) {
                 if (className.startsWith(rootName)) {
+                    if (rootClassNamePackageWildcard[i]) {  // instrument also subpackages
+                        return true;
+                    }
                     if (className.indexOf('.', rootName.length()) == -1) { // not a subpackage
-
                         return true;
                     }
                 }

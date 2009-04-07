@@ -51,7 +51,6 @@ import org.netbeans.lib.profiler.server.system.Threads;
 import org.netbeans.lib.profiler.server.system.Timers;
 import org.netbeans.lib.profiler.wireprotocol.*;
 import java.io.*;
-import java.lang.InterruptedException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -636,10 +635,6 @@ public class ProfilerServer extends Thread implements CommonConstants {
         return res;
     }
 
-    public ObjectOutputStream getSocketOutputStream() {
-        return socketOut;
-    }
-
     public static void notifyClientOnResultsAvailability() {
         if (!connectionOpen) {
             return;
@@ -716,17 +711,13 @@ public class ProfilerServer extends Thread implements CommonConstants {
     }
 
     // Several methods to send commands specific for modules that use wireprotocol just occasionally
-    public boolean sendEventBufferDumpedCommand(int length, boolean waitForResponse) {
-        EventBufferDumpedCommand cmd = new EventBufferDumpedCommand(length);
+    public boolean sendEventBufferDumpedCommand(int length, byte[] buffer, int startPos) {
+        EventBufferDumpedCommand cmd = new EventBufferDumpedCommand(length,buffer,startPos);
         sendComplexCmdToClient(cmd);
 
-        if (waitForResponse) {
-            Response resp = getLastResponse();
+        Response resp = getLastResponse();
 
-            return resp.isOK();
-        } else {
-            return true;
-        }
+        return resp.isOK();
     }
 
     public synchronized void sendSimpleCmdToClient(int cmdType) {
@@ -1550,7 +1541,7 @@ public class ProfilerServer extends Thread implements CommonConstants {
                 sendSimpleResponseToClient(true, null);
                 closeConnection();
                 preemptExit = false;
-                System.exit(-1);
+                doExit();
 
                 break;
             case Command.SHUTDOWN_OK:
@@ -1584,7 +1575,7 @@ public class ProfilerServer extends Thread implements CommonConstants {
                 status.jvmArguments = Threads.getJVMArguments();
                 status.javaCommand = Threads.getJavaCommand();
 
-                VMPropertiesResponse resp = new VMPropertiesResponse(System.getProperty("java.version"), // NOI18N
+                VMPropertiesResponse resp = new VMPropertiesResponse(Platform.getJavaVersionString(), 
                                                                      System.getProperty("java.class.path"), // NOI18N
                                                                      System.getProperty("java.ext.dirs"), // NOI18N
                                                                      System.getProperty("sun.boot.class.path"), // NOI18N
@@ -1654,6 +1645,32 @@ public class ProfilerServer extends Thread implements CommonConstants {
 
                 break;
         }
+    }
+
+    private void doExit() {
+        // try to call LifecycleManager in NetBeans first
+        try {
+            Class lookupClz = Thread.currentThread().getContextClassLoader().loadClass("org.openide.util.Lookup"); // NOI18N
+            Method instMethod = lookupClz.getMethod("getDefault", new Class[0]); // NOI18N
+            Method lookupMethod = lookupClz.getMethod("lookup", new Class[]{Class.class}); // NOI18N
+
+            Object instance = instMethod.invoke(lookupClz, new Object[0]);
+            if (instance != null) {
+                ClassLoader clInstance = (ClassLoader)lookupMethod.invoke(instance, new Class[]{ClassLoader.class});
+                if (clInstance != null) {
+                    Class lcmInstanceClz = clInstance.loadClass("org.openide.LifecycleManager"); // NOI18N
+                    Method lcmInstMethod = lcmInstanceClz.getMethod("getDefault", new Class[0]); // NOI18N
+                    Method lcmExitMethod = lcmInstanceClz.getMethod("exit", new Class[0]); // NOI18N
+                    Object lcmInstance = lcmInstMethod.invoke(lcmInstanceClz, new Object[0]);
+                    lcmExitMethod.invoke(lcmInstance, new Object[0]);
+                    return;
+                }
+            }
+        } catch (Exception ex) {
+            // ignore
+        }
+        // fall through a general system exit
+        System.exit(-1);
     }
 
     private void handleIOExceptionOnSend(IOException ex) {
