@@ -46,7 +46,6 @@ import java.util.*;
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.deep.*;
 
-import org.netbeans.modules.cnd.modelimpl.csm.*;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 
 import antlr.collections.AST;
@@ -95,7 +94,24 @@ public class ForStatementImpl extends StatementBase implements CsmForStatement {
         renderIfNeed();
         return body;
     }
-    
+
+    @Override
+    public void dispose() {
+        super.dispose();
+        if (condition instanceof Disposable) {
+            ((Disposable) condition).dispose();
+        }
+        if (init instanceof Disposable) {
+            ((Disposable) init).dispose();
+        }
+        if (iteration instanceof Disposable) {
+            ((Disposable) iteration).dispose();
+        }
+        if (body instanceof Disposable) {
+            ((Disposable) body).dispose();
+        }        
+    }
+
     private void renderIfNeed() {
         if( ! rendered ) {
             rendered = true;
@@ -110,7 +126,7 @@ public class ForStatementImpl extends StatementBase implements CsmForStatement {
         for( AST token = getAst().getFirstChild(); token != null; token = token.getNextSibling() ) {
             switch( token.getType() ) {
             case CPPTokenTypes.CSM_FOR_INIT_STATEMENT:
-                AST child = token.getFirstChild();
+                AST child = AstRenderer.getFirstChildSkipQualifiers(token);
                 if( child != null ) {
                     switch( child.getType() ) {
                         case CPPTokenTypes.SEMICOLON:
@@ -118,6 +134,9 @@ public class ForStatementImpl extends StatementBase implements CsmForStatement {
                             break;
                         case CPPTokenTypes.CSM_TYPE_BUILTIN:
                         case CPPTokenTypes.CSM_TYPE_COMPOUND:
+                        case CPPTokenTypes.LITERAL_struct:
+                        case CPPTokenTypes.LITERAL_class:
+                        case CPPTokenTypes.LITERAL_union:
                             //renderer.renderVariable(token, null, null);
                             init = new DeclarationStatementImpl(token, getContainingFile(), ForStatementImpl.this);
                             break;
@@ -134,7 +153,7 @@ public class ForStatementImpl extends StatementBase implements CsmForStatement {
                 break;
             default:
                 if( AstRenderer.isStatement(token) ) {
-                    body = body = AstRenderer.renderStatement(token, getContainingFile(), this);
+                    body = AstRenderer.renderStatement(token, getContainingFile(), this);
                 }
                 else if( AstRenderer.isExpression(token) ) {
                     iteration = renderer.renderExpression(token, ForStatementImpl.this);

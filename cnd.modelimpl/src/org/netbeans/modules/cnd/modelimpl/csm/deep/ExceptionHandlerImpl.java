@@ -59,9 +59,11 @@ import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 public class ExceptionHandlerImpl extends CompoundStatementImpl implements CsmExceptionHandler {
     
     private ParameterImpl parameter;
+    private final boolean globalHandler;
     
-    public ExceptionHandlerImpl(AST ast,  CsmFile file, CsmScope scope) {
+    public ExceptionHandlerImpl(AST ast,  CsmFile file, CsmScope scope, boolean global) {
         super(ast, file, scope);
+        this.globalHandler = global;
     }
     
     @Override
@@ -78,24 +80,29 @@ public class ExceptionHandlerImpl extends CompoundStatementImpl implements CsmEx
         if( parameter == null ) {
             AST ast = AstUtil.findChildOfType(getAst(), CPPTokenTypes.CSM_PARAMETER_DECLARATION);
             if( ast != null ) {
-                List<ParameterImpl> params = AstRenderer.renderParameter(ast, getContainingFile(), this);
-		if( params != null && ! params.isEmpty() ) {
-                    parameter = params.get(0);
-		}
+                List<ParameterImpl> params = AstRenderer.renderParameter(ast, getContainingFile(), this, !globalHandler);
+                if( params != null && ! params.isEmpty() ) {
+                            parameter = params.get(0);
+                }
             }
         }
         return parameter;
     }
-    
-    /** overrides parent method */
+
     @Override
-    protected void renderStatements(AST ast) {
-        ast = AstUtil.findChildOfType(ast, CPPTokenTypes.CSM_COMPOUND_STATEMENT);
-        if( ast != null ) {
-            super.renderStatements(ast);
+    public void dispose() {
+        super.dispose();
+        if (parameter instanceof Disposable) {
+            ((Disposable) parameter).dispose();
         }
     }
-   
+
+    /** overrides parent method */
+    @Override
+    protected AST getStartRenderingAst() {
+        return AstUtil.findChildOfType(getAst(), CPPTokenTypes.CSM_COMPOUND_STATEMENT);
+    }
+
     @Override
     public Collection<CsmScopeElement> getScopeElements() {
         return DeepUtil.merge(getParameter(), getStatements());

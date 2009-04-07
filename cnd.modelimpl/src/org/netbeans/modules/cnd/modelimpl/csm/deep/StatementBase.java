@@ -51,6 +51,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
+import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
 
@@ -95,9 +96,15 @@ public abstract class StatementBase extends OffsetableBase implements CsmStateme
     protected AST getAst() {
         return ast;
     }
-    
+
     @Override
-    protected void write(DataOutput output) throws IOException {
+    public void dispose() {
+        onDispose();
+        super.dispose();
+    }
+
+    @Override
+    public void write(DataOutput output) throws IOException {
         super.write(output);
         UIDObjectFactory.getDefaultFactory().writeUID(this.scopeUID, output);
     }
@@ -112,6 +119,12 @@ public abstract class StatementBase extends OffsetableBase implements CsmStateme
     public String toString() {
         return "" + getKind() + ' ' + getOffsetString(); // NOI18N
     }
-    
-    
+
+    private void onDispose() {
+        // restore scope from it's UID
+        if (this.scopeRef == null) {
+            this.scopeRef = UIDCsmConverter.UIDtoScope(scopeUID);
+            assert this.scopeRef != null : "no object for UID " + scopeUID;
+        }
+    }
 }
