@@ -51,6 +51,7 @@ import org.netbeans.modules.masterfs.filebasedfs.FileBasedURLMapper;
  * Implements URLMapper for MasterFileSystem.
  * @author  rm111737
  */
+@org.openide.util.lookup.ServiceProvider(service=org.openide.filesystems.URLMapper.class)
 public final class MasterURLMapper extends URLMapper {
     private static final URLMapper delegate = new FileBasedURLMapper();
     /** Creates a new instance of MasterURLMapper */
@@ -63,5 +64,5 @@ public final class MasterURLMapper extends URLMapper {
 
     public URL getURL(final FileObject fo, final int type) {
         return delegate.getURL(fo, type);
-    }        
+    }
 }

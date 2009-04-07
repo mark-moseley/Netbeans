@@ -100,6 +100,15 @@ public abstract class URLMapper {
 
     static {
         DefaultURLMapperProxy.setDefault(new DefaultURLMapper());
+        reset();
+    }
+
+    /** Cache of all available URLMapper instances. */
+    private static List<URLMapper> cache;
+
+    /** Reset cache, for use from unit tests. */
+    static void reset() {
+        cache = null;
         result = Lookup.getDefault().lookupResult(URLMapper.class);
         result.addLookupListener(
             new LookupListener() {
@@ -111,12 +120,6 @@ public abstract class URLMapper {
             }
         );
     }
-
-    /** Basic impl. for JarFileSystem, LocalFileSystem, MultiFileSystem */
-    private static URLMapper defMapper;
-
-    /** Cache of all available URLMapper instances. */
-    private static List<URLMapper> cache;
 
     /** Find a good URL for this file object which works according to type:
      * <ul>
@@ -455,20 +458,17 @@ public abstract class URLMapper {
             return retURL;
         }
 
-        private static URL toURL(File fFile, FileObject fo)
-        throws MalformedURLException {
-            URL retVal = null;
-
-            if (fo.isFolder() && !fo.isValid()) {
-                String urlDef = fFile.toURI().toURL().toExternalForm();
-                String pathSeparator = "/"; //NOI18N
-
+        private static URL toURL(File fFile, FileObject fo) throws MalformedURLException {
+            URL retVal = fFile.toURI().toURL();
+            if (retVal != null && fo.isFolder()) {
+                // #155742,160333 - URL for folder must always end with slash
+                final String urlDef = retVal.toExternalForm();
+                final String pathSeparator = "/";//NOI18N
                 if (!urlDef.endsWith(pathSeparator)) {
                     retVal = new URL(urlDef + pathSeparator);
                 }
             }
-
-            return (retVal == null) ? fFile.toURI().toURL() : retVal;
+            return retVal;
         }
 
         private static File findFileInRepository(FileObject fo) {
