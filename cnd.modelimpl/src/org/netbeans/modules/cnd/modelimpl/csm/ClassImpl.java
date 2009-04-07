@@ -89,7 +89,7 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
         }
 
         @Override
-        protected VariableImpl createVariable(AST offsetAst, CsmFile file, CsmType type, String name, boolean _static, boolean _extern,
+        protected VariableImpl<CsmField> createVariable(AST offsetAst, CsmFile file, CsmType type, String name, boolean _static, boolean _extern,
                 MutableDeclarationsContainer container1, MutableDeclarationsContainer container2, CsmScope scope) {
             type = TemplateUtils.checkTemplateType(type, ClassImpl.this);
             FieldImpl field = new FieldImpl(offsetAst, file, type, name, ClassImpl.this, curentVisibility, !isRenderingLocalContext());
@@ -201,7 +201,7 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
                     case CPPTokenTypes.CSM_FIELD:
                         child = token.getFirstChild();
                         if (hasFriendPrefix(child)) {
-                            addFriend(new FriendClassImpl(child, (FileImpl) getContainingFile(), ClassImpl.this, !isRenderingLocalContext()),!isRenderingLocalContext());
+                            addFriend(renderFriendClass(token), !isRenderingLocalContext());
                         } else {
                             if (renderVariable(token, null, null, false)) {
                                 break;
@@ -235,7 +235,7 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
                         {
                             child = token.getFirstChild();
                             if (hasFriendPrefix(child)) {
-                                addFriend(new FriendClassImpl(child, (FileImpl) getContainingFile(), ClassImpl.this, !isRenderingLocalContext()), !isRenderingLocalContext());
+                                addFriend(renderFriendClass(token), !isRenderingLocalContext());
                             } else {
                                 ClassMemberForwardDeclaration fd = renderClassForwardDeclaration(token);
                                 if (fd != null) {
@@ -279,7 +279,7 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
                                 }
                             } else {
                                 try {
-                                    addMember(new MethodImpl(token, ClassImpl.this, curentVisibility),!isRenderingLocalContext());
+                                    addMember(new MethodImpl<CsmMethod>(token, ClassImpl.this, curentVisibility),!isRenderingLocalContext());
                                 } catch (AstRendererException e) {
                                     DiagnosticExceptoins.register(e);
                                 }
@@ -318,7 +318,7 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
                             }
                         } else {
                             try {
-                                addMember(new MethodDDImpl(token, ClassImpl.this, curentVisibility, !isRenderingLocalContext(),!isRenderingLocalContext()),!isRenderingLocalContext());
+                                addMember(new MethodDDImpl<CsmMethod>(token, ClassImpl.this, curentVisibility, !isRenderingLocalContext(),!isRenderingLocalContext()),!isRenderingLocalContext());
                             } catch (AstRendererException e) {
                                 DiagnosticExceptoins.register(e);
                             }
@@ -354,6 +354,26 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
                 }
             }
             return false;
+        }
+
+        private CsmFriend renderFriendClass(AST ast) {
+            AST firstChild = ast.getFirstChild();
+            AST child = firstChild;
+            if (child.getType() == CPPTokenTypes.LITERAL_friend) {
+                child = child.getNextSibling();
+            }
+            if (child != null && child.getType() == CPPTokenTypes.LITERAL_template) {
+                child = child.getNextSibling();
+            }
+            CsmClassForwardDeclaration cfd = null;
+            if (child != null &&
+                    (child.getType() == CPPTokenTypes.LITERAL_struct ||
+                    child.getType() == CPPTokenTypes.LITERAL_class)) {
+                CsmNamespace scope = getContainingFile().getProject().getGlobalNamespace();
+                cfd = super.createForwardClassDeclaration(ast, null, (FileImpl) getContainingFile(), scope);
+                ((NamespaceImpl) scope).addDeclaration(cfd);
+            }
+            return new FriendClassImpl(firstChild, cfd, (FileImpl) getContainingFile(), ClassImpl.this, !isRenderingLocalContext());
         }
 
         private ClassMemberForwardDeclaration renderClassForwardDeclaration(AST token) {
@@ -544,7 +564,7 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
                 cls = classDefinition.getObject();
             }
             // we need to replace i.e. ForwardClass stub
-            if (cls != null && cls.isValid()) {
+            if (cls != null && cls.isValid() && !ForwardClass.isForwardClass(cls)) {
                 return cls;
             } else {
                 cls = super.getCsmClass();
@@ -698,8 +718,8 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
         CsmUID<CsmMember> uid = UIDCsmConverter.declarationToUID(member);
         assert uid != null;
         synchronized (members) {
-            members.add(uid);
-//            UIDUtilities.insertIntoSortedUIDList(uid, members);
+//            members.add(uid);
+            UIDUtilities.insertIntoSortedUIDList(uid, members);
         }
     }
 
@@ -710,8 +730,8 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
         CsmUID<CsmFriend> uid = UIDCsmConverter.declarationToUID(friend);
         assert uid != null;
         synchronized (friends) {
-            friends.add(uid);
-//            UIDUtilities.insertIntoSortedUIDList(uid, friends);
+//            friends.add(uid);
+            UIDUtilities.insertIntoSortedUIDList(uid, friends);
         }
     }
 
@@ -726,7 +746,7 @@ public class ClassImpl extends ClassEnumBase<CsmClass> implements CsmClass, CsmT
 
     @SuppressWarnings("unchecked")
     public Collection<CsmScopeElement> getScopeElements() {
-        return (Collection) getMembers();
+        return (Collection<CsmScopeElement>) (Collection<?>) getMembers();
     }
 
     @Override
