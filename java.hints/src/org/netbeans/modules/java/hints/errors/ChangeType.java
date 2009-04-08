@@ -51,6 +51,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import javax.lang.model.type.ErrorType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import org.netbeans.api.java.source.CompilationInfo;
@@ -118,11 +119,17 @@ public final class ChangeType implements ErrorRule<Void> {
             if (scope.getKind() == Kind.VARIABLE && ((VariableTree) scope).getInitializer() != null) {
                 expected = info.getTrees().getTypeMirror(path);
                 found = ((VariableTree) scope).getInitializer();
-                resolved = org.netbeans.modules.java.hints.errors.Utilities.resolveCapturedType(info, info.getTrees().getTypeMirror(new TreePath(path, found)));
+                resolved = info.getTrees().getTypeMirror(new TreePath(path, found));
+
+                if (resolved.getKind() == TypeKind.ERROR) {
+                    resolved = info.getTrees().getOriginalType((ErrorType) resolved);
+                }
+                
+                resolved = org.netbeans.modules.java.hints.errors.Utilities.resolveCapturedType(info, resolved);
             }
-            
+
             if (expected != null && resolved != null) {
-                if (resolved.getKind() == TypeKind.VOID || resolved.getKind() == TypeKind.EXECUTABLE) {
+                if (resolved.getKind() == TypeKind.VOID || resolved.getKind() == TypeKind.EXECUTABLE || resolved.getKind() == TypeKind.NULL) {
                 } else if (resolved.getKind() != TypeKind.ERROR &&
                 		expected.getKind() != TypeKind.ERROR) {
                     tm[0] = expected;
@@ -163,6 +170,10 @@ public final class ChangeType implements ErrorRule<Void> {
         
         if (leaf[0] instanceof VariableTree) {
             if (tm[0] != null) {
+
+                //anonymous class?
+                expressionType[0] = org.netbeans.modules.java.hints.errors.Utilities.convertIfAnonymous(expressionType[0]);
+
                 result.add(new ChangeTypeFix(info.getJavaSource(),
                         ((VariableTree) leaf[0]).getName().toString(), 
                         Utilities.getTypeName(expressionType[0], false).toString(), offset));
