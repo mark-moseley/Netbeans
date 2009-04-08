@@ -45,6 +45,11 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.Tree;
 import java.io.IOException;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.Document;
+import javax.swing.text.EditorKit;
+import javax.swing.text.StyledDocument;
 import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
@@ -64,7 +69,7 @@ import org.openide.loaders.DataObjectExistsException;
 import org.openide.loaders.MultiDataObject;
 import org.openide.loaders.MultiFileLoader;
 import org.openide.loaders.SaveAsCapable;
-import org.openide.nodes.CookieSet.Factory;
+import org.openide.nodes.CookieSet;
 import org.openide.nodes.Node;
 import org.openide.nodes.Node.Cookie;
 import org.openide.text.CloneableEditor;
@@ -84,7 +89,7 @@ public final class JavaDataObject extends MultiDataObject {
                 createJavaEditorSupport().saveAs( folder, fileName );
             }
         });
-        getCookieSet().add(JavaEditorSupport.class, new Factory() {
+        getCookieSet().add(JavaEditorSupport.class, new CookieSet.Factory() {
             public <T extends Cookie> T createCookie(Class<T> klass) {
                 return klass.cast(createJavaEditorSupport ());
             }
@@ -121,7 +126,7 @@ public final class JavaDataObject extends MultiDataObject {
             private static final long serialVersionUID = -1;
             
             private transient SaveSupport saveCookie = null;
-            
+
             private final class SaveSupport implements SaveCookie {
                 public void save() throws java.io.IOException {
                     ((JavaEditorSupport)findCloneableOpenSupport()).saveDocument();
@@ -162,6 +167,7 @@ public final class JavaDataObject extends MultiDataObject {
                     javaData.getCookieSet().remove(this.saveCookie);
                     javaData.setModified(false);
                 }
+
             }
         }
         
@@ -191,7 +197,6 @@ public final class JavaDataObject extends MultiDataObject {
         public @Override boolean close(boolean ask) {
             return super.close(ask);
         }
-
     }
     
     private static final class JavaEditor extends CloneableEditor {
