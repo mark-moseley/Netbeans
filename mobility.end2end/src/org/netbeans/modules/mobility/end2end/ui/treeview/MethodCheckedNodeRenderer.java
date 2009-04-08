@@ -12,6 +12,8 @@ import java.awt.Font;
 import java.awt.event.ItemListener;
 import java.beans.BeanInfo;
 import java.io.CharConversionException;
+import java.util.List;
+
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JPanel;
@@ -49,26 +51,27 @@ public class MethodCheckedNodeRenderer extends JPanel implements TreeCellRendere
  
     public Component getTreeCellRendererComponent(final JTree tree, final Object value, final boolean selected, final boolean expanded, final boolean leaf, final int row, final boolean hasFocus) {
         final Node node = Visualizer.findNode(value);
-        setText(node.getDisplayName());
-        setEnabled(tree.isEnabled());
+        MethodCheckedNodeRenderer component = new MethodCheckedNodeRenderer();
+        component.setText(node.getDisplayName());
+        component.setEnabled(tree.isEnabled());
         if (selected) {
-            setForeground(selectionForeground, textForeground);
-            setBackground(selectionBackground, tree.getBackground());
+            component.setForeground(selectionForeground, textForeground);
+            component.setBackground(selectionBackground, tree.getBackground());
         } else {
-            setForeground(textForeground);
-            setBackground(tree.getBackground());
+            component.setForeground(textForeground);
+            component.setBackground(tree.getBackground());
         }
-        setState((MultiStateCheckBox.State)node.getValue(ServiceNodeManager.NODE_SELECTION_ATTRIBUTE));
+        component.setState((MultiStateCheckBox.State)node.getValue(ServiceNodeManager.NODE_SELECTION_ATTRIBUTE));
         Boolean val = (Boolean)node.getValue(ServiceNodeManager.NODE_VALIDITY_ATTRIBUTE);
         if (val != null && !val) try {
-            setText("<html><s>" + XMLUtil.toAttributeValue(node.getDisplayName()) + "</s></html>");
-            setEnabled(false);
+            component.setText("<html><s>" + XMLUtil.toAttributeValue(node.getDisplayName()) + "</s></html>");
+            component.setEnabled(false);
         } catch (CharConversionException cce) {} else {
-            setEnabled(true);
+            component.setEnabled(true);
         }
 
-        setIcon(new ImageIcon(node.getIcon(BeanInfo.ICON_COLOR_16x16)));
-        return this;
+        component.setIcon(new ImageIcon(node.getIcon(BeanInfo.ICON_COLOR_16x16)));
+        return component;
     }
 
     public void setForeground(final Color fg) {
@@ -109,7 +112,7 @@ public class MethodCheckedNodeRenderer extends JPanel implements TreeCellRendere
     public void setText(final String text) {
         jLabel1.setText(text);
     }
-
+    
     public String getText() {
         return jLabel1.getText();
     }
