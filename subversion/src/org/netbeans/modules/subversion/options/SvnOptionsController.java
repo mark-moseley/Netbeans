@@ -52,6 +52,7 @@ import javax.swing.JFileChooser;
 import org.netbeans.modules.subversion.Annotator;
 import org.netbeans.modules.subversion.Subversion;
 import org.netbeans.modules.subversion.SvnModuleConfig;
+import org.netbeans.modules.subversion.client.SvnClientFactory;
 import org.netbeans.modules.subversion.ui.repository.Repository;
 import org.netbeans.modules.versioning.util.AccessibleJFileChooser;
 import org.netbeans.spi.options.OptionsPanelController;
@@ -92,8 +93,8 @@ public final class SvnOptionsController extends OptionsPanelController implement
     public void update() {
         
         panel.executablePathTextField.setText(SvnModuleConfig.getDefault().getExecutableBinaryPath());
-        panel.annotationTextField.setText(SvnModuleConfig.getDefault().getAnnotationFormat());                   
-                      
+        panel.annotationTextField.setText(SvnModuleConfig.getDefault().getAnnotationFormat());
+        panel.cbOpenOutputWindow.setSelected(SvnModuleConfig.getDefault().getAutoOpenOutput());
         annotationSettings.update();
         repository.refreshUrlHistory();
         
@@ -101,16 +102,17 @@ public final class SvnOptionsController extends OptionsPanelController implement
     
     public void applyChanges() {                                 
         // executable
+        if(!panel.executablePathTextField.getText().equals(SvnModuleConfig.getDefault().getExecutableBinaryPath())) {
+            SvnClientFactory.reset();
+        }
         SvnModuleConfig.getDefault().setExecutableBinaryPath(panel.executablePathTextField.getText());                
-        SvnModuleConfig.getDefault().setAnnotationFormat(panel.annotationTextField.getText());            
+        SvnModuleConfig.getDefault().setAnnotationFormat(panel.annotationTextField.getText());
+        SvnModuleConfig.getDefault().setAutoOpenOutputo(panel.cbOpenOutputWindow.isSelected());
         
         // {folder} variable setting
         annotationSettings.applyChanges();
         Subversion.getInstance().getAnnotator().refresh();
-        Subversion.getInstance().refreshAllAnnotations();
-        
-        // connection
-        repository.storeRecentUrls();
+        Subversion.getInstance().refreshAllAnnotations();        
     }
     
     public void cancel() {
@@ -176,7 +178,9 @@ public final class SvnOptionsController extends OptionsPanelController implement
     
     private void onManageConnClick() {
         boolean ok = repository.show(NbBundle.getMessage(SvnOptionsController.class, "CTL_ManageConnections"), new HelpCtx(Repository.class), true);
-        if(!ok) {
+        if(ok) {            
+            repository.storeRecentUrls();
+        } else {    
             repository.refreshUrlHistory();
         }
     }

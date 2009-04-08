@@ -43,6 +43,7 @@ package org.netbeans.modules.subversion;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.logging.Level;
 import org.openide.util.RequestProcessor;
 import org.openide.windows.IOProvider;
@@ -62,6 +63,15 @@ public class OutputLogger implements ISVNNotifyListener {
     private boolean ignoreCommand = false;
     private String repositoryRootString;
     private static final RequestProcessor rp = new RequestProcessor("SubversionOutput", 1);
+    private boolean writable; // output window is open and can be written into
+    /**
+     * cache of already opened output windows
+     * IOProvider automatically opens OW after its first initialization,
+     * in the second call it returns the handle from its cache and OW is not opened again.
+     * So if this cache doesn't contain the repository string yet, it will probably mean the OW is automatically opened
+     * and in that case it should be closed again. See getLog().
+     */
+    private static final HashSet<String> openedWindows = new HashSet<String>(5);
     
     public static OutputLogger getLogger(SVNUrl repositoryRoot) {
         if (repositoryRoot != null) {
@@ -73,7 +83,6 @@ public class OutputLogger implements ISVNNotifyListener {
     
     private OutputLogger(SVNUrl repositoryRoot) {
         repositoryRootString = repositoryRoot.toString();
-        log = IOProvider.getDefault().getIO(repositoryRootString, false);
     }
 
     private OutputLogger() {
@@ -83,16 +92,22 @@ public class OutputLogger implements ISVNNotifyListener {
         rp.post(new Runnable() {
             public void run() {                        
                 logln(commandLine, false);
-                log.getOut().flush();
+                flush();
             }
         });        
+    }
+
+    private void flush () {
+        if (writable) {
+            getLog().getOut().flush();
+        }
     }
     
     public void logCompleted(final String message) {
         rp.post(new Runnable() {
             public void run() {                
                 logln(message, ignoreCommand);
-                log.getOut().flush();
+                flush();
             }
         });        
     }
@@ -101,7 +116,7 @@ public class OutputLogger implements ISVNNotifyListener {
         rp.post(new Runnable() {
             public void run() {                
                 logln(message, false);
-                log.getOut().flush();
+                flush();
             }
         });            
     }
@@ -110,7 +125,7 @@ public class OutputLogger implements ISVNNotifyListener {
         rp.post(new Runnable() {
             public void run() {                
                 logln(message, ignoreCommand);
-                log.getOut().flush();
+                flush();
             }
         });
     }
@@ -138,8 +153,10 @@ public class OutputLogger implements ISVNNotifyListener {
     public void closeLog() {
         rp.post(new Runnable() {
             public void run() {
-                log.getOut().flush();
-                log.getOut().close();        
+                if (log != null && writable) {
+                    getLog().getOut().flush();
+                    getLog().getOut().close();
+                }
             }
         });
     }
@@ -147,7 +164,8 @@ public class OutputLogger implements ISVNNotifyListener {
     public void flushLog() {
         rp.post(new Runnable() {
             public void run() {        
-                log.getOut().flush();
+                getLog();
+                flush();
             }
         });        
     }
@@ -160,26 +178,53 @@ public class OutputLogger implements ISVNNotifyListener {
         if(ignore) {
             return;
         }
-        if (log.isClosed()) {
-            log = IOProvider.getDefault().getIO(repositoryRootString, false);
-            try {
-                // HACK (mystic logic) workaround, otherwise it writes to nowhere 
-                log.getOut().reset();
-            } catch (IOException e) {
-                Subversion.LOG.log(Level.SEVERE, null, e);
+        if (getLog().isClosed()) {
+            if (SvnModuleConfig.getDefault().getAutoOpenOutput()) {
+                Subversion.LOG.fine("Creating OutputLogger for " + repositoryRootString);
+                log = IOProvider.getDefault().getIO(repositoryRootString, false);
+                try {
+                    // HACK (mystic logic) workaround, otherwise it writes to nowhere
+                    getLog().getOut().reset();
+                } catch (IOException e) {
+                    Subversion.LOG.log(Level.SEVERE, null, e);
+                }
+            } else {
+                writable = false;
             }
-            //log.select();
         }
-        if (hyperlinkListener != null) {
-            try {
-                log.getOut().println(message, hyperlinkListener);
-            } catch (IOException e) {
-                log.getOut().write(message);
+        if (writable) {
+            if (hyperlinkListener != null) {
+                try {
+                    getLog().getOut().println(message, hyperlinkListener);
+                } catch (IOException e) {
+                    getLog().getOut().write(message);
+                }
+            } else {
+                getLog().getOut().write(message);
             }
-        } else {
-            log.getOut().write(message);
-        }        
-    }      
+        }
+    }
+
+    /**
+     * @return the log
+     */
+    private InputOutput getLog() {
+        writable = true;
+        if(log == null) {
+            Subversion.LOG.fine("Creating OutputLogger for " + repositoryRootString);
+            log = IOProvider.getDefault().getIO(repositoryRootString, false);
+            if (!openedWindows.contains(repositoryRootString)) {
+                // log window has been opened
+                writable = SvnModuleConfig.getDefault().getAutoOpenOutput();
+                openedWindows.add(repositoryRootString);
+                if (!writable) {
+                    // close it again
+                    log.closeInputOutput();
+                }
+            }
+        }
+        return log;
+    }
     
     private static class NullLogger extends OutputLogger {
 
