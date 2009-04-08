@@ -79,9 +79,9 @@ import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
 import org.openide.nodes.NodeNotFoundException;
 import org.openide.nodes.NodeOp;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
 
 /**
  *
@@ -105,7 +105,7 @@ public class TemplatesPanelGUI extends javax.swing.JPanel implements PropertyCha
     public static final String TEMPLATES_FOLDER = "templatesFolder";        //NOI18N
     public static final String TARGET_TEMPLATE = "targetTemplate";          //NOI18N
     private static final String ATTR_INSTANTIATING_DESC = "instantiatingWizardURL"; //NOI18N
-    private static final Image PLEASE_WAIT_ICON = Utilities.loadImage ("org/netbeans/modules/project/ui/resources/wait.gif"); // NOI18N
+    private static final Image PLEASE_WAIT_ICON = ImageUtilities.loadImage ("org/netbeans/modules/project/ui/resources/wait.gif"); // NOI18N
     
     private Builder firer;
 
@@ -133,6 +133,14 @@ public class TemplatesPanelGUI extends javax.swing.JPanel implements PropertyCha
         if (categoryName != null) {
             try {
                 ((org.netbeans.modules.project.ui.TemplatesPanelGUI.ExplorerProviderPanel) this.categoriesPanel).setSelectedNode(categoryName);
+                //expand explicitly selected category
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        Node[] sel = ((ExplorerProviderPanel)categoriesPanel).getSelectedNodes();
+                        if( sel.length == 1 )
+                            ((CategoriesPanel)categoriesPanel).btv.expandNode(sel[0]);
+                    }
+                });
             }
             catch (NodeNotFoundException ex) {
                 // if categoryName is null then select first category leastwise
@@ -189,6 +197,20 @@ public class TemplatesPanelGUI extends javax.swing.JPanel implements PropertyCha
             }
         }
         return null;
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        jScrollPane1.setViewportView(description);
+        jLabel3.setLabelFor(description);
+    }
+    
+    @Override
+    public void removeNotify() {
+        super.removeNotify();
+        jScrollPane1.setViewportView(null);
+        jLabel3.setLabelFor(null);
     }
 
     public void propertyChange (PropertyChangeEvent event) {
@@ -534,7 +556,7 @@ public class TemplatesPanelGUI extends javax.swing.JPanel implements PropertyCha
         public void selectFirstCategory () {
             btv.selectFirstCategory ();
         }
-        
+
     }
     
     private static class TemplatesListView extends ListView implements ActionListener {
@@ -584,7 +606,7 @@ public class TemplatesPanelGUI extends javax.swing.JPanel implements PropertyCha
         }
         
     }
-           
+   
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPanel categoriesPanel;
     private javax.swing.JEditorPane description;
