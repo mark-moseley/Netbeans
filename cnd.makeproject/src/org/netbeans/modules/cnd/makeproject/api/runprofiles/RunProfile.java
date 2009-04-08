@@ -219,11 +219,11 @@ public class RunProfile implements ConfigurationAuxObject {
                 name = getString("TerminalType_KDE"); // NOI18N
                 list.add(name); 
                 termPaths.put(name, termPath);
-                termOptions.put(name, "--nomenubar --notabbar --workdir " + baseDir + " -e \"" + dorun + // NOI18N
+                termOptions.put(name, "--notabbar --workdir " + baseDir + " -e \"" + dorun + // NOI18N
                         "\" -p \"" + getString("LBL_RunPrompt") + "\" -f \"{0}\" {1} {2}"); // NOI18N
                 if (termPaths.get(def) == null) {
                     termPaths.put(def, termPath);
-                    termOptions.put(def, "--nomenubar --notabbar --workdir " + baseDir + " -e \"" + dorun + // NOI18N
+                    termOptions.put(def, "--notabbar --workdir " + baseDir + " -e \"" + dorun + // NOI18N
                         "\" -p \"" + getString("LBL_RunPrompt") + "\" -f \"{0}\" {1} {2}"); // NOI18N
                 }
             }
@@ -341,7 +341,7 @@ public class RunProfile implements ConfigurationAuxObject {
     public void setDefault(boolean b) {
         defaultProfile = b;
     }
-    
+
     // Args ...
     public void setArgs(String argsFlat) {
         String oldArgsFlat = getArgsFlat();
@@ -362,6 +362,13 @@ public class RunProfile implements ConfigurationAuxObject {
         if (pcs != null && !IpeUtils.sameStringArray(oldArgsArray, argsArray)) {
             pcs.firePropertyChange(PROP_RUNARGS_CHANGED, oldArgsArray, argsArray);
         }
+        needSave = true;
+    }
+    
+    public void setArgsRaw(String argsFlat) {
+        this.argsFlat = argsFlat;
+        argsFlatValid = true;
+        argsArrayValid = false;
         needSave = true;
     }
     
@@ -502,10 +509,11 @@ public class RunProfile implements ConfigurationAuxObject {
         return environment;
     }
     
-    public void setEnvironment(Env environment) {
-        this.environment = environment;
-        if (pcs != null) {
-            pcs.firePropertyChange(PROP_ENVVARS_CHANGED, null, this);
+    public void setEnvironment(Env env) {
+        Env oldEnv = environment;
+        this.environment = env;
+        if (pcs != null && !environment.equals(oldEnv)) {
+            pcs.firePropertyChange(PROP_ENVVARS_CHANGED, oldEnv, environment);
         }
     }
     
@@ -642,16 +650,12 @@ public class RunProfile implements ConfigurationAuxObject {
         setTerminalType(p.getTerminalType());
     }
     
-    public RunProfile cloneProfile() {
-        return (RunProfile)clone();
-    }
-    
     /**
      * Clones the profile.
      * All fields are cloned except for 'parent'.
      */
     @Override
-    public Object clone() {
+    public RunProfile clone() {
         RunProfile p = new RunProfile(getBaseDir(), this.platform);
         //p.setParent(getParent());
         p.setCloneOf(this);
@@ -851,7 +855,7 @@ public class RunProfile implements ConfigurationAuxObject {
         }
     }
     
-    private class EnvEditor extends PropertyEditorSupport implements ExPropertyEditor {
+    private static class EnvEditor extends PropertyEditorSupport implements ExPropertyEditor {
         private Env env;
         private PropertyEnv propenv;
         
