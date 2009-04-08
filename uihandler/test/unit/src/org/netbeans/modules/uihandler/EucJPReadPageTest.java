@@ -41,30 +41,20 @@
 
 package org.netbeans.modules.uihandler;
 
-import java.awt.Component;
 import java.awt.Dialog;
-import java.awt.Dimension;
 import java.awt.Frame;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 import javax.swing.JButton;
-import junit.framework.*;
 import java.util.Locale;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
-import javax.swing.JScrollPane;
 import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
-import org.openide.util.NbBundle;
 
 /**
  *
@@ -75,22 +65,15 @@ public class EucJPReadPageTest extends NbTestCase {
     public EucJPReadPageTest(String testName) {
         super(testName);
     }
-    
-    @Override
-    protected boolean runInEQ() {
-        return true;
-    }
-
-    @Override
-    protected Level logLevel() {
-        return Level.INFO;
-    }
-    
 
     @Override
     protected void setUp() throws Exception {
         System.setProperty("netbeans.user", getWorkDirPath());
         clearWorkDir();
+        MemoryURL.initialize();
+        DD.d = null;
+        MockServices.setServices(DD.class);
+        Locale.setDefault(new Locale("te", "ST"));
         
         Installer installer = Installer.findObject(Installer.class, true);
         assertNotNull(installer);
@@ -98,10 +81,7 @@ public class EucJPReadPageTest extends NbTestCase {
         // setup the listing
         installer.restored();
         
-        Locale.setDefault(new Locale("te", "ST"));
-        
-        DD.d = null;
-        MockServices.setServices(DD.class);
+        Installer.dontWaitForUserInputInTests();
     }
 
     @Override
@@ -192,8 +172,7 @@ public class EucJPReadPageTest extends NbTestCase {
             return new DialogImpl(d, new Frame());
         }
 
-        private static class DialogImpl extends Dialog 
-        implements PropertyChangeListener {
+        private static class DialogImpl extends Dialog {
             NotifyDescriptor d;
             
             private DialogImpl(NotifyDescriptor d, Frame owner) {
@@ -201,16 +180,12 @@ public class EucJPReadPageTest extends NbTestCase {
                 this.d = d;
             }
 
-            @java.lang.Override
+            @Override
             public synchronized void setVisible(boolean b) {
                 assertFalse(isModal());
-            }
-
-            public synchronized void propertyChange(PropertyChangeEvent evt) {
-                if (d != null && d.getOptions().length == 2) {
+                if (d != null) {
                     d.setValue(NotifyDescriptor.CLOSED_OPTION);
                     d = null;
-                    notifyAll();
                 }
             }
         }
