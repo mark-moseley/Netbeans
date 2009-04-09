@@ -42,49 +42,31 @@
 package org.netbeans.modules.welcome.ui;
 
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Image;
-import java.awt.Point;
-import java.awt.Rectangle;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.Scrollable;
 import org.netbeans.modules.welcome.content.Constants;
-import org.openide.util.Utilities;
+import org.netbeans.modules.welcome.content.Utils;
+import org.openide.util.ImageUtilities;
 
 /**
  * Base class for inner tabs in the Welcome Page
  * 
  * @author S. Aubrecht
  */
-abstract class AbstractTab extends JPanel implements Scrollable, Constants {
+abstract class AbstractTab extends JPanel implements Constants {
 
     private boolean initialized = false;
-
-    private Image imgBottomStripWest;
-    private Image imgBottomStripCenter;
-    private Image imgBottomStripEast;
-
-    private Image imgTopStripWest;
-    private Image imgTopStripCenter;
-
-    private Image imgMiddleStripEast;
-    private Image imgMiddleStripCenter;
-
-    public AbstractTab() {
+    private final Image bottomBar;
+    
+    public AbstractTab( boolean paintBottomGraphics) {
         super( new BorderLayout() );
-        setOpaque( false );
-        
-        this.imgBottomStripCenter = Utilities.loadImage( IMAGE_STRIP_BOTTOM_CENTER );
-        this.imgBottomStripWest = Utilities.loadImage( IMAGE_STRIP_BOTTOM_WEST );
-        this.imgBottomStripEast = Utilities.loadImage( IMAGE_STRIP_BOTTOM_EAST );
-        
-        this.imgTopStripCenter = Utilities.loadImage( IMAGE_STRIP_TOP_CENTER );
-        this.imgTopStripWest = Utilities.loadImage( IMAGE_STRIP_TOP_WEST );
-        
-        this.imgMiddleStripCenter = Utilities.loadImage( IMAGE_STRIP_MIDDLE_CENTER );
-        this.imgMiddleStripEast = Utilities.loadImage( IMAGE_STRIP_MIDDLE_EAST );
+        setOpaque(true);
+        setBackground(Utils.getColor(Constants.COLOR_SCREEN_BACKGROUND));
+        if( paintBottomGraphics )
+             bottomBar = ImageUtilities.loadImage("org/netbeans/modules/welcome/resources/bottom_bar.png"); //NOI18N
+        else
+            bottomBar = null;
     }
 
     @Override
@@ -97,83 +79,14 @@ abstract class AbstractTab extends JPanel implements Scrollable, Constants {
     }
 
     protected abstract void buildContent();
-    
-    protected abstract Point getTopStripOrigin();
-    
-    protected abstract Point getMiddleStripOrigin();
-    
-    protected abstract Point getBottomStripOrigin();
-    
-    @Override
-    public Dimension getPreferredSize() {
-        Dimension d = super.getPreferredSize();
-        if( null != getParent() && getParent().getHeight() > 0 && getParent().getHeight() > d.height )
-            d.height = getParent().getHeight();
-        if( null != getParent() && getParent().getWidth() > 0 ) {
-            if( d.width > getParent().getWidth() ) {
-                d.width = Math.max(getParent().getWidth(), START_PAGE_MIN_WIDTH+(int)(((FONT_SIZE-11)/11.0)*START_PAGE_MIN_WIDTH));
-                if( getParent().getParent() instanceof JScrollPane ) {
-                    if( ((JScrollPane)getParent().getParent()).getVerticalScrollBar().isVisible() )
-                        d.width -= ((JScrollPane)getParent().getParent()).getVerticalScrollBar().getWidth();
-                }
-            } else if( d.width < getParent().getWidth() ) {
-                d.width = getParent().getWidth();
-            }
-        }
-        return d;
-    }
-    
-    public Dimension getPreferredScrollableViewportSize() {
-        return getPreferredSize();
-    }
-
-    public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction) {
-        return Constants.FONT_SIZE;
-    }
-
-    public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction) {
-        return 30*Constants.FONT_SIZE;
-    }
-
-    public boolean getScrollableTracksViewportWidth() {
-        return false;
-    }
-
-    public boolean getScrollableTracksViewportHeight() {
-        return false;
-    }
 
     @Override
     protected void paintComponent(Graphics g) {
-        int width = getWidth();
-        
-        //top strip
-        Point origin = getTopStripOrigin();
-        g.drawImage( imgTopStripWest, origin.x, origin.y, null );
-        for( int i=origin.x+imgTopStripWest.getWidth(null); i<width; i++ ) {
-            g.drawImage( imgTopStripCenter, i, origin.y, null );
+        super.paintComponent(g);
+        if( null != bottomBar ) {
+            int imgWidth = bottomBar.getWidth(this);
+            int imgHeight = bottomBar.getHeight(this);
+            g.drawImage(bottomBar, getWidth()-imgWidth, getHeight()-imgHeight, this);
         }
-        
-        //middle strip
-        origin = getMiddleStripOrigin();
-        g.drawImage( imgMiddleStripEast, origin.x-imgMiddleStripEast.getWidth(null), origin.y, null );
-        for( int i=origin.x-imgMiddleStripEast.getWidth(null); i>=0; i-- ) {
-            g.drawImage( imgMiddleStripCenter, i, origin.y, null );
-        }
-        
-        //bottom strip
-        origin = getBottomStripOrigin();
-        int eastWidth = imgBottomStripEast.getWidth( null );
-        int eastHeight = imgBottomStripEast.getHeight( null );
-        int westWidth = imgBottomStripWest.getWidth( null );
-        int westHeight = imgBottomStripWest.getHeight( null );
-        g.drawImage( imgBottomStripEast, width-eastWidth-1, origin.y-eastHeight-1, null    );
-        int centerWidth = Math.max( 100, width-eastWidth-westWidth-150 );
-        
-        g.drawImage( imgBottomStripWest, width-eastWidth-1-centerWidth-westWidth, origin.y-westHeight-1, null );
-        for( int i=0; i<centerWidth; i++ ) {
-            g.drawImage( imgBottomStripCenter, width-eastWidth-centerWidth-1+i, origin.y-westHeight-1, null );
-        }
-        
     }
 }

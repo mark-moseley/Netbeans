@@ -45,7 +45,6 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GraphicsEnvironment;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.io.File;
@@ -61,7 +60,6 @@ import org.openide.awt.HtmlBrowser;
 import org.openide.cookies.InstanceCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataObject;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -109,7 +107,7 @@ public class Utils {
     }
 
     public static Action findAction( String key ) {
-        FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource(key);
+        FileObject fo = FileUtil.getConfigFile(key);
         
         if (fo != null && fo.isValid()) {
             try {
@@ -127,22 +125,6 @@ public class Utils {
                 ErrorManager.getDefault().notify(ErrorManager.WARNING, e);
                 return null;
             }
-        }
-        return null;
-    }
-
-    public static Action createSampleProjectAction() {
-        ClassLoader loader = Lookup.getDefault().lookup( ClassLoader.class );
-        if( null == loader )
-            loader = ClassLoader.getSystemClassLoader();
-        try {
-            Class clazz = Class.forName( "org.netbeans.modules.project.ui.actions.NewProject", true, loader ); // NOI18N
-            Method getDefault = clazz.getMethod( "newSample"); // NOI18N
-            Object newSample = getDefault.invoke( null );
-            if( newSample instanceof Action )
-                return (Action)newSample;
-        } catch( Exception e ) {
-            ErrorManager.getDefault().notify( ErrorManager.INFORMATIONAL, e );
         }
         return null;
     }
@@ -164,7 +146,7 @@ public class Utils {
         if (userDir != null) {
             cacheStore = new File(new File(new File (userDir, "var"), "cache"), "welcome"); // NOI18N
         } else {
-            File cachedir = FileUtil.toFile(Repository.getDefault().getDefaultFileSystem().getRoot());
+            File cachedir = FileUtil.toFile(FileUtil.getConfigRoot());
             cacheStore = new File(cachedir, "welcome"); // NOI18N
         }
         return cacheStore;

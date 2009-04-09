@@ -64,7 +64,7 @@ class ArticlesAndNews extends RSSFeedReaderPanel {
 
     private RSSFeed feed;
 
-    private static final int MAX_ARTICLES_COUNT = 4;
+    private static final int MAX_ARTICLES_COUNT = 3;
 
     public ArticlesAndNews() {
         super( "ArticlesAndNews", true ); // NOI18N
@@ -94,7 +94,7 @@ class ArticlesAndNews extends RSSFeedReaderPanel {
         BundleSupport.setAccessibilityProperties( articles, "AllArticles" ); //NOI18N
 
         JPanel panel = new JPanel( new GridBagLayout() );
-        panel.setOpaque( false );
+        panel.setOpaque(false);
 
         panel.add( news, new GridBagConstraints(0,1,1,1,0.0,0.0,
                 GridBagConstraints.SOUTHWEST,GridBagConstraints.HORIZONTAL,

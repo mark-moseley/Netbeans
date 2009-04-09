@@ -56,7 +56,7 @@ import org.netbeans.modules.welcome.content.Constants;
  *
  * @author S. Aubrecht
  */
-class ShowNextTime extends JPanel 
+class ShowNextTime extends JPanel
         implements ActionListener, Constants, PropertyChangeListener {
 
     private JCheckBox button;
@@ -64,9 +64,8 @@ class ShowNextTime extends JPanel
     /** Creates a new instance of RecentProjects */
     public ShowNextTime() {
         super( new BorderLayout() );
+        setOpaque(false);
 
-        setOpaque( false );
-        
         button = new JCheckBox( BundleSupport.getLabel( "ShowOnStartup" ) ); // NOI18N
         button.setSelected( WelcomeOptions.getDefault().isShowOnStartup() );
         button.setOpaque( false );

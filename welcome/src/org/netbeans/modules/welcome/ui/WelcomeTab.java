@@ -42,16 +42,14 @@
 package org.netbeans.modules.welcome.ui;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Insets;
-import java.awt.Point;
-import java.awt.Rectangle;
-import javax.swing.JComponent;
+import javax.swing.BorderFactory;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
 import org.netbeans.modules.welcome.content.BundleSupport;
 import org.netbeans.modules.welcome.content.ContentSection;
 
@@ -61,96 +59,41 @@ import org.netbeans.modules.welcome.content.ContentSection;
  * @author S. Aubrecht
  */
 class WelcomeTab extends AbstractTab {
-    
-    private ContentSection getStartedSection;
-    private ContentSection learnMoreSection;
-    private JComponent bottomBar;
+
+    public WelcomeTab() {
+        super( true );
+    }
 
     protected void buildContent() {
         JPanel main = new JPanel( new GridBagLayout() );
-        main.setOpaque( false );
+        main.setOpaque(false);
+        main.setBorder(BorderFactory.createEmptyBorder());
         add( main, BorderLayout.CENTER );
         
-        JPanel upperSpace = new Stripe( true );
-        upperSpace.setBackground( Color.red );
-        main.add( upperSpace,
-                new GridBagConstraints(0,0,2,1,1.0,1.0,GridBagConstraints.CENTER,
+        main.add( new JLabel(),
+                new GridBagConstraints(0,0,1,1,1.0,1.0,GridBagConstraints.CENTER,
                 GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-        
-        JComponent c = new GetStarted();
-        getStartedSection = new ContentSection( BundleSupport.getLabel("SectionGetStarted"),  //NOI18N
-                SwingConstants.NORTH_WEST, c, false );
-        main.add( getStartedSection,
-                new GridBagConstraints(0,1,1,1,1.0,0.0,GridBagConstraints.SOUTHEAST,
-                GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-        
-        c = new Samples();
-        main.add( new ContentSection( BundleSupport.getLabel("SectionSamples"), //NOI18N
-                SwingConstants.NORTH_EAST, c, false ),
-                new GridBagConstraints(1,1,1,1,1.0,0.0,GridBagConstraints.SOUTHWEST,
-                GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-        
-        c = new PluginsPanel();
-        main.add( new ContentSection( BundleSupport.getLabel("SectionPlugins"), //NOI18N
-                SwingConstants.SOUTH_WEST, c, false ),
-                new GridBagConstraints(0,2,1,1,1.0,0.0,GridBagConstraints.NORTHEAST,
-                GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-        
-        c = new LearnMore();
-        learnMoreSection = new ContentSection( BundleSupport.getLabel( "SectionLearnMore" ), //NOI18N
-                SwingConstants.SOUTH_EAST, c, false );
-        main.add( learnMoreSection,
-                new GridBagConstraints(1,2,1,1,1.0,0.0,GridBagConstraints.NORTHWEST,
-                GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-        
-        bottomBar = new BottomBar();
-        main.add( bottomBar,
-                new GridBagConstraints(0,3,2,1,1.0,0.0,GridBagConstraints.CENTER,
-                GridBagConstraints.HORIZONTAL,new Insets(0,0,2,0),0,0) );
-        
-        JPanel bottomSpace = new Stripe( false );
-        bottomSpace.setBackground( Color.red );
-        main.add( bottomSpace,
-                new GridBagConstraints(0,4,2,1,1.0,1.0,GridBagConstraints.CENTER,GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-    }
 
-    protected Point getTopStripOrigin() {
-        Point p;
-        if( null == getStartedSection ) {
-            p = new Point(0,0);
-        } else {
-            Rectangle r = getStartedSection.getTitleBounds();
-            p = r.getLocation();
-            p.y += r.getHeight();
-            p = SwingUtilities.convertPoint( getStartedSection, p, this );
-        }
-        return p;
-    }
+        JPanel panel = new JPanel(new GridLayout(1,0));
+        panel.setOpaque(false);
+        panel.add(new ContentSection( BundleSupport.getLabel("SectionGetStarted"),  //NOI18N
+                "org/netbeans/modules/welcome/resources/lbl_get_started.png", //NOI18N
+                SwingConstants.WEST, new GetStarted(), false ));
 
-    protected Point getMiddleStripOrigin() {
-        Point p;
-        if( null == learnMoreSection ) {
-            p = new Point(0,0);
-        } else {
-            Rectangle r = learnMoreSection.getTitleBounds();
-            p = r.getLocation();
-            p.y += r.getHeight();
-            p.x += r.getWidth();
-            p = SwingUtilities.convertPoint( learnMoreSection, p, this );
-        }
-        return p;
-    }    
+        panel.add( new ContentSection( BundleSupport.getLabel("SectionPlugins"), //NOI18N
+                "org/netbeans/modules/welcome/resources/lbl_extend_ide.png", //NOI18N
+                SwingConstants.EAST, new PluginsPanel(), false ) );
 
-    protected Point getBottomStripOrigin() {
-        Point p;
-        if( null == bottomBar ) {
-            p = new Point(0,0);
-        } else {
-            Rectangle r = bottomBar.getBounds();
-            p = r.getLocation();
-            p.y += r.getHeight();
-            p.x += r.getWidth();
-        }
-        return p;
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 70, 20, 25));
+        
+        main.add( panel,
+                new GridBagConstraints(0,1,1,1,0.0,0.0,GridBagConstraints.CENTER,GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
+
+        main.add( new JLabel(),
+                new GridBagConstraints(0,2,1,1,1.0,1.0,GridBagConstraints.CENTER,GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
+
+        main.add( new BottomBar(),
+                new GridBagConstraints(0,3,1,1,1.0,0.0,GridBagConstraints.CENTER,
+                GridBagConstraints.HORIZONTAL,new Insets(0,0,0,0),0,0) );
     }
 }

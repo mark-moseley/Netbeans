@@ -59,12 +59,10 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.project.ui.api.RecentProjects;
 import org.netbeans.modules.project.ui.api.UnloadedProjectInformation;
-import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.URLMapper;
-import org.openide.util.NbBundle;
 
 /**
  * Panel showing all recent projects as clickable buttons.
@@ -79,7 +77,7 @@ public class RecentProjectsPanel extends JPanel implements Constants {
     /** Creates a new instance of RecentProjectsPanel */
     public RecentProjectsPanel() {
         super( new BorderLayout() );
-        setOpaque( false );
+        setOpaque(false);
     }
 
     @Override
