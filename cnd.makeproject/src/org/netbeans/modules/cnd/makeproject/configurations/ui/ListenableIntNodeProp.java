@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,45 +31,43 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
-import org.openide.nodes.PropertySupport;
-import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ui.IntNodeProp;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+import org.netbeans.modules.cnd.makeproject.api.configurations.IntConfiguration;
 
-public class BooleanNodeProp extends PropertySupport {
-    private BooleanConfiguration booleanConfiguration;
+/**
+ *
+ * @author Sergey Grinev
+ */
+public class ListenableIntNodeProp extends IntNodeProp {
 
-    public BooleanNodeProp(BooleanConfiguration booleanConfiguration, boolean canWrite, String name1, String name2, String name3) {
-        super(name1, Boolean.class, name2, name3, true, canWrite);
-        this.booleanConfiguration = booleanConfiguration;
+    private final PropertyChangeSupport pcs;
+
+    public ListenableIntNodeProp(IntConfiguration intConfiguration, boolean canWrite, String txt1, String txt2, String txt3) {
+        super(intConfiguration, canWrite, txt1, txt2, txt3);
+        pcs = new PropertyChangeSupport(this);
     }
-    
-    public String getHtmlDisplayName() {
-        if (booleanConfiguration.getModified())
-            return "<b>" + getDisplayName(); // NOI18N
-        else
-            return null;
+
+    public void addPropertyChangeListener(PropertyChangeListener listener) {
+        pcs.addPropertyChangeListener(listener);
     }
-    
-    public Object getValue() {
-        return new Boolean(booleanConfiguration.getValue());
+
+    public void remotePropertyChangeListener(PropertyChangeListener listener) {
+        pcs.removePropertyChangeListener(listener);
     }
-    
+
+    @Override
     public void setValue(Object v) {
-        booleanConfiguration.setValue(((Boolean)v).booleanValue());
-    }
-    
-    public void restoreDefaultValue() {
-        booleanConfiguration.reset();
-    }
-    
-    public boolean supportsDefaultValue() {
-        return true;
-    }
-    
-    public boolean isDefaultValue() {
-        return !booleanConfiguration.getModified();
+        Object oldV = getValue();
+        super.setValue(v);
+        pcs.firePropertyChange(getName(), oldV, v);
     }
 }
