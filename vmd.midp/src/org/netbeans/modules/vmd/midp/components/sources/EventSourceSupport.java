@@ -58,8 +58,8 @@ import org.netbeans.modules.vmd.midp.components.commands.CommandCD;
 import org.netbeans.modules.vmd.midp.components.displayables.DisplayableCD;
 import org.netbeans.modules.vmd.midp.components.general.ClassCD;
 import org.openide.actions.PropertiesAction;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 /**
  * @author David Kaspar
@@ -79,13 +79,19 @@ public final class EventSourceSupport {
     }
     
     static void addActionsPresentres(List<Presenter> presenters) {
+        addActionsPresentres(presenters, true);
+    }
+
+    static void addActionsPresentres(List<Presenter> presenters, boolean allowRename)
+    {
         for (Presenter presenter : presenters.toArray(new Presenter[presenters.size()])) {
             if (presenter instanceof ActionsPresenter)
                 presenters.remove(presenter);
              if (presenter instanceof ActionsPresenter)
                 presenters.remove(presenter);
         }
-        MidpActionsSupport.addCommonActionsPresenters(presenters, true, true, true, true, false);
+        MidpActionsSupport.addCommonActionsPresenters(presenters, true,
+                    true, allowRename, true, false);
         MidpActionsSupport.addMoveActionPresenter(presenters, DisplayableCD.PROP_COMMANDS);
         presenters.addAll(ActionsSupport.createByReference(PROP_COMMAND, PropertiesAction.class)); //NOI18N
     }
@@ -140,6 +146,11 @@ public final class EventSourceSupport {
 
         public String getEditableName (DesignComponent component) {
             DesignComponent refComponent = component.readProperty(PROP_COMMAND).getComponent();
+            if (refComponent == null || refComponent.readProperty(ClassCD.PROP_INSTANCE_NAME) == null) {
+                Debug.warning("EventSource referenced " + component.toString() + " is null "); //NOI18N
+                return null;
+            }
+            
             String name = (String) refComponent.readProperty(ClassCD.PROP_INSTANCE_NAME).getPrimitiveValue ();
             
             return name;
@@ -152,7 +163,7 @@ public final class EventSourceSupport {
         }
 
         public Image getIcon (DesignComponent component, InfoPresenter.IconType iconType) {
-            return Utilities.loadImage (CommandCD.ICON_PATH);
+            return ImageUtilities.loadImage (CommandCD.ICON_PATH);
         }
 
     }
