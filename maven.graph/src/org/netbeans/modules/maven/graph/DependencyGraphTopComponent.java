@@ -48,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.MissingResourceException;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.JComponent;
@@ -67,6 +68,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.core.spi.multiview.CloseOperationState;
 import org.netbeans.core.spi.multiview.MultiViewElement;
 import org.netbeans.core.spi.multiview.MultiViewElementCallback;
+import org.netbeans.modules.maven.model.pom.POMModel;
 import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
@@ -88,7 +90,6 @@ public class DependencyGraphTopComponent extends TopComponent implements LookupL
     private DependencyGraphScene scene;
     private MultiViewElementCallback callback;
     final JScrollPane pane = new JScrollPane();
-    private boolean isMultiview = false;
     
     private HighlightVisitor highlightV;
     
@@ -125,14 +126,21 @@ public class DependencyGraphTopComponent extends TopComponent implements LookupL
             @Override
             public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 @SuppressWarnings("unchecked")
-                List<String> scopes = (List<String>) value;
-                String text;
-                if (scopes.size() == 0) {
-                    text = "Ignore";
+                int scopesSize = ((List<String>) value).size();
+                String bundleKey;
+                if (scopesSize == 0) {
+                    bundleKey = "LBL_Scope_All";
+                } else if (scopesSize == 2) {
+                    bundleKey = "LBL_Scope_Compile";
+                } else if (scopesSize == 3) {
+                    bundleKey = "LBL_Scope_Runtime";
                 } else {
-                    text = scopes.get(scopes.size() -1);
+                    bundleKey = "LBL_Scope_Test";
                 }
-                return super.getListCellRendererComponent(list, text, index, isSelected, cellHasFocus);
+
+                return super.getListCellRendererComponent(list,
+                        NbBundle.getMessage(DependencyGraphTopComponent.class, bundleKey),
+                        index, isSelected, cellHasFocus);
             }
         });
         DefaultComboBoxModel mdl = new DefaultComboBoxModel();
@@ -202,14 +210,13 @@ public class DependencyGraphTopComponent extends TopComponent implements LookupL
         btnSmaller.setEnabled(false);
         comScopes.setEnabled(false);
         add(pane, BorderLayout.CENTER);
-        JLabel lbl = new JLabel(NbBundle.getMessage(DependencyGraphTopComponent.class, "LBL_Loading"));
-        lbl.setHorizontalAlignment(JLabel.CENTER);
-        lbl.setVerticalAlignment(JLabel.CENTER);
-        pane.setViewportView(lbl);
+        setPaneText(NbBundle.getMessage(DependencyGraphTopComponent.class, "LBL_Loading"));
         result = getLookup().lookup(new Lookup.Template<DependencyNode>(DependencyNode.class));
         result.addLookupListener(this);
         result2 = getLookup().lookup(new Lookup.Template<MavenProject>(MavenProject.class));
         result2.addLookupListener(this);
+        result3 = getLookup().lookup(new Lookup.Template<POMModel>(POMModel.class));
+        result3.addLookupListener(this);
         createScene();
     }
     
@@ -387,13 +394,18 @@ public class DependencyGraphTopComponent extends TopComponent implements LookupL
     private void createScene() {
         Iterator<? extends DependencyNode> it1 = result.allInstances().iterator();
         Iterator<? extends MavenProject> it2 = result2.allInstances().iterator();
+        Iterator<? extends POMModel> it3 = result3.allInstances().iterator();
+        final MavenProject prj = it2.hasNext() ? it2.next() : null;
+        if (prj != null && "error".equals(prj.getGroupId()) && "error".equals(prj.getArtifactId())) { //NOI18N
+            setPaneText(org.openide.util.NbBundle.getMessage(DependencyGraphTopComponent.class, "Err_CannotLoad"));
+        }
         final Project nbProj = getLookup().lookup(Project.class);
-        if (it2.hasNext() && it1.hasNext()) {
-            final MavenProject prj = it2.next();
+        if (prj != null && it1.hasNext()) {
             final DependencyNode root = it1.next();
+            final POMModel model = it3.hasNext() ? it3.next() : null;
             RequestProcessor.getDefault().post(new Runnable() {
                 public void run() {
-                    scene = new DependencyGraphScene(prj, nbProj, DependencyGraphTopComponent.this);
+                    scene = new DependencyGraphScene(prj, nbProj, DependencyGraphTopComponent.this, model);
                     GraphConstructor constr = new GraphConstructor(scene);
                     root.accept(constr);
                     SwingUtilities.invokeLater(new Runnable() {
@@ -425,7 +437,6 @@ public class DependencyGraphTopComponent extends TopComponent implements LookupL
     }
 
     public JComponent getVisualRepresentation() {
-        isMultiview = true;
         jPanel1.removeAll();
         jToolBar1.removeAll();
         return this;
@@ -467,5 +478,12 @@ public class DependencyGraphTopComponent extends TopComponent implements LookupL
 
     public CloseOperationState canCloseElement() {
         return CloseOperationState.STATE_OK;
+    }
+
+    private void setPaneText(String text)  {
+        JLabel lbl = new JLabel(text);
+        lbl.setHorizontalAlignment(JLabel.CENTER);
+        lbl.setVerticalAlignment(JLabel.CENTER);
+        pane.setViewportView(lbl);
     }
 }
