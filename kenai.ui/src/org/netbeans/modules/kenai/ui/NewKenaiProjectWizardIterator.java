@@ -55,7 +55,7 @@ import javax.swing.event.ChangeListener;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.kenai.api.Kenai;
-import org.netbeans.modules.kenai.api.KenaiErrorMessage;
+import org.netbeans.modules.kenai.api.KenaiException;
 import org.netbeans.modules.kenai.api.KenaiException;
 import org.netbeans.modules.kenai.api.KenaiFeature;
 import org.netbeans.modules.kenai.api.KenaiProject;
@@ -111,7 +111,7 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
 
     public Set<CreatedProjectInfo> instantiate(ProgressHandle handle) throws IOException {
 
-        handle.start();
+        handle.start(5);
 
         String newPrjName = (String) wizard.getProperty(PROP_PRJ_NAME);
         String newPrjTitle = (String) wizard.getProperty(PROP_PRJ_TITLE);
@@ -130,7 +130,7 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
         // Create project
         try {
             handle.progress(NbBundle.getMessage(NewKenaiProjectWizardIterator.class,
-                "NewKenaiProject.progress.creatingProject"));
+                "NewKenaiProject.progress.creatingProject"), 1);
 
             logger.log(Level.FINE, "Creating Kenai Project - Name: " + newPrjName +
                     ", Title: " + newPrjTitle + ", Description: " + newPrjDesc + ", License: " + newPrjLicense); // NOI18N
@@ -148,10 +148,10 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
         if (!NO_REPO.equals(newPrjScmType)) {
             try {
                 handle.progress(NbBundle.getMessage(NewKenaiProjectWizardIterator.class,
-                        "NewKenaiProject.progress.creatingRepo"));
+                        "NewKenaiProject.progress.creatingRepo"),2);
                 String displayName = getScmDisplayName(newPrjScmType);
                 String description = getScmDescription(newPrjScmType);
-                String extScmUrl = (Utilities.EXT_REPO.equals(newPrjScmType) ? newPrjScmUrl : null);
+                String extScmUrl = (KenaiService.Names.EXTERNAL_REPOSITORY.equals(newPrjScmType) ? newPrjScmUrl : null);
 
                 logger.log(Level.FINE, "Creating SCM Repository - Name: " + newPrjScmName +
                         ", Type: " + newPrjScmType + ", Ext. URL: " + newPrjScmUrl + ", Local Folder: " + newPrjScmLocal); // NOI18N
@@ -159,7 +159,7 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
                 Kenai.getDefault().getProject(newPrjName).createProjectFeature(newPrjScmName,
                         displayName, description, newPrjScmType, /*ext issues URL*/ null, extScmUrl, /*browse repo URL*/ null);
 
-                repoCreated = Utilities.SVN_REPO.equals(newPrjScmType) || Utilities.HG_REPO.equals(newPrjScmType);
+                repoCreated = KenaiService.Names.SUBVERSION.equals(newPrjScmType) || KenaiService.Names.MERCURIAL.equals(newPrjScmType);
 
             } catch (KenaiException kex) {
                 throw new IOException(getErrorMessage(kex, NbBundle.getMessage(NewKenaiProjectWizardIterator.class,
@@ -173,10 +173,10 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
         if (!NO_ISSUES.equals(newPrjIssues)) {
             try {
                 handle.progress(NbBundle.getMessage(NewKenaiProjectWizardIterator.class,
-                        "NewKenaiProject.progress.creatingIssues"));
+                        "NewKenaiProject.progress.creatingIssues"),3);
                 String displayName = getIssuesDisplayName(newPrjIssues);
                 String description = getIssuesDescription(newPrjIssues);
-                String extIssuesUrl = (Utilities.EXT_ISSUES.equals(newPrjIssues) ? newPrjIssuesUrl : null);
+                String extIssuesUrl = (KenaiService.Names.EXTERNAL_ISSUES.equals(newPrjIssues) ? newPrjIssuesUrl : null);
 
                 logger.log(Level.FINE, "Creating Issue Tracking - Name: " + newPrjIssues + ", Ext. URL: " + newPrjIssuesUrl); // NOI18N
 
@@ -207,13 +207,13 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
                 }
                 if (scmLoc != null) {
                     handle.progress(NbBundle.getMessage(NewKenaiProjectWizardIterator.class,
-                            "NewKenaiProject.progress.repositoryCheckout"));
+                            "NewKenaiProject.progress.repositoryCheckout"),4);
                     logger.log(Level.FINE, "Checking out repository - Location: " + scmLoc.toASCIIString() +
                             ", Local Folder: " + newPrjScmLocal + ", Service: " + featureService); // NOI18N
                     PasswordAuthentication passwdAuth = Kenai.getDefault().getPasswordAuthentication();
                     if (passwdAuth != null) {
                         final File localFile = new File(newPrjScmLocal);
-                        if (Utilities.SVN_REPO.equals(featureService)) {
+                        if (KenaiService.Names.SUBVERSION.equals(featureService)) {
                             if (isShareExistingFolder) {
                                 String initialRevision = NbBundle.getMessage(NewKenaiProjectWizardIterator.class, "NewKenaiProject.initialRevision", newPrjTitle);
                                 String dirName = activeNode.getLookup().lookup(Project.class).getProjectDirectory().getName();
@@ -227,7 +227,7 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
                                         passwdAuth.getUserName(), new String(passwdAuth.getPassword()), true, false);
                                 if (autoCommit) {
                                     handle.progress(NbBundle.getMessage(NewKenaiProjectWizardIterator.class,
-                                    "NewKenaiProject.progress.repositoryCommit"));
+                                    "NewKenaiProject.progress.repositoryCommit"),5);
                                     Subversion.commit(new File[]{localFile}, passwdAuth.getUserName(), new String(passwdAuth.getPassword()), initialRevision);
                                 }
                             } else {
@@ -235,7 +235,7 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
                                         passwdAuth.getUserName(), new String(passwdAuth.getPassword()), false);
                             }
 
-                        } else if (Utilities.HG_REPO.equals(featureService)) {
+                        } else if (KenaiService.Names.MERCURIAL.equals(featureService)) {
 
                             Mercurial.cloneRepository(scmLoc.toASCIIString(),localFile, "", "", "",
                                 passwdAuth.getUserName(), new String(passwdAuth.getPassword()));
@@ -332,8 +332,8 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
 
     private String getErrorMessage(KenaiException kex, String prepend) {
         String errMsg = null;
-        if (kex instanceof KenaiErrorMessage) {
-            KenaiErrorMessage kem = (KenaiErrorMessage) kex;
+        if (kex instanceof KenaiException) {
+            KenaiException kem = (KenaiException) kex;
             Map<String,String> errMap = kem.getErrors();
             StringBuffer sb = new StringBuffer();
             if (prepend != null) {
@@ -353,11 +353,11 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
     // XXX from bundle
     private String getScmDisplayName(String scmName) {
         String displayName = "Source Code Repository";
-        if (Utilities.SVN_REPO.equals(scmName)) {
+        if (KenaiService.Names.SUBVERSION.equals(scmName)) {
             displayName = "Subversion Repository";
-        } else if (Utilities.HG_REPO.equals(scmName)) {
+        } else if (KenaiService.Names.MERCURIAL.equals(scmName)) {
             displayName = "Mercurial Repository";
-        } else if (Utilities.EXT_REPO.equals(scmName)) {
+        } else if (KenaiService.Names.EXTERNAL_REPOSITORY.equals(scmName)) {
             displayName = "External Repository";
         }
         return displayName;
@@ -366,11 +366,11 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
     // XXX from bundle
     private String getScmDescription(String scmName) {
         String desc = "Source Code Repository";
-        if (Utilities.SVN_REPO.equals(scmName)) {
+        if (KenaiService.Names.SUBVERSION.equals(scmName)) {
             desc = "Subversion Source Code Repository";
-        } else if (Utilities.HG_REPO.equals(scmName)) {
+        } else if (KenaiService.Names.MERCURIAL.equals(scmName)) {
             desc = "Mercurial Source Code Repository";
-        } else if (Utilities.EXT_REPO.equals(scmName)) {
+        } else if (KenaiService.Names.EXTERNAL_REPOSITORY.equals(scmName)) {
             desc = "External Source Code Repository";
         }
         return desc;
@@ -379,11 +379,11 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
     // XXX from bundle
     private String getIssuesDisplayName(String issues) {
         String displayName = "Issue Tracking";
-        if (Utilities.BGZ_ISSUES.equals(issues)) {
+        if (KenaiService.Names.BUGZILLA.equals(issues)) {
             displayName = "Bugzilla";
-        } else if (Utilities.JIRA_ISSUES.equals(issues)) {
+        } else if (KenaiService.Names.JIRA.equals(issues)) {
             displayName = "JIRA";
-        } else if (Utilities.EXT_ISSUES.equals(issues)) {
+        } else if (KenaiService.Names.EXTERNAL_ISSUES.equals(issues)) {
             displayName = "External";
         }
         return displayName;
@@ -392,11 +392,11 @@ public class NewKenaiProjectWizardIterator implements WizardDescriptor.ProgressI
     // XXX from bundle
     private String getIssuesDescription(String issues) {
         String desc = "Issue Tracking";
-        if (Utilities.BGZ_ISSUES.equals(issues)) {
+        if (KenaiService.Names.BUGZILLA.equals(issues)) {
             desc = "Bugzilla Issue Tracking";
-        } else if (Utilities.JIRA_ISSUES.equals(issues)) {
+        } else if (KenaiService.Names.JIRA.equals(issues)) {
             desc = "JIRA Issue Tracking";
-        } else if (Utilities.EXT_ISSUES.equals(issues)) {
+        } else if (KenaiService.Names.EXTERNAL_ISSUES.equals(issues)) {
             desc = "External Issue Tracking";
         }
         return desc;
