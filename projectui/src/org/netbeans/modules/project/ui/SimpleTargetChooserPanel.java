@@ -72,6 +72,9 @@ final class SimpleTargetChooserPanel implements WizardDescriptor.Panel<WizardDes
     
     SimpleTargetChooserPanel(Project project, SourceGroup[] folders, WizardDescriptor.Panel<WizardDescriptor> bottomPanel, boolean isFolder) {
         this.folders = folders;
+        if (folders != null && folders.length == 0) {
+            throw new IllegalArgumentException("Attempting to create panel with an empty folders list"); // #161478
+        }
         this.project = project;
         this.bottomPanel = bottomPanel;
         if ( bottomPanel != null ) {
@@ -103,7 +106,7 @@ final class SimpleTargetChooserPanel implements WizardDescriptor.Panel<WizardDes
     }
 
     public boolean isValid() {
-        boolean ok = ( gui != null && gui.getTargetName() != null &&
+        boolean ok = ( gui != null && gui.getTargetName() != null && gui.getTargetGroup() != null &&
                ( bottomPanel == null || bottomPanel.isValid() ) );
         
         if (!ok) {
