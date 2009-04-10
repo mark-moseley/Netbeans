@@ -51,7 +51,7 @@ import org.netbeans.modules.mercurial.util.HgUtils;
  *
  * @author Maros Sandor
  */
-class RepositoryRevision {
+public class RepositoryRevision {
 
     private HgLogMessage message;
 
@@ -91,6 +91,8 @@ class RepositoryRevision {
     public String toString() {        
         StringBuffer text = new StringBuffer();
         text.append(getLog().getRevision());
+        text.append("\t");
+        text.append(getLog().getCSetShortID());
         text.append("\t");
         text.append(getLog().getDate());
         text.append("\t");
