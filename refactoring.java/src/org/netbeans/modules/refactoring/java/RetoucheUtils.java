@@ -333,7 +333,7 @@ public class RetoucheUtils {
         for (Project pr : opened) {
             for (SourceGroup sg : ProjectUtils.getSources(pr).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA)) {
                 if (fo==sg.getRootFolder() || (FileUtil.isParentOf(sg.getRootFolder(), fo) && sg.contains(fo))) {
-                    return true;
+                    return ClassPath.getClassPath(fo, ClassPath.SOURCE) != null;
                 }
             }
         }
@@ -478,13 +478,7 @@ public class RetoucheUtils {
     }
 
     private static boolean isOpenProject(Project p) {
-        Project[] opened = OpenProjects.getDefault().getOpenProjects();
-        for (int i = 0; i < opened.length; i++) {
-            if (p.equals(opened[i]) || opened[i].equals(p)) {
-                return true;
-            }
-        }
-        return false;
+        return OpenProjects.getDefault().isProjectOpen(p);
     }
     
     private static Collection<TypeElement> typesToElements(Collection<? extends TypeMirror> types, CompilationInfo info) {
