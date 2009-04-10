@@ -21,8 +21,8 @@ package org.netbeans.modules.php.dbgp.models.nodes;
 import java.util.Collection;
 import java.util.List;
 
-import org.netbeans.modules.php.dbgp.api.ModelNode;
-import org.netbeans.modules.php.dbgp.api.UnsufficientValueException;
+import org.netbeans.modules.php.dbgp.ModelNode;
+import org.netbeans.modules.php.dbgp.UnsufficientValueException;
 import org.netbeans.modules.php.dbgp.models.VariablesModel;
 import org.netbeans.modules.php.dbgp.packets.Property;
 import org.netbeans.modules.php.dbgp.packets.PropertyCommand;
@@ -76,14 +76,15 @@ public abstract class AbstractVariableNode extends AbstractModelNode
      * @see org.netbeans.modules.php.dbgp.models.VariableNode#getName()
      */
     public String getName() {
-        AbstractModelNode node = getParent();
-        if ( node instanceof ArrayVariableNode ) {
+        Property property = getProperty();
+        String propertyName = property != null ? property.getName()  : null;
+        if ( getParent() instanceof ArrayVariableNode ) {
             StringBuilder builder = new StringBuilder("[");
-            builder.append(getProperty().getName());
+            builder.append(propertyName);
             builder.append("]");
             return builder.toString();
         }
-        return getProperty().getName();
+        return propertyName;
     }
 
     /* (non-Javadoc)
@@ -189,11 +190,11 @@ public abstract class AbstractVariableNode extends AbstractModelNode
         }
         return getProperty().getChildren().size() == 0;
     }
-    
+        
     public int getContext() {
         return getRootContext().getIndex();
     }
-    
+
     protected void setProperty( Property property ) {
         Property old = getProperty();
         property.setName( old.getName() );
@@ -207,16 +208,16 @@ public abstract class AbstractVariableNode extends AbstractModelNode
         return myProperty;
     }
     
-    public ContextNode getRootContext() {
-        AbstractModelNode parent = getParent();
-        while ( !( parent instanceof ContextNode)) {
-            parent = parent.getParent();
+    private ContextNode getRootContext() {
+        AbstractModelNode retval = this;
+        while (retval != null && !( retval instanceof ContextNode)) {
+            retval = retval.getParent();
         }
-        assert parent instanceof ContextNode;
-        return (ContextNode)parent;
+        assert retval instanceof ContextNode : retval;
+        return (ContextNode)retval;
     }
     
-    private void setupCommand( PropertyCommand command ) {
+    private void setupCommand(PropertyCommand command) {
         command.setName(getFullName());
         command.setContext( getContext() );
     }
