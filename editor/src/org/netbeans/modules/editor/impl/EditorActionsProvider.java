@@ -43,6 +43,7 @@ package org.netbeans.modules.editor.impl;
 
 import java.util.Collections;
 import java.util.List;
+import javax.swing.Action;
 import org.netbeans.api.editor.mimelookup.MimeLookup;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.spi.editor.mimelookup.Class2LayerFolder;
@@ -52,39 +53,46 @@ import org.openide.filesystems.FileObject;
 /**
  *
  * @author Vita Stejskal
+ * @since 1.39
  */
 @org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.editor.mimelookup.Class2LayerFolder.class)
-public final class GlyphGutterActionsProvider extends ActionsList implements Class2LayerFolder<GlyphGutterActionsProvider>, InstanceProvider<GlyphGutterActionsProvider> {
+public final class EditorActionsProvider extends ActionsList implements  Class2LayerFolder<EditorActionsProvider>, InstanceProvider<EditorActionsProvider> {
 
-    public static final String GLYPH_GUTTER_ACTIONS_FOLDER_NAME = "GlyphGutterActions"; //NOI18N
+    private static final String EDITOR_ACTIONS_FOLDER_NAME = "Actions"; //NOI18N
     
-    public static List getGlyphGutterActions(String mimeType) {
+    public static List<Action> getEditorActions(String mimeType) {
         MimePath mimePath = MimePath.parse(mimeType);
-        GlyphGutterActionsProvider provider = MimeLookup.getLookup(mimePath).lookup(GlyphGutterActionsProvider.class);
-        return provider == null ? Collections.emptyList() : provider.getActionsOnly();
+        EditorActionsProvider provider = MimeLookup.getLookup(mimePath).lookup(EditorActionsProvider.class);
+        return provider == null ? Collections.<Action>emptyList() : provider.getActionsOnly();
     }
     
-    public GlyphGutterActionsProvider() {
-        super(null, false, false);
+    public static List<Object> getItems(String mimeType) {
+        MimePath mimePath = MimePath.parse(mimeType);
+        EditorActionsProvider provider = MimeLookup.getLookup(mimePath).lookup(EditorActionsProvider.class);
+        return provider == null ? Collections.<Object>emptyList() : provider.getAllInstances();
+    }
+    
+    public EditorActionsProvider() {
+        this(null);
     }
 
-    private GlyphGutterActionsProvider(List<FileObject> keys) {
-        super(keys, false, false);
+    private EditorActionsProvider(List<FileObject> keys) {
+        super(keys, false, true); // prohibit separators and action-names
     }
     
-    public Class<GlyphGutterActionsProvider> getClazz() {
-        return GlyphGutterActionsProvider.class;
+    public Class<EditorActionsProvider> getClazz(){
+        return EditorActionsProvider.class;
     }
 
     public String getLayerFolderName(){
-        return GLYPH_GUTTER_ACTIONS_FOLDER_NAME;
+        return EDITOR_ACTIONS_FOLDER_NAME;
     }
 
-    public InstanceProvider<GlyphGutterActionsProvider> getInstanceProvider() {
-        return new GlyphGutterActionsProvider();
+    public InstanceProvider<EditorActionsProvider> getInstanceProvider() {
+        return new EditorActionsProvider();
     }
     
-    public GlyphGutterActionsProvider createInstance(List<FileObject> fileObjectList) {
-        return new GlyphGutterActionsProvider(fileObjectList);
+    public EditorActionsProvider createInstance(List<FileObject> fileObjectList) {
+        return new EditorActionsProvider(fileObjectList);
     }
 }

@@ -43,7 +43,7 @@ made subject to such option by the copyright holder.
 <project xmlns="http://www.netbeans.org/ns/project/1">
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
-        <data xmlns="http://www.netbeans.org/ns/nb-module-project/2">
+        <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
             <code-name-base>org.netbeans.modules.editor.lib2</code-name-base>
             <module-dependencies>
                 <dependency>
@@ -83,11 +83,27 @@ made subject to such option by the copyright holder.
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.openide.awt</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>7.7</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.openide.dialogs</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <specification-version>7.1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.openide.filesystems</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>7.15</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -128,6 +144,14 @@ made subject to such option by the copyright holder.
                         <code-name-base>org.netbeans.modules.editor.mimelookup.impl</code-name-base>
                         <recursive/>
                     </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.openide.loaders</code-name-base>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.openide.util</code-name-base>
+                        <compile-dependency/>
+                        <test/>
+                    </test-dependency>
                 </test-type>
                 <test-type>
                     <name>qa-functional</name>
@@ -135,6 +159,7 @@ made subject to such option by the copyright holder.
             </test-dependencies>
             <public-packages>
                 <package>org.netbeans.api.editor</package>
+                <package>org.netbeans.spi.editor.codegen</package>
                 <package>org.netbeans.spi.editor.highlighting</package>
                 <package>org.netbeans.spi.editor.highlighting.support</package>
             </public-packages>
