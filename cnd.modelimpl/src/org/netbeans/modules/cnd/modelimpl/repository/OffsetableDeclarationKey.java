@@ -42,13 +42,15 @@
 package org.netbeans.modules.cnd.modelimpl.repository;
 
 import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.IOException;
+import org.netbeans.modules.cnd.api.model.CsmMember;
+import org.netbeans.modules.cnd.modelimpl.csm.ForwardClass;
+import org.netbeans.modules.cnd.modelimpl.csm.FunctionImplEx;
 import org.netbeans.modules.cnd.modelimpl.csm.core.CsmObjectFactory;
+import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.core.OffsetableDeclarationBase;
 import org.netbeans.modules.cnd.modelimpl.csm.core.Utils;
 import org.netbeans.modules.cnd.repository.spi.PersistentFactory;
-import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 
 
 /**
@@ -58,15 +60,37 @@ import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 /*package*/
 final class OffsetableDeclarationKey extends OffsetableKey {
     
-    public OffsetableDeclarationKey(OffsetableDeclarationBase obj) {
-	super(obj, Utils.getCsmDeclarationKindkey(obj.getKind()), obj.getName());
+    public OffsetableDeclarationKey(OffsetableDeclarationBase<?> obj) {
+	super((FileImpl) obj.getContainingFile(), obj.getStartOffset(), getSmartEndOffset(obj), Utils.getCsmDeclarationKindkey(obj.getKind()), obj.getName());
 	// we use name, because all other (FQN and UniqueName) could change
 	// and name is fixed value
     }
     
-    public OffsetableDeclarationKey(OffsetableDeclarationBase obj, int index) {
-	super(obj, Utils.getCsmDeclarationKindkey(obj.getKind()), NameCache.getManager().getString(Integer.toString(index)));
+    public OffsetableDeclarationKey(OffsetableDeclarationBase<?> obj, int index) {
+	super((FileImpl) obj.getContainingFile(), obj.getStartOffset(), getSmartEndOffset(obj), Utils.getCsmDeclarationKindkey(obj.getKind()), Integer.toString(index));
 	// we use index for unnamed objects
+    }
+    
+    private static int getSmartEndOffset(OffsetableDeclarationBase<?> obj) {
+        // #132865 ClassCastException in Go To Type -
+        // ensure that members and non-members has different keys
+        // also make sure that function and fake function has different keys
+        int result = obj.getEndOffset();
+        if (obj instanceof ForwardClass) {
+            result |= 0x80000000;
+        } else if( obj instanceof CsmMember) {
+            // do nothing
+        } else if ((obj instanceof FunctionImplEx<?>) && (FunctionImplEx.class.equals(obj.getClass()))) {
+            result |= 0x80000000;
+        } else {
+            result |= 0x40000000;
+        }
+        return result;
+    }
+
+    @Override
+    int getEndOffset() {
+        return super.getEndOffset() & 0x3FFFFFFF;
     }
     
     /*package*/ OffsetableDeclarationKey(DataInput aStream) throws IOException {
