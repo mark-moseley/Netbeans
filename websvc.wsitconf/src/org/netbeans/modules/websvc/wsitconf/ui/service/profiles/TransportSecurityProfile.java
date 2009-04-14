@@ -51,6 +51,8 @@ import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
 import org.netbeans.modules.websvc.wsitconf.util.UndoCounter;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProfilesModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProprietarySecurityPolicyModelHelper;
+import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.RMModelHelper;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
 import org.netbeans.modules.xml.wsdl.model.Binding;
 import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
@@ -62,8 +64,8 @@ import org.openide.DialogDisplayer;
  *
  * @author Martin Grebac
  */
-public class TransportSecurityProfile extends ProfileBase 
-        implements ClientDefaultsFeature,ServiceDefaultsFeature {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.wsitconf.spi.SecurityProfile.class)
+public class TransportSecurityProfile extends ProfileBase implements ClientDefaultsFeature {
     
     public int getId() {
         return 30;
@@ -78,14 +80,6 @@ public class TransportSecurityProfile extends ProfileBase
     }
     
     /**
-     * Called when the profile is selected in the combo box.
-     */
-    @Override
-    public void profileSelected(WSDLComponent component, boolean updateServiceUrl) {
-        ProfilesModelHelper.setSecurityProfile(component, getDisplayName(), updateServiceUrl);
-    }
-
-    /**
      * Should return true if the profile is set on component, false otherwise
      */
     public boolean isCurrentProfile(WSDLComponent component) {
@@ -99,7 +93,7 @@ public class TransportSecurityProfile extends ProfileBase
         
         model.addUndoableEditListener(undoCounter);
 
-        JPanel profConfigPanel = new TransportSecurity(component);
+        JPanel profConfigPanel = new TransportSecurity(component, this);
         DialogDescriptor dlgDesc = new DialogDescriptor(profConfigPanel, getDisplayName());
         Dialog dlg = DialogDisplayer.getDefault().createDialog(dlgDesc);
 
@@ -120,21 +114,19 @@ public class TransportSecurityProfile extends ProfileBase
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, true);
         ProprietarySecurityPolicyModelHelper.removeCallbackHandlerConfiguration((Binding) component);
     }
-
-    public void setServiceDefaults(WSDLComponent component, Project p) {
-        ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
-        ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
-    }
     
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
-        if (ProprietarySecurityPolicyModelHelper.getCBHConfiguration((Binding) component) != null) {
-            return false;
-        }
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         return true;
     }
  
-    public boolean isServiceDefaultSetupUsed(WSDLComponent component, Project p) {
-        return true;
+    @Override
+    public void profileSelected(WSDLComponent component, boolean updateServiceUrl, ConfigVersion configVersion) {
+        ProfilesModelHelper pmh = ProfilesModelHelper.getInstance(configVersion);
+        pmh.setSecurityProfile(component, getDisplayName(), updateServiceUrl);
+        ProprietarySecurityPolicyModelHelper.clearValidators(component);
+        ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
+        ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
     }
 
 }
