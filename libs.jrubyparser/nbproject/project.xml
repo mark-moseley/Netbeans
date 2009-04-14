@@ -44,15 +44,33 @@ made subject to such option by the copyright holder.
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/2">
-            <code-name-base>org.netbeans.libs.yydebug</code-name-base>
-            <module-dependencies/>
+            <code-name-base>org.netbeans.libs.jrubyparser</code-name-base>
+            <module-dependencies>
+                <dependency>
+                    <code-name-base>org.netbeans.libs.yydebug</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.0</specification-version>
+                    </run-dependency>
+                </dependency>
+            </module-dependencies>
             <friend-packages>
-                <friend>org.netbeans.libs.jrubyparser</friend>
-                <package>jay.yydebug</package>
+                <friend>org.netbeans.modules.ruby</friend>
+                <friend>org.netbeans.modules.ruby.hints</friend>
+                <friend>org.netbeans.modules.ruby.extrahints</friend>
+                <friend>org.netbeans.modules.ruby.refactoring</friend>
+                <package>org.jrubyparser</package>
+                <package>org.jrubyparser.ast</package>
+                <package>org.jrubyparser.lexer</package>
+                <package>org.jrubyparser.parser</package>
+                <package>org.jrubyparser.rewriter</package>
+                <package>org.jrubyparser.rewriter.utils</package>
             </friend-packages>
             <class-path-extension>
-                <runtime-relative-path>ext/yydebug-1.0.2.jar</runtime-relative-path>
-                <binary-origin>external/yydebug-1.0.2.jar</binary-origin>
+                <runtime-relative-path>ext/jruby-parser-0.1.jar</runtime-relative-path>
+                <binary-origin>external/jruby-parser-0.1.jar</binary-origin>
             </class-path-extension>
         </data>
     </configuration>
