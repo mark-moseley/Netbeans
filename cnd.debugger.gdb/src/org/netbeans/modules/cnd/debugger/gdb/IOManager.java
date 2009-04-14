@@ -53,11 +53,9 @@ import org.openide.windows.OutputEvent;
 import org.openide.windows.OutputListener;
 import org.openide.windows.OutputWriter;
 
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.modules.cnd.debugger.gdb.EditorContextBridge;
 
 public class IOManager {
-
+    
 //    /** DebuggerManager output constant. */
 //    public static final int                 DEBUGGER_OUT = 1;
 //    /** Process output constant. */
@@ -75,33 +73,35 @@ public class IOManager {
     
     // variables ...............................................................
     
-    protected InputOutput                   debuggerIO = null;
-    private OutputWriter                    debuggerOut;
-    private String                          name;
+    private final InputOutput               debuggerIO;
+    private final OutputWriter              debuggerOut;
+    //private String                        name;
     private boolean                         closed = false;
     
     /** output writer Thread */
-    private Hashtable                       lines = new Hashtable();
-    private Listener                        listener = new Listener();
-
+    private Hashtable<String, Line>           lines = new Hashtable<String, Line>();
+    private final Listener                  listener = new Listener();
+    
     
     // init ....................................................................
     
     public IOManager(String title) {
         debuggerIO = IOProvider.getDefault().getIO(title, true);
-        debuggerIO.setFocusTaken(false);
+        debuggerIO.select();
+        // IZ162493: no need to switch each time into Ouput window
+//        io.setFocusTaken(true);
         debuggerOut = debuggerIO.getOut();
     }
     
     
     // public interface ........................................................
 
-    private LinkedList buffer = new LinkedList();
+    private final LinkedList<Text> buffer = new LinkedList<Text>();
     private RequestProcessor.Task task;
     
     /**
-    * Prints given text to the output.
-    */
+     * Prints given text to the output.
+     */
     public void println(final String text, final Line line) {
         if (text == null) {
             throw new NullPointerException();
@@ -109,13 +109,13 @@ public class IOManager {
         synchronized (buffer) {
             buffer.addLast(new Text(text, line));
         }
-        if (task == null)
+        if (task == null) {
             task = RequestProcessor.getDefault().post(new Runnable() {
                 public void run() {
                     synchronized (buffer) {
                         int i, k = buffer.size();
                         for (i = 0; i < k; i++) {
-                            Text t = (Text) buffer.removeFirst();
+                            Text t = buffer.removeFirst();
                             try {
                                 //if ((t.where & DEBUGGER_OUT) != 0) {
                                     if (t.line != null) {
@@ -138,8 +138,9 @@ public class IOManager {
                     }
                 }
             }, 500, Thread.MIN_PRIORITY);
-        else 
+        } else {
             task.schedule(500);
+        }
     }
 
     void closeStream() {
@@ -159,20 +160,20 @@ public class IOManager {
         }
         public void outputLineAction(OutputEvent ev) {
             String t = ev.getLine();
-            Line l = (Line) lines.get(t);
+            Line l = lines.get(t);
             if (l == null) {
                 return;
             }
             l.show();
         }
         public void outputLineCleared(OutputEvent ev) {
-            lines = new Hashtable();
+            lines = new Hashtable<String, Line>();
         }
     }
     
     private static class Text {
-        private String text;
-        private Line line;
+        private final String text;
+        private final Line line;
      //   private int where;
         
         private Text(String text, Line line) {
@@ -182,14 +183,15 @@ public class IOManager {
         }
     }
     
-    static class Line {
-        private String url;
-        private int lineNumber;
-        private GdbDebugger debugger;
+    public static class Line {
+        private final String url;
+        private final int lineNumber;
+        private final GdbDebugger debugger;
         
         Line(String url, int lineNumber, GdbDebugger debugger) {
             this.url = url;
             this.lineNumber = lineNumber;
+            this.debugger = debugger;
         }
         
         void show() {
