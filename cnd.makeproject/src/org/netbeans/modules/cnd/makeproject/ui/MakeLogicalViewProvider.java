@@ -67,6 +67,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.netbeans.modules.cnd.api.project.NativeProject;
@@ -77,8 +78,10 @@ import org.netbeans.modules.cnd.makeproject.api.actions.AddExistingItemAction;
 import org.netbeans.modules.cnd.makeproject.api.actions.NewFolderAction;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor.State;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configurations;
+import org.netbeans.modules.cnd.makeproject.api.configurations.DevelopmentHostConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Folder;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ItemConfiguration;
@@ -153,14 +156,16 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
     }
 
     public Node createLogicalView() {
+        MakeConfigurationDescriptor configurationDescriptor = getMakeConfigurationDescriptor();
         if (ASYNC_ROOT_NODE) {
             log.fine("creating async root node in EDT? " + SwingUtilities.isEventDispatchThread());// NOI18N
-            return new MakeLogicalViewRootNode(getMakeConfigurationDescriptor().getLogicalFolders());
+            return new MakeLogicalViewRootNode(configurationDescriptor.getLogicalFolders());
         } else {
-            if (getMakeConfigurationDescriptor() == null) {
+            if (configurationDescriptor == null || configurationDescriptor.getState() == State.BROKEN
+                    || configurationDescriptor.getConfs().size() == 0) {
                 return new MakeLogicalViewRootNodeBroken();
             } else {
-                return new MakeLogicalViewRootNode(getMakeConfigurationDescriptor().getLogicalFolders());
+                return new MakeLogicalViewRootNode(configurationDescriptor.getLogicalFolders());
             }
         }
     }
@@ -328,9 +333,24 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
         }
     }
 
+    public static void checkForChangedName(final Project project) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                Node rootNode = ProjectTabBridge.getInstance().getExplorerManager().getRootContext();
+                Node root = findProjectNode(rootNode, project);
+                if (root != null) {
+                    ProjectInformation pi = ProjectUtils.getInformation(project);
+                    if (pi != null) { // node will check whether it equals...
+                        root.setDisplayName(pi.getDisplayName());
+                    }
+                }
+            }
+        });
+    }
+
     public static void checkForChangedItems(final Project project, final Folder folder, final Item item) {
         SwingUtilities.invokeLater(new Runnable() {
-
+            
             public void run() {
                 if (item == null) {
                     checkForChangedItems(project);
@@ -433,6 +453,22 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
         return new LoadingNode();
     }
 
+
+    private String getShortDescription() {
+        String prjDirDispName = FileUtil.getFileDisplayName(project.getProjectDirectory());
+
+        MakeConfigurationDescriptor mkd = getMakeConfigurationDescriptor();
+        MakeConfiguration conf = (MakeConfiguration) mkd.getConfs().getActive();
+        final DevelopmentHostConfiguration devHost = conf.getDevelopmentHost();
+        if (devHost.isLocalhost()) {
+            return NbBundle.getMessage(MakeLogicalViewProvider.class,
+                    "HINT_project_root_node", prjDirDispName);
+        } else {
+            return NbBundle.getMessage(MakeLogicalViewProvider.class,
+                    "HINT_project_root_node_on_host", prjDirDispName, devHost.getDisplayName(true));
+        }
+    }
+
     private static class LoadingNode extends AbstractNode {
 
         public LoadingNode() {
@@ -528,8 +564,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
 
         @Override
         public String getShortDescription() {
-            String prjDirDispName = FileUtil.getFileDisplayName(project.getProjectDirectory());
-            return NbBundle.getMessage(MakeLogicalViewProvider.class, "HINT_project_root_node", prjDirDispName);
+            return MakeLogicalViewProvider.this.getShortDescription();
         }
         /*
          * Something in the folder has changed
@@ -541,6 +576,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
             updateAnnotationFiles();
             fireIconChange();
             fireOpenedIconChange();
+            fireDisplayNameChange(null, null);
         }
 
         @Override
@@ -582,18 +618,21 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
 
         @Override
         public Action[] getActions(boolean context) {
+            MakeConfigurationDescriptor descriptor = getMakeConfigurationDescriptor();
+
             // TODO: not clear if we need to call the following method at all
             // but we need to remove remembering the output to prevent memory leak;
             // I think it could be removed
-            if (gotMakeConfigurationDescriptor()) {
-                getMakeConfigurationDescriptor().getLogicalFolders();
+            if (descriptor != null) {
+                descriptor.getLogicalFolders();
             }
 
             List<Action> actions = new ArrayList<Action>();
             // Add standard actions
             Action[] standardActions;
-            MakeConfiguration active = (MakeConfiguration) getMakeConfigurationDescriptor().getConfs().getActive();
-            if (active.isMakefileConfiguration()) { // FIXUP: need better check
+            MakeConfiguration active = (descriptor == null)?
+                null : (MakeConfiguration) descriptor.getConfs().getActive();
+            if (descriptor == null || active == null || active.isMakefileConfiguration()) { // FIXUP: need better check
                 standardActions = getAdditionalDiskFolderActions();
             } else {
                 standardActions = getAdditionalLogicalFolderActions();
@@ -769,8 +808,7 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
 
         @Override
         public String getShortDescription() {
-            String prjDirDispName = FileUtil.getFileDisplayName(project.getProjectDirectory());
-            return NbBundle.getMessage(MakeLogicalViewProvider.class, "HINT_project_root_node", prjDirDispName);
+            return MakeLogicalViewProvider.this.getShortDescription();
         }
     }
 
@@ -1139,9 +1177,10 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                             copyItemConfigurations(movedItem.getItemConfigurations(), oldConfigurations);
                         }
                     } else {
-                        viewItemNode.getFolder().removeItem(item);
-                        toFolder.addItem(item);
-                        copyItemConfigurations(item.getItemConfigurations(), oldConfigurations);
+                        if (viewItemNode.getFolder().removeItem(item)) {
+                            toFolder.addItem(item);
+                            copyItemConfigurations(item.getItemConfigurations(), oldConfigurations);
+                        }
                     }
                 } else {
                     if (toFolder.isDiskFolder()) {
@@ -1151,8 +1190,9 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                         String newName = IpeUtils.createUniqueFileName(toFolderPath, itemFO.getName(), itemFO.getExt());
                         FileObject movedFileFO = FileUtil.moveFile(itemFO, toFolderFO, newName);
                     } else if (IpeUtils.isPathAbsolute(item.getPath())) {
-                        viewItemNode.getFolder().removeItem(item);
-                        toFolder.addItem(item);
+                        if (viewItemNode.getFolder().removeItem(item)) {
+                            toFolder.addItem(item);
+                        }
                     } else if (item.getPath().startsWith("..")) { // NOI18N
                         String originalFilePath = FileUtil.toFile(viewItemNode.getFolder().getProject().getProjectDirectory()).getPath();
                         String newFilePath = FileUtil.toFile(toFolder.getProject().getProjectDirectory()).getPath();
@@ -1160,19 +1200,21 @@ public class MakeLogicalViewProvider implements LogicalViewProvider {
                         fromNewToOriginal = FilePathAdaptor.normalize(fromNewToOriginal);
                         String newPath = fromNewToOriginal + item.getPath();
                         newPath = IpeUtils.trimDotDot(newPath);
-                        viewItemNode.getFolder().removeItemAction(item);
-                        toFolder.addItemAction(new Item(FilePathAdaptor.normalize(newPath)));
+                        if (viewItemNode.getFolder().removeItemAction(item)) {
+                            toFolder.addItemAction(new Item(FilePathAdaptor.normalize(newPath)));
+                        }
                     } else {
                         Project toProject = toFolder.getProject();
                         FileObject fo = item.getFileObject();
                         FileObject copy = fo.copy(toProject.getProjectDirectory(), fo.getName(), fo.getExt());
                         String newPath = IpeUtils.toRelativePath(FileUtil.toFile(toProject.getProjectDirectory()).getPath(), FileUtil.toFile(copy).getPath());
-                        viewItemNode.getFolder().removeItemAction(item);
-                        fo.delete();
-                        toFolder.addItemAction(new Item(FilePathAdaptor.normalize(newPath)));
+                        if (viewItemNode.getFolder().removeItemAction(item)) {
+                            fo.delete();
+                            toFolder.addItemAction(new Item(FilePathAdaptor.normalize(newPath)));
+                        }
                     }
                 }
-            } else if (type == DnDConstants.ACTION_COPY) {
+            } else if (type == DnDConstants.ACTION_COPY || type == DnDConstants.ACTION_NONE) {
                 // Copy&Paste
                 if (toFolder.getProject() == viewItemNode.getFolder().getProject()) {
                     if ((IpeUtils.isPathAbsolute(item.getPath()) || item.getPath().startsWith("..")) && !toFolder.isDiskFolder()) { // NOI18N
