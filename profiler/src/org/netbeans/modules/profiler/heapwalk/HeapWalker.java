@@ -40,12 +40,14 @@
 
 package org.netbeans.modules.profiler.heapwalk;
 
+import javax.swing.BoundedRangeModel;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.project.Project;
 import org.netbeans.lib.profiler.heap.*;
 import org.netbeans.lib.profiler.utils.StringUtils;
-import org.netbeans.modules.profiler.heapwalk.HeapWalkerManager;
 import org.netbeans.modules.profiler.heapwalk.ui.HeapWalkerUI;
 import org.netbeans.modules.profiler.utils.IDEUtils;
 import org.openide.filesystems.FileObject;
@@ -166,7 +168,7 @@ public class HeapWalker {
     }
 
     void createMainFragment(Heap heap) {
-        mainHeapWalker = new HeapFragmentWalker(heap, this);
+        mainHeapWalker = new HeapFragmentWalker(heap, this, true);
     }
 
     void createReachableFragment(Instance instance) {
@@ -212,9 +214,11 @@ public class HeapWalker {
         try {
             pHandle = ProgressHandleFactory.createHandle(LOADING_DUMP_MSG);
             pHandle.setInitialDelay(0);
-            pHandle.start();
-
+            pHandle.start(HeapProgress.PROGRESS_MAX*2);
+            
+            setProgress(pHandle,0);
             Heap heap = HeapFactory.createHeap(heapFile);
+            setProgress(pHandle,HeapProgress.PROGRESS_MAX);
             heap.getSummary(); // Precompute HeapSummary within progress
 
             return heap;
@@ -223,5 +227,14 @@ public class HeapWalker {
                 pHandle.finish();
             }
         }
+    }
+
+    private static void setProgress(final ProgressHandle pHandle, final int offset) {
+        final BoundedRangeModel progress = HeapProgress.getProgress();
+        progress.addChangeListener(new ChangeListener() {
+            public void stateChanged(ChangeEvent e) {
+                pHandle.progress(progress.getValue()+offset);
+            }
+        });
     }
 }
