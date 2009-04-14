@@ -52,8 +52,10 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
+import org.netbeans.modules.websvc.wsitconf.spi.features.AdvancedSecurityFeature;
 import org.netbeans.modules.websvc.wsitconf.spi.features.ClientDefaultsFeature;
 import org.netbeans.modules.websvc.wsitconf.spi.features.ServiceDefaultsFeature;
+import org.netbeans.modules.websvc.wsitconf.spi.features.ValidatorsFeature;
 import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
 import org.netbeans.modules.websvc.wsitconf.util.UndoCounter;
 import org.netbeans.modules.websvc.wsitconf.wizard.SamlCallbackCreator;
@@ -73,8 +75,9 @@ import org.openide.filesystems.FileObject;
  *
  * @author Martin Grebac
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.websvc.wsitconf.spi.SecurityProfile.class)
 public class SAMLAuthorizationOverSSLProfile extends ProfileBase 
-        implements ClientDefaultsFeature,ServiceDefaultsFeature {
+        implements ClientDefaultsFeature,ServiceDefaultsFeature,ValidatorsFeature, AdvancedSecurityFeature {
     
     private static final String PKGNAME = "samlcb";
 
@@ -88,14 +91,6 @@ public class SAMLAuthorizationOverSSLProfile extends ProfileBase
 
     public String getDescription() {
         return ComboConstants.PROF_SAMLSSL_INFO;
-    }
-    
-    /**
-     * Called when the profile is selected in the combo box.
-     */
-    @Override
-    public void profileSelected(WSDLComponent component, boolean updateServiceUrl) {
-        ProfilesModelHelper.setSecurityProfile(component, getDisplayName(), updateServiceUrl);
     }
 
     /**
@@ -112,7 +107,7 @@ public class SAMLAuthorizationOverSSLProfile extends ProfileBase
         
         model.addUndoableEditListener(undoCounter);
 
-        JPanel profConfigPanel = new SAMLAuthorizationOverSSL(component);
+        JPanel profConfigPanel = new SAMLAuthorizationOverSSL(component, this);
         DialogDescriptor dlgDesc = new DialogDescriptor(profConfigPanel, getDisplayName());
         Dialog dlg = DialogDisplayer.getDefault().createDialog(dlgDesc);
 
@@ -180,15 +175,18 @@ public class SAMLAuthorizationOverSSLProfile extends ProfileBase
     }    
 
     public void setServiceDefaults(WSDLComponent component, Project p) {
+        ProprietarySecurityPolicyModelHelper.clearValidators(component);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, false, false);
         ProprietarySecurityPolicyModelHelper.setStoreLocation(component, null, true, false);
     }
     
     public boolean isServiceDefaultSetupUsed(WSDLComponent component, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         return true;
     }
 
     public boolean isClientDefaultSetupUsed(WSDLComponent component, Binding serviceBinding, Project p) {
+        if (ProprietarySecurityPolicyModelHelper.isAnyValidatorSet(component)) return false;
         String samlVersion = getSamlVersion(serviceBinding);
         String cbName = null;
         
