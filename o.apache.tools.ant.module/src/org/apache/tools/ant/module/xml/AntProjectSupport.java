@@ -88,10 +88,10 @@ public class AntProjectSupport implements AntProjectCookie.ParseStatus, Document
     private Throwable exception = null;
     private boolean parsed = false;
     private Reference<StyledDocument> styledDocRef = null;
-    private Object parseLock; // see init()
+    private final Object parseLock; // see init()
 
     private final ChangeSupport cs = new ChangeSupport(this);
-    private EditorCookie.Observable editor = null;
+    private Reference<EditorCookie.Observable> editorRef;
     
     private DocumentBuilder documentBuilder;
     
@@ -108,11 +108,13 @@ public class AntProjectSupport implements AntProjectCookie.ParseStatus, Document
     private synchronized EditorCookie.Observable getEditor() {
         FileObject file = getFileObject();
         if (file == null) return null;
+        EditorCookie.Observable editor = editorRef == null ? null : editorRef.get();
         if (editor == null) {
             try {
-                editor = DataObject.find(file).getCookie(EditorCookie.Observable.class);
+                editor = DataObject.find(file).getLookup().lookup(EditorCookie.Observable.class);
                 if (editor != null) {
                     editor.addPropertyChangeListener(WeakListeners.propertyChange(this, editor));
+                    editorRef = new WeakReference<EditorCookie.Observable>(editor);
                 }
             } catch (DataObjectNotFoundException donfe) {
                 AntModule.err.notify(ErrorManager.INFORMATIONAL, donfe);
@@ -269,7 +271,7 @@ public class AntProjectSupport implements AntProjectCookie.ParseStatus, Document
                     } catch (FileStateInvalidException e) {
                         assert false : e;
                     }
-                    doc = documentBuilder.parse(is);
+                    doc = documentBuilder.parse(in);
                 } finally {
                     is.close();
                 }
