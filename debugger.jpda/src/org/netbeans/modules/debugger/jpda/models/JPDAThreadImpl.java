@@ -123,6 +123,8 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
 
     private static final String PROP_LOCKER_THREADS = "lockerThreads"; // NOI18N
     private static final String PROP_STEP_SUSPENDED_BY_BREAKPOINT = "stepSuspendedByBreakpoint"; // NOI18N
+
+    private static Logger logger = Logger.getLogger(JPDAThreadImpl.class.getName()); // NOI18N
     
     private ThreadReference     threadReference;
     private JPDADebuggerImpl    debugger;
@@ -612,13 +614,6 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
                         NbBundle.getMessage(JPDAThreadImpl.class, "MSG_NativeMethodPop")));
         } catch (InternalExceptionWrapper iex) {
             cleanCachedFrames();
-            if (iex.getCause().errorCode() == 32) {
-                ErrorManager.getDefault().notify(
-                        ErrorManager.getDefault().annotate(iex,
-                            NbBundle.getMessage(JPDAThreadImpl.class, "MSG_NativeMethodPop")));
-            } else {
-                //throw iex;
-            }
         } catch (VMDisconnectedExceptionWrapper ex) {
             // Ignore
         } finally {
@@ -634,6 +629,7 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
         accessLock.writeLock().lock();
         try {
             if (!isSuspended ()) {
+                logger.fine("Suspending thread "+threadName);
                 ThreadReferenceWrapper.suspend (threadReference);
                 suspendedToFire = Boolean.TRUE;
                 suspendCount++;
@@ -676,6 +672,7 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
             }
             try {
                 if (isSuspended ()) {
+                    logger.fine("Resuming thread "+threadName);
                     int count = ThreadReferenceWrapper.suspendCount (threadReference);
                     while (count > 0) {
                         ThreadReferenceWrapper.resume (threadReference); count--;
@@ -824,9 +821,11 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
     private boolean unsuspendedStateWhenInvoking;
     
     public void notifyMethodInvoking() throws PropertyVetoException {
+        SingleThreadWatcher watcherToDestroy = null;
         List<PropertyChangeEvent> evts;
         accessLock.writeLock().lock();
         try {
+            logger.fine("Invoking a method in thread "+threadName);
             if (methodInvokingDisabledUntilResumed) {
                 throw new PropertyVetoException(
                         NbBundle.getMessage(JPDAThreadImpl.class, "MSG_DisabledUntilResumed"), null);
@@ -847,9 +846,13 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
             } else {
                 evts = notifyToBeRunning(false, false);
             }
+            watcherToDestroy = watcher;
             watcher = new SingleThreadWatcher(this);
         } finally {
             accessLock.writeLock().unlock();
+        }
+        if (watcherToDestroy != null) {
+            watcherToDestroy.destroy();
         }
         for (PropertyChangeEvent evt : evts) {
             pch.firePropertyChange(evt);
@@ -863,6 +866,7 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
         try {
             // HACK becuase of JDI, we've resumed this thread so that method invocation can be finished.
             // We need to suspend the thread immediately so that it does not continue after the invoke has finished.
+            logger.fine("Method invoke done in thread "+threadName);
             if (resumedToFinishMethodInvocation) {
                 try {
                     ThreadReferenceWrapper.suspend(threadReference);
@@ -926,6 +930,7 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
     public void setInStep(boolean inStep, EventRequest stepRequest) {
         SingleThreadWatcher watcherToDestroy = null;
         this.inStep = inStep;
+        watcherToDestroy = watcher;
         if (inStep) {
             boolean suspendThread;
             try {
@@ -939,7 +944,6 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
                 watcher = new SingleThreadWatcher(this);
             }
         } else {
-            watcherToDestroy = watcher;
             watcher = null;
         }
         if (watcherToDestroy != null) {
@@ -1220,8 +1224,11 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
             Map<ThreadReference, ObjectReference> lockedThreadsWithMonitors = null;
             //synchronized (t.getDebugger().LOCK) { - can not synchronize on that - method invocation uses this lock.
             // TODO: Need to be freed up and method invocation flag needs to be used instead.
-                List<JPDAThread> oldLockerThreadsList;
-                List<JPDAThread> newLockerThreadsList;
+            List<JPDAThread> oldLockerThreadsList;
+            List<JPDAThread> newLockerThreadsList;
+            logger.fine("checkForBlockingThreads("+threadName+"): suspend all...");
+            debugger.accessLock.writeLock().lock();
+            try {
                 VirtualMachineWrapper.suspend(vm);
                 try {
                     ObjectReference waitingMonitor = ThreadReferenceWrapper.currentContendedMonitor(threadReference);
@@ -1254,12 +1261,16 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
                 } catch (IncompatibleThreadStateException ex) {
                     return false;
                 } finally {
+                    logger.fine("checkForBlockingThreads("+threadName+"): resume all.");
                     VirtualMachineWrapper.resume(vm);
                 }
-                if (oldLockerThreadsList != newLockerThreadsList) { // Not fire when both null
-                    //System.err.println("Fire lockerThreads: "+(oldLockerThreadsList == null || !oldLockerThreadsList.equals(newLockerThreadsList)));
-                    pch.firePropertyChange(PROP_LOCKER_THREADS, oldLockerThreadsList, newLockerThreadsList); // NOI18N
-                }
+            } finally {
+                debugger.accessLock.writeLock().unlock();
+            }
+            if (oldLockerThreadsList != newLockerThreadsList) { // Not fire when both null
+                //System.err.println("Fire lockerThreads: "+(oldLockerThreadsList == null || !oldLockerThreadsList.equals(newLockerThreadsList)));
+                pch.firePropertyChange(PROP_LOCKER_THREADS, oldLockerThreadsList, newLockerThreadsList); // NOI18N
+            }
             //}
             //setLockerThreads(lockedThreadsWithMonitors);
             return lockedThreadsWithMonitors != null;
@@ -1385,6 +1396,7 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
                         public void run() {
                             accessLock.writeLock().lock();
                             try {
+                                logger.fine("Resuming thread "+threadName+" to finish method invoke...");
                                 resumedToFinishMethodInvocation = true;
                                     ThreadReferenceWrapper.resume(threadReference);
                             } catch (VMDisconnectedExceptionWrapper e) {
@@ -1433,6 +1445,7 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
     private void submitCheckForMonitorEntered(ObjectReference waitingMonitor) throws InternalExceptionWrapper, VMDisconnectedExceptionWrapper, ObjectCollectedExceptionWrapper, IllegalThreadStateExceptionWrapper {
         try {
             ThreadReferenceWrapper.suspend(threadReference);
+            logger.fine("submitCheckForMonitorEntered(): suspending "+ThreadReferenceWrapper.name(threadReference));
             ObjectReference monitor = ThreadReferenceWrapper.currentContendedMonitor(threadReference);
             if (monitor == null) return ;
             Location loc = StackFrameWrapper.location(ThreadReferenceWrapper.frame(threadReference, 0));
@@ -1447,6 +1460,7 @@ public final class JPDAThreadImpl implements JPDAThread, Customizer {
         } catch (InvalidStackFrameExceptionWrapper isex) {
             Exceptions.printStackTrace(isex);
         } finally {
+            logger.fine("submitCheckForMonitorEntered(): resuming "+ThreadReferenceWrapper.name(threadReference));
             ThreadReferenceWrapper.resume(threadReference);
         }
     }
