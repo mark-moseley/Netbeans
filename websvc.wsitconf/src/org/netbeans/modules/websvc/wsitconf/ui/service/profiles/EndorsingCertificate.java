@@ -41,13 +41,11 @@
 
 package org.netbeans.modules.websvc.wsitconf.ui.service.profiles;
 
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import org.netbeans.modules.websvc.wsitconf.spi.SecurityProfile;
 import org.netbeans.modules.websvc.wsitconf.spi.features.SecureConversationFeature;
-import org.netbeans.modules.websvc.wsitconf.ui.ComboConstants;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.AlgoSuiteModelHelper;
-import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.ProfilesModelHelper;
+import org.netbeans.modules.websvc.wsitmodelext.versioning.ConfigVersion;
+import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.PolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityPolicyModelHelper;
 import org.netbeans.modules.websvc.wsitconf.wsdlmodelext.SecurityTokensModelHelper;
 import org.netbeans.modules.websvc.wsitmodelext.policy.Policy;
@@ -60,53 +58,24 @@ import org.netbeans.modules.xml.wsdl.model.WSDLComponent;
  *
  * @author  Martin Grebac
  */
-public class EndorsingCertificate extends javax.swing.JPanel {
+public class EndorsingCertificate extends ProfileBaseForm {
 
-    private boolean inSync = false;
-
-    private WSDLComponent comp;
-    private SecurityProfile secProfile = null;
-    
     /**
      * Creates new form EndorsingCertificate
      */
     public EndorsingCertificate(WSDLComponent comp, SecurityProfile secProfile) {
-        super();
+        super(comp, secProfile);
         initComponents();
-        this.comp = comp;
-        this.secProfile = secProfile;
 
         inSync = true;
-        layoutCombo.removeAllItems();
-        layoutCombo.addItem(ComboConstants.STRICT);
-        layoutCombo.addItem(ComboConstants.LAX);
-        layoutCombo.addItem(ComboConstants.LAXTSFIRST);
-        layoutCombo.addItem(ComboConstants.LAXTSLAST);
-        
-        algoSuiteCombo.removeAllItems();
-        algoSuiteCombo.addItem(ComboConstants.BASIC256);
-        algoSuiteCombo.addItem(ComboConstants.BASIC192);
-        algoSuiteCombo.addItem(ComboConstants.BASIC128);
-        algoSuiteCombo.addItem(ComboConstants.TRIPLEDES);
-        algoSuiteCombo.addItem(ComboConstants.BASIC256RSA15);
-        algoSuiteCombo.addItem(ComboConstants.BASIC192RSA15);
-        algoSuiteCombo.addItem(ComboConstants.BASIC128RSA15);
-        algoSuiteCombo.addItem(ComboConstants.TRIPLEDESRSA15);
-        algoSuiteCombo.addItem(ComboConstants.BASIC256SHA256);
-        algoSuiteCombo.addItem(ComboConstants.BASIC192SHA256);
-        algoSuiteCombo.addItem(ComboConstants.BASIC128SHA256);
-        algoSuiteCombo.addItem(ComboConstants.TRIPLEDESSHA256);
-        algoSuiteCombo.addItem(ComboConstants.BASIC256SHA256RSA15);
-        algoSuiteCombo.addItem(ComboConstants.BASIC192SHA256RSA15);
-        algoSuiteCombo.addItem(ComboConstants.BASIC128SHA256RSA15);
-        algoSuiteCombo.addItem(ComboConstants.TRIPLEDESSHA256RSA15);
-        
+        fillLayoutCombo(layoutCombo);
+        fillAlgoSuiteCombo(algoSuiteCombo);       
         inSync = false;
         
         sync();
     }
     
-    private void sync() {
+    protected void sync() {
         inSync = true;
 
         WSDLComponent secBinding = null;
@@ -133,6 +102,10 @@ public class EndorsingCertificate extends javax.swing.JPanel {
             setChBox(encryptOrderChBox, SecurityPolicyModelHelper.isEncryptBeforeSigning(comp));
         }
 
+        WSDLComponent tokenKind = SecurityTokensModelHelper.getTokenElement(secBinding, ProtectionToken.class);
+        WSDLComponent token = SecurityTokensModelHelper.getTokenTypeElement(tokenKind);
+        setChBox(reqDerivedKeys, SecurityPolicyModelHelper.isRequireDerivedKeys(token));
+
         setCombo(algoSuiteCombo, AlgoSuiteModelHelper.getAlgorithmSuite(secBinding));
         setCombo(layoutCombo, SecurityPolicyModelHelper.getMessageLayout(secBinding));
 
@@ -141,7 +114,7 @@ public class EndorsingCertificate extends javax.swing.JPanel {
         inSync = false;
     }
 
-    public void setValue(javax.swing.JComponent source) {
+    protected void setValue(javax.swing.JComponent source) {
 
         if (inSync) return;
 
@@ -157,71 +130,65 @@ public class EndorsingCertificate extends javax.swing.JPanel {
             sync();
         }
 
+        ConfigVersion configVersion = PolicyModelHelper.getConfigVersion(comp);
+        SecurityPolicyModelHelper spmh = SecurityPolicyModelHelper.getInstance(configVersion);
+        AlgoSuiteModelHelper asmh = AlgoSuiteModelHelper.getInstance(configVersion);
         if (secConv) {
             WSDLComponent bootPolicy = SecurityTokensModelHelper.getTokenElement(protToken, BootstrapPolicy.class);
             secBinding = SecurityPolicyModelHelper.getSecurityBindingTypeElement(bootPolicy);
             Policy p = (Policy) secBinding.getParent();
             if (source.equals(reqSigConfChBox)) {
-                SecurityPolicyModelHelper.enableRequireSignatureConfirmation(
+                spmh.enableRequireSignatureConfirmation(
                         SecurityPolicyModelHelper.getWss11(p), reqSigConfChBox.isSelected());
             }
             if (source.equals(derivedKeysChBox)) {
-                SecurityPolicyModelHelper.enableRequireDerivedKeys(protToken, derivedKeysChBox.isSelected());
+                spmh.enableRequireDerivedKeys(protToken, derivedKeysChBox.isSelected());
             }
         } else {
             secBinding = SecurityPolicyModelHelper.getSecurityBindingTypeElement(comp);
             if (source.equals(reqSigConfChBox)) {
-                SecurityPolicyModelHelper.enableRequireSignatureConfirmation(SecurityPolicyModelHelper.getWss11(comp), reqSigConfChBox.isSelected());
+                spmh.enableRequireSignatureConfirmation(SecurityPolicyModelHelper.getWss11(comp), reqSigConfChBox.isSelected());
             }
         }
         
         if (source.equals(encryptSignatureChBox)) {
-            SecurityPolicyModelHelper.enableEncryptSignature(secBinding, encryptSignatureChBox.isSelected());
+            spmh.enableEncryptSignature(secBinding, encryptSignatureChBox.isSelected());
             if (secConv) {
-                SecurityPolicyModelHelper.enableEncryptSignature(topSecBinding, encryptSignatureChBox.isSelected());
+                spmh.enableEncryptSignature(topSecBinding, encryptSignatureChBox.isSelected());
             }
         }
         if (source.equals(encryptOrderChBox)) {
-            SecurityPolicyModelHelper.enableEncryptBeforeSigning(secBinding, encryptOrderChBox.isSelected());
+            spmh.enableEncryptBeforeSigning(secBinding, encryptOrderChBox.isSelected());
             if (secConv) {
-                SecurityPolicyModelHelper.enableEncryptBeforeSigning(topSecBinding, encryptOrderChBox.isSelected());
+                spmh.enableEncryptBeforeSigning(topSecBinding, encryptOrderChBox.isSelected());
             }
         }
         if (source.equals(layoutCombo)) {
-            SecurityPolicyModelHelper.setLayout(secBinding, (String) layoutCombo.getSelectedItem());
+            spmh.setLayout(secBinding, (String) layoutCombo.getSelectedItem());
             if (secConv) {
-                SecurityPolicyModelHelper.setLayout(topSecBinding, (String) layoutCombo.getSelectedItem());
+                spmh.setLayout(topSecBinding, (String) layoutCombo.getSelectedItem());
             }
         }
         if (source.equals(algoSuiteCombo)) {
-            AlgoSuiteModelHelper.setAlgorithmSuite(secBinding, (String) algoSuiteCombo.getSelectedItem());
+            asmh.setAlgorithmSuite(secBinding, (String) algoSuiteCombo.getSelectedItem());
             if (secConv) {
-                AlgoSuiteModelHelper.setAlgorithmSuite(topSecBinding, (String) algoSuiteCombo.getSelectedItem());
+                asmh.setAlgorithmSuite(topSecBinding, (String) algoSuiteCombo.getSelectedItem());
             }
+        }
+
+        if (source.equals(reqDerivedKeys)) {
+            WSDLComponent tokenKind = SecurityTokensModelHelper.getTokenElement(secBinding, ProtectionToken.class);
+            WSDLComponent token = SecurityTokensModelHelper.getTokenTypeElement(tokenKind);
+            spmh.enableRequireDerivedKeys(token, reqDerivedKeys.isSelected());
+            return;
         }
         
         enableDisable();
     }
 
-    private void enableDisable() {
+    protected void enableDisable() {
         boolean secConvEnabled = secConvChBox.isSelected();
         derivedKeysChBox.setEnabled(secConvEnabled);
-    }
-    
-    private void setCombo(JComboBox combo, String item) {
-        if (item == null) {
-            combo.setSelectedIndex(0);
-        } else {
-            combo.setSelectedItem(item);
-        }
-    }
-
-    private void setChBox(JCheckBox chBox, Boolean enable) {
-        if (enable == null) {
-            chBox.setSelected(false);
-        } else {
-            chBox.setSelected(enable);
-        }
     }
     
     /** This method is called from within the constructor to
@@ -241,9 +208,9 @@ public class EndorsingCertificate extends javax.swing.JPanel {
         layoutCombo = new javax.swing.JComboBox();
         encryptSignatureChBox = new javax.swing.JCheckBox();
         encryptOrderChBox = new javax.swing.JCheckBox();
+        reqDerivedKeys = new javax.swing.JCheckBox();
 
         org.openide.awt.Mnemonics.setLocalizedText(secConvChBox, org.openide.util.NbBundle.getMessage(EndorsingCertificate.class, "LBL_SecConvLabel")); // NOI18N
-        secConvChBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         secConvChBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         secConvChBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -252,7 +219,6 @@ public class EndorsingCertificate extends javax.swing.JPanel {
         });
 
         org.openide.awt.Mnemonics.setLocalizedText(reqSigConfChBox, org.openide.util.NbBundle.getMessage(EndorsingCertificate.class, "LBL_RequireSigConfirmation")); // NOI18N
-        reqSigConfChBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         reqSigConfChBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         reqSigConfChBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -261,7 +227,6 @@ public class EndorsingCertificate extends javax.swing.JPanel {
         });
 
         org.openide.awt.Mnemonics.setLocalizedText(derivedKeysChBox, org.openide.util.NbBundle.getMessage(EndorsingCertificate.class, "LBL_RequireDerivedKeysForSecConv")); // NOI18N
-        derivedKeysChBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         derivedKeysChBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         derivedKeysChBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -288,7 +253,6 @@ public class EndorsingCertificate extends javax.swing.JPanel {
         });
 
         org.openide.awt.Mnemonics.setLocalizedText(encryptSignatureChBox, org.openide.util.NbBundle.getMessage(EndorsingCertificate.class, "LBL_EncryptSignatureLabel")); // NOI18N
-        encryptSignatureChBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         encryptSignatureChBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         encryptSignatureChBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -297,11 +261,18 @@ public class EndorsingCertificate extends javax.swing.JPanel {
         });
 
         org.openide.awt.Mnemonics.setLocalizedText(encryptOrderChBox, org.openide.util.NbBundle.getMessage(EndorsingCertificate.class, "LBL_EncryptOrderLabel")); // NOI18N
-        encryptOrderChBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         encryptOrderChBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         encryptOrderChBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 encryptOrderChBoxActionPerformed(evt);
+            }
+        });
+
+        org.openide.awt.Mnemonics.setLocalizedText(reqDerivedKeys, org.openide.util.NbBundle.getMessage(EndorsingCertificate.class, "LBL_RequireDerivedKeys")); // NOI18N
+        reqDerivedKeys.setMargin(new java.awt.Insets(0, 0, 0, 0));
+        reqDerivedKeys.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                reqDerivedKeysActionPerformed(evt);
             }
         });
 
@@ -312,20 +283,26 @@ public class EndorsingCertificate extends javax.swing.JPanel {
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(layoutLabel)
+                    .add(algoSuiteLabel))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(layoutCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(algoSuiteCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap(133, Short.MAX_VALUE))
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
+                .addContainerGap(20, Short.MAX_VALUE)
+                .add(reqDerivedKeys)
+                .add(178, 178, 178))
+            .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
+                .addContainerGap(20, Short.MAX_VALUE)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(reqSigConfChBox)
                     .add(secConvChBox)
                     .add(derivedKeysChBox)
                     .add(encryptSignatureChBox)
-                    .add(encryptOrderChBox)
-                    .add(layout.createSequentialGroup()
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(layoutLabel)
-                            .add(algoSuiteLabel))
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(layoutCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                            .add(algoSuiteCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))))
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .add(encryptOrderChBox))
+                .addContainerGap())
         );
 
         layout.linkSize(new java.awt.Component[] {algoSuiteCombo, layoutCombo}, org.jdesktop.layout.GroupLayout.HORIZONTAL);
@@ -341,6 +318,8 @@ public class EndorsingCertificate extends javax.swing.JPanel {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(layoutLabel)
                     .add(layoutCombo, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .add(6, 6, 6)
+                .add(reqDerivedKeys)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(secConvChBox)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
@@ -385,6 +364,10 @@ public class EndorsingCertificate extends javax.swing.JPanel {
     private void algoSuiteComboActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_algoSuiteComboActionPerformed
         setValue(algoSuiteCombo);
     }//GEN-LAST:event_algoSuiteComboActionPerformed
+
+    private void reqDerivedKeysActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_reqDerivedKeysActionPerformed
+        setValue(reqDerivedKeys);
+}//GEN-LAST:event_reqDerivedKeysActionPerformed
             
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JComboBox algoSuiteCombo;
@@ -394,6 +377,7 @@ public class EndorsingCertificate extends javax.swing.JPanel {
     private javax.swing.JCheckBox encryptSignatureChBox;
     private javax.swing.JComboBox layoutCombo;
     private javax.swing.JLabel layoutLabel;
+    private javax.swing.JCheckBox reqDerivedKeys;
     private javax.swing.JCheckBox reqSigConfChBox;
     private javax.swing.JCheckBox secConvChBox;
     // End of variables declaration//GEN-END:variables
