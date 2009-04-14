@@ -45,12 +45,10 @@ import java.awt.GridBagLayout;
 import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
-import java.awt.Point;
-import java.awt.Rectangle;
+import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
 import org.netbeans.modules.welcome.content.BundleSupport;
 import org.netbeans.modules.welcome.content.ContentSection;
 import org.netbeans.modules.welcome.content.RecentProjectsPanel;
@@ -65,17 +63,19 @@ class MyNetBeansTab extends AbstractTab {
     private ContentSection blogsSection;
     private JComponent bottomBar;
 
+    public MyNetBeansTab() {
+        super( false );
+    }
+
     protected void buildContent() {
         JPanel main = new JPanel( new GridBagLayout() );
-        main.setOpaque( false );
+        main.setOpaque(false);
+        main.setBorder(BorderFactory.createEmptyBorder());
         add( main, BorderLayout.CENTER );
-        
-        main.add( new Stripe(true),
-                new GridBagConstraints(0,0,2,1,1.0,1.0,GridBagConstraints.CENTER,
-                GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-        
+
         JComponent c = new RecentProjectsPanel();
         recentProjectsSection = new ContentSection( BundleSupport.getLabel( "SectionRecentProjects" ), //NOI18N
+                "org/netbeans/modules/welcome/resources/lbl_recent_projects.png", //NOI18N
                 SwingConstants.NORTH_WEST, c, false );
         main.add( recentProjectsSection,
                 new GridBagConstraints(0,1,1,1,0.0,0.0,GridBagConstraints.SOUTHEAST,
@@ -83,72 +83,29 @@ class MyNetBeansTab extends AbstractTab {
         
         c = new ArticlesAndNews();
         main.add( new ContentSection( BundleSupport.getLabel( "SectionNewsAndTutorials" ), //NOI18N
+                "org/netbeans/modules/welcome/resources/lbl_news.png", //NOI18N
                 SwingConstants.NORTH_EAST, c, true ),
                 new GridBagConstraints(1,1,1,1,1.0,0.0,GridBagConstraints.SOUTHWEST,
                 GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
         
         c = new DemoPanel();
         main.add( new ContentSection( BundleSupport.getLabel( "SectionDemo" ), //NOI18N
+                "org/netbeans/modules/welcome/resources/lbl_demo.png", //NOI18N
                 SwingConstants.SOUTH_WEST, c, true ),
                 new GridBagConstraints(0,2,1,1,0.0,0.0,GridBagConstraints.NORTHEAST,
                 GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
         
         c = new Blogs();
         blogsSection = new ContentSection( BundleSupport.getLabel( "SectionBlogs" ), //NOI18N
+                "org/netbeans/modules/welcome/resources/lbl_blogs.png", //NOI18N
                 SwingConstants.SOUTH_EAST, c, true );
         main.add( blogsSection,
                 new GridBagConstraints(1,2,1,1,1.0,0.0,GridBagConstraints.NORTHWEST,
                 GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-        
+
         bottomBar = new BottomBar();
         main.add( bottomBar,
-                new GridBagConstraints(0,3,2,1,1.0,0.0,GridBagConstraints.CENTER,
+                new GridBagConstraints(0,4,2,1,1.0,0.0,GridBagConstraints.SOUTH,
                 GridBagConstraints.HORIZONTAL,new Insets(0,0,0,0),0,0) );
-        
-        main.add( new Stripe(false),
-                new GridBagConstraints(0,4,2,1,1.0,1.0,GridBagConstraints.CENTER,
-                GridBagConstraints.BOTH,new Insets(0,0,0,0),0,0) );
-    }
-
-
-    protected Point getTopStripOrigin() {
-        Point p;
-        if( null == recentProjectsSection ) {
-            p = new Point(0,0);
-        } else {
-            Rectangle r = recentProjectsSection.getTitleBounds();
-            p = r.getLocation();
-            p.y += r.getHeight();
-            p.x += r.getWidth()/2;
-            p = SwingUtilities.convertPoint( recentProjectsSection, p, this );
-        }
-        return p;
-    }
-
-    protected Point getMiddleStripOrigin() {
-        Point p;
-        if( null == blogsSection ) {
-            p = new Point(0,0);
-        } else {
-            Rectangle r = blogsSection.getTitleBounds();
-            p = r.getLocation();
-            p.y += r.getHeight();
-            p.x += r.getWidth();
-            p = SwingUtilities.convertPoint( blogsSection, p, this );
-        }
-        return p;
-    }
-
-    protected Point getBottomStripOrigin() {
-        Point p;
-        if( null == bottomBar ) {
-            p = new Point(0,0);
-        } else {
-            Rectangle r = bottomBar.getBounds();
-            p = r.getLocation();
-            p.y += r.getHeight();
-            p.x += r.getWidth();
-        }
-        return p;
     }
 }

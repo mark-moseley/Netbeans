@@ -68,6 +68,7 @@ public class WelcomeComponent extends TopComponent {
         content = null;
         initialized = false;
         putClientProperty( "activateAtStartup", Boolean.TRUE ); //NOI18N
+        putClientProperty( "KeepNonPersistentTCInModelWhenClosed", Boolean.TRUE ); //NOI18N
     }
     
     @Override protected String preferredID(){
@@ -84,7 +85,6 @@ public class WelcomeComponent extends TopComponent {
         if( null == content ) {
             WelcomeOptions.getDefault().incrementStartCounter();
             content = new StartPageContent();
-
             add( content, BorderLayout.CENTER );
             setFocusable( false );
         }
@@ -137,7 +137,7 @@ public class WelcomeComponent extends TopComponent {
     /** Overriden to explicitely set persistence type of WelcomeComponent
      * to PERSISTENCE_ALWAYS */
     @Override public int getPersistenceType() {
-        return TopComponent.PERSISTENCE_NEVER;
+        return TopComponent.PERSISTENCE_ONLY_OPENED;
     }
     
     private void initAccessibility(){
@@ -180,6 +180,14 @@ public class WelcomeComponent extends TopComponent {
                 close();
             }
         }
+    }
+
+    @Override
+    protected void componentClosed() {
+        super.componentClosed();
+        TopComponentGroup group = WindowManager.getDefault().findTopComponentGroup("InitialLayout"); //NOI18N
+        if( null != group )
+            group.open();
     }
     
     @Override protected void componentHidden() {
