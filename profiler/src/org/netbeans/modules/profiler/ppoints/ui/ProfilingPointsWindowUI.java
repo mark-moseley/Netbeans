@@ -55,7 +55,7 @@ import org.netbeans.modules.profiler.ppoints.CodeProfilingPoint;
 import org.netbeans.modules.profiler.ppoints.ProfilingPoint;
 import org.netbeans.modules.profiler.ppoints.ProfilingPointsManager;
 import org.netbeans.modules.profiler.ppoints.Utils;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.actions.SystemAction;
@@ -89,7 +89,6 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JSeparator;
-import javax.swing.JTable;
 import javax.swing.JToolBar;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
@@ -97,6 +96,7 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumnModel;
+import org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities;
 
 
 /**
@@ -162,10 +162,10 @@ public class ProfilingPointsWindowUI extends JPanel implements ActionListener, L
     private static final String NO_END_DEFINED_MSG = NbBundle.getMessage(ProfilingPointsWindowUI.class,
                                                                          "ProfilingPointsWindowUI_NoEndDefinedMsg"); // NOI18N
                                                                                                                      // -----
-    private static final ImageIcon PPOINT_ADD_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/ppointAdd.png")); // NOI18N
-    private static final ImageIcon PPOINT_REMOVE_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/ppointRemove.png")); // NOI18N
-    private static final ImageIcon PPOINT_EDIT_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/ppointEdit.png")); // NOI18N
-    private static final ImageIcon PPOINT_ENABLE_DISABLE_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/ppointEnableDisable.png")); // NOI18N
+    private static final ImageIcon PPOINT_ADD_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/ppointAdd.png", false); // NOI18N
+    private static final ImageIcon PPOINT_REMOVE_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/ppointRemove.png", false); // NOI18N
+    private static final ImageIcon PPOINT_EDIT_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/ppointEdit.png", false); // NOI18N
+    private static final ImageIcon PPOINT_ENABLE_DISABLE_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/ppointEnableDisable.png", false); // NOI18N
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -200,6 +200,8 @@ public class ProfilingPointsWindowUI extends JPanel implements ActionListener, L
     private boolean profilingInProgress = false;
     private int initialSortingColumn;
     private int minProfilingPointColumnWidth; // minimal width of Profiling Point column
+
+    private boolean internalComboChange;
 
     //~ Constructors -------------------------------------------------------------------------------------------------------------
 
@@ -236,7 +238,7 @@ public class ProfilingPointsWindowUI extends JPanel implements ActionListener, L
 
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == projectsCombo) {
-            refreshProfilingPoints();
+            if (!internalComboChange) refreshProfilingPoints();
         } else if (e.getSource() == addButton) {
             SystemAction.get(InsertProfilingPointAction.class).performAction(getSelectedProject());
         } else if (e.getSource() == removeButton) {
@@ -860,6 +862,8 @@ public class ProfilingPointsWindowUI extends JPanel implements ActionListener, L
         DefaultComboBoxModel comboModel = (DefaultComboBoxModel) projectsCombo.getModel();
         Object selectedItem = projectsCombo.getSelectedItem();
 
+        internalComboChange = true;
+
         comboModel.removeAllElements();
 
         for (int i = 0; i < items.size(); i++) {
@@ -871,5 +875,9 @@ public class ProfilingPointsWindowUI extends JPanel implements ActionListener, L
         } else {
             projectsCombo.setSelectedItem(ALL_PROJECTS_STRING);
         }
+
+        internalComboChange = false;
+
+        refreshProfilingPoints();
     }
 }
