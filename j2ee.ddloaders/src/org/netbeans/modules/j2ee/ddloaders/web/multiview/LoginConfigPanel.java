@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.j2ee.ddloaders.web.multiview;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.JRadioButton;
 import org.netbeans.modules.j2ee.dd.api.web.FormLoginConfig;
 import org.netbeans.modules.j2ee.dd.api.web.LoginConfig;
@@ -58,6 +60,8 @@ import org.netbeans.modules.xml.multiview.ui.SectionView;
  * @author  ptliu
  */
 public class LoginConfigPanel extends SectionInnerPanel {
+    private static final Logger LOG = Logger.getLogger(LoginConfigPanel.class.getName());
+    
     private static String NONE = "NONE";                //NOI18N
     private static String BASIC = "BASIC";              //NOI18N
     private static String DIGEST = "DIGEST";            //NOI18N
@@ -66,7 +70,6 @@ public class LoginConfigPanel extends SectionInnerPanel {
     
     private WebApp webApp;
     private LoginConfig loginConfig;
-    private SectionView view;
     private DDDataObject dObj;
     
     /**
@@ -76,7 +79,6 @@ public class LoginConfigPanel extends SectionInnerPanel {
         super(view);
         initComponents();
         
-        this.view = view;
         this.dObj = dObj;
         this.webApp = dObj.getWebApp();
         this.loginConfig = webApp.getSingleLoginConfig();
@@ -91,12 +93,13 @@ public class LoginConfigPanel extends SectionInnerPanel {
             String authMethod = loginConfig.getAuthMethod();
             updateVisualState(authMethod);
             
-            if (authMethod.equals(BASIC)) {
-                realmNameTF.setText(loginConfig.getRealmName());
-            } else if (authMethod.equals(FORM)) {
+            if (authMethod.equals(FORM)) {
                 FormLoginConfig formLoginConfig = loginConfig.getFormLoginConfig();
                 loginPageTF.setText(formLoginConfig.getFormLoginPage());
                 errorPageTF.setText(formLoginConfig.getFormErrorPage());
+            }
+
+            if (!authMethod.equals(NONE)) {
                 realmNameTF.setText(loginConfig.getRealmName());
             }
         }
@@ -113,44 +116,39 @@ public class LoginConfigPanel extends SectionInnerPanel {
     }
     
     private void updateVisualState(final String state) {
-        if (state.equals(BASIC)) {
-            basicRB.setSelected(true);
-            realmNameLabel.setEnabled(true);
-            realmNameTF.setEnabled(true);
-            loginPageLabel.setEnabled(false);
-            loginPageTF.setEnabled(false);
-            loginPageBrowseButton.setEnabled(false);
-            errorPageLabel.setEnabled(false);
-            errorPageTF.setEnabled(false);
-            errorPageBrowseButton.setEnabled(false);
-        } else if (state.equals(FORM)) {
-            formRB.setSelected(true);
-            realmNameLabel.setEnabled(true);
-            realmNameTF.setEnabled(true);
-            loginPageLabel.setEnabled(true);
-            loginPageTF.setEnabled(true);
-            loginPageBrowseButton.setEnabled(true);
-            errorPageLabel.setEnabled(true);
-            errorPageTF.setEnabled(true);
-            errorPageBrowseButton.setEnabled(true);
-        } else {
-            if (state.equals(NONE)) {
-                noneRB.setSelected(true);
-            } else if (state.equals(DIGEST)) {
-                digestRB.setSelected(true);
-            } else if (state.equals(CLIENT_CERT)) {
-                clientCertRB.setSelected(true);
-            }
-            
-            realmNameLabel.setEnabled(false);
-            realmNameTF.setEnabled(false);
-            loginPageLabel.setEnabled(false);
-            loginPageTF.setEnabled(false);
-            loginPageBrowseButton.setEnabled(false);
-            errorPageLabel.setEnabled(false);
-            errorPageTF.setEnabled(false);
-            errorPageBrowseButton.setEnabled(false);
+        boolean loginPages = false;
+        boolean realm = true;
+
+        if (state.equals(NONE)) {
+            noneRB.setSelected(true);
+            realm = false;
         }
+        else if (state.equals(DIGEST)) {
+            digestRB.setSelected(true);
+        }
+        else if (state.equals(CLIENT_CERT)) {
+            clientCertRB.setSelected(true);
+        }
+        else if (state.equals(BASIC)) {
+            basicRB.setSelected(true);
+        }
+        else if (state.equals(FORM)) {
+            formRB.setSelected(true);
+            loginPages = true;
+        }
+        else {
+            noneRB.setSelected(true);
+            realm = false;
+        }
+            
+        realmNameLabel.setEnabled(realm);
+        realmNameTF.setEnabled(realm);
+        loginPageLabel.setEnabled(loginPages);
+        loginPageTF.setEnabled(loginPages);
+        loginPageBrowseButton.setEnabled(loginPages);
+        errorPageLabel.setEnabled(loginPages);
+        errorPageTF.setEnabled(loginPages);
+        errorPageBrowseButton.setEnabled(loginPages);
     }
     
     public void linkButtonPressed(Object obj, String id) {
@@ -160,6 +158,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
         return null;
     }
     
+    @Override
     public void documentChanged(javax.swing.text.JTextComponent comp, String value) {
         /* TODO: Is there anything to validate?
         if (comp == realmNameTF) {
@@ -184,6 +183,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
                 loginConfig = (LoginConfig) webApp.createBean("LoginConfig");  //NOI18N
                 webApp.setLoginConfig(loginConfig);
             } catch (ClassNotFoundException ex) {
+                LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
             }
         }
         
@@ -199,6 +199,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
                 formLoginConfig = (FormLoginConfig) webApp.createBean("FormLoginConfig");  //NOI18N
                 loginConfig.setFormLoginConfig(formLoginConfig);
             } catch (ClassNotFoundException ex) {
+                LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
             }
         }
         
@@ -219,6 +220,8 @@ public class LoginConfigPanel extends SectionInnerPanel {
                 authMethod = BASIC;
             } else if (source == formRB) {
                 authMethod = FORM;
+            } else {
+                authMethod = NONE;
             }
             
             // Null out the existing loginConfig
@@ -229,10 +232,10 @@ public class LoginConfigPanel extends SectionInnerPanel {
                 loginConfig.setAuthMethod(authMethod);
                 
                 // Revive any previously set values.
-                if (authMethod.equals(BASIC)) {
+                if (!authMethod.equals(NONE)) {
                     loginConfig.setRealmName(realmNameTF.getText());
-                } else if (authMethod.equals(FORM)) {
-                    loginConfig.setRealmName(realmNameTF.getText());
+                }
+                if (authMethod.equals(FORM)) {
                     FormLoginConfig formLoginConfig = getFormLoginConfig();
                     formLoginConfig.setFormLoginPage(loginPageTF.getText());
                     formLoginConfig.setFormErrorPage(errorPageTF.getText());
@@ -250,17 +253,20 @@ public class LoginConfigPanel extends SectionInnerPanel {
         }
     }
     
+    @Override
     public void rollbackValue(javax.swing.text.JTextComponent source) {
     }
     
     /** This will be called before model is changed from this panel
      */
+    @Override
     protected void startUIChange() {
         dObj.setChangedFromUI(true);
     }
     
     /** This will be called after model is changed from this panel
      */
+    @Override
     protected void endUIChange() {
         dObj.modelUpdatedFromUI();
         dObj.setChangedFromUI(false);
@@ -271,8 +277,9 @@ public class LoginConfigPanel extends SectionInnerPanel {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
+
         buttonGroup1 = new javax.swing.ButtonGroup();
         realmNameLabel = new javax.swing.JLabel();
         loginPageLabel = new javax.swing.JLabel();
@@ -288,19 +295,17 @@ public class LoginConfigPanel extends SectionInnerPanel {
         basicRB = new javax.swing.JRadioButton();
         formRB = new javax.swing.JRadioButton();
 
-        realmNameLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_realmName_mnem").charAt(0));
         realmNameLabel.setLabelFor(realmNameTF);
-        realmNameLabel.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_RealmName"));
+        java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle"); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(realmNameLabel, bundle.getString("LBL_RealmName")); // NOI18N
         realmNameLabel.setEnabled(false);
 
-        loginPageLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_loginPage_mnem").charAt(0));
         loginPageLabel.setLabelFor(loginPageTF);
-        loginPageLabel.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_FormLoginPage"));
+        org.openide.awt.Mnemonics.setLocalizedText(loginPageLabel, bundle.getString("LBL_FormLoginPage")); // NOI18N
         loginPageLabel.setEnabled(false);
 
-        errorPageLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_errorPage_mnem").charAt(0));
         errorPageLabel.setLabelFor(loginPageTF);
-        errorPageLabel.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_FormErrorPage"));
+        org.openide.awt.Mnemonics.setLocalizedText(errorPageLabel, bundle.getString("LBL_FormErrorPage")); // NOI18N
         errorPageLabel.setEnabled(false);
 
         realmNameTF.setEnabled(false);
@@ -309,8 +314,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
 
         errorPageTF.setEnabled(false);
 
-        loginPageBrowseButton.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_browse_mnem3").charAt(0));
-        loginPageBrowseButton.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_browse"));
+        org.openide.awt.Mnemonics.setLocalizedText(loginPageBrowseButton, bundle.getString("LBL_browse")); // NOI18N
         loginPageBrowseButton.setEnabled(false);
         loginPageBrowseButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -318,8 +322,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
             }
         });
 
-        errorPageBrowseButton.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_browse_mnem2").charAt(0));
-        errorPageBrowseButton.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_browse"));
+        org.openide.awt.Mnemonics.setLocalizedText(errorPageBrowseButton, bundle.getString("LBL_browse")); // NOI18N
         errorPageBrowseButton.setEnabled(false);
         errorPageBrowseButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -328,9 +331,8 @@ public class LoginConfigPanel extends SectionInnerPanel {
         });
 
         buttonGroup1.add(noneRB);
-        noneRB.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_none_mnem").charAt(0));
         noneRB.setSelected(true);
-        noneRB.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_NoneAuthMethod"));
+        org.openide.awt.Mnemonics.setLocalizedText(noneRB, bundle.getString("LBL_NoneAuthMethod")); // NOI18N
         noneRB.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         noneRB.setMargin(new java.awt.Insets(0, 0, 0, 0));
         noneRB.setOpaque(false);
@@ -341,8 +343,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
         });
 
         buttonGroup1.add(digestRB);
-        digestRB.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_digest_mnem").charAt(0));
-        digestRB.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_DigestAuthMethod"));
+        org.openide.awt.Mnemonics.setLocalizedText(digestRB, bundle.getString("LBL_DigestAuthMethod")); // NOI18N
         digestRB.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         digestRB.setMargin(new java.awt.Insets(0, 0, 0, 0));
         digestRB.setOpaque(false);
@@ -353,8 +354,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
         });
 
         buttonGroup1.add(clientCertRB);
-        clientCertRB.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_clientCert_mnem").charAt(0));
-        clientCertRB.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_ClientCertAuthMethod"));
+        org.openide.awt.Mnemonics.setLocalizedText(clientCertRB, bundle.getString("LBL_ClientCertAuthMethod")); // NOI18N
         clientCertRB.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         clientCertRB.setMargin(new java.awt.Insets(0, 0, 0, 0));
         clientCertRB.setOpaque(false);
@@ -365,8 +365,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
         });
 
         buttonGroup1.add(basicRB);
-        basicRB.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_basic_mnem").charAt(0));
-        basicRB.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_BasicAuthMethod"));
+        org.openide.awt.Mnemonics.setLocalizedText(basicRB, bundle.getString("LBL_BasicAuthMethod")); // NOI18N
         basicRB.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         basicRB.setMargin(new java.awt.Insets(0, 0, 0, 0));
         basicRB.setOpaque(false);
@@ -377,8 +376,7 @@ public class LoginConfigPanel extends SectionInnerPanel {
         });
 
         buttonGroup1.add(formRB);
-        formRB.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_form_mnem").charAt(0));
-        formRB.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/ddloaders/web/multiview/Bundle").getString("LBL_FormAuthMethod"));
+        org.openide.awt.Mnemonics.setLocalizedText(formRB, bundle.getString("LBL_FormAuthMethod")); // NOI18N
         formRB.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
         formRB.setMargin(new java.awt.Insets(0, 0, 0, 0));
         formRB.setOpaque(false);
@@ -399,22 +397,24 @@ public class LoginConfigPanel extends SectionInnerPanel {
                     .add(digestRB)
                     .add(clientCertRB)
                     .add(basicRB)
+                    .add(formRB)
                     .add(layout.createSequentialGroup()
                         .add(17, 17, 17)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(realmNameLabel)
                             .add(loginPageLabel)
                             .add(errorPageLabel))
                         .add(4, 4, 4)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                            .add(errorPageTF, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 193, Short.MAX_VALUE)
-                            .add(org.jdesktop.layout.GroupLayout.LEADING, realmNameTF, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 193, Short.MAX_VALUE)
-                            .add(org.jdesktop.layout.GroupLayout.LEADING, loginPageTF, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 193, Short.MAX_VALUE))
+                            .add(errorPageTF, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 201, Short.MAX_VALUE)
+                            .add(org.jdesktop.layout.GroupLayout.LEADING, loginPageTF, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 201, Short.MAX_VALUE))
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                             .add(errorPageBrowseButton)
                             .add(loginPageBrowseButton)))
-                    .add(formRB))
+                    .add(layout.createSequentialGroup()
+                        .add(realmNameLabel)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
+                        .add(realmNameTF, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 327, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -429,10 +429,6 @@ public class LoginConfigPanel extends SectionInnerPanel {
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(basicRB)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(realmNameLabel)
-                    .add(realmNameTF, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(formRB)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
@@ -444,37 +440,35 @@ public class LoginConfigPanel extends SectionInnerPanel {
                     .add(errorPageBrowseButton)
                     .add(errorPageLabel)
                     .add(errorPageTF, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                    .add(realmNameLabel)
+                    .add(realmNameTF, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
                 .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
     private void formRBActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_formRBActionPerformed
-// TODO add your handling code here:
         updateVisualState(FORM);
     }//GEN-LAST:event_formRBActionPerformed
 
     private void basicRBActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_basicRBActionPerformed
-// TODO add your handling code here:
         updateVisualState(BASIC);
     }//GEN-LAST:event_basicRBActionPerformed
 
     private void clientCertRBActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_clientCertRBActionPerformed
-// TODO add your handling code here:
         updateVisualState(CLIENT_CERT);
     }//GEN-LAST:event_clientCertRBActionPerformed
 
     private void digestRBActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_digestRBActionPerformed
-// TODO add your handling code here:
         updateVisualState(DIGEST);
     }//GEN-LAST:event_digestRBActionPerformed
 
     private void noneRBActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_noneRBActionPerformed
-// TODO add your handling code here:
         updateVisualState(NONE);
     }//GEN-LAST:event_noneRBActionPerformed
     
     private void errorPageBrowseButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_errorPageBrowseButtonActionPerformed
-// TODO add your handling code here:
         try {
             org.netbeans.api.project.SourceGroup[] groups = DDUtils.getDocBaseGroups(dObj);
             org.openide.filesystems.FileObject fo = BrowseFolders.showDialog(groups);
@@ -490,11 +484,12 @@ public class LoginConfigPanel extends SectionInnerPanel {
                     getSectionView().checkValidity();
                 }
             }
-        } catch (java.io.IOException ex) {}
+        } catch (java.io.IOException ex) {
+            LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+        }
     }//GEN-LAST:event_errorPageBrowseButtonActionPerformed
     
     private void loginPageBrowseButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_loginPageBrowseButtonActionPerformed
-// TODO add your handling code here:
          try {
             org.netbeans.api.project.SourceGroup[] groups = DDUtils.getDocBaseGroups(dObj);
             org.openide.filesystems.FileObject fo = BrowseFolders.showDialog(groups);
@@ -510,7 +505,9 @@ public class LoginConfigPanel extends SectionInnerPanel {
                     getSectionView().checkValidity();
                 }
             }
-        } catch (java.io.IOException ex) {}
+        } catch (java.io.IOException ex) {
+            LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+        }
     }//GEN-LAST:event_loginPageBrowseButtonActionPerformed
         
     
