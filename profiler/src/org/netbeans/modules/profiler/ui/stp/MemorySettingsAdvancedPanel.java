@@ -53,7 +53,6 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.io.File;
 import java.lang.ref.WeakReference;
-import java.net.URL;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
@@ -67,6 +66,7 @@ import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -235,15 +235,19 @@ public class MemorySettingsAdvancedPanel extends DefaultSettingsPanel implements
     }
 
     public void setRecordStackTrace(boolean record) {
-        recordStackTracesLabel.setEnabled(record && runGCCheckbox.isEnabled()); // Check for preset
-        fullDepthRadio.setEnabled(record && runGCCheckbox.isEnabled()); // Check for preset
-        definedDepthRadio.setEnabled(record && runGCCheckbox.isEnabled()); // Check for preset
-        defineDepthSpinner.setEnabled(record && runGCCheckbox.isEnabled()); // Check for preset
+        recordStackTracesLabel.setEnabled(record && threadsMonitoringCheckbox.isEnabled()); // Check for preset
+        fullDepthRadio.setEnabled(record && threadsMonitoringCheckbox.isEnabled()); // Check for preset
+        definedDepthRadio.setEnabled(record && threadsMonitoringCheckbox.isEnabled()); // Check for preset
+        defineDepthSpinner.setEnabled(record && threadsMonitoringCheckbox.isEnabled()); // Check for preset
         updateEnabling();
     }
 
     public void setRunGC(boolean runGC) {
         runGCCheckbox.setSelected(runGC);
+    }
+
+    public void updateRunGC(boolean allocOnly, boolean record) {
+        runGCCheckbox.setEnabled(!allocOnly && !record && threadsMonitoringCheckbox.isEnabled()); // Check for preset
     }
 
     public boolean getRunGC() {
@@ -437,7 +441,7 @@ public class MemorySettingsAdvancedPanel extends DefaultSettingsPanel implements
         sampledTimingContainer.add(definedDepthRadio, constraints);
 
         // defineDepthSpinner
-        defineDepthSpinner = new JExtendedSpinner() {
+        defineDepthSpinner = new JExtendedSpinner(new SpinnerNumberModel(10, 1, Integer.MAX_VALUE, 1)) {
                 public Dimension getPreferredSize() {
                     return new Dimension(55, Utils.getDefaultSpinnerHeight());
                 }
