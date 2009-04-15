@@ -109,6 +109,10 @@ public class JspLineBreakpoint extends Breakpoint {
         javalb.setPrintText(printText);
         
         String context = Utils.getContextPath(url);
+
+        // FIXME: determine 'real' context path for web app based on used application server
+        // See issues 146793, 161026, 162286 and 162715 (new API request)
+        
         String condition = "request.getContextPath().equals(\"" + context + "\")"; // NOI18N
         javalb.setCondition(condition);
         Utils.log("condition: " + condition);
