@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -57,9 +57,14 @@ import org.netbeans.api.autoupdate.*;
 import org.netbeans.api.autoupdate.OperationContainer.OperationInfo;
 import org.netbeans.api.autoupdate.OperationSupport.Restarter;
 import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.spi.autoupdate.CustomInstaller;
+import org.netbeans.spi.autoupdate.CustomUninstaller;
 import org.openide.LifecycleManager;
 import org.openide.modules.ModuleInfo;
+import org.openide.util.Mutex.ExceptionAction;
+import org.openide.util.MutexException;
+import org.openide.util.NbBundle;
 
 /**
  * @author Jiri Rechtacek, Radek Matous
@@ -73,6 +78,7 @@ public abstract class OperationSupportImpl {
     private static final OperationSupportImpl FOR_UNINSTALL = new ForUninstall();
     private static final OperationSupportImpl FOR_DIRECT_UNINSTALL = new ForDirectUninstall();
     private static final OperationSupportImpl FOR_CUSTOM_INSTALL = new ForCustomInstall ();
+    private static final OperationSupportImpl FOR_CUSTOM_UNINSTALL = new ForCustomUninstall ();
     
     private static final Logger LOGGER = Logger.getLogger ("org.netbeans.modules.autoupdate.services.OperationSupportImpl");
     
@@ -100,6 +106,9 @@ public abstract class OperationSupportImpl {
     public static OperationSupportImpl forCustomInstall () {
         return FOR_CUSTOM_INSTALL;
     }
+    public static OperationSupportImpl forCustomUninstall () {
+        return FOR_CUSTOM_UNINSTALL;
+    }
     
     public abstract Boolean doOperation(ProgressHandle progress/*or null*/, OperationContainer<?> container) throws OperationException;
     public abstract void doCancel () throws OperationException;
@@ -111,7 +120,7 @@ public abstract class OperationSupportImpl {
     }
     
     private static class ForEnable extends OperationSupportImpl {
-        public Boolean doOperation(ProgressHandle progress,
+        public synchronized Boolean doOperation(ProgressHandle progress,
                 OperationContainer<?> container) throws OperationException {
             try {
                 if (progress != null) {
@@ -125,7 +134,7 @@ public abstract class OperationSupportImpl {
                     UpdateElementImpl impl = Trampoline.API.impl (operationInfo.getUpdateElement ());
                     moduleInfos.addAll (impl.getModuleInfos ());
                 }
-                Set<Module> modules = new HashSet<Module>();
+                final Set<Module> modules = new HashSet<Module>();
                 for (ModuleInfo info : moduleInfos) {
                     Module m = Utilities.toModule (info);
                     if (Utilities.canEnable (m)) {
@@ -137,7 +146,20 @@ public abstract class OperationSupportImpl {
                     }
                 }
                 assert mm != null;
-                enable(mm, modules);
+                final ModuleManager fmm = mm;
+                try {
+                    fmm.mutex ().writeAccess (new ExceptionAction<Boolean> () {
+                        public Boolean run () throws Exception {
+                            return enable(fmm, modules);
+                        }
+                    });
+                } catch (MutexException ex) {
+                    Exception x = ex.getException ();
+                    assert x instanceof OperationException : x + " is instanceof OperationException";
+                    if (x instanceof OperationException) {
+                        throw (OperationException) x;
+                    }
+                }
             } finally {
                 if (progress != null) {
                     progress.finish();
@@ -177,7 +199,7 @@ public abstract class OperationSupportImpl {
     private static class ForDisable extends OperationSupportImpl {
         private Collection<File> controlFileForDisable = null;
         private Collection<UpdateElement> affectedModules = null;
-        public Boolean doOperation(ProgressHandle progress,
+        public synchronized Boolean doOperation(ProgressHandle progress,
                 OperationContainer<?> container) throws OperationException {
             try {
                 if (progress != null) {
@@ -253,7 +275,7 @@ public abstract class OperationSupportImpl {
     }
     
     private static class ForDirectDisable extends OperationSupportImpl {
-        public Boolean doOperation(ProgressHandle progress,
+        public synchronized Boolean doOperation(ProgressHandle progress,
                 OperationContainer<?> container) throws OperationException {
             try {
                 if (progress != null) {
@@ -266,7 +288,7 @@ public abstract class OperationSupportImpl {
                     UpdateElementImpl impl = Trampoline.API.impl (operationInfo.getUpdateElement ());
                     moduleInfos.addAll (impl.getModuleInfos ());
                 }
-                Set<Module> modules = new HashSet<Module>();
+                final Set<Module> modules = new HashSet<Module>();
                 for (ModuleInfo info : moduleInfos) {
                     Module m = Utilities.toModule (info);
                     if (Utilities.canDisable (m)) {
@@ -278,7 +300,20 @@ public abstract class OperationSupportImpl {
                     }
                 }
                 assert mm != null;
-                mm.disable(modules);
+                final ModuleManager fmm = mm;
+                try {
+                    fmm.mutex ().writeAccess (new ExceptionAction<Boolean> () {
+                        public Boolean run () throws Exception {
+                            return disable(fmm, modules);
+                        }
+                    });
+                } catch (MutexException ex) {
+                    Exception x = ex.getException ();
+                    assert x instanceof OperationException : x + " is instanceof OperationException";
+                    if (x instanceof OperationException) {
+                        throw (OperationException) x;
+                    }
+                }
             } finally {
                 if (progress != null) {
                     progress.finish();
@@ -288,6 +323,17 @@ public abstract class OperationSupportImpl {
             return false;
         }
         
+        private static boolean disable (ModuleManager mm, Set<Module> toRun) throws OperationException {
+            boolean retval = false;
+            try {
+                mm.disable (toRun);
+                retval = true;
+            } catch(IllegalArgumentException ilae) {
+                throw new OperationException(OperationException.ERROR_TYPE.ENABLE, ilae);
+            }
+            return retval;
+        }
+
         public void doCancel () throws OperationException {
             assert false : "Not supported yet";
         }
@@ -305,7 +351,7 @@ public abstract class OperationSupportImpl {
     private static class ForUninstall extends OperationSupportImpl {
         private Collection<File> files4remove = null;
         private Collection<UpdateElement> affectedModules = null;
-        public Boolean doOperation(ProgressHandle progress,
+        public synchronized Boolean doOperation(ProgressHandle progress,
                 OperationContainer<?> container) throws OperationException {
             try {
                 if (progress != null) {
@@ -333,6 +379,9 @@ public abstract class OperationSupportImpl {
                                 affectedModules.add (moduleImpl.getUpdateElement ());
                             }
                         }
+                        break;
+                    case CUSTOM_HANDLED_COMPONENT :
+
                         break;
                     default:
                         assert false : "Not supported for impl " + updateElementImpl;
@@ -390,7 +439,7 @@ public abstract class OperationSupportImpl {
     }
     
     private static class ForDirectUninstall extends OperationSupportImpl {
-        public Boolean doOperation(ProgressHandle progress,
+        public synchronized Boolean doOperation(ProgressHandle progress,
                 OperationContainer<?> container) throws OperationException {
             try {
                 if (progress != null) {
@@ -466,7 +515,7 @@ public abstract class OperationSupportImpl {
     }
     
     private static class ForInstall extends OperationSupportImpl {
-        public Boolean doOperation(ProgressHandle progress,
+        public synchronized Boolean doOperation(ProgressHandle progress,
                 OperationContainer container) throws OperationException {
             throw new UnsupportedOperationException("Not supported yet.");
         }
@@ -485,7 +534,7 @@ public abstract class OperationSupportImpl {
     }
     
     private static class ForUpdate extends OperationSupportImpl {
-        public Boolean doOperation(ProgressHandle progress,
+        public synchronized Boolean doOperation(ProgressHandle progress,
                 OperationContainer container) throws OperationException {
             throw new UnsupportedOperationException("Not supported yet.");
         }
@@ -504,10 +553,13 @@ public abstract class OperationSupportImpl {
     }
     
     private static class ForCustomInstall extends OperationSupportImpl {
-        public Boolean doOperation(ProgressHandle progress,
+        private Collection<UpdateElement> affectedModules = null;
+
+        public synchronized Boolean doOperation(ProgressHandle progress,
                 OperationContainer<?> container) throws OperationException {
-            try {
-                
+            boolean success = false;
+            boolean started = false;
+            try {                
                 List<? extends OperationInfo> infos = container.listAll ();
                 List<NativeComponentUpdateElementImpl> customElements = new ArrayList<NativeComponentUpdateElementImpl> ();
                 for (OperationInfo operationInfo : infos) {
@@ -516,39 +568,146 @@ public abstract class OperationSupportImpl {
                     customElements.add ((NativeComponentUpdateElementImpl) impl);
                 }
                 assert customElements != null : "Some elements with custom installer found.";
-                boolean success = false;
+                progress.start(customElements.size());
+                started = true;
+                int index = 0;
+                affectedModules = new HashSet<UpdateElement> ();
                 for (NativeComponentUpdateElementImpl impl : customElements) {
+                    progress.progress(NbBundle.getMessage(OperationSupportImpl.class, "OperationSupportImpl_Custom_Install", impl.getDisplayName()), ++index);
                     CustomInstaller installer = impl.getInstallInfo ().getCustomInstaller ();
                     assert installer != null : "CustomInstaller must found for " + impl.getUpdateElement ();
-                    success = installer.install (impl.getCodeName (), impl.getSpecificationVersion ().toString (), progress);
+                    ProgressHandle handle = ProgressHandleFactory.createHandle("Installing " + impl.getDisplayName());
+                    success = installer.install (impl.getCodeName (),
+                            impl.getSpecificationVersion () == null ? null : impl.getSpecificationVersion ().toString (),
+                            handle);
+                    handle.finish();
                     if (success) {
                         UpdateUnitImpl unitImpl = Trampoline.API.impl (impl.getUpdateUnit ());
                         unitImpl.setInstalled (impl.getUpdateElement ());
+                        affectedModules.add(impl.getUpdateElement());
                     } else {
                         throw new OperationException (OperationException.ERROR_TYPE.INSTALL, impl.getDisplayName ());
                     }
                 }
             } finally {
-                if (progress != null) {
+                if (progress != null && started) {
                     progress.finish ();
                 }
             }
-            
-            // XXX
-            return false;
-            
+
+            return success;
+
         }
         public void doCancel () throws OperationException {
             assert false : "Not supported yet";
         }
 
         public void doRestart (Restarter restarter, ProgressHandle progress) throws OperationException {
-            throw new UnsupportedOperationException ("Not supported yet.");
+            createRestartMarker();
+            LifecycleManager.getDefault ().exit ();
+            // if exit&restart fails => use restart later as fallback
+            doRestartLater (restarter);
         }
 
         public void doRestartLater (Restarter restarter) {
-            throw new UnsupportedOperationException ("Not supported yet.");
+            // shedule module for restart
+            createRestartMarker();
+            if(affectedModules!=null) {
+            for (UpdateElement el : affectedModules) {
+                UpdateUnitFactory.getDefault().scheduleForRestart (el);
+            }
+            }
         }
-        
+        private void createRestartMarker() {
+            try {
+                File targetUserdir = new File(System.getProperty("netbeans.user")); // NOI18N
+                File restartFile = new File(targetUserdir, "var/restart");//NOI18N
+                if(!restartFile.exists()) {
+                    restartFile.createNewFile();
+                }
+            } catch (IOException ex) {
+                LOGGER.log(Level.INFO, "Can`t create restart file marker", ex);
+            }
+        }
+    }
+
+    private static class ForCustomUninstall extends OperationSupportImpl {
+        private Collection<UpdateElement> affectedModules = null;
+        public synchronized Boolean doOperation(ProgressHandle progress,
+                OperationContainer<?> container) throws OperationException {
+            boolean success = false;
+            boolean started = false;
+            try {
+
+                List<? extends OperationInfo> infos = container.listAll ();
+                List<NativeComponentUpdateElementImpl> customElements = new ArrayList<NativeComponentUpdateElementImpl> ();
+                for (OperationInfo operationInfo : infos) {
+                    UpdateElementImpl impl = Trampoline.API.impl (operationInfo.getUpdateElement ());
+                    assert impl instanceof NativeComponentUpdateElementImpl : "Impl of " + operationInfo.getUpdateElement () + " instanceof NativeComponentUpdateElementImpl.";
+                    customElements.add ((NativeComponentUpdateElementImpl) impl);
+                }
+                assert customElements != null : "Some elements with custom installer found.";
+                progress.start(customElements.size());
+                started = true;
+                int index = 0;
+                affectedModules = new HashSet<UpdateElement> ();
+                for (NativeComponentUpdateElementImpl impl : customElements) {
+                    progress.progress(NbBundle.getMessage(OperationSupportImpl.class, "OperationSupportImpl_Custom_Uninstall", impl.getDisplayName()), ++index);
+                    CustomUninstaller uninstaller = impl.getNativeItem ().getUpdateItemDeploymentImpl ().getCustomUninstaller ();
+                    assert uninstaller != null : "CustomInstaller must found for " + impl.getUpdateElement ();
+                    ProgressHandle handle = ProgressHandleFactory.createHandle("Installing " + impl.getDisplayName());
+                    success = uninstaller.uninstall (impl.getCodeName (),
+                            impl.getSpecificationVersion () == null ? null : impl.getSpecificationVersion ().toString (),
+                            handle);
+                    handle.finish();
+                    if (success) {
+                        UpdateUnitImpl unitImpl = Trampoline.API.impl (impl.getUpdateUnit ());
+                        unitImpl.setAsUninstalled ();
+                        affectedModules.add(impl.getUpdateElement());
+                    } else {
+                        throw new OperationException (OperationException.ERROR_TYPE.UNINSTALL, impl.getDisplayName ());
+                    }
+                }
+            } finally {
+                if (progress != null && started) {
+                    progress.finish ();
+                }
+            }
+
+            return success;
+
+        }
+        public void doCancel () throws OperationException {
+            assert false : "Not supported yet";
+        }
+
+        public void doRestart (Restarter restarter, ProgressHandle progress) throws OperationException {
+            createRestartMarker();
+            LifecycleManager.getDefault ().exit ();
+            // if exit&restart fails => use restart later as fallback
+            doRestartLater (restarter);
+        }
+
+        public void doRestartLater (Restarter restarter) {
+            // shedule module for restart
+            createRestartMarker();
+            if(affectedModules!=null) {
+            for (UpdateElement el : affectedModules) {
+                UpdateUnitFactory.getDefault().scheduleForRestart (el);
+            }
+            }
+        }
+        private void createRestartMarker() {
+            try {
+                File targetUserdir = new File(System.getProperty("netbeans.user")); // NOI18N
+                File restartFile = new File(targetUserdir, "var/restart");//NOI18N
+                if(!restartFile.exists()) {
+                    restartFile.createNewFile();
+                }
+            } catch (IOException ex) {
+                LOGGER.log(Level.INFO, "Can`t create restart file marker", ex);
+            }
+
+        }
     }
 }
