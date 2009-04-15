@@ -86,6 +86,9 @@ public abstract class UnitCategoryTableModel extends AbstractTableModel {
         return unitData;
     }
 
+    boolean supportsTwoViews() {
+        return false;
+    }
 
     static Map<String, Boolean> captureState(List<Unit> units) {
         Map<String,Boolean> retval = new HashMap<String, Boolean>();
@@ -137,7 +140,6 @@ public abstract class UnitCategoryTableModel extends AbstractTableModel {
         String countInfo = (count == rawCount) ? String.valueOf (rawCount) :
             NbBundle.getMessage (PluginManagerUI.class, "PluginManagerUI_Tabs_CountFormat", count, rawCount);
         String newName = NbBundle.getMessage (PluginManagerUI.class, "PluginManagerUI_Tabs_NameFormat", getTabTitle(), countInfo);
-        int index = getTabIndex();
         return (rawCount == 0) ? getTabTitle() : newName;        
     }
         
@@ -339,7 +341,11 @@ public abstract class UnitCategoryTableModel extends AbstractTableModel {
     }
             
     public Unit getUnitAtRow (int row) {
-        return getVisibleUnits ().size () <= row ? null : getVisibleUnits ().get (row);
+        if (row < 0 ) {
+            return null;
+        }
+        List <Unit> list = getVisibleUnits();
+        return list.size () <= row ? null : list.get (row);
     }
     
     public boolean isExpansionControlAtRow (int row) {
