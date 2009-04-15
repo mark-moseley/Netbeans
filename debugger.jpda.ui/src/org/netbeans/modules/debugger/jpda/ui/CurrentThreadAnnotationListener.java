@@ -103,13 +103,14 @@ public class CurrentThreadAnnotationListener extends DebuggerManagerAdapter {
             updateCurrentThread ((JPDAThread) e.getNewValue());
             annotate ();
         } else
-        /*if (JPDADebugger.PROP_CURRENT_CALL_STACK_FRAME.equals(propertyName)) {
-            updateCurrentThread ();
-            annotate ();
-        } else*/
+        if (JPDADebugger.PROP_CURRENT_CALL_STACK_FRAME.equals(propertyName)) {
+            //updateCurrentThread ();
+            //annotate ();
+            showCurrentFrame((CallStackFrame) e.getNewValue());
+        } else
         if (JPDADebugger.PROP_STATE.equals(propertyName)) {
             annotate ();
-        }
+        } else
         if (JPDADebugger.PROP_THREAD_STARTED.equals(propertyName)) {
             synchronized (this) {
                 if (allThreadsAnnotator != null) {
@@ -201,11 +202,9 @@ public class CurrentThreadAnnotationListener extends DebuggerManagerAdapter {
      */
     private void annotate () {
         // 1) no current thread => remove annotations
-        CallStackFrame[] stack;
-        final CallStackFrame csf;
-        JPDADebugger debugger;
+        final JPDADebugger debugger;
         final SourcePath sourcePath;
-        final String language;
+        final JPDAThread thread;
         synchronized (this) {
             debugger = currentDebugger;
             if ( (currentThread == null) ||
@@ -217,27 +216,55 @@ public class CurrentThreadAnnotationListener extends DebuggerManagerAdapter {
                 return;
             }
 
-            // 2) get call stack & Line
-            try {
-                stack = currentThread.getCallStack ();
-            } catch (AbsentInformationException ex) {
-                synchronized (currentPCLock) {
-                    currentPCSet = false; // The annotation is goint to be removed
-                }
-                removeAnnotations ();
-                return;
-            }
-            csf = debugger.getCurrentCallStackFrame ();
             sourcePath = currentSourcePath;
-            Session s;
-            try {
-                s = (Session) debugger.getClass().getMethod("getSession").invoke(debugger);
-            } catch (Exception ex) {
-                Exceptions.printStackTrace(ex);
-                s = null;
-            }
-            language = (s != null) ? s.getCurrentLanguage() : null;
+            thread = currentThread;
         }
+        Session s;
+        try {
+            s = (Session) debugger.getClass().getMethod("getSession").invoke(debugger);
+        } catch (Exception ex) {
+            Exceptions.printStackTrace(ex);
+            s = null;
+        }
+        RequestProcessor rProcessor = null;
+        if (s != null) {
+            rProcessor = s.lookupFirst(null, RequestProcessor.class);
+        }
+        if (rProcessor == null) {
+            rProcessor = this.rp;
+        }
+        rProcessor.post(new Runnable() {
+            public void run() {
+                annotate(debugger, thread, sourcePath);
+            }
+        });
+    }
+
+    private void annotate (JPDADebugger debugger, final JPDAThread currentThread, final SourcePath sourcePath) {
+        // 1) no current thread => remove annotations
+        CallStackFrame[] stack;
+        final CallStackFrame csf;
+        final String language;
+
+        // 2) get call stack & Line
+        try {
+            stack = currentThread.getCallStack ();
+        } catch (AbsentInformationException ex) {
+            synchronized (currentPCLock) {
+                currentPCSet = false; // The annotation is goint to be removed
+            }
+            removeAnnotations ();
+            return;
+        }
+        csf = debugger.getCurrentCallStackFrame ();
+        Session s;
+        try {
+            s = (Session) debugger.getClass().getMethod("getSession").invoke(debugger);
+        } catch (Exception ex) {
+            Exceptions.printStackTrace(ex);
+            s = null;
+        }
+        language = (s != null) ? s.getCurrentLanguage() : null;
 
         // 3) annotate current line & stack
         synchronized (currentPCLock) {
@@ -246,23 +273,43 @@ public class CurrentThreadAnnotationListener extends DebuggerManagerAdapter {
         SwingUtilities.invokeLater (new Runnable () {
             public void run () {
                 // show current line
-                JPDAThread thread;
-                synchronized (CurrentThreadAnnotationListener.this) {
-                    thread = currentThread;
-                }
                 synchronized (currentPCLock) {
                     if (currentPC != null)
                         EditorContextBridge.getContext().removeAnnotation (currentPC);
-                    if (csf != null && sourcePath != null && thread != null) {
+                    if (csf != null && sourcePath != null && currentThread != null) {
 
                         sourcePath.showSource (csf, language);
                         // annotate current line
-                        currentPC = sourcePath.annotate (thread, language);
+                        currentPC = sourcePath.annotate (currentThread, language);
                     }
                 }
             }
         });
         annotateCallStack (stack, sourcePath);
+    }
+
+    private void showCurrentFrame(final CallStackFrame frame) {
+        if (frame == null) return ;
+        final SourcePath sp;
+        JPDADebugger dbg;
+        synchronized (this) {
+            sp = currentSourcePath;
+            dbg = currentDebugger;
+        }
+        if (sp != null && dbg != null) {
+            final Session s;
+            try {
+                s = (Session) dbg.getClass().getMethod("getSession").invoke(dbg);
+            } catch (Exception e) {
+                Exceptions.printStackTrace(e);
+                return ;
+            }
+            SwingUtilities.invokeLater (new Runnable () {
+                public void run () {
+                    sp.showSource(frame, s.getCurrentLanguage());
+                }
+            });
+        }
     }
 
 
@@ -375,23 +422,27 @@ public class CurrentThreadAnnotationListener extends DebuggerManagerAdapter {
     private class AllThreadsAnnotator implements Runnable, PropertyChangeListener {
         
         private boolean active = true;
-        private JPDADebugger debugger;
-        private Map<JPDAThread, Object> threadAnnotations = new HashMap<JPDAThread, Object>();
-        private Set<JPDAThread> threadsToAnnotate = new HashSet<JPDAThread>();
-        private Map<JPDAThread, FutureAnnotation> futureAnnotations = new HashMap<JPDAThread, FutureAnnotation>();
-        private Set<Object> annotationsToRemove = new HashSet<Object>();
-        private RequestProcessor.Task task;
+        private final JPDADebugger debugger;
+        private final Map<JPDAThread, Object> threadAnnotations = new HashMap<JPDAThread, Object>();
+        private final Set<JPDAThread> threadsToAnnotate = new HashSet<JPDAThread>();
+        private final Map<JPDAThread, FutureAnnotation> futureAnnotations = new HashMap<JPDAThread, FutureAnnotation>();
+        private final Set<Object> annotationsToRemove = new HashSet<Object>();
+        private final RequestProcessor.Task task;
         
         public AllThreadsAnnotator(JPDADebugger debugger) {
             this.debugger = debugger;
+            RequestProcessor rp;
             try {
-                RequestProcessor rp = ((Session) debugger.getClass().getMethod("getSession").invoke(debugger)).
+                rp = ((Session) debugger.getClass().getMethod("getSession").invoke(debugger)).
                         lookupFirst(null, RequestProcessor.class);
-                if (rp == null) return ; // Session is finishing
-                task = rp.create(this);
             } catch (Exception ex) {
                 Exceptions.printStackTrace(ex);
+                rp = null;
+            }
+            if (rp != null) {
                 task = rp.create(this);
+            } else {
+                task = CurrentThreadAnnotationListener.this.rp.create(this);
             }
 
             //System.err.println("AllThreadsAnnotator("+Integer.toHexString(debugger.hashCode())+").NEW");
