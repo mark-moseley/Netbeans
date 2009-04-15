@@ -1,4 +1,3 @@
-// <editor-fold defaultstate="collapsed" desc=" License Header ">
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
@@ -39,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-// </editor-fold>
 
 package org.netbeans.modules.glassfish.common;
 
@@ -56,6 +54,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.swing.SwingUtilities;
+import org.netbeans.modules.glassfish.spi.RegisteredDerbyServer;
 import org.netbeans.modules.glassfish.spi.GlassfishModule;
 import org.netbeans.modules.glassfish.spi.GlassfishModule.OperationState;
 import org.netbeans.modules.glassfish.spi.OperationStateListener;
@@ -68,7 +68,10 @@ import org.openide.NotifyDescriptor;
 import org.openide.execution.NbProcessDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
+import org.openide.util.RequestProcessor;
+import org.openide.util.Utilities;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
@@ -151,6 +154,12 @@ public class StartTask extends BasicTask<OperationState> {
         
         Process serverProcess = null;
         try {
+            jdkHome = getJavaPlatformRoot(support);
+            // lookup the javadb start service and use it here.
+            RegisteredDerbyServer db = Lookup.getDefault().lookup(RegisteredDerbyServer.class);
+            if (null != db && "true".equals(ip.get(GlassfishModule.START_DERBY_FLAG))) {
+                db.start();
+            }
             serverProcess = createProcess();
         } catch (IOException ex) {
             fireOperationStateChanged(OperationState.FAILED, 
@@ -199,7 +208,28 @@ public class StartTask extends BasicTask<OperationState> {
             
             // if we are profiling, we need to lie about the status?
             if (null != jvmArgs) {
-                return fireOperationStateChanged(OperationState.COMPLETED, 
+                // try to sync the states after the profiler attaches
+                RequestProcessor.getDefault().post(new Runnable () {
+
+                    public void run() {
+                        while (!CommonServerSupport.isRunning(support.getHostName(), support.getHttpPortNumber())) {
+                            try {
+                                Thread.sleep(200);
+                            } catch (InterruptedException ex) {
+                                //Exceptions.printStackTrace(ex);
+                            }
+                        }
+                        SwingUtilities.invokeLater(new Runnable() {
+
+                            public void run() {
+                                    support.refresh();
+                                                    
+                            }
+
+                        });
+                    }
+                });
+                return fireOperationStateChanged(OperationState.COMPLETED,
                         "MSG_SERVER_STARTED", instanceName); // NOI18N
             }
         }
@@ -234,7 +264,24 @@ public class StartTask extends BasicTask<OperationState> {
             NotifyDescriptor nd = new NotifyDescriptor.Message(message);
             DialogDisplayer.getDefault().notifyLater(nd);
         }
-        return (String[]) envp.toArray(new String[envp.size()]);
+        return  envp.toArray(new String[envp.size()]);
+    }
+
+    private FileObject getJavaPlatformRoot(CommonServerSupport support) throws IOException {
+        FileObject retVal = null;
+        String javaInstall = support.getInstanceProperties().get(GlassfishModule.JAVA_PLATFORM_ATTR);
+        if (null == javaInstall || javaInstall.trim().length() < 1) {
+            File dir = new File(getJdkHome());
+            retVal = FileUtil.createFolder(FileUtil.normalizeFile(dir));
+        } else {
+            File f = new File(javaInstall);
+            if (f.exists()) {
+                //              bin             home
+                File dir = f.getParentFile().getParentFile();
+                retVal = FileUtil.createFolder(FileUtil.normalizeFile(dir));
+            }
+        }
+        return retVal;
     }
     
     private String getJdkHome() {
@@ -242,27 +289,20 @@ public class StartTask extends BasicTask<OperationState> {
         if (null != jdkHome) {
             result = FileUtil.toFile(jdkHome).getAbsolutePath();
         } else {
-            String localJdkHome = System.getProperty("jdk.home");       // NOI18N
-            if (localJdkHome == null || localJdkHome.length() == 0) {
-                String javaHome = System.getProperty("java.home");      // NOI18N
-                if (javaHome.endsWith(File.separatorChar + "jre")) {    // NOI18N
-                    result = javaHome.substring(javaHome.length() - 4);
-                }
-            } else {
-                result = localJdkHome;
+            result = System.getProperty("java.home");      // NOI18N
+            if (result.endsWith(File.separatorChar + "jre")) {    // NOI18N
+                result = result.substring(0,result.length() - 4);
             }
         }
         return result;
     }
     
     private NbProcessDescriptor createProcessDescriptor() throws IOException {
-        String startScript;
-        if (null == jdkHome) {
-           startScript = System.getProperty("java.home") +        
+        String startScript = FileUtil.toFile(jdkHome).getAbsolutePath() +
                 File.separatorChar + "bin" + File.separatorChar + "java";
-        } else {
-            startScript = FileUtil.toFile(jdkHome).getAbsolutePath() +
-                File.separatorChar + "bin" + File.separatorChar + "java";
+        File ss = new File(startScript);
+        if (support.getInstanceProvider().requiresJdk6OrHigher() && !Util.appearsToBeJdk6OrBetter(ss)) {
+            return null;
         }
         String serverHome = ip.get(GlassfishModule.GLASSFISH_FOLDER_ATTR);
         File jar = ServerUtilities.getJarName(serverHome, ServerUtilities.GFV3_JAR_MATCHER);
@@ -309,16 +349,27 @@ public class StartTask extends BasicTask<OperationState> {
         if(GlassfishModule.DEBUG_MODE.equals(ip.get(GlassfishModule.JVM_MODE))) {
 //            javaOpts.append(" -classic -Xdebug -Xnoagent -Djava.compiler=NONE -Xrunjdwp:transport=dt_socket,address="). // NOI18N
             try {
-                int debugPort = 8787;
-                // calculate the port and save it.
-                ServerSocket t = new ServerSocket(0);
-                debugPort = t.getLocalPort();
-                String debugPortString = Integer.toString(debugPort);
+                String debugPortString;
+                String debugTransport = "dt_socket"; // NOI18N
+                if ("true".equals(ip.get(GlassfishModule.USE_SHARED_MEM_ATTR))) {
+                    debugTransport = "dt_shmem";  // NOI18N
+                    debugPortString = Integer.toString(Math.abs((ip.get(GlassfishModule.GLASSFISH_FOLDER_ATTR)+
+                            ip.get(GlassfishModule.DOMAINS_FOLDER_ATTR)+
+                            ip.get(GlassfishModule.DOMAIN_NAME_ATTR)).hashCode()+1));
+                } else {
+                    int debugPort = 8787;
+                    // calculate the port and save it.
+                    ServerSocket t = new ServerSocket(0);
+                    debugPort = t.getLocalPort();
+                    debugPortString = Integer.toString(debugPort);
+                    t.close();
+                }
                 support.setEnvironmentProperty(GlassfishModule.DEBUG_PORT, debugPortString, true);
-                argumentBuf.append(" -Xdebug -Xrunjdwp:transport=dt_socket,address="); // NOI18N
+                argumentBuf.append(" -Xdebug -Xrunjdwp:transport="); // NOI18N
+                argumentBuf.append(debugTransport);
+                argumentBuf.append(",address="); // NOI18N
                 argumentBuf.append(debugPortString);
                 argumentBuf.append(",server=y,suspend=n"); // NOI18N
-                t.close();
             } catch (IOException ioe) {
                 Logger.getLogger("glassfish").log(Level.FINE, "Could not get a socket for debugging",ioe);
                 fireOperationStateChanged(OperationState.FAILED,
@@ -331,6 +382,29 @@ public class StartTask extends BasicTask<OperationState> {
     private StringBuilder appendSystemVars(Map<String, String> argMap, StringBuilder argumentBuf) {
         appendSystemVar(argumentBuf, GlassfishModule.JRUBY_HOME, ip.get(GlassfishModule.JRUBY_HOME));
         appendSystemVar(argumentBuf, GlassfishModule.COMET_FLAG, ip.get(GlassfishModule.COMET_FLAG));
+
+        // override the values that are found in the domain.xml file.
+        // this is totally a copy/paste from StartTomcat...
+        if ("true".equals(ip.get(GlassfishModule.USE_IDE_PROXY_FLAG))) {
+            final String[] PROXY_PROPS = {
+                "http.proxyHost",       // NOI18N
+                "http.proxyPort",       // NOI18N
+                "http.nonProxyHosts",   // NOI18N
+                "https.proxyHost",      // NOI18N
+                "https.proxyPort",      // NOI18N
+            };
+            boolean isWindows = Utilities.isWindows();
+            for (String prop : PROXY_PROPS) {
+                String value = System.getProperty(prop);
+                if (value != null && value.trim().length() > 0) {
+                    if (isWindows && "http.nonProxyHosts".equals(prop)) { // NOI18N
+                        // enclose in double quotes to escape the pipes separating the hosts on windows
+                        value = "\"" + value + "\""; // NOI18N
+                    }
+                    argMap.put(prop, value);
+                }
+            }
+        }
 
         argMap.remove(GlassfishModule.JRUBY_HOME);
         argMap.remove(GlassfishModule.COMET_FLAG);
@@ -366,6 +440,9 @@ public class StartTask extends BasicTask<OperationState> {
                 fireOperationStateChanged(OperationState.FAILED, 
                         "MSG_START_SERVER_FAILED_PD"); // NOI18N
             }
+        } else {
+            fireOperationStateChanged(OperationState.FAILED,
+                    "MSG_START_SERVER_FAILED_JDK_ERROR",support.getDisplayName()); // NOI18N
         }
         return process;
     }
@@ -384,9 +461,18 @@ public class StartTask extends BasicTask<OperationState> {
 
         varMap.put("com.sun.aas.installRoot", fixPath(ip.get(GlassfishModule.GLASSFISH_FOLDER_ATTR)));
         varMap.put("com.sun.aas.instanceRoot", fixPath(domainRoot.getAbsolutePath()));
-        varMap.put("com.sun.aas.javaRoot", fixPath(System.getProperty("java.home")));
-        varMap.put("com.sun.aas.derbyRoot", 
-                fixPath(ip.get(GlassfishModule.INSTALL_FOLDER_ATTR) + File.separatorChar + "javadb"));
+        varMap.put("com.sun.aas.javaRoot", fixPath(jdkHome.getPath())); // System.getProperty("java.home")));
+        // account for changes of "source" for java db.
+        File javadb = new File(ip.get(GlassfishModule.INSTALL_FOLDER_ATTR) + File.separatorChar + "javadb");
+        if (javadb.exists()) {
+            // a v3 Prelude install
+            varMap.put("com.sun.aas.derbyRoot",
+                    fixPath(ip.get(GlassfishModule.INSTALL_FOLDER_ATTR) + File.separatorChar + "javadb"));
+        } else {
+            // a v3 install
+            varMap.put("com.sun.aas.derbyRoot",
+                    fixPath(jdkHome.getPath() + File.separatorChar + "javadb"));
+        }
         
         File domainXml = new File(domainRoot, "config/domain.xml");
 
