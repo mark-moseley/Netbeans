@@ -41,14 +41,10 @@
 
 package org.netbeans.modules.javadoc.search;
 
-import javax.swing.JPopupMenu;
-
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.URL;
 import java.util.*;
-import java.lang.ref.Reference;
-import java.lang.ref.WeakReference;
 import javax.swing.JComponent;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
@@ -58,8 +54,6 @@ import org.openide.ErrorManager;
 import org.openide.awt.HtmlBrowser;
 import org.openide.awt.Mnemonics;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileSystem;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.awt.DynamicMenuContent;
@@ -106,6 +100,8 @@ public final class IndexOverviewAction extends SystemAction implements Presenter
      * is created, it will create submenuitems for each available index.
      */
     private final class IndexMenu extends JMenu implements HelpCtx.Provider, DynamicMenuContent {
+
+        private static final int MAX_ITEMS = 20;
         
         private int itemHash = 0;
         
@@ -157,13 +153,10 @@ public final class IndexOverviewAction extends SystemAction implements Presenter
                 int size = names.size();
                 if (size != indices.size()) throw new IllegalStateException();
                 if (size > 0) {
-                    for (int i = 0; i < size; i++) {
-                        try {
-                            add(new IndexMenuItem((String)names.get(i), (FileObject)indices.get(i)));
-                        } catch (FileStateInvalidException e) {
-                            err.notify(ErrorManager.INFORMATIONAL, e);
-                        }
+                    for (int i = 0; i < size && i < MAX_ITEMS; i++) {
+                        add(new IndexMenuItem((String) names.get(i), (FileObject) indices.get(i)));
                     }
+                    add(new MoreReferencesMenuItem());
                 } else {
                     JMenuItem dummy = new JMenuItem(NbBundle.getMessage(IndexOverviewAction.class, "CTL_no_indices_found"));
                     dummy.setEnabled(false);
@@ -177,13 +170,10 @@ public final class IndexOverviewAction extends SystemAction implements Presenter
             Iterator it = data[1].iterator();
             while (it.hasNext()) {
                 FileObject fo = (FileObject)it.next();
-                // Just using fo.hashCode() does not work because sometimes the FileObject
-                // is collected and recreated randomly, and now has a new hash code...
-                try {
-                    x += fo.getURL().hashCode();
-                } catch (FileStateInvalidException e) {
-                    err.notify(ErrorManager.INFORMATIONAL, e);
-                }
+                // Do not use fo.getURL() that is really slow.
+                // As FileObject instance is referened by IndexMenuItem, there
+                // should not be the identity issue any more
+                x += fo.hashCode();
             }
             return x;
         }
@@ -198,14 +188,11 @@ public final class IndexOverviewAction extends SystemAction implements Presenter
         /** cached url */
         private URL u;
         /** a reference to org.openide.filesystems.FileSystem */
-        private final Reference fsRef;
-        /** path to index file */
-        private String foPath;
+        private final FileObject fsRef;
         
-        public IndexMenuItem(String display, FileObject index) throws FileStateInvalidException {
+        public IndexMenuItem(String display, FileObject index) {
             super(display);
-            fsRef = new WeakReference(index.getFileSystem());
-            foPath = index.getPath();
+            fsRef = index;
             addActionListener(this);
         }
         
@@ -216,11 +203,7 @@ public final class IndexOverviewAction extends SystemAction implements Presenter
         
         private URL getURL() {
             if (u == null) {
-                FileSystem fs = (FileSystem) fsRef.get();
-                assert fs != null;
-                FileObject index = fs.findResource(foPath);
-                assert index != null: foPath;
-                u = JavadocURLMapper.findURL(index);
+                u = JavadocURLMapper.findURL(fsRef);
             }
             return u;
         }
@@ -229,6 +212,26 @@ public final class IndexOverviewAction extends SystemAction implements Presenter
             return IndexOverviewAction.this.getHelpCtx();
         }
         
+    }
+
+    private static final class MoreReferencesMenuItem extends JMenuItem implements ActionListener {
+
+        public MoreReferencesMenuItem() {
+            Mnemonics.setLocalizedText(this, NbBundle.getMessage(IndexOverviewAction.class, "CTL_MORE_INDICES_MenuItem"));
+            addActionListener(this);
+        }
+
+        public void actionPerformed(ActionEvent e) {
+            FileObject fsRef = ReferencesPanel.showInWindow();
+            URL u = null;
+            if (fsRef != null) {
+                u = JavadocURLMapper.findURL(fsRef);
+            }
+            if (u != null) {
+                HtmlBrowser.URLDisplayer.getDefault().showURL(u);
+            }
+        }
+
     }
     
 }
