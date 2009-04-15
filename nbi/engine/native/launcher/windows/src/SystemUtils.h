@@ -41,13 +41,17 @@
 extern "C" {
 #endif
 
-DWORD isNT();
 DWORD is9x();
+DWORD isNT();
 DWORD isXP();
 DWORD is2k();
 DWORD is2003();
+DWORD is2008();
+DWORD is7();
 DWORD isVista();
+void  initWow64();
 
+extern BOOL IsWow64;
 
 #ifdef	__cplusplus
 }
