@@ -57,7 +57,6 @@ import org.netbeans.modules.profiler.ppoints.ui.ValidityAwarePanel;
 import org.netbeans.modules.profiler.ppoints.ui.ValidityListener;
 import org.netbeans.modules.profiler.ui.ProfilerDialogs;
 import org.netbeans.modules.profiler.utils.IDEUtils;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.DialogDescriptor;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileAttributeEvent;
@@ -99,6 +98,7 @@ import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.SwingUtilities;
+import org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities;
 import org.openide.filesystems.FileChangeListener;
 
 
@@ -399,14 +399,20 @@ public class ProfilingPointsManager extends ProfilingPointsProcessor implements 
 
         while (iterator.hasNext()) {
             ProfilingPoint profilingPoint = iterator.next();
+            ProfilingPointFactory factory = profilingPoint.getFactory();
 
-            if (ppClass.isInstance(profilingPoint)) {
-                if (((project == null) && (includeDependencies ? true : openedProjects.contains(profilingPoint.getProject())))
-                        || projects.contains(profilingPoint.getProject())) {
-                    if (all || profilingPoint.getFactory().isAvailable()) {
-                        filteredProfilingPoints.add((T) profilingPoint);
+            // Bugfix #162132, the factory may already be unloaded
+            if (factory != null) {
+                if (ppClass.isInstance(profilingPoint)) {
+                    if (((project == null) && (includeDependencies ? true : openedProjects.contains(profilingPoint.getProject())))
+                            || projects.contains(profilingPoint.getProject())) {
+                        if (all || factory.isAvailable()) {
+                            filteredProfilingPoints.add((T) profilingPoint);
+                        }
                     }
                 }
+            } else {
+                // TODO: profiling points without factories should be cleaned up somehow
             }
         }
 
@@ -541,7 +547,7 @@ public class ProfilingPointsManager extends ProfilingPointsProcessor implements 
             GlobalProfilingPointsProcessor.getDefault().notifyProfilingStateChanged();
             IDEUtils.runInEventDispatchThread(new Runnable() {
                     public void run() {
-                        ProfilingPointsWindow.getInstance().notifyProfilingStateChanged(); // this needs to be called on EDT
+                        ProfilingPointsWindow.getDefault().notifyProfilingStateChanged(); // this needs to be called on EDT
                     }
                 });
         }
@@ -813,7 +819,9 @@ public class ProfilingPointsManager extends ProfilingPointsProcessor implements 
     }
     
     private void addFileWatch(File file) {
-        FileObject fileo = FileUtil.toFileObject(file);
+        FileObject fileo = null;
+        if (file.isFile())
+            fileo = FileUtil.toFileObject(FileUtil.normalizeFile(file));
         if (fileo != null) {
             FileWatch fileWatch = profilingPointsFiles.get(file);
             if (fileWatch == null) {
@@ -827,7 +835,9 @@ public class ProfilingPointsManager extends ProfilingPointsProcessor implements 
     }
     
     private void removeFileWatch(File file) {
-        FileObject fileo = file.exists() && file.isFile() ? FileUtil.toFileObject(file) : null;
+        FileObject fileo = null;
+        if (file.isFile())
+            fileo = FileUtil.toFileObject(FileUtil.normalizeFile(file));
         if (fileo != null) {
             FileWatch fileWatch = profilingPointsFiles.get(file);
             if (fileWatch != null) {
@@ -844,8 +854,7 @@ public class ProfilingPointsManager extends ProfilingPointsProcessor implements 
         for (CodeProfilingPoint.Annotation annotation : annotations) {
             CodeProfilingPoint.Location location = cpp.getLocation(annotation);
             String filename = location.getFile();
-            File file = new File(filename);
-            if (file.exists() && file.isFile()) addFileWatch(file);
+            addFileWatch(new File(filename));
         }
     }
     
@@ -854,8 +863,7 @@ public class ProfilingPointsManager extends ProfilingPointsProcessor implements 
         for (CodeProfilingPoint.Annotation annotation : annotations) {
             CodeProfilingPoint.Location location = cpp.getLocation(annotation);
             String filename = location.getFile();
-            File file = new File(filename);
-            removeFileWatch(file);
+            removeFileWatch(new File(filename));
         }
     }
     
@@ -1127,6 +1135,8 @@ public class ProfilingPointsManager extends ProfilingPointsProcessor implements 
         }
 
         for (ProfilingPointFactory factory : factories) {
+            if (factory == null) continue;
+
             for (Project project : projects) {
                 try {
                     factory.saveProfilingPoints(project);
