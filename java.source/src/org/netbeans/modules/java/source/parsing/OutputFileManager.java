@@ -45,14 +45,19 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.logging.Level;
+import java.util.Set;
 import java.util.logging.Logger;
+import javax.tools.JavaFileManager.Location;
 import javax.tools.JavaFileObject;
+import javax.tools.JavaFileObject.Kind;
 import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.modules.java.source.util.Iterators;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
 
 /**
  *
@@ -68,9 +73,10 @@ public class OutputFileManager extends CachingFileManager {
         
     }
 
-    private static boolean debug = Boolean.getBoolean("org.netbeans.modules.java.source.parsing.OutputFileManager.debug");      //NOI18N
-
     private ClassPath scp;
+    private final Set<File> filteredFiles = new HashSet<File>();
+    private boolean filtered;
+    private String outputRoot;
     
     /** Creates a new instance of CachingFileManager */
     public OutputFileManager(CachingArchiveProvider provider, final ClassPath outputClassPath, final ClassPath sourcePath) {
@@ -79,7 +85,39 @@ public class OutputFileManager extends CachingFileManager {
 	this.scp = sourcePath;
     }
     
+    public final boolean isFiltered () {
+        return this.filtered;
+    }
     
+    public final synchronized void setFilteredFiles (final Set<File> files) {
+        assert files != null;
+        this.filteredFiles.clear();
+        this.filteredFiles.addAll(files);
+        this.filtered = true;
+    }
+    
+    public final synchronized void clearFilteredFiles () {
+        this.filteredFiles.clear();
+        this.filtered = false;
+    }
+
+    @Override
+    public Iterable<JavaFileObject> list(Location l, String packageName, Set<Kind> kinds, boolean recursive) {
+        Iterable sr =  super.list(l, packageName, kinds, recursive);
+        if (this.filteredFiles.isEmpty()) {
+            return sr;
+        }
+        else {
+            Iterable<JavaFileObject> res = Iterators.filter (sr,new Comparable<JavaFileObject>() {
+                public int compareTo(JavaFileObject o) {
+                    File f = ((FileObjects.FileBase)o).f;
+                    return filteredFiles.contains(f) ? 0 : -1;
+                }
+            });            
+            return res;
+        }
+    }
+            
     public @Override JavaFileObject getJavaFileForOutput( Location l, String className, JavaFileObject.Kind kind, javax.tools.FileObject sibling ) 
         throws IOException, UnsupportedOperationException, IllegalArgumentException {
         
@@ -88,24 +126,30 @@ public class OutputFileManager extends CachingFileManager {
             throw new IllegalArgumentException ();
         }
         else { 
-            int index;
-            if (sibling != null) {
-                index = getActiveRoot (sibling);
+            File activeRoot = null;
+            if (outputRoot != null) {
+                activeRoot = new File(outputRoot);
+            } else {
+                int index;
+                if (sibling != null) {
+                    index = getActiveRoot (sibling);
+                }
+                else {
+                    index = getActiveRoot (FileObjects.convertPackage2Folder(className));
+                }
+                if (index == -1) {
+                    //Deleted project
+                    throw new InvalidSourcePath ();
+                }
+                if (index < 0) {                
+                    //Deleted project or source path changed during the scan, log & ignore it
+                    Logger.getLogger(OutputFileManager.class.getName()).warning(
+                        "No output for class: " + className +" sibling: " + sibling +" srcRoots: " + this.scp + " cacheRoots: "  + this.cp);    //NOI18N
+                    throw new InvalidSourcePath ();
+                }
+                assert index < this.cp.entries().size() : "index "+ index +" class: " + className +" sibling: " + sibling +" srcRoots: " + this.scp + " cacheRoots: " + this.cp;
+                activeRoot = new File (URI.create(this.cp.entries().get(index).getURL().toExternalForm()));
             }
-            else {
-                index = getActiveRoot (FileObjects.convertPackage2Folder(className));
-            }            
-            if (index == -1) {
-                //Deleted project
-                throw new InvalidSourcePath ();
-            }
-            if (index < 0 && sibling != null && !(new File (sibling.toUri()).exists())) {
-                //Deleted project
-                throw new InvalidSourcePath ();
-            }
-            assert index >= 0 : "class: " + className +" sibling: " + sibling +" srcRoots: " + this.scp + " cacheRoots: "  + this.cp;
-            assert index < this.cp.entries().size() : "index "+ index +" class: " + className +" sibling: " + sibling +" srcRoots: " + this.scp + " cacheRoots: " + this.cp;
-            File activeRoot = new File (URI.create(this.cp.entries().get(index).getURL().toExternalForm()));
             String baseName = className.replace('.', File.separatorChar);       //NOI18N
             String nameStr = baseName + '.' + FileObjects.SIG;
             int nameComponentIndex = nameStr.lastIndexOf(File.separatorChar);            
@@ -147,7 +191,7 @@ public class OutputFileManager extends CachingFileManager {
                 throw new IOException ();
             }
         }
-        File file = new File (folder,relativeName);
+        File file = FileUtil.normalizeFile(new File (folder,relativeName));
         return OutputFileObject.create (activeRoot,file);
     }
         
@@ -163,11 +207,18 @@ public class OutputFileManager extends CachingFileManager {
             return -1;
         }
         Iterator<ClassPath.Entry> it = entries.iterator();
-        for (int i = 0; it.hasNext(); i++) {
-            URL rootUrl = it.next().getURL();
-            if (isParentOf(rootUrl, file.toUri().toURL())) {
-                return i;
+        //Logging for issue #151416
+        try {
+            for (int i = 0; it.hasNext(); i++) {
+                URL rootUrl = it.next().getURL();
+                if (isParentOf(rootUrl, file.toUri().toURL())) {
+                    return i;
+                }
             }
+        } catch (IllegalArgumentException e) {
+            //Logging for issue #151416
+            String message = String.format("file: %s class: %s uri: %s", file.toString(), file.getClass().toString(), file.toUri().toString());
+            throw Exceptions.attachMessage(e, message);
         }
         return -2;
     }
@@ -189,6 +240,7 @@ public class OutputFileManager extends CachingFileManager {
         String name, parent = null;
 	int index = baseName.lastIndexOf('/');              //NOI18N        
 	if (index<0) {
+            parent = "";
             name = baseName;	    
 	}
 	else {
@@ -214,11 +266,17 @@ public class OutputFileManager extends CachingFileManager {
 	return -2;
     }
     
-    private static boolean debug (String message) {
-        if (debug) {
-            Logger.getLogger("global").log(Level.INFO, message);
+    @Override
+    public boolean handleOption(String head, Iterator<String> tail) {
+        if ("output-root".equals(head)) { //NOI18N
+            if (!tail.hasNext())
+                throw new IllegalArgumentException();
+            outputRoot = tail.next();
+            if (outputRoot.length() <= 0)
+                outputRoot = null;
+            return true;
         }
-        return true;
-    }        
+        return super.handleOption(head, tail);
+    }
     
 }
