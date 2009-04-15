@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,7 +34,7 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.java.source.usages;
@@ -44,6 +44,7 @@ import java.util.logging.Logger;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
 import org.netbeans.modules.java.source.JavaSourceSupportAccessor;
+import org.netbeans.modules.parsing.impl.indexing.friendapi.IndexingController;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.api.ProgressEvent;
@@ -52,14 +53,16 @@ import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.netbeans.modules.refactoring.spi.RefactoringPlugin;
 import org.netbeans.modules.refactoring.spi.RefactoringPluginFactory;
 import org.openide.filesystems.FileObject;
-import org.openide.util.RequestProcessor;
 
 /**
  *
- * @author lahvac
+ * @author Jan Lahoda
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.refactoring.spi.RefactoringPluginFactory.class, position=90)
 public class AllRefactoringsPluginFactory implements RefactoringPluginFactory {
 
+    private static final Logger LOGGER = Logger.getLogger(AllRefactoringsPluginFactory.class.getName());
+    
     public RefactoringPlugin createInstance(AbstractRefactoring refactoring) {
         return new RefactoringPluginImpl();
     }
@@ -83,18 +86,27 @@ public class AllRefactoringsPluginFactory implements RefactoringPluginFactory {
         public Problem prepare(RefactoringElementsBag refactoringElements) {
             refactoringElements.getSession().addProgressListener(new ProgressListener() {
                 public void start(ProgressEvent event) {
-                    RepositoryUpdater.getDefault().lockRU();
+                    LOGGER.log(Level.FINE, "Refactoring started, locking RepositoryUpdater");
+//                    RepositoryUpdater.getDefault().lockRU();
+                    IndexingController.getDefault().enterProtectedMode();
                 }
                 public void step(ProgressEvent event) {}
                 public void stop(ProgressEvent event) {
-                    RepositoryUpdater.getDefault().unlockRU(new Runnable() {
+                    LOGGER.log(Level.FINE, "Refactoring finished, unlocking RepositoryUpdater");
+//                    RepositoryUpdater.getDefault().unlockRU(new Runnable() {
+                    IndexingController.getDefault().exitProtectedMode(new Runnable() {
                         public void run() {
+                            LOGGER.log(Level.FINE, "Refreshing editor panes:");
                             for (FileObject f : JavaSourceSupportAccessor.ACCESSOR.getVisibleEditorsFiles()) {
                                 JavaSource source = JavaSource.forFileObject(f);
+                                if (LOGGER.isLoggable(Level.FINE)) {
+                                    LOGGER.log(Level.FINE, "Refreshing file={0}, JavaSource={1}", new Object[] {f, source});
+                                }
                                 if (source != null) {
-                                    JavaSourceAccessor.INSTANCE.revalidate(source);
+                                    JavaSourceAccessor.getINSTANCE().revalidate(source);
                                 }
                             }
+                            LOGGER.log(Level.FINE, "done.");
                         }
                     });
                 }
@@ -105,6 +117,4 @@ public class AllRefactoringsPluginFactory implements RefactoringPluginFactory {
         
     }
 
-    private static final RequestProcessor REFRESHER = new RequestProcessor(AllRefactoringsPluginFactory.class.getName(), 1);
-    
 }
