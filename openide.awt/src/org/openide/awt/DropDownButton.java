@@ -56,6 +56,7 @@ import javax.swing.JButton;
 import javax.swing.JPopupMenu;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 
 /**
@@ -173,14 +174,12 @@ class DropDownButton extends JButton {
                     // If inside the button let the button's mouse listener
                     // deal with the state. The popup menu will be hidden and
                     // we should not show it again.
-                    if ( !mouseInButton ) {
-                        if( getModel() instanceof Model ) {
-                            ((Model)getModel())._release();
-                        }
-                        JPopupMenu menu = getPopupMenu();
-                        if( null != menu ) {
-                            menu.removePopupMenuListener( this );
-                        }
+                    if( getModel() instanceof Model ) {
+                        ((Model)getModel())._release();
+                    }
+                    JPopupMenu menu = getPopupMenu();
+                    if( null != menu ) {
+                        menu.removePopupMenuListener( this );
                     }
                 }
 
@@ -288,7 +287,7 @@ class DropDownButton extends JButton {
             arrowIcons.remove( iconType );
         } else {
             regIcons.put( iconType, orig );
-            arrow = new ImageIcon(Utilities.icon2Image(new IconWithArrow( orig, false )));
+            arrow = new ImageIcon(ImageUtilities.icon2Image(new IconWithArrow( orig, false )));
             arrowIcons.put( iconType, arrow );
         }
         return arrow;
