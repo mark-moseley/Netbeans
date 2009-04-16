@@ -81,8 +81,8 @@ public class PrimitiveArrayNode extends ArrayNode {
             String name = "[" + itemIndex + "]"; // NOI18N
 
             if (isLoop()) {
-                return name + " "
-                       + MessageFormat.format(LOOP_TO_STRING, new Object[] { BrowserUtils.getFullNodeName(getLoopTo()) }); // NOI18N
+                return name + " " // NOI18N
+                       + MessageFormat.format(LOOP_TO_STRING, new Object[] { BrowserUtils.getFullNodeName(getLoopTo()) });
             }
 
             return name;
@@ -182,7 +182,7 @@ public class PrimitiveArrayNode extends ArrayNode {
                             }
                         }
                     } else if (getMode() == HeapWalkerNode.MODE_REFERENCES) {
-                        List fields = getInstance().getReferences();
+                        List fields = getReferences();
 
                         if (fields.size() == 0) {
                             // Instance has no fields

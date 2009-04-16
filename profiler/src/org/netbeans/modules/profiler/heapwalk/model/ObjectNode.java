@@ -40,12 +40,16 @@
 
 package org.netbeans.modules.profiler.heapwalk.model;
 
-import org.netbeans.lib.profiler.heap.*;
+
 import org.openide.util.NbBundle;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
+import org.netbeans.lib.profiler.heap.FieldValue;
+import org.netbeans.lib.profiler.heap.GCRoot;
+import org.netbeans.lib.profiler.heap.Instance;
+import org.netbeans.lib.profiler.heap.Value;
 
 
 /**
@@ -177,7 +181,7 @@ public class ObjectNode extends InstanceNode {
                             }
                         }
                     } else if (getMode() == HeapWalkerNode.MODE_REFERENCES) {
-                        fieldValues.addAll(getInstance().getReferences());
+                        fieldValues.addAll(getReferences());
 
                         if (fieldValues.size() == 0) {
                             // Instance has no fields
