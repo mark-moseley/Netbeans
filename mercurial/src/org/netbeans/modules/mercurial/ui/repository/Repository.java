@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -78,6 +78,7 @@ import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 
 /**
  * @author Tomas Stupka
@@ -92,10 +93,14 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
     public final static int FLAG_SHOW_PROXY             = 64;    
     
     private final static String LOCAL_URL_HELP          = "file:///repository_path";              // NOI18N
-    private final static String HTTP_URL_HELP           = "http://[username[:password]@]hostname/repository_path";      // NOI18N
-    private final static String HTTPS_URL_HELP          = "https://hostname/repository_path";     // NOI18N
+    private final static String HTTP_URL_HELP           = Utilities.isWindows()? 
+        "http://[DOMAIN%5C[username[:password]@]hostname/repository_path":      // NOI18N
+        "http://[username[:password]@]hostname/repository_path";      // NOI18N
+    private final static String HTTPS_URL_HELP          = Utilities.isWindows()? 
+        "https://[DOMAIN%5C[username[:password]@]hostname/repository_path":     // NOI18N
+        "https://[username[:password]@]hostname/repository_path";     // NOI18N
     private final static String STATIC_HTTP_URL_HELP    = "static-http://hostname/repository_path";       // NOI18N
-    private final static String SSH_URL_HELP        = "ssh://hostname/repository_path";   // NOI18N   
+    private final static String SSH_URL_HELP            = "ssh://hostname/repository_path";   // NOI18N   
                
     private RepositoryPanel repositoryPanel;
     private boolean valid = true;
@@ -108,12 +113,14 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
     private String message;            
     private int modeMask;
     private Dimension maxNeededSize;
+    private boolean bPushPull;
+    private static int HG_PUSH_PULL_VERT_PADDING = 30;
     
     public Repository(String titleLabel) {
-        this(0, titleLabel);
+        this(0, titleLabel, false);
     }
             
-    public Repository(int modeMask, String titleLabel) {
+    public Repository(int modeMask, String titleLabel, boolean bPushPull) {
         
         this.modeMask = modeMask;
         
@@ -130,7 +137,10 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
         //repositoryPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 0, 0));
         
         // retrieve the dialog size for the largest configuration
-        updateVisibility("svn+");                                                                       // NOI18N
+        if(bPushPull)
+            updateVisibility("foo:"); // NOI18N
+        else
+            updateVisibility("https:"); // NOI18N            
         maxNeededSize = repositoryPanel.getPreferredSize();
 
         repositoryPanel.savePasswordCheckBox.setSelected(HgModuleConfig.getDefault().getSavePassword());
@@ -195,7 +205,7 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
             // templates for supported connection methods        
             recentRoots.add(new RepositoryConnection("file:///"));      // NOI18N
             recentRoots.add(new RepositoryConnection("http://"));       // NOI18N
-            //recentRoots.add(new RepositoryConnection("https://"));      // NOI18N
+            recentRoots.add(new RepositoryConnection("https://"));      // NOI18N
             recentRoots.add(new RepositoryConnection("static-http://"));        // NOI18N
             recentRoots.add(new RepositoryConnection("ssh://"));        // NOI18N
         };
@@ -303,7 +313,7 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
         try {
             rc = getSelectedRC();            
             // check for a valid svnurl
-            rc.getHgUrl();                             
+            rc.getHgUrl();
             //if(!isSet(FLAG_ACCEPT_REVISION) && !rc.getSvnRevision().equals(SVNRevision.HEAD)) 
             //{
             //    message = NbBundle.getMessage(Repository.class, "MSG_Repository_OnlyHEADRevision"); // NOI18N
@@ -400,10 +410,10 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
             repositoryPanel.tipLabel.setText(HTTP_URL_HELP);
             authFields = true;
             proxyFields = true;
-        //} else if(selectedUrlString.startsWith("https:")) {                     // NOI18N
-            //repositoryPanel.tipLabel.setText(HTTPS_URL_HELP);
+        } else if(selectedUrlString.startsWith("https:")) {                     // NOI18N
+            repositoryPanel.tipLabel.setText(HTTPS_URL_HELP);
             //authFields = true;
-            //proxyFields = true;
+            proxyFields = true;
         } else if(selectedUrlString.startsWith("static-http:")) {                       // NOI18N
             repositoryPanel.tipLabel.setText(STATIC_HTTP_URL_HELP);
             authFields = true;
@@ -415,8 +425,8 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
             repositoryPanel.tipLabel.setText(LOCAL_URL_HELP);
         } else {
             repositoryPanel.tipLabel.setText(NbBundle.getMessage(Repository.class, "MSG_Repository_Url_Help", new Object [] { // NOI18N
-                //LOCAL_URL_HELP, HTTP_URL_HELP, HTTPS_URL_HELP, STATIC_HTTP_URL_HELP, SSH_URL_HELP
-                LOCAL_URL_HELP, HTTP_URL_HELP, STATIC_HTTP_URL_HELP, SSH_URL_HELP
+                LOCAL_URL_HELP, HTTP_URL_HELP, HTTPS_URL_HELP, STATIC_HTTP_URL_HELP, SSH_URL_HELP
+                //LOCAL_URL_HELP, HTTP_URL_HELP, STATIC_HTTP_URL_HELP, SSH_URL_HELP
             }));
         }
 
@@ -644,6 +654,9 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
         corectPanel.panel.setLayout(new BorderLayout());
         JPanel p = getPanel();
         if(setMaxNeddedSize) {
+            if(bPushPull){
+                maxNeededSize.setSize(maxNeededSize.width, maxNeededSize.height + HG_PUSH_PULL_VERT_PADDING);
+            }
             p.setPreferredSize(maxNeededSize);
         }        
         corectPanel.panel.add(p, BorderLayout.NORTH);
@@ -659,6 +672,9 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
         DialogDescriptor dialogDescriptor = new DialogDescriptor(corectPanel, title); // NOI18N        
         JPanel p = getPanel();
         if(setMaxNeededSize) {
+            if(bPushPull){
+                maxNeededSize.setSize(maxNeededSize.width, maxNeededSize.height + HG_PUSH_PULL_VERT_PADDING);
+            }
             p.setPreferredSize(maxNeededSize);
         }        
         if(options!= null) {
@@ -676,6 +692,8 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
         if (name != null) {
             dialog.addWindowListener(new DialogBoundsPreserver(HgModuleConfig.getDefault().getPreferences(), name)); // NOI18N
         }
+        dialog.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(Repository.class, "ACSD_RepositoryPanel"));
+
         dialog.setVisible(true);
     }
 
@@ -689,6 +707,7 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
             super(v);
         }
 
+        @Override
         public void setSelectedItem(Object obj) {
             if(obj instanceof String) {
                 int idx = getIndexOf(obj);
@@ -701,6 +720,7 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
             super.setSelectedItem(obj);
         }
 
+        @Override
         public int getIndexOf(Object obj) {
             if(obj instanceof String) {
                 obj = createNewRepositoryConnection((String)obj);                
@@ -708,6 +728,7 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
             return super.getIndexOf(obj);
         }
 
+        @Override
         public void addElement(Object obj) {
             if(obj instanceof String) {
                 obj = createNewRepositoryConnection((String)obj);                
@@ -715,6 +736,7 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
             super.addElement(obj);
         }
 
+        @Override
         public void insertElementAt(Object obj,int index) {
             if(obj instanceof String) {
                 String str = (String) obj;
@@ -732,6 +754,7 @@ public class Repository implements ActionListener, DocumentListener, FocusListen
             super.insertElementAt(obj, index);
         }         
 
+        @Override
         public void removeElement(Object obj) {
             int index = getIndexOf(obj);
             if ( index != -1 ) {
