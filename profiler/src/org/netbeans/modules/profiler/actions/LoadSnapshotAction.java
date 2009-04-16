@@ -49,7 +49,6 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.text.MessageFormat;
@@ -68,7 +67,6 @@ public final class LoadSnapshotAction extends AbstractAction {
 
     // -----
     // I18N String constants
-    private static final String ACTION_NAME = NbBundle.getMessage(LoadSnapshotAction.class, "LoadSnapshotAction_ActionName"); // NOI18N
     private static final String ACTION_DESCR = NbBundle.getMessage(LoadSnapshotAction.class, "LoadSnapshotAction_ActionDescr"); // NOI18N
     private static final String OPEN_SNAPSHOT_DIALOG_CAPTION = NbBundle.getMessage(LoadSnapshotAction.class,
                                                                                    "LoadSnapshotAction_OpenSnapshotDialogCaption"); // NOI18N
@@ -79,20 +77,19 @@ public final class LoadSnapshotAction extends AbstractAction {
     private static final String PROFILER_SNAPSHOT_HEAPDUMP_FILE_FILTER = NbBundle.getMessage(LoadSnapshotAction.class,
                                                                                              "LoadSnapshotAction_ProfilerSnapshotHeapdumpFileFilter"); // NOI18N
                                                                                                                                                        // -----
+    private static final String CANNOT_OPEN_SNAPSHOT_MSG = NbBundle.getMessage(LoadSnapshotAction.class,
+                                                                                    "LoadSnapshotAction_No_Snapshot_Selected"); // NOI18N
     private static File importDir;
 
     //~ Constructors -------------------------------------------------------------------------------------------------------------
 
     public LoadSnapshotAction() {
-        putValue(Action.NAME, ACTION_NAME);
         putValue(Action.SHORT_DESCRIPTION, ACTION_DESCR);
-        putValue(Action.SMALL_ICON,
-                 new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/actions/resources/openSnapshot.png")) //NOI18N
-        );
     }
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
+    @Override
     public boolean isEnabled() {
         if (!NetBeansProfiler.isInitialized()) {
             return false;
@@ -162,6 +159,11 @@ public final class LoadSnapshotAction extends AbstractAction {
                 LoadedSnapshot[] imported = ResultsManager.getDefault()
                                                           .loadSnapshots(snapshotsFOArr.toArray(new FileObject[snapshotsFOArr.size()]));
                 ResultsManager.getDefault().openSnapshots(imported);
+            } else if (!handleHeapdumps) {
+                NetBeansProfiler.getDefaultNB()
+                        .displayError(MessageFormat
+                        .format(CANNOT_OPEN_SNAPSHOT_MSG, null));
+
             }
 
             if (heapdumpsFArr.size() > 0) {
