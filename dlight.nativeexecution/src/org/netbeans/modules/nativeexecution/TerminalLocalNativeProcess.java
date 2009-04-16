@@ -92,11 +92,13 @@ public final class TerminalLocalNativeProcess extends AbstractNativeProcess {
 
             if (!isWindows) {
                 try {
-                    new ProcessBuilder("/bin/chmod", "+x", runScript).start().waitFor(); // NOI18N
+                    ProcessBuilder pb = new ProcessBuilder("chmod", "+x", runScript); // NOI18N
+                    pb.environment().put("PATH", "/bin:/usr/bin"); // NOI18N
+                    pb.start().waitFor();
                 } catch (InterruptedException ex) {
-                    Exceptions.printStackTrace(ex);
+//                    Exceptions.printStackTrace(ex);
                 } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
+//                    Exceptions.printStackTrace(ex);
                 }
             } else {
                 runScript = runScript.replaceAll("\\\\", "/"); // NOI18N
@@ -119,7 +121,8 @@ public final class TerminalLocalNativeProcess extends AbstractNativeProcess {
             final NativeProcessInfo info, final ExternalTerminal terminal) {
         super(info);
         this.terminal = terminal;
-        this.processOutput = new ByteArrayInputStream(new byte[]{32});
+        this.processOutput = new ByteArrayInputStream(
+                (loc("TerminalLocalNativeProcess.ProcessStarted.text") + '\n').getBytes()); // NOI18N
     }
 
     protected void create() throws Throwable {
@@ -211,8 +214,10 @@ public final class TerminalLocalNativeProcess extends AbstractNativeProcess {
                 if (isWindows) {
                     String path = env.get("PATH"); // NOI18N
                     env.put("PATH", WindowsSupport.getInstance().normalizeAllPaths(path)); // NOI18N
-                    env.put("PATH", "/bin:$PATH"); // NOI18N
                 }
+                
+                // Always prepend /bin and /usr/bin to PATH
+                env.put("PATH", "/bin:/usr/bin:$PATH"); // NOI18N
 
                 File envFile = new File(envFileName);
                 OutputStream fos = new FileOutputStream(envFile);
