@@ -49,14 +49,7 @@ made subject to such option by the copyright holder.
 -->
 
 <bindings>
-    <!-- This is what the Java module does.... is this obsolete?
-    <bind key="O-G" remove="true"/>
-    <bind key="OS-G" actionName="goto-declaration"/>
-    <bind key="OS-UP" remove="true"/>
-    <bind key="DOS-UP" actionName="select-element-next"/>
-    <bind key="OS-DOWN" remove="true"/>
-    <bind key="DOS-DOWN" actionName="select-element-previous"/>
-    -->
+    <bind actionName="fast-import" key="OS-I"/>
     <bind actionName="csl-next-marked-occurrence" key="O-DOWN"/>
     <bind actionName="csl-prev-marked-occurrence" key="O-UP"/>
 </bindings>
