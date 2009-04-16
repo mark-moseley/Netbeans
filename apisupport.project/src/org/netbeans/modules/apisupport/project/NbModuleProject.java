@@ -58,7 +58,6 @@ import java.util.jar.Manifest;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.classpath.GlobalPathRegistry;
 import org.netbeans.api.java.project.JavaProjectConstants;
@@ -91,7 +90,6 @@ import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
-import org.openide.util.lookup.Lookups;
 import org.w3c.dom.Element;
 import org.netbeans.modules.apisupport.project.queries.AccessibilityQueryImpl;
 import org.netbeans.modules.apisupport.project.queries.UnitTestForSourceQueryImpl;
@@ -118,6 +116,8 @@ import org.netbeans.spi.project.ui.RecommendedTemplates;
 import org.netbeans.spi.project.ui.support.UILookupMergerSupport;
 import org.openide.modules.SpecificationVersion;
 import org.openide.util.Exceptions;
+import org.openide.util.lookup.AbstractLookup;
+import org.openide.util.lookup.InstanceContent;
 
 /**
  * A NetBeans module project.
@@ -144,6 +144,7 @@ public final class NbModuleProject implements Project {
     private final AntProjectHelper helper;
     private final Evaluator eval;
     private final Lookup lookup;
+    private final InstanceContent ic;
     private Map<FileObject,Element> extraCompilationUnits;
     private final GeneratedFilesHelper genFilesHelper;
     private final NbModuleProviderImpl typeProvider;
@@ -179,7 +180,7 @@ public final class NbModuleProject implements Project {
         }
         FileBuiltQueryImplementation fileBuilt = helper.createGlobFileBuiltQuery(
                 eval,from.toArray(new String[0]), to.toArray(new String[0]));
-        final SourcesHelper sourcesHelper = new SourcesHelper(helper, eval);
+        SourcesHelper sourcesHelper = new SourcesHelper(this, helper, eval);
         // Temp build dir is always internal; NBM build products go elsewhere, but
         // difficult to predict statically exactly what they are!
         // XXX would be good to mark at least the module JAR as owned by this project
@@ -204,11 +205,8 @@ public final class NbModuleProject implements Project {
                     /* XXX should schema incl. display name? */entry.getKey().getNameExt(), null, null);
         }
         // #56457: support external source roots too.
-        ProjectManager.mutex().postWriteRequest(new Runnable() {
-            public void run() {
-                sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
-            }
-        });
+        sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
+        ic = new InstanceContent();
         lookup = createLookup(new Info(), aux, helper, fileBuilt, sourcesHelper);
     }
 
@@ -220,43 +218,57 @@ public final class NbModuleProject implements Project {
         return lookup;
     }
 
+    public void refreshLookup() {
+        if (getModuleType() == NbModuleType.SUITE_COMPONENT) {
+            if (lookup.lookup(SuiteProvider.class) == null)
+                ic.add(new SuiteProviderImpl());
+        } else {
+            SuiteProvider sp = lookup.lookup(SuiteProvider.class);
+            if (sp != null)
+                ic.remove(sp);
+        }
+    }
+
     private Lookup createLookup(ProjectInformation info, AuxiliaryConfiguration aux, AntProjectHelper helper, FileBuiltQueryImplementation fileBuilt, final SourcesHelper sourcesHelper) {
-        Lookup baseLookup = Lookups.fixed(
-            this,
-            info,
-            aux,
-            helper.createCacheDirectoryProvider(),
-            helper.createAuxiliaryProperties(),
-            new SavedHook(),
-            UILookupMergerSupport.createProjectOpenHookMerger(new OpenedHook()),
-            new ModuleActions(this),
-            new ClassPathProviderImpl(this),
-            new SourceForBinaryImpl(this),
-            new JavadocForBinaryImpl(this),
-            new UnitTestForSourceQueryImpl(this),
-            new ModuleLogicalView(this),
-            new SubprojectProviderImpl(this),
-            fileBuilt,
-            new AccessibilityQueryImpl(this),
-            new SourceLevelQueryImpl(this),
-            helper.createSharabilityQuery(evaluator(), new String[0], new String[] {
-                // currently these are hardcoded
-                "build", // NOI18N
-            }),
-            sourcesHelper.createSources(),
-            new AntArtifactProviderImpl(this, helper, evaluator()),
-            new CustomizerProviderImpl(this, getHelper(), evaluator()),
-            new SuiteProviderImpl(),
-            typeProvider,
-            new PrivilegedTemplatesImpl(),
-            new ModuleProjectClassPathExtender(this),
-            new LocalizedBundleInfoProvider(),
-            new ModuleOperations(this),
-            LookupProviderSupport.createSourcesMerger(),
-            UILookupMergerSupport.createPrivilegedTemplatesMerger(),
-            UILookupMergerSupport.createRecommendedTemplatesMerger(),
-            new TemplateAttributesProvider(getHelper(), getModuleType() == NbModuleType.NETBEANS_ORG),
-            new FileEncodingQueryImpl());
+        ic.add(this);
+        ic.add(info);
+        ic.add(aux);
+        ic.add(helper.createCacheDirectoryProvider());
+        ic.add(helper.createAuxiliaryProperties());
+        ic.add(new SavedHook());
+        ic.add(UILookupMergerSupport.createProjectOpenHookMerger(new OpenedHook()));
+        ic.add(new ModuleActions(this));
+        ic.add(new ClassPathProviderImpl(this));
+        ic.add(new SourceForBinaryImpl(this));
+        ic.add(new JavadocForBinaryImpl(this));
+        ic.add(new UnitTestForSourceQueryImpl(this));
+        ic.add(new ModuleLogicalView(this));
+        ic.add(new SubprojectProviderImpl(this));
+        ic.add(fileBuilt);
+        ic.add(new AccessibilityQueryImpl(this));
+        ic.add(new SourceLevelQueryImpl(this));
+        ic.add(helper.createSharabilityQuery(evaluator(), new String[0], new String[]{
+                    // currently these are hardcoded
+                    "build", // NOI18N
+                }));
+        ic.add(sourcesHelper.createSources());
+        ic.add(new AntArtifactProviderImpl(this, helper, evaluator()));
+        ic.add(new CustomizerProviderImpl(this, getHelper(), evaluator()));
+        ic.add(typeProvider);
+        ic.add(new PrivilegedTemplatesImpl());
+        ic.add(new ModuleProjectClassPathExtender(this));
+        ic.add(new LocalizedBundleInfoProvider());
+        ic.add(new ModuleOperations(this));
+        ic.add(LookupProviderSupport.createSourcesMerger());
+        ic.add(UILookupMergerSupport.createPrivilegedTemplatesMerger());
+        ic.add(UILookupMergerSupport.createRecommendedTemplatesMerger());
+        ic.add(new TemplateAttributesProvider(getHelper(), getModuleType() == NbModuleType.NETBEANS_ORG));
+        ic.add(new FileEncodingQueryImpl());
+
+        if (getModuleType() == NbModuleType.SUITE_COMPONENT) {
+            ic.add(new SuiteProviderImpl());
+        }
+        Lookup baseLookup = new AbstractLookup(ic);
         return  LookupProviderSupport.createCompositeLookup(baseLookup, "Projects/org-netbeans-modules-apisupport-project/Lookup"); //NOI18N
     }
 
@@ -481,8 +493,14 @@ public final class NbModuleProject implements Project {
     
     public ModuleList getModuleList() throws IOException {
         NbPlatform p = getPlatform(false);
-        if (p == null) {
+        if (p == null || ! p.isValid()) {
             // #67148: have to use something... (and getEntry(codeNameBase) will certainly fail!)
+
+            // TODO dealing with nonexistent platforms probably not complete / 100% correct yet,
+            // see #61227; but project with unresolved platform may also load as result
+            // of suite-chaining; perhaps resolve already in loadProject
+            Util.err.log(ErrorManager.WARNING, "Project in " + FileUtil.getFileDisplayName(getProjectDirectory()) // NOI18N
+                    + " is missing its platform '" + evaluator().getProperty("nbplatform.active") + "', switching to default platform");    // NOI18N
             NbPlatform p2 = NbPlatform.getDefaultPlatform();
             return ModuleList.getModuleList(getProjectDirectoryFile(), p2 != null ? p2.getDestDir() : null);
         }
@@ -771,7 +789,7 @@ public final class NbModuleProject implements Project {
     public void refreshBuildScripts(boolean checkForProjectXmlModified, NbPlatform customPlatform) throws IOException {
         String buildImplPath =
                     customPlatform.getHarnessVersion() <= NbPlatform.HARNESS_VERSION_65
-                    && eval.getProperty(SuiteProperties.CLUSTER_PATH_PROPERTY) == null
+                    || eval.getProperty(SuiteProperties.CLUSTER_PATH_PROPERTY) == null
                     ? "build-impl-65.xsl" : "build-impl.xsl";    // NOI18N
         genFilesHelper.refreshBuildScript(
                 GeneratedFilesHelper.BUILD_IMPL_XML_PATH,
