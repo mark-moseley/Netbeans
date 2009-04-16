@@ -64,18 +64,21 @@ import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.WorkingCopy;
+import org.netbeans.spi.editor.codegen.CodeGenerator;
 import org.openide.DialogDisplayer;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.Position;
 import javax.swing.text.StyledDocument;
+import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.CompilationInfo;
+import org.netbeans.editor.Utilities;
 import org.netbeans.modules.editor.indent.api.Reformat;
-import org.netbeans.modules.java.editor.codegen.CodeGenerator;
 import org.openide.DialogDescriptor;
 import org.openide.loaders.DataObject;
 import org.openide.text.NbDocument;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 
 /**
@@ -84,12 +87,15 @@ import org.openide.util.NbBundle;
  */
 public class AddPropertyCodeGenerator implements CodeGenerator {
 
+    private JTextComponent component;
+    private String className;
     private List<String> existingFields;
-
     private String[] pcsName;
     private String[] vcsName;
 
-    public AddPropertyCodeGenerator(List<String> existingFields, String[] pcsName, String[] vcsName) {
+    public AddPropertyCodeGenerator(JTextComponent component, String className, List<String> existingFields, String[] pcsName, String[] vcsName) {
+        this.component = component;
+        this.className = className;
         this.existingFields = existingFields;
         this.pcsName = pcsName;
         this.vcsName = vcsName;
@@ -99,7 +105,7 @@ public class AddPropertyCodeGenerator implements CodeGenerator {
         return NbBundle.getMessage(AddPropertyCodeGenerator.class, "DN_AddProperty");
     }
 
-    public void invoke(JTextComponent component) {
+    public void invoke() {
         Object o = component.getDocument().getProperty(Document.StreamDescriptionProperty);
 
         if (o instanceof DataObject) {
@@ -111,16 +117,86 @@ public class AddPropertyCodeGenerator implements CodeGenerator {
 
     public void perform(FileObject file, JTextComponent pane) {
         JButton ok = new JButton(NbBundle.getMessage(AddPropertyCodeGenerator.class, "LBL_ButtonOK"));
-        final AddPropertyPanel addPropertyPanel = new AddPropertyPanel(file, existingFields, pcsName, vcsName, ok);
+        final AddPropertyPanel addPropertyPanel = new AddPropertyPanel(file, className, existingFields, pcsName, vcsName, ok);
         String caption = NbBundle.getMessage(AddPropertyCodeGenerator.class, "CAP_AddProperty");
         String cancel = NbBundle.getMessage(AddPropertyCodeGenerator.class, "LBL_ButtonCancel");
         DialogDescriptor dd = new DialogDescriptor(addPropertyPanel,caption, true, new Object[] {ok,cancel}, ok, DialogDescriptor.DEFAULT_ALIGN, null, null);
         if (DialogDisplayer.getDefault().notify(dd) == ok) {
-            insertCode(file, pane, addPropertyPanel.getAddPropertyConfig());
+            insertCode2(file, pane, addPropertyPanel.getAddPropertyConfig());
         }
     }
 
+    /**
+     * work around for {@link #insertCode}.
+     * @see <a href=http://www.netbeans.org/issues/show_bug.cgi?id=162853>162853</a>
+     * @see <a href=http://www.netbeans.org/issues/show_bug.cgi?id=162630>162630</a>
+     */
+    static void insertCode2(final FileObject file, final JTextComponent pane, final AddPropertyConfig config) {
+            final Document doc = pane.getDocument();
+            final Reformat r = Reformat.get(pane.getDocument());
+            final String code = new AddPropertyGenerator().generate(config);
+            final Position[] bounds = new Position[2];
+
+            r.lock();
+            try {
+                NbDocument.runAtomicAsUser((StyledDocument) doc, new Runnable() {
+                    public void run() {
+                        try {
+                            int startOffset = pane.getCaretPosition();
+                            doc.insertString(startOffset, code, null);
+                            Position start = doc.createPosition(startOffset);
+                            Position end = doc.createPosition(startOffset + code.length());
+                            r.reformat(Utilities.getRowStart(pane, start.getOffset()), Utilities.getRowEnd(pane, end.getOffset()));
+                            bounds[0] = start;
+                            bounds[1] = end;
+                        } catch (BadLocationException ex) {
+                            Exceptions.printStackTrace(ex);
+                        }
+                    }
+                });
+
+            } catch (BadLocationException ex) {
+                Exceptions.printStackTrace(ex);
+            } finally {
+                r.unlock();
+            }
+
+            if (bounds[0] != null) {
+                // code insertion to document passed
+                try {
+                    JavaSource.forFileObject(file).runModificationTask(new Task<WorkingCopy>() {
+                        public void run(WorkingCopy parameter) throws Exception {
+                            parameter.toPhase(Phase.RESOLVED);
+
+                            Position start = bounds[0];
+                            Position end = bounds[1];
+                            
+                            new ImportFQNsHack(parameter, start.getOffset(), end.getOffset()).scan(parameter.getCompilationUnit(), null);
+
+                            CompilationUnitTree cut = parameter.getCompilationUnit();
+
+                            parameter.rewrite(cut, parameter.getTreeMaker().CompilationUnit(cut.getPackageName(), cut.getImports(), cut.getTypeDecls(), cut.getSourceFile()));
+                        }
+                    }).commit();
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+    }
+
     static void insertCode(final FileObject file, final JTextComponent pane, final AddPropertyConfig config) {
+        try {
+            JavaSource.create(ClasspathInfo.create(file)).runUserActionTask(new Task<CompilationController>() {
+                public void run(CompilationController parameter) throws Exception {
+                    insertCodeImpl(file, pane, config);
+                }
+            }, true);
+        } catch (IOException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+    }
+    
+    static void insertCodeImpl(final FileObject file, final JTextComponent pane, final AddPropertyConfig config) {
         try {
             final Document doc = pane.getDocument();
             final Reformat r = Reformat.get(pane.getDocument());
@@ -151,7 +227,7 @@ public class AddPropertyCodeGenerator implements CodeGenerator {
                                 }
                             }).commit();
 
-                            r.reformat(start.getOffset(), end.getOffset());
+                            r.reformat(Utilities.getRowStart(pane, start.getOffset()), Utilities.getRowEnd(pane, end.getOffset()));
 
                         } catch (IOException ex) {
                             Exceptions.printStackTrace(ex);
@@ -206,12 +282,15 @@ public class AddPropertyCodeGenerator implements CodeGenerator {
 
     public static final class Factory implements CodeGenerator.Factory {
 
-        public Iterable<? extends CodeGenerator> create(CompilationController cc, TreePath path) throws IOException {
+        public List<? extends CodeGenerator> create(Lookup context) {
+            JTextComponent component = context.lookup(JTextComponent.class);
+            CompilationController cc = context.lookup(CompilationController.class);
+            TreePath path = context.lookup(TreePath.class);
             while (path != null && path.getLeaf().getKind() != Kind.CLASS) {
                 path = path.getParentPath();
             }
 
-            if (path == null) {
+            if (component == null || cc == null || path == null) {
                 return Collections.emptyList();
             }
             
@@ -250,7 +329,9 @@ public class AddPropertyCodeGenerator implements CodeGenerator {
                 }
             }
             
-            return Collections.singleton(new AddPropertyCodeGenerator(existingFields, pcsName, vcsName));
+            String className = ((TypeElement) e).getQualifiedName().toString();
+            
+            return Collections.singletonList(new AddPropertyCodeGenerator(component, className, existingFields, pcsName,vcsName));
         }
         
         private static TypeMirror resolve(CompilationInfo info, String s) {
