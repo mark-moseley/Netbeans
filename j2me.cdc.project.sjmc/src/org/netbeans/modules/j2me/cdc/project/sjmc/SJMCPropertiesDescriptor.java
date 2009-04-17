@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.j2me.cdc.project.savaje;
+package org.netbeans.modules.j2me.cdc.project.sjmc;
 
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
@@ -47,44 +47,26 @@ import java.util.HashSet;
 import java.util.Set;
 import org.netbeans.api.mobility.project.PropertyDescriptor;
 import org.netbeans.spi.mobility.project.ProjectPropertiesDescriptor;
-import org.netbeans.spi.mobility.project.support.DefaultPropertyParsers;
 
 /**
  *
  * @author Adam Sotona
  */
-@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.mobility.project.ProjectPropertiesDescriptor.class, position=30)
-public class SavajePropertiesDescriptor implements ProjectPropertiesDescriptor {
-
-    public static final String SAVAJE_BUNDLE_DEBUG = "savaje.bundle.debug"; //NOI18N
-    public static final String SAVAJE_BUNDLE_DEBUG_PORT = "savaje.bundle.debug.port"; //NOI18N
-    public static final String SAVAJE_BUNDLE_BASE = "savaje.bundle.base"; //NOI18N
-    public static final String SAVAJE_APPLICATION_ICON = "savaje.application.icon"; //NOI18N
-    public static final String SAVAJE_APPLICATION_ICON_SMALL = "savaje.application.icon.small"; //NOI18N
-    public static final String SAVAJE_APPLICATION_ICON_FOCUSED = "savaje.application.icon.focused"; //NOI18N
-    public static final String SAVAJE_APPLICATION_UID = "savaje.application.uid"; //NOI18N
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.mobility.project.ProjectPropertiesDescriptor.class, position=35)
+public class SJMCPropertiesDescriptor implements ProjectPropertiesDescriptor {
     
     private Reference<Set<PropertyDescriptor>> ref = new WeakReference(null);
     
-    /** Creates a new instance of SavajePropertiesDescriptor */
-    public SavajePropertiesDescriptor() {
+    /** Creates a new instance of SJMCPropertiesDescriptor */
+    public SJMCPropertiesDescriptor() {
     }
     
     public Set getPropertyDescriptors() {
         Set<PropertyDescriptor> set = ref.get();
         if (set == null) {
-            String EMPTY = ""; //NOI18N
             set = new HashSet();
-            set.add(new PropertyDescriptor(SAVAJE_BUNDLE_DEBUG, true, DefaultPropertyParsers.BOOLEAN_PARSER,  "false")); //NOI18N
-            set.add(new PropertyDescriptor(SAVAJE_BUNDLE_DEBUG_PORT, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SAVAJE_BUNDLE_BASE, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SAVAJE_APPLICATION_ICON, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SAVAJE_APPLICATION_ICON_SMALL, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SAVAJE_APPLICATION_ICON_FOCUSED, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SAVAJE_APPLICATION_UID, true, DefaultPropertyParsers.STRING_PARSER,  "TBD")); //NOI18N
             ref = new WeakReference(set);
         }
         return new HashSet(set);
     }
-
 }

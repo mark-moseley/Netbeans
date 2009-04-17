@@ -38,8 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-package org.netbeans.modules.j2me.cdc.project.semc;
+package org.netbeans.modules.j2me.cdc.project.bdj;
 
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
@@ -51,51 +50,42 @@ import org.netbeans.spi.mobility.project.support.DefaultPropertyParsers;
 
 /**
  *
- * @author Adam Sotona
+ * @author suchys
  */
-@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.mobility.project.ProjectPropertiesDescriptor.class, position=40)
-public class SEMCPropertiesDescriptor implements ProjectPropertiesDescriptor {
-        
-    public static final String SEMC_APPLICATION_ICON_SPLASH_INSTALLONLY = "semc.application.icon.splash.installonly"; //NOI18N
-    public static final String SEMC_APPLICATION_UID = "semc.application.uid"; //NOI18N
-    public static final String SEMC_APPLICATION_ICON = "semc.application.icon";
-    public static final String SEMC_APPLICATION_ICON_COUNT = "semc.application.icon.count";
-    public static final String SEMC_APPLICATION_ICON_SPLASH = "semc.application.icon.splash";
-    public static final String SEMC_APPLICATION_CAPS    = "semc.application.caps";
-    public static final String SEMC_CERTIFICATE = "semc.certificate.path";
-    public static final String SEMC_PRIVATEKEY  = "semc.private.key.path";
-    public static final String SEMC_PASSWORD    = "semc.private.key.password";
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.mobility.project.ProjectPropertiesDescriptor.class, position=200)
+public class BDJPropertiesDescriptor implements ProjectPropertiesDescriptor {
 
+    public static String PROP_ORGANIZATION_ID       = "bdj.organization.id";     //NOI18N
+    public static String PROP_APPLICATION_ID        = "bdj.application.id";     //NOI18N
+    public static String PROP_FILE_ACCESS           = "bdj.file.access";     //NOI18N
+    public static String PROP_LIFECYCLE             = "bdj.application.lifecycle";     //NOI18N
+    public static String PROP_SERVICE_SELECT        = "bdj.service.selection";     //NOI18N
+    public static String PROP_USER_PREFERENCES_READ = "bdj.user.preferences.read";     //NOI18N
+    public static String PROP_USER_PREFERENCES_WRITE = "bdj.user.preferences.write";     //NOI18N
+    public static String PROP_NETWORK_PERMISSIONS   = "bdj.network.permissions";     //NOI18N
+    public static String PROP_DEPLOYMENT_DIR        = "bdj.deployment.dir";     //NOI18N
+            
     private Reference<Set<PropertyDescriptor>> ref = new WeakReference(null);
-    private PropertyDescriptor uid;
-    
-    /** Creates a new instance of SEMCPropertiesDescriptor */
-    public SEMCPropertiesDescriptor() {
+
+    public BDJPropertiesDescriptor() {
     }
-    
-    private String randomUID() {
-        String s = "0000000" + String.valueOf((long)(Math.random()*10000000)); //NOI18N
-        return 'E' + s.substring(s.length()-7, s.length());
-    }
-    
-    public synchronized Set<PropertyDescriptor> getPropertyDescriptors() {
+
+    public Set getPropertyDescriptors() {
         Set<PropertyDescriptor> set = ref.get();
         if (set == null) {
             set = new HashSet();
-            final String EMPTY = ""; //NOI18N
-            set.add(new PropertyDescriptor(SEMC_APPLICATION_ICON_SPLASH_INSTALLONLY, true, DefaultPropertyParsers.BOOLEAN_PARSER,  "false")); //NOI18N
-            set.add(new PropertyDescriptor(SEMC_APPLICATION_ICON, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SEMC_APPLICATION_ICON_COUNT, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SEMC_APPLICATION_ICON_SPLASH, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SEMC_APPLICATION_CAPS, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SEMC_CERTIFICATE, true, DefaultPropertyParsers.FILE_REFERENCE_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SEMC_PRIVATEKEY, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
-            set.add(new PropertyDescriptor(SEMC_PASSWORD, true, DefaultPropertyParsers.STRING_PARSER,  EMPTY));
+            set.add(new PropertyDescriptor(PROP_ORGANIZATION_ID, true, DefaultPropertyParsers.STRING_PARSER,  "56789abc")); //NOI18N
+            set.add(new PropertyDescriptor(PROP_APPLICATION_ID, true, DefaultPropertyParsers.STRING_PARSER,  "00004001")); //NOI18N
+            set.add(new PropertyDescriptor(PROP_FILE_ACCESS, true, DefaultPropertyParsers.BOOLEAN_PARSER,  "false")); //NOI18N
+            set.add(new PropertyDescriptor(PROP_LIFECYCLE, true, DefaultPropertyParsers.BOOLEAN_PARSER,  "false")); //NOI18N
+            set.add(new PropertyDescriptor(PROP_SERVICE_SELECT, true, DefaultPropertyParsers.BOOLEAN_PARSER,  "false")); //NOI18N
+            set.add(new PropertyDescriptor(PROP_USER_PREFERENCES_READ, true, DefaultPropertyParsers.BOOLEAN_PARSER,  "false")); //NOI18N
+            set.add(new PropertyDescriptor(PROP_USER_PREFERENCES_WRITE, true, DefaultPropertyParsers.BOOLEAN_PARSER,  "false")); //NOI18N
+            set.add(new PropertyDescriptor(PROP_NETWORK_PERMISSIONS, true, DefaultPropertyParsers.STRING_PARSER,  "")); //NOI18N
+            set.add(new PropertyDescriptor(PROP_DEPLOYMENT_DIR, true, DefaultPropertyParsers.FILE_REFERENCE_PARSER,  "${build.dir}/deploy")); //NOI18N
             ref = new WeakReference(set);
         }
-        if (uid != null) set.remove(uid);
-        uid = new PropertyDescriptor(SEMC_APPLICATION_UID, true, DefaultPropertyParsers.STRING_PARSER,  randomUID());
-        set.add(uid);
+        //Defensive copy - getting CMEs when creating new configurations
         return new HashSet(set);
     }
 

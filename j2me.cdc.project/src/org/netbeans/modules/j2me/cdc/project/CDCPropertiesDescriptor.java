@@ -53,6 +53,7 @@ import org.netbeans.spi.mobility.project.support.DefaultPropertyParsers;
  *
  * @author Adam Sotona
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.mobility.project.ProjectPropertiesDescriptor.class, position=10)
 public class CDCPropertiesDescriptor implements ProjectPropertiesDescriptor {
     
     public static final String APPLICATION_ARGS = "application.args"; //NOI18N
@@ -92,7 +93,8 @@ public class CDCPropertiesDescriptor implements ProjectPropertiesDescriptor {
             set.add(new PropertyDescriptor(PLATFORM_FAT_JAR, true, DefaultPropertyParsers.BOOLEAN_PARSER, "true")); //NOI18N
             ref = new WeakReference(set);
         }
-        return set;
+        //Defensive copy - getting CMEs when creating new configurations
+        return new HashSet(set);
     }
 
 }
