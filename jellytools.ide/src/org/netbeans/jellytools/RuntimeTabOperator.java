@@ -47,8 +47,8 @@ import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jemmy.ComponentChooser;
 import org.netbeans.jemmy.operators.JTreeOperator;
 
-/** Operator handling Runtime TopComponent.<p>
- * Functionality related to Runtime tree is delegated to JTreeOperator (method
+/** Operator handling Services TopComponent.<p>
+ * Functionality related to Services tree is delegated to JTreeOperator (method
  * tree()) and nodes (method getRootNode()).<p>
  * Example:<p>
  * <pre>
@@ -67,7 +67,7 @@ import org.netbeans.jemmy.operators.JTreeOperator;
  */
 public class RuntimeTabOperator extends TopComponentOperator {
 
-    static final String RUNTIME_CAPTION = Bundle.getString("org.netbeans.core.Bundle", "UI/Runtime");
+    static final String RUNTIME_CAPTION = Bundle.getString("org.netbeans.core.ide.resources.Bundle", "UI/Runtime");
     private static final RuntimeViewAction viewAction = new RuntimeViewAction();
     
     private JTreeOperator _tree;
@@ -111,11 +111,11 @@ public class RuntimeTabOperator extends TopComponentOperator {
      */
     private static final class RuntimeTabSubchooser implements ComponentChooser {
         public boolean checkComponent(Component comp) {
-            return comp.getClass().getName().endsWith("MainTab");
+            return comp.getClass().getName().equals("org.netbeans.core.ide.ServicesTab");
         }
         
         public String getDescription() {
-            return "org.netbeans.core.NbMainExplorer$MainTab";
+            return "org.netbeans.core.ide.ServicesTab";
         }
     }
 }
