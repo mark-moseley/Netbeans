@@ -40,6 +40,8 @@
 
 package org.netbeans.modules.profiler.heapwalk;
 
+import javax.swing.BoundedRangeModel;
+import javax.swing.SwingUtilities;
 import org.netbeans.lib.profiler.heap.*;
 import org.netbeans.modules.profiler.NetBeansProfiler;
 import org.netbeans.modules.profiler.heapwalk.model.AbstractHeapWalkerNode;
@@ -55,20 +57,12 @@ import org.openide.util.NbBundle;
 import java.awt.BorderLayout;
 import java.awt.Dialog;
 import java.awt.Dimension;
-import java.awt.EventQueue;
-import java.awt.event.HierarchyEvent;
-import java.awt.event.HierarchyListener;
-import java.awt.event.WindowEvent;
-import java.awt.event.WindowStateListener;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Comparator;
-import java.util.concurrent.CountDownLatch;
 import javax.swing.AbstractButton;
 import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
-import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 
 
@@ -147,19 +141,27 @@ public class ReferencesBrowserController extends AbstractController {
         protected String computeName() {
             return NO_INSTANCE_SELECTED_STRING;
         }
-        ;
+
         protected String computeType() {
             return NONE_STRING;
         }
-        ;
+
         protected String computeValue() {
             return NONE_STRING;
         }
-        ;
+        
+        protected String computeSize() {
+            return ""; // NOI18N
+        }
+        
+        protected String computeRetainedSize() {
+            return ""; // NOI18N
+        }
+
         protected Icon computeIcon() {
             return null;
         }
-        ;
+
         public boolean isLeaf() {
             return true;
         }
@@ -182,6 +184,11 @@ public class ReferencesBrowserController extends AbstractController {
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
     // --- Internal interface ----------------------------------------------------
+
+    public Handler getReferencesControllerHandler() {
+        return referencesControllerHandler;
+    }
+
     public HeapWalkerNode getFilteredSortedFields(String filterValue, int sortingColumn, boolean sortingOrder) {
         if (instance == null) {
             return EMPTY_INSTANCE_NODE;
@@ -210,39 +217,30 @@ public class ReferencesBrowserController extends AbstractController {
     public void navigateToNearestGCRoot(final InstanceNode instanceNode) {
         new NBSwingWorker(true) {
                 private Dialog progress = null;
-                HeapWalkerNode gcRootNode = null;
-
+                private HeapWalkerNode gcRootNode = null;
+                private BoundedRangeModel progressModel = null;
+                private boolean done = false;
+                
                 public void doInBackground() {
+                    progressModel = HeapProgress.getProgress();
                     gcRootNode = BrowserUtils.computeChildrenToNearestGCRoot(instanceNode);
                 }
 
                 @Override
                 public void nonResponding() {
-                    final CountDownLatch latch = new CountDownLatch(1); // create a latch to prevent race condition while displaying the progress
-
-                    progress = createProgressPanel(PROGRESS_MSG);
-                    progress.addHierarchyListener(new HierarchyListener() {
-                            public void hierarchyChanged(HierarchyEvent e) {
-                                if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) > 0) {
-                                    latch.countDown(); // window has changed the state to "SHOWING" - can leave the "nonResponding()" method"
+                    SwingUtilities.invokeLater(new Runnable() {
+                            public void run() {
+                                if (!done) {
+                                    progress = createProgressPanel(PROGRESS_MSG,progressModel);
+                                    progress.setVisible(true);
                                 }
                             }
                         });
-                    EventQueue.invokeLater(new Runnable() {
-                            public void run() {
-                                progress.setVisible(true);
-                            }
-                        });
-
-                    try {
-                        latch.await(); // wait till the progress dialog has been displayed
-                    } catch (InterruptedException e) {
-                        // TODO move to SwingWorker
-                    }
                 }
 
                 @Override
                 public void done() {
+                    done = false;
                     if (progress != null) {
                         progress.setVisible(false);
                         progress.dispose();
@@ -282,7 +280,7 @@ public class ReferencesBrowserController extends AbstractController {
         return new ReferencesBrowserControllerUI(this);
     }
 
-    Dialog createProgressPanel(final String message) {
+    Dialog createProgressPanel(final String message, BoundedRangeModel model) {
         Dialog dialog;
         JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout(10, 10));
@@ -294,7 +292,12 @@ public class ReferencesBrowserController extends AbstractController {
         panel.setPreferredSize(ps);
 
         final JProgressBar progress = new JProgressBar();
-        progress.setIndeterminate(true);
+        if (model == null) {
+            progress.setIndeterminate(true);
+        } else {
+            progress.setStringPainted(true);
+            progress.setModel(model);
+        }
         panel.add(progress, BorderLayout.SOUTH);
         dialog = ProfilerDialogs.createDialog(new DialogDescriptor(panel, PROGRESS_DIALOG_CAPTION, true, new Object[] {  },
                                                                    DialogDescriptor.CANCEL_OPTION, DialogDescriptor.RIGHT_ALIGN,
@@ -304,8 +307,8 @@ public class ReferencesBrowserController extends AbstractController {
     }
 
     private HeapWalkerNode getFields(final Instance instance) {
-        return HeapWalkerNodeFactory.createRootInstanceNode(instance, "this",
-                                                            new Runnable() { // NOI18N
+        return HeapWalkerNodeFactory.createRootInstanceNode(instance, "this", // NOI18N
+                                                            new Runnable() {
                 public void run() {
                     ((ReferencesBrowserControllerUI) getPanel()).refreshView();
                 }
