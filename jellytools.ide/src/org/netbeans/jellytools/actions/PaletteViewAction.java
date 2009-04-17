@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,46 +40,18 @@
  */
 package org.netbeans.jellytools.actions;
 
-import java.awt.event.KeyEvent;
-import javax.swing.KeyStroke;
 import org.netbeans.jellytools.Bundle;
 
-/** Used to call "File|New File..."  main menu item, "New|File/Folder" popup menu item,
- * "org.netbeans.modules.project.ui.actions.NewFile" action
- * or Ctrl+N shortcut.<br>
- * Usage:
- * <pre>
- *    new NewFileAction().performMenu();
- *    new NewFileAction().performPopup();
- *    new NewFileAction().performShortcut();
- * </pre>
+/** Used to call "Window|Palette" main menu item.
  * @see Action
- * @see ActionNoBlock
- * @author tb115823
- */
-public class NewFileAction extends ActionNoBlock {
-    
-    /** "New" popup menu item. */
-    private static final String popupPath = Bundle.getStringTrimmed("org.netbeans.modules.project.ui.actions.Bundle", "LBL_NewFileAction_PopupName");
-    
-    /** "File..." popup menu sub item. */
-    private static final String popupSubPath = Bundle.getStringTrimmed("org.netbeans.modules.project.ui.actions.Bundle", "LBL_NewFileAction_File_PopupName");
-        
-    /** File|New File..." main menu path. */
-    private  static final String menuPath = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/File")
-                                            + "|"
-                                            + Bundle.getStringTrimmed("org.netbeans.modules.project.ui.actions.Bundle", "LBL_NewFileAction_Name");
-    
-    /** Creates new NewFileAction instance. */
-    public NewFileAction() {
-        super(menuPath, popupPath + "|" + popupSubPath, "org.netbeans.modules.project.ui.actions.NewFile");
-    }
+ * @author mmirilovic@netbeans.org */
+public class PaletteViewAction extends Action {
+    private static final String projectMenu = Bundle.getStringTrimmed("org.netbeans.core.windows.resources.Bundle", "Menu/Window")
+                                           + "|"
+                                           + Bundle.getStringTrimmed("org.netbeans.modules.palette.Bundle", "CTL_PaletteAction");
 
-    /** Create new NewFileAction instance with name of template for
-    * popup operation (only popup mode allowed).
-    * @param templateName name of template shown in submenu (e.g. "Java Main Class")
-    */
-    public NewFileAction(String templateName) {
-        super(null, popupPath+"|"+templateName);
+    /** creates new PaletteViewAction instance */    
+    public PaletteViewAction() {
+        super(projectMenu, null, "org.netbeans.modules.palette.ShowPaletteAction");
     }
 }

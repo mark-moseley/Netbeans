@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,20 +38,23 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.jellytools.actions;
 
-import org.netbeans.jellytools.Bundle;
+package org.netbeans.jellytools;
 
-/** Used to call "Window|Palette" main menu item.
- * @see Action
- * @author mmirilovic@netbeans.org */
-public class PaletteViewAction extends Action {
-    private static final String projectMenu = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Window")
-                                           + "|"
-                                           + Bundle.getStringTrimmed("org.netbeans.modules.palette.Bundle", "CTL_PaletteAction");
+import org.netbeans.jellytools.nodes.JavaProjectRootNode;
 
-    /** creates new PaletteViewAction instance */    
-    public PaletteViewAction() {
-        super(projectMenu, null, "org.netbeans.modules.palette.ShowPaletteAction");
+/**
+ * Java-specific extension to ProjectsTabOperator.
+ *
+ * @author Vojtech.Sigler@sun.com
+ */
+public class JavaProjectsTabOperator extends ProjectsTabOperator {
+
+    /** Gets JavaProjectRootNode
+     * @param projectName display name of project
+     * @return ProjectsRootNode
+     */
+    public JavaProjectRootNode getJavaProjectRootNode(String projectName) {
+        return new JavaProjectRootNode(tree(), projectName);
     }
 }

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,36 +31,46 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.jellytools.actions;
 
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.ProjectsTabOperator;
+package org.netbeans.jellytools;
 
-/** Used to call "Find" popup menu item, "Edit|Find in Projects" main menu item,
- * "org.netbeans.modules.search.FindInFilesAction".
- * @see Action
- * @see ActionNoBlock
+/**
+ * Java-specific extension to NewFileWizardOperator.
+ *
+ * @author Vojtech.Sigler@sun.com
  */
-public class FindInFilesAction extends ActionNoBlock {
-    // "Edit|Find in Projects..."
-    private static final String menu =
-            Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Edit") +
-            "|" +
-            Bundle.getStringTrimmed("org.netbeans.modules.search.Bundle", "LBL_Action_FindInProjects");
-    // "Find"
-    private static final String popup =
-            Bundle.getStringTrimmed("org.openide.actions.Bundle", "Find");
-    
-    /** Creates new instance. */
-    public FindInFilesAction() {
-        super(menu, popup, "org.netbeans.modules.search.FindInFilesAction");
+public class NewJavaFileWizardOperator extends NewFileWizardOperator
+{
+
+    /** Creates a new object from template. It invokes new file wizard,
+     * sets given project, category and file type. On the next panel it
+     * sets package and object name. If package name is null or empty, it lets
+     * the default one.
+     * @param projectName name of project in which new object should be created
+     * @param category category to be selected
+     * @param fileType file type to be selected
+     * @param packageName package name of new object
+     * @param name name of created object
+     */
+    public static void create(String projectName, String category, String fileType, String packageName, String name) {
+        String wizardTitle = Bundle.getString("org.netbeans.modules.project.ui.Bundle",
+                                              "LBL_NewFileWizard_Title");
+        NewFileWizardOperator nfwo = invoke(wizardTitle);
+        nfwo.selectProject(projectName);
+        nfwo.selectCategory(category);
+        nfwo.selectFileType(fileType);
+        nfwo.next();
+        NewFileNameLocationStepOperator nfnlso = new NewFileNameLocationStepOperator();
+        nfnlso.setObjectName(name);
+        if(packageName != null && !"".equals(packageName)) {
+            nfnlso.setPackage(packageName);
+        }
+        nfnlso.finish();
     }
-    
-    /** Performs action through API. It selects a node first.
-     * @throws UnsupportedOperationException when action does not support API mode */
-    public void performAPI() {
-        new ProjectsTabOperator().tree().selectRow(0);
-        super.performAPI();
-    }
+
 }

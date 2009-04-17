@@ -43,27 +43,17 @@ package org.netbeans.jellytools.actions;
 import java.awt.event.KeyEvent;
 import org.netbeans.jellytools.Bundle;
 
-/** Used to call "File|New Project..."  main menu item, "org.netbeans.modules.project.ui.actions.NewProject" action
- *  or Ctrl+Shift+N shortcut.<br>
- * Usage:
- * <pre>
- *  new NewProjectAction.performMenu();
- *  new NewProjectAction().performShortcut();
- * </pre>
+/** Used to call "Window|Files" main menu item.
  * @see Action
- * @see ActionNoBlock
- * @author tb115823
+ * @author Jiri.Skrivanek@sun.com
  */
-public class NewProjectAction extends ActionNoBlock {
+public class FilesViewAction extends Action {
+    private static final String filesMenu = Bundle.getStringTrimmed("org.netbeans.core.windows.resources.Bundle", "Menu/Window")
+                                           + "|"
+                                           + Bundle.getStringTrimmed("org.netbeans.modules.project.ui.Bundle", "LBL_projectTab_tc");
 
-    /** File|New Project..." main menu path. */
-    private  static final String menuPath = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/File")
-                                            + "|"
-                                            + Bundle.getStringTrimmed("org.netbeans.modules.project.ui.actions.Bundle", "LBL_NewProjectAction_Name");
-    
-    /** Creates new NewProjectAction instance. */
-    public NewProjectAction() {
-        super(menuPath, null, "org.netbeans.modules.project.ui.actions.NewProject");
+    /** creates new FilesViewAction instance */    
+    public FilesViewAction() {
+        super(filesMenu, null);
     }
-    
 }
