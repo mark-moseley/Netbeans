@@ -30,15 +30,15 @@ package org.netbeans.modules.java.hints;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
-import java.io.File;
 import java.io.IOException;
 import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
+import org.netbeans.api.java.source.SourceUtilsTestUtil;
 import org.netbeans.api.java.source.TestUtilities;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.junit.NbTestCase;
-import org.netbeans.modules.java.source.usages.IndexUtil;
+import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 
 /**
@@ -55,13 +55,7 @@ public class ConvertAnonymousToInnerTest extends NbTestCase {
     protected void setUp() throws Exception {
         super.setUp();
         
-        clearWorkDir();
-        
-        File cache = new File(getWorkDir(), "cache");
-        
-        cache.mkdirs();
-        
-        IndexUtil.setCacheFolder(cache);
+        SourceUtilsTestUtil.prepareTest(new String[0], new Object[0]);
     }
 
     private static final class FindNewClassTree extends TreePathScanner<TreePath, Void> {
@@ -312,7 +306,7 @@ public class ConvertAnonymousToInnerTest extends NbTestCase {
                 "        new XImpl();\n" +
                 "    }\n" +
                 "    class X {}\n" +
-                "    private class XImpl extends Test.X {\n" +
+                "    private class XImpl extends X {\n" +
                 "        public XImpl() {\n" +
                 "        }\n" +
                 "    }\n" +
@@ -516,13 +510,62 @@ public class ConvertAnonymousToInnerTest extends NbTestCase {
         "    }\n" +
         "}\n");
     }
+
+    public void test129413() throws Exception {
+        performTest("package hierbas.del.litoral;\n\n" +
+                    "public class TestClass {\n" +
+                    "    public static void method() {\n" +
+                    "        new AbstractClass(\"\",26) {\n" +
+                    "            public String getInfo() {\n" +
+                    "                return this.name;\n" +
+                    "            }\n" +
+                    "        };\n" +
+                    "    }\n" +
+                    "    private static abstract class AbstractClass {\n" +
+                    "        protected String name;\n" +
+                    "        public AbstractClass(String s, int i) {\n" +
+                    "        }\n" +
+                    "    }\n" +
+                    "}\n",
+                    "package hierbas.del.litoral;\n\n" +
+                    "public class TestClass {\n" +
+                    "    public static void method() {\n" +
+                    "        new AbstractClassImpl(\"\",26);\n" +
+                    "    }\n" +
+                    "    private static abstract class AbstractClass {\n" +
+                    "        protected String name;\n" +
+                    "        public AbstractClass(String s, int i) {\n" +
+                    "        }\n" +
+                    "    }\n" +
+                    "    private static class AbstractClassImpl extends AbstractClass {\n" +
+                    "        public AbstractClassImpl(String s, int i) {\n" +
+                    "            super(s, i);\n" +
+                    "        }\n" +
+                    "        public String getInfo() {\n" +
+                    "            return this.name;\n" +
+                    "        }\n" +
+                    "    }\n" +
+                    "}\n");
+    }
     
     private void performTest(String test, String golden) throws Exception {
-        File testFile = new File(getWorkDir(), "Test.java");
+        clearWorkDir();
+
+        FileUtil.refreshFor(getWorkDir());
+        
+        FileObject wd = FileUtil.toFileObject(getWorkDir());
+        FileObject src = FileUtil.createFolder(wd, "src");
+        FileObject build = FileUtil.createFolder(wd, "build");
+        FileObject cache = FileUtil.createFolder(wd, "cache");
+        
+        SourceUtilsTestUtil.prepareTest(src, build, cache);
+
+        FileObject testFile = FileUtil.createData(src, "Test.java");
+
         TestUtilities.copyStringToFile(testFile, test);
-        JavaSource testSource = JavaSource.forFileObject(FileUtil.toFileObject(testFile));
+        
+        JavaSource testSource = JavaSource.forFileObject(testFile);
         Task task = new Task<WorkingCopy>() {
-            
             public void run(WorkingCopy workingCopy) throws IOException {
                 workingCopy.toPhase(Phase.RESOLVED);
                 
@@ -533,8 +576,8 @@ public class ConvertAnonymousToInnerTest extends NbTestCase {
             
         };
         testSource.runModificationTask(task).commit();
-        String res = TestUtilities.copyFileToString(testFile);
-        System.err.println(res);
+        String res = TestUtilities.copyFileToString(FileUtil.toFile(testFile));
+//        System.err.println(res);
         assertEquals(removeWhitespaces(golden), removeWhitespaces(res));
     }
     
