@@ -42,20 +42,33 @@
 package org.netbeans.modules.server.ui.wizard;
 
 import java.awt.Dialog;
+import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.Action;
 import javax.swing.JComponent;
+import javax.swing.JRadioButton;
 import javax.swing.event.ChangeListener;
-import org.netbeans.spi.server.ServerInstance;
+import org.netbeans.api.server.ServerInstance;
+import org.netbeans.modules.server.ServerRegistry;
 import org.netbeans.spi.server.ServerWizardProvider;
+import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.WizardDescriptor;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
+import org.openide.util.lookup.Lookups;
 
 /**
  *
@@ -68,17 +81,17 @@ public class AddServerInstanceWizard extends WizardDescriptor {
 
     public static final String PROP_SERVER_INSTANCE_WIZARD = "ServInstWizard_server"; // NOI18N
 
-    private static final String PROP_AUTO_WIZARD_STYLE = "WizardPanel_autoWizardStyle"; // NOI18N
+    private static final String PROP_AUTO_WIZARD_STYLE = WizardDescriptor.PROP_AUTO_WIZARD_STYLE; // NOI18N
 
-    private static final String PROP_CONTENT_DISPLAYED = "WizardPanel_contentDisplayed"; // NOI18N
+    private static final String PROP_CONTENT_DISPLAYED = WizardDescriptor.PROP_CONTENT_DISPLAYED; // NOI18N
 
-    private static final String PROP_CONTENT_NUMBERED = "WizardPanel_contentNumbered"; // NOI18N
+    private static final String PROP_CONTENT_NUMBERED = WizardDescriptor.PROP_CONTENT_NUMBERED; // NOI18N
 
-    private static final String PROP_CONTENT_DATA = "WizardPanel_contentData"; // NOI18N
+    private static final String PROP_CONTENT_DATA = WizardDescriptor.PROP_CONTENT_DATA; // NOI18N
 
-    private static final String PROP_CONTENT_SELECTED_INDEX = "WizardPanel_contentSelectedIndex"; // NOI18N
+    private static final String PROP_CONTENT_SELECTED_INDEX = WizardDescriptor.PROP_CONTENT_SELECTED_INDEX; // NOI18N
 
-    private static final String PROP_ERROR_MESSAGE = "WizardPanel_errorMessage"; // NOI18N
+    private static final String PROP_ERROR_MESSAGE = WizardDescriptor.PROP_ERROR_MESSAGE; // NOI18N
 
     private AddServerInstanceWizardIterator iterator;
 
@@ -106,6 +119,58 @@ public class AddServerInstanceWizard extends WizardDescriptor {
 
 
     public static ServerInstance showAddServerInstanceWizard() {
+        Collection<? extends ServerWizardProvider> providers = Lookups.forPath(
+                ServerRegistry.SERVERS_PATH).lookupAll(ServerWizardProvider.class);
+        // this will almost never happen if this module will be autoload
+        if (providers.isEmpty()) {
+            // except we run in ergonomics mode and providers are not yet on
+            // inspite there some are ready
+            JRadioButton[] ready = listAvailableProviders();
+            if (ready.length == 0) {
+                // display the warning dialog - no server plugins
+                String close = NbBundle.getMessage(AddServerInstanceWizard.class, "LBL_NoServerPlugins_Close");
+                DialogDescriptor descriptor = new DialogDescriptor(
+                        NbBundle.getMessage(AddServerInstanceWizard.class, "LBL_NoServerPlugins_Text"),
+                        NbBundle.getMessage(AddServerInstanceWizard.class, "LBL_NoServerPlugins_Title"),
+                        true,
+                        new Object[] {close},
+                        close,
+                        DialogDescriptor.DEFAULT_ALIGN,
+                        null,
+                        null);
+
+                // TODO invoke plugin manager once API to do that will be available
+                DialogDisplayer.getDefault().notify(descriptor);
+                return null;
+            } else {
+                Action a = null;
+                if (ready.length == 1) {
+                    a = (Action)ready[0].getClientProperty("action"); // NOI18N
+                } else {
+                    AvailableProvidersPanel available = new AvailableProvidersPanel(ready);
+                    DialogDescriptor descriptor = new DialogDescriptor(
+                            available,
+                            NbBundle.getMessage(AddServerInstanceWizard.class, "LBL_NoServerPlugins_Title"),
+                            true,
+                            new Object[] {DialogDescriptor.OK_OPTION, DialogDescriptor.CANCEL_OPTION },
+                            null,
+                            DialogDescriptor.DEFAULT_ALIGN,
+                            null,
+                            null);
+
+                    DialogDisplayer.getDefault().notify(descriptor);
+                    if (descriptor.getValue() == DialogDescriptor.OK_OPTION) {
+                        a = (Action)available.getSelected().getClientProperty("action"); // NOI18N
+                    }
+                }
+                if (a != null) {
+                    a.actionPerformed(new ActionEvent(a, 0, "noui")); // NOI18N
+                } else {
+                    return null;
+                }
+            }
+        }
+
         AddServerInstanceWizard wizard = new AddServerInstanceWizard();
 
         Dialog dialog = DialogDisplayer.getDefault().createDialog(wizard);
@@ -147,6 +212,25 @@ public class AddServerInstanceWizard extends WizardDescriptor {
             putProperty(PROP_CONTENT_SELECTED_INDEX, Integer.valueOf(getContentSelectedIndex()));
         }
     }
+
+    static JRadioButton[] listAvailableProviders() {
+        List<JRadioButton> res = new ArrayList<JRadioButton>();
+
+        for (Action a : Utilities.actionsForPath("Servers/Actions")) { // NOI18N
+            if (a == null) {
+                continue;
+            }
+            Object msg = a.getValue("wizardMessage"); // NOI18N
+            if (msg instanceof String) {
+                JRadioButton button = new JRadioButton((String)msg);
+                button.putClientProperty("action", a); // NOI18N
+                res.add(button);
+            }
+        }
+
+        return res.toArray(new JRadioButton[0]);
+    }
+
 
     private ServerWizardPanel getChooser() {
         if (chooser == null) {
