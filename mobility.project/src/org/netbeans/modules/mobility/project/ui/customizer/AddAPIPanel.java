@@ -56,7 +56,7 @@ import javax.swing.JTextField;
 import javax.swing.event.DocumentListener;
 import org.openide.DialogDescriptor;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.HelpCtx;
 import org.openide.util.Utilities;
 
@@ -116,8 +116,11 @@ public class AddAPIPanel extends javax.swing.JPanel implements ActionListener, D
         "javax.wireless.messaging.mms.receive", //NOI18N
         "javax.wireless.messaging.mms.send", //NOI18N
         "javax.wireless.messaging.sms.receive", //NOI18N
-        "javax.wireless.messaging.sms.send" //NOI18N
-
+        "javax.wireless.messaging.sms.send", //NOI18N
+        // Fix for IZ#145774 - Add JSR 256 Permissions to the list of API Permisions
+        "javax.microedition.sensor.PrivateSensor", // NOI18N
+        "javax.microedition.sensor.ProtectedSensor",  // NOI18N
+        "javax.microedition.io.Connector.sensor", // NOI18N
     };
     
     private DialogDescriptor dd;
@@ -151,25 +154,41 @@ public class AddAPIPanel extends javax.swing.JPanel implements ActionListener, D
     }
     
     private static String[] loadPermissions() {
-        final FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource("j2me/permissions.txt"); // NOI18N
+        List<FileObject> allPermissionsFos = new ArrayList<FileObject>();
+        final List<String> perms = new ArrayList<String>();
+
+        final FileObject xml = FileUtil.getConfigFile("Buildsystem/ApplicationDescriptor/Permissions"); // NOI18N
+        if (xml != null){
+            FileObject[] entries = xml.getChildren();
+            allPermissionsFos.addAll(Arrays.asList(entries));
+        }
+        //need to preserve for compatibility!
+        final FileObject fo = FileUtil.getConfigFile("j2me/permissions.txt"); // NOI18N
         if (fo != null) {
+            allPermissionsFos.add(fo);
+        }
+
+        for (FileObject fileObject : allPermissionsFos) {
             InputStream is = null;
             try {
-                is = fo.getInputStream();
+                is = fileObject.getInputStream();
                 final BufferedReader reader = new BufferedReader(new InputStreamReader(is));
                 try {
                     String s;
-                    final List<String> l = new ArrayList<String>();
-                    while ((s = reader.readLine()) != null)
-                        l.add(s);
-                    return l.toArray(new String[l.size()]);
+                    while ((s = reader.readLine()) != null){
+                        s = s.trim();
+                        if (!perms.contains(s) && s.length() != 0){
+                            perms.add(s);
+                        }
+                    }
                 } finally {
                     reader.close();
                 }
             } catch (IOException e) {
+                e.printStackTrace();
             }
         }
-        return availableDefaultPermissions;
+        return perms.size() != 0 ? perms.toArray(new String[perms.size()]) : availableDefaultPermissions;
     }
     
     public String getAPIName() {
@@ -192,7 +211,7 @@ public class AddAPIPanel extends javax.swing.JPanel implements ActionListener, D
         return true;
     }
     
-    public boolean isValid() {
+    public boolean isStateValid() {
         if (getAPIName().length() == 0  ||  !isValidClassName(getAPIName())) {
             errorPanel.setErrorBundleMessage("ERR_AddAPI_InvPackage");//NOI18N
             return false;
@@ -250,7 +269,7 @@ public class AddAPIPanel extends javax.swing.JPanel implements ActionListener, D
     
     public void actionPerformed(@SuppressWarnings("unused")
 	final java.awt.event.ActionEvent e) {
-        dd.setValid(isValid());
+        dd.setValid(isStateValid());
     }
     
     public void changedUpdate(@SuppressWarnings("unused")
