@@ -47,8 +47,10 @@ import org.openide.util.*;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.*;
+import java.util.concurrent.Executor;
 import junit.framework.*;
 import org.netbeans.junit.*;
+import org.netbeans.modules.openide.util.ActiveQueue;
 import org.openide.util.Lookup.Result;
 
 /** Runs all NbLookupTest tests on ProxyLookup and adds few additional.
@@ -61,8 +63,7 @@ implements AbstractLookupBaseHid.Impl {
 
     public static Test suite() {
         return new NbTestSuite (ProxyLookupTest.class);
-        
-        //return new ProxyLookupTest("testArrayIndexWithAddRemoveListenerAsInIssue119292");
+//        return new ProxyLookupTest("testDuplicatedLookupArrayIndexWithSetLookupAsInIssue123679");
     }
     
     /** Creates an lookup for given lookup. This class just returns 
@@ -88,7 +89,22 @@ implements AbstractLookupBaseHid.Impl {
      */
     public void testProxyListener () {
         ProxyLookup lookup = new ProxyLookup (new Lookup[0]);
-        Lookup.Result res = lookup.lookup (new Lookup.Template (Object.class));
+
+        final Lookup.Template<Object> template = new Lookup.Template<Object>(Object.class);
+        final Object[] IGNORE = {
+            ProxyLookup.ImmutableInternalData.EMPTY,
+            ProxyLookup.ImmutableInternalData.EMPTY_ARR,
+            ActiveQueue.queue(),
+            Collections.emptyMap(),
+            Collections.emptyList(),
+            Collections.emptySet()
+        };
+        
+        assertSize("Pretty small", Collections.singleton(lookup), 16, IGNORE);
+        
+        Lookup.Result<Object> res = lookup.lookup (template);
+
+        assertSize("Bigger", Collections.singleton(lookup), 216, IGNORE);
         
         LL ll = new LL ();
         res.addLookupListener (ll);
@@ -111,6 +127,64 @@ implements AbstractLookupBaseHid.Impl {
         
         lookup.setLookups (new Lookup[] { del });
         
+        if (ll.getCount () != 0) {
+           fail ("Calling setLookups (thesamearray) fired a change");
+        }
+    }
+    
+    public void testNoListenersProxyListener () {
+        ProxyLookup lookup = new ProxyLookup (new Lookup[0]);
+        class E implements Executor {
+            Runnable r;
+            public void execute(Runnable command) {
+                assertNull("NO previous", r);
+                r = command;
+            }
+            public void perform() {
+                assertNotNull("We shall have a runnable", r);
+                r.run();
+                r = null;
+            }
+        }
+        E executor = new E();
+                
+
+        final Lookup.Template<Object> template = new Lookup.Template<Object>(Object.class);
+        final Object[] IGNORE = {
+            ProxyLookup.ImmutableInternalData.EMPTY,
+            ProxyLookup.ImmutableInternalData.EMPTY_ARR,
+            ActiveQueue.queue(),
+            Collections.emptyMap(),
+            Collections.emptyList(),
+            Collections.emptySet()
+        };
+        
+        assertSize("Pretty small", Collections.singleton(lookup), 16, IGNORE);
+        
+        Lookup.Result<Object> res = lookup.lookup (template);
+
+        assertSize("Bigger", Collections.singleton(lookup), 216, IGNORE);
+        
+        LL ll = new LL ();
+        res.addLookupListener (ll);
+        Collection allRes = res.allInstances ();
+        
+        lookup.setLookups (executor, new Lookup[0]);
+        if (ll.getCount () != 0) {
+           fail ("Calling setLookups (emptyarray) fired a change");
+        }
+        
+        InstanceContent t = new InstanceContent();
+        Lookup del = new AbstractLookup (t);
+        t.add("Ahoj");
+        lookup.setLookups (executor, new Lookup[] { del });
+        assertEquals("No change yet", 0, ll.getCount());
+        executor.perform();
+        if (ll.getCount () != 1) {
+            fail ("Changing lookups did not generate an event");
+        }
+        
+        lookup.setLookups (executor, new Lookup[] { del });
         if (ll.getCount () != 0) {
            fail ("Calling setLookups (thesamearray) fired a change");
         }
@@ -204,9 +278,9 @@ implements AbstractLookupBaseHid.Impl {
      */
     private void doProxyLookupTemplateCaching(Lookup[] lookups, boolean reget) {
         // Create MyProxyLookup with one lookup containing the String object
-        InstanceContent ic = new InstanceContent();
-        ic.add(new String("Hello World")); //NOI18N
-        lookups[0] = new AbstractLookup(ic);
+        InstanceContent inst = new InstanceContent();
+        inst.add(new String("Hello World")); //NOI18N
+        lookups[0] = new AbstractLookup(inst);
         ProxyLookup proxy = new ProxyLookup(lookups);
         if (reget) {
             lookups = proxy.getLookups();
