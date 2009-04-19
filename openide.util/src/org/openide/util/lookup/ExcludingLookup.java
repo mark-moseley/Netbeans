@@ -67,6 +67,11 @@ final class ExcludingLookup extends org.openide.util.Lookup {
     ExcludingLookup(Lookup delegate, Class[] classes) {
         this.delegate = delegate;
 
+        for (Class c : classes) {
+            if (c == null) {
+                throw new NullPointerException();
+            }
+        }
         if (classes.length == 1) {
             this.classes = classes[0];
         } else {
