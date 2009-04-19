@@ -41,58 +41,58 @@
 
 package org.openide.util.lookup;
 
+import java.util.concurrent.Executor;
 import org.openide.util.Lookup;
-import org.openide.util.test.MockLookup;
+import org.openide.util.LookupEvent;
+import org.openide.util.LookupListener;
 
-
-/** Test finding services from manifest.
- * @author Jaroslav Tulach
- */
-public class NamedServicesLookupTest extends MetaInfServicesLookupTest {
-    static {
-        MockLookup.init();
-    }
-    public NamedServicesLookupTest(String name) {
-        super(name);
-    }
-
-    @Override
-    protected String prefix() {
-        return "META-INF/namedservices/sub/path/";
-    }
+public class AbstractLookupExecutorTest extends AbstractLookupBaseHid 
+implements AbstractLookupBaseHid.Impl, Executor, LookupListener {
+    Lookup.Result<?> res;
     
-    @Override
-    protected Lookup createLookup(ClassLoader c) {
-        MockLookup.setInstances(c);
-        Thread.currentThread().setContextClassLoader(c);
-        Lookup l = Lookups.forPath("sub/path");
+    
+    public AbstractLookupExecutorTest(java.lang.String testName) {
+        super(testName, null);
+    }
+
+    //
+    // Impl of AbstractLookupBaseHid.Impl
+    //
+
+    /** Creates the initial abstract lookup.
+     */
+    public Lookup createInstancesLookup (InstanceContent ic) {
+        ic.attachExecutor(this);
+        Lookup l = new AbstractLookup (ic, new InheritanceTree ());
         return l;
     }
     
-    //
-    // this is not much inheriting test, as we mask most of the tested methods
-    // anyway, but the infrastructure to generate the JAR files is useful
-    //
-    
-    public void testLoaderSkew() throws Exception {
+    /** Creates an lookup for given lookup. This class just returns 
+     * the object passed in, but subclasses can be different.
+     * @param lookup in lookup
+     * @return a lookup to use
+     */
+    public Lookup createLookup (Lookup lookup) {
+        res = lookup.lookupResult(Object.class);
+        res.addLookupListener(this);
+        return lookup;
     }
 
-    public void testStability() throws Exception {
-    }
-
-    public void testMaskingOfResources() throws Exception {
-    }
-
-    public void testOrdering() throws Exception {
-    }
-
-    public void testNoCallToGetResourceForObjectIssue65124() throws Exception {
-    }
-
-    public void testListenersAreNotifiedWithoutHoldingALockIssue36035() throws Exception {
-    }
-    
-    public void testWrongOrderAsInIssue100320() throws Exception {
+    public void clearCaches () {
     }    
-    
+
+    ThreadLocal<Object> ME = new ThreadLocal<Object>();
+    public void execute(Runnable command) {
+        assertEquals("Not yet set", null, ME.get());
+        ME.set(this);
+        try {
+            command.run();
+        } finally {
+            ME.set(null);
+        }
+    }
+
+    public void resultChanged(LookupEvent ev) {
+        assertEquals("Changes delivered only from execute method", this, ME.get());
+    }
 }

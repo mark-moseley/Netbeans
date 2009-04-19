@@ -41,12 +41,11 @@
 
 package org.openide.util.lookup;
 
-import org.openide.util.*;
-
 import java.lang.ref.WeakReference;
 import java.util.*;
 import junit.framework.*;
 import org.netbeans.junit.*;
+import org.openide.util.Lookup;
 
 /** To simulate issue 42244.
  */
@@ -55,8 +54,9 @@ public class SimpleProxyLookupIssue42244Test extends AbstractLookupBaseHid imple
         super(testName, null);
     }
 
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(new NbTestSuite (SimpleProxyLookupIssue42244Test.class));
+    public static Test suite() {
+        // return new SimpleProxyLookupIssue42244Test("testGarbageCollect");
+        return new NbTestSuite(SimpleProxyLookupIssue42244Test.class);
     }
     
     /** Creates an lookup for given lookup. This class just returns 
@@ -104,6 +104,7 @@ public class SimpleProxyLookupIssue42244Test extends AbstractLookupBaseHid imple
             super (new Lookup[] { delegate });
         }
         
+        @Override
         protected void beforeLookup (org.openide.util.Lookup.Template template) {
             super.beforeLookup (template);
             if (allQueries != null && in.get () == null) {
