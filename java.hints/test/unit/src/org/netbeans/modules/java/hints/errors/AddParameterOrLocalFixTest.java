@@ -60,7 +60,7 @@ public class AddParameterOrLocalFixTest extends ErrorHintsTestBase {
                        "package test; public class Test {public void test(String[] a) {bbb = 0;}}",
                        90 - 25,
                        "AddParameterOrLocalFix:bbb:int:true",
-                       "package test; public class Test {public void test(String[] a,int bbb) {bbb = 0;}}");
+                       "package test; public class Test {public void test(String[] a, int bbb) {bbb = 0;}}");
     }
     
     public void testAddToTheEmptyParamsList() throws Exception {
@@ -112,7 +112,166 @@ public class AddParameterOrLocalFixTest extends ErrorHintsTestBase {
             ErrorFixesFakeHint.setCreateLocalVariableInPlace(orig);
         }
     }
-    
+
+    public void testInsideBlock() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                       "package test; public class Test {public void test() {if (true) {int aaa = 0; |bbb = aaa; }}}",
+                       "AddParameterOrLocalFix:bbb:int:false",
+                       "package test; public class Test {public void test() {if (true) {int aaa = 0;int bbb = aaa; }}}");
+    }
+
+    public void testInsideBlockWithPreviousDeclaration() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                       "package test; public class Test {public void test() {Object[] array = new Object[10];for (int i = 0; i < array.length; i++) {Object item = array[i + 1];item = array[i];}int j = 0;while (j < 10) {|item = array[j];j--;}}}",
+                       "AddParameterOrLocalFix:item:java.lang.Object:false",
+                       "package test; public class Test {public void test() {Object[] array = new Object[10];for (int i = 0; i < array.length; i++) {Object item = array[i + 1];item = array[i];}int j = 0;while (j < 10) {Object item = array[j]; j--;}}}");
+    }
+
+    public void testInsideParentBlock() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                       "package test; public class Test {public void test() {{foo = \"bar\";}|foo = \"bar\";}}",
+                       "AddParameterOrLocalFix:foo:java.lang.String:false",
+                       "package test; public class Test {public void test() {String foo; {foo = \"bar\";}foo = \"bar\";}}");
+    }
+
+    public void testEnhancedForLoopEmptyList() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                "package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         for (|ttt : java.util.Collections.emptyList()) {}\n" +
+                "     }\n" +
+                "}\n",
+                "AddParameterOrLocalFix:ttt:java.lang.Object:false",
+                ("package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         for (Object ttt : java.util.Collections.emptyList()) {}\n" +
+                "     }\n" +
+                "}\n").replaceAll("[ \t\n]+", " "));
+    }
+
+    public void testEnhancedForLoopExtendedNumber() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                "package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         java.util.List<? extends Number> l = null;\n" +
+                "         for (|ttt : l) {}\n" +
+                "     }\n" +
+                "}\n",
+                "AddParameterOrLocalFix:ttt:java.lang.Number:false",
+                ("package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         java.util.List<? extends Number> l = null;\n" +
+                "         for (Number ttt : l) {}\n" +
+                "     }\n" +
+                "}\n").replaceAll("[ \t\n]+", " "));
+    }
+
+    public void testEnhancedForLoopStringArray() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                "package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         String[] a = null;\n" +
+                "         for (|ttt : a) {}\n" +
+                "     }\n" +
+                "}\n",
+                "AddParameterOrLocalFix:ttt:java.lang.String:false",
+                ("package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         String[] a = null;\n" +
+                "         for (String ttt : a) {}\n" +
+                "     }\n" +
+                "}\n").replaceAll("[ \t\n]+", " "));
+    }
+
+    public void testEnhancedForLoopPrimitiveArray() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                "package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         int[] a = null;\n" +
+                "         for (|ttt : a) {}\n" +
+                "     }\n" +
+                "}\n",
+                "AddParameterOrLocalFix:ttt:int:false",
+                ("package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         int[] a = null;\n" +
+                "         for (int ttt : a) {}\n" +
+                "     }\n" +
+                "}\n").replaceAll("[ \t\n]+", " "));
+    }
+
+    public void testEnhancedForLoopNotImported() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                "package test;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         for (|date : someMethod()) {\n" +
+                "         }\n" +
+                "     }\n" +
+                "     private Iterable<java.util.Date> someMethod() {\n" +
+                "         return null;\n" +
+                "     }\n" +
+                "}\n",
+                "AddParameterOrLocalFix:date:java.util.Date:false",
+                ("package test;\n" +
+                "import java.util.Date;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         for (Date date : someMethod()) {\n" +
+                "         }\n" +
+                "     }\n" +
+                "     private Iterable<java.util.Date> someMethod() {\n" +
+                "         return null;\n" +
+                "     }\n" +
+                "}\n").replaceAll("[ \t\n]+", " "));
+    }
+
+    public void testEnhancedForLoopInsideItsBody() throws Exception {
+        parameter = false;
+        performFixTest("test/Test.java",
+                "package test;\n" +
+                "import java.util.Date;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         for (date : someMethod()) {\n" +
+                "             Date local = |date;\n" +
+                "         }\n" +
+                "     }\n" +
+                "     private Iterable<java.util.Date> someMethod() {\n" +
+                "         return null;\n" +
+                "     }\n" +
+                "}\n",
+                "AddParameterOrLocalFix:date:java.util.Date:false",
+                ("package test;\n" +
+                "import java.util.Date;\n" +
+                "public class Test {\n" +
+                "     public void test() {\n" +
+                "         for (Date date : someMethod()) {\n" +
+                "             Date local = date;\n" +
+                "         }\n" +
+                "     }\n" +
+                "     private Iterable<java.util.Date> someMethod() {\n" +
+                "         return null;\n" +
+                "     }\n" +
+                "}\n").replaceAll("[ \t\n]+", " "));
+    }
+
     protected List<Fix> computeFixes(CompilationInfo info, int pos, TreePath path) throws IOException {
         List<Fix> fixes = CreateElement.analyze(info, pos);
         List<Fix> result=  new LinkedList<Fix>();
