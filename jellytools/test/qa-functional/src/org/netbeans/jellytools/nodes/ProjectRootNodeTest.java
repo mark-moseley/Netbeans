@@ -40,10 +40,12 @@
  */
 package org.netbeans.jellytools.nodes;
 
+import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.FindInFilesOperator;
+import org.netbeans.jellytools.JavaProjectsTabOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.MainWindowOperator;
 import org.netbeans.jellytools.NbDialogOperator;
@@ -64,6 +66,7 @@ public class ProjectRootNodeTest extends JellyTestCase {
     
     /** method used for explicit testsuite definition */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new ProjectRootNodeTest("testVerifyPopup"));
         suite.addTest(new ProjectRootNodeTest("testFind"));
@@ -71,6 +74,11 @@ public class ProjectRootNodeTest extends JellyTestCase {
         suite.addTest(new ProjectRootNodeTest("testCleanProject"));
         suite.addTest(new ProjectRootNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(ProjectRootNodeTest.class, 
+                "testVerifyPopup", "testFind",
+                "testBuildProject", "testCleanProject",
+                "testProperties");
     }
     
     /** Use for internal test execution inside IDE
@@ -80,13 +88,14 @@ public class ProjectRootNodeTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
-    private static ProjectRootNode projectRootNode;
+    private static JavaProjectRootNode projectRootNode;
     
     /** Find node. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         if(projectRootNode == null) {
-            projectRootNode = ProjectsTabOperator.invoke().getProjectRootNode("SampleProject"); // NOI18N
+            projectRootNode = JavaProjectsTabOperator.invoke().getJavaProjectRootNode("SampleProject"); // NOI18N
         }
     }
     

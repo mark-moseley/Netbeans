@@ -43,19 +43,17 @@ package org.netbeans.jellytools.modules.db.actions;
 
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.actions.ActionNoBlock;
-import org.netbeans.jemmy.operators.Operator;
 
 
-/** Used to call "Connect ..." popup menu item.
+/** Used to call "Connect Using ..." popup menu item.
  * @see org.netbeans.jellytools.actions.Action
  * @author Martin.Schovanek@sun.com */
-public class ConnectAction extends ActionNoBlock {
+public class ConnectUsingAction extends ActionNoBlock {
 
-    /** creates new "Connect ..." action */
-    public ConnectAction() {
-        super(null, Bundle.getStringTrimmed(
-                "org.netbeans.modules.db.resources.Bundle",
-                "Connect"));
-        setComparator(new Operator.DefaultStringComparator(true, true));
+    /** creates new "Connect Using ..." action */
+    public ConnectUsingAction() {
+        super(null,Bundle.getStringTrimmed(
+                "org.netbeans.modules.db.explorer.action.Bundle",
+                "ConnectUsing"));
     }
 }

@@ -41,57 +41,50 @@
 
 package org.netbeans.jellytools.modules.db.nodes;
 
+import org.netbeans.jellytools.actions.Action;
+import org.netbeans.jellytools.modules.db.actions.AddDriverAction;
+import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.RuntimeTabOperator;
-import org.netbeans.jellytools.actions.Action;
-import org.netbeans.jellytools.modules.db.actions.DisableDebugAction;
-import org.netbeans.jellytools.modules.db.actions.EnableDebugAction;
-import org.netbeans.jellytools.nodes.Node;
 
-/** Node representing "Databases" node in Runtime tab.
+/** Node representing "Databases > Drivers" node in Services tab.
  * <p>
  * Usage:<br>
  * <pre>
- *      DatabasesNode databases = DatabasesNode.invoke();
- *      databases.enableDebug();
+ *      DriversNode drivers = DriversNode.invoke();
+ *      drivers.addDriver();
  *      ....
  * </pre>
  *
  * @author Martin.Schovanek@sun.com
  */
-public class DatabasesNode extends Node {
-    static final String TREE_PATH = Bundle.getStringTrimmed(
-                "org.netbeans.modules.db.resources.Bundle",
-                "NDN_Databases");
-    private static final Action enableDebugAction = new EnableDebugAction();
-    private static final Action disableDebugAction = new DisableDebugAction();
+public class DriversNode extends Node {
+    static final String TREE_PATH = DatabasesNode.TREE_PATH+"|"+
+            Bundle.getStringTrimmed(
+            "org.netbeans.modules.db.explorer.node.Bundle",
+            "DriverListNode_DISPLAYNAME");
+    private static final Action addDriverAction = new AddDriverAction();
+
+    /** Finds "Databases > Drivers" node */
+    public static DriversNode invoke() {
+        RuntimeTabOperator.invoke();
+        return new DriversNode();
+    }
     
-    public DatabasesNode() {
+    /** Creates new DriversNode */
+    public DriversNode() {
         super(new RuntimeTabOperator().getRootNode(), TREE_PATH);
     }
     
-    /** Finds "Databases" node in Runtime tab
-     */
-    public static DatabasesNode invoke() {
-        RuntimeTabOperator.invoke();
-        return new DatabasesNode();
-    }
-    
-    /** performs EnableDebugAction with this node */
-    public void enableDebug() {
-        enableDebugAction.perform(this);
-    }
-    
-    /** performs DisableDebugAction with this node */
-    public void disableDebug() {
-        disableDebugAction.perform(this);
+    /** performs AddDriverAction with this node */
+    public void addDriver() {
+        addDriverAction.perform(this);
     }
     
     /** tests popup menu items for presence */
     void verifyPopup() {
         verifyPopup(new Action[]{
-            enableDebugAction,
-            disableDebugAction,
+            addDriverAction,
         });
     }
 }

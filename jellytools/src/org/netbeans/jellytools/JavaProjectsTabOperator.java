@@ -39,21 +39,29 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.jellytools.modules.db.actions;
+package org.netbeans.jellytools;
 
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.actions.Action;
+import org.netbeans.jellytools.nodes.JavaProjectRootNode;
 
+/**
+ * Java-specific extension to ProjectsTabOperator.
+ *
+ * @author Vojtech.Sigler@sun.com
+ */
+public class JavaProjectsTabOperator extends ProjectsTabOperator {
 
-/** Used to call "Disconnect" popup menu item.
- * @see org.netbeans.jellytools.actions.Action
- * @author Martin.Schovanek@sun.com */
-public class DisconnectAction extends Action {
+    /** Gets JavaProjectRootNode
+     * @param projectName display name of project
+     * @return ProjectsRootNode
+     */
+    public JavaProjectRootNode getJavaProjectRootNode(String projectName) {
+        return new JavaProjectRootNode(tree(), projectName);
+    }
 
-    /** creates new "Disconnect" action*/
-    public DisconnectAction() {
-        super(null,Bundle.getStringTrimmed(
-                "org.netbeans.modules.db.resources.Bundle",
-                "Disconnect"));
+    /** invokes Projects and returns new instance of ProjectsTabOperator
+     * @return new instance of ProjectsTabOperator */
+    public static JavaProjectsTabOperator invoke() {
+        viewAction.perform();
+        return new JavaProjectsTabOperator();
     }
 }

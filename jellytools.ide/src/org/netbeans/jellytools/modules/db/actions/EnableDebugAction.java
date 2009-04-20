@@ -39,52 +39,21 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.jellytools.modules.db.nodes;
+package org.netbeans.jellytools.modules.db.actions;
 
-import org.netbeans.jellytools.actions.Action;
-import org.netbeans.jellytools.modules.db.actions.AddDriverAction;
-import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.RuntimeTabOperator;
+import org.netbeans.jellytools.actions.Action;
 
-/** Node representing "Databases > Drivers" node in Runtime tab.
- * <p>
- * Usage:<br>
- * <pre>
- *      DriversNode drivers = DriversNode.invoke();
- *      drivers.addDriver();
- *      ....
- * </pre>
- *
- * @author Martin.Schovanek@sun.com
- */
-public class DriversNode extends Node {
-    static final String TREE_PATH = DatabasesNode.TREE_PATH+"|"+
-            Bundle.getStringTrimmed(
-                "org.netbeans.modules.db.resources.Bundle",
-                "NDN_Drivers");
-    private static final Action addDriverAction = new AddDriverAction();
 
-    /** Finds "Databases > Drivers" node */
-    public static DriversNode invoke() {
-        RuntimeTabOperator.invoke();
-        return new DriversNode();
-    }
-    
-    /** Creates new DriversNode */
-    public DriversNode() {
-        super(new RuntimeTabOperator().getRootNode(), TREE_PATH);
-    }
-    
-    /** performs AddDriverAction with this node */
-    public void addDriver() {
-        addDriverAction.perform(this);
-    }
-    
-    /** tests popup menu items for presence */
-    void verifyPopup() {
-        verifyPopup(new Action[]{
-            addDriverAction,
-        });
+/** Used to call "Enable Debug" popup menu item.
+ * @see Action
+ * @author Martin.Schovanek@sun.com */
+public class EnableDebugAction extends Action {
+
+    /** creates new "Enable Debug" action */
+    public EnableDebugAction() {
+        super(null, Bundle.getStringTrimmed(
+                "org.netbeans.modules.db.explorer.action.Bundle",
+                "EnableDebug"));
     }
 }

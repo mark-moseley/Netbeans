@@ -44,15 +44,16 @@ package org.netbeans.jellytools.modules.db.actions;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.actions.ActionNoBlock;
 
-/** Used to call "Execute Command ..." popup menu item.
+
+/** Used to call "Disable Debug" popup menu item.
  * @see org.netbeans.jellytools.actions.Action
  * @author Martin.Schovanek@sun.com */
-public class ExecuteCommandAction extends ActionNoBlock {
+public class DisableDebugAction extends ActionNoBlock {
 
-    /** creates new "Execute Command ..." action */
-    public ExecuteCommandAction() {
+    /** creates new "Disable Debug" action */
+    public DisableDebugAction() {
         super(null, Bundle.getStringTrimmed(
-                "org.netbeans.modules.db.resources.Bundle",
-                "ExecuteCommand"));
+                "org.netbeans.modules.db.explorer.action.Bundle",
+                "DisableDebug"));
     }
 }

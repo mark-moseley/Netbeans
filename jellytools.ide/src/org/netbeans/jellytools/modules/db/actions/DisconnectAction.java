@@ -42,18 +42,18 @@
 package org.netbeans.jellytools.modules.db.actions;
 
 import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.actions.ActionNoBlock;
+import org.netbeans.jellytools.actions.Action;
 
 
-/** Used to call "Connect Using ..." popup menu item.
+/** Used to call "Disconnect" popup menu item.
  * @see org.netbeans.jellytools.actions.Action
  * @author Martin.Schovanek@sun.com */
-public class ConnectUsingAction extends ActionNoBlock {
+public class DisconnectAction extends Action {
 
-    /** creates new "Connect Using ..." action */
-    public ConnectUsingAction() {
-        super(null,Bundle.getStringTrimmed(
-                "org.netbeans.modules.db.resources.Bundle",
-                "ConnectUsing"));
+    /** creates new "Disconnect" action*/
+    public DisconnectAction() {
+        super(null, Bundle.getStringTrimmed(
+                "org.netbeans.modules.db.explorer.action.Bundle",
+                "Disconnect"));
     }
 }

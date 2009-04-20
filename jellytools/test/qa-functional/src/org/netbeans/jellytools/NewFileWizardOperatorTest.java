@@ -40,14 +40,12 @@
  */
 package org.netbeans.jellytools;
 
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.actions.DeleteAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.jemmy.operators.JComboBoxOperator;
 
 /**
  * Test of org.netbeans.jellytools.NewFileWizardOperator.
@@ -64,10 +62,14 @@ public class NewFileWizardOperatorTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
+    public static final String[] tests = new String[] {
+        "testInvokeTitle", "testInvoke", "testSelectProjectAndCategoryAndFileType", 
+        "testGetDescription", "testCreate"};    
     /** Method used for explicit testsuite definition
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new NewFileWizardOperatorTest("testInvokeTitle"));
         suite.addTest(new NewFileWizardOperatorTest("testInvoke"));
@@ -75,10 +77,14 @@ public class NewFileWizardOperatorTest extends JellyTestCase {
         suite.addTest(new NewFileWizardOperatorTest("testGetDescription"));
         suite.addTest(new NewFileWizardOperatorTest("testCreate"));
         return suite;
+         */
+        return createModuleTest(NewFileWizardOperatorTest.class, 
+                tests);
     }
     
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");           
     }
     
     /** Constructor required by JUnit.
@@ -105,7 +111,7 @@ public class NewFileWizardOperatorTest extends JellyTestCase {
      *  sets category and filetype
      */
     public void testSelectProjectAndCategoryAndFileType() {
-        JComboBoxOperator cbo = op.cboProject();
+        org.netbeans.jemmy.operators.JComboBoxOperator cbo = op.cboProject();
         cbo.selectItem(0);
         // Java Classes
         op.selectCategory(Bundle.getString("org.netbeans.modules.java.project.Bundle", "Templates/Classes"));
@@ -126,12 +132,13 @@ public class NewFileWizardOperatorTest extends JellyTestCase {
         String javaClassesLabel = Bundle.getString("org.netbeans.modules.java.project.Bundle", "Templates/Classes");
         // Java Class
         String javaClassLabel = Bundle.getString("org.netbeans.modules.java.project.Bundle", "Templates/Classes/Class.java");
-        NewFileWizardOperator.create("SampleProject", javaClassesLabel, javaClassLabel, "sample1", "TempClass");  // NOI18N
+        NewJavaFileWizardOperator.create("SampleProject", javaClassesLabel, javaClassLabel, "sample1", "TempClass");  // NOI18N
         Node classNode = new Node(new SourcePackagesNode("SampleProject"), "sample1|TempClass");  // NOI18N
         DeleteAction deleteAction = new DeleteAction();
         deleteAction.perform(classNode);
         // "Safe Delete"
-        String safeDeleteTitle = Bundle.getString("org.netbeans.modules.refactoring.spi.impl.Bundle", "LBL_SafeDel"); // NOI18N
+        //TODO: is this the correct bundle/key to use here?
+        String safeDeleteTitle = Bundle.getString("org.netbeans.modules.project.ui.actions.Bundle", "LBL_DeleteProjectAction_Name"); // I18N
         new NbDialogOperator(safeDeleteTitle).ok();
     }
 }

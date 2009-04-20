@@ -38,22 +38,80 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.jellytools;
 
-package org.netbeans.jellytools.modules.db.actions;
+import java.io.IOException;
+import org.netbeans.junit.NbModuleSuite;
+import org.netbeans.junit.NbTest;
+import org.netbeans.junit.NbTestSuite;
 
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.actions.ActionNoBlock;
+/** Test FavoritesOperator.
+ *
+ * @author Jiri.Skrivanek@sun.com
+ */
+public class FavoritesOperatorTest extends JellyTestCase {
+
+    public FavoritesOperatorTest(java.lang.String testName) {
+        super(testName);
+    }
+
+    public static void main(java.lang.String[] args) {
+        junit.textui.TestRunner.run(suite());
+    }
+
+    public static NbTest suite() {
+        /*
+        NbTestSuite suite = new NbTestSuite();
+        // suites have to be in particular order
+        suite.addTest(new FavoritesOperatorTest("testInvoke"));
+        suite.addTest(new FavoritesOperatorTest("testTree"));
+        suite.addTest(new FavoritesOperatorTest("testVerify"));
+        return suite;
+         */
+        return (NbTest) NbModuleSuite.create(
+        NbModuleSuite.createConfiguration(FavoritesOperatorTest.class).
+                addTest("testInvoke").
+                //addTest("testTree").
+                addTest("testVerify").
+                enableModules(".*").clusters(".*"));
+    }
+    
+    /** Print out test name. */
+    public void setUp() throws IOException {
+        System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
+    }
+    
+    private static FavoritesOperator favoritesOper;
+    
+    /**
+     * Test of invoke method.
+     */
+    public void testInvoke() {
+        FavoritesOperator.invoke().close();
+        favoritesOper = FavoritesOperator.invoke();
+    }
 
 
-/** Used to call "Disable Debug" popup menu item.
- * @see org.netbeans.jellytools.actions.Action
- * @author Martin.Schovanek@sun.com */
-public class DisableDebugAction extends ActionNoBlock {
-
-    /** creates new "Disable Debug" action */
-    public DisableDebugAction() {
-        super(null,Bundle.getStringTrimmed(
-                "org.netbeans.modules.db.resources.Bundle",
-                "DisableDebug"));
+    /**
+     * Test of tree method.
+     */
+    //this test will not compile if this is uncommented, because it uses
+    //an operator from the IDE cluster
+    //TODO: fix this test
+    /*
+    public void testTree() {
+        RuntimeTabOperator rto = RuntimeTabOperator.invoke();
+        // has to make tab visible
+        favoritesOper.tree();
+    }
+    */
+    
+    /**
+     * Test of verify method.
+     */
+    public void testVerify() {
+        favoritesOper.verify();
+        favoritesOper.close();
     }
 }
