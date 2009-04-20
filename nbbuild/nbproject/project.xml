@@ -64,16 +64,6 @@ made subject to such option by the copyright holder.
                     <type>java</type>
                     <location>test/unit/src</location>
                 </source-folder>
-                <source-folder>
-                    <label>Test Distribution Tasks</label>
-                    <type>java</type>
-                    <location>testdist/src</location>
-                </source-folder>
-                <source-folder>
-                    <label>Tests for Test Distribution Tasks</label>
-                    <type>java</type>
-                    <location>testdist/test</location>
-                </source-folder>
             </folders>
             <ide-actions>
                 <action name="build">
@@ -89,7 +79,7 @@ made subject to such option by the copyright holder.
                 <action name="test">
                     <target>localtest</target>
                 </action>
-                <action name="run.single">
+                <action name="test.single">
                     <target>localtest</target>
                     <context>
                         <property>includes</property>
@@ -101,7 +91,7 @@ made subject to such option by the copyright holder.
                         </arity>
                     </context>
                 </action>
-                <action name="debug.single">
+                <action name="debug.test.single">
                     <target>localtest-single-nb-debug</target>
                     <context>
                         <property>includes</property>
@@ -138,14 +128,6 @@ made subject to such option by the copyright holder.
 		    <source-folder style="packages">
                         <label>Tests for Ant Tasks</label>
                         <location>test/unit/src</location>
-                    </source-folder>
-                    <source-folder style="packages">
-                        <label>Test Distribution Tasks</label>
-                        <location>testdist/src</location>
-                    </source-folder>
-		    <source-folder style="packages">
-                        <label>Tests for Test Distribution Tasks</label>
-                        <location>testdist/test</location>
                     </source-folder>
                     <source-file>
                         <location>build.xml</location>
@@ -204,7 +186,7 @@ made subject to such option by the copyright holder.
         <java-data xmlns="http://www.netbeans.org/ns/freeform-project-java/2">
             <compilation-unit>
                 <package-root>antsrc</package-root>
-                <classpath mode="compile">${ant.core.lib}:${nb_all}/javahelp/external/jh-2.0_05.jar</classpath>
+                <classpath mode="compile">${ant.core.lib}:${nb_all}/javahelp/external/jh-2.0_05.jar:${nb_all}/apisupport.harness/external/jsearch-2.0_05.jar</classpath>
                 <classpath mode="boot">${nbjdk.bootclasspath}</classpath>
                 <built-to>build/antclasses</built-to>
                 <built-to>nbantext.jar</built-to>
@@ -216,21 +198,6 @@ made subject to such option by the copyright holder.
                 <classpath mode="compile">../libs.junit4/external/junit-4.5.jar:netbeans/harness/modules/org-netbeans-modules-nbjunit.jar:${ant.core.lib}:nbantext.jar</classpath>
                 <classpath mode="boot">${nbjdk.bootclasspath}</classpath>
                 <built-to>build/test/unit/classes</built-to>
-                <source-level>1.5</source-level>
-            </compilation-unit>
-            <compilation-unit>
-                <package-root>testdist/src</package-root>
-                <classpath mode="compile">${ant.core.lib}</classpath>
-                <classpath mode="boot">${nbjdk.bootclasspath}</classpath>
-                <built-to>build/testdistclasses</built-to>
-                <built-to>build/testdist/tasks.jar</built-to>
-                <source-level>1.5</source-level>
-            </compilation-unit>
-            <compilation-unit>
-                <package-root>testdist/test</package-root>
-                <unit-tests/>
-                <classpath mode="compile">../libs.junit4/external/junit-4.5.jar:netbeans/harness/modules/org-netbeans-modules-nbjunit.jar:${ant.core.lib}:build/testdistclasses</classpath>
-                <classpath mode="boot">${nbjdk.bootclasspath}</classpath>
                 <source-level>1.5</source-level>
             </compilation-unit>
         </java-data>
