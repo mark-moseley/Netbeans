@@ -137,7 +137,8 @@ public class ChoiceGroupCD extends ComponentDescriptor {
                 // properties
                 createPropertiesPresenter(),
                 // code
-                createSetterPresenter(),MidpInspectorSupport.createComponentElementsCategory(NbBundle.getMessage (ChoiceGroupCD.class, "DISP_InspectorCategory_ChoiceElements"),getInspectorOrderingControllers(), ChoiceElementCD.TYPEID), //NOI18N
+                createSetterPresenter(),
+                MidpInspectorSupport.createComponentElementsCategory(NbBundle.getMessage (ChoiceGroupCD.class, "DISP_InspectorCategory_ChoiceElements"),getInspectorOrderingControllers(), ChoiceElementCD.TYPEID), //NOI18N
                 //actions
                 AddActionPresenter.create(AddActionPresenter.ADD_ACTION, 10, ChoiceElementCD.TYPEID),
                 //accept
@@ -154,6 +155,7 @@ public class ChoiceGroupCD extends ComponentDescriptor {
                         }
                     }
                 },
+                DatabindingItemAcceptPresenter.create(ItemCD.PROP_LABEL),
                 // screen
                 new ChoiceGroupDisplayPresenter()
         );
