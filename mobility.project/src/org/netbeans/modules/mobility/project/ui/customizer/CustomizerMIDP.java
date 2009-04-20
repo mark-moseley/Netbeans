@@ -301,8 +301,10 @@ final public class CustomizerMIDP extends JPanel implements CustomizerPanel, Vis
         }
     }
     
-    private void initAllProfiles(final String deviceName, final boolean reset) {
+    private void initAllProfiles(final String deviceName, boolean reset) {
         synchronized (lock) {
+            Map<String,J2MEPlatform.J2MEProfile> optProfiles =
+                    new HashMap<String,J2MEPlatform.J2MEProfile>();
             final J2MEPlatform.Device device = name2device.get(deviceName);
             final HashSet<String> profNames = new HashSet<String>();
             String defaultCfg = null, defaultProf = null;
@@ -319,6 +321,7 @@ final public class CustomizerMIDP extends JPanel implements CustomizerPanel, Vis
                     } else if (J2MEPlatform.J2MEProfile.TYPE_PROFILE.equals(prof[i].getType()) && prof[i].isDefault()) {
                         defaultProf = prof[i].toString();
                     } else if (J2MEPlatform.J2MEProfile.TYPE_OPTIONAL.equals(prof[i].getType()) && prof[i].isDefault()) {
+                        optProfiles.put( prof[i].toString() , prof[i] );
                         defaultOpts.add(prof[i].toString());
                     }
                 }
@@ -342,6 +345,7 @@ final public class CustomizerMIDP extends JPanel implements CustomizerPanel, Vis
             }
             //enable/disable profile radio boxes
             c = jPanelProfile.getComponents();
+            reset = c.length>0; //fix for 157499
             for (int i=0; i<c.length; i++) {
                 if (c[i] instanceof JRadioButton) {
                     final JRadioButton rb = (JRadioButton)c[i];
@@ -351,6 +355,9 @@ final public class CustomizerMIDP extends JPanel implements CustomizerPanel, Vis
                     } else {
                         rb.setEnabled(false);
                     }
+                    if (rb.isSelected()) {
+                        reset = false; //fix for 157499, we need to reset if profile is non sense to default
+                    } 
                 }
             }
             //correct selection of profile to default if necessary
@@ -361,14 +368,12 @@ final public class CustomizerMIDP extends JPanel implements CustomizerPanel, Vis
             final Set<String> optValues = getOptionalValues();
             jPanelOptional.setVisible(false);
             jPanelOptional.removeAll();
-            for (final JCheckBox cb : optional ) {
+            for (final JCheckBox cb : removeDuplicateOptProfiles(optProfiles) ) {
                 final String APIname = cb.getActionCommand();
                 final boolean selected = (reset ? defaultOpts : optValues).contains(APIname);
-                if (profNames.contains(APIname)) {
-                    jPanelOptional.add(cb, new GridBagConstraints(0, GridBagConstraints.RELATIVE, GridBagConstraints.REMAINDER, 1, 1.0, 0.0, GridBagConstraints.NORTHWEST, GridBagConstraints.HORIZONTAL, new Insets(0, 0, 0, 0), 0, 0));
-                    cb.setEnabled(!useDefault);
-                    cb.setSelected(selected);
-                }
+                jPanelOptional.add(cb, new GridBagConstraints(0, GridBagConstraints.RELATIVE, GridBagConstraints.REMAINDER, 1, 1.0, 0.0, GridBagConstraints.NORTHWEST, GridBagConstraints.HORIZONTAL, new Insets(0, 0, 0, 0), 0, 0));
+                cb.setEnabled(!useDefault);
+                cb.setSelected(selected);
             }
             jPanelOptional.add(new JPanel(), new GridBagConstraints(0, GridBagConstraints.RELATIVE, GridBagConstraints.REMAINDER, GridBagConstraints.REMAINDER, 1.0, 1.0, GridBagConstraints.NORTHWEST, GridBagConstraints.VERTICAL, new Insets(0, 0, 0, 0), 0, 0));
             jPanelOptional.setVisible(true);
@@ -377,6 +382,81 @@ final public class CustomizerMIDP extends JPanel implements CustomizerPanel, Vis
             saveOptionalAPIs();
             saveClassPath();
         }
+    }
+
+    /*
+     * Fix for IZ#142571 - Misleading optional packages in project properties
+     */
+    private  java.util.List<JCheckBox> removeDuplicateOptProfiles(
+            Map<String,J2MEPlatform.J2MEProfile> profiles )
+    {
+
+        java.util.List<JCheckBox> result = new ArrayList<JCheckBox>( optional.size());
+        for ( JCheckBox checkBox : optional ){
+            if (profiles.get( checkBox.getActionCommand())!= null) {
+                JCheckBox box = new JCheckBox( checkBox.getText() );
+                box.setToolTipText( checkBox.getToolTipText() );
+                box.setActionCommand(checkBox.getActionCommand());
+                box.addActionListener(this);
+                result.add( box );
+            }
+        }
+
+        java.util.Collection<J2MEPlatform.J2MEProfile> values = profiles.values();
+        Map<String,java.util.List<J2MEPlatform.J2MEProfile>> classpaths =
+                new HashMap<String,java.util.List<J2MEPlatform.J2MEProfile>>();
+        for ( J2MEPlatform.J2MEProfile profile : values){
+            String classpath = profile.getClassPath();
+            java.util.List<J2MEPlatform.J2MEProfile> list = classpaths.get(
+                    classpath);
+            if ( list == null ){
+                list = new java.util.LinkedList<J2MEPlatform.J2MEProfile>();
+                classpaths.put( classpath, list );
+            }
+            list.add(  profile );
+        }
+
+        java.util.List<JCheckBox> res = new ArrayList<JCheckBox>( result.size());
+        Map<String,JCheckBox> classPath2checkBox = new HashMap<String,JCheckBox>( );
+        StringBuilder textBuilder = new StringBuilder();
+        StringBuilder tooltipBuilder = new StringBuilder();
+        for ( JCheckBox option: result){
+            String command = option.getActionCommand();
+            J2MEPlatform.J2MEProfile profile = profiles.get( command );
+            String classPath = profile.getClassPath();
+            java.util.List<J2MEPlatform.J2MEProfile> list = classpaths.get( classPath );
+            if ( list.size() > 1 ){
+                JCheckBox checkBox = classPath2checkBox.get( classPath );
+                if ( checkBox == null ){
+                    classPath2checkBox.put( classPath, option );
+                    res.add( option );
+                }
+                else {
+                    String text = checkBox.getText();
+                    String tooltip = checkBox.getToolTipText();
+                    textBuilder.setLength(0);
+                    tooltipBuilder.setLength(0);
+
+                    if ( !text.contains( option.getText() )){
+                        textBuilder.append(text);
+                        textBuilder.append(", ");
+                        textBuilder.append(option.getText());
+                        checkBox.setText(textBuilder.toString());
+                    }
+
+                    if ( !tooltip.contains( option.getToolTipText() )){
+                        tooltipBuilder.append(tooltip);
+                        tooltipBuilder.append(", ");
+                        tooltipBuilder.append(option.getToolTipText());
+                        checkBox.setToolTipText( tooltipBuilder.toString());
+                    }
+                }
+            }
+            else {
+                res.add( option );
+            }
+        }
+        return res;
     }
         
     private Set<String> getOptionalValues() {
