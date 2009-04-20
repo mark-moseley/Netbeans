@@ -79,6 +79,8 @@ import org.netbeans.api.queries.VisibilityQuery;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.parsing.impl.Utilities;
+import org.netbeans.modules.parsing.impl.indexing.friendapi.IndexingActivityInterceptor;
+import org.netbeans.modules.parsing.impl.indexing.friendapi.IndexingController;
 import org.netbeans.modules.parsing.spi.Parser.Result;
 import org.netbeans.modules.parsing.spi.ParserResultTask;
 import org.netbeans.modules.parsing.spi.Scheduler;
@@ -99,7 +101,10 @@ import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
+import org.openide.util.Parameters;
+import org.openide.util.RequestProcessor;
 import org.openide.util.TopologicalSortException;
 
 /**
@@ -123,6 +128,7 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
         if (state == State.CREATED) {
             state = State.STARTED;
             LOGGER.fine("Initializing..."); //NOI18N
+            this.indexingActivityInterceptors = Lookup.getDefault().lookupResult(IndexingActivityInterceptor.class);
             PathRegistry.getDefault().addPathRegistryListener(this);
             FileUtil.addFileChangeListener(this);
             EditorRegistry.addPropertyChangeListener(this);
@@ -171,6 +177,11 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
     public void addIndexingJob(URL rootUrl, Collection<? extends URL> fileUrls, boolean followUpJob, boolean checkEditor, boolean wait) {
         assert rootUrl != null;
 
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine("addIndexingJob: rootUrl=" + rootUrl + ", fileUrls=" + fileUrls //NOI18N
+                + ", followUpJob=" + followUpJob + ", checkEditor=" + checkEditor + ", wait=" + wait); //NOI18N
+        }
+
         FileObject root = URLMapper.findFileObject(rootUrl);
         assert root != null : rootUrl + " can't be translated to FileObject"; //NOI18N
         if (root == null) {
@@ -215,6 +226,10 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
      * @param indexerName The name of the indexer, which indexes should be refreshed.
      */
     public void addIndexingJob(String indexerName) {
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.fine("addIndexingJob: indexerName=" + indexerName); //NOI18N
+        }
+
         CustomIndexerFactory factory = null;
         Set<String> indexerMimeTypes = new HashSet<String>();
         
@@ -236,15 +251,22 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
         if (factory == null) {
             throw new InvalidParameterException("No CustomIndexerFactory with name: '" + indexerName + "'"); //NOI18N
         } else {
-            Work w = new RefreshIndicies(indexerMimeTypes, factory, scannedRoots2Dependencies);
+            Work w = new RefreshIndices(indexerMimeTypes, factory, scannedRoots2Dependencies);
             scheduleWork(w, false);
         }
     }
 
-    public Map<URL,List<URL>> getDependencies () {
-        return new HashMap<URL, List<URL>> (this.scannedRoots2Dependencies);
+    public void refreshAll() {
+        scheduleWork(new RootsWork(scannedRoots2Dependencies, scannedBinaries), false);
     }
-    
+
+    public synchronized IndexingController getController() {
+        if (controller == null) {
+            controller = new Controller();
+        }
+        return controller;
+    }
+
     // -----------------------------------------------------------------------
     // PathRegistryListener implementation
     // -----------------------------------------------------------------------
@@ -280,6 +302,10 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
     // -----------------------------------------------------------------------
 
     public void fileFolderCreated(FileEvent fe) {
+        if (!authorize(fe)) {
+            return;
+        }
+        
         //In ideal case this should do nothing,
         //but in Netbeans newlly created folder may
         //already contain files
@@ -307,6 +333,10 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
     }
 
     public void fileChanged(FileEvent fe) {
+        if (!authorize(fe)) {
+            return;
+        }
+
         boolean processed = false;
         FileObject fo = fe.getFile();
         URL root = null;
@@ -326,13 +356,19 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
     }
 
     public void fileDeleted(FileEvent fe) {
+        if (!authorize(fe)) {
+            return;
+        }
+
         final FileObject fo = fe.getFile();
         final URL root = getOwningSourceRoot (fo);
         boolean processed = false;
 
         if (root != null &&  VisibilityQuery.getDefault().isVisible(fo) && fo.isData()
             /*&& FileUtil.getMIMEType(fo, recognizers.getMimeTypes())!=null*/) {
-            scheduleWork(new DeleteWork(root, fo), false);
+            String relativePath = FileUtil.getRelativePath(URLMapper.findFileObject(root), fo);
+            assert relativePath != null : "FileObject not under root: f=" + fo + ", root=" + root; //NOI18N
+            scheduleWork(new DeleteWork(root, relativePath), false);
             processed = true;
         }
         
@@ -343,6 +379,10 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
     }
 
     public void fileRenamed(FileRenameEvent fe) {
+        if (!authorize(fe)) {
+            return;
+        }
+        
         final FileObject newFile = fe.getFile();
         final String oldNameExt = fe.getExt().length() == 0 ? fe.getName() : fe.getName() + "." + fe.getExt(); //NOI18N
         final URL root = getOwningSourceRoot(newFile);
@@ -354,7 +394,12 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
             scheduleWork(new DeleteWork(root, oldFilePath.toString()), false);
 
             if (VisibilityQuery.getDefault().isVisible(newFile) && newFile.isData()) {
-                scheduleWork(new FileListWork(root, Collections.singleton(newFile), false, false), false);
+                // delaying of this task was just copied from the old java.source RepositoryUpdater
+                RequestProcessor.getDefault().create(new Runnable() {
+                    public void run() {
+                        scheduleWork(new FileListWork(root, Collections.singleton(newFile), false, false), false);
+                    }
+                }).schedule(FILE_LOCKS_DELAY);
             }
             processed = true;
         }
@@ -519,7 +564,8 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
     private static final Logger LOGGER = Logger.getLogger(RepositoryUpdater.class.getName());
     private static final Logger TEST_LOGGER = Logger.getLogger(RepositoryUpdater.class.getName() + ".tests"); //NOI18N
     private static final boolean PERF_TEST = Boolean.getBoolean("perf.refactoring.test"); //NOI18N
-
+    private static final boolean noRootsScan = Boolean.getBoolean("netbeans.indexing.noRootsScan"); //NOI18N
+    private static final int FILE_LOCKS_DELAY = org.openide.util.Utilities.isWindows() ? 2000 : 1000;
     private static final String PROP_LAST_SEEN_VERSION = RepositoryUpdater.class.getName() + "-last-seen-document-version"; //NOI18N
     
     private final Map<URL, List<URL>>scannedRoots2Dependencies = Collections.synchronizedMap(new HashMap<URL, List<URL>>());
@@ -530,6 +576,8 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
     private volatile Task worker;
 
     private volatile Reference<Document> activeDocumentRef = null;
+    private Lookup.Result<? extends IndexingActivityInterceptor> indexingActivityInterceptors = null;
+    private IndexingController controller;
 
     private RepositoryUpdater () {
         // no-op
@@ -559,6 +607,8 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
     }
 
     /* test */ void scheduleWork(final Work work, boolean wait) {
+        recordCaller();
+
         synchronized (this) {
             if (state == State.STARTED) {
                 state = State.INITIAL_SCAN_RUNNING;
@@ -624,6 +674,48 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
         return null;
     }
 
+    private boolean authorize(FileEvent event) {
+        Collection<? extends IndexingActivityInterceptor> interceptors = indexingActivityInterceptors.allInstances();
+        for(IndexingActivityInterceptor i : interceptors) {
+            if (i.authorizeFileSystemEvent(event) == IndexingActivityInterceptor.Authorization.IGNORE) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static final Map<List<StackTraceElement>, Long> lastRecordedStackTraces = new HashMap<List<StackTraceElement>, Long>();
+    private static long stackTraceId = 0;
+    private static void recordCaller() {
+        if (!LOGGER.isLoggable(Level.FINE)) {
+            return;
+        }
+
+        synchronized (lastRecordedStackTraces) {
+            StackTraceElement []  stackTrace = Thread.currentThread().getStackTrace();
+            List<StackTraceElement> stackTraceList = new ArrayList<StackTraceElement>(stackTrace.length);
+            for(StackTraceElement e : stackTrace) {
+                stackTraceList.add(e);
+            }
+
+            Long id = lastRecordedStackTraces.get(stackTraceList);
+            if (id == null) {
+                id = stackTraceId++;
+                lastRecordedStackTraces.put(stackTraceList, id);
+                StringBuilder sb = new StringBuilder();
+                sb.append("RepositoryUpdater caller [id=").append(id).append("] :\n"); //NOI18N
+                for(StackTraceElement e : stackTraceList) {
+                    sb.append(e.toString());
+                    sb.append("\n"); //NOI18N
+                }
+                LOGGER.fine(sb.toString());
+            } else {
+                StackTraceElement caller = Util.findCaller(stackTrace);
+                LOGGER.fine("RepositoryUpdater caller [refid=" + id + "]: " + caller); //NOI18N
+            }
+        }
+    }
+
 // we have to handle *all* mime types because of eg. tasklist indexer or goto-file indexer
 //    private static boolean isMonitoredMimeType(FileObject f, Set<String> mimeTypes) {
 //        String mimeType = FileUtil.getMIMEType(f, mimeTypes.toArray(new String[mimeTypes.size()]));
@@ -636,17 +728,25 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
 
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
         private final boolean followUpJob;
-        private final boolean checkForEditorModifications;
+        private final boolean checkEditor;
         private final CountDownLatch latch;
         private ProgressHandle progressHandle = null;
 
 //        private int allLanguagesParsersCount = -1;
 //        private int allLanguagesTasksCount = -1;
 
-        protected Work(boolean followUpJob, boolean checkForEditorModifications) {
+        protected Work(boolean followUpJob, boolean checkEditor) {
             this.followUpJob = followUpJob;
-            this.checkForEditorModifications = checkForEditorModifications;
+            this.checkEditor = checkEditor;
             this.latch = new CountDownLatch(1);
+        }
+
+        protected final boolean isFollowUpJob() {
+            return followUpJob;
+        }
+        
+        protected final boolean hasToCheckEditor() {
+            return checkEditor;
         }
 
         protected final void updateProgress(String message) {
@@ -696,12 +796,12 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
                 }
 
                 for (CustomIndexerFactory factory : customIndexerFactories) {
-                    final Context ctx = SPIAccessor.getInstance().createContext(cacheRoot, root, factory.getIndexerName(), factory.getIndexVersion(), null, followUpJob, checkForEditorModifications);
+                    final Context ctx = SPIAccessor.getInstance().createContext(cacheRoot, root, factory.getIndexerName(), factory.getIndexVersion(), null, followUpJob, checkEditor);
                     factory.filesDeleted(deleted, ctx);
                 }
 
                 for(EmbeddingIndexerFactory factory : embeddingIndexerFactories) {
-                    final Context ctx = SPIAccessor.getInstance().createContext(cacheRoot, root, factory.getIndexerName(), factory.getIndexVersion(), null, followUpJob, checkForEditorModifications);
+                    final Context ctx = SPIAccessor.getInstance().createContext(cacheRoot, root, factory.getIndexerName(), factory.getIndexVersion(), null, followUpJob, checkEditor);
                     factory.filesDeleted(deleted, ctx);
                 }
             } finally {
@@ -750,7 +850,7 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
                         }
 
                         supportsEmbeddings &= b;
-                        final Context ctx = SPIAccessor.getInstance().createContext(cacheRoot, root, factory.getIndexerName(), factory.getIndexVersion(), null, followUpJob, checkForEditorModifications);
+                        final Context ctx = SPIAccessor.getInstance().createContext(cacheRoot, root, factory.getIndexerName(), factory.getIndexVersion(), null, followUpJob, checkEditor);
                         transactionContexts.add(ctx);
 
                         // some CustomIndexers (eg. java) need to know about roots even when there
@@ -770,11 +870,11 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
                     }
 
                     if (supportsEmbeddings) {
-                        if (canBeParsed(mimeType)) {
+                        if (Util.canBeParsed(mimeType)) {
                             //Then use slow gsf like indexers
                             LOGGER.log(Level.FINE, "Using EmbeddingIndexers for {0}", indexables); //NOI18N
 
-                            final SourceIndexer si = new SourceIndexer(root, cacheRoot, followUpJob, checkForEditorModifications);
+                            final SourceIndexer si = new SourceIndexer(root, cacheRoot, followUpJob, checkEditor);
                             si.index(indexables, transactionContexts);
                         } else {
                             if (LOGGER.isLoggable(Level.FINE)) {
@@ -807,6 +907,10 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
             return false;
         }
 
+        public boolean absorb(Work newWork) {
+            return false;
+        }
+
         protected final boolean isCancelled() {
             return cancelled.get();
         }
@@ -835,48 +939,6 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
             if (isCancelledBy(newWork)) {
                 cancelled.set(true);
             }
-        }
-
-        private final boolean canBeParsed(String mimeType) {
-            if (!Util.getAllMimeTypes().contains(mimeType)) {
-                return false;
-            }
-
-            int slashIdx = mimeType.indexOf('/'); //NOI18N
-            assert slashIdx != -1 : "Invalid mimetype: '" + mimeType + "'"; //NOI18N
-
-            String type = mimeType.substring(0, slashIdx);
-            if (type.equals("application")) { //NOI18N
-                if (!mimeType.equals("application/x-httpd-eruby") && !mimeType.equals("application/xml-dtd")) { //NOI18N
-                    return false;
-                }
-            } else if (!type.equals("text")) { //NOI18N
-                return false;
-            }
-
-//            if (allLanguagesParsersCount == -1) {
-//                Collection<? extends ParserFactory> allLanguagesParsers = MimeLookup.getLookup(MimePath.EMPTY).lookupAll(ParserFactory.class);
-//                allLanguagesParsersCount = allLanguagesParsers.size();
-//            }
-//            Collection<? extends ParserFactory> parsers = MimeLookup.getLookup(mimeType).lookupAll(ParserFactory.class);
-//            if (parsers.size() - allLanguagesParsersCount > 0) {
-//                return true;
-//            }
-//
-//            // Ideally we should check that there are EmbeddingProviders registered for the
-//            // mimeType, but let's assume that if there are TaskFactories they are either
-//            // ordinary scheduler tasks or EmbeddingProviders. The former would most likely
-//            // mean that there is also a Parser and would have been caught in the previous check.
-//            if (allLanguagesTasksCount == -1) {
-//                Collection<? extends TaskFactory> allLanguagesTasks = MimeLookup.getLookup(MimePath.EMPTY).lookupAll(TaskFactory.class);
-//                allLanguagesTasksCount = allLanguagesTasks.size();
-//            }
-//            Collection<? extends TaskFactory> tasks = MimeLookup.getLookup(mimeType).lookupAll(TaskFactory.class);
-//            if (tasks.size() - allLanguagesTasksCount > 0) {
-//                return true;
-//            }
-            
-            return true;
         }
 
         private String urlForMessage(URL currentlyScannedRoot) {
@@ -931,7 +993,7 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
             files.add(f);
         }
 
-        public @Override void getDone() {
+        protected @Override void getDone() {
 //            updateProgress(root);
             final FileObject rootFo = URLMapper.findFileObject(root);
             if (rootFo != null) {
@@ -949,33 +1011,49 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
             TEST_LOGGER.log(Level.FINEST, "filelist"); //NOI18N
         }
 
+        public @Override boolean absorb(Work newWork) {
+            if (newWork instanceof FileListWork) {
+                FileListWork nflw = (FileListWork) newWork;
+                if (nflw.root.equals(root)
+                    && nflw.isFollowUpJob() == isFollowUpJob()
+                    && nflw.hasToCheckEditor() == hasToCheckEditor()
+                ) {
+                    files.addAll(nflw.files);
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.fine(this + ", root=" + root + " absorbed: " + nflw.files); //NOI18N
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
     } // End of FileListWork
 
     private static final class DeleteWork extends Work {
 
         private final URL root;
-        private final String relativePath;
+        private final Set<String> relativePaths = new HashSet<String>();
 
         public DeleteWork (URL root, String relativePath) {
             super(false, false);
             
-            assert root != null;
-            assert relativePath != null;
+            Parameters.notNull("root", root);
+            Parameters.notNull("relativePath", relativePath);
+            
             this.root = root;
-            this.relativePath = relativePath;
+            this.relativePaths.add(relativePath);
             if (LOGGER.isLoggable(Level.FINE)) {
-                LOGGER.fine("DeleteWork: root=" + root + ", file=" + relativePath);
+                LOGGER.fine("DeleteWork: root=" + root + ", files=" + relativePaths);
             }
-        }
-
-        public DeleteWork (URL root, FileObject file) {
-            this(root, FileUtil.getRelativePath(URLMapper.findFileObject(root), file));
         }
 
         public @Override void getDone() {
 //            updateProgress(root);
             try {
-                final Collection<Indexable> indexables = Collections.singleton(SPIAccessor.getInstance().create(new DeletedIndexable (root, relativePath)));
+                final Collection<Indexable> indexables = new LinkedList<Indexable>();
+                for(String path : relativePaths) {
+                    indexables.add(SPIAccessor.getInstance().create(new DeletedIndexable (root, path)));
+                }
                 delete(indexables, root);
                 TEST_LOGGER.log(Level.FINEST, "delete"); //NOI18N
             } catch (IOException ioe) {
@@ -983,16 +1061,29 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
             }
         }
 
+        public @Override boolean absorb(Work newWork) {
+            if (newWork instanceof DeleteWork) {
+                DeleteWork ndw = (DeleteWork) newWork;
+                if (ndw.root.equals(root)) {
+                    relativePaths.addAll(ndw.relativePaths);
+                    if (LOGGER.isLoggable(Level.FINE)) {
+                        LOGGER.fine(this + ", root=" + root + " absorbed: " + ndw.relativePaths); //NOI18N
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
     } // End of DeleteWork class
 
-
-    private static class RefreshIndicies extends Work {
+    private static class RefreshIndices extends Work {
 
         private final Set<String> indexerMimeTypes;
         private final CustomIndexerFactory indexerFactory;
         private final Map<URL, List<URL>> scannedRoots2Dependencies;
 
-        public RefreshIndicies(Set<String> indexerMimeTypes, CustomIndexerFactory indexerFactory, Map<URL, List<URL>> scannedRoots2Depencencies) {
+        public RefreshIndices(Set<String> indexerMimeTypes, CustomIndexerFactory indexerFactory, Map<URL, List<URL>> scannedRoots2Depencencies) {
             super(false, false);
             this.indexerMimeTypes = indexerMimeTypes;
             this.indexerFactory = indexerFactory;
@@ -1052,7 +1143,7 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
                 }
             }
         }
-    } // End of RefreshIndicies class
+    } // End of RefreshIndices class
 
     private static class RootsWork extends Work {
 
@@ -1204,8 +1295,10 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
                 
                 final long tmStart = System.currentTimeMillis();
                 try {
-                    updateProgress(binary);
-                    scanBinary (binary);
+                    if (!noRootsScan) {
+                        updateProgress(binary);
+                        scanBinary (binary);
+                    }
                     ctx.scannedBinaries.add(binary);
                 } catch (IOException ioe) {
                     LOGGER.log(Level.WARNING, null, ioe);
@@ -1271,8 +1364,10 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
 
                 final long tmStart = System.currentTimeMillis();
                 try {
-                    updateProgress(source);
-                    scanSource (source);
+                    if (!noRootsScan) {
+                        updateProgress(source);
+                        scanSource (source);
+                    }
                     ctx.scannedRoots.add(source);
                 } catch (IOException ioe) {
                     LOGGER.log(Level.WARNING, null, ioe);
@@ -1325,16 +1420,42 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
             synchronized (todo) {
                 assert work != null;
                 if (!allCancelled) {
-                    if (wait && Utilities.holdsParserLock()) {
-                        enforceWork = true;
-                    } else {
+                      if (wait && Utilities.holdsParserLock()) {
+                        if (protectedMode == 0) {
+                            enforceWork = true;
+                        } else {
+//                            LOGGER.log(Level.FINE, "Won't enforce {0} when in protected mode", work); //NOI18N
+//                            wait = false;
+                            // nobody should actually call schedule(work, true) from
+                            // within a UserTask, SchedulerTask or Indexer
+                            throw new IllegalStateException("Won't enforce " + work + " when in protected mode"); //NOI18N
+                        }
+                    }
+
+                    if (!enforceWork) {
                         if (workInProgress != null) {
                             workInProgress.cancelBy(work);
                         }
 
-                        LOGGER.log(Level.FINE, "Scheduling {0}", work);
-                        todo.add(work);
-                        if (!scheduled) {
+                        // coalesce ordinary jobs
+                        boolean absorbed = false;
+                        if (!wait) {
+                            for(Work w : todo) {
+                                if (w.absorb(work)) {
+                                    absorbed = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!absorbed) {
+                            LOGGER.log(Level.FINE, "Scheduling {0}", work); //NOI18N
+                            todo.add(work);
+                        } else {
+                            LOGGER.log(Level.FINE, "Work absorbed {0}", work); //NOI18N
+                        }
+                        
+                        if (!scheduled && protectedMode == 0) {
                             scheduled = true;
                             Utilities.scheduleSpecialTask(this);
                         }
@@ -1381,7 +1502,66 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
 
         public boolean isWorking() {
             synchronized (todo) {
-                return scheduled;
+                return scheduled || protectedMode > 0;
+            }
+        }
+
+        public void enterProtectedMode() {
+            synchronized (todo) {
+                protectedMode++;
+                LOGGER.log(Level.FINE, "Entering protected mode: {0}", protectedMode); //NOI18N
+            }
+        }
+
+        public void exitProtectedMode(Runnable followupTask) {
+            synchronized (todo) {
+                if (protectedMode <= 0) {
+                    throw new IllegalStateException("Calling exitProtectedMode without enterProtectedMode"); //NOI18N
+                }
+
+                // stash the followup task, we will run all of them when exiting the protected mode
+                if (followupTask != null) {
+                    if (followupTasks == null) {
+                        followupTasks = new LinkedList<Runnable>();
+                    }
+                    followupTasks.add(followupTask);
+                }
+
+                protectedMode--;
+                LOGGER.log(Level.FINE, "Exiting protected mode: {0}", protectedMode); //NOI18N
+
+                if (protectedMode == 0) {
+                    // in normal mode again, restart all delayed jobs
+                    final List<Runnable> tasks = followupTasks;
+
+                    // delaying of these tasks was just copied from the old java.source RepositoryUpdater
+                    RequestProcessor.getDefault().create(new Runnable() {
+                        public void run() {
+                            schedule(new Work(false, false) {
+                                protected @Override void getDone() {
+                                    if (tasks != null) {
+                                        for(Runnable task : tasks) {
+                                            try {
+                                                task.run();
+                                            } catch (ThreadDeath td) {
+                                                throw td;
+                                            } catch (Throwable t) {
+                                                LOGGER.log(Level.WARNING, null, t);
+                                            }
+                                        }
+                                    }
+                                }
+                            }, false);
+                        }
+                    }).schedule(FILE_LOCKS_DELAY);
+                    LOGGER.log(Level.FINE, "Protected mode exited, scheduling postprocess tasks: {0}", tasks); //NOI18N
+                }
+            }
+        }
+
+        public boolean isInProtectedMode() {
+            synchronized (todo) {
+                return protectedMode > 0;
             }
         }
 
@@ -1444,6 +1624,8 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
         private volatile Work workInProgress = null;
         private boolean scheduled = false;
         private boolean allCancelled = false;
+        private int protectedMode = 0;
+        private List<Runnable> followupTasks = null;
 
         private void _run() {
             ProgressHandle progressHandle = ProgressHandleFactory.createHandle(NbBundle.getMessage(RepositoryUpdater.class, "MSG_BackgroundCompileStart")); //NOI18N
@@ -1470,7 +1652,7 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
         private Work getWork () {
             synchronized (todo) {
                 Work w;
-                if (todo.size() > 0) {
+                if (protectedMode == 0 && todo.size() > 0) {
                     w = todo.remove(0);
                 } else {
                     w = null;
@@ -1518,6 +1700,35 @@ public final class RepositoryUpdater implements PathRegistryListener, FileChange
             cycleDetector = new Stack<URL>();
         }
     } // End of DependenciesContext class
+
+    private final class Controller extends IndexingController {
+
+        public Controller() {
+            super();
+            RepositoryUpdater.this.start(false);
+        }
+        
+        @Override
+        public void enterProtectedMode() {
+            getWorker().enterProtectedMode();
+        }
+
+        @Override
+        public void exitProtectedMode(Runnable followUpTask) {
+            getWorker().exitProtectedMode(followUpTask);
+        }
+
+        @Override
+        public boolean isInProtectedMode() {
+            return getWorker().isInProtectedMode();
+        }
+
+        @Override
+        public Map<URL, List<URL>> getRootDependencies() {
+            return new HashMap<URL, List<URL>>(RepositoryUpdater.this.scannedRoots2Dependencies);
+        }
+
+    } // End of Controller class
 
     // -----------------------------------------------------------------------
     // Methods for tests
