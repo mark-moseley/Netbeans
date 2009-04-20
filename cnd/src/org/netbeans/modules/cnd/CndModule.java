@@ -42,20 +42,11 @@
 package org.netbeans.modules.cnd;
 
 import java.io.File;
-import java.io.IOException;
-import org.netbeans.editor.Settings;
-import org.netbeans.modules.cnd.builds.OutputWindowOutputStream;
-import org.netbeans.modules.cnd.editor.cplusplus.CCKit;
-import org.netbeans.modules.cnd.editor.cplusplus.CCSettingsInitializer;
-import org.netbeans.modules.cnd.editor.cplusplus.CKit;
-import org.netbeans.modules.cnd.editor.fortran.FKit;
-import org.netbeans.modules.cnd.editor.fortran.FSettingsInitializer;
-import org.netbeans.modules.cnd.editor.makefile.MakefileKit;
-import org.netbeans.modules.cnd.editor.makefile.MakefileSettingsInitializer;
-import org.netbeans.modules.cnd.editor.shell.ShellKit;
-import org.netbeans.modules.cnd.editor.shell.ShellSettingsInitializer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.openide.ErrorManager;
-import org.openide.modules.InstalledFileLocator;
 import org.openide.modules.ModuleInstall;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.util.Utilities;
@@ -65,46 +56,72 @@ public class CndModule extends ModuleInstall {
     // Used in other CND sources...
     public static final ErrorManager err = ErrorManager.getDefault().getInstance("org.netbeans.modules.cnd"); // NOI18N
 
-    @Override public void uninstalled() {
-        OutputWindowOutputStream.detachAllAnnotations();
-
-        // Print Options
-//        PrintSettings ps = (PrintSettings) PrintSettings.findObject(PrintSettings.class, true);
-//	ps.removeOption((SystemOption)SystemOption.findObject(FPrintOptions.class, true));
-//      ps.removeOption((SystemOption)SystemOption.findObject(CCPrintOptions.class, true));
-//	ps.removeOption((SystemOption)SystemOption.findObject(MakefilePrintOptions.class, true));
-//	ps.removeOption((SystemOption)SystemOption.findObject(ShellPrintOptions.class, true));
-    }
+    private static final Logger log = Logger.getLogger("cnd.execution.logger"); // NOI18N
 
     /** Module is being opened (NetBeans startup, or enable-toggled) */
     @Override public void restored() {
-
-	// Settings for editor kits
-        Settings.addInitializer(new CCSettingsInitializer(CCKit.class));
-	Settings.addInitializer(new CCSettingsInitializer(CKit.class));
-	Settings.addInitializer(new FSettingsInitializer(FKit.class));
-	Settings.addInitializer(new MakefileSettingsInitializer(MakefileKit.class));
-	Settings.addInitializer(new ShellSettingsInitializer(ShellKit.class));
-	
-//	PrintSettings ps = (PrintSettings) PrintSettings.findObject(PrintSettings.class, true);
-//	ps.addOption ((SystemOption) SystemOption.findObject(FPrintOptions.class, true));
-//	ps.addOption ((SystemOption) SystemOption.findObject(CCPrintOptions.class, true));
-//	ps.addOption ((SystemOption) SystemOption.findObject(MakefilePrintOptions.class, true));
-//	ps.addOption ((SystemOption) SystemOption.findObject(ShellPrintOptions.class, true));
         
         if (Utilities.isUnix()) {
-            setExecutionPermission("bin/dorun.sh"); // NOI18N
-            setExecutionPermission("bin/stdouterr.sh"); // NOI18N
+            // TODO: why not set permissions for bin/* ?
+            List<String> files = new ArrayList<String>();
+            addFile(files, "bin/dorun.sh"); // NOI18N
+            //addFile(files, "bin/stdouterr.sh"); // NOI18N
+            if (Utilities.getOperatingSystem() == Utilities.OS_SOLARIS) {
+                if (System.getProperty("os.arch").equals("sparc")) { // NOI18N
+                    //addFile(files, "bin/GdbHelper-SunOS-sparc.so"); // NOI18N
+                    addFile(files, "bin/unbuffer-SunOS-sparc.so"); // NOI18N
+                    addFile(files, "bin/unbuffer-SunOS-sparc_64.so"); // NOI18N
+                } else {
+                    //addFile(files, "bin/GdbHelper-SunOS-x86.so"); // NOI18N
+                    addFile(files, "bin/unbuffer-SunOS-x86.so"); // NOI18N
+                    addFile(files, "bin/unbuffer-SunOS-x86_64.so"); // NOI18N
+                }
+            } else if (Utilities.getOperatingSystem() == Utilities.OS_LINUX) {
+                //addFile(files, "bin/GdbHelper-Linux-x86.so"); // NOI18N
+                addFile(files, "bin/unbuffer-Linux-x86.so"); // NOI18N
+                addFile(files, "bin/unbuffer-Linux-x86_64.so"); // NOI18N
+            } else if (Utilities.isMac()) {
+                //addFile(files, "bin/GdbHelper-Mac_OS_X-x86.dylib"); // NOI18N
+                addFile(files, "bin/unbuffer-Mac_OS_X-x86.dylib"); // NOI18N
+                addFile(files, "bin/unbuffer-Mac_OS_X-x86_64.dylib"); // NOI18N
+            }
+            chmod755(files, log);
         }
     }
-    
-    private void setExecutionPermission(String relpath) {
+
+    private static void addFile(List<String> files, String relpath) {
         File file = InstalledFileLocator.getDefault().locate(relpath, null, false);
-        if (file.exists()) {
-            ProcessBuilder pb = new ProcessBuilder("/bin/chmod", "755", file.getAbsolutePath()); // NOI18N
+        if (file != null && file.exists()) {
+            files.add(file.getAbsolutePath());
+        }
+    }
+
+    public static void chmod755(List<String> files, Logger log) {
+        if (files.isEmpty()) {
+            return;
+        }
+        
+        // Find chmod
+        File chmod = new File("/bin/chmod"); // NOI18N
+
+        if (!chmod.isFile()) {
+            chmod = new File("/usr/bin/chmod"); // NOI18N
+        }
+        
+        if (chmod.isFile()) {
+            List<String> commands = new ArrayList<String>();
+            commands.add(chmod.getAbsolutePath());
+            commands.add("755"); // NOI18N
+            commands.addAll(files);
+            ProcessBuilder pb = new ProcessBuilder(commands);
             try {
-                pb.start();
-            } catch (IOException ex) {
+                Process process = pb.start();
+                // We need to wait for the process completion
+                if (process.waitFor() != 0) {
+                    log.log(Level.WARNING, "chmod failed: " + commands); // NOI18N
+                }
+            } catch (Exception ex) {
+                log.log(Level.WARNING, "chmod failed: " + commands, ex); // NOI18N
             }
         }
     }
