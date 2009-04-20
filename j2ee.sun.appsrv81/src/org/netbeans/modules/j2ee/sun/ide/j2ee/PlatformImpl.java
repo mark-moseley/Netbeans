@@ -50,20 +50,29 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import org.netbeans.api.java.platform.JavaPlatform;
+import org.netbeans.api.java.platform.JavaPlatformManager;
+import org.netbeans.api.java.platform.Specification;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
 import org.netbeans.modules.j2ee.deployment.common.api.J2eeLibraryTypeProvider;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.J2eePlatformImpl;
+import org.netbeans.modules.j2ee.deployment.plugins.spi.support.LookupProviderSupport;
+import org.netbeans.modules.j2ee.sun.api.Asenv;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
+import org.openide.filesystems.FileObject;
+import org.openide.util.ImageUtilities;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
 // TODO finish migration towards being an abstract class
+import org.openide.util.lookup.Lookups;
 /**
  */
 public class PlatformImpl extends J2eePlatformImpl {
@@ -105,6 +114,7 @@ public class PlatformImpl extends J2eePlatformImpl {
     private static final String JAXWSA_RI_JAR = "lib/jaxwsa-ri.jar"; //NOI18N
     
     // wsit jars
+    private static final String WEBSERVICES_API_JAR = "lib/endorsed/webservices-api.jar"; //NOI18N
     private static final String WEBSERVICES_RT_JAR = "lib/webservices-rt.jar"; //NOI18N
     private static final String WEBSERVICES_TOOLS_JAR = "lib/webservices-tools.jar"; //NOI18N
     
@@ -242,6 +252,7 @@ public class PlatformImpl extends J2eePlatformImpl {
                 // WSIT - just add additional libraries to the above
                 lib = lp.createLibrary();
                 lib.setName(NbBundle.getMessage(PlatformImpl.class, "wsit")); // NOI18N
+                l.add(fileToUrl(new File(root, WEBSERVICES_API_JAR)));
                 l.add(fileToUrl(new File(root, WEBSERVICES_TOOLS_JAR)));
                 l.add(fileToUrl(new File(root, WEBSERVICES_RT_JAR)));
 
@@ -367,7 +378,7 @@ public class PlatformImpl extends J2eePlatformImpl {
      * @return platform's icon.
      */
     public Image getIcon() {
-        return Utilities.loadImage("org/netbeans/modules/j2ee/sun/ide/resources/ServerInstanceIcon.png"); // NOI18N;
+        return ImageUtilities.loadImage("org/netbeans/modules/j2ee/sun/ide/resources/ServerInstanceIcon.png"); // NOI18N;
     }
     
     /**
@@ -397,6 +408,7 @@ public class PlatformImpl extends J2eePlatformImpl {
                     new File(root, "lib/jaxrpc-impl.jar"),      //NOI18N
                     new File(root, "lib/endorsed/jaxp-api.jar"),//NOI18N
                     new File(root, APPSERV_WS_JAR),        // possibly for AS 9
+                    new File(root, WEBSERVICES_API_JAR),   // possibly for AS 9.1
                     new File(root, WEBSERVICES_TOOLS_JAR), // possibly for AS 9.1
                     new File(root, WEBSERVICES_RT_JAR),    // possibly for AS 9.1
                 };
@@ -429,8 +441,9 @@ public class PlatformImpl extends J2eePlatformImpl {
                     new File(root, "lib/activation.jar"),       // NOI18N
                     
                     // GF V2 -- not present in other environments
-                    new File(root, "lib/webservices-rt.jar"),       //NOI18N
-                    new File(root, "lib/webservices-tools.jar"),       //NOI18N
+                    new File(root, WEBSERVICES_API_JAR),       //NOI18N
+                    new File(root, WEBSERVICES_RT_JAR),       //NOI18N
+                    new File(root, WEBSERVICES_TOOLS_JAR),       //NOI18N
                     
                     // GF V1U1 and V2 -- not present in 8.2
                     new File(root, "lib/appserv-ws.jar"),       //NOI18N
@@ -501,18 +514,34 @@ public class PlatformImpl extends J2eePlatformImpl {
             File jwsdpJar = new File(root, JWSDP_JAR);  //NOI18N
             File wsToolsJar = new File(root, WEBSERVICES_TOOLS_JAR);  //NOI18N
 
+            File wsEndorsedApiJar = new File(root, WEBSERVICES_API_JAR);  //NOI18N
+
             if (wsToolsJar.exists()) {          // WSIT installed on top
                 if (isValidPlatformRoot(root).equals("")) {
-                    return new File[] {
-                        new File(root, WEBSERVICES_TOOLS_JAR),     // NOI18N
-                        new File(root, WEBSERVICES_RT_JAR),           // NOI18N
-                        new File(root, TOOLS_JAR),      //NOI18N
-                        new File(root, JSTL_JAR),       //NOI18N
-                        new File(root, JAVA_EE_JAR),    //NOI18N
-                        new File(root, APPSERV_WS_JAR), //NOI18N
-                        new File(root, MAIL_JAR),       //NOI18N
-                        new File(root, ACTIVATION_JAR)  //NOI18N
-                    };
+                    if (wsEndorsedApiJar.exists()) {
+                        return new File[] {
+                            new File(root, WEBSERVICES_API_JAR),     // NOI18N
+                            new File(root, WEBSERVICES_TOOLS_JAR),     // NOI18N
+                            new File(root, WEBSERVICES_RT_JAR),           // NOI18N
+                            new File(root, TOOLS_JAR),      //NOI18N
+                            new File(root, JSTL_JAR),       //NOI18N
+                            new File(root, JAVA_EE_JAR),    //NOI18N
+                            new File(root, APPSERV_WS_JAR), //NOI18N
+                            new File(root, MAIL_JAR),       //NOI18N
+                            new File(root, ACTIVATION_JAR)  //NOI18N
+                        };
+                    } else {
+                        return new File[] {
+                            new File(root, WEBSERVICES_TOOLS_JAR),     // NOI18N
+                            new File(root, WEBSERVICES_RT_JAR),           // NOI18N
+                            new File(root, TOOLS_JAR),      //NOI18N
+                            new File(root, JSTL_JAR),       //NOI18N
+                            new File(root, JAVA_EE_JAR),    //NOI18N
+                            new File(root, APPSERV_WS_JAR), //NOI18N
+                            new File(root, MAIL_JAR),       //NOI18N
+                            new File(root, ACTIVATION_JAR)  //NOI18N
+                        };
+                    }
                 }
             } else if (jwsdpJar.exists()) { // JWSDP installed on top
                 if (isValidPlatformRoot (root).equals("")) {
@@ -641,7 +670,26 @@ public class PlatformImpl extends J2eePlatformImpl {
     }
     
     public JavaPlatform getJavaPlatform() {
-        // TODO
+        if (dmProps.getSunDeploymentManager().isLocal()) {
+            Asenv envData = new Asenv(root);
+            File jdkPath = new File(envData.get(Asenv.AS_JAVA));
+            FileObject currHome = FileUtil.toFileObject(FileUtil.normalizeFile(jdkPath));
+            JavaPlatformManager jpm = JavaPlatformManager.getDefault();
+
+            if (currHome != null) {
+                JavaPlatform[] installedPlatforms = jpm.getPlatforms(null, new Specification("J2SE", null)); // NOI18N
+                for (int i = 0; i < installedPlatforms.length; i++) {
+                    JavaPlatform platform = installedPlatforms[i];
+                    Iterator itr = platform.getInstallFolders().iterator();
+                    while (itr.hasNext()) {
+                        FileObject propName = (FileObject) itr.next();
+                        if (propName.equals(currHome)) {
+                            return platform;
+                        }
+                    }
+                }
+            }
+        }
         return null;
     }
     
@@ -682,10 +730,43 @@ public class PlatformImpl extends J2eePlatformImpl {
                 sb.append(" -Djava.util.logging.manager=com.sun.enterprise.server.logging.ACCLogManager"); // NOI18N
                 return sb.toString();
             }
+            if (J2eePlatform.TOOL_PROP_CLIENT_JAR_LOCATION.equals(propertyName)) {
+                File exFile = new File(root, "lib/javaee.jar"); // NOI18N
+                FileObject location = FileUtil.toFileObject(FileUtil.normalizeFile(new File(dmProps.getLocation())));
+                if (location == null) {
+                    return null;
+                }
+                FileObject domain = location.getFileObject(
+                        dmProps.getInstanceProperties().getProperty(DeploymentManagerProperties.DOMAIN_ATTR));
+                if (domain == null) {
+                    return null;
+                }
+
+                if (exFile.exists()) {
+                    FileObject copyLocation = domain.getFileObject("generated/xml/j2ee-modules"); // NOI18N
+                    if (copyLocation != null) {
+                        return FileUtil.toFile(copyLocation).getAbsolutePath();
+                    }
+                } else {
+                    FileObject copyLocation = domain.getFileObject("applications/j2ee-modules"); // NOI18N
+                    if (copyLocation != null) {
+                        return FileUtil.toFile(copyLocation).getAbsolutePath();
+                    }
+                }
+                return null;
+            }
             if ("j2ee.appclient.args".equals(propertyName)) { // NOI18N
                 return "-configxml " + quotedString(new File(dmProps.getLocation(), dmProps.getDomainName() + "/config/sun-acc.xml").getAbsolutePath()); // NOI18N
             }
         }
         return null;
     }
+    
+    public Lookup getLookup() {
+        Lookup baseLookup = Lookups.fixed(root);
+        return LookupProviderSupport.createCompositeLookup(baseLookup, "J2EE/DeploymentPlugins/J2EE/Lookup"); //NOI18N
+//        WSStackSPI metroStack = new GlassfishJaxWsStack(root);
+//        return Lookups.fixed(WSStackFactory.createWSStack(metroStack));
+    }
+    
 }
