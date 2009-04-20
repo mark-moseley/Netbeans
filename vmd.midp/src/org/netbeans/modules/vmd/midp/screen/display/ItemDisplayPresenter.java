@@ -60,18 +60,21 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
+import org.netbeans.modules.vmd.api.model.PropertyValue;
+import org.netbeans.modules.vmd.midp.components.databinding.MidpDatabindingSupport;
 
 /**
  * @author David Kaspar
  */
 public class ItemDisplayPresenter extends ScreenDisplayPresenter {
-    
+
     private JPanel panel;
-    private JLabel label;
+    private WrappedLabel label;
     private JComponent contentComponent;
-    
+
     public ItemDisplayPresenter() {
         panel = new JPanel() {
+
             @Override
             public JPopupMenu getComponentPopupMenu() {
                 return Utilities.actionsToPopup(ActionsSupport.createActionsArray(getRelatedComponent()), this);
@@ -79,11 +82,20 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
         };
         panel.setLayout(new GridBagLayout());
         panel.setOpaque(false);
-        
-        label = new JLabel();
+
+        // Fix for #79636 - Screen designer tab traversal
+        ScreenSupport.addKeyboardSupport(this);
+
+        label = new WrappedLabel() {
+
+            @Override
+            protected int getLabelWidth() {
+                return (int) panel.getSize().getWidth();
+            }
+        };
         Font bold = label.getFont().deriveFont(Font.BOLD);
         label.setFont(bold);
-        
+
         GridBagConstraints constraints = new GridBagConstraints();
         constraints.weightx = 1.0;
         constraints.weighty = 0.0;
@@ -94,23 +106,23 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
         constraints.anchor = GridBagConstraints.NORTH;
         panel.add(label, constraints);
     }
-    
+
     public boolean isTopLevelDisplay() {
         return false;
     }
-    
+
     public Collection<DesignComponent> getChildren() {
         return Collections.emptyList();
     }
-    
+
     public JComponent getView() {
         return panel;
     }
-    
+
     protected final JPanel getViewPanel() {
         return panel;
     }
-    
+
     protected final void setContentComponent(JComponent contentComponent) {
         panel.setVisible(false);
         if (this.contentComponent != null) {
@@ -126,7 +138,7 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
             constraints.gridx = GridBagConstraints.REMAINDER;
             constraints.gridy = GridBagConstraints.RELATIVE;
             constraints.anchor = GridBagConstraints.NORTHEAST;
-            
+
             panel.add(contentComponent, constraints);
         }
         panel.setVisible(true);
@@ -134,37 +146,52 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
         panel.validate();
         panel.repaint();
     }
-    
+
     public void reload(ScreenDeviceInfo deviceInfo) {
-        String text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(ItemCD.PROP_LABEL));
+        String text = null;
+        if (MidpDatabindingSupport.getConnector(getComponent(), ItemCD.PROP_LABEL) != null) {
+            text = java.util.ResourceBundle.getBundle("org/netbeans/modules/vmd/midp/screen/display/Bundle").getString("LBL_Databinding"); //NOI18N 
+        } else {
+            text = text = MidpValueSupport.getHumanReadableString(getComponent().readProperty(ItemCD.PROP_LABEL));
+        }
         label.setText(text);
+
+        int width = -1;
+        if (getComponent().readProperty(ItemCD.PROP_PREFERRED_WIDTH).getKind() == PropertyValue.Kind.VALUE) {
+            width = Integer.parseInt(getComponent().readProperty(ItemCD.PROP_PREFERRED_WIDTH).getPrimitiveValue().toString());
+        }
+        label.setPreferedWidth(width);
+
+        label.repaint();
+        label.revalidate();
     }
-    
+
     public Shape getSelectionShape() {
         return new Rectangle(panel.getSize());
     }
-    
+
     public Collection<ScreenPropertyDescriptor> getPropertyDescriptors() {
         return Collections.singleton(
-                new ScreenPropertyDescriptor(getComponent(), label, new ScreenStringPropertyEditor(ItemCD.PROP_LABEL))
-                );
+                new ScreenPropertyDescriptor(getComponent(), label, new ScreenStringPropertyEditor(ItemCD.PROP_LABEL)));
     }
-    
+
     @Override
     public boolean isDraggable() {
         return true;
     }
-    
+
     @Override
     public AcceptSuggestion createSuggestion(Transferable transferable) {
-        if (!(transferable.isDataFlavorSupported(ScreenDisplayDataFlavorSupport.HORIZONTAL_POSITION_DATA_FLAVOR)))
+        if (!(transferable.isDataFlavorSupported(ScreenDisplayDataFlavorSupport.HORIZONTAL_POSITION_DATA_FLAVOR))) {
             return null;
-        if (!(transferable.isDataFlavorSupported(ScreenDisplayDataFlavorSupport.VERTICAL_POSITION_DATA_FLAVOR)))
+        }
+        if (!(transferable.isDataFlavorSupported(ScreenDisplayDataFlavorSupport.VERTICAL_POSITION_DATA_FLAVOR))) {
             return null;
-        
+        }
+
         ScreenDeviceInfo.Edge horizontalPosition = null;
         ScreenDeviceInfo.Edge verticalPosition = null;
-        
+
         try {
             horizontalPosition = (ScreenDeviceInfo.Edge) transferable.getTransferData(ScreenDisplayDataFlavorSupport.HORIZONTAL_POSITION_DATA_FLAVOR);
             verticalPosition = (ScreenDeviceInfo.Edge) transferable.getTransferData(ScreenDisplayDataFlavorSupport.VERTICAL_POSITION_DATA_FLAVOR);
@@ -175,5 +202,4 @@ public class ItemDisplayPresenter extends ScreenDisplayPresenter {
         }
         return new ScreenMoveArrayAcceptSuggestion(horizontalPosition, verticalPosition);
     }
-    
 }
