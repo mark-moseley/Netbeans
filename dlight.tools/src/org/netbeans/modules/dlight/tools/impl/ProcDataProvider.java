@@ -36,12 +36,11 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.dlight.tools.impl;
 
+import org.netbeans.modules.dlight.api.execution.DLightTargetChangeEvent;
 import org.netbeans.modules.dlight.tools.ProcDataProviderConfiguration;
 import java.io.IOException;
-import java.net.ConnectException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -52,18 +51,16 @@ import org.netbeans.api.extexecution.ExecutionDescriptor.InputProcessorFactory;
 import org.netbeans.api.extexecution.ExecutionService;
 import org.netbeans.modules.dlight.api.execution.AttachableTarget;
 import org.netbeans.modules.dlight.api.execution.DLightTarget;
-import org.netbeans.modules.dlight.api.execution.DLightTarget.State;
 import org.netbeans.modules.dlight.api.execution.ValidationListener;
 import org.netbeans.modules.dlight.api.execution.ValidationStatus;
 import org.netbeans.modules.dlight.api.storage.DataRow;
 import org.netbeans.modules.dlight.api.storage.DataTableMetadata;
-import org.netbeans.modules.dlight.management.api.DLightManager;
 import org.netbeans.modules.dlight.spi.indicator.IndicatorDataProvider;
 import org.netbeans.modules.dlight.util.DLightLogger;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.netbeans.modules.nativeexecution.api.HostInfo;
+import org.netbeans.modules.nativeexecution.api.HostInfo.OSFamily;
 import org.netbeans.modules.nativeexecution.api.NativeProcessBuilder;
-import org.netbeans.modules.nativeexecution.api.util.AsynchronousAction;
-import org.netbeans.modules.nativeexecution.api.util.ConnectionManager;
 import org.netbeans.modules.nativeexecution.api.util.HostInfoUtils;
 import org.openide.util.NbBundle;
 import org.openide.windows.InputOutput;
@@ -96,16 +93,16 @@ public class ProcDataProvider extends IndicatorDataProvider<ProcDataProviderConf
         return NAME;
     }
 
-    public void targetStateChanged(DLightTarget target, State oldState, State newState) {
-        switch (newState) {
+    public void targetStateChanged(DLightTargetChangeEvent event) {
+        switch (event.state) {
             case RUNNING:
-                targetStarted(target);
+                targetStarted(event.target);
                 break;
             case DONE:
             case FAILED:
             case STOPPED:
             case TERMINATED:
-                targetFinished(target);
+                targetFinished(event.target);
                 break;
         }
     }
@@ -129,28 +126,21 @@ public class ProcDataProvider extends IndicatorDataProvider<ProcDataProviderConf
 
     private ValidationStatus doValidation(DLightTarget target) {
         ExecutionEnvironment env = target.getExecEnv();
-        try {
-            String os = HostInfoUtils.getOS(env);
-            if (!"Linux".equals(os) && !"SunOS".equals(os)) { // NOI18N
-                return ValidationStatus.invalidStatus(getMessage("ValidationStatus.OSNotSupported")); // NOI18N
-            }
-            try {
-                if (!HostInfoUtils.fileExists(env, "/proc")) { // NOI18N
-                    return ValidationStatus.invalidStatus(getMessage("ValidationStatus.ProcNotFound")); // NOI18N
-                }
-            } catch (IOException ex) {
-                return ValidationStatus.invalidStatus(ex.getMessage());
-            }
-            return ValidationStatus.validStatus();
-        } catch (ConnectException ex) {
-            AsynchronousAction connectAction = ConnectionManager.getInstance().getConnectToAction(env, new Runnable() {
-                public void run() {
-                    DLightManager.getDefault().revalidateSessions();
-                }
-            });
-            return ValidationStatus.unknownStatus(
-                    getMessage("ValidationStatus.HostNotConnected"), connectAction); // NOI18N
+        OSFamily osFamily = HostInfoUtils.getHostInfo(env, true).getOSFamily();
+
+        if (osFamily != OSFamily.LINUX && osFamily != OSFamily.SUNOS) {
+            return ValidationStatus.invalidStatus(getMessage("ValidationStatus.OSNotSupported")); // NOI18N
         }
+
+        try {
+            if (!HostInfoUtils.fileExists(env, "/proc")) { // NOI18N
+                return ValidationStatus.invalidStatus(getMessage("ValidationStatus.ProcNotFound")); // NOI18N
+            }
+        } catch (IOException ex) {
+            return ValidationStatus.invalidStatus(ex.getMessage());
+        }
+
+        return ValidationStatus.validStatus();
     }
 
     /*
@@ -194,29 +184,28 @@ public class ProcDataProvider extends IndicatorDataProvider<ProcDataProviderConf
      * Synchronization protects procReaderTask.
      */
     private synchronized void targetStarted(DLightTarget target) {
-        try {
-            ExecutionEnvironment env = target.getExecEnv();
-            NativeProcessBuilder npb = new NativeProcessBuilder(env, HostInfoUtils.getShell(env));
-            ExecutionDescriptor descr = new ExecutionDescriptor();
-            descr = descr.inputOutput(InputOutput.NULL);
-            int pid = ((AttachableTarget)target).getPID();
-            String os = HostInfoUtils.getOS(env);
-            Engine engine;
-            if ("Linux".equals(os)) {
+        ExecutionEnvironment env = target.getExecEnv();
+        HostInfo hostInfo = HostInfoUtils.getHostInfo(env, true);
+        NativeProcessBuilder npb = new NativeProcessBuilder(env, hostInfo.getShell());
+        ExecutionDescriptor descr = new ExecutionDescriptor();
+        descr = descr.inputOutput(InputOutput.NULL);
+        int pid = ((AttachableTarget) target).getPID();
+        Engine engine;
+        switch (hostInfo.getOSFamily()) {
+            case LINUX:
                 engine = new ProcDataProviderLinux(this);
-            } else if ("SunOS".equals(os)) {
+                break;
+            case SUNOS:
                 engine = new ProcDataProviderSolaris(this, env);
-            } else {
+                break;
+            default:
                 DLightLogger.instance.severe("Called ProcDataProvider.targetStarted() on unsupported OS"); // NOI18N
                 return;
-            }
-            npb = npb.setArguments("-c", engine.getCommand(pid)); // NOI18N
-            descr = descr.outProcessorFactory(engine);
-            ExecutionService service = ExecutionService.newService(npb, descr, "procreader"); // NOI18N
-            procReaderTask = service.run();
-        } catch (ConnectException ex) {
-            DLightLogger.instance.severe(ex.getMessage());
         }
+        npb = npb.setArguments("-c", engine.getCommand(pid)); // NOI18N
+        descr = descr.outProcessorFactory(engine);
+        ExecutionService service = ExecutionService.newService(npb, descr, "procreader"); // NOI18N
+        procReaderTask = service.run();
     }
 
     /*
@@ -235,6 +224,7 @@ public class ProcDataProvider extends IndicatorDataProvider<ProcDataProviderConf
      * ProcDataProvider backend.
      */
     /*package*/ static interface Engine extends InputProcessorFactory {
+
         String getCommand(int pid);
     }
 
@@ -246,7 +236,6 @@ public class ProcDataProvider extends IndicatorDataProvider<ProcDataProviderConf
     /*package*/ void notifyIndicators(DataRow row) {
         super.notifyIndicators(Collections.singletonList(row));
     }
-
 
     private static String getMessage(String name) {
         return NbBundle.getMessage(ProcDataProvider.class, name);
