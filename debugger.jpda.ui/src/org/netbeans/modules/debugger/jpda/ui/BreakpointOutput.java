@@ -84,8 +84,6 @@ PropertyChangeListener {
         ("\\{lineNumber\\}");
     private static final Pattern exceptionClassNamePattern = Pattern.compile
         ("\\{exceptionClassName\\}");
-    private static final Pattern exceptionMessagePattern = Pattern.compile
-        ("\\{exceptionMessage\\}");
     private static final Pattern expressionPattern = Pattern.compile
         ("\\{=(.*?)\\}");
     private static final String threadStartedCondition = "{? threadStarted}";
@@ -313,14 +311,16 @@ PropertyChangeListener {
                 String exceptionMessage = "";
                 try {
                     // replace {exceptionMessage}
-                    exceptionMessage = ((ObjectVariable) exception).invokeMethod("getLocalizedMessage", null, new Variable[]{}).getValue();
+                    Variable var = ((ObjectVariable) exception).invokeMethod("getLocalizedMessage", null, new Variable[]{});
+                    if (var != null) {
+                        exceptionMessage = var.getValue();
+                    }
                 } catch (NoSuchMethodException ex) {
                     exceptionMessage = "<"+ex.getLocalizedMessage()+">";
                 } catch (InvalidExpressionException ex) {
                     exceptionMessage = "<"+ex.getLocalizedMessage()+">";
                 }
-                printText = exceptionMessagePattern.matcher (printText).replaceAll
-                    (exceptionMessage);
+                printText = printText.replace("{exceptionMessage}", exceptionMessage);  // NOI18N
             }
         }
         if (event.getSource() instanceof ThreadBreakpoint) {
