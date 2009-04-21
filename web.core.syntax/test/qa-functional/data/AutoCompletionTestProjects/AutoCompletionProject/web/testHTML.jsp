@@ -12,7 +12,7 @@
 <%--CC
 <p dir="r|
 ...
-<p dir="rtl"
+<p dir="rtl
 --%>
 
 <%-- completion for HTML entities --%>
@@ -31,7 +31,7 @@
 
 <%-- completion for body HTML endtag --%>
 <%--CC
-<body>|
+<body></|
 ...
 <body></body>
 --%>
