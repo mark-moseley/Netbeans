@@ -47,18 +47,16 @@ import java.awt.Component;
 import java.awt.Frame;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.File;
-import java.util.Set;
-import java.util.LinkedHashSet;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.SwingUtilities;
 import org.openide.windows.WindowManager;
 import org.openide.util.RequestProcessor;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.FileStateInvalidException;
+import org.openide.util.NbBundle;
 
 /**
  * A menu preheating task. It is referenced from the layer and may be performed
@@ -114,75 +112,64 @@ public final class MenuWarmUpTask implements Runnable {
     }
 
     /**
-     * After activation of window is refreshed filesystem   
+     * After activation of window is refreshed filesystem but only if switching
+     * from an external application.
      */ 
     private static class NbWindowsAdapter extends WindowAdapter implements Runnable{
         private static final RequestProcessor rp = new RequestProcessor ("Refresh-After-WindowActivated");//NOI18N        
         private RequestProcessor.Task task = null;
-        
+        private static final Logger LOG = Logger.getLogger("org.netbeans.ui.focus"); // NOI18N
+
+        @Override
         public void windowActivated(WindowEvent e) {
-            synchronized (rp) {
-                if (task != null) {
-                    task.cancel();
-                } else {
-                    task = rp.create(this);                    
+            // proceed only if switching from external application
+            if (e.getOppositeWindow() == null) {
+                synchronized (rp) {
+                    if (task != null) {
+                        task.cancel();
+                    } else {
+                        task = rp.create(this);
+                    }
+                    task.schedule(1500);
                 }
-                task.schedule(1500);
             }
         }
 
+        @Override
         public void windowDeactivated(WindowEvent e) {
-            synchronized (rp) {
-                if (task != null) {
-                    task.cancel();
+            // proceed only if switching to external application
+            if (e.getOppositeWindow() == null) {
+                synchronized (rp) {
+                    if (task != null) {
+                        task.cancel();
+                    }
                 }
+                LogRecord r = new LogRecord(Level.FINE, "LOG_WINDOW_DEACTIVATED"); // NOI18N
+                r.setResourceBundleName("org.netbeans.core.ui.warmup.Bundle"); // NOI18N
+                r.setResourceBundle(NbBundle.getBundle(MenuWarmUpTask.class)); // NOI18N
+                r.setLoggerName(LOG.getName());
+                LOG.log(r);
             }
         }
 
-        public void run() {         
-            FileSystem[] all = getFileSystems();
-            for (int i = 0; i < all.length; i++) {
-                FileSystem fileSystem = all[i];
-                fileSystem.refresh(false);
+        public void run() {
+            if (Boolean.getBoolean("netbeans.indexing.noFileRefresh") == true) { // NOI18N
+                return; // no file refresh
             }
-            
+            long now = System.currentTimeMillis();
+            FileUtil.refreshAll();
             synchronized (rp) {
                 task = null;
             }
+            long took = System.currentTimeMillis() - now;
+            LogRecord r = new LogRecord(Level.FINE, "LOG_WINDOW_ACTIVATED"); // NOI18N
+            r.setParameters(new Object[] { took });
+            r.setResourceBundleName("org.netbeans.core.ui.warmup.Bundle"); // NOI18N
+            r.setResourceBundle(NbBundle.getBundle(MenuWarmUpTask.class)); // NOI18N
+            r.setLoggerName(LOG.getName());
+            LOG.log(r);
+
         }        
-        
-        //copy - paste programming
-        //http://ant.netbeans.org/source/browse/ant/src-bridge/org/apache/tools/ant/module/bridge/impl/BridgeImpl.java.diff?r1=1.15&r2=1.16
-        //http:/java.netbeans.org/source/browse/java/javacore/src/org/netbeans/modules/javacore/Util.java    
-        //http://core.netbeans.org/source/browse/core/ui/src/org/netbeans/core/ui/MenuWarmUpTask.java
-        //http://core.netbeans.org/source/browse/core/src/org/netbeans/core/actions/RefreshAllFilesystemsAction.java
-        //http://java.netbeans.org/source/browse/java/api/src/org/netbeans/api/java/classpath/ClassPath.java
-        
-        private static FileSystem[] getFileSystems() {
-            File[] roots = File.listRoots();
-            Set<FileSystem> allRoots = new LinkedHashSet<FileSystem>();
-            assert roots != null && roots.length > 0 : "Could not list file roots"; // NOI18N
-            
-            for (int i = 0; i < roots.length; i++) {
-                File root = roots[i];
-                FileObject random = FileUtil.toFileObject(root);
-                if (random == null) continue;
-                
-                FileSystem fs;
-                try {
-                    fs = random.getFileSystem();
-                    allRoots.add(fs);
-                } catch (FileStateInvalidException e) {
-                    throw new AssertionError(e);
-                }
-            }
-            FileSystem[] retVal = new FileSystem [allRoots.size()];
-            allRoots.toArray(retVal);
-//            assert retVal.length > 0 : "Could not get any filesystem"; // NOI18N
-            
-            return retVal;
-        }
-        
     }
     
 }
