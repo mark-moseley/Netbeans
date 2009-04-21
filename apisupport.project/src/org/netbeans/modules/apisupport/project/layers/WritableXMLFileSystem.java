@@ -46,7 +46,6 @@ import java.beans.PropertyChangeListener;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
-import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.NotSerializableException;
@@ -55,6 +54,7 @@ import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
@@ -73,6 +73,7 @@ import org.netbeans.tax.TreeAttribute;
 import org.netbeans.tax.TreeCDATASection;
 import org.netbeans.tax.TreeChild;
 import org.netbeans.tax.TreeDocumentRoot;
+import org.netbeans.tax.TreeDocumentType;
 import org.netbeans.tax.TreeElement;
 import org.netbeans.tax.TreeException;
 import org.netbeans.tax.TreeObjectList;
@@ -83,7 +84,6 @@ import org.openide.filesystems.AbstractFileSystem;
 import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
-import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileUtil;
@@ -282,7 +282,7 @@ final class WritableXMLFileSystem extends AbstractFileSystem
         TreeAttribute urlAttr = el.getAttribute("url"); // NOI18N
         if (urlAttr != null) {
             try {
-                URL[] u = LayerUtils.currentify(new URL(location, urlAttr.getValue()), suffix, classpath);
+                URL[] u = LayerUtils.currentify(new URL(location, new URI(null, urlAttr.getValue(), null).getRawPath()), suffix, classpath);
                 URLConnection conn = u[0].openConnection();
                 conn.connect();
                 InputStream is = conn.getInputStream();
@@ -297,6 +297,8 @@ final class WritableXMLFileSystem extends AbstractFileSystem
                 return buf;
             } catch (IOException ioe) {
                 throw new FileNotFoundException(ioe.getMessage());
+            } catch (URISyntaxException use) {
+                throw new FileNotFoundException(use.getMessage());
             }
         } else {
             StringBuffer buf = new StringBuffer();
@@ -342,19 +344,13 @@ final class WritableXMLFileSystem extends AbstractFileSystem
             if (external == null) {
                 throw new FileNotFoundException(name);
             }
-            final FileLock lock = external.lock();
-            return new FilterOutputStream(external.getOutputStream(lock)) {
-                public void close() throws IOException {
-                    super.close();
-                    lock.releaseLock();
-                }
-            };
+            return external.getOutputStream();
         }
         // We will change the layer file.
         return new ByteArrayOutputStream() {
             public void close() throws IOException {
                 super.close();
-                byte[] contents = toByteArray();
+                final byte[] contents = toByteArray();
                 /* If desired to kill any existing inline content:
                 Iterator it = el.getChildNodes().iterator();
                 ArrayList/ *<TreeCDATASection>* / allCdata = new ArrayList();
@@ -372,22 +368,21 @@ final class WritableXMLFileSystem extends AbstractFileSystem
                     el.removeChild((CDATASection) it.next());
                 }
                  */
-                FileObject parent = findLayerParent();
-                String externalName = LayerUtils.findGeneratedName(parent, name);
+                final FileObject parent = findLayerParent();
+                final String externalName = LayerUtils.findGeneratedName(parent, name);
                 assert externalName.indexOf('/') == -1 : externalName;
-                FileObject externalFile = parent.createData(externalName);
-                FileLock lock = externalFile.lock();
-                try {
-                    OutputStream os = externalFile.getOutputStream(lock);
-                    try {
-                        os.write(contents);
-                    } finally {
-                        os.close();
+                parent.getFileSystem().runAtomicAction(new AtomicAction() {
+                    public void run() throws IOException {
+                        FileObject externalFile = parent.createData(externalName);
+                        OutputStream os = externalFile.getOutputStream();
+                        try {
+                            os.write(contents);
+                        } finally {
+                            os.close();
+                        }
+                        externalFile.addFileChangeListener(fileChangeListener);
                     }
-                } finally {
-                    lock.releaseLock();
-                }
-                externalFile.addFileChangeListener(fileChangeListener);
+                });
                 try {
                     el.addAttribute("url", externalName); // NOI18N
                 } catch (ReadOnlyException e) {
@@ -660,6 +655,13 @@ final class WritableXMLFileSystem extends AbstractFileSystem
                     if (literal) {
                         return "method:" + clazz; // NOI18N
                     } // else XXX
+                } else if ((nameAttr = sub.getAttribute("bundlevalue")) != null) { // NOI18N
+                    String bundle = nameAttr.getValue();
+                    if (literal) {
+                        return "bundle:" + bundle; // NOI18N
+                    } else {
+                        // XXX
+                    }
                 }
             } catch (Exception e) {
                 // MalformedURLException, etc.
@@ -835,14 +837,28 @@ final class WritableXMLFileSystem extends AbstractFileSystem
             attr.addAttribute("name", attrName); // NOI18N
             if (v instanceof String) {
                 String inStr = (String) v;
-                String newValueMagic = "newvalue:"; // NOI18N
-                String methodValueMagic = "methodvalue:"; // NOI18N
+                final String newValueMagic = "newvalue:"; // NOI18N
+                final String methodValueMagic = "methodvalue:"; // NOI18N
+                final String bundleValueMagic = "bundlevalue:"; // NOI18N
                 if (inStr.startsWith(newValueMagic)) {
                     // Impossible to set this (reliably) as a real value, so use this magic technique instead:
                     attr.addAttribute("newvalue", inStr.substring(newValueMagic.length())); // NOI18N
                 } else if (inStr.startsWith(methodValueMagic)) {
                     // Same here:
                     attr.addAttribute("methodvalue", inStr.substring(methodValueMagic.length())); // NOI18N
+                } else if (inStr.startsWith(bundleValueMagic)) {
+                    // Same here:
+                    attr.addAttribute("bundlevalue", inStr.substring(bundleValueMagic.length())); // NOI18N
+                    TreeObjectList nodes = doc.getChildNodes();
+                    for (int i = 0; i < nodes.size(); i++) {
+                        Object object = nodes.get(i);
+                        if (object instanceof TreeDocumentType) {
+                            TreeDocumentType tdt = (TreeDocumentType)object;
+                            tdt.setPublicId("-//NetBeans//DTD Filesystem 1.2//EN");
+                            tdt.setSystemId("http://www.netbeans.org/dtds/filesystem-1_2.dtd");
+                            break;
+                        }
+                    }
                 } else {
                     // Regular string value.
                     // Stolen from XMLMapAttr w/ mods:
@@ -1014,12 +1030,19 @@ final class WritableXMLFileSystem extends AbstractFileSystem
             return new Date(0L);
         }
         String u = attr.getValue();
-        if (URI.create(u).isAbsolute()) {
+        URI uri = null;
+        try {
+            uri = new URI(null, u, null);
+            if (uri.isAbsolute()) {
+                return new Date(0L);
+            }
+        } catch (URISyntaxException e) {
+            assert false : e;
             return new Date(0L);
         }
         FileObject external;
         try {
-            external = URLMapper.findFileObject(new URL(location, u));
+            external = URLMapper.findFileObject(new URL(location, uri == null ? u : uri.getRawPath()));
         } catch (MalformedURLException e) {
             assert false : e;
             return new Date(0L);
