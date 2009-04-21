@@ -50,9 +50,11 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
+import java.util.logging.Level;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
+import org.netbeans.modules.cnd.utils.CndUtils;
 
 /**
  * Common ancestor for all statements
@@ -66,18 +68,20 @@ public abstract class StatementBase extends OffsetableBase implements CsmStateme
     private CsmUID<CsmScope> scopeUID;
     
     public StatementBase(AST ast, CsmFile file, CsmScope scope) {
-            super(ast, file);
-            this.ast = ast;
-	    if( scope != null ) {
-		setScope(scope);
-	    }
+        super(ast, file);
+        CndUtils.assertTrue(file != null, "File can not be null", Level.WARNING);
+        this.ast = ast;
+        if( scope != null ) {
+            setScope(scope);
+        }
     }
     
     public CsmScope getScope() {
         CsmScope scope = this.scopeRef;
         if (scope == null) {
             scope = UIDCsmConverter.UIDtoScope(this.scopeUID);
-            assert (scope != null || this.scopeUID == null) : "null object for UID " + this.scopeUID;
+            // this is possible situation when scope is already invalidated (see IZ#154264)
+            // assert (scope != null || this.scopeUID == null) : "null object for UID " + this.scopeUID;
         }
         return scope;
     }
@@ -95,9 +99,15 @@ public abstract class StatementBase extends OffsetableBase implements CsmStateme
     protected AST getAst() {
         return ast;
     }
-    
+
     @Override
-    protected void write(DataOutput output) throws IOException {
+    public void dispose() {
+        onDispose();
+        super.dispose();
+    }
+
+    @Override
+    public void write(DataOutput output) throws IOException {
         super.write(output);
         UIDObjectFactory.getDefaultFactory().writeUID(this.scopeUID, output);
     }
@@ -112,6 +122,12 @@ public abstract class StatementBase extends OffsetableBase implements CsmStateme
     public String toString() {
         return "" + getKind() + ' ' + getOffsetString(); // NOI18N
     }
-    
-    
+
+    private void onDispose() {
+        // restore scope from it's UID
+        if (this.scopeRef == null) {
+            this.scopeRef = UIDCsmConverter.UIDtoScope(scopeUID);
+            assert this.scopeRef != null : "no object for UID " + scopeUID;
+        }
+    }
 }
