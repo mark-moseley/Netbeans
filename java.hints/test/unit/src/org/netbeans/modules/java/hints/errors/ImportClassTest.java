@@ -54,11 +54,19 @@ public class ImportClassTest extends HintsTestBase {
     }
     
     public void testImportHint() throws Exception {
-        performTest("ImportTest", "java.util.List", 22, 13);
+        if (org.openide.util.Utilities.isMac()) {
+            performTest("ImportTest", "java.util.List", 22, 13);
+        } else {
+            performTest("ImportTestNonMac", "java.util.List", 22, 13);
+        }
     }
 
     public void testImportHint2() throws Exception {
-        performTest("ImportTest2", "java.util.List", 18, 13);
+        if (org.openide.util.Utilities.isMac()) {
+            performTest("ImportTest2", "java.util.List", 18, 13);
+        } else {
+            performTest("ImportTest2NonMac", "java.util.List", 18, 13);
+        }
     }
     
     public void testImportHint3() throws Exception {
@@ -81,7 +89,11 @@ public class ImportClassTest extends HintsTestBase {
         performTestDoNotPerform("ImportHintDoNotPropose", 10, 24);
         performTestDoNotPerform("ImportHintDoNotPropose", 11, 24);
     }
-    
+
+    public void testImportHint118714() throws Exception {
+        performTestDoNotPerform("ImportTest118714", 8, 11);
+    }
+
     public void testImportHint86932() throws Exception {
         performTestDoNotPerform("ImportTest86932", 6, 25);
     }
@@ -91,6 +103,7 @@ public class ImportClassTest extends HintsTestBase {
         return "org/netbeans/test/java/hints/ImportClassEnablerTest/";
     }
     
+    @Override
     protected String layer() {
         return "org/netbeans/modules/java/hints/errors/only-imports-layer.xml";
     }
