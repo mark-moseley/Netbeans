@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -63,6 +63,7 @@ import org.openide.util.RequestProcessor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.netbeans.modules.mercurial.ui.clone.CloneAction;
+import org.netbeans.modules.mercurial.ui.repository.HgURL;
 
 // An example action demonstrating how the wizard could be called from within
 // your code. You can copy-paste the code below wherever you need.
@@ -74,6 +75,7 @@ public final class CloneWizardAction extends CallableSystemAction implements Cha
     private WizardDescriptor wizardDescriptor;
     private CloneRepositoryWizardPanel cloneRepositoryWizardPanel;
     private CloneDestinationDirectoryWizardPanel cloneDestinationDirectoryWizardPanel;
+    private ClonePathsWizardPanel clonePathsWizardPanel;
     private PanelsIterator wizardIterator;
     private String errorMessage;
 
@@ -98,13 +100,13 @@ public final class CloneWizardAction extends CallableSystemAction implements Cha
         dialog.toFront();
         boolean cancelled = wizardDescriptor.getValue() != WizardDescriptor.FINISH_OPTION;
         if (!cancelled) {
-            final String repository = (String) wizardDescriptor.getProperty("repository"); // NOI18N
-            final String username = (String) wizardDescriptor.getProperty("username"); // NOI18N
-            final String password = (String) wizardDescriptor.getProperty("password"); // NOI18N
-            final String directory = (String) wizardDescriptor.getProperty("directory"); // NOI18N
+            final HgURL repository = (HgURL) wizardDescriptor.getProperty("repository"); // NOI18N
+            final File directory = (File) wizardDescriptor.getProperty("directory"); // NOI18N
             final String cloneName = (String) wizardDescriptor.getProperty("cloneName"); // NOI18N
+            final HgURL pullPath = (HgURL) wizardDescriptor.getProperty("defaultPullPath"); // NOI18N
+            final HgURL pushPath = (HgURL) wizardDescriptor.getProperty("defaultPushPath"); // NOI18N
             File cloneFile = new File(directory, cloneName);
-            CloneAction.performClone(repository, cloneFile.getAbsolutePath(), true, null);
+            CloneAction.performClone(repository, cloneFile, true, null, pullPath, pushPath);
         }
     }
     
@@ -118,11 +120,14 @@ public final class CloneWizardAction extends CallableSystemAction implements Cha
         }
         if (step == cloneRepositoryWizardPanel) {
             errorMessage = cloneRepositoryWizardPanel.getErrorMessage();
+        } else if (step == clonePathsWizardPanel) {
+            //not validated during modification of text
+            //errorMessage = clonePathsWizardPanel.getErrorMessage();
         } else if (step == cloneDestinationDirectoryWizardPanel) {
             errorMessage = cloneDestinationDirectoryWizardPanel.getErrorMessage();
         }
         if (wizardDescriptor != null) {
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", errorMessage); // NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, errorMessage); // NOI18N
         }
     }
 
@@ -154,14 +159,15 @@ public final class CloneWizardAction extends CallableSystemAction implements Cha
         }
 
         protected WizardDescriptor.Panel[] initializePanels() {
-            WizardDescriptor.Panel[] panels = new WizardDescriptor.Panel[2];
             cloneRepositoryWizardPanel = new CloneRepositoryWizardPanel();
+            clonePathsWizardPanel = new ClonePathsWizardPanel();
             cloneDestinationDirectoryWizardPanel = new CloneDestinationDirectoryWizardPanel();
             panels = new WizardDescriptor.Panel[] {                
-                cloneRepositoryWizardPanel, cloneDestinationDirectoryWizardPanel
+                cloneRepositoryWizardPanel, clonePathsWizardPanel, cloneDestinationDirectoryWizardPanel
             };
-            panels[0].addChangeListener(CloneWizardAction.this);
-            panels[1].addChangeListener(CloneWizardAction.this);
+            for (int i = 0; i < panels.length; i++) {
+                panels[i].addChangeListener(CloneWizardAction.this);
+            }
             String[] steps = new String[panels.length];
             for (int i = 0; i < panels.length; i++) {
                 Component c = panels[i].getComponent();
@@ -172,15 +178,15 @@ public final class CloneWizardAction extends CallableSystemAction implements Cha
                 if (c instanceof JComponent) { // assume Swing components
                     JComponent jc = (JComponent) c;
                     // Sets step number of a component
-                    jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
                     // Sets steps names for a panel
-                    jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
                     // Turn on subtitle creation on each step
-                    jc.putClientProperty("WizardPanel_autoWizardStyle", Boolean.TRUE); // NOI18N
+                    jc.putClientProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE); // NOI18N
                     // Show steps on the left side with the image on the background
-                    jc.putClientProperty("WizardPanel_contentDisplayed", Boolean.TRUE); // NOI18N
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE); // NOI18N
                     // Turn on numbering of all steps
-                    jc.putClientProperty("WizardPanel_contentNumbered", Boolean.TRUE); // NOI18N
+                    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE); // NOI18N
                 }
             }
             return panels;

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -76,9 +76,8 @@ public class ClonePanel extends javax.swing.JPanel implements ActionListener {
         setMainCheckBox.setSelected(HgModuleConfig.getDefault().getSetMainProject());
     }
 
-    public String getOutputFileName() {
-        File target = new File(toTextField.getText(), toCloneField.getText());
-        return target.getAbsolutePath();
+    public File getTargetDir() {
+        return new File(toTextField.getText(), toCloneField.getText());
     }
 
     /** This method is called from within the constructor to
@@ -134,7 +133,7 @@ public class ClonePanel extends javax.swing.JPanel implements ActionListener {
                         .add(toLabel)))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(fromTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 253, Short.MAX_VALUE)
+                    .add(fromTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 258, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
                             .add(toCloneField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 165, Short.MAX_VALUE)
@@ -165,6 +164,12 @@ public class ClonePanel extends javax.swing.JPanel implements ActionListener {
                 .add(setMainCheckBox, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 21, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap())
         );
+
+        toTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ClonePanel.class, "ACSD_toTextField")); // NOI18N
+        browseButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ClonePanel.class, "ACSD_Browse")); // NOI18N
+        fromTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ClonePanel.class, "ACSD_fromTextField")); // NOI18N
+        toCloneField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ClonePanel.class, "ACSD_toCloneField")); // NOI18N
+        setMainCheckBox.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(ClonePanel.class, "ACSD_setMainCheckBox")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     
 

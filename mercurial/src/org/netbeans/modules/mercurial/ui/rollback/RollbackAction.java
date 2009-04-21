@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -50,11 +50,12 @@ import org.netbeans.modules.mercurial.FileInformation;
 import org.netbeans.modules.mercurial.HgException;
 import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.mercurial.OutputLogger;
 import org.netbeans.modules.mercurial.util.HgCommand;
 import org.netbeans.modules.mercurial.util.HgUtils;
-import org.netbeans.modules.mercurial.util.HgRepositoryContextCache;
 import org.netbeans.modules.mercurial.FileStatusCache;
 import org.netbeans.modules.mercurial.ui.update.ConflictResolvedAction;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.DialogDisplayer;
@@ -66,68 +67,70 @@ import org.openide.NotifyDescriptor;
  * 
  * @author John Rice
  */
-public class RollbackAction extends AbstractAction {
+public class RollbackAction extends ContextAction {
     
     private final VCSContext context;
-    private static File pullPath = null;
             
     public RollbackAction(String name, VCSContext context) {
         this.context = context;
         putValue(Action.NAME, name);
     }
     
-    public void actionPerformed(ActionEvent e) {
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()) return;
-        if(!HgRepositoryContextCache.hasHistory(context)){
-            HgUtils.outputMercurialTabInRed(
-                    NbBundle.getMessage(RollbackAction.class,
-                    "MSG_ROLLBACK_TITLE")); // NOI18N
-            HgUtils.outputMercurialTabInRed(
-                    NbBundle.getMessage(RollbackAction.class,
-                    "MSG_ROLLBACK_TITLE_SEP")); // NOI18N
-            HgUtils.outputMercurialTab(NbBundle.getMessage(RollbackAction.class, "MSG_NO_ROLLBACK")); // NOI18N
-            HgUtils.outputMercurialTabInRed(NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_DONE")); // NOI18N
-            HgUtils.outputMercurialTab(""); // NOI18N
-            return;
-        }
+    public void performAction(ActionEvent e) {
         rollback(context);
     }
     
     public static void rollback(final VCSContext ctx){
         final File root = HgUtils.getRootFile(ctx);
         if (root == null) return;
-        String repository = root.getAbsolutePath();
          
-        RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(repository);
+        RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(root);
         HgProgressSupport support = new HgProgressSupport() {
             public void perform() {
                 
+                OutputLogger logger = getLogger();
                 try {
-                    HgUtils.outputMercurialTabInRed(
+                    logger.outputInRed(
                                 NbBundle.getMessage(RollbackAction.class,
                                 "MSG_ROLLBACK_TITLE")); // NOI18N
-                    HgUtils.outputMercurialTabInRed(
+                    logger.outputInRed(
                                 NbBundle.getMessage(RollbackAction.class,
                                 "MSG_ROLLBACK_TITLE_SEP")); // NOI18N
-                    List<String> list = HgCommand.doRollback(root);
+                    logger.output(
+                                NbBundle.getMessage(StripAction.class,
+                                "MSG_ROLLBACK_INFO_SEP", root.getAbsolutePath())); // NOI18N
+                    NotifyDescriptor descriptor = new NotifyDescriptor.Confirmation(NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_CONFIRM_QUERY")); // NOI18N
+                    descriptor.setTitle(NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_CONFIRM")); // NOI18N
+                    descriptor.setMessageType(JOptionPane.WARNING_MESSAGE);
+                    descriptor.setOptionType(NotifyDescriptor.YES_NO_OPTION);
+
+                    Object res = DialogDisplayer.getDefault().notify(descriptor);
+                    if (res == NotifyDescriptor.NO_OPTION) {
+                        logger.outputInRed(
+                                NbBundle.getMessage(RollbackAction.class,
+                                "MSG_ROLLBACK_CANCELED", root.getAbsolutePath())); // NOI18N
+                        return;
+                    }
+                    List<String> list = HgCommand.doRollback(root, logger);
+                    
                     
                     if(list != null && !list.isEmpty()){                      
-                        //HgUtils.clearOutputMercurialTab();
+                        //logger.clearOutput();
                         
                         if(HgCommand.isNoRollbackPossible(list.get(0))){
-                            HgUtils.outputMercurialTab(
+                            logger.output(
                                     NbBundle.getMessage(RollbackAction.class,
                                     "MSG_NO_ROLLBACK"));     // NOI18N                       
                         }else{
-                            HgUtils.outputMercurialTab(list.get(0));
+                            logger.output(list.get(0));
                             if (HgCommand.hasHistory(root)) {
-                                int response = JOptionPane.showOptionDialog(null,
-                                        NbBundle.getMessage(RollbackAction.class,"MSG_ROLLBACK_CONFIRM_QUERY") ,  // NOI18N
-                                        NbBundle.getMessage(RollbackAction.class,"MSG_ROLLBACK_CONFIRM"), // NOI18N
-                                        JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,null, null, null);
-                            
-                                if( response == JOptionPane.YES_OPTION){
-                                    HgUtils.outputMercurialTab(
+                                descriptor = new NotifyDescriptor.Confirmation(NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_CONFIRM_UPDATE_QUERY")); // NOI18N
+                                descriptor.setTitle(NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_CONFIRM")); // NOI18N
+                                descriptor.setMessageType(JOptionPane.WARNING_MESSAGE);
+                                descriptor.setOptionType(NotifyDescriptor.YES_NO_OPTION);
+                                res = DialogDisplayer.getDefault().notify(descriptor);
+                                if (res == NotifyDescriptor.YES_OPTION) {
+                                    logger.output(
                                             NbBundle.getMessage(RollbackAction.class,
                                             "MSG_ROLLBACK_FORCE_UPDATE", root.getAbsolutePath())); // NOI18N
                                     list = HgCommand.doUpdateAll(root, true, null);
@@ -140,8 +143,11 @@ public class RollbackAction extends AbstractAction {
                                     Mercurial.getInstance().changesetChanged(root);
 
                                     if (list != null && !list.isEmpty()){
-                                        HgUtils.outputMercurialTab(list);
+                                        logger.output(list);
                                     }
+                                } else {
+                                    HgUtils.forceStatusRefreshProject(ctx);
+                                    Mercurial.getInstance().changesetChanged(root);
                                 }
                             } else {
                                 JOptionPane.showMessageDialog(null,
@@ -151,7 +157,7 @@ public class RollbackAction extends AbstractAction {
                             
                             }
                         }
-                        HgUtils.outputMercurialTabInRed(
+                        logger.outputInRed(
                                     NbBundle.getMessage(RollbackAction.class,
                                     "MSG_ROLLBACK_INFO")); // NOI18N
                     }
@@ -159,14 +165,14 @@ public class RollbackAction extends AbstractAction {
                     NotifyDescriptor.Exception e = new NotifyDescriptor.Exception(ex);
                     DialogDisplayer.getDefault().notifyLater(e);
                 } finally {
-                    HgUtils.outputMercurialTabInRed(
+                    logger.outputInRed(
                                 NbBundle.getMessage(RollbackAction.class,
                                 "MSG_ROLLBACK_DONE")); // NOI18N
-                    HgUtils.outputMercurialTab(""); // NOI18N
+                    logger.output(""); // NOI18N
                 }
             }
         };
-        support.start(rp, repository,org.openide.util.NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_PROGRESS")); // NOI18N
+        support.start(rp, root,org.openide.util.NbBundle.getMessage(RollbackAction.class, "MSG_ROLLBACK_PROGRESS")); // NOI18N
     }
     
     public boolean isEnabled() {

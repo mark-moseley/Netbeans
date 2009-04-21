@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -50,10 +50,10 @@ import org.netbeans.modules.mercurial.FileStatusCache;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import org.netbeans.modules.mercurial.Mercurial;
 import org.netbeans.modules.mercurial.FileInformation;
-import javax.swing.AbstractAction;
 import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.util.HgCommand;
 import org.netbeans.modules.mercurial.util.HgUtils;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.openide.util.RequestProcessor;
 import  org.openide.util.NbBundle;
 
@@ -62,7 +62,7 @@ import  org.openide.util.NbBundle;
  *
  * @author Petr Kuzel
  */
-public class ConflictResolvedAction extends AbstractAction {
+public class ConflictResolvedAction extends ContextAction {
 
     private final VCSContext context;
  
@@ -71,8 +71,7 @@ public class ConflictResolvedAction extends AbstractAction {
         putValue(Action.NAME, name);
     }
 
-    public void actionPerformed(ActionEvent e) {
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()) return;
+    public void performAction(ActionEvent e) {
         resolved(context);
     }
 
@@ -111,7 +110,7 @@ public class ConflictResolvedAction extends AbstractAction {
                 }
             }
         };
-        support.start(rp, repository.getAbsolutePath(), NbBundle.getMessage(ConflictResolvedAction.class, "MSG_ConflictResolved_Progress")); // NOI18N
+        support.start(rp, repository, NbBundle.getMessage(ConflictResolvedAction.class, "MSG_ConflictResolved_Progress")); // NOI18N
     }
     
     private static void perform(File file) {

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -87,11 +87,8 @@ public class Clone implements PropertyChangeListener {
     } 
     
     public boolean showDialog() {
-        DialogDescriptor dialogDescriptor = new DialogDescriptor(panel, org.openide.util.NbBundle.getMessage(Clone.class, "CTL_CloneDialog")); // NOI18N
-        
-        dialogDescriptor.setModal(true);
-        dialogDescriptor.setOptions(new Object[] {okButton, cancelButton});
-        dialogDescriptor.setHelpCtx(new HelpCtx(this.getClass()));
+        DialogDescriptor dialogDescriptor = new DialogDescriptor(panel, org.openide.util.NbBundle.getMessage(Clone.class, "CTL_CloneDialog"),  // NOI18N
+                true, new Object[] {okButton, cancelButton}, okButton, DialogDescriptor.DEFAULT_ALIGN, new HelpCtx(this.getClass()), null);
         dialogDescriptor.setValid(false);
         
         Dialog dialog = DialogDisplayer.getDefault().createDialog(dialogDescriptor);     
@@ -116,8 +113,11 @@ public class Clone implements PropertyChangeListener {
         }       
     }
 
-    public String getOutputFileName() {
-        if (panel == null) return null;
-        return panel.getOutputFileName().trim();
+    public File getTargetDir() {
+        if (panel == null) {
+            return null;
+        }
+        return panel.getTargetDir();
     }
+
 }

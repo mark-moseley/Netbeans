@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -53,6 +53,7 @@ import org.netbeans.modules.mercurial.FileInformation;
 import org.netbeans.modules.mercurial.HgModuleConfig;
 import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.openide.util.RequestProcessor;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import org.openide.nodes.*;
@@ -61,7 +62,7 @@ import org.openide.nodes.*;
  *
  * @author Petr Kuzel
  */
-public final class ExcludeFromCommitAction extends AbstractAction {
+public final class ExcludeFromCommitAction extends ContextAction {
 
     public static final int UNDEFINED = -1;
     public static final int EXCLUDING = 1;
@@ -120,7 +121,7 @@ public final class ExcludeFromCommitAction extends AbstractAction {
         return status;
     }
 
-    public void actionPerformed(ActionEvent e) {
+    public void performAction(ActionEvent e) {
         final VCSContext ctx = context;
         RequestProcessor rp = Mercurial.getInstance().getRequestProcessor();
         HgProgressSupport support = new HgProgressSupport() {
@@ -133,13 +134,13 @@ public final class ExcludeFromCommitAction extends AbstractAction {
                     paths.add(file.getAbsolutePath());
                 }
                 if (isCanceled()) return;
-                if (status == EXCLUDING) {
+                if (status != INCLUDING) {
                     config.addExclusionPaths(paths);
-                } else if (status == INCLUDING) {
+                } else {
                     config.removeExclusionPaths(paths);
                 }
             }
         };
-        support.start(rp, "", ""); // NOI18N
+        support.start(rp, "");                                          //NOI18N
     }
 }

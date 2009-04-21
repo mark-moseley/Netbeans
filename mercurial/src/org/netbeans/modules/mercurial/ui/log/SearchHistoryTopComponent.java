@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -48,6 +48,7 @@ import java.util.*;
 import java.io.File;
 import java.awt.BorderLayout;
 import org.netbeans.modules.mercurial.ui.diff.DiffSetupSource;
+import org.netbeans.modules.mercurial.util.HgUtils;
 import org.netbeans.modules.versioning.spi.VCSContext;
 
 /**
@@ -56,6 +57,7 @@ import org.netbeans.modules.versioning.spi.VCSContext;
 public class SearchHistoryTopComponent extends TopComponent implements DiffSetupSource {
 
     private SearchHistoryPanel shp;
+    private SearchCriteriaPanel scp;
 
     public SearchHistoryTopComponent() {
         getAccessibleContext().setAccessibleName(NbBundle.getMessage(SearchHistoryTopComponent.class, "ACSN_SearchHistoryT_Top_Component")); // NOI18N
@@ -72,9 +74,17 @@ public class SearchHistoryTopComponent extends TopComponent implements DiffSetup
         initComponents(roots, commitMessage, username, from, to);
     }
 
-    public SearchHistoryTopComponent(String repositoryUrl, File localRoot, long revision) {
+    /**
+     * Support for openning file history with a specific DiffResultsView
+     * @param file it's history shall be shown
+     * @param fac factory creating a specific DiffResultsView - just override its createDiffResultsView method
+     */
+    SearchHistoryTopComponent(File file, DiffResultsViewFactory fac) {
         this();
-        initComponents(repositoryUrl, localRoot, revision);
+        initComponents(new File[] {file}, null, null, null, null);
+        shp.setDiffResultsViewFactory(fac);
+        // showing only one file - so disable the show all changepaths options
+        shp.disableFileChangesOption(false);
     }
 
     public void search() {        
@@ -82,25 +92,30 @@ public class SearchHistoryTopComponent extends TopComponent implements DiffSetup
         shp.setSearchCriteria(false);
     }
     
-    private void initComponents(String repositoryUrl, File localRoot, long revision) {
-        setLayout(new BorderLayout());
-        SearchCriteriaPanel scp = new SearchCriteriaPanel(repositoryUrl);
-        scp.setFrom(Long.toString(revision));
-        scp.setTo(Long.toString(revision));
-        shp = new SearchHistoryPanel(repositoryUrl, localRoot, scp);
-        add(shp);
+    public void searchOut() {  
+        shp.setOutSearch();
+        scp.setTo("");
+    }
+
+    public void searchIncoming() {  
+        shp.setIncomingSearch();
+        scp.setTo("");
     }
 
     private void initComponents(File[] roots, String commitMessage, String username, Date from, Date to) {
         setLayout(new BorderLayout());
-        SearchCriteriaPanel scp = new SearchCriteriaPanel(roots);
+        scp = new SearchCriteriaPanel();
         scp.setCommitMessage(commitMessage);
         scp.setUsername(username);
-        if (from != null) scp.setFrom(SearchExecutor.simpleDateFormat.format(from));
-        if (to != null) scp.setTo(SearchExecutor.simpleDateFormat.format(to));
+        if (from != null){ 
+            scp.setFrom(SearchExecutor.simpleDateFormat.format(from));
+        }
+        if (to != null){
+            scp.setTo(SearchExecutor.simpleDateFormat.format(to));
+        }
         shp = new SearchHistoryPanel(roots, scp);
         add(shp);
-    }
+        }
 
     public int getPersistenceType(){
        return TopComponent.PERSISTENCE_NEVER;
@@ -112,7 +127,12 @@ public class SearchHistoryTopComponent extends TopComponent implements DiffSetup
     }
     
     protected String preferredID(){
-       return "Hg.SearchHistoryTopComponent";    // NOI18N
+        if (shp.isIncomingSearch()) {
+            return "Hg.IncomingSearchHistoryTopComponent";    // NOI18N
+        } else if (shp.isOutSearch()) {
+            return "Hg.OutSearchHistoryTopComponent";    // NOI18N
+        }
+        return "Hg.SearchHistoryTopComponent";    // NOI18N
     }
 
     public HelpCtx getHelpCtx() {
@@ -125,5 +145,14 @@ public class SearchHistoryTopComponent extends TopComponent implements DiffSetup
 
     public String getSetupDisplayName() {
         return getDisplayName();
+    }
+    
+    /**
+     * Provides an initial diff view. To display a specific one, override createDiffResultsView.
+     */
+    public static class DiffResultsViewFactory {
+        DiffResultsView createDiffResultsView(SearchHistoryPanel panel, List<RepositoryRevision> results) {
+            return new DiffResultsView(panel, results);
+        }
     }
 }
