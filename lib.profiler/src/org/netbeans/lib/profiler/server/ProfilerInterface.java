@@ -65,6 +65,10 @@ import java.util.WeakHashMap;
  * @author Ian Formanek
  */
 public class ProfilerInterface implements CommonConstants {
+
+    private static final boolean INSTRUMENT_JFLUID_CLASSES =
+            Boolean.getBoolean("org.netbeans.lib.profiler.server.instrumentJFluidClasses"); // NOI18N
+
     //~ Inner Classes ------------------------------------------------------------------------------------------------------------
 
     private static class HFIRIThread extends Thread {
@@ -79,7 +83,7 @@ public class ProfilerInterface implements CommonConstants {
         //~ Methods --------------------------------------------------------------------------------------------------------------
 
         public void run() {
-            RootClassLoadedCommand cmd = new RootClassLoadedCommand(new String[] { "*FAKE_CLASS_1*", "*FAKE_CLASS_2*" },
+            RootClassLoadedCommand cmd = new RootClassLoadedCommand(new String[] { "*FAKE_CLASS_1*", "*FAKE_CLASS_2*" }, // NOI18N
                                                                     new int[] { 0, 0 }, null, 2, new int[] { -1 }, ""); // NOI18N
             profilerServer.sendComplexCmdToClient(cmd);
 
@@ -139,7 +143,8 @@ public class ProfilerInterface implements CommonConstants {
                                                                           // for take heap dump
 
                     Class.forName("java.lang.reflect.InvocationTargetException"); // NOI18N
-                    Class.forName("java.lang.InterruptedException");
+                    Class.forName("java.lang.InterruptedException");    // NOI18N
+                    Class.forName("java.util.zip.Deflater");    // NOI18N compressed remote profiling
                 } catch (ClassNotFoundException e) {
                     e.printStackTrace(System.err);
                 }
@@ -211,11 +216,20 @@ public class ProfilerInterface implements CommonConstants {
 
         private static void computeRootWildcard() {
             rootClassNameWildcard = new boolean[rootClassNames.length];
+            rootClassNamePackageWildcard = new boolean[rootClassNames.length];
 
             for (int i = 0; i < rootClassNames.length; i++) {
                 int nameLen = rootClassNames[i].length();
                 rootClassNameWildcard[i] = (nameLen == 0) // default package wildcard
                                            || (rootClassNames[i].charAt(nameLen - 1) == '.'); // ends with "." // NOI18N
+                if (!rootClassNameWildcard[i]) {
+                    if (rootClassNames[i].charAt(nameLen - 1) == '*') { // package wild card - instrument all classes including subpackages
+                        rootClassNames[i] = rootClassNames[i].substring(0,nameLen - 1); // remove *
+                        rootClassNameWildcard[i] = true;
+                        rootClassNamePackageWildcard[i] = true;
+                    }
+                }
+//                System.out.println("Root "+rootClassNames[i]+" wild "+rootClassNameWildcard[i]+" package "+rootClassNamePackageWildcard[i]);
             }
         }
     }
@@ -260,6 +274,7 @@ public class ProfilerInterface implements CommonConstants {
     private static Thread initInstrumentationThread;
     private static String[] rootClassNames;
     private static boolean[] rootClassNameWildcard;
+    private static boolean[] rootClassNamePackageWildcard;
 
     // For statistics
     static int nClassLoads;
@@ -711,8 +726,10 @@ public class ProfilerInterface implements CommonConstants {
 
             if (rootClassNameWildcard[i]) {
                 if (className.startsWith(rootName)) {
+                    if (rootClassNamePackageWildcard[i]) {  // instrument also subpackages
+                        return true;
+                    }
                     if (className.indexOf('.', rootName.length()) == -1) { // not a subpackage
-
                         return true;
                     }
                 }
@@ -1127,7 +1144,7 @@ public class ProfilerInterface implements CommonConstants {
     }
 
     private static boolean internalClassName(String name) {
-        return (name.startsWith(PROFILER_DOTTED_CLASS_PREFIX)
+        return (serverInternalClassName(name)
                || // WARNING: sun.reflect.* are not really internal classes, but they may create too many problems by being loaded unexpectedly
         // by our internal code and causing classLoadHook to be invoked recursively. At least we need sun.reflect.Generated* to be
         // dismissed. Others could probably be less of a problem if ClassLoaderManager didn't use reflection.
@@ -1139,6 +1156,16 @@ public class ProfilerInterface implements CommonConstants {
                                                      // but its root cause is still unclear to me.
                || name.equals("com.sun.enterprise.J2EESecurityManager") // NOI18N
         );
+    }
+
+    private static boolean serverInternalClassName(String name) {
+        if (INSTRUMENT_JFLUID_CLASSES) {
+            return name.startsWith("org.netbeans.lib.profiler.server") || // NOI18N
+                   name.startsWith("org.netbeans.lib.profiler.global") || // NOI18N
+                   name.startsWith("org.netbeans.lib.profiler.wireprotocol"); // NOI18N
+        } else {
+            return name.startsWith(PROFILER_DOTTED_CLASS_PREFIX);
+        }
     }
 
     private static void reflectiveMethodInvokeHook(Method method) {
