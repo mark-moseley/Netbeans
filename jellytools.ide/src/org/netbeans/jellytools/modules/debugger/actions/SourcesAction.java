@@ -53,13 +53,13 @@ import org.netbeans.jellytools.actions.Action;
  */
 public class SourcesAction extends Action {
     private static final String menuPath =
-            Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Window") +
+            Bundle.getStringTrimmed("org.netbeans.core.windows.resources.Bundle", "Menu/Window") +
             "|"+Bundle.getStringTrimmed(
                                 "org.netbeans.modules.debugger.resources.Bundle",
                                 "CTL_Debugging_workspace") +
             "|"+Bundle.getStringTrimmed(
-                                "org.netbeans.modules.debugger.jpda.ui.actions.Bundle",
-                                "CTL_SourcesViewAction");
+                                "org.netbeans.modules.debugger.ui.actions.Bundle",
+                                "CTL_SourcesAction");
 
     private static final KeyStroke keystroke = KeyStroke.getKeyStroke(
                                                         KeyEvent.VK_8,
