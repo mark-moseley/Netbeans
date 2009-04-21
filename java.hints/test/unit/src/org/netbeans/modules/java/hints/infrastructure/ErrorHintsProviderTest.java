@@ -178,8 +178,8 @@ public class ErrorHintsProviderTest extends NbTestCase {
         
         doc.putProperty(Language.class, JavaTokenId.language());
         
-        for (ErrorDescription ed : new ErrorHintsProvider(testSource).computeErrors(info, doc))
-            ref(ed.toString());
+        for (ErrorDescription ed : new ErrorHintsProvider().computeErrors(info, doc))
+            ref(ed.toString().replaceFirst("\\p{Space}*:", ":"));
         
         compareReferenceFiles();
     }
@@ -222,6 +222,10 @@ public class ErrorHintsProviderTest extends NbTestCase {
     
     public void testTestShortErrorsMethodInvocation1() throws Exception {
         performTest("TestShortErrorsMethodInvocation1");
+    }
+    
+    public void testTestShortErrorsMethodInvocation2() throws Exception {
+        performTest("TestShortErrorsMethodInvocation2");
     }
     
     public void testTestShortErrorsNewClass() throws Exception {
