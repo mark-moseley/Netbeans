@@ -65,11 +65,13 @@ public abstract class ProjectClassPathImplementation implements ClassPathImpleme
     final private AntProjectHelper helper;
     private List<PathResourceImplementation> resources;
     private String path;
+    private final RequestProcessor requestProcessor;
     
     
-    public ProjectClassPathImplementation(AntProjectHelper helper) {
+    public ProjectClassPathImplementation(AntProjectHelper helper, RequestProcessor requestProcessor) {
         assert helper != null;
         this.helper = helper;
+        this.requestProcessor = requestProcessor;
         this.helper.addAntProjectListener(this);
     }
     
@@ -125,7 +127,7 @@ public abstract class ProjectClassPathImplementation implements ClassPathImpleme
     
     public void propertiesChanged(@SuppressWarnings("unused")
 	final AntProjectEvent ev) {
-        RequestProcessor.getDefault().post(this);
+        requestProcessor.post(this);
     }
     
     public void run() {
@@ -156,11 +158,19 @@ public abstract class ProjectClassPathImplementation implements ClassPathImpleme
                     URL entry = f.toURI().toURL();
                     if (FileUtil.isArchiveFile(entry)) {
                         entry = FileUtil.getArchiveRoot(entry);
-                    } else if (!f.exists()) {
+                    }
+                    else if (!f.exists()) {
                         // if file does not exist (e.g. build/classes folder
                         // was not created yet) then corresponding File will
                         // not be ended with slash. Fix that.
                         assert !entry.toExternalForm().endsWith("/") : f; // NOI18N
+                        entry = new URL(entry.toExternalForm() + "/"); // NOI18N
+                    }
+                    else if ( !entry.toExternalForm().endsWith("/")) { // NOI18N
+                        /* Possible fix for #156890 - IllegalArgumentException: URL must be a folder URL (append '/' if necessary):
+                         * This will fix an the issue in any case. But possibly
+                         * this "else" will never work .
+                         */
                         entry = new URL(entry.toExternalForm() + "/"); // NOI18N
                     }
                     result.add(ClassPathSupport.createResource(entry));
