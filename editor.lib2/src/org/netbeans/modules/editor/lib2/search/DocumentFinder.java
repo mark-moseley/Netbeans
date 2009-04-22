@@ -250,7 +250,7 @@ public class DocumentFinder
                 matcher.reset(foundString);
                 if (matcher.find()){
                     try{
-                        replaceText = matcher.replaceFirst(replaceText);
+                        replaceText = matcher.replaceFirst(convertStringForMatcher(replaceText));
                     }catch(IndexOutOfBoundsException ioobe){
                         NotifyDescriptor msg = new NotifyDescriptor.Message(
                                 ioobe.getLocalizedMessage(), NotifyDescriptor.ERROR_MESSAGE);
@@ -263,8 +263,8 @@ public class DocumentFinder
         }
         return new FindReplaceResult(ret, replaceText);
     }
-    
-    /** 
+
+    /**
      * Finds in document 
      *
      * @param doc document where to find
@@ -289,15 +289,17 @@ public class DocumentFinder
         if (finder == null){
             return blocks;
         }
-        finder.reset();
-        finder.setBlocks(blocks);
         CharSequence cs = DocumentUtilities.getText(doc, startOffset, endOffset - startOffset);
         if (cs==null){
             return null;
         }
-        finder.find(startOffset, cs);
-        int ret [] = finder.getBlocks();
-        return ret;
+        synchronized (finder) {
+            finder.reset();
+            finder.setBlocks(blocks);
+            finder.find(startOffset, cs);
+            int ret [] = finder.getBlocks();
+            return ret;
+        }
     }
     
     /**
@@ -310,6 +312,26 @@ public class DocumentFinder
         return findReplaceImpl(replaceString, doc, startOffset, endOffset, props, oppositeDir);
     }
     
+
+    private static String convertStringForMatcher(String text) {
+        String res = null;
+        if (text != null){
+            String[] sGroups = text.split("\\\\\\\\", text.length()); //NOI18N
+            res = "";                         //NOI18N
+            for(int i=0;i<sGroups.length;i++){
+                String tmp = sGroups[i];
+                tmp = tmp.replace("\\" + "r", "\r"); //NOI18N
+                tmp = tmp.replace("\\" + "n", "\n"); //NOI18N
+                tmp = tmp.replace("\\" + "t", "\t"); //NOI18N
+                res += tmp;
+                if (i != sGroups.length - 1){
+                    res += "\\\\";                   //NOI18N
+                }
+            }
+        }
+        return res;
+    }
+
     private interface DocFinder{
         
         public int find(int initOffset, CharSequence data);        
