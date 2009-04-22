@@ -86,7 +86,7 @@ public final class RepositoryStep extends AbstractStep implements WizardDescript
 
     private static final String USE_INTERNAL_SSH = "repositoryStep.useInternalSSH";
     private static final String EXT_COMMAND = "repositoryStep.extCommand";
-    private static final String RECENT_ROOTS = "repositoryStep.recentRoots";
+    public static final String RECENT_ROOTS = "repositoryStep.recentRoots";
 
     private RequestProcessor.Task updatePasswordTask;
     private volatile boolean passwordExpected;
@@ -555,12 +555,7 @@ public final class RepositoryStep extends AbstractStep implements WizardDescript
             } else {
                 SwingUtilities.invokeAndWait(awt);
             }
-            String root = cvsRoot[0].trim();
-            try {
-                return CVSRoot.parse(root).toString();
-            } catch (Exception e) {
-                return root;                
-            }
+            return cvsRoot[0].trim();
         } catch (InterruptedException e) {
             ErrorManager err = ErrorManager.getDefault();
             err.notify(e);
