@@ -41,17 +41,19 @@
 
 package org.netbeans.modules.refactoring.java.plugins;
 
+import com.sun.source.util.TreePath;
+import java.util.List;
 import org.netbeans.modules.refactoring.java.spi.RefactoringVisitor;
 import com.sun.source.tree.*;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import javax.lang.model.element.*;
 import org.netbeans.api.java.source.ElementHandle;
-import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.modules.refactoring.api.Problem;
-import org.netbeans.modules.refactoring.api.RenameRefactoring;
 import org.netbeans.modules.refactoring.java.RetoucheUtils;
+import org.netbeans.modules.refactoring.java.SourceUtilsEx;
 import org.netbeans.modules.refactoring.java.spi.ToPhaseException;
 import org.openide.filesystems.FileObject;
 import org.openide.util.NbBundle;
@@ -64,12 +66,16 @@ public class MoveTransformer extends RefactoringVisitor {
 
     private FileObject originalFolder;
     private MoveRefactoringPlugin move;
-    private Set<Element> elementsToImport = new HashSet();
+    private Set<Element> elementsToImport;
+    private Set<ImportTree> importToRemove;
     private boolean isThisFileMoving;
     private boolean isThisFileReferencingOldPackage = false;
-    private Set<Element> elementsAlreadyImported = new HashSet();
+    private Set<Element> elementsAlreadyImported;
     private Problem problem;
     private boolean moveToDefaulPackageProblem = false;
+    private String originalPackage;
+    private SourceUtilsEx.Cache cacheOfSrcFiles = new SourceUtilsEx.Cache();
+    private final Set<ElementHandle> classes2Move;
 
     public Problem getProblem() {
         return problem;
@@ -77,27 +83,31 @@ public class MoveTransformer extends RefactoringVisitor {
 
     public MoveTransformer(MoveRefactoringPlugin move) {
         this.move = move;
+        classes2Move = new HashSet<ElementHandle>(move.classes.values());
     }
     
+    @Override
     public void setWorkingCopy(WorkingCopy copy) throws ToPhaseException {
         super.setWorkingCopy(copy);
         originalFolder = workingCopy.getFileObject().getParent();
+        originalPackage = RetoucheUtils.getPackageName(originalFolder);
         isThisFileMoving = move.filesToMove.contains(workingCopy.getFileObject());
-        elementsToImport = new HashSet();
+        elementsToImport = new HashSet<Element>();
         isThisFileReferencingOldPackage = false;
-        elementsAlreadyImported = new HashSet();
+        elementsAlreadyImported = new HashSet<Element>();
+        importToRemove = new HashSet<ImportTree>();
     }
     
     @Override
     public Tree visitMemberSelect(MemberSelectTree node, Element p) {
         if (!workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
-            Element el = workingCopy.getTrees().getElement(getCurrentPath());
-            if (el!=null) {
-                FileObject fo = SourceUtils.getFile(el, workingCopy.getClasspathInfo());
+            final Element el = workingCopy.getTrees().getElement(getCurrentPath());
+            if (el != null) {
                 if (isElementMoving(el)) {
                     elementsAlreadyImported.add(el);
-                    String newPackageName = move.getTargetPackageName(SourceUtils.getFile(el, workingCopy.getClasspathInfo()));
-                    if (!"".equals(newPackageName)) {
+                    String newPackageName = getTargetPackageName(el);
+                    
+                    if (!"".equals(newPackageName)) { //
                         Tree nju = make.MemberSelect(make.Identifier(newPackageName), el);
                         rewrite(node, nju);
                     } else {
@@ -106,54 +116,68 @@ public class MoveTransformer extends RefactoringVisitor {
                             moveToDefaulPackageProblem = true;
                         }
                     }
-                }
-                if (isThisFileMoving && !isElementMoving(el)) {
-                    if (el.getKind()!=ElementKind.PACKAGE && 
-                        !move.filesToMove.contains(fo) &&
-                        getPackageOf(el).toString().equals(RetoucheUtils.getPackageName(workingCopy.getFileObject().getParent())) && !(el.getModifiers().contains(Modifier.PUBLIC) || el.getModifiers().contains(Modifier.PROTECTED))) {
+                } else {
+                    if (isThisFileMoving) {
+                        if (el.getKind() != ElementKind.PACKAGE
+                                && getPackageOf(el).toString().equals(originalPackage)
+                                && !(el.getModifiers().contains(Modifier.PUBLIC) || el.getModifiers().contains(Modifier.PROTECTED))
+                                && !move.filesToMove.contains(getFileObject(el))) {
                             problem = createProblem(problem, false, NbBundle.getMessage(MoveTransformer.class, "ERR_AccessesPackagePrivateFeature2",workingCopy.getFileObject().getName(),el, getTypeElement(el).getSimpleName()));
                         }
-                }
-                if (!isThisFileMoving && !isElementMoving(el)) {
-                    if (el.getKind()!=ElementKind.PACKAGE && 
-                        move.filesToMove.contains(fo) &&
-                        getPackageOf(el).toString().equals(RetoucheUtils.getPackageName(workingCopy.getFileObject().getParent())) && !(el.getModifiers().contains(Modifier.PUBLIC) || el.getModifiers().contains(Modifier.PROTECTED))) {
+                    } else {
+                        if (el.getKind()!=ElementKind.PACKAGE
+                                && getPackageOf(el).toString().equals(originalPackage)
+                                && !(el.getModifiers().contains(Modifier.PUBLIC) || el.getModifiers().contains(Modifier.PROTECTED))
+                                && move.filesToMove.contains(getFileObject(el))) {
                             problem = createProblem(problem, false, NbBundle.getMessage(MoveTransformer.class, "ERR_AccessesPackagePrivateFeature",workingCopy.getFileObject().getName(),el, getTypeElement(el).getSimpleName()));
                         }
+                    }
+                }
+            } else if (isPackageRename() && "*".equals(node.getIdentifier().toString())) { // NOI18N
+                ExpressionTree exprTree = node.getExpression();
+                TreePath exprPath = workingCopy.getTrees().getPath(workingCopy.getCompilationUnit(), exprTree);
+                Element elem = workingCopy.getTrees().getElement(exprPath);
+                if (elem != null && elem.getKind() == ElementKind.PACKAGE && isThisPackageMoving((PackageElement) elem)) {
+                    String newPackageName = getTargetPackageName(elem);
+                    Tree nju = make.MemberSelect(make.Identifier(newPackageName), "*"); // NOI18N
+                    rewrite(node, nju);
                 }
             }
         }
         return super.visitMemberSelect(node, p);
     }
     
-    
     @Override
     public Tree visitIdentifier(IdentifierTree node, Element p) {
         if (!workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
             Element el = workingCopy.getTrees().getElement(getCurrentPath());
-            if (el!=null) {
-                FileObject fo = SourceUtils.getFile(el, workingCopy.getClasspathInfo());
+            if (el != null) {
                 if (!isThisFileMoving) {
                     if (isElementMoving(el)) {
                         if (!elementsAlreadyImported.contains(el)) {
-                            if (!RetoucheUtils.getPackageName(workingCopy.getCompilationUnit()).equals(move.getTargetPackageName(fo)))
+                            String targetPackageName = getTargetPackageName(el);
+                            if (!RetoucheUtils.getPackageName(workingCopy.getCompilationUnit()).equals(targetPackageName))
                                 elementsToImport.add(el);
                         }
-                    } else if (el.getKind()!=ElementKind.PACKAGE && 
-                            move.filesToMove.contains(fo) &&
-                            getPackageOf(el).toString().equals(RetoucheUtils.getPackageName(workingCopy.getFileObject().getParent())) && !(el.getModifiers().contains(Modifier.PUBLIC) || el.getModifiers().contains(Modifier.PROTECTED))) {
+                    } else if (el.getKind() != ElementKind.PACKAGE
+                            && !(el.getModifiers().contains(Modifier.PUBLIC) || el.getModifiers().contains(Modifier.PROTECTED))
+                            && getPackageOf(el).toString().equals(originalPackage)
+                            && move.filesToMove.contains(getFileObject(el))) {
                                 problem = createProblem(problem, false, NbBundle.getMessage(MoveTransformer.class, "ERR_AccessesPackagePrivateFeature",workingCopy.getFileObject().getName(), el, getTypeElement(el).getSimpleName()));
-                            }
+                    }
                 } else {
-                    if (!isThisFileReferencingOldPackage && (!isElementMoving(el) && isTopLevelClass(el)) && getPackageOf(el).toString().equals(RetoucheUtils.getPackageName(workingCopy.getFileObject().getParent()))) {
+                    Boolean[] isElementMoving = new Boolean[1];
+                    if (!isThisFileReferencingOldPackage
+                            && (isTopLevelClass(el) && !isElementMoving(el, isElementMoving))
+                            && getPackageOf(el).toString().equals(originalPackage)) {
                         isThisFileReferencingOldPackage = true;
                     }
-                    if (el.getKind()!=ElementKind.PACKAGE &&
-                            (!isElementMoving(el) && 
-                            !move.filesToMove.contains(fo) &&
-                            getPackageOf(el).toString().equals(RetoucheUtils.getPackageName(workingCopy.getFileObject().getParent()))) && 
-                            !(el.getModifiers().contains(Modifier.PUBLIC) || el.getModifiers().contains(Modifier.PROTECTED))) {
-                                problem = createProblem(problem, false, NbBundle.getMessage(MoveTransformer.class, "ERR_AccessesPackagePrivateFeature2",workingCopy.getFileObject().getName(),el, getTypeElement(el).getSimpleName()));
+                    if (el.getKind() != ElementKind.PACKAGE
+                            && !(el.getModifiers().contains(Modifier.PUBLIC) || el.getModifiers().contains(Modifier.PROTECTED))
+                            && !isElementMoving(el, isElementMoving)
+                            && getPackageOf(el).toString().equals(originalPackage)
+                            && !move.filesToMove.contains(getFileObject(el))) {
+                        problem = createProblem(problem, false, NbBundle.getMessage(MoveTransformer.class, "ERR_AccessesPackagePrivateFeature2",workingCopy.getFileObject().getName(),el, getTypeElement(el).getSimpleName()));
                     }
                 }
             }
@@ -161,9 +185,21 @@ public class MoveTransformer extends RefactoringVisitor {
         
         return super.visitIdentifier(node, p);
     }
+
+    private FileObject getFileObject(Element el) {
+        return SourceUtilsEx.getFile(el, workingCopy.getClasspathInfo(), cacheOfSrcFiles);
+    }
+
+    private boolean isThisPackageMoving(PackageElement el) {
+        return move.packages.contains(el.getQualifiedName().toString());
+    }
+
+    private String getTargetPackageName(Element el) {
+        return move.getTargetPackageName(getFileObject(el));
+    }
     
     private TypeElement getTypeElement(Element e) {
-        TypeElement t = SourceUtils.getEnclosingTypeElement(e);
+        TypeElement t = workingCopy.getElementUtilities().enclosingTypeElement(e);
         if (t==null && e instanceof TypeElement) {
             return (TypeElement) e;
         }
@@ -187,13 +223,11 @@ public class MoveTransformer extends RefactoringVisitor {
     }
 
     private boolean isPackageRename() {
-        return move.refactoring instanceof RenameRefactoring;
+        return move.isRenameRefactoring;
     }
     
-    
-    
     private boolean isThisFileReferencedbyOldPackage() {
-        Set<FileObject> references = new HashSet(move.whoReferences.get(workingCopy.getFileObject()));
+        Set<FileObject> references = new HashSet<FileObject>(move.whoReferences.get(workingCopy.getFileObject()));
         references.removeAll(move.filesToMove);
         for (FileObject file:references) {
             if (file.getParent().equals(originalFolder))
@@ -206,14 +240,22 @@ public class MoveTransformer extends RefactoringVisitor {
 //        //TODO: correctly implement
 //        return true;
 //    }
-    
-    private boolean isElementMoving(Element el) {
-        for (ElementHandle handle:move.classes.values()) {
-            if (handle.signatureEquals(el)) {
-                return true;
-            }
+
+    private boolean isElementMoving(Element el, Boolean[] cache) {
+        if (cache[0] == null) {
+            cache[0] = isElementMoving(el);
         }
-        return false;
+
+        return cache[0];
+    }
+
+    private boolean isElementMoving(Element el) {
+        ElementKind kind = el.getKind();
+        if (!(kind.isClass() || kind.isInterface())) {
+            return false;
+        }
+        ElementHandle<Element> elHandle = ElementHandle.create(el);
+        return classes2Move.contains(elHandle);
     }
     
     private boolean isTopLevelClass(Element el) {
@@ -229,18 +271,28 @@ public class MoveTransformer extends RefactoringVisitor {
             return result;
         }
         CompilationUnitTree cut = node;
+        List<? extends ImportTree> imports = cut.getImports();
+        if (!importToRemove.isEmpty()) {
+            List<ImportTree> temp = new ArrayList<ImportTree>(imports);
+            temp.removeAll(importToRemove);
+            imports = temp;
+        }
         if (isThisFileMoving) {
             // change package statement if old and new package exist, i.e.
             // neither old nor new package is default
             String newPckg = move.getTargetPackageName(workingCopy.getFileObject());
             if (node.getPackageName() != null && !"".equals(newPckg)) {
-                rewrite(node.getPackageName(), make.Identifier(move.getTargetPackageName(workingCopy.getFileObject())));
+                if (importToRemove.isEmpty()) {
+                    rewrite(node.getPackageName(), make.Identifier(newPckg));
+                } else {
+                    cut = make.CompilationUnit(make.Identifier(newPckg), imports, node.getTypeDecls(), node.getSourceFile());
+                }
             } else {
                 // in order to handle default package, we have to rewrite whole
                 // compilation unit:
                 cut = make.CompilationUnit(
                         "".equals(newPckg) ? null : make.Identifier(newPckg),
-                        node.getImports(),
+                        imports,
                         node.getTypeDecls(),
                         node.getSourceFile()
                 );
@@ -249,7 +301,7 @@ public class MoveTransformer extends RefactoringVisitor {
                 //add import to old package
                 ExpressionTree newPackageName = cut.getPackageName();
                 if (newPackageName != null) {
-                    cut = insertImport(cut, newPackageName.toString() + ".*", null); // NOI18N
+                    cut = insertImport(cut, newPackageName.toString() + ".*", null, null); // NOI18N
                 } else {
                     if (!moveToDefaulPackageProblem) {
                         problem = createProblem(problem, false, NbBundle.getMessage(MoveTransformer.class, "ERR_MovingClassToDefaultPackage"));
@@ -258,32 +310,54 @@ public class MoveTransformer extends RefactoringVisitor {
                 }
                       
             }
+        } else if (!importToRemove.isEmpty()) {
+            cut = make.CompilationUnit(node.getPackageName(), imports, node.getTypeDecls(), node.getSourceFile());
         }
+
         for (Element el:elementsToImport) {
-            FileObject fo = SourceUtils.getFile(el, workingCopy.getClasspathInfo());
-            String newPackageName = move.getTargetPackageName(fo);
-            if (!"".equals(newPackageName)) {
-                cut = insertImport(cut, newPackageName + "." +el.getSimpleName(), el); // NOI18N
+            String newPackageName = getTargetPackageName(el);
+            if (!"".equals(newPackageName)) { // NOI18N
+                cut = insertImport(cut, newPackageName + "." +el.getSimpleName(), el, newPackageName); // NOI18N
             }
         }
         rewrite(node, cut);
         return result;
     }
-    
-    private CompilationUnitTree insertImport(CompilationUnitTree node, String imp, Element orig) {
+
+    private CompilationUnitTree insertImport(CompilationUnitTree node, String imp, Element orig, String targetPkgOfOrig) {
         for (ImportTree tree: node.getImports()) {
             if (tree.getQualifiedIdentifier().toString().equals(imp)) 
                 return node;
             if (orig!=null) {
                 if (tree.getQualifiedIdentifier().toString().equals(getPackageOf(orig).getQualifiedName()+".*") && isPackageRename()) { // NOI18N
-                    FileObject fo = SourceUtils.getFile(orig, workingCopy.getClasspathInfo());
-                    rewrite(tree.getQualifiedIdentifier(), make.Identifier(move.getTargetPackageName(fo)+".*")); // NOI18N
+                    rewrite(tree.getQualifiedIdentifier(), make.Identifier(targetPkgOfOrig + ".*")); // NOI18N
                     return node;
                 }
             }
         }
         CompilationUnitTree nju = make.insertCompUnitImport(node, 0, make.Import(make.Identifier(imp), false));
         return nju;
+    }
+
+    @Override
+    public Tree visitImport(ImportTree node, Element p) {
+        if (!workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
+            final Element el = workingCopy.getTrees().getElement(new TreePath(getCurrentPath(), node.getQualifiedIdentifier()));
+            if (el != null) {
+                if (isElementMoving(el)) {
+                    String newPackageName = getTargetPackageName(el);
+
+                    if (!"".equals(newPackageName)) {
+                        String cuPackageName = RetoucheUtils.getPackageName(workingCopy.getCompilationUnit());
+                        if (cuPackageName.equals(newPackageName)) { //remove newly created import from same package
+                            importToRemove.add(node);
+                            return node;
+                        }
+                    }
+                }
+            }
+        }
+        return super.visitImport(node, p);
     }
     
 }
