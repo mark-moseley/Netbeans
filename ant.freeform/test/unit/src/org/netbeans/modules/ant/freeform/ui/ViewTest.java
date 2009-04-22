@@ -50,6 +50,7 @@ import java.util.TreeSet;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.modules.ant.freeform.FreeformProjectGenerator;
 import org.netbeans.modules.ant.freeform.FreeformProjectType;
 import org.netbeans.modules.ant.freeform.TestBase;
@@ -86,6 +87,7 @@ public class ViewTest extends TestBase {
     
     private LogicalViewProvider lvp;
     
+    @Override
     protected void setUp() throws Exception {
         super.setUp();
         ModuleInfo info = Lookup.getDefault().lookup(ModuleInfo.class);
@@ -106,7 +108,8 @@ public class ViewTest extends TestBase {
                 DataObject.find(egdirFO.getFileObject("extsrcroot/proj/nbproject/project.xml")),
                 kids[1].getLookup().lookup(DataObject.class));
     }
-    
+
+    @RandomlyFails // NB-Core-Build #1012
     public void testViewItemChanges() throws Exception {
         Node root = lvp.createLogicalView();
         Children ch = root.getChildren();
@@ -197,6 +200,7 @@ public class ViewTest extends TestBase {
         sf.appendChild(doc.createElementNS(Util.NAMESPACE, "location")).appendChild(doc.createTextNode("s"));
         Util.putPrimaryConfigurationData(helper, data);
         ProjectManager.getDefault().saveProject(p);
+        new java.awt.Robot().waitForIdle();
         Node r = p.getLookup().lookup(LogicalViewProvider.class).createLogicalView();
         assertEquals(appearanceEverything, expand(r));
         // Now configure includes and excludes.
@@ -211,6 +215,7 @@ public class ViewTest extends TestBase {
                 appendChild(doc.createTextNode("config.properties"));
         Util.putPrimaryConfigurationData(helper, data);
         ProjectManager.getDefault().saveProject(p);
+        new java.awt.Robot().waitForIdle();
         data = Util.getPrimaryConfigurationData(helper);
         doc = data.getOwnerDocument();
         sf = (Element) data.getElementsByTagName("source-folder").item(0);
@@ -220,18 +225,21 @@ public class ViewTest extends TestBase {
                 appendChild(doc.createTextNode("${excludes}"));
         Util.putPrimaryConfigurationData(helper, data);
         ProjectManager.getDefault().saveProject(p);
+        new java.awt.Robot().waitForIdle();
         assertEquals(appearanceIncludesExcludes, expand(r));
         // Now change them.
         ep = helper.getProperties("config.properties");
         ep.remove("includes");
         helper.putProperties("config.properties", ep);
         ProjectManager.getDefault().saveProject(p);
+        new java.awt.Robot().waitForIdle();
         assertEquals(appearanceExcludes, expand(r));
         // Also check floating includes.
         ep = helper.getProperties("config.properties");
         ep.put("includes", "relevant/included/");
         helper.putProperties("config.properties", ep);
         ProjectManager.getDefault().saveProject(p);
+        new java.awt.Robot().waitForIdle();
         assertEquals(appearanceFloating, expand(r));
     }
     public void testIncludesExcludes() throws Exception {
