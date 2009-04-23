@@ -41,10 +41,16 @@ import java.awt.GridBagConstraints;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.util.LinkedList;
 import java.util.List;
+import javax.swing.BoundedRangeModel;
 import javax.swing.JComponent;
+import javax.swing.JScrollBar;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import org.netbeans.installer.product.components.Product;
 import org.netbeans.installer.product.Registry;
 import org.netbeans.installer.utils.StringUtils;
@@ -169,7 +175,7 @@ public class LicensesPanel extends WizardPanel {
                 }
                 final String licenseValue = SystemUtils.resolveString(
                         System.getProperty(OVERALL_LICENSE_RESOURCE_PROPERTY));
-                final String license = SystemUtils.resolveString("$R{" + licenseValue + "}");
+                final String license = SystemUtils.resolveString("$R{" + licenseValue + ";" + StringUtils.ENCODING_UTF8 + "}");
                 final String format = component.getProperty(OVERALL_LICENSE_FORMAT_PROPERTY);
                 text.append(StringUtils.format(format, license));
             } else {
@@ -196,13 +202,49 @@ public class LicensesPanel extends WizardPanel {
                     }                    
                 }
             }
-            licensePane.setText(text);
+            if(System.getProperty(OVERALL_LICENSE_CONTENT_TYPE_PROPERTY)!=null) {
+                licensePane.setContentType(System.getProperty(
+                        OVERALL_LICENSE_CONTENT_TYPE_PROPERTY));
+            }
+            
+            licensePane.setText(text);            
             licensePane.setCaretPosition(0);
+            licensePane.requestFocus();
+
+            licensePane.addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    final int code = e.getKeyCode();
+                    if (code == KeyEvent.VK_SPACE || code == KeyEvent.VK_ENTER) {
+                        BoundedRangeModel brm = licenseScrollPane.getVerticalScrollBar().getModel();
+                        brm.setValue(brm.getValue() + brm.getExtent());
+                    } else if (code == KeyEvent.VK_N || code == KeyEvent.VK_Q) {
+                        container.getCancelButton().doClick();
+                    } else if (code == KeyEvent.VK_A || code == KeyEvent.VK_Y) {
+                        if (acceptCheckBox.isEnabled()) {
+                            acceptCheckBox.setSelected(true);
+                            acceptCheckBoxToggled();
+                        }
+                    }
+                }
+            });
+
+            if (System.getProperty(WHOLE_LICENSE_SCROLLING_REQUIRED) != null) {
+                licenseScrollPane.getVerticalScrollBar().getModel().addChangeListener(new ChangeListener() {
+
+                    public void stateChanged(ChangeEvent e) {
+                        JScrollBar vsb = licenseScrollPane.getVerticalScrollBar();
+                        if (vsb.getValue() >= vsb.getMaximum() - vsb.getModel().getExtent()) {
+                            acceptCheckBox.setEnabled(true);
+                        }
+                    }
+                });
+                acceptCheckBox.setEnabled(false);
+            }
             
             if (!everythingAccepted) {
                 acceptCheckBox.setSelected(false);
             }
-            
             acceptCheckBoxToggled();
         }
         
@@ -216,6 +258,7 @@ public class LicensesPanel extends WizardPanel {
             
             // licenseScrollPane ////////////////////////////////////////////////////
             licenseScrollPane = new NbiScrollPane(licensePane);
+            licenseScrollPane.setFocusable(true);
             
             // acceptCheckBox ///////////////////////////////////////////////////////
             acceptCheckBox = new NbiCheckBox();
@@ -269,12 +312,16 @@ public class LicensesPanel extends WizardPanel {
             "error.cannot.get.logic";//NOI18N
     public static final String OVERALL_LICENSE_RESOURCE_PROPERTY =
             "nbi.overall.license.resource";//NOI18N
+    public static final String OVERALL_LICENSE_CONTENT_TYPE_PROPERTY =
+            "nbi.overall.license.content.type";//NOI18N
     public static final String APPEND_LICENSE_FORMAT_PROPERTY =
             "append.license.format";//NOI18N
     public static final String OVERALL_LICENSE_FORMAT_PROPERTY =
             "overall.license.format";//NOI18N
     public static final String SINGLE_PRODUCT_LICENSE_FORMAT_PROPERTY =
             "single.product.license.format";//NOI18N
+    private static final String WHOLE_LICENSE_SCROLLING_REQUIRED =
+            "nbi.whole.license.scrolling.required";
     public static final String DEFAULT_TITLE =
             ResourceUtils.getString(LicensesPanel.class,
             "LP.title"); // NOI18N
