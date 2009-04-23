@@ -144,7 +144,7 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
     public void closeSessionOnExit(DLightSession session) {
         SessionState currentSessionState = session.getState();
         if (currentSessionState != SessionState.ANALYZE) {
-            session.closeOnRun();
+            session.closeOnExit();
         } else {
             session.close();
         }
@@ -173,7 +173,7 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
         if (sessions.isEmpty()) {
             setActiveSession(null);
         } else {
-            setActiveSession(sessions.get(0));
+            setActiveSession(sessions.get(sessions.size() -1));//last one will be active
         }
     }
 
