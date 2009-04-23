@@ -64,6 +64,8 @@ public class PreCreateBundleSummaryPanel extends WizardPanel {
     public PreCreateBundleSummaryPanel() {
         setProperty(TITLE_PROPERTY, 
                 DEFAULT_TITLE);
+        setProperty(DESCRIPTION_PROPERTY, 
+                DEFAULT_DESCRIPTION);
         
         setProperty(MESSAGE_TEXT_PROPERTY, 
                 DEFAULT_MESSAGE_TEXT);
@@ -149,6 +151,7 @@ public class PreCreateBundleSummaryPanel extends WizardPanel {
         // protected ////////////////////////////////////////////////////////////////
         @Override
         protected void initializeContainer() {
+            super.initializeContainer();
             container.getNextButton().setText(
                     component.getProperty(CREATE_BUTTON_TEXT_PROPERTY));
         }
@@ -217,11 +220,11 @@ public class PreCreateBundleSummaryPanel extends WizardPanel {
             
             // downloadSizeLabel ////////////////////////////////////////////////////
             downloadSizeLabel = new NbiLabel();
-            downloadSizeLabel.setFocusable(true);
+            //downloadSizeLabel.setFocusable(true);
             
             // requiredDiskSpaceLabel ///////////////////////////////////////////////
             requiredDiskSpaceLabel = new NbiLabel();
-            requiredDiskSpaceLabel.setFocusable(true);
+            //requiredDiskSpaceLabel.setFocusable(true);
             
             // spacer ///////////////////////////////////////////////////////////////
             spacer = new NbiPanel();
@@ -331,4 +334,7 @@ public class PreCreateBundleSummaryPanel extends WizardPanel {
     public static final String DEFAULT_TITLE =
             ResourceUtils.getString(PreCreateBundleSummaryPanel.class,
             "PrCBSPdialog.title"); // NOI18N
+    public static final String DEFAULT_DESCRIPTION =
+            ResourceUtils.getString(PreCreateBundleSummaryPanel.class,
+            "PrCBSPdialog.description"); // NOI18N    
 }
