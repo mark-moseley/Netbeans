@@ -54,9 +54,9 @@ import org.netbeans.junit.NbTestCase;
 import org.netbeans.junit.NbTestSuite;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.MIMEResolver;
 import org.openide.filesystems.XMLFileSystem;
+import org.openide.util.Exceptions;
 
 public class MIMEResolverImplTest extends NbTestCase {
     List<MIMEResolver> resolvers;
@@ -101,7 +101,6 @@ public class MIMEResolverImplTest extends NbTestCase {
         
         root = fs.getRoot().getFileObject("root");
         root.refresh();
-        FileUtil.setMIMEType("txt2", "text/plain; charset=us-ascii");        
     }
     
     private static MIMEResolver createResolver(FileObject fo) throws Exception {
@@ -125,20 +124,29 @@ public class MIMEResolverImplTest extends NbTestCase {
         TestThread t1 = new TestThread(tl1);
         TestThread t2 = new TestThread(tl2);
 
+        Thread.UncaughtExceptionHandler exceptionHandler = new Thread.UncaughtExceptionHandler() {
+
+            public void uncaughtException(Thread t, Throwable e) {
+                e.printStackTrace();
+                ((TestThread) t).fail = e.getMessage();
+            }
+        };
+
+        t1.setUncaughtExceptionHandler(exceptionHandler);
+        t2.setUncaughtExceptionHandler(exceptionHandler);
+
         // call resolver from two threads
-        
+
         t1.start();
         t2.start();
         Thread.currentThread().join(100);
         synchronized (tl1) {tl1.notify();}
         synchronized (tl2) {tl2.notify();}
-
  
         t1.join(5000);
         t2.join(5000);
-        
-        if (t1.fail != null) fail(t1.fail);
 
+        if (t1.fail != null) fail(t1.fail);
         if (t2.fail != null) fail(t2.fail);
     }
 
@@ -156,14 +164,6 @@ public class MIMEResolverImplTest extends NbTestCase {
             String s;
             FileObject fo = null;
 
-            fo = root.getFileObject("test","txt2");
-            s = resolve(fo);
-            if ("mime.xml".equals(s) == false) fail = "mime rule failure: " + fo + " => " + s;            
-
-            fo = root.getFileObject("test","txt3");
-            s = resolve(fo);
-            if (s != null) fail = "and-mime rule failure: " + fo + " => " + s;            
-                        
             fo = root.getFileObject("test","elf");
             s = resolve(fo);
             if ("magic-mask.xml".equals(s) == false) fail = "magic-mask rule failure: " + fo + " => " + s;
@@ -310,5 +310,46 @@ public class MIMEResolverImplTest extends NbTestCase {
     public void testExitResolver() {
         MIMEResolver resolver = MIMEResolverImpl.forDescriptor(resolversRoot.getFileObject("exit-resolver.xml"));
         assertMimeType(resolver, null, "php.txt");
+    }
+
+    /** Tests concurrent threads accessing MIMEResolverImpl. */
+    public void testDeadlock163378() {
+        final MIMEResolver declarativeResolver = MIMEResolverImpl.forDescriptor(resolversRoot.getFileObject("pattern-resolver-valid.xml"));
+        Handler handler = new Handler() {
+
+            private boolean threadStarted = false;
+
+            @Override
+            public void publish(LogRecord record) {
+                if (!threadStarted && "findMIMEType - smell.resolve.".equals(record.getMessage())) {
+                    Thread lockingThread = new Thread(new Runnable() {
+
+                        public void run() {
+                            declarativeResolver.findMIMEType(root.getFileObject("empty.dtd"));
+                        }
+                    }, "Locking");
+                    threadStarted = true;
+                    lockingThread.start();
+                    try {
+                        lockingThread.join();
+                    } catch (InterruptedException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() throws SecurityException {
+            }
+        };
+        Logger logger = Logger.getLogger(MIMEResolverImpl.class.getName());
+        logger.addHandler(handler);
+        logger.setLevel(Level.FINEST);
+        declarativeResolver.findMIMEType(root.getFileObject("empty.dtd"));
+        logger.removeHandler(handler);
     }
 }
