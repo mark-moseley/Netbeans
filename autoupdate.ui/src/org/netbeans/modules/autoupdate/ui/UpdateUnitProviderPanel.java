@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -48,11 +48,14 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.prefs.Preferences;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.netbeans.api.autoupdate.UpdateUnitProvider;
 import org.netbeans.api.autoupdate.UpdateUnitProviderFactory;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 
 /**
@@ -62,11 +65,12 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
     private DocumentListener listener;
     private FocusListener focusNameListener;
     private FocusListener focusUrlListener;
-    private JButton bOK = new JButton(NbBundle.getMessage(UpdateUnitProviderPanel.class, "UpdateUnitProviderPanel_OK"));//NOI18N        
+    private JButton bOK = new JButton(NbBundle.getMessage(UpdateUnitProviderPanel.class, "UpdateUnitProviderPanel_OK"));//NOI18N
     private Set<String> namesOfProviders = null;
     private boolean isEdit;
     private String originalName;
-    
+    private Icon errorIcon = ImageUtilities.loadImageIcon("org/netbeans/modules/autoupdate/ui/resources/error.png", false);
+
     /** Creates new form UpdateUnitProviderPanel */
     public UpdateUnitProviderPanel(boolean isActive, String name, String url, boolean editing) {
         isEdit = editing;
@@ -79,17 +83,29 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
         getAccessibleContext().setAccessibleName("ACN_UpdateCenterCustomizer");
         getAccessibleContext().setAccessibleDescription("ACD_UpdateCenterCustomizer");
     }
-    
+
     JButton getOKButton() {
         return bOK;
     }
-    
+
     @Override
     public void addNotify() {
         super.addNotify();
         addListeners ();
     }
-    
+
+    public void updateErrorMessage(String error) {
+        if (error == null) {
+            errorLabel.setText("");
+            errorLabel.setIcon(null);
+            bOK.setEnabled(true);
+        } else {
+            errorLabel.setText(error);
+            errorLabel.setIcon(errorIcon);
+            bOK.setEnabled(false);
+        }
+    }
+
     private void addListeners () {
         if (listener == null) {
             listener = new DocumentListener() {
@@ -103,56 +119,96 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
 
                 public void changedUpdate(DocumentEvent arg0) {
                     update();
-                }   
-                
-                private void update() {
-                    bOK.setEnabled(isValid());
                 }
-                
-                private boolean isValid() {
-                    boolean isOk = getProviderName().length() > 0 && getProviderURL ().length () > 0;
-                    if (isOk) {
-                        isOk = (isEdit && getProviderName().equals (originalName))
-                                || ! getNamesOfProviders ().contains (getProviderName ());
+
+                private void update() {
+                    updateErrorMessage(getErrorMessage());
+                }
+
+                private String getErrorMessage() {
+                    final String providerName = getProviderName();
+                    String url = getProviderURL();
+                    if (providerName.length() == 0) {
+                        return NbBundle.getMessage(UpdateUnitProviderPanel.class,
+                                "UpdateUnitProviderPanel.error.name.short");
+                    } else if (url.length() == 0) {
+                        return NbBundle.getMessage(UpdateUnitProviderPanel.class,
+                                "UpdateUnitProviderPanel.error.url.short");
                     }
-                    if (isOk) {
-                        String s = getProviderURL ();
-                        try {
-                            new URI (s).toURL ();
-                        } catch (MalformedURLException x) {
-                            isOk = false;
-                        } catch (URISyntaxException x) {
-                            isOk = false;
-                        } catch (IllegalArgumentException x) {
+
+                    if (!(isEdit && providerName.equals(originalName)) &&
+                            getNamesOfProviders().contains(providerName)) {
+                        return NbBundle.getMessage(UpdateUnitProviderPanel.class,
+                                "UpdateUnitProviderPanel.error.name.dup");
+                    }
+
+                    boolean isOk = true;
+                    try {
+                        new URI(url).toURL();
+                        //#132506
+                        if (url.startsWith("http:") && !url.startsWith("http://")) {
                             isOk = false;
                         }
+                        if (isOk) {
+                            //workaround for Issue #160766
+                            //Use "_removed" here instead of UpdateUnitProviderImpl.REMOVED_MASK since is private and not in api/spi
+                            if ((providerName + "_removed").length() > Preferences.MAX_NAME_LENGTH) {
+                                isOk = false;
+                            }
+                        }
+                    } catch (MalformedURLException x) {
+                        isOk = false;
+                    } catch (URISyntaxException x) {
+                        isOk = false;
+                    } catch (IllegalArgumentException x) {
+                        isOk = false;
                     }
-                    return isOk;
+                    if(!isOk) {
+                        return NbBundle.getMessage(UpdateUnitProviderPanel.class,
+                                "UpdateUnitProviderPanel.error.url.invalid");
+                    }
+                    return null;
                 }
             };
             focusNameListener = new FocusListener () {
+                int currentSelectionStart = 0;
+                int currentSelectionEnd = 0;
                 public void focusGained(FocusEvent e) {
-                    tfName.selectAll ();
+                    if (e.getOppositeComponent () != null) {
+                        tfName.selectAll ();
+                    } else {
+                        tfName.select (currentSelectionStart, currentSelectionEnd);
+                    }
                 }
                 public void focusLost(FocusEvent e) {
+                    currentSelectionStart = tfName.getSelectionStart ();
+                    currentSelectionEnd = tfName.getSelectionEnd ();
                     tfName.select (0, 0);
                 }
             };
             tfName.addFocusListener (focusNameListener);
-            
+
             focusUrlListener = new FocusListener () {
+                int currentSelectionStart = 0;
+                int currentSelectionEnd = 0;
                 public void focusGained(FocusEvent e) {
-                    tfURL.selectAll ();
+                    if (e.getOppositeComponent () != null) {
+                        tfURL.selectAll ();
+                    } else {
+                        tfURL.select (currentSelectionStart, currentSelectionEnd);
+                    }
                 }
                 public void focusLost(FocusEvent e) {
+                    currentSelectionStart = tfURL.getSelectionStart ();
+                    currentSelectionEnd = tfURL.getSelectionEnd ();
                     tfURL.select (0, 0);
                 }
             };
             tfURL.addFocusListener (focusUrlListener);
-            
+
             tfName.getDocument().addDocumentListener(listener);
             tfURL.getDocument().addDocumentListener(listener);
-        }        
+        }
     }
     
     private Set<String> getNamesOfProviders () {
@@ -203,7 +259,7 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
         lName = new javax.swing.JLabel();
@@ -211,6 +267,7 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
         lURL = new javax.swing.JLabel();
         tfURL = new javax.swing.JTextField();
         cbActive = new javax.swing.JCheckBox();
+        errorLabel = new javax.swing.JLabel();
 
         lName.setLabelFor(tfName);
         org.openide.awt.Mnemonics.setLocalizedText(lName, org.openide.util.NbBundle.getMessage(UpdateUnitProviderPanel.class, "UpdateUnitProviderPanel.lName.text")); // NOI18N
@@ -228,13 +285,16 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(lName)
-                    .add(lURL))
-                .add(15, 15, 15)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(tfURL, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 474, Short.MAX_VALUE)
-                    .add(tfName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 474, Short.MAX_VALUE)
-                    .add(cbActive))
+                    .add(errorLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 524, Short.MAX_VALUE)
+                    .add(layout.createSequentialGroup()
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(lName)
+                            .add(lURL))
+                        .add(15, 15, 15)
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(tfURL, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 474, Short.MAX_VALUE)
+                            .add(tfName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 474, Short.MAX_VALUE)
+                            .add(cbActive))))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -250,7 +310,9 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(lURL)
                     .add(tfURL, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(21, Short.MAX_VALUE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 20, Short.MAX_VALUE)
+                .add(errorLabel)
+                .addContainerGap())
         );
 
         lName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(UpdateUnitProviderPanel.class, "UpdateUnitProviderPanel.lName.adesc")); // NOI18N
@@ -261,6 +323,7 @@ public class UpdateUnitProviderPanel extends javax.swing.JPanel {
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JCheckBox cbActive;
+    private javax.swing.JLabel errorLabel;
     private javax.swing.JLabel lName;
     private javax.swing.JLabel lURL;
     private javax.swing.JTextField tfName;
