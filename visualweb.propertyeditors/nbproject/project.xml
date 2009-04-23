@@ -154,7 +154,7 @@ made subject to such option by the copyright holder.
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.3.1</specification-version>
+                        <specification-version>7.19</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -207,6 +207,7 @@ made subject to such option by the copyright holder.
                 <friend>org.netbeans.modules.visualweb.jsfsupport.designtime_1_1</friend>
                 <friend>org.netbeans.modules.visualweb.jsfsupport.designtime_1_2</friend>
                 <friend>org.netbeans.modules.visualweb.webui.designtime</friend>
+                <friend>org.icefaces.netbeans.modules.visualweb.frameworks</friend>
                 <package>com.sun.jsfcl.std</package>
                 <package>org.netbeans.modules.visualweb.propertyeditors</package>
                 <package>org.netbeans.modules.visualweb.propertyeditors.binding</package>
