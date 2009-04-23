@@ -54,19 +54,23 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.util.ElementFilter;
+import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.WorkingCopy;
+import org.netbeans.editor.GuardedException;
 import org.netbeans.modules.java.editor.codegen.GeneratorUtils;
 import org.netbeans.modules.java.hints.spi.ErrorRule;
 import org.netbeans.spi.editor.hints.ChangeInfo;
 import org.netbeans.spi.editor.hints.Fix;
+import org.openide.awt.StatusDisplayer;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
@@ -128,7 +132,7 @@ public final class ImplementAllAbstractMethods implements ErrorRule<Void> {
     private static void analyze(JavaSource js, int offset, CompilationInfo info, Performer performer) {
         final TreePath path = info.getTreeUtilities().pathFor(offset + 1);
         Element e = info.getTrees().getElement(path);
-        boolean isUsableElement = e != null && (e.getKind().isClass() || e.getKind().isInterface());
+        boolean isUsableElement = e != null && (e.getKind().isClass() || e.getKind().isInterface()) && e.getKind() != ElementKind.ENUM;
         
         if (isUsableElement) {
             //#85806: do not propose implement all abstract methods when the current class contains abstract methods:
@@ -199,6 +203,13 @@ public final class ImplementAllAbstractMethods implements ErrorRule<Void> {
                                             copy.getDocument().insertString(insertOffset, " {}", null);
                                             offset = insertOffset + 1;
                                             repeat[0] = true;
+                                        } catch (GuardedException e) {
+                                            SwingUtilities.invokeLater(new Runnable() {
+                                                public void run() {
+                                                    String message = NbBundle.getMessage(ImplementAllAbstractMethods.class, "ERR_CannotApplyGuarded");
+                                                    StatusDisplayer.getDefault().setStatusText(message);
+                                                }
+                                            });
                                         } catch (BadLocationException e) {
                                             Exceptions.printStackTrace(e);
                                         } catch (IOException e) {
