@@ -42,13 +42,13 @@
 package org.netbeans.modules.cnd.apt.impl.support;
 
 import java.util.List;
-import org.netbeans.modules.cnd.apt.debug.APTTraceFlags;
 import org.netbeans.modules.cnd.apt.structure.APTInclude;
 import org.netbeans.modules.cnd.apt.structure.APTIncludeNext;
 import org.netbeans.modules.cnd.apt.support.APTIncludeResolver;
 import org.netbeans.modules.cnd.apt.support.APTMacroCallback;
 import org.netbeans.modules.cnd.apt.utils.APTIncludeUtils;
 import org.netbeans.modules.cnd.apt.support.ResolvedPath;
+import org.netbeans.modules.cnd.utils.cache.FilePathCache;
 
 /**
  * implementation of include resolver
@@ -56,14 +56,14 @@ import org.netbeans.modules.cnd.apt.support.ResolvedPath;
  */
 public class APTIncludeResolverImpl implements APTIncludeResolver {
     private final int baseFileIncludeDirIndex;
-    private final String baseFile;
-    private final List<String> systemIncludePaths;
-    private final List<String> userIncludePaths;  
+    private final CharSequence baseFile;
+    private final List<CharSequence> systemIncludePaths;
+    private final List<CharSequence> userIncludePaths;
     
-    public APTIncludeResolverImpl(String path, int baseFileIncludeDirIndex, 
-                                    List<String> systemIncludePaths,
-                                    List<String> userIncludePaths) {
-        this.baseFile = path;
+    public APTIncludeResolverImpl(CharSequence path, int baseFileIncludeDirIndex,
+                                    List<CharSequence> systemIncludePaths,
+                                    List<CharSequence> userIncludePaths) {
+        this.baseFile = FilePathCache.getManager().getString(path);
         this.systemIncludePaths = systemIncludePaths;
         this.userIncludePaths = userIncludePaths;
         this.baseFileIncludeDirIndex = baseFileIncludeDirIndex;
@@ -77,31 +77,31 @@ public class APTIncludeResolverImpl implements APTIncludeResolver {
         return resolveFilePath(apt.getFileName(callback), apt.isSystem(callback), true);
     }
 
-    public String getBasePath() {
+    public CharSequence getBasePath() {
         return baseFile;
     }
     
     ////////////////////////////////////////////////////////////////////////////
     // implementation details    
         
-    private ResolvedPath resolveFilePath(String file, boolean system, boolean includeNext) {
+    private ResolvedPath resolveFilePath(String includedFile, boolean system, boolean includeNext) {
         ResolvedPath result = null;
-        if (file != null && (file.length() > 0)) {  
-            result = APTIncludeUtils.resolveAbsFilePath(file);
+        if (includedFile != null && (includedFile.length() > 0)) {
+            result = APTIncludeUtils.resolveAbsFilePath(includedFile);
             if (result == null && !system && !includeNext) {
                 // for <system> "current dir" has lowest priority
                 // for #include_next should start from another dir
-                result = APTIncludeUtils.resolveFilePath(file, baseFile);
+                result = APTIncludeUtils.resolveFilePath(includedFile, baseFile);
             }
             if ( result == null) {
                 int startOffset = includeNext ? baseFileIncludeDirIndex+1 : 0;
                 PathsCollectionIterator paths = 
                         new PathsCollectionIterator(userIncludePaths, systemIncludePaths, startOffset);
-                result = APTIncludeUtils.resolveFilePath(paths, file, startOffset);
+                result = APTIncludeUtils.resolveFilePath(paths, includedFile, startOffset);
             }
             if ( result == null && system && !includeNext) {
                 // <system> was skipped above, check now, but not for #include_next
-                result = APTIncludeUtils.resolveFilePath(file, baseFile);
+                result = APTIncludeUtils.resolveFilePath(includedFile, baseFile);
             }
         }
         return result;
