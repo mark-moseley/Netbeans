@@ -38,130 +38,116 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+
 package org.netbeans.modules.cnd.makeproject.configurations.ui;
 
 import java.beans.PropertyEditor;
 import java.beans.PropertyEditorSupport;
-import java.util.ArrayList;
-import java.util.List;
-import org.netbeans.modules.cnd.makeproject.api.configurations.CompilerSet2Configuration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.PlatformConfiguration;
 import org.openide.nodes.Node;
 
-public class CompilerSetNodeProp extends Node.Property<String> {
-
-    private CompilerSet2Configuration configuration;
+public class PlatformNodeProp extends Node.Property {
+    
+    private PlatformConfiguration platformConfiguration;
+    private PlatformEditor editor;
     private boolean canWrite;
-    //private String txt1;
-    private String txt2;
-    private String txt3;
-    private String oldname;
+    private String name;
+    private String description;
 
-    public CompilerSetNodeProp(CompilerSet2Configuration configuration, boolean canWrite, String txt1, String txt2, String txt3) {
-        super(String.class);
-        this.configuration = configuration;
+    @SuppressWarnings("unchecked")
+    public PlatformNodeProp(PlatformConfiguration platformConfiguration, boolean canWrite, String name, String description) {
+        super(Integer.class);
+        this.platformConfiguration = platformConfiguration;
         this.canWrite = canWrite;
-        //this.txt1 = txt1;
-        this.txt2 = txt2;
-        this.txt3 = txt3;
-        oldname = configuration.getOption();
-        configuration.setCompilerSetNodeProp(this);
-    }
-
-    public String getOldname() {
-        return oldname;
+        this.name = name;
+        this.description = description;
+        platformConfiguration.setPlatformNodeProp(this);
+        editor = null;
     }
 
     @Override
     public String getName() {
-        return txt2;
+        return name;
     }
 
     @Override
     public String getShortDescription() {
-        return txt3;
+        return description;
     }
-
+    
     @Override
     public String getHtmlDisplayName() {
-        if (configuration.getCompilerSetName().getModified()) {
-            return configuration.isDevHostSetUp() ? "<b>" + getDisplayName() : getDisplayName(); // NOI18N
+        if (platformConfiguration.getModified()) {
+            return platformConfiguration.isConfigured() ? "<b>" + getDisplayName() : getDisplayName(); // NOI18N
         } else {
             return null;
         }
     }
-
-    public String getValue() {
-        return configuration.getCompilerSetName().getValue();
+    
+    public Object getValue() {
+        return Integer.valueOf(platformConfiguration.getValue());
     }
-
-    public void setValue(String v) {
-        configuration.setValue(v);
+    
+    public void setValue(Object v) {
+        platformConfiguration.setValue((String)v);
     }
-
+    
     @Override
     public void restoreDefaultValue() {
-        configuration.getCompilerSetName().reset();
+        platformConfiguration.reset();
     }
-
+    
     @Override
     public boolean supportsDefaultValue() {
         return true;
     }
-
+    
     @Override
     public boolean isDefaultValue() {
-        return !configuration.getCompilerSetName().getModified();
+        return !platformConfiguration.getModified();
     }
 
     public boolean canWrite() {
         return canWrite;
     }
-
+    
     public boolean canRead() {
         return true;
     }
 
-    public void repaint() {
-        ((CompilerSetEditor) getPropertyEditor()).repaint();
-    }
-
     @Override
     public PropertyEditor getPropertyEditor() {
-        return new CompilerSetEditor();
+        if (editor == null) {
+            editor = new PlatformEditor();
+        }
+        return editor;
+    }
+    
+    public void repaint() {
+        ((PlatformEditor) getPropertyEditor()).repaint();
     }
 
-    private class CompilerSetEditor extends PropertyEditorSupport {
-
+    private class PlatformEditor extends PropertyEditorSupport {
         @Override
         public String getJavaInitializationString() {
             return getAsText();
         }
-
+        
         @Override
         public String getAsText() {
-            String displayName = configuration.getDisplayName(true);
-            return displayName;
+            return platformConfiguration.getName();
         }
-
+        
         @Override
-        public void setAsText(String text) throws java.lang.IllegalArgumentException {
+        public void setAsText(String text) throws IllegalArgumentException {
             super.setValue(text);
         }
-
+        
         @Override
         public String[] getTags() {
-            List<String> list = new ArrayList<String>();
-            // TODO: this works unpredictable on switching development hosts
-            // TODO: should be resolved later on
-//            if (configuration.getCompilerSetManager().getCompilerSet(getOldname()) == null) {
-//                list.add(getOldname());
-//            }
-            if (configuration.isDevHostSetUp()) {
-                list.addAll(configuration.getCompilerSetManager().getCompilerSetNames());
-            }
-            return list.toArray(new String[list.size()]);
+            return platformConfiguration.getNames();
         }
-
+        
         public void repaint() {
             firePropertyChange();
         }
