@@ -50,17 +50,46 @@ made subject to such option by the copyright holder.
             <file name="beans_binding.xml" url="beans_binding.xml"/>
         </folder>
     </folder>
-
-    <folder name="UI">
-      <folder name="Services">
-        <folder name="Editing">
-            <file name="FormSettingsNode.instance">
-                <attr name="instanceCreate" methodvalue="org.netbeans.modules.form.FormLoaderSettings.createViewNode"/>
+  <folder name="Loaders">
+    <folder name="text">
+        <folder name="x-java">
+            <folder name="Factories">
+                <file name="org-netbeans-modules-form-FormDataLoader.instance">
+                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
+                        <attr name="position" intvalue="100"/>
+                </file>
+            </folder>
+        </folder>
+        <folder name="x-form">
+            <folder name="Factories">
+                <file name="org-netbeans-modules-form-FormDataLoader.instance">
+                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
+                        <attr name="position" intvalue="100"/>
+                </file>
+            </folder>
+        </folder>
+        <folder name="x-palette-item">
+            <folder name="Factories">
+                <file name="org-netbeans-modules-form-palette-PaletteItemDataObject$PaletteItemDataLoader.instance">
+                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
+                        <attr name="position" intvalue="100"/>
+                </file>
+            </folder>
+        </folder>
+    </folder>
+   </folder>
+    <folder name="Services">
+        <folder name="MIMEResolver">
+            <file name="SwingPaletteItemResolver.xml" url="PaletteItemResolver.xml">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
+                <attr name="position" intvalue="50037"/>
             </file>
-        </folder> <!-- Editing -->
-      </folder> <!-- Services -->
-    </folder> <!-- UI -->
-
+            <file name="FormResolver.xml" url="FormResolver.xml">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
+                <attr name="position" intvalue="137"/>
+            </file>
+        </folder>
+    </folder>
     <folder name="Actions">
         <folder name="Form">
             <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
@@ -92,7 +121,6 @@ made subject to such option by the copyright holder.
         </folder>
         <folder name="Tools">
             <folder name="PaletteManager">
-                <attr name="position" intvalue="1200"/>
                 <file name="org-netbeans-modules-form-actions-InstallBeanAction.instance">
                     <attr name="position" intvalue="100"/>
                 </file>
@@ -399,7 +427,8 @@ made subject to such option by the copyright holder.
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="500"/>
                 <attr name="template" boolvalue="true"/>
-                <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/JApplet.html"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/FormJApplet.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/applet.gif"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/javax/swing/beaninfo/images/JAppletColor32.gif"/>
                 <attr name="instantiatingIterator" methodvalue="org.netbeans.modules.form.wizard.TemplateWizardIterator.create"/>
@@ -407,12 +436,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="JApplet.form" url="templates/SwingForms/JApplet_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="JDialog.java" url="templates/SwingForms/JDialog_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="100"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>                
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/JDialog.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/dialog_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/dialog_32.png"/>
@@ -421,12 +452,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="JDialog.form" url="templates/SwingForms/JDialog_form">
                 <attr name="template" boolvalue="true"/>                
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="JFrame.java" url="templates/SwingForms/JFrame_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="200"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>                
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/JFrame.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/frame_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/frame_32.png"/>
@@ -435,12 +468,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="JFrame.form" url="templates/SwingForms/JFrame_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="JInternalFrame.java" url="templates/SwingForms/JInternalFrame_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="300"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/JInternalFrame.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/internal_frame_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/internal_frame_32.png"/>
@@ -449,12 +484,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="JInternalFrame.form" url="templates/SwingForms/JInternalFrame_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="JPanel.java" url="templates/SwingForms/JPanel_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="400"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/JPanel.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/panel_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/panel_32.png"/>
@@ -463,12 +500,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="JPanel.form" url="templates/SwingForms/JPanel_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="BeanForm.java" url="templates/SwingForms/BeanForm_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="600"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/BeanForm.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/panel_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/panel_32.png"/>
@@ -477,12 +516,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="BeanForm.form" url="templates/SwingForms/BeanForm_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
             
             <file name="Application.java" url="templates/Dialogs/Application_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="700"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/Application.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/frame_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/frame_32.png"/>
@@ -491,12 +532,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="Application.form" url="templates/Dialogs/Application_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="MDIApplication.java" url="templates/Dialogs/MDIApplication_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="template" boolvalue="true"/>
                 <attr name="position" intvalue="800"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/MDIApplication.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/frame_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/frame_32.png"/>
@@ -505,12 +548,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="MDIApplication.form" url="templates/Dialogs/MDIApplication_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="OkCancelDialog.java" url="templates/Dialogs/OkCancelDialog_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="1000"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/OKCancelDialog.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/dialog_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/dialog_32.png"/>
@@ -519,6 +564,7 @@ made subject to such option by the copyright holder.
             </file>
             <file name="OkCancelDialog.form" url="templates/Dialogs/OkCancelDialog_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
             
             
@@ -535,7 +581,8 @@ made subject to such option by the copyright holder.
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="100"/>
                 <attr name="template" boolvalue="true"/>
-                <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/Applet.html"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/FormApplet.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/applet.gif"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/javax/swing/beaninfo/images/JAppletColor32.gif"/>
                 <attr name="instantiatingIterator" methodvalue="org.netbeans.modules.form.wizard.TemplateWizardIterator.create"/>
@@ -543,12 +590,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="Applet.form" url="templates/AWTForms/Applet_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="Dialog.java" url="templates/AWTForms/Dialog_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="200"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/Dialog.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/dialog_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/dialog_32.png"/>
@@ -557,12 +606,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="Dialog.form" url="templates/AWTForms/Dialog_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="Frame.java" url="templates/AWTForms/Frame_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="300"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/Frame.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/frame_16.png"/>
                 <attr name="SystemFileSystem.icon32" urlvalue="nbresloc:/org/netbeans/modules/form/resources/palette/frame_32.png"/>
@@ -571,12 +622,14 @@ made subject to such option by the copyright holder.
             </file>
             <file name="Frame.form" url="templates/AWTForms/Frame_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
 
             <file name="Panel.java" url="templates/AWTForms/Panel_java">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.form.resources.Bundle"/>
                 <attr name="position" intvalue="400"/>
                 <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
                 <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/form/resources/Panel.html"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/form/beaninfo/awt/panel.gif"/>
                 <attr name="instantiatingIterator" methodvalue="org.netbeans.modules.form.wizard.TemplateWizardIterator.create"/>
@@ -584,6 +637,7 @@ made subject to such option by the copyright holder.
             </file>
             <file name="Panel.form" url="templates/AWTForms/Panel_form">
                 <attr name="template" boolvalue="true"/>
+                <attr name="templateCategory" stringvalue="java-forms"/>
             </file>
         </folder>
 
@@ -606,7 +660,7 @@ made subject to such option by the copyright holder.
         <folder name="Modes">
             <folder name="navigator">
                 <file name="ComponentInspector.wstcref" url="windowmanager/inspector/ComponentInspector.wstcref">
-                    <attr name="position" intvalue="500"/>
+                    <attr name="position" intvalue="200"/>
                 </file>
             </folder>
         </folder>
@@ -636,7 +690,22 @@ made subject to such option by the copyright holder.
     <folder name="OptionsDialog">
         <folder name="Advanced">
             <file name="FormEditor.instance">
-                <attr name="instanceClass" stringvalue="org.netbeans.modules.form.FormEditorOptions"/>
+                <attr name="instanceCreate" methodvalue="org.netbeans.spi.options.AdvancedOption.createSubCategory"/>
+
+                <attr name="displayName" bundlevalue="org.netbeans.modules.form.Bundle#Form_Editor"/>
+                <attr name="toolTip" bundlevalue="org.netbeans.modules.form.Bundle#Form_Editor_Tooltip"/>
+                <attr name="controller" newvalue="org.netbeans.modules.form.FormEditorPanelController"/>
+                <attr name="keywords" bundlevalue="org.netbeans.modules.form.Bundle#KW_FormOptions"/>
+                <attr name="keywordsCategory" stringvalue="Advanced/FormEditor"/>
+            </file>
+        </folder>
+    </folder>
+
+    <folder name="OptionsExport">
+        <folder name="Advanced">
+            <file name="Form">
+                <attr name="include" stringvalue="config/FormDesignerPalette/.*|config/Services/formsettings[.]settings"/>
+                <attr name="displayName" bundlevalue="org.netbeans.modules.form.Bundle#Form.Options.Export.displayName"/>
             </file>
         </folder>
     </folder>
