@@ -57,30 +57,25 @@ import org.netbeans.lib.profiler.results.cpu.CPUResultsSnapshot;
 import org.netbeans.lib.profiler.results.memory.MemoryCCTProvider;
 import org.netbeans.lib.profiler.ui.LiveResultsPanel;
 import org.netbeans.lib.profiler.ui.UIUtils;
-import org.netbeans.lib.profiler.ui.charts.ChartActionListener;
-import org.netbeans.lib.profiler.ui.charts.SynchronousXYChart;
 import org.netbeans.lib.profiler.ui.cpu.CPUResUserActionsHandler;
 import org.netbeans.lib.profiler.ui.cpu.CodeRegionLivePanel;
 import org.netbeans.lib.profiler.ui.cpu.FlatProfilePanel;
 import org.netbeans.lib.profiler.ui.cpu.LiveFlatProfilePanel;
 import org.netbeans.lib.profiler.ui.cpu.statistics.StatisticalModuleContainer;
-import org.netbeans.lib.profiler.ui.cpu.statistics.drilldown.DrillDownListener;
-import org.netbeans.lib.profiler.ui.graphs.GraphPanel;
+import org.netbeans.modules.profiler.ui.stats.drilldown.DrillDownListener;
 import org.netbeans.lib.profiler.ui.memory.LiveAllocResultsPanel;
 import org.netbeans.lib.profiler.ui.memory.LiveLivenessResultsPanel;
 import org.netbeans.lib.profiler.ui.memory.MemoryResUserActionsHandler;
 import org.netbeans.modules.profiler.actions.ResetResultsAction;
 import org.netbeans.modules.profiler.actions.TakeSnapshotAction;
-import org.netbeans.modules.profiler.spi.ProjectTypeProfiler;
-import org.netbeans.modules.profiler.ui.stats.drilldown.hierarchical.DrillDown;
+import org.netbeans.modules.profiler.ui.stats.drilldown.DrillDown;
 import org.netbeans.modules.profiler.ui.stp.ProfilingSettingsManager;
 import org.netbeans.modules.profiler.utils.IDEUtils;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
 import org.openide.util.actions.Presenter;
 import org.openide.util.actions.SystemAction;
 import org.openide.windows.TopComponent;
@@ -88,33 +83,43 @@ import org.openide.windows.TopComponentGroup;
 import org.openide.windows.WindowManager;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Image;
-import java.awt.Insets;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
+import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.AbstractAction;
+import javax.swing.Action;
 import javax.swing.BorderFactory;
-import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JScrollBar;
 import javax.swing.JTabbedPane;
 import javax.swing.JToggleButton;
 import javax.swing.JToolBar;
-import javax.swing.border.BevelBorder;
-import javax.swing.border.CompoundBorder;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.lib.profiler.results.ExportDataDumper;
+import org.netbeans.lib.profiler.results.memory.ClassHistoryDataManager;
+import org.netbeans.lib.profiler.results.memory.PresoObjAllocCCTNode;
+import org.netbeans.lib.profiler.ui.graphs.AllocationsHistoryGraphPanel;
+import org.netbeans.lib.profiler.ui.graphs.LivenessHistoryGraphPanel;
+import org.netbeans.lib.profiler.ui.memory.ClassHistoryActionsHandler;
+import org.netbeans.lib.profiler.ui.memory.ClassHistoryModels;
+import org.netbeans.lib.profiler.utils.VMUtils;
+import org.netbeans.modules.profiler.ui.ProfilerDialogs;
+import org.netbeans.modules.profiler.ui.stats.drilldown.DrillDownFactory;
 
 
 /**
@@ -123,8 +128,12 @@ import javax.swing.event.ChangeListener;
  * @author Tomas Hurka
  * @author Ian Formanek
  */
-public final class LiveResultsWindow extends TopComponent implements ResultsListener, ProfilingStateListener, HistoryListener,
-                                                                     SaveViewAction.ViewProvider {
+public final class LiveResultsWindow extends TopComponent
+                                     implements ResultsListener,
+                                                ProfilingStateListener,
+                                                SaveViewAction.ViewProvider,
+                                                ExportAction.ExportProvider {
+
     //~ Inner Classes ------------------------------------------------------------------------------------------------------------
 
     public static final class EmptyLiveResultsPanel extends JPanel implements LiveResultsPanel {
@@ -171,6 +180,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         }
     }
 
+    @org.openide.util.lookup.ServiceProviders({@org.openide.util.lookup.ServiceProvider(service=org.netbeans.lib.profiler.results.cpu.CPUCCTProvider.Listener.class), @org.openide.util.lookup.ServiceProvider(service=org.netbeans.lib.profiler.results.memory.MemoryCCTProvider.Listener.class)})
     public static final class ResultsMonitor implements CPUCCTProvider.Listener, MemoryCCTProvider.Listener {
         //~ Methods --------------------------------------------------------------------------------------------------------------
 
@@ -275,182 +285,18 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         }
     }
 
-    private static final class GraphTab extends JPanel implements ActionListener, ChartActionListener {
-        //~ Static fields/initializers -------------------------------------------------------------------------------------------
-
-        private static final ImageIcon zoomInIcon = new ImageIcon(Utilities.loadImage("org/netbeans/lib/profiler/ui/resources/zoomIn.png")); //NOI18N
-        private static final ImageIcon zoomOutIcon = new ImageIcon(Utilities.loadImage("org/netbeans/lib/profiler/ui/resources/zoomOut.png")); //NOI18N
-        private static final ImageIcon zoomIcon = new ImageIcon(Utilities.loadImage("org/netbeans/lib/profiler/ui/resources/zoom.png")); //NOI18N
-        private static final ImageIcon scaleToFitIcon = new ImageIcon(Utilities.loadImage("org/netbeans/lib/profiler/ui/resources/scaleToFit.png")); //NOI18N
-
-        //~ Instance fields ------------------------------------------------------------------------------------------------------
-
-        final GraphPanel panel;
-        final JButton scaleToFitButton;
-        final JButton zoomInButton;
-        final JButton zoomOutButton;
-        private final JScrollBar scrollBar;
-        private boolean lastTrackingEnd;
-        private double lastScale;
-        private long lastOffset;
-
-        //~ Constructors ---------------------------------------------------------------------------------------------------------
-
-        public GraphTab(final GraphPanel panel) {
-            this.panel = panel;
-
-            setLayout(new BorderLayout());
-
-            final boolean scaleToFit = panel.getChart().isFitToWindow();
-
-            zoomInButton = new JButton(zoomInIcon);
-            zoomInButton.setToolTipText(ZOOM_IN_TOOLTIP);
-            zoomInButton.getAccessibleContext().setAccessibleName(ZOOM_IN_TOOLTIP);
-            zoomOutButton = new JButton(zoomOutIcon);
-            zoomOutButton.setToolTipText(ZOOM_OUT_TOOLTIP);
-            zoomOutButton.getAccessibleContext().setAccessibleName(ZOOM_OUT_TOOLTIP);
-            scaleToFitButton = new JButton(scaleToFit ? zoomIcon : scaleToFitIcon);
-            scaleToFitButton.setToolTipText(scaleToFit ? FIXED_SCALE_TOOLTIP : SCALE_TO_FIT_TOOLTIP);
-            scaleToFitButton.getAccessibleContext().setAccessibleName(scaleToFit ? FIXED_SCALE_TOOLTIP : SCALE_TO_FIT_TOOLTIP);
-
-            scrollBar = new JScrollBar(JScrollBar.HORIZONTAL);
-
-            zoomInButton.setEnabled(!scaleToFit);
-            zoomOutButton.setEnabled(!scaleToFit);
-            scrollBar.setEnabled(!scaleToFit);
-
-            if (!panel.getChart().containsValidData()) {
-                scaleToFitButton.setEnabled(false);
-                zoomInButton.setEnabled(false);
-                zoomOutButton.setEnabled(false);
-            }
-
-            final JPanel graphPanel = new JPanel();
-            graphPanel.setLayout(new BorderLayout());
-            graphPanel.setBorder(new CompoundBorder(new EmptyBorder(new Insets(0, 0, 0, 0)), new BevelBorder(BevelBorder.LOWERED)));
-            graphPanel.add(panel, BorderLayout.CENTER);
-            graphPanel.add(scrollBar, BorderLayout.SOUTH);
-
-            final JPanel legendContainer = new JPanel();
-            legendContainer.setLayout(new FlowLayout(FlowLayout.TRAILING));
-
-            if (panel.getBigLegendPanel() != null) {
-                legendContainer.add(panel.getBigLegendPanel());
-            }
-
-            //            add(toolBar, BorderLayout.NORTH);
-            add(graphPanel, BorderLayout.CENTER);
-            add(legendContainer, BorderLayout.SOUTH);
-
-            zoomInButton.addActionListener(this);
-            zoomOutButton.addActionListener(this);
-            scaleToFitButton.addActionListener(this);
-
-            panel.getChart().associateJScrollBar(scrollBar);
-            panel.getChart().addChartActionListener(this);
-        }
-
-        //~ Methods --------------------------------------------------------------------------------------------------------------
-
-        // --- ActionListener -------------------------------------------------------
-        public void actionPerformed(final ActionEvent e) {
-            final SynchronousXYChart xyChart = panel.getChart();
-
-            if (e.getSource() == scaleToFitButton) {
-                if (xyChart.isFitToWindow()) {
-                    if (lastTrackingEnd) {
-                        xyChart.setTrackingEnd(lastScale);
-                    } else {
-                        xyChart.setScaleAndOffsetX(lastScale, lastOffset);
-                    }
-                } else {
-                    lastScale = xyChart.getScale();
-                    lastOffset = xyChart.getViewOffsetX();
-                    lastTrackingEnd = xyChart.isTrackingEnd();
-                    xyChart.setFitToWindow();
-                }
-
-                //updateButtons();
-            } else if (e.getSource() == zoomInButton) {
-                xyChart.setScale(xyChart.getScale() * 2);
-            } else if (e.getSource() == zoomOutButton) {
-                xyChart.setScale(xyChart.getScale() / 2);
-            }
-        }
-
-        public void chartDataChanged() {
-            updateZoomButtons();
-        }
-
-        public void chartFitToWindowChanged() {
-            if (panel.getChart().isFitToWindow()) {
-                scaleToFitButton.setIcon(zoomIcon);
-                scaleToFitButton.setToolTipText(FIXED_SCALE_TOOLTIP);
-                scaleToFitButton.getAccessibleContext().setAccessibleName(FIXED_SCALE_TOOLTIP);
-            } else {
-                scaleToFitButton.setIcon(scaleToFitIcon);
-                scaleToFitButton.setToolTipText(SCALE_TO_FIT_TOOLTIP);
-                scaleToFitButton.getAccessibleContext().setAccessibleName(SCALE_TO_FIT_TOOLTIP);
-            }
-
-            updateZoomButtons();
-        }
-
-        public void chartPanned() {
-        }
-
-        public void chartTrackingEndChanged() {
-        }
-
-        public void chartZoomed() {
-            updateZoomButtons();
-        }
-
-        // --- ChartActionListener -------------------------------------------------
-        private void updateZoomButtons() {
-            if (!panel.getChart().containsValidData()) {
-                scaleToFitButton.setEnabled(false);
-                zoomInButton.setEnabled(false);
-                zoomOutButton.setEnabled(false);
-            } else {
-                scaleToFitButton.setEnabled(true);
-
-                if (panel.getChart().isFitToWindow()) {
-                    zoomInButton.setEnabled(false);
-                    zoomOutButton.setEnabled(false);
-                } else {
-                    if (panel.getChart().isMaximumZoom()) {
-                        zoomInButton.setEnabled(false);
-                    } else {
-                        zoomInButton.setEnabled(true);
-                    }
-
-                    if (panel.getChart().isMinimumZoom()) {
-                        zoomOutButton.setEnabled(false);
-                    } else {
-                        zoomOutButton.setEnabled(true);
-                    }
-                }
-            }
-        }
-    }
-
     private final class MemoryActionsHandler implements MemoryResUserActionsHandler {
         //~ Methods --------------------------------------------------------------------------------------------------------------
 
         public void showSourceForMethod(final String className, final String methodName, final String methodSig) {
-            if (className.length() == 1) {
-                if (BOOLEAN_CODE.equals(className) || CHAR_CODE.equals(className) || BYTE_CODE.equals(className)
-                        || SHORT_CODE.equals(className) || INT_CODE.equals(className) || LONG_CODE.equals(className)
-                        || FLOAT_CODE.equals(className) || DOUBLE_CODE.equals(className)) {
-                    // primitive type
-                    Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
-
-                    return;
-                }
-            }
-
-            Profiler.getDefault().openJavaSource(className, methodName, methodSig);
+            // Check if primitive type/array
+            if ((methodName == null && methodSig == null) && (VMUtils.isVMPrimitiveType(className) ||
+                 VMUtils.isPrimitiveType(className))) Profiler.getDefault().displayWarning(CANNOT_SHOW_PRIMITIVE_SRC_MSG);
+            // Check if allocated by reflection
+            else if (PresoObjAllocCCTNode.VM_ALLOC_CLASS.equals(className) && PresoObjAllocCCTNode.VM_ALLOC_METHOD.equals(methodName))
+                     Profiler.getDefault().displayWarning(CANNOT_SHOW_REFLECTION_SRC_MSG);
+            // Display source
+            else NetBeansProfiler.getDefaultNB().openJavaSource(className, methodName, methodSig);
         }
 
         public void showStacksForClass(final int selectedClassId, final int sortingColumn, final boolean sortingOrder) {
@@ -471,6 +317,86 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
                         }
                     }
                 });
+        }
+    }
+
+    private final class HistoryActionsHandler implements ClassHistoryActionsHandler {
+        public void showClassHistory(int classID, final String className) {
+
+            int currentlyTrackedClass = classHistoryManager.getTrackedClassID();
+            String currentlyTrackedClassName = classHistoryManager.getTrackedClassName();
+            if (currentlyTrackedClass != -1) {
+                if (classID == currentlyTrackedClass) {
+                    ProfilerDialogs.DNSAConfirmationChecked dnsa =
+                            new ProfilerDialogs.DNSAConfirmationChecked(
+                                        "History.historylogging.reset", //NOI18N
+                                        MessageFormat.format(LOGGING_RESET_MSG,
+                                        new Object[] { currentlyTrackedClassName }),
+                                        LOGGING_CONFIRMATION_CAPTION,
+                                        ProfilerDialogs.DNSAConfirmationChecked.
+                                        YES_NO_OPTION);
+
+                    if (!ProfilerDialogs.notify(dnsa).equals(
+                            ProfilerDialogs.DNSAConfirmationChecked.YES_OPTION)) {
+                        return;
+                    }
+                } else {
+                    ProfilerDialogs.DNSAConfirmationChecked dnsa =
+                            new ProfilerDialogs.DNSAConfirmationChecked(
+                                        "History.historylogging.stop", //NOI18N
+                                        MessageFormat.format(LOGGING_STOP_MSG,
+                                        new Object[] { currentlyTrackedClassName }),
+                                        LOGGING_CONFIRMATION_CAPTION,
+                                        ProfilerDialogs.DNSAConfirmationChecked.
+                                        YES_NO_OPTION);
+
+                    if (!ProfilerDialogs.notify(dnsa).equals(
+                            ProfilerDialogs.DNSAConfirmationChecked.YES_OPTION)) {
+                        return;
+                    }
+                }
+            }
+
+            // Reset current history
+            classHistoryManager.setupClass(classID, className);
+            
+            // Let the graphs update before showing the tab
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    chartActions.clear();
+                    Action[] actions = null;
+
+                    if (runner.getProfilerClient().getCurrentInstrType() ==
+                        ProfilerEngineSettings.INSTR_OBJECT_ALLOCATIONS) {
+                        if (allocationsHistoryPanel == null)
+                            allocationsHistoryPanel = AllocationsHistoryGraphPanel.
+                                                        createPanel(classHistoryModels);
+                        historyPanel.removeAll();
+                        historyPanel.add(allocationsHistoryPanel, BorderLayout.CENTER);
+                        actions = allocationsHistoryPanel.getActions();
+                    } else if (runner.getProfilerClient().getCurrentInstrType() ==
+                               ProfilerEngineSettings.INSTR_OBJECT_LIVENESS) {
+                        if (livenessHistoryPanel == null)
+                                livenessHistoryPanel = LivenessHistoryGraphPanel.
+                                                            createPanel(classHistoryModels);
+                        historyPanel.removeAll();
+                        historyPanel.add(livenessHistoryPanel, BorderLayout.CENTER);
+                        actions = livenessHistoryPanel.getActions();
+                    }
+
+                    if (actions != null)
+                        for (Action action : actions)
+                            chartActions.add(new JButton(action));
+
+                    Collections.reverse(chartActions);
+
+                    tabs.setEnabledAt(1, true);
+                    tabs.setTitleAt(1, NbBundle.getMessage(LiveResultsWindow.class,
+                                                           "LiveResultsWindow_ClassHistoryTabName", //NOI18N
+                                                            new Object[] { className }));
+                    tabs.setSelectedIndex(1);
+                }
+            });
         }
     }
 
@@ -497,25 +423,21 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
     private static final String HISTORY_TAB_NAME = NbBundle.getMessage(LiveResultsWindow.class, "LiveResultsWindow_HistoryTabName"); // NOI18N
     private static final String LIVE_RESULTS_ACCESS_DESCR = NbBundle.getMessage(LiveResultsWindow.class,
                                                                                 "LiveResultsWindow_LiveResultsAccessDescr"); // NOI18N
-    private static final String ZOOM_IN_TOOLTIP = NbBundle.getMessage(TelemetryWindow.class, "TelemetryWindow_ZoomInTooltip"); // NOI18N
-    private static final String ZOOM_OUT_TOOLTIP = NbBundle.getMessage(TelemetryWindow.class, "TelemetryWindow_ZoomOutTooltip"); // NOI18N
-    private static final String FIXED_SCALE_TOOLTIP = NbBundle.getMessage(TelemetryWindow.class,
-                                                                          "TelemetryWindow_FixedScaleTooltip"); // NOI18N
-    private static final String SCALE_TO_FIT_TOOLTIP = NbBundle.getMessage(TelemetryWindow.class,
-                                                                           "TelemetryWindow_ScaleToFitTooltip"); // NOI18N
+    private static final String LOGGING_CONFIRMATION_CAPTION = NbBundle.getMessage(LiveResultsWindow.class,
+                                                                                   "History_LoggingConfirmationCaption"); //NOI18N
+    private static final String LOGGING_RESET_MSG = NbBundle.getMessage(LiveResultsWindow.class, "History_LoggingResetMsg"); //NOI18N
+    private static final String LOGGING_STOP_MSG = NbBundle.getMessage(LiveResultsWindow.class, "History_LoggingStopMsg"); //NOI18N
 
     // -----
     private static final String HELP_CTX_KEY = "LiveResultsWindow.HelpCtx"; // NOI18N
     private static final HelpCtx HELP_CTX = new HelpCtx(HELP_CTX_KEY);
     private static LiveResultsWindow defaultLiveInstance;
     private static final TargetAppRunner runner = Profiler.getDefault().getTargetAppRunner();
-    private static final Image liveWindowIcon = Utilities.loadImage("org/netbeans/modules/profiler/resources/liveResultsWindow.png"); // NOI18N
+    private static final Image liveWindowIcon = ImageUtilities.loadImage("org/netbeans/modules/profiler/resources/liveResultsWindow.png"); // NOI18N
     private static final AtomicBoolean resultsDumpForced = new AtomicBoolean(false);
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
-    GraphTab graphTab;
-    private JToolBar.Separator graphButtonsSeparator;
     private CPUResUserActionsHandler cpuActionsHandler;
     private Component lastFocusOwner;
     private DrillDown dd = null;
@@ -526,12 +448,22 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
     private JPanel memoryTabPanel;
     private JTabbedPane tabs;
     private JToggleButton autoToggle;
+    private JToolBar.Separator graphButtonsSeparator;
+
+    private List<JButton> chartActions = new ArrayList();
+
+    private JPanel historyPanel;
+    private ClassHistoryDataManager classHistoryManager;
+    private ClassHistoryModels classHistoryModels;
+    private AllocationsHistoryGraphPanel allocationsHistoryPanel;
+    private LivenessHistoryGraphPanel livenessHistoryPanel;
 
     /*  private JComponent valueFilterComponent;
        private JSlider valueSlider; */
     private JToolBar toolBar;
     private LiveResultsPanel currentDisplay;
     private MemoryResUserActionsHandler memoryActionsHandler;
+    private HistoryActionsHandler historyActionsHandler;
     private boolean autoRefresh = true;
     private boolean drillDownGroupOpened;
     private volatile boolean profilerRunning = false;
@@ -547,10 +479,13 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         setLayout(new BorderLayout());
 
         memoryActionsHandler = new MemoryActionsHandler();
+        historyActionsHandler = new HistoryActionsHandler();
         cpuActionsHandler = new CPUActionsHandler();
 
+        classHistoryManager = new ClassHistoryDataManager();
+        classHistoryModels = new ClassHistoryModels(classHistoryManager);
+
         toolBar = createToolBar();
-        toolBar.setBorder(new EmptyBorder(5, 5, 0, 5));
 
         add(toolBar, BorderLayout.NORTH);
 
@@ -561,8 +496,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         final JLabel noResultsLabel = new JLabel(NO_PROFILING_RESULTS_LABEL_TEXT);
 
         noResultsLabel.setFont(noResultsLabel.getFont().deriveFont(14));
-        noResultsLabel.setIcon(new javax.swing.ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ui/resources/monitoring.png")) //NOI18N
-        );
+        noResultsLabel.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ui/resources/monitoring.png", false)); //NOI18N
         noResultsLabel.setIconTextGap(10);
         noResultsLabel.setEnabled(false);
         noResultsPanel.add(noResultsLabel, BorderLayout.NORTH);
@@ -580,29 +514,46 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         tabs.getActionMap().getParent().remove("navigatePageDown"); // NOI18N
                                                                     // TODO: implement PreviousViewAction/NextViewAction handling for Live Memory Results
 
+        graphButtonsSeparator = new JToolBar.Separator();
+        toolBar.add(graphButtonsSeparator);
+        final int chartButtonsOffset = toolBar.getComponentCount();
+
         memoryTabPanel.add(tabs, BorderLayout.CENTER);
         tabs.setTabPlacement(JTabbedPane.BOTTOM);
         tabs.addChangeListener(new ChangeListener() {
-                public void stateChanged(final ChangeEvent e) {
-                    updateGraphButtons();
+            public void stateChanged(final ChangeEvent e) {
+                if (currentDisplayComponent == memoryTabPanel) {
+                    if (tabs.getSelectedComponent() == historyPanel) {
+                        for (JButton b : chartActions)
+                            toolBar.add(b, chartButtonsOffset);
+                        graphButtonsSeparator.setVisible(true);
+                    } else {
+                        for (JButton b : chartActions)
+                            toolBar.remove(b);
+                        graphButtonsSeparator.setVisible(false);
+                    }
                 }
-            });
+            }
+        });
 
-        graphTab = new GraphTab(new HistoryPanel(History.getInstance()));
+        historyPanel = new JPanel(new BorderLayout());
 
-        History.getInstance().addHistoryListener(this);
-
-        graphButtonsSeparator = new JToolBar.Separator();
-        toolBar.add(graphButtonsSeparator);
-        toolBar.add(graphTab.zoomInButton);
-        toolBar.add(graphTab.zoomOutButton);
-        toolBar.add(graphTab.scaleToFitButton);
-
-        JPanel toolbarSpacer = new JPanel(new FlowLayout(0, 0, FlowLayout.LEADING));
+        JPanel toolbarSpacer = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0)) {
+            public Dimension getPreferredSize() {
+                if (UIUtils.isGTKLookAndFeel() || UIUtils.isNimbusLookAndFeel()) {
+                    int currentWidth = toolBar.getSize().width;
+                    int minimumWidth = toolBar.getMinimumSize().width;
+                    int extraWidth = currentWidth - minimumWidth;
+                    return new Dimension(Math.max(extraWidth, 0), 0);
+                } else {
+                    return super.getPreferredSize();
+                }
+            }
+        };
         toolbarSpacer.setOpaque(false);
 
         final DrillDownWindow drillDownWin = DrillDownWindow.getDefault();
-        drillDownWin.closeIfOpened();
+        DrillDownWindow.closeIfOpened();
         drillDownWin.getPresenter().addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     if (drillDownWin.getPresenter().isSelected()) {
@@ -616,7 +567,6 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         toolBar.add(toolbarSpacer);
         toolBar.add(drillDownWin.getPresenter());
 
-        updateGraphButtons();
         hideDrillDown();
         //******************
         setFocusable(true);
@@ -699,8 +649,8 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
     }
 
     public BufferedImage getViewImage(boolean onlyVisibleArea) {
-        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == graphTab)) {
-            return UIUtils.createScreenshot(graphTab.panel);
+        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == historyPanel)) {
+            return UIUtils.createScreenshot(historyPanel);
         }
 
         if (currentDisplay == null) {
@@ -711,8 +661,8 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
     }
 
     public String getViewName() {
-        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == graphTab)) {
-            return "memory-history-" + History.getInstance().getClassName(); // NOI18N
+        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == historyPanel)) {
+            return "memory-history-" + classHistoryManager.getTrackedClassName(); // NOI18N
         }
 
         if (currentDisplay == null) {
@@ -739,7 +689,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
     }
 
     public boolean fitsVisibleArea() {
-        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == graphTab)) {
+        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == historyPanel)) {
             return true;
         }
 
@@ -772,23 +722,17 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         profilerRunning = true;
     }
 
+    public void handleCleanupBeforeProfiling() {
+        classHistoryManager.resetClass();
+    }
+
     // --- Save Current View action support ------------------------------------
     public boolean hasView() {
-        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == graphTab)) {
+        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == historyPanel)) {
             return true;
         }
 
         return !noResultsPanel.isShowing() && (currentDisplay != null) && currentDisplay.hasView();
-    }
-
-    public void historyLogging() {
-        if (currentDisplay instanceof LiveAllocResultsPanel || currentDisplay instanceof LiveLivenessResultsPanel) {
-            tabs.setEnabledAt(1, true);
-            tabs.setTitleAt(1,
-                            NbBundle.getMessage(LiveResultsWindow.class, "LiveResultsWindow_ClassHistoryTabName",
-                                                new Object[] { History.getInstance().getClassName() })); // NOI18N
-            tabs.setSelectedIndex(1);
-        }
     }
 
     public void ideClosing() {
@@ -847,6 +791,30 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
 
     public void threadsMonitoringChanged() {
         // ignore
+    }
+
+    public void exportData(int exportedFileType, ExportDataDumper eDD) {
+        if (currentDisplayComponent == memoryTabPanel) {
+            if (tabs.getSelectedComponent() instanceof LiveAllocResultsPanel) {
+                ((LiveAllocResultsPanel) currentDisplay).exportData(exportedFileType, eDD, NbBundle.getMessage(LiveResultsWindow.class, "LAB_ResultsWindowName"));
+            } else if (tabs.getSelectedComponent() instanceof LiveLivenessResultsPanel) {
+                ((LiveLivenessResultsPanel) currentDisplay).exportData(exportedFileType, eDD, NbBundle.getMessage(LiveResultsWindow.class, "LAB_ResultsWindowName"));
+            }
+        } else if (currentDisplayComponent instanceof LiveFlatProfilePanel) {
+            ((LiveFlatProfilePanel) currentDisplay).exportData(exportedFileType, eDD, NbBundle.getMessage(LiveResultsWindow.class, "LAB_ResultsWindowName"));
+        }
+    }
+
+    public boolean hasLoadedSnapshot() {
+        return false;
+    }
+
+    public boolean hasExportableView() {
+        if ((currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == currentDisplay)) {
+            return true;
+        }
+
+        return !noResultsPanel.isShowing() && (currentDisplay != null) && currentDisplay.hasView();
     }
 
     protected void componentClosed() {
@@ -913,7 +881,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
     private static boolean callForceObtainedResultsDump(final ProfilerClient client) {
         return callForceObtainedResultsDump(client, true);
     }
-    
+
     private static boolean callForceObtainedResultsDump(final ProfilerClient client, final boolean refreshDisplay) {
         if (refreshDisplay) {
             resultsDumpForced.set(true);
@@ -968,8 +936,9 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
 
         toolBar.setFloatable(false);
         toolBar.putClientProperty("JToolBar.isRollover", Boolean.TRUE); //NOI18N
-        autoToggle = new JToggleButton(new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/autoRefresh.png") // NOI18N
-        ));
+        toolBar.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
+
+        autoToggle = new JToggleButton(ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/autoRefresh.png", false)); //NOI18N
         autoToggle.setSelected(true);
         autoToggle.addActionListener(new ActionListener() {
                 public void actionPerformed(final ActionEvent e) {
@@ -979,8 +948,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         autoToggle.setToolTipText(UPDATE_RESULTS_AUTOMATICALLY_TOOLTIP);
         autoToggle.getAccessibleContext().setAccessibleName(UPDATE_RESULTS_AUTOMATICALLY_TOOLTIP);
 
-        updateNowButton = new JButton(new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/updateNow.png") // NOI18N
-        ));
+        updateNowButton = new JButton(ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/updateNow.png", false)); //NOI18N
         updateNowButton.addActionListener(new ActionListener() {
                 public void actionPerformed(final ActionEvent e) {
                     requestProfilingDataUpdate(true);
@@ -989,8 +957,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         updateNowButton.setToolTipText(UPDATE_RESULTS_NOW_TOOLTIP);
         updateNowButton.getAccessibleContext().setAccessibleName(UPDATE_RESULTS_NOW_TOOLTIP);
 
-        runGCButton = new JButton(new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/actions/resources/runGC.png") // NOI18N
-        ));
+        runGCButton = new JButton(ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/actions/resources/runGC.png", false)); //NOI18N
         runGCButton.addActionListener(new ActionListener() {
                 public void actionPerformed(final ActionEvent e) {
                     try {
@@ -1014,27 +981,9 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         toolBar.addSeparator();
         toolBar.add(((Presenter.Toolbar) SystemAction.get(TakeSnapshotAction.class)).getToolbarPresenter());
         toolBar.addSeparator();
+        toolBar.add(new ExportAction(this, null));
         toolBar.add(new SaveViewAction(this));
 
-        /*    toolBar.addSeparator();
-        
-                                                                                 valueSlider = new JSlider(JSlider.HORIZONTAL, 0, 100, 0) {
-                                                                                   public Dimension getMaximumSize() {
-                                                                                     return new Dimension(100, super.getMaximumSize().height);
-                                                                                   }
-                                                                                 };
-                                                                                 toolBar.add(valueSlider);
-                                                                                 valueFilterComponent = valueSlider;
-        
-                                                                                 valueSlider.addChangeListener(new ChangeListener() {
-        
-                                                                                   public void stateChanged(ChangeEvent e) {
-                                                                                     // make cubic curve instead of linear
-                                                                                     double val = (double) valueSlider.getValue() / 10f;
-                                                                                     val = val * val;
-                                                                                     if (currentDisplay != null) currentDisplay.updateValueFilter(val);
-                                                                                   }
-                                                                                 }); */
         return toolBar;
     }
 
@@ -1046,7 +995,6 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
                     if (group != null) {
                         group.close();
                     }
-
                     drillDownGroupOpened = false;
                     DrillDownWindow.getDefault().getPresenter().setEnabled(false);
                 }
@@ -1059,7 +1007,10 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
 
         switch (instrumentationType) {
             case ProfilerEngineSettings.INSTR_OBJECT_ALLOCATIONS: {
-                LiveAllocResultsPanel allocPanel = new LiveAllocResultsPanel(runner, memoryActionsHandler, History.getInstance());
+                LiveAllocResultsPanel allocPanel = new LiveAllocResultsPanel(runner,
+                                                    memoryActionsHandler,
+                                                    historyActionsHandler,
+                                                    classHistoryManager);
                 currentDisplayComponent = memoryTabPanel;
                 currentDisplayComponent.setBorder(new EmptyBorder(5, 0, 0, 0));
 
@@ -1068,15 +1019,17 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
                 }
 
                 tabs.addTab(LIVE_RESULTS_TAB_NAME, allocPanel);
-                tabs.addTab(HISTORY_TAB_NAME, graphTab);
+                tabs.addTab(HISTORY_TAB_NAME, historyPanel);
                 tabs.setEnabledAt(1, false);
                 aPanel = allocPanel;
 
                 break;
             }
             case ProfilerEngineSettings.INSTR_OBJECT_LIVENESS: {
-                LiveLivenessResultsPanel livenessPanel = new LiveLivenessResultsPanel(runner, memoryActionsHandler,
-                                                                                      History.getInstance());
+                LiveLivenessResultsPanel livenessPanel = new LiveLivenessResultsPanel(runner,
+                                                    memoryActionsHandler,
+                                                    historyActionsHandler,
+                                                    classHistoryManager);
                 currentDisplayComponent = memoryTabPanel;
                 currentDisplayComponent.setBorder(new EmptyBorder(5, 0, 0, 0));
 
@@ -1085,7 +1038,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
                 }
 
                 tabs.addTab(LIVE_RESULTS_TAB_NAME, livenessPanel);
-                tabs.addTab(HISTORY_TAB_NAME, graphTab);
+                tabs.addTab(HISTORY_TAB_NAME, historyPanel);
                 tabs.setEnabledAt(1, false);
                 aPanel = livenessPanel;
 
@@ -1094,20 +1047,26 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
             case ProfilerEngineSettings.INSTR_RECURSIVE_FULL:
             case ProfilerEngineSettings.INSTR_RECURSIVE_SAMPLED: {
                 Project project = NetBeansProfiler.getDefaultNB().getProfiledProject();
-                ProjectTypeProfiler ptp = ProjectUtilities.getProjectTypeProfiler(project);
+//                ProjectTypeProfiler ptp = org.netbeans.modules.profiler.utils.ProjectUtilities.getProjectTypeProfiler(project);
 
                 List additionalStats = new ArrayList();
 
-                dd = new DrillDown(runner.getProfilerClient(), ptp.getMarkHierarchyRoot());
+                dd = Lookup.getDefault().lookup(DrillDownFactory.class).createDrillDown(project, runner.getProfilerClient());
+                if (dd != null) {
+                    StatisticalModuleContainer container = Lookup.getDefault().lookup(StatisticalModuleContainer.class);
+                    additionalStats.addAll(container.getAllModules());
 
-                runner.getProfilerClient().getMarkFilter().removeAllEvaluators();
-                runner.getProfilerClient().getMarkFilter().addEvaluator(dd);
 
-                StatisticalModuleContainer container = Lookup.getDefault().lookup(StatisticalModuleContainer.class);
-                additionalStats.addAll(container.getAllModules());
+                    DrillDownWindow.getDefault().setDrillDown(dd, additionalStats);
+                    showDrillDown();
+                } else {
+                    hideDrillDown();
+                }
 
                 final LiveFlatProfilePanel cpuPanel = new LiveFlatProfilePanel(runner, cpuActionsHandler, additionalStats);
-                dd.addListener(new DrillDownListener() {
+
+                if (dd != null) {
+                    dd.addListener(new DrillDownListener() {
                         public void dataChanged() {
                         }
 
@@ -1115,8 +1074,7 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
                             cpuPanel.updateLiveResults();
                         }
                     });
-
-                DrillDownWindow.getDefault().setDrillDown(dd, additionalStats);
+                }
 
                 currentDisplayComponent = cpuPanel;
 
@@ -1174,10 +1132,8 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
             currentDisplay = null;
             currentDisplayComponent = noResultsPanel;
             add(noResultsPanel, BorderLayout.CENTER);
+            for (JButton b : chartActions) toolBar.remove(b);
             graphButtonsSeparator.setVisible(false);
-            graphTab.zoomInButton.setVisible(false);
-            graphTab.zoomOutButton.setVisible(false);
-            graphTab.scaleToFitButton.setVisible(false);
             revalidate();
             repaint();
             hideDrillDown();
@@ -1231,17 +1187,9 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
         }
     }
 
-    private void updateGraphButtons() {
-        boolean graphVisible = (currentDisplayComponent == memoryTabPanel) && (tabs.getSelectedComponent() == graphTab);
-        graphButtonsSeparator.setVisible(graphVisible);
-        graphTab.zoomInButton.setVisible(graphVisible);
-        graphTab.zoomOutButton.setVisible(graphVisible);
-        graphTab.scaleToFitButton.setVisible(graphVisible);
-    }
-
     private void updateResultsDisplay() {
         if (!isOpened()) {
-            return; // do nothing if i'm closed 
+            return; // do nothing if i'm closed
         }
 
         if (!resultsDumpForced.getAndSet(false) && !isAutoRefresh()) {
@@ -1273,12 +1221,11 @@ public final class LiveResultsWindow extends TopComponent implements ResultsList
             add(currentDisplayComponent, BorderLayout.CENTER);
             revalidate();
             repaint();
-            updateGraphButtons();
             IDEUtils.runInEventDispatchThread(new Runnable() {
-                    public void run() {
-                        currentDisplayComponent.requestFocusInWindow(); // must be invoked lazily to override default focus behavior
-                    }
-                });
+                public void run() {
+                    currentDisplayComponent.requestFocusInWindow(); // must be invoked lazily to override default focus behavior
+                }
+            });
         }
 
         if (currentDisplay != null) {
