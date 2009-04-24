@@ -48,15 +48,13 @@ import java.lang.reflect.*;
 import java.net.URL;
 import java.util.*;
 import java.util.logging.*;
-import javax.swing.Action;
 import javax.xml.parsers.DocumentBuilder;
-import org.openide.actions.OpenAction;
+import javax.xml.parsers.FactoryConfigurationError;
 import org.openide.cookies.*;
 import org.openide.filesystems.*;
 import org.openide.nodes.*;
 import org.openide.text.DataEditorSupport;
 import org.openide.util.*;
-import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.AbstractLookup;
 import org.openide.windows.CloneableOpenSupport;
 import org.openide.xml.*;
@@ -248,13 +246,16 @@ public class XMLDataObject extends MultiDataObject {
     * @return the node representation for this data object
     * @see DataNode
     */
-    protected Node createNodeDelegate () {  //??? what about interaction with Looks
+    @Override
+    protected Node createNodeDelegate () {
         XMLNode xn = new XMLNode (this);
         // netbeans.core.nodes.description
         xn.setShortDescription (NbBundle.getMessage ( 
                                         XMLDataObject.class, "HINT_XMLDataObject")); // NOI18N
         return xn;
     }
+
+
 
     /** Called when the info file is parsed and the icon should change.
     * @param res resource for the icon
@@ -299,6 +300,7 @@ public class XMLDataObject extends MultiDataObject {
      * @return a cookie (instanceof cls) that has been found in info or
      * super.getCookie(cls).
      */
+    @Override
     public <T extends Node.Cookie> T getCookie(Class<T> cls) {
         getIP ().waitFinished();
 
@@ -326,6 +328,18 @@ public class XMLDataObject extends MultiDataObject {
         }
         
         return cls.cast(cake);
+    }
+
+    @Override
+    public Lookup getLookup() {
+        if (getClass() == XMLDataObject.class) {
+            Node n = getNodeDelegateOrNull();
+            if (n == null) {
+                setNodeDelegate(n = createNodeDelegate());
+            }
+            return n.getLookup();
+        }
+        return super.getLookup();
     }
 
     /** Special support of InstanceCookie.Of. If the Info class
@@ -386,7 +400,12 @@ public class XMLDataObject extends MultiDataObject {
     private static class XMLEditorSupport extends DataEditorSupport implements OpenCookie, EditorCookie.Observable, PrintCookie, CloseCookie {
         public XMLEditorSupport (XMLDataObject obj) {
             super (obj, new XMLEditorEnv (obj));
-            setMIMEType ("text/xml"); // NOI18N
+            //when undelying fileobject has a mimetype defined,
+            //don't enforce text/xml on the editor document.
+            //be conservative and apply the new behaviour only when the mimetype is xml like..
+            if (obj.getPrimaryFile().getMIMEType().indexOf("xml") == -1) { // NOI18N
+                setMIMEType ("text/xml"); // NOI18N
+            }
         }
         class Save implements SaveCookie {
             public void save () throws IOException {
@@ -447,7 +466,7 @@ public class XMLDataObject extends MultiDataObject {
         synchronized (this) {
             DelDoc d = doc;
             if (d == null) {
-                d = new DelDoc ();
+                d = new DelDoc(this);
                 doc = d;
             }
             return d.getProxyDocument();
@@ -1076,6 +1095,7 @@ public class XMLDataObject extends MultiDataObject {
             iconBase = null;
         }
 
+        @Override
         public Object clone () {
             Info ii = new Info();
             for (Class<?> proc: processors) {
@@ -1327,9 +1347,6 @@ public class XMLDataObject extends MultiDataObject {
             super(XMLDataObject.this, Children.LEAF);
             setIconBaseWithExtension("org/openide/loaders/xmlObject.gif"); // NOI18N
         }
-        public Action getPreferredAction() {
-            return SystemAction.get(OpenAction.class);
-        }
     }
         
     
@@ -1408,17 +1425,30 @@ public class XMLDataObject extends MultiDataObject {
         }
     } // end of ICDel    
     
-    /** Delegating DOM document that provides fast implementation of
+    static final Constructor<?> cnstr;
+    static {
+        try {
+            Class<?> proxy = Proxy.getProxyClass(XMLDataObject.class.getClassLoader(), Document.class, DocumentType.class);
+            cnstr = proxy.getConstructor(InvocationHandler.class);
+            new DelDoc(null);
+        } catch (NoSuchMethodException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }    /** Delegating DOM document that provides fast implementation of
      * getDocumentType and getPublicID methods.
      */
-    private final class DelDoc implements InvocationHandler {
-        
+    private static final class DelDoc implements InvocationHandler {
+        private final XMLDataObject obj;
         private Reference<Document> xmlDocument;
         private final Document proxyDocument;
         
-        DelDoc() {
-            proxyDocument = (Document)Proxy.newProxyInstance(
-                DelDoc.class.getClassLoader(), new Class[] {Document.class}, this);
+        DelDoc(XMLDataObject obj) {
+            this.obj = obj;
+            try {
+                proxyDocument = (Document) cnstr.newInstance(this);
+            } catch (Exception ex) {
+                throw new IllegalStateException(ex);
+            }
         }
 
         /** Creates w3c's document for the xml file. Either returns cached reference
@@ -1438,9 +1468,9 @@ public class XMLDataObject extends MultiDataObject {
                     return null;
                 }
 
-                status = STATUS_OK;
+                obj.status = STATUS_OK;
                 try {
-                    Document d = parsePrimaryFile ();
+                    Document d = obj.parsePrimaryFile();
                     xmlDocument = new SoftReference<Document> (d);
                     return d;
                 } catch (SAXException e) {
@@ -1449,13 +1479,13 @@ public class XMLDataObject extends MultiDataObject {
                     ERR.log(Level.WARNING, null, e);
                 }
                 
-                status = STATUS_ERROR;
+                obj.status = STATUS_ERROR;
                 Document d = XMLUtil.createDocument("brokenDocument", null, null, null); // NOI18N
                 
                 xmlDocument = new SoftReference<Document> (d);
                 
                 // fire property change, because the document is errornous
-                firePropertyChange (PROP_DOCUMENT, null, null);
+                obj.firePropertyChange (PROP_DOCUMENT, null, null);
                 
                 return d;
             }
@@ -1473,14 +1503,14 @@ public class XMLDataObject extends MultiDataObject {
         
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             if (method.getName().equals("getDoctype") && args == null) { // NOI18N
-                return Proxy.newProxyInstance(DelDoc.class.getClassLoader(), new Class[] {DocumentType.class}, this);
+                return (DocumentType)proxyDocument;
             } else if (method.getName().equals("getPublicId") && args == null) { // NOI18N
                 Document d = getDocumentImpl(false);
                 if (d != null) {
                     DocumentType doctype = d.getDoctype();
                     return doctype == null ? null : doctype.getPublicId();
                 } else {
-                    return getIP().getPublicId();
+                    return obj.getIP().getPublicId();
                 }
             } else {
                 return method.invoke(getDocumentImpl(true), args);
