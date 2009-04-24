@@ -78,6 +78,7 @@ import org.netbeans.installer.utils.helper.ExecutionMode;
 import org.netbeans.installer.utils.helper.Status;
 import org.netbeans.installer.utils.helper.swing.NbiButton;
 import org.netbeans.installer.utils.helper.swing.NbiCheckBox;
+import org.netbeans.installer.utils.helper.swing.NbiFrame;
 import org.netbeans.installer.utils.helper.swing.NbiLabel;
 import org.netbeans.installer.utils.helper.swing.NbiPanel;
 import org.netbeans.installer.utils.helper.swing.NbiScrollPane;
@@ -90,6 +91,7 @@ import org.netbeans.installer.wizard.components.panels.ErrorMessagePanel.ErrorMe
 import org.netbeans.installer.wizard.components.panels.ErrorMessagePanel.ErrorMessagePanelUi;
 import org.netbeans.installer.wizard.components.panels.JdkLocationPanel;
 import org.netbeans.installer.wizard.containers.SwingContainer;
+import org.netbeans.installer.wizard.containers.SwingFrameContainer;
 import org.netbeans.installer.wizard.ui.SwingUi;
 import org.netbeans.installer.wizard.ui.WizardUi;
 
@@ -721,16 +723,20 @@ public class NbWelcomePanel extends ErrorMessagePanel {
             final String bottomLeftImage = SystemUtils.resolveString(
                     System.getProperty(
                     WELCOME_PAGE_LEFT_BOTTOM_IMAGE_PROPERTY));
-            
+
+            int bottomAnchor = NbiPanel.ANCHOR_BOTTOM_LEFT;
+            if(type.isJDKBundle() || type.equals(BundleType.JAVA_TOOLS)) {
+                bottomAnchor = NbiPanel.ANCHOR_FULL;
+            }
             if(topLeftImage!=null) {
                 leftImagePanel.setBackgroundImage(topLeftImage,ANCHOR_TOP_LEFT);
                 width   = leftImagePanel.getBackgroundImage(NbiPanel.ANCHOR_TOP_LEFT).getIconWidth();
                 height += leftImagePanel.getBackgroundImage(NbiPanel.ANCHOR_TOP_LEFT).getIconHeight();
             }
             if(bottomLeftImage!=null) {
-                leftImagePanel.setBackgroundImage(bottomLeftImage,ANCHOR_BOTTOM_LEFT);
-                width   = leftImagePanel.getBackgroundImage(NbiPanel.ANCHOR_BOTTOM_LEFT).getIconWidth();
-                height += leftImagePanel.getBackgroundImage(NbiPanel.ANCHOR_BOTTOM_LEFT).getIconHeight();
+                leftImagePanel.setBackgroundImage(bottomLeftImage, bottomAnchor);
+                width   = leftImagePanel.getBackgroundImage(bottomAnchor).getIconWidth();
+                height += leftImagePanel.getBackgroundImage(bottomAnchor).getIconHeight();
             }
              
             leftImagePanel.setPreferredSize(new Dimension(width,height));
@@ -922,8 +928,12 @@ public class NbWelcomePanel extends ErrorMessagePanel {
                         initialize();
                     }
                 };
-                
+                NbiFrame owner = null;
+                if(container instanceof SwingFrameContainer) {
+                    owner = (SwingFrameContainer) container;
+                }
                 customizeDialog = new NbCustomizeSelectionDialog(
+                        owner,
                         panel,
                         callback,
                         registryNodes);
