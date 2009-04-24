@@ -41,13 +41,10 @@
 
 package org.netbeans.modules.cnd.apt.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import antlr.TokenStreamException;
-import antlr.collections.AST;
 import java.util.logging.Level;
 import org.netbeans.modules.cnd.apt.debug.DebugUtils;
-import org.netbeans.modules.cnd.apt.impl.support.*;
 import org.netbeans.modules.cnd.apt.impl.support.generated.APTExprParser;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.structure.APTElif;
@@ -75,13 +72,13 @@ public final class APTConditionResolver {
         switch (cond.getType()) {
             case APT.Type.IFNDEF:
                 {
-                    Token macro = ((APTIfndef)cond).getMacroName();
+                    APTToken macro = ((APTIfndef)cond).getMacroName();
                     res = macro == null ? PREPROCESSOR_ERROR_DEFAULT_RETURN_VALUE : !isDefined(macro, callback);
                 }
                 break;
             case APT.Type.IFDEF:
                 {
-                    Token macro = ((APTIfdef)cond).getMacroName();
+                    APTToken macro = ((APTIfdef)cond).getMacroName();
                     res = macro == null ? PREPROCESSOR_ERROR_DEFAULT_RETURN_VALUE : isDefined(macro, callback);
                 }
                 break;
@@ -97,7 +94,7 @@ public final class APTConditionResolver {
         return res;
     }
     
-    private static boolean isDefined(Token macro, APTMacroCallback callback) {
+    private static boolean isDefined(APTToken macro, APTMacroCallback callback) {
         return callback.isDefined(macro);
     }
     
@@ -108,10 +105,14 @@ public final class APTConditionResolver {
             APTExprParser parser = new APTExprParser(expandedTS, callback);
             long r = parser.expr();
 
-            if (APT_EXPR_TRACE) System.out.println("Value is "+r);// NOI18N
-            APTUtils.LOG.log(Level.FINE, 
+            if (APT_EXPR_TRACE) {
+                System.out.println("Value is " + r); // NOI18N
+            }
+            if (APTUtils.LOG.isLoggable(Level.FINE)) {
+                APTUtils.LOG.log(Level.FINE,
                         "stream {0} \n was expanded for condition resolving to \n {1} \n with result {2}", // NOI18N
-                        new Object[] { expr, expandedTS, new Long(r) });
+                        new Object[] { expr, expandedTS, Long.valueOf(r) });
+            }
             res = (r==0)?false:true;
         } catch (NullPointerException ex) {
             APTUtils.LOG.log(Level.SEVERE, 
@@ -138,9 +139,5 @@ public final class APTConditionResolver {
         return new APTExpandedStream(orig, callback, true);
     }
 
-    private static boolean isEmpty(AST ast) {
-	return (ast == null || ast.getType() == APTTokenTypes.EOF);
-    }  
-    
     public static final boolean PREPROCESSOR_ERROR_DEFAULT_RETURN_VALUE = false;
 }
