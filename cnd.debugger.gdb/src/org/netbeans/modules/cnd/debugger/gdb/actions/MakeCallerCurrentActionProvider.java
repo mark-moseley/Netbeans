@@ -43,7 +43,6 @@ package org.netbeans.modules.cnd.debugger.gdb.actions;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Set;
 import org.netbeans.api.debugger.ActionsManager;
@@ -60,12 +59,10 @@ import org.netbeans.spi.debugger.ActionsProviderSupport;
 */
 public class MakeCallerCurrentActionProvider extends ActionsProviderSupport implements PropertyChangeListener {
     
-    private ContextProvider lookupProvider;
     private GdbDebugger debugger;
     
     public MakeCallerCurrentActionProvider(ContextProvider lookupProvider) {
-        debugger = (GdbDebugger) lookupProvider.lookupFirst(null, GdbDebugger.class);
-        this.lookupProvider = lookupProvider;
+        debugger = lookupProvider.lookupFirst(null, GdbDebugger.class);
         debugger.addPropertyChangeListener(GdbDebugger.PROP_CURRENT_CALL_STACK_FRAME, this);
     }
     
@@ -76,12 +73,12 @@ public class MakeCallerCurrentActionProvider extends ActionsProviderSupport impl
     public void doAction(Object action) {
         int i = getCurrentCallStackFrameIndex(debugger);
         if (i < (debugger.getStackDepth() - 1)) {
-	    setCurrentCallStackFrameIndex(debugger, ++i);
+	    setCurrentCallStackFrameIndex(debugger, i+1);
 	}
     }
     
-    protected void checkEnabled(String debuggerState) {
-        if (debuggerState == debugger.STATE_STOPPED) {
+    private void checkEnabled(boolean stoppped) {
+        if (stoppped) {
 	    int i = getCurrentCallStackFrameIndex(debugger);
 	    setEnabled(ActionsManager.ACTION_MAKE_CALLER_CURRENT, i < (debugger.getStackDepth() - 1));
         } else {
@@ -91,23 +88,22 @@ public class MakeCallerCurrentActionProvider extends ActionsProviderSupport impl
     
     static int getCurrentCallStackFrameIndex(GdbDebugger debugger) {
 	CallStackFrame csf = debugger.getCurrentCallStackFrame();
-	if (csf != null) {
-	    ArrayList callstack = debugger.getCallStack();
-	    return callstack.indexOf(csf);
-	} else {
-	    return -1;
-	}
+        if (csf != null) {
+            return csf.getFrameNumber();
+        } else {
+            return -1;
+        }
     }
     
     static void setCurrentCallStackFrameIndex(GdbDebugger debugger, int index) {
 	if (index < debugger.getStackDepth()) {
-	    CallStackFrame csf = debugger.getCallStackFrames(index, index + 1)[0];
+	    CallStackFrame csf = debugger.getCallStack().get(index);
 	    csf.makeCurrent();
 	}
     }
     
     public void propertyChange(PropertyChangeEvent evt) {
-	checkEnabled(debugger.getState());
+	checkEnabled(debugger.isStopped());
     }
 }
 

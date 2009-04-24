@@ -64,8 +64,7 @@ import org.openide.util.RequestProcessor;
  */
 public class CallStackTreeModel implements TreeModel {
     private final GdbDebugger     debugger;
-    @SuppressWarnings("unchecked")
-    private final Collection<ModelListener> listeners = new HashSet();
+    private final Collection<ModelListener> listeners = new HashSet<ModelListener>();
     private Listener            listener;
     
    
@@ -218,7 +217,7 @@ public class CallStackTreeModel implements TreeModel {
         // check also whether the current thread was resumed/suspended
         // the call stack needs to be refreshed after invokeMethod() which resumes the thread
         public synchronized void propertyChange(PropertyChangeEvent e) {
-            if (e.getPropertyName().equals(GdbDebugger.PROP_STATE) && debugger.getState() == GdbDebugger.State.STOPPED) {
+            if (e.getPropertyName().equals(GdbDebugger.PROP_STATE) && debugger.isStopped()) {
                 synchronized (this) {
                     if (task == null) {
                         task = RequestProcessor.getDefault().create(new Refresher());
@@ -230,7 +229,7 @@ public class CallStackTreeModel implements TreeModel {
         
         private class Refresher extends Object implements Runnable {
             public void run() {
-                if (debugger.getState() == GdbDebugger.State.STOPPED) {
+                if (debugger.isStopped()) {
                     CallStackTreeModel tm = getModel();
                     if (tm != null) {
                         tm.fireTreeChanged();
