@@ -59,10 +59,9 @@ import javax.swing.text.EditorKit;
 import javax.swing.text.StyledDocument;
 import javax.swing.text.BadLocationException;
 import org.netbeans.api.queries.FileEncodingQuery;
-import org.netbeans.modules.html.palette.HTMLPaletteFactory;
+import org.netbeans.modules.html.palette.HtmlPaletteFactory;
 import org.netbeans.spi.palette.PaletteController;
 import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
 import org.openide.NotifyDescriptor;
 import org.openide.cookies.EditCookie;
 import org.openide.cookies.EditorCookie;
@@ -76,8 +75,6 @@ import org.openide.nodes.Node;
 import org.openide.nodes.Node.Cookie;
 import org.openide.text.CloneableEditor;
 import org.openide.text.DataEditorSupport;
-import org.openide.util.Exceptions;
-import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.UserCancelException;
@@ -100,6 +97,9 @@ public final class HtmlEditorSupport extends DataEditorSupport implements OpenCo
     
     private static final String DOCUMENT_SAVE_ENCODING = "Document_Save_Encoding";
     private static final String UTF_8_ENCODING = "UTF-8";
+
+    // only to be ever user from unit tests:
+    public static boolean showConfirmationDialog = true;
     
     /** SaveCookie for this support instance. The cookie is adding/removing
      * data object's cookie set depending on if modification flag was set/unset.
@@ -175,7 +175,7 @@ public final class HtmlEditorSupport extends DataEditorSupport implements OpenCo
     public void open() {
         String encoding = ((HtmlDataObject)getDataObject()).getFileEncoding();
         String feqEncoding = FileEncodingQuery.getEncoding(getDataObject().getPrimaryFile()).name();
-        if (encoding != null && !isSupportedEncoding(encoding)) {
+        if (encoding != null && !isSupportedEncoding(encoding) && showConfirmationDialog) {
 //            if(!canDecodeFile(getDataObject().getPrimaryFile(), feqEncoding)) {
 //                feqEncoding = UTF_8_ENCODING;
 //            }
@@ -352,18 +352,20 @@ public final class HtmlEditorSupport extends DataEditorSupport implements OpenCo
         }
         
         void associatePalette(HtmlEditorSupport s) {
+            DataObject dataObject = s.getDataObject();
+            if(!dataObject.isValid()) {
+                return ;
+            }
             
-            Node nodes[] = { s.getDataObject().getNodeDelegate() };
+            Node nodes[] = { dataObject.getNodeDelegate() };
             InstanceContent instanceContent = new InstanceContent();
             associateLookup(new ProxyLookup(new Lookup[] { new AbstractLookup(instanceContent), nodes[0].getLookup()}));
             instanceContent.add(getActionMap());
             
             setActivatedNodes(nodes);
-            
-            DataObject dataObject = s.getDataObject();
             if (dataObject instanceof HtmlDataObject) {
                 try {
-                    PaletteController pc = HTMLPaletteFactory.getPalette();
+                    PaletteController pc = HtmlPaletteFactory.getPalette();
                     instanceContent.add(pc);
                 } catch (IOException ioe) {
                     //TODO exception handling
