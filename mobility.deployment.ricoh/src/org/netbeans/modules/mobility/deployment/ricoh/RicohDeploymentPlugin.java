@@ -47,14 +47,17 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.netbeans.spi.mobility.deployment.DeploymentPlugin;
+import org.openide.util.NbBundle;
 
 /**
  *
  * @author Lukas Waldmann
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.mobility.deployment.DeploymentPlugin.class, position=110)
 public class RicohDeploymentPlugin implements DeploymentPlugin
 {
     final static String RicohDeployment = "RicohDeployment";
+    private final static String DISPLAY_NAME = "DSPL_NAME_RicohDeployment"; // NOI18N
     
     public RicohDeploymentPlugin() {
     }
@@ -66,7 +69,8 @@ public class RicohDeploymentPlugin implements DeploymentPlugin
 
     public String getDeploymentMethodDisplayName()
     {
-        return "Ricoh Deployment";
+        return NbBundle.getMessage(RicohDeploymentPlugin.class,
+                DISPLAY_NAME );
     }
 
     public String getAntScriptLocation()
