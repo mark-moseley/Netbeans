@@ -97,13 +97,16 @@ public class ErrorFixesFakeHint extends AbstractHint {
                 return new LocalVariableFixCustomizer(node);
             case SURROUND_WITH_TRY_CATCH:
                 return new SurroundWithTryCatchLog(node);
+            case CREATE_FINAL_FIELD_CTOR:
+                return new FinalFieldsFromCtorCustomiser(node);
         }
         return super.getCustomizer(node);
     }
 
     public static enum FixKind {
         SURROUND_WITH_TRY_CATCH,
-        CREATE_LOCAL_VARIABLE;
+        CREATE_LOCAL_VARIABLE,
+        CREATE_FINAL_FIELD_CTOR;
     }
     
     private static Map<FixKind, ErrorFixesFakeHint> kind2Hint = new  EnumMap<FixKind, ErrorFixesFakeHint>(FixKind.class);
@@ -121,13 +124,29 @@ public class ErrorFixesFakeHint extends AbstractHint {
     public static boolean enabled(FixKind kind) {
         return getHint(kind).isEnabled();
     }
-    
+
+    public static boolean isCreateFinalFieldsForCtor() {
+        return getHint(FixKind.CREATE_FINAL_FIELD_CTOR).getPreferences(null).getBoolean(FINAL_FIELDS_FROM_CTOR, true);
+    }
+
+    public static void setCreateFinalFieldsForCtor(Preferences p, boolean v) {
+        p.putBoolean(FINAL_FIELDS_FROM_CTOR, v);
+    }
+
+    public static void setCreateFinalFieldsForCtor(boolean v) {
+        setCreateFinalFieldsForCtor(getHint(FixKind.CREATE_FINAL_FIELD_CTOR).getPreferences(null), v);
+    }
+
     public static boolean isCreateLocalVariableInPlace() {
         return getHint(FixKind.CREATE_LOCAL_VARIABLE).getPreferences(null).getBoolean(LOCAL_VARIABLES_INPLACE, true);
     }
     
     public static void setCreateLocalVariableInPlace(boolean v) {
-        getHint(FixKind.CREATE_LOCAL_VARIABLE).getPreferences(null).putBoolean(LOCAL_VARIABLES_INPLACE, v);
+        setCreateLocalVariableInPlace(getHint(FixKind.CREATE_LOCAL_VARIABLE).getPreferences(null), v);
+    }
+    
+    public static void setCreateLocalVariableInPlace(Preferences p, boolean v) {
+        p.putBoolean(LOCAL_VARIABLES_INPLACE, v);
     }
     
     public static boolean isUseExceptions() {
@@ -135,7 +154,11 @@ public class ErrorFixesFakeHint extends AbstractHint {
     }
     
     public static void setUseExceptions(boolean v) {
-        getHint(FixKind.SURROUND_WITH_TRY_CATCH).getPreferences(null).putBoolean(SURROUND_USE_EXCEPTIONS, v);
+        setUseExceptions(getHint(FixKind.SURROUND_WITH_TRY_CATCH).getPreferences(null), v);
+    }
+    
+    public static void setUseExceptions(Preferences p, boolean v) {
+        p.putBoolean(SURROUND_USE_EXCEPTIONS, v);
     }
     
     public static boolean isUseLogger() {
@@ -143,12 +166,17 @@ public class ErrorFixesFakeHint extends AbstractHint {
     }
     
     public static void setUseLogger(boolean v) {
-        getHint(FixKind.SURROUND_WITH_TRY_CATCH).getPreferences(null).putBoolean(SURROUND_USE_JAVA_LOGGER, v);
+        setUseLogger(getHint(FixKind.SURROUND_WITH_TRY_CATCH).getPreferences(null), v);
     }
     
-    public static final String LOCAL_VARIABLES_INPLACE = "create-local-variables-in-place";
-    public static final String SURROUND_USE_EXCEPTIONS = "surround-try-catch-org-openide-util-Exceptions";
-    public static final String SURROUND_USE_JAVA_LOGGER = "surround-try-catch-java-util-logging-Logger";
+    public static void setUseLogger(Preferences p, boolean v) {
+        p.putBoolean(SURROUND_USE_JAVA_LOGGER, v);
+    }
+    
+    public static final String LOCAL_VARIABLES_INPLACE = "create-local-variables-in-place"; // NOI18N
+    public static final String SURROUND_USE_EXCEPTIONS = "surround-try-catch-org-openide-util-Exceptions"; // NOI18N
+    public static final String SURROUND_USE_JAVA_LOGGER = "surround-try-catch-java-util-logging-Logger"; // NOI18N
+    public static final String FINAL_FIELDS_FROM_CTOR = "create-final-fields-from-ctor"; // NOI18N
 
     public static ErrorFixesFakeHint create(FileObject file) {
         if (file.getName().endsWith("surround")) {
@@ -156,6 +184,9 @@ public class ErrorFixesFakeHint extends AbstractHint {
         }
         if (file.getName().endsWith("local")) {
             return getHint(FixKind.CREATE_LOCAL_VARIABLE);
+        }
+        if (file.getName().endsWith("finalfield")) {
+            return getHint(FixKind.CREATE_FINAL_FIELD_CTOR);
         }
         
         throw new IllegalArgumentException();
