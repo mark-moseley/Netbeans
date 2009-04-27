@@ -179,10 +179,10 @@ public class SourceAndIssuesWizardPanelGUI extends javax.swing.JPanel {
         // XXX here will be some condition ???
         showRepoOnKenaiGUI();
         showIssuesOnKenaiGUI();
+        createChatRoom.setVisible(false);
+        chatSeparator.setVisible(false);
         if (!System.getProperty("kenai.com.url", "https://kenai.com").endsWith("testkenai.com")) {
-            createChatRoom.setVisible(false);
             createChatRoom.setSelected(false);
-            chatSeparator.setVisible(false);
         }
 
     }
@@ -564,6 +564,7 @@ public class SourceAndIssuesWizardPanelGUI extends javax.swing.JPanel {
         gridBagConstraints.gridy = 12;
         gridBagConstraints.gridwidth = 3;
         gridBagConstraints.fill = GridBagConstraints.HORIZONTAL;
+        gridBagConstraints.insets = new Insets(4, 0, 4, 0);
         add(chatSeparator, gridBagConstraints);
 
         createChatRoom.setSelected(true);
