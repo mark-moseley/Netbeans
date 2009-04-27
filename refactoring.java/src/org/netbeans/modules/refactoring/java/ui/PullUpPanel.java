@@ -42,6 +42,7 @@ package org.netbeans.modules.refactoring.java.ui;
 
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.EventQueue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -67,22 +68,16 @@ import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.AbstractTableModel;
 import org.netbeans.api.java.source.CancellableTask;
-import org.netbeans.api.java.source.CancellableTask;
-import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.TreePathHandle;
-import org.netbeans.api.java.source.UiUtils;
+import org.netbeans.api.java.source.ui.ElementHeaders;
 import org.netbeans.modules.refactoring.java.RetoucheUtils;
-import org.netbeans.modules.refactoring.java.api.MemberInfo;
-import org.netbeans.modules.refactoring.java.api.MemberInfo;
-import org.netbeans.modules.refactoring.java.api.MemberInfo;
 import org.netbeans.modules.refactoring.java.api.MemberInfo;
 import org.netbeans.modules.refactoring.java.api.PullUpRefactoring;
 import org.netbeans.modules.refactoring.spi.ui.CustomRefactoringPanel;
 import org.openide.util.NbBundle;
-import org.openide.util.lookup.Lookups;
 
 
 /** UI panel for collecting refactoring parameters.
@@ -131,6 +126,16 @@ public class PullUpPanel extends JPanel implements CustomRefactoringPanel {
     /** Initialization of the panel (called by the parent window).
      */
     public void initialize() {
+        // XXX hot fix: this should be rewritten to first initialize model in RP and later update UI in EDT
+        EventQueue.invokeLater(new Runnable() {
+
+            public void run() {
+                initializeInEDT();
+            }
+        });
+    }
+
+    private void initializeInEDT() {
         final TreePathHandle handle = refactoring.getSourceType();
         JavaSource source = JavaSource.forFileObject(handle.getFileObject());
         try {
@@ -175,7 +180,7 @@ public class PullUpPanel extends JPanel implements CustomRefactoringPanel {
                     // 2. be disabled for static methods
                     // 3. be disabled and checked for methods if the target type is an interface
                     // 4. be disabled and check for abstract methods
-                    membersTable.getColumnModel().getColumn(2).setCellRenderer(new UIUtilities.BooleanTableCellRenderer() {
+                    membersTable.getColumnModel().getColumn(2).setCellRenderer(new UIUtilities.BooleanTableCellRenderer(membersTable) {
                         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                             // make the checkbox checked (even if "Make Abstract" is not set)
                             // for non-static methods if the target type is an interface
@@ -206,7 +211,7 @@ public class PullUpPanel extends JPanel implements CustomRefactoringPanel {
                     // compute and set the preferred width for the first and the third column
                     UIUtilities.initColumnWidth(membersTable, 0, Boolean.TRUE, 4);
                     UIUtilities.initColumnWidth(membersTable, 2, Boolean.TRUE, 4);
-                    String name = UiUtils.getHeader(handle.resolve(controller), controller, UiUtils.PrintPart.NAME);
+                    String name = ElementHeaders.getHeader(handle.resolve(controller), controller, ElementHeaders.NAME);
                     setName(org.openide.util.NbBundle.getMessage(PullUpPanel.class, "LBL_PullUpHeader", new Object[] {name}) /* NOI18N */); // NOI18N
                 }
             }, true);
