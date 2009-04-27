@@ -37,38 +37,41 @@
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.subversion;
+package org.netbeans.modules.bugtracking.bridge.kenai;
 
 import java.net.PasswordAuthentication;
+import org.netbeans.modules.bugtracking.util.KenaiUtil;
 import org.netbeans.modules.versioning.util.VCSKenaiSupport;
-import org.openide.util.Lookup;
 
 /**
  *
  * @author Tomas Stupka
  */
-public class SvnKenaiSupport {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.versioning.util.VCSKenaiSupport.class)
+public class VCSKenaiSupportImpl extends VCSKenaiSupport {
 
-    private static SvnKenaiSupport instance;
-    private VCSKenaiSupport kenaiSupport = null;
-
-    private SvnKenaiSupport() {
-        kenaiSupport = Lookup.getDefault().lookup(VCSKenaiSupport.class);
-    }
-
-    public static SvnKenaiSupport getInstance() {
-        if(instance == null) {
-            instance = new SvnKenaiSupport();
-        }
-        return instance;
-    }
-
+    @Override
     public boolean isKenai(String url) {
-        return kenaiSupport != null && kenaiSupport.isKenai(url);
+        return KenaiUtil.isKenai(url);
+    }
+    
+    @Override
+    public PasswordAuthentication getPasswordAuthentication() {
+        return getPasswordAuthentication(true);
     }
 
-    public PasswordAuthentication getPasswordAuthentication(boolean forceRelogin) {
-        return kenaiSupport.getPasswordAuthentication(forceRelogin);
+    @Override
+    public PasswordAuthentication getPasswordAuthentication(boolean forceLogin) {
+        return KenaiUtil.getPasswordAuthentication(forceLogin);
     }
 
+    @Override
+    public boolean showLogin() {
+        return KenaiUtil.showLogin();
+    }
+
+    @Override
+    public boolean isLogged () {
+        return KenaiUtil.isLoggedIn();
+    }
 }

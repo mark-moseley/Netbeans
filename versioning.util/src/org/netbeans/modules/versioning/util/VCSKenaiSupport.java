@@ -37,38 +37,51 @@
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.subversion;
+package org.netbeans.modules.versioning.util;
 
 import java.net.PasswordAuthentication;
-import org.netbeans.modules.versioning.util.VCSKenaiSupport;
-import org.openide.util.Lookup;
 
 /**
  *
  * @author Tomas Stupka
  */
-public class SvnKenaiSupport {
+public abstract class VCSKenaiSupport {
 
-    private static SvnKenaiSupport instance;
-    private VCSKenaiSupport kenaiSupport = null;
+    /**
+     * Returns an instance of PasswordAuthentication holding the actuall
+     * Kenai credentials or null if user not logged in.
+     *
+     * @return
+     */
+    public abstract PasswordAuthentication getPasswordAuthentication();
 
-    private SvnKenaiSupport() {
-        kenaiSupport = Lookup.getDefault().lookup(VCSKenaiSupport.class);
-    }
+    /**
+     * Returns an instance of PasswordAuthentication holding the actuall
+     * Kenai credentials or forces a login if forceLogin is true
+     *
+     * @param forceLogin opens a login dialog is user not logged in
+     * @return
+     */
+    public abstract PasswordAuthentication getPasswordAuthentication(boolean forceLogin);
 
-    public static SvnKenaiSupport getInstance() {
-        if(instance == null) {
-            instance = new SvnKenaiSupport();
-        }
-        return instance;
-    }
+    /**
+     * Returns true if the given url belongs to a Kenai project, otherwise false.
+     * 
+     * @param url
+     * @return
+     */
+    public abstract boolean isKenai(String url);
 
-    public boolean isKenai(String url) {
-        return kenaiSupport != null && kenaiSupport.isKenai(url);
-    }
+    /**
+     * Opens the kenai login dialog.
+     * @return true if login successfull, otherwise false
+     */
+    public abstract boolean showLogin();
 
-    public PasswordAuthentication getPasswordAuthentication(boolean forceRelogin) {
-        return kenaiSupport.getPasswordAuthentication(forceRelogin);
-    }
-
+    /**
+     * Returns true if user is logged into kenai
+     * @return true if user is logged into kenai
+     */
+    public abstract boolean isLogged ();
+    
 }
