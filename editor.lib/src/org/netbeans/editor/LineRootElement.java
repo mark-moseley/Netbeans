@@ -47,9 +47,7 @@ import javax.swing.text.Document;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.Position;
 import javax.swing.undo.UndoableEdit;
-import java.util.ArrayList;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.Segment;
 import javax.swing.text.StyleContext;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.lib.editor.util.swing.GapBranchElement;
@@ -105,7 +103,7 @@ final class LineRootElement extends GapBranchElement {
         return (newCapacity - addedLinesLength); // value for original index zero
     }
     
-    public Element getElement(int index) {
+    public @Override Element getElement(int index) {
         if (index < 0) {
             throw new IndexOutOfBoundsException("Invalid line index=" + index + " < 0"); // NOI18N
         }
@@ -116,7 +114,13 @@ final class LineRootElement extends GapBranchElement {
         }
         
         LineElement elem = (LineElement)super.getElement(index);
-        assert (elem != null);
+        if (elem == null) {
+            // if the document is not locked elem may be null even after the initial checks (#159491)
+            throw new IndexOutOfBoundsException("Can't find element, index=" + index //NOI18N
+                + ", count=" + getElementCount() //NOI18N
+                + ", documentLocked=" + (DocumentUtilities.isReadLocked(doc) || DocumentUtilities.isWriteLocked(doc))); //NOI18N
+        }
+
         return elem;
     }
 
@@ -275,7 +279,7 @@ final class LineRootElement extends GapBranchElement {
         return doc.getLength() + 1;
     }
 
-    public int getElementIndex(int offset) {
+    public @Override int getElementIndex(int offset) {
         if (offset == 0) { // NB uses this frequently to just get the parent
             return 0;
         }
