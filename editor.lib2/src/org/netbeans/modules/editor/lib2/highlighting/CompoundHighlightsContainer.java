@@ -48,6 +48,7 @@ import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.Position;
+import javax.swing.text.StyleConstants;
 import org.netbeans.spi.editor.highlighting.HighlightsChangeEvent;
 import org.netbeans.spi.editor.highlighting.HighlightsChangeListener;
 import org.netbeans.spi.editor.highlighting.HighlightsContainer;
@@ -134,16 +135,15 @@ public final class CompoundHighlightsContainer extends AbstractHighlightsContain
                     // not sure what is cached -> reset the cache
                     discardCache();
                 } else {
-                    int maxDistance = Math.max(MIN_CACHE_SIZE, highest - lowest);
-                    if (endOffset > lowest - maxDistance && endOffset <= highest && startOffset < lowest) {
+                    if (endOffset <= highest && startOffset < lowest) {
                         // below the cached area, but close enough
-                        update = new int [] { startOffset, lowest };
-                    } else if (startOffset < highest + maxDistance && startOffset >= lowest && endOffset > highest) {
+                        update = new int [] { expandBelow(startOffset, lowest), lowest };
+                    } else if (startOffset >= lowest && endOffset > highest) {
                         // above the cached area, but close enough
-                        update = new int [] { highest, endOffset };
+                        update = new int [] { highest, expandAbove(highest, endOffset) };
                     } else if (startOffset < lowest && endOffset > highest) {
                         // extends the cached area on both sides
-                        update = new int [] { startOffset, lowest, highest, endOffset };
+                        update = new int [] { expandBelow(startOffset, lowest), lowest, highest, expandAbove(highest, endOffset) };
                     } else if (startOffset >= lowest && endOffset <= highest) {
                         // inside the cached area
                     } else {
@@ -158,16 +158,13 @@ public final class CompoundHighlightsContainer extends AbstractHighlightsContain
                 bag = new OffsetsBag(doc, true);
                 cache = bag;
                 lowest = highest = -1;
-                update = new int [] { startOffset, endOffset };
+                update = new int [] { expandBelow(startOffset, endOffset), expandAbove(startOffset, endOffset) };
             }
             
             if (update != null) {
                 for (int i = 0; i < update.length / 2; i++) {
-                    if (update[2 * i + 1] - update[2 * i] < MIN_CACHE_SIZE) {
-                        update[2 * i + 1] = update[2 * i] + MIN_CACHE_SIZE;
-                        if (update[2 * i + 1] >= doc.getLength()) {
-                            update[2 * i + 1] = Integer.MAX_VALUE;
-                        }
+                    if (update[2 * i + 1] >= doc.getLength()) {
+                        update[2 * i + 1] = Integer.MAX_VALUE;
                     }
                     
                     updateCache(update[2 * i], update[2 * i + 1], bag);
@@ -273,6 +270,7 @@ public final class CompoundHighlightsContainer extends AbstractHighlightsContain
 
         synchronized (LOCK) {
             // XXX: Perhaps we could do something more efficient.
+            LOG.fine("Cache obsoleted by changes in " + layer);
             cacheObsolete = true;
             increaseVersion();
             
@@ -289,7 +287,7 @@ public final class CompoundHighlightsContainer extends AbstractHighlightsContain
         }
     }
 
-    private void updateCache(int startOffset, int endOffset, OffsetsBag bag) {
+    private void updateCache(final int startOffset, final int endOffset, OffsetsBag bag) {
         if (LOG.isLoggable(Level.FINE)) {
             LOG.fine("Updating cache: <" + startOffset + ", " + endOffset + ">"); //NOI18N
         }
@@ -300,8 +298,59 @@ public final class CompoundHighlightsContainer extends AbstractHighlightsContain
             }
 
             try {
-                HighlightsSequence seq = layers[i].getHighlights(startOffset, endOffset);
-                bag.addAllHighlights(seq);
+                final HighlightsSequence seq = layers[i].getHighlights(startOffset, endOffset);
+                final int layerIndex = i; //saving this so we can debug corrupt layers (aka the ones that need clipping)
+                final HighlightsContainer currentLayerObject = layers[i];
+                bag.addAllHighlights(new HighlightsSequence() {
+
+                    int start = -1, end = -1;
+                    public boolean moveNext() {
+                        boolean hasNext = seq.moveNext();
+                        //XXX: the problem here is if the sequence we are wrapping is sorted by startOffset.
+                        // In practice I think it is, but I cannot afford to make that assumption now.
+                        // So I have to check both boundaries, not only start and end offset separately.
+                        boolean retry = hasNext;
+                        while(retry){
+                            start = seq.getStartOffset();
+                            end = seq.getEndOffset();
+                            assert start <=end : "Start should come before the end offset in the sequence"; //NOI18N
+
+                            if (start > endOffset || end < startOffset) {
+                                //this highlight is totally outside our rage, there is nothing we can clip, we must retry
+                                LOG.warning("Corrupt layer found (#" + layerIndex + ":" + currentLayerObject + "). Start offset " + start + " and end offset "+end+" are outside the range [" + startOffset + "," + endOffset+"], skipping."); //NOI18N
+                                retry = hasNext = seq.moveNext();
+                            }else{
+                                retry = false;
+                            }
+                        }
+                        if(hasNext){
+                            if (start < startOffset) {
+                                LOG.warning("Corrupt layer found (#" + layerIndex + ":" + currentLayerObject + "). Start offset " + start + " should be >=" + startOffset + ". Clipping..."); //NOI18N
+                                start = startOffset;
+                            }
+                            if (end > endOffset) {
+                                LOG.warning("Corrupt layer found (#" + layerIndex + ":" + currentLayerObject + "). End offset " + end + " should be <=" + endOffset + ". Clipping..."); //NOI18N
+                                end = endOffset;
+                            }
+                        }
+                        return hasNext;
+                    }
+
+                    public int getStartOffset() {
+                        return start;
+                    }
+
+                    public int getEndOffset() {
+                        return end;
+                    }
+
+                    public AttributeSet getAttributes() {
+                        return seq.getAttributes();
+                    }
+                });
+                if (LOG.isLoggable(Level.FINE)) {
+                    LOG.fine(dumpLayerHighlights(layers[i], startOffset, endOffset));
+                }
             } catch (ThreadDeath td) {
                 throw td;
             } catch (Throwable t) {
@@ -343,6 +392,45 @@ public final class CompoundHighlightsContainer extends AbstractHighlightsContain
         cache = null;
     }
     
+    private static int expandBelow(int startOffset, int endOffset) {
+        if (startOffset == 0 || endOffset == Integer.MAX_VALUE) {
+            return startOffset;
+        } else {
+            int expandBy = Math.max((endOffset - startOffset) >> 2, MIN_CACHE_SIZE);
+            return Math.max(startOffset - expandBy, 0);
+        }
+    }
+    
+    private static int expandAbove(int startOffset, int endOffset) {
+        if (endOffset == Integer.MAX_VALUE) {
+            return endOffset;
+        } else {
+            int expandBy = Math.max((endOffset - startOffset) >> 2, MIN_CACHE_SIZE);
+            return endOffset + expandBy;
+        }
+    }
+
+    private static String dumpLayerHighlights(HighlightsContainer layer, int startOffset, int endOffset) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("Highlights in " + layer + ": {\n"); //NOI18N
+        
+        for(HighlightsSequence seq = layer.getHighlights(startOffset, endOffset); seq.moveNext(); ) {
+            sb.append("  <"); //NOI18N
+            sb.append(seq.getStartOffset());
+            sb.append(", "); //NOI18N
+            sb.append(seq.getEndOffset());
+            sb.append(", "); //NOI18N
+            sb.append(seq.getAttributes().getAttribute(StyleConstants.NameAttribute));
+            sb.append(">\n"); //NOI18N
+        }
+        
+        sb.append("} End of Highlights in " + layer); //NOI18N
+        sb.append("\n"); //NOI18N
+        
+        return sb.toString();
+    }
+
     private static final class LayerListener implements HighlightsChangeListener {
         
         private WeakReference<CompoundHighlightsContainer> ref;
