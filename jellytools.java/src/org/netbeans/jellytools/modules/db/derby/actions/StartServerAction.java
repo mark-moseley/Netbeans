@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,27 +38,23 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.jellytools.actions;
 
-import java.awt.event.KeyEvent;
-import javax.swing.KeyStroke;
+package org.netbeans.jellytools.modules.db.derby.actions;
+
 import org.netbeans.jellytools.Bundle;
+import org.netbeans.jellytools.actions.ActionNoBlock;
 
-/** Used to call "Build|Compile File" main menu item, "Compile File" popup menu or F9 shortcut.
- * @see Action
- * @author <a href="mailto:adam.sotona@sun.com">Adam Sotona</a>
+
+/** Used to call "Start Server" popup menu item.
+ * @see org.netbeans.jellytools.actions.Action
+ * @author Martin.Schovanek@sun.com
  */
-public class CompileAction extends Action {
+public class StartServerAction extends ActionNoBlock {
 
-    // Build|Compile
-    private static final String compileMenu = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Build")+"|"
-                                            +Bundle.getStringTrimmed("org.netbeans.modules.project.ui.actions.Bundle", "LBL_CompileSingleAction_Name");
-    private static final KeyStroke keystroke = KeyStroke.getKeyStroke(KeyEvent.VK_F9, 0);
-    // Compile File
-    private static final String compilePopup = Bundle.getString("org.netbeans.modules.java.project.Bundle", "LBL_CompileFile_Action");
-    
-    /** creates new CompileAction instance */    
-    public CompileAction() {
-        super(compileMenu, compilePopup, keystroke);
+    /** creates new "Start Server" action */
+    public StartServerAction() {
+        super(null, Bundle.getStringTrimmed(
+                "org.netbeans.modules.derby.Bundle",
+                "LBL_StartAction"));
     }
 }

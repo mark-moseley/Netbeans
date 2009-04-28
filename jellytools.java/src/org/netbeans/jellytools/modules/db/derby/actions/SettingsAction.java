@@ -45,16 +45,16 @@ import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.actions.ActionNoBlock;
 
 
-/** Used to call "Tools | Java DB Database | Stop Server" menu item.
+/** Used to call "Properties..." popup menu item.
  * @see org.netbeans.jellytools.actions.Action
  * @author Martin.Schovanek@sun.com
  */
-public class StopServerAction extends ActionNoBlock {
+public class SettingsAction extends ActionNoBlock {
 
-    /** creates new "Stop Server" action */
-    public StopServerAction() {
-        super(Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Tools")+"|"
-                +Bundle.getStringTrimmed("org.netbeans.modules.derby.Bundle", "LBL_DerbyDatabase")+"|"
-                +Bundle.getStringTrimmed("org.netbeans.modules.derby.Bundle", "LBL_StopAction"), null);
+    /** creates new "Settings..." action */
+    public SettingsAction() {
+        super(null, Bundle.getStringTrimmed(
+                "org.netbeans.modules.derby.Bundle",
+                "LBL_PropertiesAction"));
     }
 }

@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,30 +38,23 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.jellytools.modules.form.actions;
+
+package org.netbeans.jellytools.modules.db.derby.actions;
 
 import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.actions.Action;
+import org.netbeans.jellytools.actions.ActionNoBlock;
 
-/** Used to call "Window|GUI Editor|Inspector" main menu item,
- * "org.netbeans.modules.form.actions.InspectorAction" or shortcut.
- * @see Action
- * @author Jiri.Skrivanek@sun.com
+
+/** Used to call "Tools | Java DB Database | Create Database..." menu item.
+ * @see org.netbeans.jellytools.actions.Action
+ * @author Martin.Schovanek@sun.com 
  */
-public class InspectorAction extends Action {
+public class CreateDatabaseAction extends ActionNoBlock {
 
-    // Window|GUI Editor|Inspector
-    private static final String inspectorMenu =
-        Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Window")+
-        "|" +
-        Bundle.getStringTrimmed("org.netbeans.modules.form.resources.Bundle", 
-                                "Menu/Window/Form")+
-        "|" +
-        Bundle.getStringTrimmed("org.netbeans.modules.form.actions.Bundle", 
-                                "CTL_InspectorAction");
-
-    /** Creates new InspectorAction instance */    
-    public InspectorAction() {
-        super(inspectorMenu, null, "org.netbeans.modules.form.actions.InspectorAction");
+    /** creates new "Create Database..." action */
+    public CreateDatabaseAction() {
+        super(null, Bundle.getStringTrimmed(
+                "org.netbeans.modules.derby.Bundle",
+                "LBL_CreateDBAction"));
     }
 }
