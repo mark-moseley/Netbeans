@@ -59,21 +59,19 @@ import org.netbeans.lib.profiler.ui.components.FlatToolBar;
 import org.netbeans.lib.profiler.ui.components.SnippetPanel;
 import org.netbeans.lib.profiler.utils.StringUtils;
 import org.netbeans.modules.profiler.actions.*;
-import org.netbeans.modules.profiler.heapwalk.HeapWalker;
 import org.netbeans.modules.profiler.heapwalk.HeapWalkerManager;
 import org.netbeans.modules.profiler.ui.ProfilerDialogs;
 import org.netbeans.modules.profiler.utils.IDEUtils;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.SharedClassObject;
 import org.openide.util.Utilities;
-import org.openide.util.actions.Presenter;
 import org.openide.util.actions.SystemAction;
 import org.openide.windows.Mode;
 import org.openide.windows.TopComponent;
@@ -104,6 +102,7 @@ import javax.swing.event.ListSelectionListener;
 import javax.swing.plaf.ComboBoxUI;
 import javax.swing.plaf.IconUIResource;
 import javax.swing.plaf.basic.BasicComboBoxUI;
+import org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities;
 
 
 /**
@@ -278,29 +277,26 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
             setBorder(BorderFactory.createEmptyBorder(8, 3, 9, 3));
             setLayout(new GridBagLayout());
 
-            final Font labelFont = UIManager.getFont("Label.font"); // NOI18N
-            final Font boldFont = new Font(labelFont.getName(), labelFont.getStyle() | Font.BOLD, labelFont.getSize());
-
             final JLabel instrLabel = new JLabel(INSTRUMENTED_LABEL_STRING);
-            instrLabel.setFont(boldFont);
+            instrLabel.setFont(instrLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel instrFilterLabel = new JLabel(FILTER_LABEL_STRING);
-            instrFilterLabel.setFont(boldFont);
+            instrFilterLabel.setFont(instrFilterLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel threadsLabel = new JLabel(THREADS_LABEL_STRING);
-            threadsLabel.setFont(boldFont);
+            threadsLabel.setFont(threadsLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel typeLabel = new JLabel(TYPE_LABEL_STRING);
-            typeLabel.setFont(boldFont);
+            typeLabel.setFont(typeLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel totalMemLabel = new JLabel(TOTAL_MEMORY_LABEL_STRING);
-            totalMemLabel.setFont(boldFont);
+            totalMemLabel.setFont(totalMemLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel usedMemLabel = new JLabel(USED_MEMORY_LABEL_STRING);
-            usedMemLabel.setFont(boldFont);
+            usedMemLabel.setFont(usedMemLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel relTimeLabel = new JLabel(GC_TIME_LABEL_STRING);
-            relTimeLabel.setFont(boldFont);
+            relTimeLabel.setFont(relTimeLabel.getFont().deriveFont(Font.BOLD));
 
             instrValueLabel = new JLabel(savedInstrText);
             instrFilterValueLabel = new JLabel(""); // NOI18N
@@ -588,18 +584,12 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
         private static final int CPU = 1;
         private static final int MEMORY = 2;
         private static final int FRAGMENT = 3;
-        private static final ImageIcon TAKE_SNAPSHOT_CPU_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/takeSnapshotCPU.png") // NOI18N
-        );
-        private static final ImageIcon TAKE_SNAPSHOT_MEMORY_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/takeSnapshotMem.png") // NOI18N
-        );
-        private static final ImageIcon TAKE_SNAPSHOT_FRAGMENT_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/takeSnapshotFragment.png") // NOI18N
-        );
-        private static final ImageIcon LIVE_RESULTS_CPU_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/liveResultsCPUView.png") // NOI18N
-        );
-        private static final ImageIcon LIVE_RESULTS_MEMORY_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/liveResultsMemView.png") // NOI18N
-        );
-        private static final ImageIcon LIVE_RESULTS_FRAGMENT_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/liveResultsFragmentView.png") // NOI18N
-        );
+        private static final ImageIcon TAKE_SNAPSHOT_CPU_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/takeSnapshotCPU.png", false);
+        private static final ImageIcon TAKE_SNAPSHOT_MEMORY_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/takeSnapshotMem.png", false);
+        private static final ImageIcon TAKE_SNAPSHOT_FRAGMENT_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/takeSnapshotFragment.png", false);
+        private static final ImageIcon LIVE_RESULTS_CPU_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/liveResultsCPUView.png", false);
+        private static final ImageIcon LIVE_RESULTS_MEMORY_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/liveResultsMemView.png", false);
+        private static final ImageIcon LIVE_RESULTS_FRAGMENT_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/liveResultsFragmentView.png", false);
 
         //~ Instance fields ------------------------------------------------------------------------------------------------------
 
@@ -1397,22 +1387,20 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
             setBorder(BorderFactory.createEmptyBorder(8, 3, 9, 3));
             setLayout(new GridBagLayout());
 
-            final Font labelFont = UIManager.getFont("Label.font"); // NOI18N
-            final Font boldFont = new Font(labelFont.getName(), labelFont.getStyle() | Font.BOLD, labelFont.getSize());
-
             final JLabel modeLabel = new JLabel(MODE_LABEL_STRING);
-            modeLabel.setFont(boldFont);
+            modeLabel.setFont(modeLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel typeLabel = new JLabel(TYPE_LABEL_STRING);
-            typeLabel.setFont(boldFont);
+            typeLabel.setFont(typeLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel profileLabel = new JLabel(CONFIG_LABEL_STRING);
-            profileLabel.setFont(boldFont);
+            profileLabel.setFont(profileLabel.getFont().deriveFont(Font.BOLD));
+
             onLabel = new JLabel(ON_LABEL_STRING);
-            onLabel.setFont(boldFont);
+            onLabel.setFont(onLabel.getFont().deriveFont(Font.BOLD));
 
             final JLabel statusLabel = new JLabel(STATUS_LABEL_STRING);
-            statusLabel.setFont(boldFont);
+            statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD));
 
             modeValueLabel = new JLabel(NO_CONFIGURATION_STRING);
             typeValueLabel = new JLabel(NO_CONFIGURATION_STRING);
@@ -1569,9 +1557,7 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
                                                                                                         Color.LIGHT_GRAY),
                                                                new FlatToolBar.FlatMarginBorder());
 
-            vmTelemetryButton = new JButton(TELEMETRY_BUTTON_NAME,
-                                            new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/vmTelemetryView.png") // NOI18N
-            ));
+            vmTelemetryButton = new JButton(TELEMETRY_BUTTON_NAME, ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/vmTelemetryView.png", false));
             UIUtils.fixButtonUI(vmTelemetryButton);
             vmTelemetryButton.addActionListener(this);
             vmTelemetryButton.setContentAreaFilled(false);
@@ -1582,9 +1568,7 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
             vmTelemetryButton.setBorder(myRolloverBorder);
             vmTelemetryButton.setToolTipText(TELEMETRY_BUTTON_TOOLTIP);
 
-            threadsButton = new JButton(THREADS_BUTTON_NAME,
-                                        new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/threadsView.png") // NOI18N
-            ));
+            threadsButton = new JButton(THREADS_BUTTON_NAME, ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/threadsView.png", false));
             UIUtils.fixButtonUI(threadsButton);
             threadsButton.addActionListener(this);
             threadsButton.setContentAreaFilled(false);
@@ -1747,16 +1731,12 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
     private static final String HELP_CTX_KEY = "ProfilerControlPanel.HelpCtx"; // NOI18N
     private static final HelpCtx HELP_CTX = new HelpCtx(HELP_CTX_KEY);
     private static ProfilerControlPanel2 defaultInstance;
-    private static final Image windowIcon = Utilities.loadImage("org/netbeans/modules/profiler/resources/controlPanelWindow.gif"); // NOI18N
-    private static final ImageIcon cpuIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/cpuSmall.png") // NOI18N
-    ); // NOI18N
-    private static final ImageIcon fragmentIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/fragmentSmall.png") // NOI18N
-    ); // NOI18N
-    private static final ImageIcon memoryIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/memorySmall.png") // NOI18N
-    ); // NOI18N
-    private static final ImageIcon emptyIcon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/empty16.gif") // NOI18N
-    ); // NOI18N
-    private static final String PREFERRED_ID = "PROFILERCONTROLPANEL_TC"; // NOI18N // for winsys persistence
+    private static final Image windowIcon = ImageUtilities.loadImage("org/netbeans/modules/profiler/resources/controlPanelWindow.gif"); // NOI18N
+    private static final ImageIcon cpuIcon = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/cpuSmall.png", false); // NOI18N
+    private static final ImageIcon fragmentIcon = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/fragmentSmall.png", false); // NOI18N
+    private static final ImageIcon memoryIcon = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/memorySmall.png", false); // NOI18N
+    private static final ImageIcon emptyIcon = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/empty16.gif", false); // NOI18N
+    private static final String ID = "profiler_cp"; // NOI18N // for winsys persistence
     private static final Integer EXTERNALIZABLE_VERSION_WITH_SNAPSHOTS = new Integer(3);
     
     private static final Color CP_BACKGROUND_COLOR = UIUtils.getProfilerResultsBackground();
@@ -1844,16 +1824,11 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
     public static synchronized ProfilerControlPanel2 getDefault() {
         if (defaultInstance == null) {
             IDEUtils.runInEventDispatchThreadAndWait(new Runnable() {
-                    public void run() {
-                        final TopComponent tc = WindowManager.getDefault().findTopComponent(PREFERRED_ID);
-
-                        if ((tc != null) && tc instanceof ProfilerControlPanel2) {
-                            defaultInstance = (ProfilerControlPanel2) tc;
-                        } else {
-                            defaultInstance = new ProfilerControlPanel2();
-                        }
-                    }
-                });
+                public void run() {
+                    defaultInstance = (ProfilerControlPanel2) WindowManager.getDefault().findTopComponent(ID);
+                    if (defaultInstance == null) defaultInstance = new ProfilerControlPanel2();
+                }
+            });
         }
 
         return defaultInstance;
@@ -1871,26 +1846,12 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
         return CONTROL_PANEL_TOOLTIP;
     }
 
-    public static void closeIfOpened() {
+    public static synchronized void closeIfOpened() {
         IDEUtils.runInEventDispatchThread(new Runnable() {
-                public void run() {
-                    ProfilerControlPanel2 instance = defaultInstance;
-
-                    if (instance == null) {
-                        final TopComponent tc = WindowManager.getDefault().findTopComponent(PREFERRED_ID);
-
-                        if ((tc != null) && tc instanceof ProfilerControlPanel2) {
-                            instance = (ProfilerControlPanel2) tc;
-                        }
-                    }
-
-                    if (instance != null) {
-                        if (instance.isOpened()) {
-                            instance.close();
-                        }
-                    }
-                }
-            });
+            public void run() {
+                if (defaultInstance != null && defaultInstance.isOpened()) defaultInstance.close();
+            }
+        });
     }
 
     public int getPersistenceType() {
@@ -2030,7 +1991,7 @@ public final class ProfilerControlPanel2 extends TopComponent implements Profili
     }
 
     protected String preferredID() {
-        return PREFERRED_ID;
+        return ID;
     }
 
     //  private static class CPMainPanel extends JPanel implements Scrollable {
