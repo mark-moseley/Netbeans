@@ -56,6 +56,7 @@ import org.netbeans.modules.refactoring.java.RetoucheUtils;
 import org.netbeans.modules.refactoring.java.api.PushDownRefactoring;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
 
@@ -96,7 +97,10 @@ public final class PushDownRefactoringPlugin extends JavaRefactoringPlugin {
                 return precheckProblem;
             }
             if (!RetoucheUtils.isElementInOpenProject(treePathHandle.getFileObject())) {
-                return new Problem(true, NbBundle.getMessage(PushDownRefactoringPlugin.class, "ERR_ProjectNotOpened"));
+                return new Problem(true, NbBundle.getMessage(
+                        PushDownRefactoringPlugin.class,
+                        "ERR_ProjectNotOpened",
+                        FileUtil.getFileDisplayName(treePathHandle.getFileObject())));
             }
 
 
@@ -154,9 +158,9 @@ public final class PushDownRefactoringPlugin extends JavaRefactoringPlugin {
         fireProgressListenerStart(ProgressEvent.START, a.size());
         PushDownTransformer pdt = new PushDownTransformer(refactoring.getMembers()); 
         TransformTask task = new TransformTask(pdt, treePathHandle);
-        createAndAddElements(a, task, refactoringElements, refactoring);
+        Problem prob = createAndAddElements(a, task, refactoringElements, refactoring);
         fireProgressListenerStop();
-        return pdt.getProblem();    
+        return prob != null ? prob : pdt.getProblem();
     }
 
     protected FileObject getFileObject() {

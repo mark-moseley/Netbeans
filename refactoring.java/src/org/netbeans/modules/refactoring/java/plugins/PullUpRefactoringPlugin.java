@@ -62,7 +62,7 @@ import org.netbeans.modules.refactoring.java.api.PullUpRefactoring;
 import org.netbeans.modules.refactoring.java.spi.JavaRefactoringPlugin;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.openide.filesystems.FileObject;
-import org.openide.util.NbBundle;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
 
@@ -103,7 +103,10 @@ public final class PullUpRefactoringPlugin extends JavaRefactoringPlugin {
                 return problem;
             }
             if (!RetoucheUtils.isElementInOpenProject(treePathHandle.getFileObject())) {
-                return new Problem(true, NbBundle.getMessage(PullUpRefactoringPlugin.class, "ERR_ProjectNotOpened"));
+                return new Problem(true, NbBundle.getMessage(
+                        PullUpRefactoringPlugin.class,
+                        "ERR_ProjectNotOpened",
+                        FileUtil.getFileDisplayName(treePathHandle.getFileObject())));
             }
 
 
@@ -116,11 +119,13 @@ public final class PullUpRefactoringPlugin extends JavaRefactoringPlugin {
             // increase progress (step 2)
             fireProgressListenerStep();
             // #2 - check if there are any members to pull up
-            Element el = treePathHandle.resolveElement(cc);
-            for (Element element : el.getEnclosedElements()) {
+            for (Element element : e.getEnclosedElements()) {
                 if (element.getKind() != ElementKind.CONSTRUCTOR) {
                     return null;
                 }
+            }
+            if (!e.getInterfaces().isEmpty()) {
+                return null;
             }
             problem = new Problem(true, NbBundle.getMessage(PullUpRefactoringPlugin.class, "ERR_PullUp_NoMembers")); // NOI18N
             // increase progress (step 3)
@@ -260,9 +265,9 @@ public final class PullUpRefactoringPlugin extends JavaRefactoringPlugin {
         a.add(RetoucheUtils.getFileObject(treePathHandle));
         fireProgressListenerStart(ProgressEvent.START, a.size());
         TransformTask task = new TransformTask(new PullUpTransformer(refactoring), treePathHandle);
-        createAndAddElements(a, task, refactoringElements, refactoring, cpInfo);
+        Problem problem = createAndAddElements(a, task, refactoringElements, refactoring, cpInfo);
         fireProgressListenerStop();
-        return null;
+        return problem;
     }
 
     protected FileObject getFileObject() {

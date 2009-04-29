@@ -44,7 +44,6 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.*;
 import javax.lang.model.element.*;
-import javax.lang.model.type.TypeMirror;
 import org.netbeans.api.java.source.*;
 import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.TreePathHandle;
@@ -55,6 +54,7 @@ import org.netbeans.modules.refactoring.java.api.ChangeParametersRefactoring.Par
 import org.netbeans.modules.refactoring.java.spi.JavaRefactoringPlugin;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -153,23 +153,24 @@ public class ChangeParametersPlugin extends JavaRefactoringPlugin {
                 public void run(CompilationController info) throws Exception {
                     final ClassIndex idx = info.getClasspathInfo().getClassIndex();
                     info.toPhase(JavaSource.Phase.RESOLVED);
+                    final ElementUtilities elmUtils = info.getElementUtilities();
 
                     //add all references of overriding methods
                         TreePathHandle treePathHandle = refactoring.getRefactoringSource().lookup(TreePathHandle.class);
                         Element el = treePathHandle.resolveElement(info);
-                    ElementHandle<TypeElement>  enclosingType = ElementHandle.create(SourceUtils.getEnclosingTypeElement(el));
+                    ElementHandle<TypeElement>  enclosingType = ElementHandle.create(elmUtils.enclosingTypeElement(el));
                         allMethods = new HashSet<ElementHandle<ExecutableElement>>();
                         allMethods.add(ElementHandle.create((ExecutableElement)el));
                         for (ExecutableElement e:RetoucheUtils.getOverridingMethods((ExecutableElement)el, info)) {
                             set.add(SourceUtils.getFile(e, info.getClasspathInfo()));
-                            ElementHandle<TypeElement> encl = ElementHandle.create(SourceUtils.getEnclosingTypeElement(e));
+                            ElementHandle<TypeElement> encl = ElementHandle.create(elmUtils.enclosingTypeElement(e));
                             set.addAll(idx.getResources(encl, EnumSet.of(ClassIndex.SearchKind.METHOD_REFERENCES),EnumSet.of(ClassIndex.SearchScope.SOURCE)));
                             allMethods.add(ElementHandle.create(e));
                         }
                         //add all references of overriden methods
                         for (ExecutableElement e:RetoucheUtils.getOverridenMethods((ExecutableElement)el, info)) {
                             set.add(SourceUtils.getFile(e, info.getClasspathInfo()));
-                            ElementHandle<TypeElement> encl = ElementHandle.create(SourceUtils.getEnclosingTypeElement(e));
+                            ElementHandle<TypeElement> encl = ElementHandle.create(elmUtils.enclosingTypeElement(e));
                             set.addAll(idx.getResources(encl, EnumSet.of(ClassIndex.SearchKind.METHOD_REFERENCES),EnumSet.of(ClassIndex.SearchScope.SOURCE)));
                             allMethods.add(ElementHandle.create(e));
                         }
@@ -189,7 +190,11 @@ public class ChangeParametersPlugin extends JavaRefactoringPlugin {
         fireProgressListenerStart(ProgressEvent.START, a.size());
         if (!a.isEmpty()) {
             TransformTask transform = new TransformTask(new ChangeParamsTransformer(refactoring, allMethods), treePathHandle);
-            createAndAddElements(a, transform, elements, refactoring);
+            Problem p = createAndAddElements(a, transform, elements, refactoring);
+            if (p != null) {
+                fireProgressListenerStop();
+                return p;
+            }
         }
         fireProgressListenerStop();
         return null;
@@ -285,15 +290,22 @@ public class ChangeParametersPlugin extends JavaRefactoringPlugin {
         
         FileObject fo = SourceUtils.getFile(el,info.getClasspathInfo());
         if (RetoucheUtils.isFromLibrary(el, info.getClasspathInfo())) { //NOI18N
-            preCheckProblem = createProblem(preCheckProblem, true, getCannotRefactor(fo));
-        }
-        
-        if (!RetoucheUtils.isElementInOpenProject(fo)) {
-            preCheckProblem =new Problem(true, NbBundle.getMessage(ChangeParametersPlugin.class, "ERR_ProjectNotOpened"));
+            preCheckProblem = createProblem(preCheckProblem, true, NbBundle.getMessage(
+                    ChangeParametersPlugin.class, "ERR_CannotRefactorLibraryClass",
+                    el.getEnclosingElement()
+                    ));
             return preCheckProblem;
         }
         
-        if (SourceUtils.getEnclosingTypeElement(el).getKind() == ElementKind.ANNOTATION_TYPE) {
+        if (!RetoucheUtils.isElementInOpenProject(fo)) {
+            preCheckProblem =new Problem(true, NbBundle.getMessage(
+                    ChangeParametersPlugin.class,
+                    "ERR_ProjectNotOpened",
+                    FileUtil.getFileDisplayName(fo)));
+            return preCheckProblem;
+        }
+        
+        if (info.getElementUtilities().enclosingTypeElement(el).getKind() == ElementKind.ANNOTATION_TYPE) {
             preCheckProblem =new Problem(true, NbBundle.getMessage(ChangeParametersPlugin.class, "ERR_MethodsInAnnotationsNotSupported"));
             return preCheckProblem;
         }
@@ -308,7 +320,4 @@ public class ChangeParametersPlugin extends JavaRefactoringPlugin {
         return preCheckProblem;
     }
     
-    private static final String getCannotRefactor(FileObject r) {
-        return new MessageFormat(NbBundle.getMessage(ChangeParametersPlugin.class, "ERR_CannotRefactorFile")).format(new Object[] {r.getName()});
-    }
 }
