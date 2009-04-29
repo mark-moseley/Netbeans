@@ -298,6 +298,8 @@ public class SourcePathProviderImpl extends SourcePathProvider {
 
             srcRootsToListenForArtifactsUpdates = new HashSet(allSourceRoots);
 
+            smartSteppingSourcePath = originalSourcePath;
+
             Set<String> disabledRoots = getRemoteDisabledSourceRoots();
             if (disabledRoots != null && !disabledRoots.isEmpty()) {
                 List<FileObject> enabledSourcePath = new ArrayList<FileObject>(
@@ -309,8 +311,6 @@ public class SourcePathProviderImpl extends SourcePathProvider {
                 }
                 smartSteppingSourcePath = ClassPathSupport.createClassPath(
                         enabledSourcePath.toArray(new FileObject[0]));
-            } else {
-                smartSteppingSourcePath = originalSourcePath;
             }
         }
         
@@ -481,6 +481,10 @@ public class SourcePathProviderImpl extends SourcePathProvider {
                                                                 if (verbose) System.out.println ("SPPI:   fo " + fo);
                 if (fo == null && global) {
                     fo = originalSourcePath.findResource(relativePath);
+                                                                    if (verbose) System.out.println ("SPPI:   fo " + fo);
+                }
+                if (fo == null && global) {
+                    fo = GlobalPathRegistry.getDefault().findResource(relativePath);
                                                                     if (verbose) System.out.println ("SPPI:   fo " + fo);
                 }
             }
