@@ -36,50 +36,41 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.jellytools.modules.ruby;
 
-import java.awt.Component;
-import javax.swing.JLabel;
-import javax.swing.JTextField;
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jemmy.ComponentChooser;
-import org.netbeans.jemmy.operators.JLabelOperator;
+package org.netbeans.jellytools;
 
 /**
+ * Java-specific extension to NewFileWizardOperator.
  *
- * @author Ivan Sidorkin <ivansidorkin@netbeans.org>
+ * @author Vojtech.Sigler@sun.com
  */
-public class NewFileNameLocationStepOperator extends org.netbeans.jellytools.NewFileNameLocationStepOperator {
+public class NewJavaFileWizardOperator extends NewFileWizardOperator
+{
 
-    private JLabelOperator _lblObjectName;
-
-    /** Returns operator for first label with "Name"
-     * @return JLabelOperator
+    /** Creates a new object from template. It invokes new file wizard,
+     * sets given project, category and file type. On the next panel it
+     * sets package and object name. If package name is null or empty, it lets
+     * the default one.
+     * @param projectName name of project in which new object should be created
+     * @param category category to be selected
+     * @param fileType file type to be selected
+     * @param packageName package name of new object
+     * @param name name of created object
      */
-    @Override
-    public JLabelOperator lblObjectName() {
-        if (_lblObjectName == null) {
-            final String nameLabel = Bundle.getString("org.netbeans.modules.properties.Bundle", "PROP_name");
-           // final String nameAndLocationLabel = Bundle.getStringTrimmed("org.netbeans.modules.java.project.Bundle", "LBL_JavaTargetChooserPanelGUI_Name");
-            final String nameAndLocationLabel = Bundle.getString("org.netbeans.modules.ruby.rubyproject.templates.Bundle", "LBL_RubyTargetChooserPanelGUI_Name");
-            _lblObjectName = new JLabelOperator(this, new JLabelOperator.JLabelFinder(new ComponentChooser() {
-
-                public boolean checkComponent(Component comp) {
-                    JLabel jLabel = (JLabel) comp;
-                    String text = jLabel.getText();
-                    if (text == null || nameAndLocationLabel.equals(text)) {
-                        return false;
-                    } else if (text.indexOf(nameLabel) > -1 && (jLabel.getLabelFor() == null || jLabel.getLabelFor() instanceof JTextField)) {
-                        return true;
-                    }
-                    return false;
-                }
-
-                public String getDescription() {
-                    return "JLabel containing Name and associated with text field";
-                }
-            }));
+    public static void create(String projectName, String category, String fileType, String packageName, String name) {
+        String wizardTitle = Bundle.getString("org.netbeans.modules.project.ui.Bundle",
+                                              "LBL_NewFileWizard_Title");
+        NewFileWizardOperator nfwo = invoke(wizardTitle);
+        nfwo.selectProject(projectName);
+        nfwo.selectCategory(category);
+        nfwo.selectFileType(fileType);
+        nfwo.next();
+        NewJavaFileNameLocationStepOperator nfnlso = new NewJavaFileNameLocationStepOperator();
+        nfnlso.setObjectName(name);
+        if(packageName != null && !"".equals(packageName)) {
+            nfnlso.setPackage(packageName);
         }
-        return _lblObjectName;
+        nfnlso.finish();
     }
+
 }
