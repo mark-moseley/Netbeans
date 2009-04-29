@@ -47,9 +47,8 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.source.CompilationInfo;
-import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.TreePathHandle;
-import org.netbeans.api.java.source.UiUtils;
+import org.netbeans.api.java.source.ui.ElementHeaders;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.java.RetoucheUtils;
@@ -59,7 +58,6 @@ import org.netbeans.modules.refactoring.spi.ui.CustomRefactoringPanel;
 import org.netbeans.modules.refactoring.spi.ui.RefactoringUI;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
-import org.openide.util.lookup.Lookups;
 
 
 /** Refactoring UI object for Push Down refactoring.
@@ -79,21 +77,29 @@ public class PushDownRefactoringUI implements RefactoringUI {
     /** Creates a new instance of PushDownRefactoringUI
      * @param selectedElements Elements the refactoring action was invoked on.
      */
-    public PushDownRefactoringUI(TreePathHandle[] selectedElements, CompilationInfo info) {
+    public PushDownRefactoringUI(TreePathHandle selectedElements, CompilationInfo info) {
         initialMembers = new HashSet();
-        initialMembers.add(MemberInfo.create(selectedElements[0].resolveElement(info),info));
-        // compute source type and members that should be pre-selected from the
-        // set of elements the action was invoked on
-        
-       // create an instance of push down refactoring object
-        Element selected = selectedElements[0].resolveElement(info);
-        if (!(selected instanceof TypeElement))
-            selected = SourceUtils.getEnclosingTypeElement(selected);
-        TreePath tp = info.getTrees().getPath(selected);
-        TreePathHandle sourceType = TreePathHandle.create(tp, info);
-        description = UiUtils.getHeader(tp, info, UiUtils.PrintPart.NAME);
-        refactoring = new PushDownRefactoring(sourceType);
-        refactoring.getContext().add(RetoucheUtils.getClasspathInfoFor(sourceType));
+        TreePathHandle selectedPath = resolveSelection(selectedElements, info);
+
+        if (selectedPath != null) {
+            Element selected = selectedPath.resolveElement(info);
+            initialMembers.add(MemberInfo.create(selected, info));
+            // compute source type and members that should be pre-selected from the
+            // set of elements the action was invoked on
+
+           // create an instance of push down refactoring object
+            if (!(selected instanceof TypeElement))
+                selected = info.getElementUtilities().enclosingTypeElement(selected);
+            TreePath tp = info.getTrees().getPath(selected);
+            TreePathHandle sourceType = TreePathHandle.create(tp, info);
+            description = ElementHeaders.getHeader(tp, info, ElementHeaders.NAME);
+            refactoring = new PushDownRefactoring(sourceType);
+            refactoring.getContext().add(RetoucheUtils.getClasspathInfoFor(sourceType));
+        } else {
+            // put the unresolvable selection to refactoring,
+            // user notification is provided by PushDownRefactoringPlugin.preCheck
+            refactoring = new PushDownRefactoring(selectedElements);
+        }
     }
     
     // --- IMPLEMENTATION OF RefactoringUI INTERFACE ---------------------------
@@ -146,6 +152,21 @@ public class PushDownRefactoringUI implements RefactoringUI {
      */
     private void captureParameters() {
         refactoring.setMembers(panel.getMembers());
+    }
+
+    static TreePathHandle resolveSelection(TreePathHandle source, CompilationInfo javac) {
+        TreePath resolvedPath = source.resolve(javac);
+        TreePath path = resolvedPath;
+        Element resolvedElement = source.resolveElement(javac);
+        while (path != null && resolvedElement == null) {
+            path = path.getParentPath();
+            if (path == null) {
+                return null;
+            }
+            resolvedElement = javac.getTrees().getElement(path);
+        }
+
+        return path == resolvedPath ? source : TreePathHandle.create(path, javac);
     }
 
 }
