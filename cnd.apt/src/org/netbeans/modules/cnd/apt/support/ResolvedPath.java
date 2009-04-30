@@ -41,33 +41,45 @@
 
 package org.netbeans.modules.cnd.apt.support;
 
+import org.netbeans.modules.cnd.utils.cache.FilePathCache;
+
 /**
  *
  * @author Alexander Simon
  */
 public final class ResolvedPath {
-    private final String folder;
-    private final String path;
+    private final CharSequence folder;
+    private final CharSequence path;
+    private final CharSequence notNormalizedPath;
     private final boolean isDefaultSearchPath;
     private final int index;
     
-    public ResolvedPath(String folder, String path, boolean isDefaultSearchPath, int index) {
-        this.folder = folder;
-        this.path = path;
+    public ResolvedPath(CharSequence folder, CharSequence path, CharSequence notNormalizedPath, boolean isDefaultSearchPath, int index) {
+        this.folder = FilePathCache.getManager().getString(folder);
+        this.path = FilePathCache.getManager().getString(path);
+        this.notNormalizedPath = FilePathCache.getManager().getString(notNormalizedPath);
         this.isDefaultSearchPath = isDefaultSearchPath;
         this.index = index;
     }
     /**
-     * Resolved file path
+     * Resolved file path (normalized version)
      */
-    public String getPath(){
+    public CharSequence getPath(){
         return path;
+    }
+
+    /**
+     * Resolved file path (not normalized version)
+     * @return
+     */
+    public CharSequence getNotNormalizedPath() {
+        return notNormalizedPath;
     }
 
     /**
      * Include path used for resolving file path
      */
-    public String getFolder(){
+    public CharSequence getFolder(){
         return folder;
     }
 
@@ -85,6 +97,7 @@ public final class ResolvedPath {
         return index;
     }
     
+    @Override
     public String toString(){
         return path+" in "+folder; // NOI18N
     }

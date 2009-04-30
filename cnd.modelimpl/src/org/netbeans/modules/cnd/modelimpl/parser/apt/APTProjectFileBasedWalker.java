@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.cnd.modelimpl.parser.apt;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.logging.Level;
@@ -55,7 +54,6 @@ import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 import org.netbeans.modules.cnd.modelimpl.csm.core.LibraryManager;
 import org.netbeans.modules.cnd.modelimpl.csm.core.ProjectBase;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
-import org.openide.filesystems.FileUtil;
 
 /**
  * base walker to visit project files based APTs
@@ -80,15 +78,11 @@ public abstract class APTProjectFileBasedWalker extends APTAbstractWalker {
     protected void include(ResolvedPath resolvedPath, APTInclude apt) {
         FileImpl included = null;
         if (resolvedPath != null) {
-            String path = resolvedPath.getPath();
-            if (path.indexOf("..") > 0) { // NOI18N
-                path = FileUtil.normalizeFile(new File(path)).getAbsolutePath();
-                resolvedPath = new ResolvedPath(resolvedPath.getFolder(), path, resolvedPath.isDefaultSearchPath(), resolvedPath.getIndex());
-            }
+            CharSequence path = resolvedPath.getPath();
             if (getIncludeHandler().pushInclude(path, apt.getToken().getLine(), resolvedPath.getIndex())) {
-                ProjectBase startProject = this.getStartProject();
-                if (startProject != null) {
-                    ProjectBase inclFileOwner = LibraryManager.getInstance().resolveFileProjectOnInclude(startProject, getFile(), resolvedPath);
+                ProjectBase aStartProject = this.getStartProject();
+                if (aStartProject != null && aStartProject.isValid()) {
+                    ProjectBase inclFileOwner = LibraryManager.getInstance().resolveFileProjectOnInclude(aStartProject, getFile(), resolvedPath);
                     try {
                         included = includeAction(inclFileOwner, path, mode, apt);
                     } catch (FileNotFoundException ex) {
@@ -107,7 +101,7 @@ public abstract class APTProjectFileBasedWalker extends APTAbstractWalker {
 	postInclude(apt, included);
     }
     
-    abstract protected FileImpl includeAction(ProjectBase inclFileOwner, String inclPath, int mode, APTInclude apt) throws IOException;
+    abstract protected FileImpl includeAction(ProjectBase inclFileOwner, CharSequence inclPath, int mode, APTInclude apt) throws IOException;
 
     protected void postInclude(APTInclude apt, FileImpl included) {
     }
@@ -117,7 +111,7 @@ public abstract class APTProjectFileBasedWalker extends APTAbstractWalker {
     }
 
     protected ProjectBase getStartProject() {
-	return this.file.getProjectImpl();
+	return this.startProject;
     }
     
     protected void setMode(int mode) {
