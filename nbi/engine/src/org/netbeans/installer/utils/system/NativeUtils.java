@@ -39,10 +39,12 @@ package org.netbeans.installer.utils.system;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import org.netbeans.installer.Installer;
+import org.netbeans.installer.utils.EngineUtils;
 import org.netbeans.installer.utils.helper.EnvironmentScope;
 import org.netbeans.installer.utils.ErrorManager;
 import org.netbeans.installer.utils.FileUtils;
@@ -67,11 +69,11 @@ import org.netbeans.installer.utils.system.shortcut.LocationType;
  */
 public abstract class NativeUtils {
     /////////////////////////////////////////////////////////////////////////////////
-    // Static
-    private static NativeUtils instance;
+    // Static    
+    protected static boolean nativeLibraryLoaded;
     private static HashSet<File> forbiddenDeletingFiles = new HashSet<File>();
     private static List <LauncherResource> uninstallerJVMs = new ArrayList <LauncherResource> ();
-    private static List <File> deleteOnExitFiles = new ArrayList <File> ();
+    private static Platform currentPlatform;    
     public final static String NATIVE_RESOURCE_SUFFIX = "native/"; // NOI18N
     public final static String NATIVE_JNILIB_RESOURCE_SUFFIX =
             NATIVE_RESOURCE_SUFFIX +
@@ -83,21 +85,14 @@ public abstract class NativeUtils {
             NATIVE_RESOURCE_SUFFIX +
             "cleaner/"; // NOI18N
     private static OnExitCleanerHandler cleanerHandler;
+
+    protected abstract Platform getPlatform();
     
-    public static synchronized NativeUtils getInstance() {
-        final Platform platform = SystemUtils.getCurrentPlatform();
-        
-        if (platform.isCompatibleWith(Platform.WINDOWS)) {
-            instance = new WindowsNativeUtils();
-        } else if (platform.isCompatibleWith(Platform.LINUX)) {
-            instance = new LinuxNativeUtils();
-        } else if (platform.isCompatibleWith(Platform.SOLARIS)) {
-            instance = new SolarisNativeUtils();
-        } else if (platform.isCompatibleWith(Platform.MACOSX)) {
-            instance = new MacOsNativeUtils();
-        }
-        
-        return instance;
+    final public Platform getCurrentPlatform() {
+        if (currentPlatform == null) {
+            currentPlatform = getPlatform();
+        }        
+        return currentPlatform;
     }
     
     /////////////////////////////////////////////////////////////////////////////////
@@ -145,7 +140,7 @@ public abstract class NativeUtils {
         final File engine = new File(descriptor.getInstallPath(),
                 "uninstall.jar");
         try {
-            Installer.cacheInstallerEngine(engine, new Progress());
+            EngineUtils.cacheEngine(engine, new Progress());
             
             final LauncherProperties props = new LauncherProperties();
             
@@ -158,10 +153,8 @@ public abstract class NativeUtils {
                 "-Xmx256m",
                 "-Xms64m",
                 "-D" + Installer.LOCAL_DIRECTORY_PATH_PROPERTY +
-                        "=" + new File(System.getProperty(
-                        Installer.LOCAL_DIRECTORY_PATH_PROPERTY)).
-                        getAbsolutePath()});
-            props.setMainClass(Installer.class.getName());
+                        "=" + Installer.getInstance().getLocalDirectory()});
+            props.setMainClass(EngineUtils.getEngineMainClass().getName());
             
             if (uninstall) {
                 props.setAppArguments(descriptor.getUninstallCommand());
@@ -179,7 +172,11 @@ public abstract class NativeUtils {
             FileUtils.deleteFile(engine);
         }
     }
+
+    public abstract boolean openBrowser(URI uri);
     
+    public abstract boolean isBrowseSupported();
+
     public abstract FilesList addComponentToSystemInstallManager(ApplicationDescriptor descriptor) throws NativeException;
     
     public abstract void removeComponentFromSystemInstallManager(ApplicationDescriptor descriptor) throws NativeException;
@@ -204,9 +201,6 @@ public abstract class NativeUtils {
     
     public boolean checkFileAccess(File file, boolean isReadNotModify) throws NativeException {
         return true;
-    }
-    private final void initializeDeteleOnExit() {
-        
     }
     public final void addDeleteOnExitFile(File file) {        
         getDeleteOnExitHandler().addDeleteOnExitFile(file);
@@ -233,47 +227,67 @@ public abstract class NativeUtils {
     protected void loadNativeLibrary(String path) {
         LogManager.logIndent("loading jni library");
         LogManager.log("library resource path: " + path);
-        
-        if (path != null) {
-            InputStream input = null;
-            
-            try {
-                final File file = FileUtils.createTempFile();
-                
-                LogManager.log("library file path: " + file.getAbsolutePath());
-                
-                input = getClass().getClassLoader().getResourceAsStream(path);
-                FileUtils.writeFile(file, input);
-                
-                System.load(file.getAbsolutePath());
-                
-                addDeleteOnExitFile(file);
-            } catch (IOException e) {
-                ErrorManager.notifyCritical(
-                        "Cannot load native library from path: " + path, e);
-            } catch (UnsatisfiedLinkError e) {
-                ErrorManager.notifyCritical(
-                        "Cannot load native library from path: " + path, e);
-            } finally {
-                if (input != null) {
+        try {
+            if (path != null) {
+                final File tempDir = SystemUtils.getTempDirectory();
+                File file = null;
+                try {
+                    file = FileUtils.createTempFile(tempDir);
+                } catch (IOException e) {
+                    ErrorManager.notifyCritical(
+                            "Cannot create temporary file for native library at " + file.getAbsolutePath(), e);
+                    return;
+                }
+
+                InputStream input = getClass().getClassLoader().getResourceAsStream(path);
+                if (input == null) {
+                    ErrorManager.notifyCritical("Cannot find native library at resource " + path);//NOI18N
+                    return;
+                }
+                try {
+                    LogManager.log("library file path: " + file.getAbsolutePath());
+                    FileUtils.writeFile(file, input);
+                } catch (IOException e) {
+                    ErrorManager.notifyCritical(
+                            "Cannot write native library (" + path + ") to temporary file " + file.getAbsolutePath(), e);
+                    file.delete();
+                    return;
+                } finally {
                     try {
                         input.close();
                     } catch (IOException e) {
-                        ErrorManager.notifyDebug("Failed to close the input " +
-                                "stream to the cached jni library", e);
+                        //ignore
                     }
                 }
+                try {
+                    System.load(file.getAbsolutePath());
+                    LogManager.log("... successfully loaded the library");
+                    nativeLibraryLoaded = true;
+                    addDeleteOnExitFile(file);
+                } catch (UnsatisfiedLinkError e) {
+                    LogManager.log("... failed loading the library", e);
+                    final String message = e.getMessage();
+                    //special handling for #163022
+                    if (message != null && message.contains("failed to map segment from shared object")) {
+                        UnsatisfiedLinkError ex = new UnsatisfiedLinkError("Could not load file from temporary directory (" + tempDir.getAbsolutePath() +
+                                ") which is mounted with \"noexec\" option.\n  Try to use other temporary directory.");
+                        ex.initCause(e);
+                        e = ex;
+                    }
+                    ErrorManager.notifyCritical("Cannot load native library from path: " + path, e);
+                }
             }
+        } finally {
+            LogManager.unindent();
         }
-        
-        LogManager.logUnindent("... successfully loaded the library");
+
     }
     
     protected void initializeForbiddenFiles(String ... filepaths) {
         for (String path : filepaths) {
             if(path!=null) {
                 File file = new File(path);
-                if(file.exists()) {
+                if(file.exists() && !forbiddenDeletingFiles.contains(file)) {
                     forbiddenDeletingFiles.add(file);
                 }
             }
