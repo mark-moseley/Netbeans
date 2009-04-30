@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  * 
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,7 +34,7 @@
  * 
  * Contributor(s):
  * 
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
 /*
@@ -56,7 +56,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -83,6 +82,7 @@ import javax.swing.table.TableColumnModel;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Caret;
 import javax.swing.text.Document;
+import org.netbeans.api.editor.EditorRegistry;
 import org.netbeans.modules.db.sql.history.SQLHistory;
 import org.netbeans.modules.db.sql.history.SQLHistoryException;
 import org.netbeans.modules.db.sql.history.SQLHistoryModel;
@@ -90,7 +90,6 @@ import org.netbeans.modules.db.sql.history.SQLHistoryModelImpl;
 import org.netbeans.modules.db.sql.history.SQLHistoryPersistenceManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
@@ -107,7 +106,7 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
     public static final int SAVE_STATEMENTS_MAX_LIMIT = 10000; 
     public static final int TABLE_DATA_WIDTH_SQL = 125;
     public static final Logger LOGGER = Logger.getLogger(SQLHistoryPanel.class.getName());
-    private static final FileObject USERDIR = Repository.getDefault().getDefaultFileSystem().getRoot();
+    private static final FileObject USERDIR = FileUtil.getConfigRoot();
     private static final FileObject historyRoot = USERDIR.getFileObject(SQL_HISTORY_FOLDER);
     private static String historyFilePath;
     private static Object[][] data;
@@ -247,11 +246,12 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
         connectionUrlComboBox.setModel(new UrlComboBoxModel());
         connectionUrlComboBox.setRenderer(new ConnectionUrlRenderer());
 
-        jLabel2.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_Match")); // NOI18N
+        jLabel2.setLabelFor(searchTextField);
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel2, org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_Match")); // NOI18N
 
         searchTextField.setMinimumSize(new java.awt.Dimension(20, 22));
 
-        insertSQLButton.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_Insert")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(insertSQLButton, org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_Insert")); // NOI18N
         insertSQLButton.setEnabled(false);
         insertSQLButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -265,12 +265,13 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
         sqlHistoryTable.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "ACSN_History")); // NOI18N
         sqlHistoryTable.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "ACSD_History")); // NOI18N
 
-        sqlLimitLabel.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_SqlLimit")); // NOI18N
+        sqlLimitLabel.setLabelFor(sqlLimitTextField);
+        org.openide.awt.Mnemonics.setLocalizedText(sqlLimitLabel, org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_SqlLimit")); // NOI18N
 
         sqlLimitTextField.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_InitialLimit")); // NOI18N
         sqlLimitTextField.setMinimumSize(new java.awt.Dimension(18, 22));
 
-        sqlLimitButton.setText(org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ApplyButton")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(sqlLimitButton, org.openide.util.NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ApplyButton")); // NOI18N
         sqlLimitButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 sqlLimitButtonActionPerformed(evt);
@@ -326,7 +327,7 @@ public class SQLHistoryPanel extends javax.swing.JPanel {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(insertSQLButton)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                        .add(jScrollPane1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 168, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                        .add(jScrollPane1, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 168, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                             .add(sqlLimitTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
@@ -359,20 +360,26 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
 
 
     private void insertSQL() {
-        int rowSelected = sqlHistoryTable.getSelectedRow();
         try {
             // Make sure to insert the entire SQL, not just what appears in the Table
             List<SQLHistory> sqlHistoryList = view.getCurrentSQLHistoryList();
             int i = 0;
             String sqlToInsert = ""; // NOI18N
+            InsertSQLUtility insertUtility = new InsertSQLUtility();
             for (SQLHistory sqlHistory : sqlHistoryList) {
-                if (rowSelected == i) {
+                if (sqlHistoryTable.isRowSelected(i)) {
                     sqlToInsert = sqlHistory.getSql().trim();
+                    JEditorPane pane = (JEditorPane)EditorRegistry.lastFocusedComponent();
+                    String mime = pane.getContentType();
+                    if (mime.equals("text/x-sql")) {  // NOI18N
+                        editorPane = pane;
+                    }
+                    insertUtility.insert(sqlToInsert, editorPane);
                 }
                 // increment for the next row
                 i++;
             }
-            new InsertSQLUtility().insert(sqlToInsert, editorPane);
+            
         } catch (BadLocationException ex) {
             Exceptions.printStackTrace(ex);
         }
@@ -401,7 +408,7 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
         } catch (SQLHistoryException ex) {
             handleSQLHistoryException();
         }
-        ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(null, sqlHistoryList);
+        ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(sqlHistoryList);
         NbPreferences.forModule(SQLHistoryPanel.class).put("SQL_STATEMENTS_SAVED_FOR_HISTORY", Integer.toString(iLimit));  // NOI18N               
         sqlLimitTextField.setText(SAVE_STATEMENTS_MAX_LIMIT_ENTERED);
     }
@@ -422,12 +429,13 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
                 }
             } else {
                 inputWarningLabel.setText(""); // NOI18N
-                SQLHistoryPersistenceManager.getInstance().updateSQLSaved(iLimit, historyRoot);
-                List<SQLHistory> sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, historyRoot);
-                view.setCurrentSQLHistoryList(sqlHistoryList);
-                ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(null, sqlHistoryList);
-                view.updateConnectionUrl();
-                NbPreferences.forModule(SQLHistoryPanel.class).put("SQL_STATEMENTS_SAVED_FOR_HISTORY", Integer.toString(iLimit));  // NOI18N               
+                if (SQLHistoryPersistenceManager.getInstance().updateSQLSaved(iLimit, historyRoot).size() > 0) {
+                    List<SQLHistory> sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve(historyFilePath, historyRoot);
+                    view.setCurrentSQLHistoryList(sqlHistoryList);
+                    ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(sqlHistoryList);
+                    view.updateConnectionUrl();
+                    NbPreferences.forModule(SQLHistoryPanel.class).put("SQL_STATEMENTS_SAVED_FOR_HISTORY", Integer.toString(iLimit));  // NOI18N
+                }
             }
         } catch (ClassNotFoundException ex) {
             Exceptions.printStackTrace(ex);
@@ -446,9 +454,11 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
     }
     
     private void handleSQLHistoryException() {
-        inputWarningLabel.setText(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ErrorParsingSQLHistory"));
         LOGGER.log(Level.WARNING, NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ErrorParsingSQLHistory"));
-        SQLHistoryPersistenceManager.getInstance().removeHistoryFile(historyRoot);
+        List<SQLHistory> sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve();
+        view.setCurrentSQLHistoryList(sqlHistoryList);
+        ((HistoryTableModel) sqlHistoryTable.getModel()).refreshTable(sqlHistoryList);
+        view.updateConnectionUrl();
     }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
@@ -481,7 +491,9 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
                 this.sqlHistoryList = model.getSQLHistoryList();
                 this.currentSQLHistoryList = model.getSQLHistoryList();
             } catch (SQLHistoryException ex) {
-                // ignore for now since this exception will be caught later
+                LOGGER.log(Level.INFO, NbBundle.getMessage(SQLHistoryPanel.class, "LBL_ErrorParsingSQLHistory"), ex);
+                sqlHistoryList = SQLHistoryPersistenceManager.getInstance().retrieve();
+                setCurrentSQLHistoryList(sqlHistoryList);
             }
         }
 
@@ -677,8 +689,8 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
     private final class HistoryTableModel extends DefaultTableModel implements ActionListener, DocumentListener {
         List<String> sqlList;
         List<String> dateList;
-        int sortCol = 0;
-        boolean sortAsc = true;
+        int sortCol = 1;
+        boolean sortAsc = false;
             
         @Override
         public int getRowCount() {
@@ -758,13 +770,10 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
         }
 
         public void actionPerformed(ActionEvent evt) {
-            view.setCurrentSQLHistoryList(view.filterSQLHistoryList());
-            sqlHistoryTable.repaint();
-            sqlHistoryTable.clearSelection();
-            refreshTable(evt, view.getCurrentSQLHistoryList());
+            processUpdate();
         }
         
-        public void refreshTable(ActionEvent evt, List<SQLHistory> sqlHistoryList) {
+        public void refreshTable(List<SQLHistory> sqlHistoryList) {
             String url;
             // Get the connection url from the combo box
             if (sqlHistoryList.size() > 0) {
@@ -778,12 +787,8 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
             int length;
             int maxLength;
             for (SQLHistory sqlHistory : sqlHistoryList) {
-                if (url.equals(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_URLComboBoxAllConnectionsItem"))) {
-                    length = sqlHistory.getSql().trim().length();
-                    maxLength = length > TABLE_DATA_WIDTH_SQL ? TABLE_DATA_WIDTH_SQL : length;
-                    sqlList.add(sqlHistory.getSql().trim().substring(0, maxLength));
-                    dateList.add(DateFormat.getInstance().format(sqlHistory.getDate()));
-                } else if (url.equals(sqlHistory.getUrl())) {
+                if (url.equals(NbBundle.getMessage(SQLHistoryPanel.class, "LBL_URLComboBoxAllConnectionsItem")) ||
+                      url.equals(sqlHistory.getUrl())) {
                     length = sqlHistory.getSql().trim().length();
                     maxLength = length > TABLE_DATA_WIDTH_SQL ? TABLE_DATA_WIDTH_SQL : length;
                     sqlList.add(sqlHistory.getSql().trim().substring(0, maxLength));
@@ -815,89 +820,19 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
         }
 
         public void insertUpdate(DocumentEvent evt) {
-            List<String> currentSQLList = view.getSQLList(sortData());
-
-            // Read the contents
-            try {
-                String matchText = read(evt.getDocument());
-                Object[][] localData = new Object[currentSQLList.size()][2];
-                int row = 0;
-                int length;
-                int maxLength;
-                Iterator dateIterator = dateList.iterator();
-                for (String sql : currentSQLList) {
-                    if (sql.trim().toLowerCase().indexOf(matchText.toLowerCase()) != -1) {
-                        length = sql.trim().length();
-                        maxLength = length > TABLE_DATA_WIDTH_SQL ? TABLE_DATA_WIDTH_SQL : length;
-                        localData[row][0] = sql.trim().substring(0, maxLength);
-                        localData[row][1] = dateIterator.next();
-                        row++;
+            processUpdate();
                     } 
-                }
-
-                // Adjust size of data for the table
-                if (row > 0) {
-                    data = new Object[row][2];
-                    for (int i = 0; i < row; i++) {
-                        data[i][0] = localData[i][0];
-                        data[i][1] = localData[i][1];
-                    }
-                } else {
-                    data = new Object[0][0];
-                    insertSQLButton.setEnabled(false);
-                }
-                // Refresh the table
-                sqlHistoryTable.revalidate();
-            } catch (InterruptedException e) {
-                Exceptions.printStackTrace(e);
-            } catch (Exception e) {
-                Exceptions.printStackTrace(e);
-            }
-        }
 
         public void removeUpdate(DocumentEvent evt) {
-            List<String> currentSQLList = view.getSQLList(sortData());
-
-             // Read the contents
-            try {
-                String matchText = read(evt.getDocument());
-                Object[][] localData = new Object[currentSQLList.size()][2];
-                int row = 0;
-                int length;
-                int maxLength;                                
-                Iterator dateIterator = dateList.iterator();
-                for (String sql : currentSQLList) {
-                    if (sql.trim().toLowerCase().indexOf(matchText.toLowerCase()) != -1) {
-                        length = sql.trim().length();
-                        maxLength = length > TABLE_DATA_WIDTH_SQL ? TABLE_DATA_WIDTH_SQL : length;
-                        localData[row][0] = sql.trim().substring(0, maxLength);
-                        localData[row][1] = dateIterator.next();
-                        row++;
+            processUpdate();
                     }
-                }
-                // no matches so clean the table
-                if (row == 0) {
-                    cleanTable();
-                }
-                // Adjust size of data for the table
-                if (row > 0) {
-                    data = new Object[row][2];
-                    for (int i = 0; i < row; i++) {
-                        data[i][0] = localData[i][0];
-                        data[i][1] = localData[i][1];
-                    }                    
-                } else {
-                    data = new Object[0][0];                                        
-                    insertSQLButton.setEnabled(false);
-                }
-                // Refresh the table
-                sqlHistoryTable.revalidate();
-            } catch (InterruptedException e) {
-                Exceptions.printStackTrace(e);
-            } catch (Exception e) {
-                Exceptions.printStackTrace(e);
-            }
-        }
+
+        private void processUpdate() {
+            view.setCurrentSQLHistoryList(view.filterSQLHistoryList());
+            sqlHistoryTable.repaint();
+            sqlHistoryTable.clearSelection();
+            refreshTable(view.getCurrentSQLHistoryList());
+                    }
 
         public void changedUpdate(DocumentEvent arg0) {
             // unused
@@ -912,14 +847,11 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
 
         public List<SQLHistory> sortData() {
             // Refresh the table
-//            sqlHistoryTable.revalidate();
-            List<SQLHistory> sqlHistoryList = view.getSQLHistoryList();
-//            searchTextField.setText(""); // NOI18N
             List<SQLHistory> filteredSQLHistoryList = view.filterSQLHistoryList();
             SQLComparator sqlComparator = new SQLComparator(sortCol, sortAsc);
             Collections.sort(filteredSQLHistoryList, sqlComparator);
             view.setCurrentSQLHistoryList(filteredSQLHistoryList);
-            refreshTable(null, filteredSQLHistoryList);
+            refreshTable( filteredSQLHistoryList);
             return filteredSQLHistoryList;
         }
     }
@@ -1093,8 +1025,8 @@ private void sqlLimitButtonActionPerformed(java.awt.event.ActionEvent evt) {//GE
             if (!(sql1 instanceof SQLHistory) || !(sql2 instanceof SQLHistory)) {
                 return result;
             }
-            SQLHistory sqlHistory1 = (SQLHistory) sql1;
-            SQLHistory sqlHistory2 = (SQLHistory) sql2;
+            SQLHistory sqlHistory1 = sql1;
+            SQLHistory sqlHistory2 = sql2;
 
             switch (sortCol) {
                 case 0: // SQL
