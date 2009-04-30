@@ -48,14 +48,20 @@ import javax.swing.ComboBoxModel;
 import javax.swing.JFileChooser;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import org.netbeans.installer.product.Registry;
+import org.netbeans.installer.product.components.Product;
+import org.netbeans.installer.utils.BrowserUtils;
+import org.netbeans.installer.utils.FileUtils;
 import org.netbeans.installer.utils.helper.swing.NbiButton;
 import org.netbeans.installer.utils.helper.swing.NbiLabel;
 import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StringUtils;
+import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.helper.Version;
 import org.netbeans.installer.utils.helper.swing.NbiComboBox;
 import org.netbeans.installer.utils.helper.swing.NbiDirectoryChooser;
 import org.netbeans.installer.utils.helper.swing.NbiTextField;
+import org.netbeans.installer.utils.helper.swing.NbiTextPane;
 import org.netbeans.installer.wizard.components.panels.ApplicationLocationPanel.LocationValidator;
 import org.netbeans.installer.wizard.components.panels.ApplicationLocationPanel.LocationsComboBoxEditor;
 import org.netbeans.installer.wizard.components.panels.ApplicationLocationPanel.LocationsComboBoxModel;
@@ -92,11 +98,8 @@ public class NbBasePanel extends DestinationPanel {
                 DEFAULT_JDK_LOCATION_LABEL_TEXT);
         setProperty(BROWSE_BUTTON_TEXT_PROPERTY,
                 DEFAULT_BROWSE_BUTTON_TEXT);
-        
-        setProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY,
-                DEFAULT_MINIMUM_JDK_VERSION);
-        setProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY,
-                DEFAULT_MAXIMUM_JDK_VERSION);
+        setProperty(WARNING_INSTALL_INTO_USERDIR_PROPERTY,
+                DEFAULT_WARNING_INSTALL_INTO_USERDIR);
     }
     
     @Override
@@ -114,20 +117,97 @@ public class NbBasePanel extends DestinationPanel {
         
         jdkLocationPanel.setWizard(getWizard());
         
-        jdkLocationPanel.setProperty(
-                JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY,
-                getProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY));
-        jdkLocationPanel.setProperty(
-                JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY,
-                getProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY));
-        
-        if (getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY) != null) {
-            jdkLocationPanel.setProperty(
-                    JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY,
-                    getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY));
+        //first, initialize the min and max values with the panel`s default
+        //second, check if nbProduct has the properties set
+        //third, check other nb- products if they have these properties set        
+        String minVersionNbBase = getProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY);
+        String maxVersionNbBase = getProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY);
+        String preferredVersion = getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY);
+        String jreAllowedStr = getProperty(JdkLocationPanel.JRE_ALLOWED_PROPERTY);
+
+        Version min = (minVersionNbBase != null) ? Version.getVersion(minVersionNbBase) : null;
+        Version max = (maxVersionNbBase != null) ? Version.getVersion(maxVersionNbBase) : null;
+        Version preferred = (preferredVersion != null) ? Version.getVersion(preferredVersion) : null;
+        boolean jreAllowed = !"false".equals(jreAllowedStr); // if nothing defined - then true
+
+        if (getWizard().getProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY) != null) {
+            min = Version.getVersion(getWizard().getProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY));
+        }
+        if (getWizard().getProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY) != null) {
+            max = Version.getVersion(getWizard().getProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY));
+        }
+        if (getWizard().getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY) != null) {
+            preferred = Version.getVersion(getWizard().getProperty(JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY));
+        }
+        if (getWizard().getProperty(JdkLocationPanel.JRE_ALLOWED_PROPERTY) != null) {
+            jreAllowed = !"false".equals(getWizard().getProperty(JdkLocationPanel.JRE_ALLOWED_PROPERTY));
         }
         
+        for (Product product : Registry.getInstance().getProductsToInstall()) {
+            if (product.getUid().startsWith("nb-")) {
+                jreAllowed &= !"false".equals(product.getProperty(JdkLocationPanel.JRE_ALLOWED_PROPERTY));
+
+                String minVersionString = product.getProperty(JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY);
+                if (minVersionString != null) {
+                    Version depMinVersion = Version.getVersion(minVersionString);
+                    if (min == null || depMinVersion.newerThan(min)) {
+                        min = depMinVersion;
+                    }
+                }
+                String maxVersionString = product.getProperty(JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY);
+                if (maxVersionString != null) {
+                    Version depMaxVersion = Version.getVersion(maxVersionString);
+                    if (min == null || depMaxVersion.olderThan(max)) {
+                        max = depMaxVersion;
+                    }
+                }
+            // do not check preferred version of the dependent nb product :
+            // it is not clear how to handle that
+            }
+        }
+
+
+        String finalMinVersion = (min == null) ? null : min.toString();
+        String finalMaxVersion = (max == null) ? null : max.toString();
+        String preferedVersion = (preferred == null) ? null : preferred.toString();
+        String jreAllowedString = Boolean.toString(jreAllowed);
+
+        if (finalMinVersion != null) {
+            jdkLocationPanel.setProperty(
+                    JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY,
+                    finalMinVersion);
+        }
+        if (finalMaxVersion != null) {
+            jdkLocationPanel.setProperty(
+                    JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY,
+                    finalMaxVersion);
+        }
+        if (preferedVersion != null) {
+            jdkLocationPanel.setProperty(
+                    JdkLocationPanel.PREFERRED_JDK_VERSION_PROPERTY,
+                    preferedVersion);
+        }
+        jdkLocationPanel.setProperty(
+                JdkLocationPanel.JRE_ALLOWED_PROPERTY,
+                jreAllowedString);
+        
         jdkLocationPanel.initialize();
+        
+        //reinitialize labels which are different for cases of jdk and jre allowance
+        setProperty(DESCRIPTION_PROPERTY, 
+                jreAllowed ? DEFAULT_DESCRIPTION_JAVA : DEFAULT_DESCRIPTION);
+        setProperty(JDK_LOCATION_LABEL_TEXT_PROPERTY, 
+                jreAllowed ? DEFAULT_JAVA_LOCATION_LABEL_TEXT : DEFAULT_JDK_LOCATION_LABEL_TEXT);
+                
+        //This makes it possible to perform silent installation with emptry state files 
+        //that means that JDK_LOCATION_PROPERTY property is explicitely set to the first location
+        //that fits the requirements
+        //TODO: Investigate the prons&cons and side affects of moving
+        //this code to the end of JdkLocationPanel.initialize() method        
+        File jdkLocation = jdkLocationPanel.getSelectedLocation();        
+        if(jdkLocation!=null && !jdkLocation.getPath().equals(StringUtils.EMPTY_STRING)) {
+            jdkLocationPanel.setLocation(jdkLocation);
+        }        
     }
     
     public JdkLocationPanel getJdkLocationPanel() {
@@ -161,7 +241,7 @@ public class NbBasePanel extends DestinationPanel {
         private NbiLabel jdkLocationLabel;
         private NbiComboBox jdkLocationComboBox;
         private NbiButton browseButton;
-        private NbiLabel statusLabel;
+        private NbiTextPane statusLabel;
         
         private NbiTextField jdkLocationField;
         
@@ -190,11 +270,15 @@ public class NbBasePanel extends DestinationPanel {
                         JdkLocationPanel.MINIMUM_JDK_VERSION_PROPERTY));
                 final Version maxVersion = Version.getVersion(jdkLocationPanel.getProperty(
                         JdkLocationPanel.MAXIMUM_JDK_VERSION_PROPERTY));
-                
+
+                statusLabel.setContentType("text/html");
                 statusLabel.setText(StringUtils.format(
                         jdkLocationPanel.getProperty(JdkLocationPanel.ERROR_NOTHING_FOUND_PROPERTY),
                         minVersion.toJdkStyle(),
-                        minVersion.toJdkStyle()));
+                        maxVersion.toJdkStyle(),
+                        jdkLocationPanel.getProperty(JdkLocationPanel.JAVA_DOWNLOAD_PAGE_PROPERTY)));
+
+                statusLabel.addHyperlinkListener(BrowserUtils.createHyperlinkListener());
             } else {
                 statusLabel.clearText();
                 statusLabel.setVisible(false);
@@ -245,7 +329,24 @@ public class NbBasePanel extends DestinationPanel {
             
             return errorMessage;
         }
-        
+
+        @Override
+        protected String getWarningMessage() {
+            String warning = super.getWarningMessage();
+            if (warning == null) {
+                final String location = getDestinationField().getText().trim();
+                final File f = FileUtils.eliminateRelativity(location);
+                final File nbUserDirRoot = new File(SystemUtils.getUserHomeDirectory(), ".netbeans");
+                if (f.equals(nbUserDirRoot) || FileUtils.isParent(nbUserDirRoot, f)) {
+                    warning = StringUtils.format(panel.getProperty(
+                            WARNING_INSTALL_INTO_USERDIR_PROPERTY),
+                            nbUserDirRoot.getAbsolutePath());
+                }
+            }
+            return warning;
+        }
+
+
         // private //////////////////////////////////////////////////////////////////
         private void initComponents() {
             // selectedLocationField ////////////////////////////////////////////////
@@ -299,7 +400,7 @@ public class NbBasePanel extends DestinationPanel {
             });
             
             // statusLabel //////////////////////////////////////////////////////////
-            statusLabel = new NbiLabel();
+            statusLabel = new NbiTextPane();            
             
             // fileChooser //////////////////////////////////////////////////////////
             fileChooser = new NbiDirectoryChooser();
@@ -355,6 +456,8 @@ public class NbBasePanel extends DestinationPanel {
             "jdk.location.label.text"; // NOI18N
     public static final String BROWSE_BUTTON_TEXT_PROPERTY =
             "browse.button.text"; // NOI18N
+    public static final String WARNING_INSTALL_INTO_USERDIR_PROPERTY =
+            "install.into.userdir.storage";
     
     public static final String DEFAULT_TITLE =
             ResourceUtils.getString(NbBasePanel.class,
@@ -362,6 +465,9 @@ public class NbBasePanel extends DestinationPanel {
     public static final String DEFAULT_DESCRIPTION =
             ResourceUtils.getString(NbBasePanel.class,
             "NBP.description"); // NOI18N
+    public static final String DEFAULT_DESCRIPTION_JAVA =
+            ResourceUtils.getString(NbBasePanel.class,
+            "NBP.description.java"); // NOI18N
     
     public static final String DEFAULT_DESTINATION_LABEL_TEXT =
             ResourceUtils.getString(NbBasePanel.class,
@@ -373,14 +479,14 @@ public class NbBasePanel extends DestinationPanel {
     public static final String DEFAULT_JDK_LOCATION_LABEL_TEXT =
             ResourceUtils.getString(NbBasePanel.class,
             "NBP.jdk.location.label.text"); // NOI18N
+    public static final String DEFAULT_JAVA_LOCATION_LABEL_TEXT =
+            ResourceUtils.getString(NbBasePanel.class,
+            "NBP.java.location.label.text"); // NOI18N
     public static final String DEFAULT_BROWSE_BUTTON_TEXT =
             ResourceUtils.getString(NbBasePanel.class,
             "NBP.browse.button.text"); // NOI18N
     
-    public static final String DEFAULT_MINIMUM_JDK_VERSION =
+    public static final String DEFAULT_WARNING_INSTALL_INTO_USERDIR =
             ResourceUtils.getString(NbBasePanel.class,
-            "NBP.minimum.jdk.version"); // NOI18N
-    public static final String DEFAULT_MAXIMUM_JDK_VERSION =
-            ResourceUtils.getString(NbBasePanel.class,
-            "NBP.maximum.jdk.version"); // NOI18N
+            "NBP.warning.install.into.userdir"); // NOI18N
 }
