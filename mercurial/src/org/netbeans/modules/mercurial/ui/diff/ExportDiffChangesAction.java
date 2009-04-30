@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,16 +39,17 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.subversion.ui.diff;
+package org.netbeans.modules.mercurial.ui.diff;
 
 import org.netbeans.modules.diff.builtin.visualizer.TextDiffVisualizer;
-import org.netbeans.modules.subversion.FileInformation;
-import org.netbeans.modules.subversion.Subversion;
-import org.netbeans.modules.subversion.SvnModuleConfig;
-import org.netbeans.modules.subversion.client.SvnProgressSupport;
-import org.netbeans.modules.subversion.util.Context;
-import org.netbeans.modules.subversion.util.SvnUtils;
-import org.netbeans.modules.subversion.ui.actions.ContextAction;
+import org.netbeans.modules.mercurial.FileInformation;
+import org.netbeans.modules.mercurial.Mercurial;
+import org.netbeans.modules.mercurial.FileStatusCache;
+import org.netbeans.modules.mercurial.OutputLogger;
+import org.netbeans.modules.mercurial.HgProgressSupport;
+import org.netbeans.modules.versioning.spi.VCSContext;
+import org.netbeans.modules.mercurial.util.HgUtils;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 import org.netbeans.modules.versioning.util.Utils;
 import org.netbeans.api.diff.Difference;
 import org.netbeans.spi.diff.DiffProvider;
@@ -58,18 +59,16 @@ import org.openide.util.RequestProcessor;
 import org.openide.util.NbBundle;
 import org.openide.NotifyDescriptor;
 import org.openide.DialogDisplayer;
-import org.openide.nodes.Node;
 import org.openide.awt.StatusDisplayer;
+import javax.swing.*;
 import java.io.*;
 import java.util.*;
 import java.util.List;
+import java.awt.event.ActionEvent;
 import java.util.logging.Level;
-import org.netbeans.modules.subversion.FileStatusCache;
-import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
+import org.netbeans.modules.mercurial.HgModuleConfig;
 import org.netbeans.modules.proxy.Base64Encoder;
-import org.netbeans.modules.versioning.spi.VCSContext;
 import org.netbeans.modules.versioning.util.ExportDiffSupport;
-import org.tigris.subversion.svnclientadapter.SVNClientException;
 
 /**
  * Exports diff to file:
@@ -84,7 +83,7 @@ import org.tigris.subversion.svnclientadapter.SVNClientException;
  *  
  * @author Petr Kuzel
  */
-public class ExportDiffAction extends ContextAction {
+public class ExportDiffChangesAction extends ContextAction {
     
     private static final int enabledForStatus =
             FileInformation.STATUS_VERSIONED_MERGE |
@@ -94,81 +93,64 @@ public class ExportDiffAction extends ContextAction {
             FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY |
             FileInformation.STATUS_VERSIONED_ADDEDLOCALLY;
 
-    protected String getBaseName(Node [] activatedNodes) {
-        return "CTL_MenuItem_ExportDiff";  // NOI18N
+    private final VCSContext context;
+
+    public ExportDiffChangesAction(String name, VCSContext context) {
+        this.context = context;
+        putValue(Action.NAME, name);
     }
 
-    /**
-     * First look for DiffSetupSource name then for super (context name).
-     */
-    public String getName() {
-        TopComponent activated = TopComponent.getRegistry().getActivated();
-        if (activated instanceof DiffSetupSource) {
-            String setupName = ((DiffSetupSource)activated).getSetupDisplayName();
-            if (setupName != null) {
-                return NbBundle.getMessage(this.getClass(), getBaseName(getActivatedNodes()) + "_Context",  // NOI18N
-                                            setupName);
-            }
-        }
-        return super.getName();
-    }
-    
-    public boolean enable(Node[] nodes) {
-        Context ctx = SvnUtils.getCurrentContext(nodes);
-        File[] files = getModifiedFiles(ctx, enabledForStatus);         
-        if(files.length < 1) {
+    public boolean isEnabled () {
+        if(HgUtils.getRootFile(context) == null) {
             return false;
         }  
         TopComponent activated = TopComponent.getRegistry().getActivated();
         if (activated instanceof DiffSetupSource) {
             return true;
         }
-        return super.enable(nodes) && Lookup.getDefault().lookup(DiffProvider.class) != null;                
+        return super.isEnabled() && Lookup.getDefault().lookup(DiffProvider.class) != null;                
     }
 
-    protected void performContextAction(final Node[] nodes) {
-       
-        // reevaluate fast enablement logic guess
-
-        if(!Subversion.getInstance().checkClientAvailable()) {            
-            return;
-        }
-        
+    public void performAction(ActionEvent e) {
         boolean noop;
-        Context context = getContext(nodes);
         TopComponent activated = TopComponent.getRegistry().getActivated();
         if (activated instanceof DiffSetupSource) {
             noop = ((DiffSetupSource) activated).getSetups().isEmpty();
         } else {
-            File [] files = SvnUtils.getModifiedFiles(context, FileInformation.STATUS_LOCAL_CHANGE);
+            File [] files = HgUtils.getModifiedFiles(context, FileInformation.STATUS_LOCAL_CHANGE);
             noop = files.length == 0;
         }
         if (noop) {
-            NotifyDescriptor msg = new NotifyDescriptor.Message(NbBundle.getMessage(ExportDiffAction.class, "BK3001"), NotifyDescriptor.INFORMATION_MESSAGE);
+            NotifyDescriptor msg = new NotifyDescriptor.Message(NbBundle.getMessage(ExportDiffChangesAction.class, "BK3001"), NotifyDescriptor.INFORMATION_MESSAGE);
             DialogDisplayer.getDefault().notify(msg);
             return;
         }
 
-        ExportDiffSupport exportDiffSupport = new ExportDiffSupport(context.getRootFiles(), SvnModuleConfig.getDefault().getPreferences()) {
+        ExportDiffSupport exportDiffSupport = new ExportDiffSupport(new File[] {HgUtils.getRootFile(context)}, HgModuleConfig.getDefault().getPreferences()) {
             @Override
             public void writeDiffFile(final File toFile) {
-                RequestProcessor rp = Subversion.getInstance().getRequestProcessor();
-                SvnProgressSupport ps = new SvnProgressSupport() {
+                HgModuleConfig.getDefault().getPreferences().put("ExportDiff.saveFolder", toFile.getParent()); // NOI18N
+                File root = HgUtils.getRootFile(context);
+                RequestProcessor rp = Mercurial.getInstance().getRequestProcessor(root);
+                HgProgressSupport ps = new HgProgressSupport() {
                     protected void perform() {
-                        async(this, nodes, toFile);
+                        OutputLogger logger = getLogger();
+                        async(this, context, toFile, logger);
                     }
                 };
-                ps.start(rp, null, getRunningName(nodes)).waitFinished();
+                ps.start(rp, root, org.openide.util.NbBundle.getMessage(ExportDiffChangesAction.class, "LBL_ExportChanges_Progress")).waitFinished();
             }
         };
         exportDiffSupport.export();
+
     }
 
     protected boolean asynchronous() {
         return false;
     }
-
-    private void async(SvnProgressSupport progress, Node[] nodes, File destination) {
+    
+    @SuppressWarnings("unchecked")
+    private void async(HgProgressSupport progress, VCSContext context, File destination, OutputLogger logger) {
         boolean success = false;
         OutputStream out = null;
         int exportedFiles = 0;
@@ -189,24 +171,33 @@ public class ExportDiffAction extends ContextAction {
                 }
                 root = getCommonParent(setupFiles.toArray(new File[setupFiles.size()]));
             } else {
-                Context context = getContext(nodes);
-                File [] files = SvnUtils.getModifiedFiles(context, FileInformation.STATUS_LOCAL_CHANGE);
-                root = getCommonParent(context.getRootFiles());
+                File [] files = HgUtils.getModifiedFiles(context, FileInformation.STATUS_LOCAL_CHANGE);
+                root = getCommonParent(context.getRootFiles().toArray(new File[context.getRootFiles().size()]));
                 setups = new ArrayList<Setup>(files.length);
                 for (int i = 0; i < files.length; i++) {
                     File file = files[i];
+                    Mercurial.LOG.log(Level.INFO, "setups {0}", file);
                     Setup setup = new Setup(file, null, Setup.DIFFTYPE_LOCAL);
+                    Mercurial.LOG.log(Level.INFO, "setup {0}", setup.getBaseFile());
                     setups.add(setup);
                 }
             }
             if (root == null) {
                 NotifyDescriptor nd = new NotifyDescriptor(
-                        NbBundle.getMessage(ExportDiffAction.class, "MSG_BadSelection_Prompt"), 
-                        NbBundle.getMessage(ExportDiffAction.class, "MSG_BadSelection_Title"), 
+                        NbBundle.getMessage(ExportDiffChangesAction.class, "MSG_BadSelection_Prompt"), 
+                        NbBundle.getMessage(ExportDiffChangesAction.class, "MSG_BadSelection_Title"), 
                         NotifyDescriptor.DEFAULT_OPTION, NotifyDescriptor.ERROR_MESSAGE, null, null);
                 DialogDisplayer.getDefault().notify(nd);
                 return;
             }
+
+            logger.outputInRed(
+                    NbBundle.getMessage(ExportDiffChangesAction.class,
+                    "MSG_EXPORT_CHANGES_TITLE")); // NOI18N
+            logger.outputInRed(
+                    NbBundle.getMessage(ExportDiffChangesAction.class,
+                    "MSG_EXPORT_CHANGES_TITLE_SEP")); // NOI18N
+            logger.outputInRed(NbBundle.getMessage(ExportDiffChangesAction.class, "MSG_EXPORT_CHANGES", destination)); // NOI18N
 
             String sep = System.getProperty("line.separator"); // NOI18N
             out = new BufferedOutputStream(new FileOutputStream(destination));
@@ -228,13 +219,8 @@ public class ExportDiffAction extends ContextAction {
             while (it.hasNext()) {
                 Setup setup = it.next();
                 File file = setup.getBaseFile();                
+                Mercurial.LOG.log(Level.INFO, "setup {0}", file.getName());
                 if (file.isDirectory()) continue;
-                try {            
-                    progress.setRepositoryRoot(SvnUtils.getRepositoryRootUrl(file));
-                } catch (SVNClientException ex) {
-                    SvnClientExceptionHandler.notifyException(ex, true, true);
-                    return;
-                }                           
                 progress.setDisplayName(file.getName());
 
                 String index = "Index: ";   // NOI18N
@@ -253,7 +239,7 @@ public class ExportDiffAction extends ContextAction {
             exportedFiles = i;
             success = true;
         } catch (IOException ex) {
-            Subversion.LOG.log(Level.INFO, NbBundle.getMessage(ExportDiffAction.class, "BK3003"), ex);
+            Mercurial.LOG.log(Level.INFO, NbBundle.getMessage(ExportDiffChangesAction.class, "BK3003"), ex);
         } finally {
             if (out != null) {
                 try {
@@ -263,7 +249,7 @@ public class ExportDiffAction extends ContextAction {
                 }
             }
             if (success) {
-                StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(ExportDiffAction.class, "BK3004", new Integer(exportedFiles)));
+                StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(ExportDiffChangesAction.class, "BK3004", new Integer(exportedFiles)));
                 if (exportedFiles == 0) {
                     destination.delete();
                 } else {
@@ -272,6 +258,9 @@ public class ExportDiffAction extends ContextAction {
             } else {
                 destination.delete();
             }
+            logger.outputInRed(NbBundle.getMessage(ExportDiffChangesAction.class, "MSG_EXPORT_CHANGES_DONE")); // NOI18N
+            logger.output(""); // NOI18N
+
 
         }
     }
@@ -309,10 +298,10 @@ public class ExportDiffAction extends ContextAction {
         File file = setup.getBaseFile();
         try {
             InputStream is;
-            if (!SvnUtils.getMimeType(file).startsWith("text/") && differences.length == 0) {
-                // assume the file is binary 
-                is = new ByteArrayInputStream(exportBinaryFile(file).getBytes("utf8"));  // NOI18N
-            } else {
+            //if (!HgUtils.getMimeType(file).startsWith("text/") && differences.length == 0) {
+             //   // assume the file is binary 
+             //   is = new ByteArrayInputStream(exportBinaryFile(file).getBytes("utf8"));  // NOI18N
+            //} else {
                 r1 = setup.getFirstSource().createReader();
                 if (r1 == null) r1 = new StringReader(""); // NOI18N
                 r2 = setup.getSecondSource().createReader();
@@ -329,7 +318,7 @@ public class ExportDiffAction extends ContextAction {
                 info.setContextMode(true, 3);
                 String diffText = TextDiffVisualizer.differenceToUnifiedDiffText(info);
                 is = new ByteArrayInputStream(diffText.getBytes("utf8"));  // NOI18N
-            }
+            //}
             while(true) {
                 int i = is.read();
                 if (i == -1) break;
@@ -349,8 +338,8 @@ public class ExportDiffAction extends ContextAction {
      * @param includeStatus bit mask of file statuses to include in result
      * @return File [] array of Files having specified status
      */
-    public static File [] getModifiedFiles(Context context, int includeStatus) {
-        File[] all = Subversion.getInstance().getStatusCache().listFiles(context, includeStatus);
+    public static File [] getModifiedFiles(VCSContext context, int includeStatus) {
+        File[] all = Mercurial.getInstance().getFileStatusCache().listFiles(context, includeStatus);
         List<File> files = new ArrayList<File>();
         for (int i = 0; i < all.length; i++) {
             File file = all[i];            
@@ -358,8 +347,8 @@ public class ExportDiffAction extends ContextAction {
         }
         
         // ensure that command roots (files that were explicitly selected by user) are included in Diff
-        FileStatusCache cache = Subversion.getInstance().getStatusCache();
-        File [] rootFiles = context.getRootFiles();
+        FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();
+        File[] rootFiles = context.getRootFiles().toArray(new File[context.getRootFiles().size()]);
         for (int i = 0; i < rootFiles.length; i++) {
             File file = rootFiles[i];
             if (file.isFile() && (cache.getStatus(file).getStatus() & includeStatus) != 0 && !files.contains(file)) {
