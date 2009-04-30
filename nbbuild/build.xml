@@ -559,7 +559,8 @@ Link to <A HREF="overview-summary.html">Non-frame version.</A>
   <!-- Use of nbmerge target has the effect of automatically depending on all-X for every module. -->
   <!-- It also runs deltree(dir=wherever) and copydir(src=../X/netbeans,dest=wherever) to create the IDE install. -->
 
-  <target name="build-nozip" depends="clean-cluster-flags,build-clusters,create-license-summary,create-netbeans-import" description="Build the IDE but do not create a final ZIP file.">
+  <target name="build-nozip" depends="clean-cluster-flags,build-clusters,create-license-summary,create-netbeans-import,finish-build" description="Build the IDE but do not create a final ZIP file."/>
+  <target name="finish-build" depends="init">
     <loadproperties srcFile="${clusters.list.file}" />
      
     <loadproperties srcfile="${netbeans.dest.dir}/moduleCluster.properties" />
@@ -721,7 +722,9 @@ the ${netbeans.dest}/bin/ directory.
   </target>
 
   <target name="zip-cluster-config" depends="init">
-    <property name="zip.name" value="NetBeans-${buildnum}-${cluster.config}.zip"/>
+    <property name="zip.dir" location="."/>
+    <mkdir dir="${zip.dir}"/>
+    <property name="zip.name" location="${zip.dir}/NetBeans-${buildnum}-${cluster.config}.zip"/>
     <taskdef name="resolvelist" classname="org.netbeans.nbbuild.ResolveList" classpath="nbantext.jar"/>
     <resolvelist name="nb.clusters.dirs" list="${nb.clusters.list}">
         <mapper type="glob" from="*" to="*.dir"/>
@@ -1288,7 +1291,7 @@ PKGINST=${pkg.svr4.pkginst}</echo>
     </nbprofiledirect>
     
     <antcall target="tryme">
-        <param name="tryme.args" value="${profiler.jvmargs}"/>
+        <param name="tryme.debug.args" value="${profiler.jvmargs}"/>
     </antcall>
   </target>
   
@@ -1490,13 +1493,15 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
         </path>
         <javac srcdir="test/unit/src" destdir="build/test/unit/classes" debug="true" source="1.5">
             <classpath refid="test.cp"/>
+            <compilerarg line="-Xlint -Xlint:-serial"/>
         </javac>
         <copy todir="build/test/unit/classes">
             <fileset dir="test/unit/src" excludes="**/*.java"/>
         </copy>
         <mkdir dir="build/test/unit/results"/>
         <property name="includes" value="**/*Test"/>
-        <junit showoutput="true" fork="true" tempdir="build/test/unit/results">
+        <property name="nbbuild.test.fork.junit" value="true"/> <!-- setting to 'false' allows for debugging of nbbuild tests -->
+        <junit showoutput="true" fork="${nbbuild.test.fork.junit}" tempdir="build/test/unit/results">
             <batchtest todir="build/test/unit/results">
                 <fileset dir="build/test/unit/classes">
                     <include name="${includes}.class"/>
@@ -1662,6 +1667,8 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
         <property name="continue.after.failing.tests" value="true"/>
         <property name="build.test.unit.results.dir" location="${build.test.results.dir}"/>
         <property name="build.test.qa-functional.results.dir" location="${build.test.results.dir}"/>
+        <property name="test-unit-sys-prop.ignore.random.failures" value="true"/>
+        <property name="test-qa-functional-sys-prop.ignore.random.failures" value="true"/>
         <dirset dir=".." includes="${nb.clusters.validation.list}"/>
     </subant>
     
@@ -1884,15 +1891,10 @@ It is possible to use -Ddebug.port=3234 -Ddebug.pause=y to start the system in d
       <copy todir="${test.dist.dir}">
           <fileset dir="testdist/release"/>
       </copy>
-      <mkdir dir="build/testdistclasses"/>
-      <javac srcdir="testdist/src" destdir="build/testdistclasses" deprecation="true" debug="${build.compiler.debug}" source="1.5" target="1.5">
-          <classpath>
-              <pathelement location="${ant.core.lib}"/>
-          </classpath>
-          <compilerarg line="-Xlint -Xlint:-serial"/>
-      </javac>
       <jar jarfile="${test.dist.dir}/tasks.jar">
-          <fileset dir="build/testdistclasses"/>
+          <fileset dir="build/antclasses">
+              <include name="org/netbeans/nbbuild/testdist/"/>
+          </fileset>
       </jar>
       <zip basedir="${test.dist.dir}" destfile="build/testdist.zip"/>
   </target>      
