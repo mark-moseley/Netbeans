@@ -728,22 +728,25 @@ public class JavaMembersPanel extends javax.swing.JPanel {
         org.openide.awt.Mnemonics.setLocalizedText(filterLabel, org.openide.util.NbBundle.getBundle(JavaMembersPanel.class).getString("LABEL_filterLabel")); // NOI18N
 
         filterTextField.setToolTipText(org.openide.util.NbBundle.getBundle(JavaMembersPanel.class).getString("TOOLTIP_filterTextField")); // NOI18N
+        filterTextField.setNextFocusableComponent(javaMembersTree);
 
         org.openide.awt.Mnemonics.setLocalizedText(caseSensitiveFilterCheckBox, org.openide.util.NbBundle.getBundle(JavaMembersPanel.class).getString("LABEL_caseSensitiveFilterCheckBox")); // NOI18N
         caseSensitiveFilterCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        caseSensitiveFilterCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         splitPane.setDividerLocation(350);
         splitPane.setOneTouchExpandable(true);
 
         javaMembersTreeScrollPane.setBorder(null);
         javaMembersTreeScrollPane.setViewportView(javaMembersTree);
+        javaMembersTree.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(JavaMembersPanel.class, "ACSN_JavaMembersTree")); // NOI18N
+        javaMembersTree.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(JavaMembersPanel.class, "ACSD_JavaMembersTree")); // NOI18N
 
         splitPane.setLeftComponent(javaMembersTreeScrollPane);
 
         signatureEditorPane.setBorder(javax.swing.BorderFactory.createLineBorder(javax.swing.UIManager.getDefaults().getColor("Nb.ScrollPane.Border.color")));
         signatureEditorPane.setContentType("text/x-java");
         signatureEditorPane.setEditable(false);
+        signatureEditorPane.setNextFocusableComponent(filtersToolbar);
 
         org.openide.awt.Mnemonics.setLocalizedText(filtersLabel, org.openide.util.NbBundle.getMessage(JavaMembersPanel.class, "LABEL_filtersLabel")); // NOI18N
 
@@ -826,18 +829,18 @@ public class JavaMembersPanel extends javax.swing.JPanel {
             .add(layout.createSequentialGroup()
                 .addContainerGap()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(splitPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 710, Short.MAX_VALUE)
+                    .add(splitPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 740, Short.MAX_VALUE)
                     .add(layout.createSequentialGroup()
                         .add(filterLabel)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(filterTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 549, Short.MAX_VALUE)
+                        .add(filterTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 580, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(caseSensitiveFilterCheckBox))
-                    .add(signatureEditorPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 710, Short.MAX_VALUE)
+                    .add(signatureEditorPane, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 740, Short.MAX_VALUE)
                     .add(layout.createSequentialGroup()
                         .add(filtersLabel)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(filtersToolbar, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 580, Short.MAX_VALUE)
+                        .add(filtersToolbar, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 611, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(closeButton)))
                 .addContainerGap())

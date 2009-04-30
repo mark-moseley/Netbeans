@@ -9,6 +9,8 @@
     </Property>
   </Properties>
   <AuxValues>
+    <AuxValue name="FormSettings_autoSetComponentName" type="java.lang.Boolean" value="false"/>
+    <AuxValue name="FormSettings_generateFQN" type="java.lang.Boolean" value="true"/>
     <AuxValue name="FormSettings_generateMnemonicsCode" type="java.lang.Boolean" value="true"/>
     <AuxValue name="FormSettings_i18nAutoMode" type="java.lang.Boolean" value="false"/>
     <AuxValue name="FormSettings_layoutCodeTarget" type="java.lang.Integer" value="2"/>
@@ -23,19 +25,19 @@
           <Group type="102" attributes="0">
               <EmptySpace min="-2" max="-2" attributes="0"/>
               <Group type="103" groupAlignment="0" attributes="0">
-                  <Component id="splitPane" alignment="0" pref="710" max="32767" attributes="2"/>
+                  <Component id="splitPane" alignment="0" pref="740" max="32767" attributes="2"/>
                   <Group type="102" alignment="0" attributes="0">
                       <Component id="filterLabel" min="-2" max="-2" attributes="0"/>
                       <EmptySpace max="-2" attributes="0"/>
-                      <Component id="filterTextField" pref="549" max="32767" attributes="0"/>
+                      <Component id="filterTextField" pref="580" max="32767" attributes="0"/>
                       <EmptySpace max="-2" attributes="0"/>
                       <Component id="caseSensitiveFilterCheckBox" min="-2" max="-2" attributes="0"/>
                   </Group>
-                  <Component id="signatureEditorPane" alignment="0" pref="710" max="32767" attributes="1"/>
+                  <Component id="signatureEditorPane" alignment="0" pref="740" max="32767" attributes="1"/>
                   <Group type="102" alignment="0" attributes="0">
                       <Component id="filtersLabel" min="-2" max="-2" attributes="0"/>
                       <EmptySpace max="-2" attributes="0"/>
-                      <Component id="filtersToolbar" pref="580" max="32767" attributes="0"/>
+                      <Component id="filtersToolbar" pref="611" max="32767" attributes="0"/>
                       <EmptySpace max="-2" attributes="0"/>
                       <Component id="closeButton" min="-2" max="-2" attributes="0"/>
                   </Group>
@@ -86,6 +88,9 @@
         <Property name="toolTipText" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
           <ResourceString bundle="org/netbeans/modules/java/navigation/Bundle.properties" key="TOOLTIP_filterTextField" replaceFormat="org.openide.util.NbBundle.getBundle({sourceFileName}.class).getString(&quot;{key}&quot;)"/>
         </Property>
+        <Property name="nextFocusableComponent" type="java.awt.Component" editor="org.netbeans.modules.form.ComponentChooserEditor">
+          <ComponentRef name="javaMembersTree"/>
+        </Property>
       </Properties>
     </Component>
     <Component class="javax.swing.JCheckBox" name="caseSensitiveFilterCheckBox">
@@ -97,9 +102,6 @@
           <Border info="org.netbeans.modules.form.compat2.border.EmptyBorderInfo">
             <EmptyBorder bottom="0" left="0" right="0" top="0"/>
           </Border>
-        </Property>
-        <Property name="margin" type="java.awt.Insets" editor="org.netbeans.beaninfo.editors.InsetsEditor">
-          <Insets value="[0, 0, 0, 0]"/>
         </Property>
       </Properties>
       <AccessibilityProperties>
@@ -134,6 +136,14 @@
           <Layout class="org.netbeans.modules.form.compat2.layouts.support.JScrollPaneSupportLayout"/>
           <SubComponents>
             <Component class="javax.swing.JTree" name="javaMembersTree">
+              <AccessibilityProperties>
+                <Property name="AccessibleContext.accessibleName" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+                  <ResourceString bundle="org/netbeans/modules/java/navigation/Bundle.properties" key="ACSN_JavaMembersTree" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+                </Property>
+                <Property name="AccessibleContext.accessibleDescription" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+                  <ResourceString bundle="org/netbeans/modules/java/navigation/Bundle.properties" key="ACSD_JavaMembersTree" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+                </Property>
+              </AccessibilityProperties>
             </Component>
           </SubComponents>
         </Container>
@@ -150,6 +160,9 @@
         </Property>
         <Property name="contentType" type="java.lang.String" value="text/x-java"/>
         <Property name="editable" type="boolean" value="false"/>
+        <Property name="nextFocusableComponent" type="java.awt.Component" editor="org.netbeans.modules.form.ComponentChooserEditor">
+          <ComponentRef name="filtersToolbar"/>
+        </Property>
       </Properties>
     </Component>
     <Component class="javax.swing.JLabel" name="filtersLabel">
