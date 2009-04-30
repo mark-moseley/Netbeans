@@ -47,19 +47,18 @@ package org.netbeans.modules.cnd.debugger.gdb;
  * @author gordonp
  */
 public class GdbVariable {
-    
-    private String name;
-    private String type;
+    private static final String ANONYMOUS_NAMESPACE_PREFIX = "(anonymous namespace)::"; // NOI18N
+
+    private final String name;
     private String value;
     
     /** Creates a new instance of GdbVariable */
-    public GdbVariable(String name, String type, String value) {
-        if (name.startsWith("(anonymous namespace)::")) {  // NOI18N
-            this.name = name.substring(23);
+    public GdbVariable(String name, String value) {
+        if (name.startsWith(ANONYMOUS_NAMESPACE_PREFIX)) {
+            this.name = name.substring(ANONYMOUS_NAMESPACE_PREFIX.length());
         } else {
             this.name = name;
         }
-        this.type = type;
         this.value = value;
     }
     
@@ -71,6 +70,16 @@ public class GdbVariable {
         return value;
     }
     
+    /**
+     * The value can change after creation if a Watch exists and the value changes before
+     * the associated AbstractVariable gets created from the GdbVariable.
+     * 
+     * @param value
+     */
+    public void setValue(String value) {
+        this.value = value;
+    }
+    
     @Override
     public boolean equals(Object o) {
         return o instanceof GdbVariable && ((GdbVariable) o).getName().equals(name);
@@ -78,8 +87,11 @@ public class GdbVariable {
 
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 41 * hash + (this.name != null ? this.name.hashCode() : 0);
-        return hash;
+        return name.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return name + "=" + value; // NOI18N
     }
 }
