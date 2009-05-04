@@ -46,7 +46,10 @@ import java.awt.Frame;
 import java.awt.KeyboardFocusManager;
 import java.awt.Window;
 import java.io.*;
+import java.text.MessageFormat;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 import org.netbeans.api.project.FileOwnerQuery;
@@ -84,6 +87,40 @@ public class Utils {
             return SharabilityQuery.getSharability(pathname) != SharabilityQuery.NOT_SHARABLE;
         }
     };
+
+    /**
+     * Creates annotation format string.
+     * @param format format specified by the user, e.g. [{status}]
+     * @return modified format, e.g. [{0}]
+     */
+    public static String createAnnotationFormat(final String format) {
+        String taf = org.netbeans.modules.versioning.util.Utils.skipUnsupportedVariables(
+                        format, new String[] {"{status}", "{tag}", "{revision}", "{binary}" }   // NOI18N
+                );
+        taf = taf.replaceAll("\\{revision}", "{0}").    // NOI18N
+                replaceAll("\\{status}", "{1}").        // NOI18N
+                replaceAll("\\{tag}", "{2}").           // NOI18N
+                replaceAll("\\{binary}", "{3}");        // NOI18N
+        return taf;
+    }
+
+    /**
+     * Validates annotation format text
+     * @param format format to be validatet
+     * @return <code>true</code> if the format is correct, <code>false</code> otherwise.
+     */
+    public static boolean isAnnotationFormatValid(final String format) {
+        boolean retval = true;
+        if (format != null) {
+            try {
+                new MessageFormat(format);
+            } catch (IllegalArgumentException ex) {
+                CvsVersioningSystem.LOG.log(Level.FINER, "Bad user input - annotation format", ex);
+                retval = false;
+            }
+        }
+        return retval;
+    }
     
     /**
      * Semantics is similar to {@link org.openide.windows.TopComponent#getActivatedNodes()} except that this
@@ -250,6 +287,32 @@ public class Utils {
         return new Context(filtered, roots, exclusions);
     }
 
+    /**
+     * Returns the widest possible versioned context for the given file, the outter boundary is the file's Project.
+     * 
+     * @param file a file
+     * @return Context a context 
+     */
+    public static Context getProjectContext(Project project, File file) {
+        Context context = Utils.getProjectsContext(new Project[] { project });
+        if (context.getRootFiles().length == 0) {
+            // the project itself is not versioned, try to search in the broadest context possible
+            FileStatusCache cache = CvsVersioningSystem.getInstance().getStatusCache();
+            for (;;) {
+                File parent = file.getParentFile();
+                assert parent != null;
+                if ((cache.getStatus(parent).getStatus() & FileInformation.STATUS_IN_REPOSITORY) == 0) {
+                    Set<File> files = new HashSet<File>(1);
+                    files.add(file);
+                    context = new Context(files, files, Collections.emptySet());
+                    break;
+                }
+                file = parent;
+            }
+        }
+        return context;
+    }
+    
     public static File [] toFileArray(Collection fileObjects) {
         Set files = new HashSet(fileObjects.size()*4/3+1);
         for (Iterator i = fileObjects.iterator(); i.hasNext();) {
@@ -446,9 +509,15 @@ public class Utils {
     }
 
     public static boolean containsMetadata(File folder) {
+        CvsVersioningSystem.LOG.log(Level.FINER, " containsMetadata {0}", new Object[] { folder });
+        long t = System.currentTimeMillis();
         File repository = new File(folder, CvsVersioningSystem.FILENAME_CVS_REPOSITORY);
         File entries = new File(folder, CvsVersioningSystem.FILENAME_CVS_ENTRIES);
-        return repository.canRead() && entries.canRead();
+        boolean ret = repository.exists() && entries.exists();
+        if(CvsVersioningSystem.LOG.isLoggable(Level.FINER)) {
+            CvsVersioningSystem.LOG.log(Level.FINER, " containsMetadata returns {0} after {1} millis", new Object[] { ret, System.currentTimeMillis() - t });
+        }
+        return ret;
     }
 
     /**
@@ -509,6 +578,7 @@ public class Utils {
         
     /** Like mkdirs but but using openide filesystems (firing events) */
     public static FileObject mkfolders(File file) throws IOException {
+        file = FileUtil.normalizeFile(file);
         if (file.isDirectory()) return FileUtil.toFileObject(file);
 
         File parent = file.getParentFile();
@@ -537,9 +607,17 @@ public class Utils {
         if ((c < 'a' || c > 'z') && (c < 'A' || c > 'Z')) return false;
         for (int i = 1; i < name.length(); i++) {
             c = name.charAt(i);
-            if ((c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' && c != '_') return false;
+            if ((c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' && c != '+' && c != '_') return false;
         }
         if (name.equals("HEAD") || name.equals("BASE")) return false;
         return true;
+    }
+
+    //T9Y logging
+    private static Logger T9Y_LOG = null;
+    public static void logT9Y(String msg) {
+        if(T9Y_LOG == null)
+            T9Y_LOG = Logger.getLogger("org.netbeans.modules.versioning.system.cvss.t9y");
+        T9Y_LOG.log(Level.FINEST, msg);
     }
 }
