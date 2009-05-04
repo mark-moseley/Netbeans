@@ -87,7 +87,6 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
     
     private ClassMemberPanelUI ui;
     private final AtomicBoolean canceled = new AtomicBoolean ();
-    private Map<Element,Long> pos;
     
     private static final String TYPE_COLOR = "#707070";
     private static final String INHERITED_COLOR = "#7D694A";
@@ -104,6 +103,15 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
     public void run(CompilationInfo info) throws Exception {        
         canceled.set (false); // Task shared for one file needs reset first
         long start = System.currentTimeMillis();        
+        
+        if (info.getChangedTree() != null) {
+            //method body has been reparsed - no need to update the navigator
+            long end = System.currentTimeMillis();
+            Logger.getLogger("TIMER").log(Level.FINE, "Element Scanning Task", //NOI18N
+                    new Object[]{info.getFileObject(), end - start});
+            return ;
+        }
+        
         //System.out.println("The task is running" + info.getFileObject().getNameExt() + "=====================================" ) ;
         
         Description rootDescription = new Description( ui );
@@ -114,19 +122,19 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         CompilationUnitTree cuTree = info.getCompilationUnit();        
         List<? extends TypeElement> elements = info.getTopLevelElements();
         
-        pos = new HashMap<Element,Long>();
+        final Map<Element,Long> pos = new HashMap<Element,Long>();
         if (!canceled.get()) {
             Trees trees = info.getTrees();
             PositionVisitor posVis = new PositionVisitor (trees, canceled);
             posVis.scan(cuTree, pos);
         }
         
-        if ( !canceled.get()) {
+        if ( !canceled.get() && elements != null) {
             for (Element element : elements) {
-                Description topLevel = element2description(element, null, false, info);
+                Description topLevel = element2description(element, null, false, info, pos);
                 if( null != topLevel ) {
                     rootDescription.subs.add( topLevel );
-                    addMembers( (TypeElement)element, topLevel, info );
+                    addMembers( (TypeElement)element, topLevel, info, pos);
                 }
             }
         }
@@ -201,23 +209,25 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         }        
     }
      
-    private void addMembers( TypeElement e, Description parentDescription, CompilationInfo info ) {
+    private void addMembers( final TypeElement e, final Description parentDescription, final CompilationInfo info, final Map<Element,Long> pos) {        
         List<? extends Element> members = info.getElements().getAllMembers( e );
         for( Element m : members ) {
             if( canceled.get() )
                 return;
             
-            Description d = element2description(m, e, parentDescription.isInherited, info);
+            Description d = element2description(m, e, parentDescription.isInherited, info, pos);
             if( null != d ) {
                 parentDescription.subs.add( d );
                 if( m instanceof TypeElement && !d.isInherited ) {
-                    addMembers( (TypeElement)m, d, info);
+                    addMembers( (TypeElement)m, d, info, pos);
                 }
             }
         }
     }
     
-    Description element2description( Element e, Element parent, boolean isParentInherited, CompilationInfo info ) {
+    private Description element2description(final Element e, final Element parent,
+            final boolean isParentInherited, final CompilationInfo info,
+            final Map<Element,Long> pos) {
         if( info.getElementUtilities().isSynthetic(e) )
             return null;
         
@@ -236,7 +246,7 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         }
         
         d.modifiers = e.getModifiers();
-        d.pos = getPosition( e, info );
+        d.pos = getPosition(e, info, pos);
         
         if( inherited ) {
             d.cpInfo = info.getClasspathInfo();
@@ -245,16 +255,8 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         return d;
     }
         
-    private long getPosition( Element e ) {   
-         Long res = pos.get(e);
-         if (res == null) {
-//                java.util.logging.Logger.getLogger(ElementScanningTask.class.getName()).warning("No pos for: " + e);
-            return -1;
-         }
-         return res.longValue();
-    }
     
-    private long getPosition( Element e, CompilationInfo info ) {
+    private long getPosition(final Element e, final CompilationInfo info, final Map<Element,Long> pos) {
          Long res = pos.get(e);
          if (res == null) {
 //                java.util.logging.Logger.getLogger(ElementScanningTask.class.getName()).warning("No pos for: " + e);
