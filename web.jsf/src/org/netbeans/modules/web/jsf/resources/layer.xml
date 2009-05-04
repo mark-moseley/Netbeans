@@ -45,7 +45,7 @@ made subject to such option by the copyright holder.
     <folder name="Services">
         <!-- Recognize text/x-jsf+xml: -->
         <folder name="MIMEResolver">
-            <file name="org-netbeans-modules-web-jsf-resources-mime-resolver.xml" url="mime-resolver.xml">
+            <file name="org-netbeans-modules-web-jsf-resources-mime-resolver.xml" url="web-faces-mime-resolver.xml">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.web.jsf.resources.Bundle"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/web/jsf/resources/JSFConfigIcon.png"/>
                 <attr name="position" intvalue="400"/>
@@ -61,7 +61,9 @@ made subject to such option by the copyright holder.
             </folder>
             -->
             <folder name="framework">
-                <file name="org-netbeans-modules-web-jsf-JSFFrameworkProvider.instance"/> 
+                <file name="org-netbeans-modules-web-jsf-JSFFrameworkProvider.instance"> 
+                    <attr name="position" intvalue="300"/>
+                </file>
             </folder>
         </folder>
     </folder>
@@ -77,17 +79,16 @@ made subject to such option by the copyright holder.
             </folder>
         </folder>
     </folder>
+
     <folder name="Editors">
         <folder name="text">
-            <folder name="xml">
+            <folder name="x-jsf+xml">
                 <folder name="HyperlinkProviders">
                     <file name="JSFConfigHyperlinkProvider.instance">
                         <attr name="instanceClass" stringvalue="org.netbeans.modules.web.jsf.editor.JSFConfigHyperlinkProvider"/>
                         <attr name="instanceOf" stringvalue="org.netbeans.lib.editor.hyperlink.spi.HyperlinkProvider"/>
                     </file>
                 </folder>
-            </folder>
-            <folder name="x-jsf+xml">
                 <folder name="Popup"> 
                     <file name="org-netbeans-modules-web-jsf-editor-JSFPopupAction.instance">
                         <attr name="position" intvalue="3500"/>
@@ -126,10 +127,36 @@ made subject to such option by the copyright holder.
         <folder name="JSF">
             <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.web.jsf.resources.Bundle"/>
             <attr name="position" intvalue="700"/>
+            <!-- JSP Page --> 
+            <file name="JSP.jsp" url="templates/JSP.template">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.web.jsf.resources.Bundle"/>
+                <attr name="position" intvalue="10"/>
+                <attr name="templateCategory" stringvalue="web-types"/>
+                <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/web/core/resources/JSPInfo.html"/>
+                <attr name="templateWizardIterator" methodvalue="org.netbeans.modules.web.jsf.wizards.JSFPageIterator.createJspIterator"/>
+            </file>
+            <!-- JSP Document --> 
+            <file name="JSPX.jspx" url="templates/JSPDoc.template">
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="position" intvalue="0"/>
+            </file>
+            <!-- JSP Segment --> 
+            <file name="JSPF.jspf" url="templates/JSPF.template">
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>  
+                <attr name="position" intvalue="0"/>
+            </file>
+            <!-- JSP XML segemnt --> 
+            <file name="JSPFX.jspf" url="templates/JSPDocX.template">
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>  
+                <attr name="position" intvalue="0"/>
+            </file>
+            <!-- JSF Managed Bean --> 
             <file name="JSFManagedBean.java" url="templates/JSFManagedBean.template">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.web.jsf.resources.Bundle"/>
-                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:org/netbeans/modules/java/resources/class.gif"/>
-                <attr name="position" intvalue="500"/>
+                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/java/resources/class.gif"/>
+                <attr name="position" intvalue="50"/>
                 <attr name="templateCategory" stringvalue="web-types"/>
                 <attr name="template" boolvalue="true"/>
                 <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
@@ -137,7 +164,6 @@ made subject to such option by the copyright holder.
                 <attr name="templateWizardIterator" newvalue="org.netbeans.modules.web.jsf.wizards.ManagedBeanIterator"/>          
             </file>
         </folder>
-        <!--  Previously removed due to issue #91200. Now re-enabled. -->
         <folder name="Persistence">
             <file name="JsfFromDB" url="templates/dummy.template">
                 <attr name="position" intvalue="250"/>
@@ -146,16 +172,9 @@ made subject to such option by the copyright holder.
                 <attr name="template" boolvalue="true"/>
                 <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/web/jsf/resources/JsfFromDB.html"/>
                 <attr name="templateWizardIterator" newvalue="org.netbeans.modules.web.jsf.wizards.PersistenceClientIterator"/>
-                <attr name="SystemFileSystem.icon"
-                          urlvalue="nbresloc:/org/netbeans/modules/web/jsf/resources/jsp16.gif"/>
+                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/web/jsf/resources/jsp16.gif"/>
             </file>
         </folder>
-    </folder>
-
-    <folder name="org-netbeans-modules-web-jsf">
-        <file name="faces-config.xml" url="faces-config.xml"/>
-        <file name="faces-config_1_2.xml" url="faces-config_1_2.xml"/>
-        <file name="welcomeJSF.jsp" url="welcomeJSF.jsp"/>
     </folder>
 
     <folder name="JSPPalette">
@@ -170,6 +189,11 @@ made subject to such option by the copyright holder.
     <folder name="Loaders">
         <folder name="text">
             <folder name="x-jsf+xml">
+                <folder name="Factories">
+                    <file name="org-netbeans-modules-web-jsf-JSFConfigLoader.instance">
+                        <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.web.jsf.resources.Bundle"/>
+                    </file>
+                </folder>
                 <folder name="Actions">
                     <file name="org-openide-actions-OpenAction.instance">
                         <attr name="position" intvalue="100"/>
