@@ -52,7 +52,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import java.util.logging.Level;
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.util.UIDs;
@@ -117,6 +116,10 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         setStatus(Status.Initial);
         this.name = ProjectNameCache.getManager().getString(name);
         init(model, platformProject);
+        initFields();
+    }
+
+    private void initFields() {
         NamespaceImpl ns = new NamespaceImpl(this, false);
         assert ns != null;
         this.globalNamespaceUID = UIDCsmConverter.namespaceToUID(ns);
@@ -126,6 +129,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         graphStorageKey = new GraphContainer(this).getKey();
         FAKE_GLOBAL_NAMESPACE = new NamespaceImpl(this, true);
     }
+
 
     private void init(ModelImpl model, Object platformProject) {
         this.model = model;
@@ -330,19 +334,28 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
 
     public final Collection<CsmClassifier> findClassifiers(CharSequence qualifiedName) {
         CsmClassifier result = getClassifierSorage().getClassifier(qualifiedName);
-        Collection<CsmClassifier> out = UIDCsmConverter.UIDsToDeclarations(new ArrayList<CsmUID<CsmClassifier>>());
+        Collection<CsmClassifier> out = new ArrayList<CsmClassifier>();
         //Collection<CsmClassifier> out = new LazyCsmCollection<CsmClassifier, CsmClassifier>(new ArrayList<CsmUID<CsmClassifier>>(), TraceFlags.SAFE_UID_ACCESS);
         if (result != null) {
             if (CsmKindUtilities.isBuiltIn(result)) {
                 return Collections.<CsmClassifier>singletonList(result);
             }
             CharSequence[] allClassifiersUniqueNames = Utils.getAllClassifiersUniqueNames(result.getUniqueName());
+            Collection<CsmClassifier> fwds = new ArrayList<CsmClassifier>(1);
             for (CharSequence curUniqueName : allClassifiersUniqueNames) {
                 Collection<? extends CsmDeclaration> decls = this.findDeclarations(curUniqueName);
                 @SuppressWarnings("unchecked")
                 Collection<CsmClassifier> classifiers = (Collection<CsmClassifier>) decls;
-                out.addAll(classifiers);
+                for (CsmClassifier csmClassifier : classifiers) {
+                    if (ForwardClass.isForwardClass(csmClassifier)) {
+                        fwds.add(csmClassifier);
+                    } else {
+                        out.add(csmClassifier);
+                    }
+                }
             }
+            // All forwards move at the end
+            out.addAll(fwds);
         }
         return out;
     }
@@ -687,6 +700,12 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                 validator = new ProjectSettingsValidator(this);
                 validator.restoreSettings();
             }
+            if (status == Status.Validating && RepositoryUtils.getRepositoryErrorCount(this) > 0){
+                System.err.println("Clean index for project \""+getUniqueName()+"\" because index was corrupted (was "+RepositoryUtils.getRepositoryErrorCount(this)+" errors)."); // NOI18N
+                validator = null;
+                reopenUnit();
+            }
+
             projectRoots.fixFolder(nativeProject.getProjectRoot());
             for (String root : nativeProject.getSourceRoots()) {
                 projectRoots.fixFolder(root);
@@ -695,8 +714,17 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
             projectRoots.addSources(headers);
             projectRoots.addSources(excluded);
             createProjectFilesIfNeed(sources, true, removedFiles, validator);
-            createProjectFilesIfNeed(headers, false, removedFiles, validator);
-
+            if (status == Status.Validating && RepositoryUtils.getRepositoryErrorCount(this) == 0){
+                createProjectFilesIfNeed(headers, false, removedFiles, validator);
+            }
+            if (status == Status.Validating && RepositoryUtils.getRepositoryErrorCount(this) > 0){
+                System.err.println("Clean index for project \""+getUniqueName()+"\" because index was corrupted (was "+RepositoryUtils.getRepositoryErrorCount(this)+" errors)."); // NOI18N
+                validator = null;
+                reopenUnit();
+                createProjectFilesIfNeed(sources, true, removedFiles, validator);
+                createProjectFilesIfNeed(headers, false, removedFiles, validator);
+            }
+            
         } finally {
             disposeLock.readLock().unlock();
             if (TraceFlags.TIMING) {
@@ -708,6 +736,15 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
     // in fact if visitor used for parsing => visitor will parse all included files
     // recursively starting from current source file
     // so, when we visit headers, they should not be reparsed if already were parsed
+    }
+
+    private void reopenUnit() {
+        setStatus(Status.Initial);
+        ParserQueue.instance().clean(this);
+        RepositoryUtils.closeUnit(this.getUniqueName().toString(), null, true);
+        RepositoryUtils.openUnit(this);
+        RepositoryUtils.hang(this);
+        initFields();
     }
 
     private void createProjectFilesIfNeed(List<NativeFileItem> items, boolean sources,
@@ -731,6 +768,9 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
             }
             try {
                 createIfNeed(nativeFileItem, sources, validator, reparseOnEdit, reparseOnPropertyChanged);
+                if (status == Status.Validating && RepositoryUtils.getRepositoryErrorCount(this) > 0) {
+                    return;
+                }
             } catch (Exception ex) {
                 DiagnosticExceptoins.register(ex);
             }
@@ -1004,7 +1044,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         return createPreprocHandler(file, getFileContainer().getPreprocState(file));
     }
 
-    public final APTPreprocHandler getPreprocHandler(File file, FileContainer.StatePair statePair) {
+    /*package*/ final APTPreprocHandler getPreprocHandler(File file, FileContainer.StatePair statePair) {
         return createPreprocHandler(file, statePair == null ? getFileContainer().getPreprocState(file) : statePair.state);
     }
 
@@ -1073,7 +1113,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
      */
     public final CsmFile testAPTParseFile(NativeFileItem item) {
         APTPreprocHandler preprocHandler = this.createPreprocHandler(item);
-        return findFile(item.getFile(), getFileType(item), preprocHandler, true, preprocHandler.getState(), item);
+        return findFile(item.getFile(), false, getFileType(item), preprocHandler, true, preprocHandler.getState(), item);
     }
 
     /**
@@ -1139,8 +1179,8 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
             if (disposing) {
                 return null;
             }
-            FileImpl csmFile = findFile(new File(file.toString()), FileImpl.FileType.HEADER_FILE, preprocHandler, false, null, null);
-
+            FileImpl csmFile = findFile(new File(file.toString()), true, FileImpl.FileType.HEADER_FILE, preprocHandler, false, null, null);
+            
             APTPreprocHandler.State newState = preprocHandler.getState();
             APTPreprocHandler.State cachedOut = null;
             if (mode == ProjectBase.GATHERING_TOKENS && !APTHandlersSupport.extractIncludeStack(newState).isEmpty()) {
@@ -1202,7 +1242,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                     traceIncludeStates("comparison 1 " + comparisonResult, csmFile, newState, null, newStateFound.get(), null, statesToKeep); // NOI18N
                 }
                 if (comparisonResult == ComparisonResult.BETTER) {
-                    CndUtils.assertTrue(statesToKeep.isEmpty(), "states to keep must be empty 1", Level.INFO); // NOI18N
+                    CndUtils.assertTrueInConsole(statesToKeep.isEmpty(), "states to keep must be empty 1"); // NOI18N
                     entry.setPendingReparse(true); // #148608 Instable test regressions on CLucene
                     // some of the old states are worse than the new one; we'll deinitely parse
                     existsInEntryOnPhaseAExit = true;
@@ -1215,10 +1255,10 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
             }
 
             // gather macro map from all includes
-            FilePreprocessorConditionState pcState = new FilePreprocessorConditionState(csmFile/*, preprocHandler*/);
-            APTParseFileWalker walker = new APTParseFileWalker(base, aptLight, csmFile, preprocHandler, pcState);
+            FilePreprocessorConditionState.Builder pcBuilder = new FilePreprocessorConditionState.Builder(csmFile.getAbsolutePath());
+            APTParseFileWalker walker = new APTParseFileWalker(base, aptLight, csmFile, preprocHandler, pcBuilder);
             walker.visit();
-            pcState.trimSize();
+            FilePreprocessorConditionState pcState = pcBuilder.build();
             if (mode == ProjectBase.GATHERING_TOKENS && !APTHandlersSupport.extractIncludeStack(newState).isEmpty()) {
                 csmFile.cacheVisitedState(newState, preprocHandler);
             }
@@ -1281,7 +1321,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
 
                 if (comparisonResult == ComparisonResult.BETTER) {
                     clean = true;
-                    CndUtils.assertTrue(statesToKeep.isEmpty(), "states to keep must be empty 2", Level.INFO); // NOI18N
+                    CndUtils.assertTrueInConsole(statesToKeep.isEmpty(), "states to keep must be empty 2"); // NOI18N
                     if (TRACE_FILE && FileImpl.traceFile(file)) {
                         traceIncludeStates("best state", csmFile, newState, pcState, clean, statesToParse, statesToKeep); // NOI18N
                     }
@@ -1293,7 +1333,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                     }
                     switch (comparisonResult) {
                         case BETTER:
-                            CndUtils.assertTrue(statesToKeep.isEmpty(), "states to keep must be empty 3", Level.INFO); // NOI18N
+                            CndUtils.assertTrueInConsole(statesToKeep.isEmpty(), "states to keep must be empty 3"); // NOI18N
                             clean = true;
                             break;
                         case SAME:
@@ -1479,7 +1519,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
             }
         }
         if (result == ComparisonResult.BETTER) {
-            CndUtils.assertTrue(statesToKeep.isEmpty(), "states to keep must be empty ", Level.INFO); // NOI18N
+            CndUtils.assertTrueInConsole(statesToKeep.isEmpty(), "states to keep must be empty "); // NOI18N
         }
         return result;
     }
@@ -1500,8 +1540,6 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
 
         boolean isSuperset = true; // true if this state is a superset of each old state
 
-        Collection<FilePreprocessorConditionState> possibleSuperSet = new ArrayList<FilePreprocessorConditionState>();
-
         // we assume that
         // 1. all oldStates are valid
         // 2. either them all are compileContext
@@ -1511,9 +1549,6 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         statesToKeep.clear();
 
         for (FileContainer.StatePair old : oldStates) {
-            if (pcState.isSubset(old.pcState)) {
-                return ComparisonResult.WORSE;
-            }
             if (old.pcState == null) {
                 isSuperset = false;
                 // not yet filled - somebody is filling it right now => we don't know what it will be => keep it
@@ -1522,8 +1557,12 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                 }
                 statesToKeep.add(old);
             } else {
-                possibleSuperSet.add(old.pcState);
-                if (!old.pcState.isSubset(pcState)) {
+                if (old.pcState.isBetterOrEqual(pcState)) {
+                    return ComparisonResult.WORSE;
+                } else if (pcState.isBetterOrEqual(old.pcState)) {
+                    // still superset or current can replace old
+                } else {
+                    // states are not comparable => not superset
                     isSuperset = false;
                     if (!old.state.isCleaned()) {
                         old = new FileContainer.StatePair(APTHandlersSupport.createCleanPreprocState(old.state), old.pcState);
@@ -1533,14 +1572,10 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
             }
         }
         if (isSuperset) {
-            statesToKeep.clear();
+            assert statesToKeep.isEmpty() : "should be empty, but it is: " + Arrays.toString(statesToKeep.toArray());
             return ComparisonResult.BETTER;
         } else {
-            if (pcState.isSubset(possibleSuperSet)) {
-                return ComparisonResult.WORSE;
-            } else {
-                return ComparisonResult.SAME;
-            }
+            return ComparisonResult.SAME;
         }
     }
 
@@ -1552,14 +1587,14 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         // Wait while files are created. Otherwise project file will be recognized as library file.
         ensureFilesCreated();
         File file = new File(absPath.toString());
-        if (getFile(file) != null) {
+        if (getFile(file, false) != null) {
             return this;
         } else {
             // else check in libs
             for (CsmProject prj : getLibraries()) {
                 // Wait while files are created. Otherwise project file will be recognized as library file.
                 ((ProjectBase) prj).ensureFilesCreated();
-                if (((ProjectBase) prj).getFile(file) != null) {
+                if (((ProjectBase) prj).getFile(file, false) != null) {
                     return (ProjectBase) prj;
                 }
             }
@@ -1597,7 +1632,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
     protected abstract void clearNativeFileContainer();
 
     public final void onFileRemoved(File nativeFile) {
-        onFileRemoved(getFile(nativeFile));
+        onFileRemoved(getFile(nativeFile, false));
     }
 
     public final void onFileExternalCreate(FileObject file) {
@@ -1640,11 +1675,11 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                 }
             }
             if (preprocHandler != null) {
-                return findFile(file, FileImpl.FileType.UNDEFINED_FILE, preprocHandler, true, preprocHandler.getState(), nativeFile);
+                return findFile(file, false, FileImpl.FileType.UNDEFINED_FILE, preprocHandler, true, preprocHandler.getState(), nativeFile);
             }
         }
         // if getPreprocState(file) isn't null, the file alreasy exists, so we may not pass nativeFile
-        return findFile(file, FileImpl.FileType.UNDEFINED_FILE, preprocHandler, true, null, null);
+        return findFile(file, false, FileImpl.FileType.UNDEFINED_FILE, preprocHandler, true, null, null);
     }
 
     private CsmFile findFileByItem(NativeFileItem nativeFile) {
@@ -1662,27 +1697,27 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                 }
             }
             if (preprocHandler != null) {
-                return findFile(file, FileImpl.FileType.UNDEFINED_FILE, preprocHandler, true, preprocHandler.getState(), nativeFile);
+                return findFile(file, false, FileImpl.FileType.UNDEFINED_FILE, preprocHandler, true, preprocHandler.getState(), nativeFile);
             }
         }
         // if getPreprocState(file) isn't null, the file alreasy exists, so we may not pass nativeFile
-        return findFile(file, FileImpl.FileType.UNDEFINED_FILE, preprocHandler, true, null, null);
+        return findFile(file, false, FileImpl.FileType.UNDEFINED_FILE, preprocHandler, true, null, null);
     }
 
-    protected final FileImpl findFile(File file, FileImpl.FileType fileType, APTPreprocHandler preprocHandler,
+    protected final FileImpl findFile(File file, boolean treatSymlinkAsSeparateFile, FileImpl.FileType fileType, APTPreprocHandler preprocHandler,
             boolean scheduleParseIfNeed, APTPreprocHandler.State initial, NativeFileItem nativeFileItem) {
-        FileImpl impl = getFile(file);
+        FileImpl impl = getFile(file, treatSymlinkAsSeparateFile);
         if (impl == null){
-            impl = findFileImpl(file, fileType, preprocHandler, scheduleParseIfNeed, initial, nativeFileItem);
+            impl = findFileImpl(file, treatSymlinkAsSeparateFile, fileType, preprocHandler, scheduleParseIfNeed, initial, nativeFileItem);
         }
         return impl;
     }
 
-    private FileImpl findFileImpl(File file, FileImpl.FileType fileType, APTPreprocHandler preprocHandler,
+    private FileImpl findFileImpl(File file, boolean treatSymlinkAsSeparateFile, FileImpl.FileType fileType, APTPreprocHandler preprocHandler,
             boolean scheduleParseIfNeed, APTPreprocHandler.State initial, NativeFileItem nativeFileItem) {
         FileImpl impl = null;
         synchronized (fileContainerLock) {
-            impl = getFile(file);
+            impl = getFile(file, treatSymlinkAsSeparateFile);
             if (impl == null) {
                 preprocHandler = (preprocHandler == null) ? getPreprocHandler(file) : preprocHandler;
                 impl = new FileImpl(ModelSupport.getFileBuffer(file), this, fileType, nativeFileItem);
@@ -1735,10 +1770,10 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
     private FileAndHandler createOrFindFileImpl(final FileBuffer buf, final NativeFileItem nativeFile, FileImpl.FileType fileType) {
         APTPreprocHandler preprocHandler = null;
         File file = buf.getFile();
-        FileImpl impl = getFile(file);
+        FileImpl impl = getFile(file, true);
         if (impl == null) {
             synchronized (fileContainerLock) {
-                impl = getFile(file);
+                impl = getFile(file, true);
                 if (impl == null) {
                     preprocHandler = createPreprocHandler(nativeFile);
                     assert preprocHandler != null;
@@ -1754,8 +1789,8 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         return new FileAndHandler(impl, preprocHandler);
     }
 
-    public final FileImpl getFile(File file) {
-        return getFileContainer().getFile(file);
+    public final FileImpl getFile(File file, boolean treatSymlinkAsSeparateFile) {
+        return getFileContainer().getFile(file, treatSymlinkAsSeparateFile);
     }
 
     protected final void removeFile(CharSequence file) {
@@ -2156,7 +2191,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
     private StartEntryInfo getStartEntryInfo(APTPreprocHandler preprocHandler, APTPreprocHandler.State state) {
         StartEntry startEntry = APTHandlersSupport.extractStartEntry(state);
         ProjectBase startProject = getStartProject(startEntry);
-        FileImpl csmFile = startProject == null ? null : startProject.getFile(new File(startEntry.getStartFile().toString()));
+        FileImpl csmFile = startProject == null ? null : startProject.getFile(new File(startEntry.getStartFile().toString()), false);
         if (csmFile != null) {
             NativeFileItem nativeFile = csmFile.getNativeFileItem();
             if (nativeFile != null && nativeFile.getFile() != null) {
@@ -2209,7 +2244,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                         if (testRestoredFiles == null) {
                             testRestoredFiles = new ArrayList<String>();
                         }
-                        FileImpl interestedFileImpl = getFile(interestedFile);
+                        FileImpl interestedFileImpl = getFile(interestedFile, false);
                         assert interestedFileImpl != null;
                         String msg = interestedFile.getAbsolutePath() + " [" + (interestedFileImpl.isHeaderFile() ? "H" : interestedFileImpl.isSourceFile() ? "S" : "U") + "]"; // NOI18N
                         time = System.currentTimeMillis() - time;
@@ -2409,7 +2444,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
     public static FileImpl getStartFile(final APTPreprocHandler.State state) {
         StartEntry startEntry = APTHandlersSupport.extractStartEntry(state);
         ProjectBase startProject = getStartProject(startEntry);
-        FileImpl csmFile = startProject == null ? null : startProject.getFile(new File(startEntry.getStartFile().toString()));
+        FileImpl csmFile = startProject == null ? null : startProject.getFile(new File(startEntry.getStartFile().toString()), false);
         return csmFile;
     }
 
@@ -2546,8 +2581,8 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
     private ModelImpl model;
     private Unresolved unresolved;
     private CharSequence name;
-    private final CsmUID<CsmNamespace> globalNamespaceUID;
-    private final NamespaceImpl FAKE_GLOBAL_NAMESPACE;
+    private CsmUID<CsmNamespace> globalNamespaceUID;
+    private NamespaceImpl FAKE_GLOBAL_NAMESPACE;
     private Object platformProject;
     /**
      * Some notes concerning disposing and disposeLock fields.
@@ -2580,15 +2615,15 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
     private CharSequence uniqueName = null; // lazy initialized
     private Map<CharSequence, CsmUID<CsmNamespace>> namespaces = new ConcurrentHashMap<CharSequence, CsmUID<CsmNamespace>>();
     //private ClassifierContainer classifierContainer = new ClassifierContainer();
-    private final Key classifierStorageKey;
+    private Key classifierStorageKey;
 
     // collection of sharable system macros and system includes
     private APTSystemStorage sysAPTData = APTSystemStorage.getDefault();
     private final Object namespaceLock = new String("namespaceLock in Projectbase " + hashCode()); // NOI18N
-    private final Key declarationsSorageKey;
-    private final Key fileContainerKey;
+    private Key declarationsSorageKey;
+    private Key fileContainerKey;
     private final Object fileContainerLock = new Object();
-    private final Key graphStorageKey;
+    private Key graphStorageKey;
     protected final SourceRootContainer projectRoots = new SourceRootContainer();
     private NativeProjectListenerImpl projectListener;
 
@@ -2717,7 +2752,7 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
                     return;
                 }
                 FileImpl impl = (FileImpl) UIDCsmConverter.UIDtoFile(file);
-                CndUtils.assertTrue(impl != null, "no deref file for " + file, Level.INFO); // NOI18N
+                CndUtils.assertTrueInConsole(impl != null, "no deref file for " + file); // NOI18N
                 // situation is possible for standalone files which were already replaced
                 // by real files
                 if (impl == null) {
