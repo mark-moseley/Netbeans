@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='ISO-8859-1' ?>
 <!--
-*     Copyright © 2007 Sun Microsystems, Inc. All rights reserved.
+*     Copyright © 2008 Sun Microsystems, Inc. All rights reserved.
 *     Use is subject to license terms.
 -->
 
@@ -40,7 +40,7 @@
     <tocitem text="Setting Keyboard Shortcuts" target="shortcuts.menucuts-setting" />
     <tocitem text="General Editor Shortcuts" target="shortcuts.editor" />
   </tocitem>
-  
+
     <tocitem text="Version Control and File History">
       <tocitem text="Local History">
           <tocitem text="About Local File History" target="hist_about" />
@@ -51,7 +51,26 @@
           <tocitem text="Adjusting Local History Settings" target="hist_settings" />
       </tocitem>
     </tocitem>
-    
+
+<tocitem text="Collaborative Development">
+          <tocitem text="About Collaborative Development" target="collab_about" />
+          <tocitem text="Working With Kenai Projects">
+              <tocitem text="About Kenai Projects" target="kenai_projects" />
+              <tocitem text="Sharing a Local Project" target="kenai_share" />
+              <tocitem text="Creating a Kenai Project" target="kenai_create" />
+              <tocitem text="Kenai Project Tasks: Quick Reference" target="kenai_quickref" />
+              <tocitem text="Opening a Kenai Project" target="kenai_opening" />
+              <tocitem text="Working With Kenai Projects" target="kenai_workingwith" />
+              <tocitem text="Collaborating With Kenai Project Members" target="kenai_members" />
+          </tocitem>
+          <tocitem text="Working With Issue Tracking">
+              <tocitem text="About Issue Trackers" target="issues_trackers" />
+              <tocitem text="Working With Issues" target="issues_workingwith" />
+              <tocitem text="Adding an Issue Tracker" target="issues_external" />
+          </tocitem>
+    </tocitem>
+
+
   <tocitem text="Servers and Databases">
 
    <tocitem text="Web Browsers" >
@@ -60,8 +79,6 @@
       <tocitem text="Accessing Local Files Through a Proxy" target="bypass.proxy" />
       <tocitem text="Changing the Default Web Browser" target="webbrowser.default" />
       <tocitem text="Configuring a Web Browser" target="webbrowser.config" />
-
-      <tocitem text="Setting a Home Page for the Web Browser" target="webbrowser.homepage" />
     </tocitem>
 
    </tocitem>
@@ -73,6 +90,15 @@
       <tocitem text="Installing Plugins Offline" target="update.offline" />
       <tocitem text="Updating a Multi-User IDE Installation" target="update.globally" />
       <tocitem text="Activating and Deactivating a Plugin" target="configure.enable.module" />
+    </tocitem>
+    
+    <tocitem text="JavaScript Files">
+        <tocitem text="Basic Features" target="js.basics" />
+        <tocitem text="Code Completion" target="js.code.completion"/>
+        <tocitem text="Refactoring" target="js.refactoring" />
+        <tocitem text="Quick Fixes and Semantic Checks" target="js.quickfixes" />
+        <tocitem text="Browser Compatibility" target="js.browser.compatibility" />
+        <tocitem text="Cross-File Navigation" target="js.function.jump" />        
     </tocitem>
   
      <tocitem text="XML Documents" >
@@ -120,10 +146,6 @@
 
     <tocitem text="Configuring the IDE's Workspace">
       <tocitem text="Managing IDE Windows" target="workspace.window.managing"/>
-      <tocitem text="Changing Window Modes" target="workspace.window.mode"/>
-      <tocitem text="Customizing Menus in the IDE" target="configure.menucustomize" />
-      <tocitem text="Customizing the Display of Commands in a Menu" target="configure.menucommands" />
-      <tocitem text="Customizing the Contextual Menu for an Object" target="configure.menucontextual" />
       <tocitem text="Customizing Toolbars in the IDE" target="configure.tbcustomize" />
       <tocitem text="Customizing the Display of Commands in a Toolbar" target="configure.tbcommands" />
     </tocitem>
