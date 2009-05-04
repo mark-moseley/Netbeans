@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,11 +41,18 @@
 
 package org.netbeans.modules.mercurial;
 
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.File;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.logging.Level;
+import javax.swing.JComponent;
+import javax.swing.JButton;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
+import org.netbeans.modules.mercurial.ui.repository.HgURL;
+import org.netbeans.modules.mercurial.util.HgUtils;
 import org.openide.util.Cancellable;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
@@ -63,15 +70,40 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
     private ProgressHandle progressHandle = null;    
     private String displayName = ""; // NOI18N
     private String originalDisplayName = ""; // NOI18N
-    private String repositoryRoot;
+    private OutputLogger logger;
+    private HgURL repositoryRoot;
     private RequestProcessor.Task task;
     
-    public RequestProcessor.Task start(RequestProcessor rp, String repositoryRoot, String displayName) {
+    public HgProgressSupport() {
+    }
+
+    public HgProgressSupport(String displayName, JButton cancel) {
+        this.displayName = displayName;
+        if(cancel != null) {
+            cancel.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    cancel();
+                }
+            });
+        }
+    }
+    
+    public RequestProcessor.Task start(RequestProcessor rp, String displayName) {
+        return start(rp, new File(""), displayName);                    //NOI18N
+    }
+
+    public RequestProcessor.Task start(RequestProcessor rp, File repositoryRoot, String displayName) {
+        HgURL hgUrl = (repositoryRoot != null) ? new HgURL(repositoryRoot)
+                                               : null;
+        return start(rp, hgUrl, displayName);
+    }
+
+    public RequestProcessor.Task start(RequestProcessor rp, HgURL repositoryRoot, String displayName) {
         setDisplayName(displayName);
         this.repositoryRoot = repositoryRoot;
         startProgress();
         setProgressQueued();
-        task = rp.post(this);   
+        task = rp.post(this);
         task.addTaskListener(new TaskListener() {
             public void taskFinished(org.openide.util.Task task) {
                 delegate = null;
@@ -80,8 +112,23 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
         return task;
     }
 
-    public void setRepositoryRoot(String repositoryRoot) {
+    public RequestProcessor.Task start(RequestProcessor rp) {
+        startProgress();
+        task = rp.post(this);
+        return task;
+    }
+
+    public JComponent getProgressComponent() {
+        return ProgressHandleFactory.createProgressComponent(getProgressHandle());
+    }
+
+    public void setRepositoryRoot(HgURL repositoryRoot) {
         this.repositoryRoot = repositoryRoot;
+        logger = null;
+    }
+
+    protected HgURL getRepositoryRoot() {
+        return repositoryRoot;
     }
 
     public void run() {        
@@ -91,13 +138,14 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
 
     protected void performIntern() {
         try {
-            Mercurial.LOG.log(Level.FINE, "Start - ", displayName); // NOI18N
+            log("Start - " + displayName); // NOI18N
             if(!canceled) {
                 perform();
             }
-            Mercurial.LOG.log(Level.FINE, "End - ", displayName); // NOI18N
-        } finally {            
+        } finally {
+            log("End - " + displayName); // NOI18N
             finnishProgress();
+            getLogger().closeLog();
         }
     }
 
@@ -108,14 +156,15 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
     }
 
     public synchronized boolean cancel() {
+        if(delegate != null) {
+            if(!delegate.cancel()) 
+                return false;
+        }
         if (canceled) {
             return false;
         }        
         if(task != null) {
             task.cancel();
-        }
-        if(delegate != null) {
-            delegate.cancel();
         }
         Mercurial.getInstance().clearRequestProcessor(repositoryRoot);
         getProgressHandle().finish();
@@ -123,7 +172,7 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
         return true;
     }
 
-    void setCancellableDelegate(Cancellable cancellable) {
+    public void setCancellableDelegate(Cancellable cancellable) {
         this.delegate = cancellable;
     }
 
@@ -131,6 +180,7 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
         if(originalDisplayName.equals("")) { // NOI18N
             originalDisplayName = displayName;
         }
+        logChangedDisplayName(this.displayName, displayName);
         this.displayName = displayName;
         setProgress();
     }
@@ -166,13 +216,36 @@ public abstract class HgProgressSupport implements Runnable, Cancellable {
         getProgressHandle().finish();
     }
     
-    
+    public OutputLogger getLogger() {
+        if (logger == null) {
+            String loggerId = (repositoryRoot != null)
+                              ? repositoryRoot.toHgCommandUrlStringWithoutUserInfo()
+                              : null;
+            logger = Mercurial.getInstance().getLogger(loggerId);
+        }
+        return logger;
+    }
+
     public void annotate(HgException ex) {        
         ExceptionHandler eh = new ExceptionHandler(ex);
         if(isCanceled()) {
             eh.notifyException(false);
         } else {
             eh.notifyException();    
+        }
+    }
+    
+    private static void log(String msg) {
+        HgUtils.logT9Y(msg);
+        Mercurial.LOG.log(Level.FINE, msg); 
+    }
+
+    private void logChangedDisplayName(String thisDisplayName, String displayName) {
+        if(thisDisplayName != null && !thisDisplayName.equals(displayName)) {
+            if(!thisDisplayName.equals("")) {
+                log("End - " + thisDisplayName); // NOI18N
+                log("Start - " + displayName); // NOI18N
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -49,6 +49,10 @@ import javax.swing.*;
 import java.io.File;
 import java.util.*;
 import org.netbeans.modules.mercurial.FileInformation;
+import org.netbeans.modules.mercurial.OutputLogger;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
+import org.netbeans.modules.mercurial.ui.repository.HgURL;
+import org.netbeans.modules.mercurial.util.HgUtils;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import org.openide.windows.TopComponent;
 
@@ -57,7 +61,7 @@ import org.openide.windows.TopComponent;
  * 
  * @author Maros Sandor
  */
-public class SearchHistoryAction extends AbstractAction {
+public class SearchHistoryAction extends ContextAction {
     private final VCSContext context;
     static final int DIRECTORY_ENABLED_STATUS = FileInformation.STATUS_MANAGED & ~FileInformation.STATUS_NOTVERSIONED_EXCLUDED & ~FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY;
     static final int FILE_ENABLED_STATUS = FileInformation.STATUS_MANAGED & ~FileInformation.STATUS_NOTVERSIONED_EXCLUDED & ~FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY;
@@ -83,7 +87,7 @@ public class SearchHistoryAction extends AbstractAction {
         return false;
     }
 
-    public void actionPerformed(ActionEvent e) {
+    public void performAction(ActionEvent e) {
         String title = NbBundle.getMessage(SearchHistoryAction.class, "CTL_SearchHistory_Title", Utils.getContextDisplayName(context)); // NOI18N
         openHistory(context, title ); 
     }
@@ -91,14 +95,93 @@ public class SearchHistoryAction extends AbstractAction {
     public static void openHistory(final VCSContext context, final String title) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
+                if (context == null) return;
+                outputSearchContextTab(context, "MSG_Log_Title", false);
                 SearchHistoryTopComponent tc = new SearchHistoryTopComponent(context);
                 tc.setDisplayName(title);
                 tc.open();
                 tc.requestActive();
-                File [] files = context.getRootFiles().toArray(new File[0]);
-                if (files != null && files.length > 0) {
-                    tc.search();
+                Set<File> s = context.getFiles();
+                if(s != null) {
+                    File[] files = s.toArray(new File[s.size()]);
+                    if (files.length == 1 && files[0].isFile() || files.length > 1 && Utils.shareCommonDataObject(files)) {
+                        tc.search();
+                    }
                 }
+            }
+        });
+    }
+
+    private static void outputSearchContextTab(VCSContext context, String title, boolean bRootOnly) {
+        File root = HgUtils.getRootFile(context);
+        String loggerId = (root != null) ? new HgURL(root).toHgCommandUrlStringWithoutUserInfo()
+                                               : null;
+        OutputLogger logger = OutputLogger.getLogger(loggerId);
+        logger.outputInRed(
+                NbBundle.getMessage(SearchHistoryAction.class,
+                title));
+        logger.outputInRed(
+                NbBundle.getMessage(SearchHistoryAction.class,
+                "MSG_Log_Title_Sep")); // NOI18N
+        if(bRootOnly){
+            logger.output(
+                    NbBundle.getMessage(SearchHistoryAction.class,
+                    "MSG_LOG_ROOT_CONTEXT_SEP")); // NOI18N
+            logger.output(root.getAbsolutePath());
+        }else{
+            File[] files = context.getFiles().toArray(new File[0]);
+            logger.output(
+                    NbBundle.getMessage(SearchHistoryAction.class,
+                    "MSG_LOG_CONTEXT_SEP")); // NOI18N
+            for (File f : files) {
+                logger.output(f.getAbsolutePath());
+            }
+        }
+        logger.outputInRed(""); // NOI18N
+        logger.closeLog();
+    }
+
+    /**
+     * Opens the Seach History panel to view Mercurial Incoming Changesets that will be sent on next Pull from remote repo
+     * using: hg incoming - to get the data
+     * 
+     * @param title title of the search
+     * @param commitMessage commit message to search for
+     * @param username user name to search for
+     * @param date date of the change in question
+     */ 
+    public static void openIncoming(final VCSContext context, final String title) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                if (context == null) return;
+                outputSearchContextTab(context, "MSG_LogIncoming_Title", true);
+                SearchHistoryTopComponent tc = new SearchHistoryTopComponent(context);
+                tc.setDisplayName(title);
+                tc.open();
+                tc.requestActive();
+                tc.searchIncoming();
+            }
+        });
+    }
+    /**
+     * Opens the Seach History panel to view Mercurial Out Changesets that will be sent on next Push to remote repo
+     * using: hg out - to get the data
+     * 
+     * @param title title of the search
+     * @param commitMessage commit message to search for
+     * @param username user name to search for
+     * @param date date of the change in question
+     */ 
+    public static void openOut(final VCSContext context, final String title) {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                if (context == null) return;
+                outputSearchContextTab(context, "MSG_LogOut_Title", true);
+                SearchHistoryTopComponent tc = new SearchHistoryTopComponent(context);
+                tc.setDisplayName(title);
+                tc.open();
+                tc.requestActive();
+                tc.searchOut();
             }
         });
     }
@@ -137,26 +220,28 @@ public class SearchHistoryAction extends AbstractAction {
         tc.search();
     }
 
+    /**
+     * Opens search panel with a diff view fixed on a line
+     * @param file file to search history for
+     * @param lineNumber number of a line to fix on
+     */
+    public static void openSearch(final File file, final int lineNumber) {
+        SearchHistoryTopComponent tc = new SearchHistoryTopComponent(file, new SearchHistoryTopComponent.DiffResultsViewFactory() {
+            @Override
+            DiffResultsView createDiffResultsView(SearchHistoryPanel panel, List<RepositoryRevision> results) {
+                return new DiffResultsViewForLine(panel, results, lineNumber);
+            }
+        });
+        String tcTitle = NbBundle.getMessage(SearchHistoryAction.class, "CTL_SearchHistory_Title", file.getName()); // NOI18N
+        tc.setDisplayName(tcTitle);
+        tc.open();
+        tc.requestActive();
+    }
+
     private static VCSContext getDefaultContext() {
         Node [] nodes = TopComponent.getRegistry().getActivatedNodes();
         
         return nodes != null ? VCSContext.forNodes(nodes): VCSContext.EMPTY;
     }
 
-    /**
-     * Opens search panel in the context of the given repository URL.
-     * 
-     * @param repositoryUrl URL to search
-     * @param localRoot local working copy root that corresponds to the repository URL 
-     * @param revision revision to search for
-     */ 
-    public static void openSearch(String repositoryUrl, File localRoot, long revision) {
-        SearchHistoryTopComponent tc = new SearchHistoryTopComponent(repositoryUrl, localRoot, revision);
-        String tcTitle = NbBundle.getMessage(SearchHistoryAction.class, "CTL_SearchHistory_Title", repositoryUrl); // NOI18N
-        tc.setDisplayName(tcTitle);
-        tc.open();
-        tc.requestActive();
-        tc.search();
-    }
-
-    }
+}
