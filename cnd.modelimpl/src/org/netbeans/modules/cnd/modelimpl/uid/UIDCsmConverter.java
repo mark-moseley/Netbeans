@@ -38,22 +38,22 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.uid;
 
+import org.netbeans.modules.cnd.modelimpl.csm.core.CsmIdentifiable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
-import org.netbeans.modules.cnd.api.model.CsmInclude;
-import org.netbeans.modules.cnd.api.model.CsmMacro;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmProject;
 import org.netbeans.modules.cnd.api.model.CsmScope;
 import org.netbeans.modules.cnd.api.model.CsmUID;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
+import org.netbeans.modules.cnd.api.model.util.UIDs;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
 
@@ -61,16 +61,18 @@ import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
  * utilities to convert between CsmUID and CsmObjects
  * @author Vladimir Voskresensky
  */
-public class UIDCsmConverter {
-   
+public final class UIDCsmConverter {
+
     private UIDCsmConverter() {
     }
-    
+
     ////////////////////////////////////////////////////////////////////////////
     // UID -> Object
-    
-    private static int lastHash = 0;
-	    
+//    private static int lastHash = 0;
+    public static boolean isIdentifiable(Object obj) {
+        return obj instanceof CsmIdentifiable;
+    }
+
     public static CsmFile UIDtoFile(CsmUID<CsmFile> uid) {
         try {
             CsmFile result = uid == null ? null : uid.getObject();
@@ -89,20 +91,20 @@ public class UIDCsmConverter {
             return result;
         } catch (StackOverflowError ex) {
             // needed to analyze IZ99230; it's fixed!
-	    Exception ex2 = new Exception("StackOverflowError for UID " + uid);
-	    ex2.setStackTrace(ex.getStackTrace());
-	    DiagnosticExceptoins.register(ex2);
+            Exception ex2 = new Exception("StackOverflowError for UID " + uid); // NOI18N
+            ex2.setStackTrace(ex.getStackTrace());
+            DiagnosticExceptoins.register(ex2);
             return null;
         }
     }
-    
-    public static CsmObject UIDtoCsmObject(CsmUID uid) {
-        return uid == null ? null : (CsmObject)uid.getObject();
-    }    
+
+    public static <T> T UIDtoCsmObject(CsmUID<T> uid) {
+        return uid == null ? null : uid.getObject();
+    }
 
     public static CsmNamespace UIDtoNamespace(CsmUID<CsmNamespace> uid) {
         return uid == null ? null : uid.getObject();
-    }    
+    }
 
     public static CsmProject UIDtoProject(CsmUID<CsmProject> uid) {
         return uid == null ? null : uid.getObject();
@@ -110,8 +112,8 @@ public class UIDCsmConverter {
 
     public static <T extends CsmDeclaration> T UIDtoDeclaration(CsmUID<T> uid) {
         return uid == null ? null : uid.getObject();
-    } 
-    
+    }
+
     public static CsmScope UIDtoScope(CsmUID<CsmScope> uid) {
         return uid == null ? null : uid.getObject();
     }
@@ -119,75 +121,115 @@ public class UIDCsmConverter {
     public static CsmClass UIDtoClass(CsmUID<CsmClass> uid) {
         return uid == null ? null : uid.getObject();
     }
-    
-    public static <T extends CsmNamespace> Collection<T> UIDsToNamespaces(Collection<CsmUID<T>> uids) {
+
+    public static <T> Collection<T> UIDsToNamespaces(Collection<CsmUID<T>> uids) {
         Collection<T> out = UIDsToList(uids, false);
         return out;
     }
-    
+
     public static <T extends CsmDeclaration> Collection<T> UIDsToDeclarations(Collection<CsmUID<T>> uids) {
         Collection<T> out = UIDsToList(uids, false);
         return out;
     }
-    
-    public static <T extends CsmDeclaration> Collection<T> UIDsToDeclarationsUnsafe(Collection<CsmUID<T>> uids) {
+
+    public static <T extends CsmDeclaration> Iterator<T> UIDsToDeclarationsFiltered(Collection<CsmUID<T>> uids, CsmFilter filter) {
+        return new LazyCsmCollection<T, T>(new ArrayList<CsmUID<T>>(uids), true).iterator(filter);
+    }
+
+    public static <T> Collection<T> UIDsToDeclarationsUnsafe(Collection<CsmUID<T>> uids) {
         Collection<T> out = UIDsToList(uids, true);
         return out;
     }
-    
-    public static <T extends CsmMacro> Collection<T> UIDsToMacros(Collection<CsmUID<T>> uids) {
+
+    public static <T> Collection<T> UIDsToMacros(Collection<CsmUID<T>> uids) {
         Collection<T> out = UIDsToList(uids, false);
         return out;
     }
-    
-    public static <T extends CsmInclude> Collection<T> UIDsToIncludes(Collection<CsmUID<T>> uids) {
+
+    public static <T> Iterator<T> UIDsToMacros(Collection<CsmUID<T>> uids, CsmFilter filter) {
+        return new LazyCsmCollection<T, T>(new ArrayList<CsmUID<T>>(uids), true).iterator(filter);
+    }
+
+    public static <T> Collection<T> UIDsToIncludes(Collection<CsmUID<T>> uids) {
         Collection<T> out = UIDsToList(uids, false);
         return out;
     }
-    
-    private static <T extends CsmIdentifiable> Collection<T> UIDsToList(Collection<CsmUID<T>> uids, boolean allowNullsAndSkip) {
+
+    public static <T> Iterator<T> UIDsToIncludes(Collection<CsmUID<T>> uids, CsmFilter filter) {
+        return new LazyCsmCollection<T, T>(new ArrayList<CsmUID<T>>(uids), true).iterator(filter);
+    }
+
+    public static <T> Collection<T> UIDsToCsmObjects(Collection<CsmUID<T>> uids) {
+        Collection<T> out = UIDsToList(uids, false);
+        return out;
+    }
+
+    private static <T> Collection<T> UIDsToList(Collection<CsmUID<T>> uids, boolean allowNullsAndSkip) {
         allowNullsAndSkip |= TraceFlags.SAFE_UID_ACCESS;
-        return new LazyCsmCollection<T>(new ArrayList<CsmUID<T>>(uids), allowNullsAndSkip);
-//        List<T> out = new ArrayList<T>(uids.size());
-//        for (CsmUID<T> uid : uids) {
-//            assert uid != null;
-//            T decl = UIDCsmConverter.UIDtoIdentifiable(uid);
-//            if (!allowNullsAndSkip || decl != null) {
-//                assert decl != null : "no object for UID " + uid;
-//                out.add(decl);
-//            }
-//        }
-//        return out;
+        return new LazyCsmCollection<T, T>(new ArrayList<CsmUID<T>>(uids), allowNullsAndSkip);
     }
-    
-    public static <T extends CsmIdentifiable> T UIDtoIdentifiable(CsmUID<T> uid) {
+
+    public static <T> Iterator<T> UIDsToDeclarations(Collection<CsmUID<T>> nonSharedCollection, CsmFilter filter) {
+        return new LazyCsmCollection<T, T>(nonSharedCollection, true).iterator(filter);
+    }
+
+    public static <T> T UIDtoIdentifiable(CsmUID<T> uid) {
         return uid == null ? null : uid.getObject();
     }
-    
+
     ////////////////////////////////////////////////////////////////////////////
     // Object -> UID
-    
     public static CsmUID<CsmFile> fileToUID(CsmFile file) {
-        return file == null ? null : file.getUID();
+        return (file == null) ? null : UIDs.get(file);
     }
-    
+
     public static CsmUID<CsmNamespace> namespaceToUID(CsmNamespace ns) {
-        return ns == null ? null : ns.getUID();
-    }    
+        return ns == null ? null : UIDs.get(ns);
+    }
 
     public static CsmUID<CsmProject> projectToUID(CsmProject project) {
-        return project == null ? null : project.getUID();
-    }  
+        return project == null ? null : UIDs.get(project);
+    }
 
     public static <T extends CsmDeclaration> CsmUID<T> declarationToUID(T decl) {
-        return decl == null ? null : decl.getUID();
+        return decl == null ? null : UIDs.get(decl);
     }
 
     public static CsmUID<CsmScope> scopeToUID(CsmScope scope) {
-        return scope == null ? null : ((CsmIdentifiable)scope).getUID();
+        return scope == null ? null : UIDs.get(scope);
     }
-    
-    public static <T extends CsmIdentifiable> CsmUID<T> identifiableToUID(CsmIdentifiable<T> obj) {
-        return obj == null ? null : obj.getUID();
+
+    public static <T> CsmUID<T> identifiableToUID(CsmIdentifiable obj) {
+        if (obj == null) {
+            return null;
+        } else {
+            // we need to cast from ? to the exact type
+            @SuppressWarnings("unchecked") // checked
+            CsmUID<T> res = (CsmUID<T>) obj.getUID();
+            return res;
+        }
+    }
+
+    public static <T extends CsmObject> CsmUID<T> objectToUID(T obj) {
+        if (obj == null) {
+            return null;
+        } else {
+            return UIDs.get(obj);
+        }
+    }
+
+    public static <T extends CsmObject> Collection<CsmUID<T>> objectsToUIDs(Collection<T> objs) {
+        if (objs == null) {
+            return null;
+        }
+        if (objs.isEmpty()) {
+            return new ArrayList<CsmUID<T>>(0);
+        }
+        Collection<CsmUID<T>> out = new ArrayList<CsmUID<T>>(objs.size());
+        for (T csmObj : objs) {
+            CsmUID<T> uid = UIDs.get(csmObj);
+            out.add(uid);
+        }
+        return out;
     }
 }
