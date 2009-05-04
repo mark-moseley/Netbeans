@@ -94,34 +94,55 @@ final class InspectorFolderNode extends AbstractNode {
         return componentID;
     }
     
+    @Override
     public String getHtmlDisplayName() {
-        return folder.getHtmlDisplayName();
+        if (component == null)
+            return ""; //NOI18N
+        final String[] componentTypeName = new String[1];
+        getComponent().getDocument().getTransactionManager().readAccess(new Runnable() {
+
+            public void run() {
+                InfoPresenter presenter = getComponent().getPresenter(InfoPresenter.class);
+                componentTypeName[0] = presenter.getDisplayName (InfoPresenter.NameType.SECONDARY);
+            }
+        });
+        String name = getName();
+        if (getName() != null && getName().contains("<")) { //NOI18N
+            name = getName().replace("<", "&lt;").replace(">", "&gt;"); //NOI18N
+        }
+        return componentTypeName[0] != null ? name + " <font color=\"#808080\">[" + componentTypeName[0] + "]" : name; //NOI18N
+        
     }
     
+    @Override
     public Image getIcon(int type) {
         if (folder == null)
             throw new IllegalStateException("Not resolved Folder- Broken tree structure. Check InspectorPosisitonPresenters and InspectorFolderPresenters"); //NOI18N
         return folder.getIcon();
     }
     
+    @Override
     public Image getOpenedIcon(int type) {
         return folder.getIcon();
     }
     
+    @Override
     public Action[] getActions(boolean context) {
         if (folder.getActions() == null)
             return EMPTY_ACTION_ARRAY;
         return folder.getActions();
     }
     
+    @Override
     public boolean canRename() {
-        return folder.canRename();
+        return false;
     }
     
     public AcceptSuggestion createSuggestion(Transferable transferable) {
         return folder.createSuggestion(transferable);
     }
     
+    @Override
     public void setName(final String name) {
         if (name == null)
             throw new IllegalArgumentException("Argument name cant be null"); //NOI18N
@@ -142,10 +163,12 @@ final class InspectorFolderNode extends AbstractNode {
         this.folder = folderWrapper.getFolder();
         super.setDisplayName(folder.getDisplayName());
         this.componentID = folder.getComponentID();
-        if (folder.getName() == null)
+        
+        if (folder.getName() == null) {
             super.setName(folder.getDisplayName());
-        else
+        } else {
             super.setName(folder.getName());
+        }
         if (componentID != null) {
             document.getTransactionManager().readAccess(new Runnable() {
                 public void run() {
@@ -161,6 +184,7 @@ final class InspectorFolderNode extends AbstractNode {
         });
     }
     
+    @Override
     protected void createPasteTypes(Transferable t, java.util.List s) {
         super.createPasteTypes(t, s);
         if (!t.isDataFlavorSupported(INSPECTOR_NODE_DATA_FLAVOR)) 
@@ -171,6 +195,7 @@ final class InspectorFolderNode extends AbstractNode {
             s.add(paste);
     }
     
+    @Override
     public PasteType getDropType(final Transferable t, final int action, final int index) {
         final PasteType[] pasteType = new PasteType[1];
         if (!t.isDataFlavorSupported(INSPECTOR_NODE_DATA_FLAVOR))
@@ -199,10 +224,12 @@ final class InspectorFolderNode extends AbstractNode {
         return pasteType[0];
     }
     
+    @Override
     public Transferable drag() throws IOException {
         return transferable;
     }
     
+    @Override
     public boolean canCut() {
         return true;
     }
@@ -222,6 +249,7 @@ final class InspectorFolderNode extends AbstractNode {
         return transferable;
     }
     
+    @Override
     public boolean canDestroy() {
         return true;
     }
@@ -236,6 +264,7 @@ final class InspectorFolderNode extends AbstractNode {
         folder = null;
     }
     
+    @Override
     public Sheet createSheet() {
         if(component.get() == null)
             super.createSheet();
