@@ -39,13 +39,14 @@
 package org.netbeans.modules.php.editor.nav;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.InstantRenamer;
-import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.csl.api.InstantRenamer;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.php.editor.model.FieldElement;
 import org.netbeans.modules.php.editor.model.MethodScope;
 import org.netbeans.modules.php.editor.model.ModelElement;
@@ -60,41 +61,48 @@ import org.netbeans.modules.php.editor.model.VariableName;
  * @author Jan Lahoda, Radek Matous
  */
 public class InstantRenamerImpl implements InstantRenamer {
+    //TODO: instant rename isn't proper refactoring but cause it was released this way in 6.5
+    // and because rename refactoring won't be implemented, so I've reverted it into
+    //6.5 shape to supress the feeling there is a regression
+    private static final boolean IS_RENAME_REFACTORING_ENABLED = false;
     private List<Occurence> allOccurences = Collections.emptyList();
 
-    public boolean isRenameAllowed(CompilationInfo info, int caretOffset, String[] explanationRetValue) {
-        //TODO: put some comments into status line if false is returned
+    public boolean isRenameAllowed(ParserResult info, int caretOffset, String[] explanationRetValue) {
         allOccurences.clear();
         OccurencesSupport occurencesSupport = ModelFactory.getModel(info).getOccurencesSupport(caretOffset);
         Occurence caretOccurence = occurencesSupport.getOccurence();
         if (caretOccurence != null) {
-            ModelElement decl = caretOccurence.getDeclaration();
-            if (caretOccurence.getAllDeclarations().size() > 1) {
-                return false;
-            }
-            if (decl instanceof VariableName) {
-                VariableName varName = (VariableName) decl;
-                if (!varName.isGloballyVisible() && !varName.representsThis()) {
-                    return checkAll(caretOccurence);
+            if (IS_RENAME_REFACTORING_ENABLED) {
+                ModelElement decl = caretOccurence.getDeclaration();
+                if (caretOccurence.getAllDeclarations().size() > 1) {
+                    return false;
                 }
-            } else if (decl instanceof MethodScope) {
-                MethodScope meth = (MethodScope) decl;
-                PhpModifiers phpModifiers = meth.getPhpModifiers();
-                if (phpModifiers.isPrivate()) {
-                    return checkAll(caretOccurence);
+                if (decl instanceof VariableName) {
+                    VariableName varName = (VariableName) decl;
+                    if (!varName.isGloballyVisible() && !varName.representsThis()) {
+                        return checkAll(caretOccurence);
+                    }
+                } else if (decl instanceof MethodScope) {
+                    MethodScope meth = (MethodScope) decl;
+                    PhpModifiers phpModifiers = meth.getPhpModifiers();
+                    if (phpModifiers.isPrivate()) {
+                        return checkAll(caretOccurence);
+                    }
+                } else if (decl instanceof FieldElement) {
+                    FieldElement fld = (FieldElement) decl;
+                    PhpModifiers phpModifiers = fld.getPhpModifiers();
+                    if (phpModifiers.isPrivate()) {
+                        return checkAll(caretOccurence);
+                    }
                 }
-            } else if (decl instanceof FieldElement) {
-                FieldElement fld = (FieldElement) decl;
-                PhpModifiers phpModifiers = fld.getPhpModifiers();
-                if (phpModifiers.isPrivate()) {
-                    return checkAll(caretOccurence);
-                }
+            } else {
+                return checkAll(caretOccurence);
             }
         }
         return false;
     }
 
-    public Set<OffsetRange> getRenameRegions(CompilationInfo info, int caretOffset) {
+    public Set<OffsetRange> getRenameRegions(ParserResult info, int caretOffset) {
         Set<OffsetRange> retval = new HashSet<OffsetRange>();
         for (Occurence occurence : allOccurences) {
             retval.add(occurence.getOccurenceRange());
@@ -105,13 +113,17 @@ public class InstantRenamerImpl implements InstantRenamer {
 
     private boolean checkAll(Occurence caretOccurence) {
         List<Occurence> collected = new ArrayList<Occurence>();
-        List<Occurence> all = caretOccurence.getAllOccurences();
+        Collection<Occurence> all = caretOccurence.getAllOccurences();
         for (Occurence occurence : all) {
-            if (occurence.getAllDeclarations().size() == 1 ) {
-                collected.add(occurence);
+            if (IS_RENAME_REFACTORING_ENABLED) {
+                if (occurence.getAllDeclarations().size() == 1 ) {
+                    collected.add(occurence);
+                } else {
+                    allOccurences.clear();
+                    return false;
+                }
             } else {
-                allOccurences.clear();
-                return false;
+                collected.add(occurence);
             }
         }
         allOccurences = collected;
