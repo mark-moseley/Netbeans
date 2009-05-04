@@ -40,8 +40,6 @@
 
 package org.netbeans.modules.profiler.ui.stp;
 
-import org.netbeans.api.progress.ProgressHandle;
-import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.project.Project;
 import org.netbeans.lib.profiler.client.ClientUtils;
 import org.netbeans.lib.profiler.common.Profiler;
@@ -53,13 +51,10 @@ import org.netbeans.lib.profiler.ui.components.JExtendedComboBox;
 import org.netbeans.modules.profiler.ui.FilterSetsPanel;
 import org.netbeans.modules.profiler.ui.GlobalFiltersPanel;
 import org.netbeans.modules.profiler.ui.HyperlinkLabel;
-import org.netbeans.modules.profiler.ui.NBSwingWorker;
 import org.netbeans.modules.profiler.ui.ProfilerDialogs;
 import org.netbeans.modules.profiler.ui.QuickFilterPanel;
 import org.netbeans.modules.profiler.ui.panels.PreferredInstrFilterPanel;
-import org.netbeans.modules.profiler.ui.panels.ProgressDisplayer;
 import org.netbeans.modules.profiler.ui.panels.RootMethodsPanel;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.DialogDescriptor;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
@@ -71,7 +66,6 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.net.URL;
 import java.text.MessageFormat;
 import java.util.List;
 import javax.swing.ButtonGroup;
@@ -141,6 +135,7 @@ public class CPUSettingsBasicPanel extends DefaultSettingsPanel implements Actio
                                                                                    "StpManageFilterSetsTooltip"); // NOI18N
     private static final String STP_USEPPS_TOOLTIP = NbBundle.getMessage(CPUSettingsBasicPanel.class, "StpUsePpsTooltip"); // NOI18N
     private static final String STP_SHOWPPS_TOOLTIP = NbBundle.getMessage(CPUSettingsBasicPanel.class, "StpShowPpsTooltip"); // NOI18N
+    private static final String SHOW_FILTER_CAPTION = NbBundle.getMessage(CPUSettingsBasicPanel.class, "CPUSettingsBasicPanel_ShowFilterCaption"); // NOI18N
                                                                                                                              // -----
 
     // --- Instance variables declaration ----------------------------------------
@@ -766,8 +761,8 @@ public class CPUSettingsBasicPanel extends DefaultSettingsPanel implements Actio
             }
         };
 
-        final DialogDescriptor dd = new DialogDescriptor(preferredInstrFilterPanel,
-                                                         ((SimpleFilter) selectedInstrumentationFilter).getFilterName(), true,
+        final DialogDescriptor dd = new DialogDescriptor(preferredInstrFilterPanel, MessageFormat.format(SHOW_FILTER_CAPTION, new Object[] {
+                                                         ((SimpleFilter) selectedInstrumentationFilter).getFilterName() }), true,
                                                          new Object[] {
                                                              preferredInstrFilterPanel.OPEN_IN_QUICKFILTER_BUTTON,
                                                              preferredInstrFilterPanel.CLOSE_BUTTON
