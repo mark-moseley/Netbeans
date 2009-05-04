@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.subversion.config;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -49,15 +50,21 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
 import java.util.prefs.Preferences;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.ini4j.Config;
 import org.ini4j.Ini;
 import org.netbeans.modules.subversion.Subversion;
+import org.netbeans.modules.subversion.SvnModuleConfig;
+import org.netbeans.modules.subversion.ui.repository.RepositoryConnection;
 import org.netbeans.modules.subversion.util.FileUtils;
 import org.netbeans.modules.subversion.util.ProxySettings;
 import org.netbeans.modules.subversion.util.SvnUtils;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
 import org.openide.util.Utilities;
 import org.tigris.subversion.svnclientadapter.SVNUrl;
 
@@ -73,7 +80,7 @@ import org.tigris.subversion.svnclientadapter.SVNUrl;
  * 
  * @author Tomas Stupka
  */
-public class SvnConfigFiles {    
+public class SvnConfigFiles implements PreferenceChangeListener {
 
     /** the only SvnConfigFiles instance */
     private static SvnConfigFiles instance;
@@ -96,7 +103,9 @@ public class SvnConfigFiles {
     private static final String WINDOWS_GLOBAL_CONFIG_DIR = getGlobalAPPDATA() + "\\Subversion";                                // NOI18N
     private static final List<String> DEFAULT_GLOBAL_IGNORES = 
             parseGlobalIgnores("*.o *.lo *.la #*# .*.rej *.rej .*~ *~ .#* .DS_Store");                                          // NOI18N
-    
+
+    private boolean recentUrlsChanged = true; // force rewrite on first run in a session
+
     private interface IniFilePatcher {
         void patch(Ini file);
     }
@@ -122,10 +131,12 @@ public class SvnConfigFiles {
      * Creates a new instance
      */
     private SvnConfigFiles() {      
-        // copy config file        
+        Config.getGlobal().setEscape(false); // do not escape characters
+        // copy config file
         config = copyConfigFileToIDEConfigDir("config", new ConfigIniFilePatcher());    // NOI18N
         // get the system servers file 
-        svnServers = loadSystemIniFile("servers");        
+        svnServers = loadSystemIniFile("servers");
+        SvnModuleConfig.getDefault().getPreferences().addPreferenceChangeListener(this);
     }
     
     /**
@@ -142,89 +153,118 @@ public class SvnConfigFiles {
             instance = null;
         }
         
-        if(instance==null) {
+        if(instance == null) {
             instance = new SvnConfigFiles();                    
         }
         return instance;
     }
 
+    public void preferenceChange(PreferenceChangeEvent evt) {
+        if(evt.getKey().startsWith(SvnModuleConfig.KEY_RECENT_URL)) {
+            recentUrlsChanged = true;
+        }
+    }
+
     /**
-     * Stores the proxy host, port, username and password from the given  
-     * {@link org.netbeans.modules.subversion.config.ProxyDescriptor} in the 
+     * Stores the cert file and password, proxy host, port, username and password for the given
+     * {@link SVNUrl} in the
      * <b>servers</b> file used by the Subversion module.  
      *     
      * @param host the host
      */
-    public void setProxy(SVNUrl url) {
+    public void storeSvnServersSettings(SVNUrl url) {
                         
-        assert url != null : "can\'t do anything for a null host";               // NOI18N
+        assert url != null : "can\'t do anything for a null host";     // NOI18N
                          
         if(!(url.getProtocol().startsWith("http") ||
              url.getProtocol().startsWith("https")) ) 
         {            
-            // a proxy will be needed only for remote http and https repositories
+            // we need the settings only for remote http and https repositories
             return;
         }
-        
-        String host =  SvnUtils.ripUserFromHost(url.getHost());
+
+        boolean changes = false;
+        Ini nbServers = new Ini();   
+        Ini.Section nbGlobalSection = nbServers.add(GLOBAL_SECTION);
+
+        changes = recentUrlsChanged;
         ProxySettings ps = new ProxySettings();
         if(proxySettings != null && ps.equals(proxySettings)) {
-            return;
+            // do nothing
         } else {
             proxySettings = ps;
+            changes = true;
         }
-        
-        Ini nbServers = new Ini();
-        Ini.Section nbGlobalSection = nbServers.add(GLOBAL_SECTION);
+
+        if(changes) {
+            if(url.getProtocol().startsWith("https")) {
+                setSSLCert(url, nbGlobalSection);
+            }
+            setProxy(url, nbGlobalSection);
+            storeIni(nbServers, "servers");                    // NOI18N
+        }
+    }        
+
+    private boolean setSSLCert(SVNUrl url, Ini.Section nbGlobalSection) {
+        recentUrlsChanged = false;
+        RepositoryConnection rc = SvnModuleConfig.getDefault().getRepositoryConnection(url.toString());
+        if(rc == null) {
+            return true;
+        }
+        String certFile = rc.getCertFile();
+        if(certFile == null || certFile.equals("")) {
+            return true;
+        }
+        String certPassword = rc.getCertPassword();
+        if(certPassword == null || certPassword.equals("")) {
+            return true;
+        }
+        nbGlobalSection.put("ssl-client-cert-file", certFile);
+        nbGlobalSection.put("ssl-client-cert-password", certPassword);
+        return true;
+    }
+
+    private boolean setProxy(SVNUrl url, Ini.Section nbGlobalSection) {
+        String host =  SvnUtils.ripUserFromHost(url.getHost());        
         Ini.Section svnGlobalSection = svnServers.get(GLOBAL_SECTION);
-        if(proxySettings.isDirect()) {
-            mergeNonProxyKeys(host, svnGlobalSection, nbGlobalSection);
-        } else {                        
+        if(!proxySettings.isDirect()) {
             String proxyHost = "";
-            int proxyPort = -1;                       
+            int proxyPort = -1;
             if(url.getProtocol().startsWith("https")) {
                 proxyHost = proxySettings.getHttpsHost();
                 proxyPort = proxySettings.getHttpsPort();
-            }            
+            }
             if(proxyHost.equals("")) {
                 proxyHost = proxySettings.getHttpHost();
-                proxyPort = proxySettings.getHttpPort();                
+                proxyPort = proxySettings.getHttpPort();
             }
             String exceptions = proxySettings.getNotProxyHosts();
-             
+
             if(proxyHost != null && !proxyHost.equals("")) {
                 nbGlobalSection.put("http-proxy-host", proxyHost);                     // NOI18N
-                nbGlobalSection.put("http-proxy-port", Integer.toString(proxyPort));   // NOI18N            
+                nbGlobalSection.put("http-proxy-port", Integer.toString(proxyPort));   // NOI18N
                 if(!exceptions.equals("")) {
                     nbGlobalSection.put("http-proxy-exceptions", exceptions);   // NOI18N
-                }            
+                }
 
                 // and the authentication
-                Preferences prefs = org.openide.util.NbPreferences.root ().node ("org/netbeans/core");  // NOI18N    
-                boolean useAuth = prefs.getBoolean ("useProxyAuthentication", false);                   // NOI18N    
+                Preferences prefs = org.openide.util.NbPreferences.root ().node ("org/netbeans/core");  // NOI18N
+                boolean useAuth = prefs.getBoolean ("useProxyAuthentication", false);                   // NOI18N
                 if(useAuth) {
                     String username = prefs.get ("proxyAuthenticationUsername", "");                    // NOI18N
-                    String password = prefs.get ("proxyAuthenticationPassword", "");                    // NOI18N    
+                    String password = prefs.get ("proxyAuthenticationPassword", "");                    // NOI18N
 
                     nbGlobalSection.put("http-proxy-username", username);                               // NOI18N
-                    nbGlobalSection.put("http-proxy-password", password);                               // NOI18N            
-                }            
-            
-                // we have a proxy for the host, so check 
-                // if in there are also some no proxy settings 
-                // we should get from the original svn servers file     
-                mergeNonProxyKeys(host, svnGlobalSection, nbGlobalSection);                
-            } else {
-                // no proxy host means no proxy at all                                                
-                if(svnGlobalSection != null) {
-                    // if there is a global section than get the no proxy settings                                                                 
-                    mergeNonProxyKeys(svnGlobalSection, nbGlobalSection);                
+                    nbGlobalSection.put("http-proxy-password", password);                               // NOI18N
                 }
             }
-        }        
-        storeIni(nbServers, "servers");                                                       // NOI18N    
-    }        
-    
+        }
+        // check if there are also some no proxy settings
+        // we should get from the original svn servers file
+        mergeNonProxyKeys(host, svnGlobalSection, nbGlobalSection);
+        return true;
+    }
+
     private void mergeNonProxyKeys(String host, Ini.Section svnGlobalSection, Ini.Section nbGlobalSection) {                             
         if(svnGlobalSection != null) {
             // if there is a global section, than get the no proxy settings                                                                 
@@ -266,12 +306,21 @@ public class SvnConfigFiles {
     }
     
     private void storeIni(Ini ini, String iniFile) {
+        BufferedOutputStream bos = null;
         try {
             File file = FileUtil.normalizeFile(new File(getNBConfigPath() + "/" + iniFile));   // NOI18N
             file.getParentFile().mkdirs();
-            ini.store(FileUtils.createOutputStream(file));
+            ini.store(bos = FileUtils.createOutputStream(file));
         } catch (IOException ex) {
             Subversion.LOG.log(Level.INFO, null, ex);            
+        } finally {
+            if (bos != null) {
+                try {
+                    bos.close();
+                } catch (IOException ex) {
+                    Subversion.LOG.log(Level.INFO, null, ex);
+                }
+            }
         }
     }    
 
@@ -383,7 +432,6 @@ public class SvnConfigFiles {
                 String key = it.next();
                 String value = groups.get(key);
                 if(value != null) {     
-                    // XXX the same pattern everywhere when calling match()
                     value = value.trim();                    
                     if(value != null && match(value, host)) {
                         return svnServers.get(key);
@@ -444,11 +492,20 @@ public class SvnConfigFiles {
         patcher.patch(systemIniFile);
 
         File file = FileUtil.normalizeFile(new File(getNBConfigPath() + "/" + fileName)); // NOI18N
+        BufferedOutputStream bos = null;
         try {
             file.getParentFile().mkdirs();
-            systemIniFile.store(FileUtils.createOutputStream(file));
+            systemIniFile.store(bos = FileUtils.createOutputStream(file));
         } catch (IOException ex) {
             Subversion.LOG.log(Level.INFO, null, ex)     ; // should not happen
+        } finally {
+            if (bos != null) {
+                try {
+                    bos.close();
+                } catch (IOException ex) {
+                    Subversion.LOG.log(Level.INFO, null, ex);
+                }
+            }
         }
         return systemIniFile;
     }
@@ -476,6 +533,8 @@ public class SvnConfigFiles {
             // ignore
         } catch (IOException ex) {
             Subversion.LOG.log(Level.INFO, null, ex)     ;
+        } catch (Exception ex) {
+            Subversion.LOG.log(Level.INFO, "exception in Ini4j, system file not loaded: " + filePath, ex);
         }
 
         if(system == null) {
@@ -490,6 +549,8 @@ public class SvnConfigFiles {
             // just doesn't exist - ignore
         } catch (IOException ex) {
             Subversion.LOG.log(Level.INFO, null, ex)     ;
+        } catch (Exception ex) {
+            Subversion.LOG.log(Level.INFO, "exception in Ini4j, global file not loaded: " + getGlobalConfigPath() + "/" + fileName, ex);
         }
          
         if(global != null) {
@@ -575,23 +636,40 @@ public class SvnConfigFiles {
             String appdataPath = WINDOWS_USER_APPDATA;
             if(appdataPath == null || appdataPath.equals("")) {                                     // NOI18N
                 return "";                                                                          // NOI18N
-            }
-            String appdata = "";                                                                    // NOI18N
-            int idx = appdataPath.lastIndexOf("\\");                                                // NOI18N
-            if(idx > -1) {
-                appdata = appdataPath.substring(idx + 1);
-                if(appdata.trim().equals("")) {                                                     // NOI18N
-                    int previdx = appdataPath.lastIndexOf("\\", idx);                               // NOI18N
-                    if(idx > -1) {
-                        appdata = appdataPath.substring(previdx + 1, idx);
-                    }
-                }
-            } else {
-                return "";                                                                          // NOI18N
-            }
-            return globalProfile + "/" + appdata;                                                   // NOI18N
+            }                                                                                       // NOI18N
+            return getWinUserAppdata(appdataPath, globalProfile);                                          // NOI18N
         }
         return "";                                                                                  // NOI18N
     }
-        
+
+    private static String getWinUserAppdata(String appdataPath, String globalProfile) {
+        appdataPath = trimBackslash(appdataPath);
+        globalProfile = trimBackslash(globalProfile);
+        String appdata = "";                                                                        // NOI18N
+        int idx = appdataPath.lastIndexOf("\\");                                                    // NOI18N
+        if (idx > -1) {
+            appdata = appdataPath.substring(idx + 1);
+            if (appdata.trim().equals("")) {                                                        // NOI18N
+                int previdx = appdataPath.lastIndexOf("\\", idx);                                   // NOI18N
+                if (idx > -1) {
+                    appdata = appdataPath.substring(previdx + 1, idx);
+                }
+            }
+        } else {
+            return "";                                                                              // NOI18N
+        }
+        if(globalProfile.endsWith("\\")) {                                                          // NOI18N
+            globalProfile = globalProfile.substring(0, globalProfile.length() - 1);
+        }
+        return globalProfile + "/" + appdata;                                                       // NOI18N
+    }
+
+    private static String trimBackslash(String appdataPath) {
+        if (appdataPath.endsWith("\\")) {
+            // NOI18N
+            appdataPath = appdataPath.substring(0, appdataPath.length() - 1);
+        }
+        return appdataPath;
+    }
+    
 }
