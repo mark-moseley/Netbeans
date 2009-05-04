@@ -57,6 +57,13 @@ made subject to such option by the copyright holder.
                                                   /p:project/p:configuration/nbmproject3:data/nbmproject3:code-name-base"/>
         <project name="{$codenamebase}-impl">
             <xsl:attribute name="basedir">..</xsl:attribute>
+            <fail message="Please build using Ant 1.7.1 or higher.">
+                <condition>
+                    <not>
+                        <antversion atleast="1.7.1"/>
+                    </not>
+                </condition>
+            </fail>
             <xsl:choose>
                 <xsl:when test="/p:project/p:configuration/nbmproject2:data/nbmproject2:suite-component |
                                 /p:project/p:configuration/nbmproject3:data/nbmproject3:suite-component">
@@ -84,13 +91,21 @@ made subject to such option by the copyright holder.
                     <property name="@{{name}}" value="${{@{{value}}}}"/>
                 </sequential>
             </macrodef>
+            <macrodef name="evalprops" uri="http://www.netbeans.org/ns/nb-module-project/2">
+                <attribute name="property"/>
+                <attribute name="value"/>
+                <sequential>
+                    <property name="@{{property}}" value="@{{value}}"/>
+                </sequential>
+            </macrodef>
             <property file="${{user.properties.file}}"/>
             <nbmproject2:property name="harness.dir" value="nbplatform.${{nbplatform.active}}.harness.dir"/>
-            <nbmproject2:property name="netbeans.dest.dir" value="nbplatform.${{nbplatform.active}}.netbeans.dest.dir"/>
-            <fail message="You must define 'nbplatform.${{nbplatform.active}}.harness.dir'">
+            <nbmproject2:property name="nbplatform.active.dir" value="nbplatform.${{nbplatform.active}}.netbeans.dest.dir"/>
+            <nbmproject2:evalprops property="cluster.path.evaluated" value="${{cluster.path}}"/>
+            <fail message="Path to 'platform' cluster missing in $${{cluster.path}} property or using corrupt Netbeans Platform (missing harness).">
                 <condition>
                     <not>
-                        <available file="${{harness.dir}}" type="dir"/>
+                        <contains string="${{cluster.path.evaluated}}" substring="platform"/>
                     </not>
                 </condition>
             </fail>
