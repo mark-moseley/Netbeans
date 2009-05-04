@@ -48,6 +48,7 @@ import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.modelimpl.csm.core.OffsetableIdentifiableBase;
 import org.netbeans.modules.cnd.modelimpl.csm.core.ProjectImpl;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 import org.netbeans.modules.cnd.modelimpl.textcache.FileNameCache;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
@@ -70,7 +71,7 @@ public class IncludeImpl extends OffsetableIdentifiableBase<CsmInclude> implemen
         this.name = FileNameCache.getManager().getString(name);
         this.system = system;
         this.includeFileUID = UIDCsmConverter.fileToUID(includeFile);
-        assert (includeFileUID != null || includeFile == null);
+        assert (includeFileUID != null || includeFile == null) : "got " + includeFileUID + " for " + includeFile;
     }
     
     public CsmFile getIncludeFile() {
@@ -156,7 +157,8 @@ public class IncludeImpl extends OffsetableIdentifiableBase<CsmInclude> implemen
         return file;
     }
 
-    protected CsmUID createUID() {
+    @Override
+    protected CsmUID<CsmInclude> createUID() {
         return UIDUtilities.createIncludeUID(this);
     }
     
@@ -164,14 +166,14 @@ public class IncludeImpl extends OffsetableIdentifiableBase<CsmInclude> implemen
     public void write(DataOutput output) throws IOException {
         super.write(output);
         assert this.name != null;
-        output.writeUTF(this.name.toString());
+        PersistentUtils.writeUTF(name, output);
         output.writeBoolean(this.system);
         UIDObjectFactory.getDefaultFactory().writeUID(this.includeFileUID, output);
     }
 
     public IncludeImpl(DataInput input) throws IOException {
         super(input);
-        this.name = FileNameCache.getManager().getString(input.readUTF());
+        this.name = PersistentUtils.readUTF(input, FileNameCache.getManager());
         assert this.name != null;
         this.system = input.readBoolean();
         this.includeFileUID = UIDObjectFactory.getDefaultFactory().readUID(input);
