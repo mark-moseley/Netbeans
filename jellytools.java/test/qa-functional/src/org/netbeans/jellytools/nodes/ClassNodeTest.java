@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,39 +43,38 @@ package org.netbeans.jellytools.nodes;
 import java.io.IOException;
 import junit.framework.Test;
 import junit.textui.TestRunner;
-import org.netbeans.jellytools.FindInFilesOperator;
-import org.netbeans.jellytools.JavaProjectsTabOperator;
+import org.netbeans.jellytools.FilesTabOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.MainWindowOperator;
-import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.actions.CompileJavaAction;
+import org.netbeans.jemmy.operators.Operator;
+import org.netbeans.jellytools.testutils.NodeUtils;
 
-/** Test of org.netbeans.jellytools.nodes.ProjectRootNodeTest
+/** Test of org.netbeans.jellytools.nodes.ClassNode
  *
+ * @author <a href="mailto:adam.sotona@sun.com">Adam Sotona</a>
+ * @author Jiri.Skrivanek@sun.com
  */
-public class ProjectRootNodeTest extends JellyTestCase {
-
+public class ClassNodeTest extends JellyTestCase {
+    
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
      */
-    public ProjectRootNodeTest(String testName) {
+    public ClassNodeTest(String testName) {
         super(testName);
     }
     
-    /** method used for explicit testsuite definition */
+    /** method used for explicit testsuite definition
+     */
     public static Test suite() {
         /*
         TestSuite suite = new NbTestSuite();
-        suite.addTest(new ProjectRootNodeTest("testVerifyPopup"));
-        suite.addTest(new ProjectRootNodeTest("testFind"));
-        suite.addTest(new ProjectRootNodeTest("testBuildProject"));
-        suite.addTest(new ProjectRootNodeTest("testCleanProject"));
-        suite.addTest(new ProjectRootNodeTest("testProperties"));
+        suite.addTest(new ClassNodeTest("testVerifyPopup"));
+        suite.addTest(new ClassNodeTest("testProperties"));
         return suite;
-         */
-        return createModuleTest(ProjectRootNodeTest.class, 
-                "testVerifyPopup", "testFind",
-                "testBuildProject", "testCleanProject",
-                "testProperties");
+        */
+        return createModuleTest(ClassNodeTest.class, 
+                "testVerifyPopup", "testProperties");
     }
     
     /** Use for internal test execution inside IDE
@@ -85,56 +84,40 @@ public class ProjectRootNodeTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
-    private static JavaProjectRootNode projectRootNode;
-    
-    /** Find node. */
+    /** ClassNode instance used in all test cases. */
+    protected static ClassNode classNode = null;
+
+    /** Finds data node before each test case. */
     protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
         openDataProjects("SampleProject");
-        if(projectRootNode == null) {
-            projectRootNode = JavaProjectsTabOperator.invoke().getJavaProjectRootNode("SampleProject"); // NOI18N
+        // find class node
+        if(classNode == null) { // NOI18N
+            Node sampleClass1Node = new Node(new SourcePackagesNode("SampleProject"), "sample1|SampleClass1.java"); // NOI18N
+            MainWindowOperator.StatusTextTracer statusTextTracer = MainWindowOperator.getDefault().getStatusTextTracer();
+            statusTextTracer.start();
+            new CompileJavaAction().perform(sampleClass1Node);
+            // wait status text "Building SampleProject (compile-single)"
+            statusTextTracer.waitText("compile-single", true); // NOI18N
+            // wait status text "Finished building SampleProject (compile-single).
+            statusTextTracer.waitText("compile-single", true); // NOI18N
+            statusTextTracer.stop();
+            // create exactly (full match) and case sensitively comparing comparator to distinguish build and build.xml node
+            Operator.DefaultStringComparator comparator = new Operator.DefaultStringComparator(true, true);
+            Node filesProjectNode = new FilesTabOperator().getProjectNode("SampleProject");
+            filesProjectNode.setComparator(comparator);
+            classNode = new ClassNode(filesProjectNode, "build|classes|sample1|SampleClass1.class"); // NOI18N
         }
     }
     
     /** Test verifyPopup */
     public void testVerifyPopup() {
-        projectRootNode.verifyPopup();
-    }
-    
-    /** Test find */
-    public void testFind() {
-        projectRootNode.find();
-        new FindInFilesOperator().close();
-    }
-    
-    /** Test buildProject */
-    public void testBuildProject() {
-        MainWindowOperator.StatusTextTracer statusTextTracer = MainWindowOperator.getDefault().getStatusTextTracer();
-        statusTextTracer.start();
-        projectRootNode.buildProject();
-        // wait status text "Building SampleProject (jar)"
-        statusTextTracer.waitText("jar", true); // NOI18N
-        // wait status text "Finished building SampleProject (jar).
-        statusTextTracer.waitText("jar", true); // NOI18N
-        statusTextTracer.stop();
-    }
-    
-    /** Test cleanProject*/
-    public void testCleanProject() {
-        MainWindowOperator.StatusTextTracer statusTextTracer = MainWindowOperator.getDefault().getStatusTextTracer();
-        statusTextTracer.start();
-        projectRootNode.cleanProject();
-        // wait status text "Building SampleProject (clean)"
-        statusTextTracer.waitText("clean", true); // NOI18N
-        // wait status text "Finished building SampleProject (clean).
-        statusTextTracer.waitText("clean", true); // NOI18N
-        statusTextTracer.stop();
+        classNode.verifyPopup();
     }
     
     /** Test properties */
     public void testProperties() {
-        projectRootNode.properties();
-        new NbDialogOperator("SampleProject").close(); //NOI18N
+        classNode.properties();
+        NodeUtils.closeProperties("SampleClass1.class");
     }
-    
 }

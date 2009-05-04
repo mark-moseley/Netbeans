@@ -40,27 +40,31 @@
  */
 package org.netbeans.jellytools.actions;
 
+import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.NewFileNameLocationStepOperator;
+import org.netbeans.jellytools.NewJavaFileNameLocationStepOperator;
 import org.netbeans.jellytools.NewFileWizardOperator;
-import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
+import org.netbeans.jellytools.NewJavaProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.ide.ProjectSupport;
 
 /** Test org.netbeans.jellytools.actions.ExploreFromHereAction
  *
  * @author Jiri.Skrivanek@sun.com
  */
 public class ExploreFromHereActionTest extends JellyTestCase {
+
+    public static final String[] tests = new String[] {
+        "testInit"
+    };
     
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
@@ -71,6 +75,7 @@ public class ExploreFromHereActionTest extends JellyTestCase {
     
     /** method used for explicit testsuite definition */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new ExploreFromHereActionTest("testInit"));
         // Explore from here is used on web services node but to create such
@@ -78,6 +83,8 @@ public class ExploreFromHereActionTest extends JellyTestCase {
         //suite.addTest(new ExploreFromHereActionTest("testPerformPopup"));
         //suite.addTest(new ExploreFromHereActionTest("testPerformAPI"));
         return suite;
+         */
+        return createModuleTest(ExploreFromHereActionTest.class, tests);
     }
     
     /** Use for internal test execution inside IDE
@@ -98,9 +105,16 @@ public class ExploreFromHereActionTest extends JellyTestCase {
     public void testInit() {
         new ExploreFromHereAction();
     }
+
+    @Override
+    protected void setUp() throws IOException {
+        openDataProjects("SampleProject");
+    }
+    
+    
     
     /** Test performPopup */
-    public void testPerformPopup() {
+    public void testPerformPopup() throws Exception {
         // create new web application project
         
         NewProjectWizardOperator npwo = NewProjectWizardOperator.invoke();
@@ -111,7 +125,7 @@ public class ExploreFromHereActionTest extends JellyTestCase {
         String webApplicationLabel = org.netbeans.jellytools.Bundle.getString("org.netbeans.modules.web.project.ui.wizards.Bundle", "Templates/Project/Web/emptyWeb.xml");
         npwo.selectProject(webApplicationLabel);
         npwo.next();
-        NewProjectNameLocationStepOperator npnlso = new NewProjectNameLocationStepOperator();
+        NewJavaProjectNameLocationStepOperator npnlso = new NewJavaProjectNameLocationStepOperator();
         npnlso.txtProjectName().setText(SAMPLE_WEB_PROJECT_NAME);
         npnlso.txtProjectLocation().setText(System.getProperty("netbeans.user")); // NOI18N
         npnlso.finish();
@@ -120,18 +134,23 @@ public class ExploreFromHereActionTest extends JellyTestCase {
         // wait index.jsp is opened in editor
         EditorOperator editor = new EditorOperator("index.jsp"); // NOI18N
         // wait classpath scanning finished
-        ProjectSupport.waitScanFinished();
+        try {
+            Class.forName("org.netbeans.api.java.source.SourceUtils", true, Thread.currentThread().getContextClassLoader()).
+                    getMethod("waitScanFinished").invoke(null);
+        } catch (ClassNotFoundException x) {
+            System.err.println("Warning: org.netbeans.api.java.source.SourceUtils could not be found, will not wait for scan to finish");
+        }
         
         // create a web service
 
         // "Web Services"
         String webServicesLabel = Bundle.getString(
-                "org.netbeans.modules.websvc.dev.wizard.Bundle", "Templates/WebServices");
+                "org.netbeans.modules.websvc.core.client.wizard.Bundle", "Templates/WebServices");
         // "Web Service"
         String webServiceLabel = org.netbeans.jellytools.Bundle.getString(
-                "org.netbeans.modules.websvc.dev.wizard.Bundle", "Templates/WebServices/WebService");
+                "org.netbeans.modules.websvc.core.dev.wizard.Bundle", "Templates/WebServices/WebService.java");
         NewFileWizardOperator.invoke(projectRootNode, webServicesLabel, webServiceLabel);
-        NewFileNameLocationStepOperator nameStepOper = new NewFileNameLocationStepOperator();
+        NewJavaFileNameLocationStepOperator nameStepOper = new NewJavaFileNameLocationStepOperator();
         nameStepOper.setPackage("dummy"); // NOI18N
         nameStepOper.setObjectName(SAMPLE_WEB_SERVICE_NAME);
         nameStepOper.finish();
@@ -140,7 +159,7 @@ public class ExploreFromHereActionTest extends JellyTestCase {
 
         // "Web Services"
         String webServicesNodeLabel = Bundle.getString(
-                "org.netbeans.modules.websvc.core.webservices.ui.Bundle", "LBL_WebServices");
+                "org.netbeans.modules.websvc.core.Bundle", "LBL_WebServices");
         Node wsNode = new Node(projectRootNode, webServicesNodeLabel+"|"+SAMPLE_WEB_SERVICE_NAME);
         new ExploreFromHereAction().performPopup(wsNode);
         new TopComponentOperator(SAMPLE_WEB_SERVICE_NAME).close();  // NOI18N
@@ -150,7 +169,7 @@ public class ExploreFromHereActionTest extends JellyTestCase {
     public void testPerformAPI() {
         // "Web Services"
         String webServicesNodeLabel = Bundle.getString(
-                "org.netbeans.modules.websvc.core.webservices.ui.Bundle", "LBL_WebServices");
+                "org.netbeans.modules.websvc.core.Bundle", "LBL_WebServices");
         Node projectRootNode = new ProjectsTabOperator().getProjectRootNode(SAMPLE_WEB_PROJECT_NAME);
         Node wsNode = new Node(projectRootNode, webServicesNodeLabel+"|"+SAMPLE_WEB_SERVICE_NAME);
         new ExploreFromHereAction().performAPI(wsNode);

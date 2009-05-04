@@ -38,46 +38,43 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.jellytools.nodes;
+
+package org.netbeans.jellytools.actions;
 
 import java.io.IOException;
 import junit.framework.Test;
 import junit.textui.TestRunner;
-import org.netbeans.jellytools.FindInFilesOperator;
-import org.netbeans.jellytools.JavaProjectsTabOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.MainWindowOperator;
-import org.netbeans.jellytools.NbDialogOperator;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.nodes.SourcePackagesNode;
 
-/** Test of org.netbeans.jellytools.nodes.ProjectRootNodeTest
+/** Test org.netbeans.jellytools.actions.CleanProjectAction
  *
+ * @author Jiri.Skrivanek@sun.com
  */
-public class ProjectRootNodeTest extends JellyTestCase {
+public class CompileJavaActionTest extends JellyTestCase {
 
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
      */
-    public ProjectRootNodeTest(String testName) {
+    public CompileJavaActionTest(String testName) {
         super(testName);
     }
     
-    /** method used for explicit testsuite definition */
+    /** method used for explicit testsuite definition
+     */
     public static Test suite() {
         /*
         TestSuite suite = new NbTestSuite();
-        suite.addTest(new ProjectRootNodeTest("testVerifyPopup"));
-        suite.addTest(new ProjectRootNodeTest("testFind"));
-        suite.addTest(new ProjectRootNodeTest("testBuildProject"));
-        suite.addTest(new ProjectRootNodeTest("testCleanProject"));
-        suite.addTest(new ProjectRootNodeTest("testProperties"));
+        suite.addTest(new CompileActionTest("testPerformPopup"));
+        suite.addTest(new CompileActionTest("testPerformMenu"));
+        suite.addTest(new CompileActionTest("testPerformShortcut"));
         return suite;
          */
-        return createModuleTest(ProjectRootNodeTest.class, 
-                "testVerifyPopup", "testFind",
-                "testBuildProject", "testCleanProject",
-                "testProperties");
+        return createModuleTest(CompileJavaActionTest.class, "testPerformPopup", "testPerformMenu", "testPerformShortcut");
     }
-    
+
     /** Use for internal test execution inside IDE
      * @param args command line arguments
      */
@@ -85,56 +82,41 @@ public class ProjectRootNodeTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
-    private static JavaProjectRootNode projectRootNode;
+    private static Node node;
+    private static MainWindowOperator.StatusTextTracer statusTextTracer;
     
-    /** Find node. */
-    protected void setUp() throws IOException {
-        System.out.println("### "+getName()+" ###");
+    public void setUp() throws IOException {
         openDataProjects("SampleProject");
-        if(projectRootNode == null) {
-            projectRootNode = JavaProjectsTabOperator.invoke().getJavaProjectRootNode("SampleProject"); // NOI18N
+        if(node ==null) {
+            node = new Node(new SourcePackagesNode("SampleProject"), "sample1|SampleClass1.java");
         }
-    }
-    
-    /** Test verifyPopup */
-    public void testVerifyPopup() {
-        projectRootNode.verifyPopup();
-    }
-    
-    /** Test find */
-    public void testFind() {
-        projectRootNode.find();
-        new FindInFilesOperator().close();
-    }
-    
-    /** Test buildProject */
-    public void testBuildProject() {
-        MainWindowOperator.StatusTextTracer statusTextTracer = MainWindowOperator.getDefault().getStatusTextTracer();
+        if(statusTextTracer == null) {
+            statusTextTracer = MainWindowOperator.getDefault().getStatusTextTracer();
+        }
         statusTextTracer.start();
-        projectRootNode.buildProject();
-        // wait status text "Building SampleProject (jar)"
-        statusTextTracer.waitText("jar", true); // NOI18N
-        // wait status text "Finished building SampleProject (jar).
-        statusTextTracer.waitText("jar", true); // NOI18N
+    }
+
+    public void tearDown() {
+        // wait status text "Building SampleProject (compile-single)"
+        statusTextTracer.waitText("compile-single", true); // NOI18N
+        // wait status text "Finished building SampleProject (compile-single).
+        statusTextTracer.waitText("compile-single", true); // NOI18N
         statusTextTracer.stop();
     }
     
-    /** Test cleanProject*/
-    public void testCleanProject() {
-        MainWindowOperator.StatusTextTracer statusTextTracer = MainWindowOperator.getDefault().getStatusTextTracer();
-        statusTextTracer.start();
-        projectRootNode.cleanProject();
-        // wait status text "Building SampleProject (clean)"
-        statusTextTracer.waitText("clean", true); // NOI18N
-        // wait status text "Finished building SampleProject (clean).
-        statusTextTracer.waitText("clean", true); // NOI18N
-        statusTextTracer.stop();
+    /** Test performPopup method. */
+    public void testPerformPopup() {
+        new CompileJavaAction().performPopup(node);
     }
     
-    /** Test properties */
-    public void testProperties() {
-        projectRootNode.properties();
-        new NbDialogOperator("SampleProject").close(); //NOI18N
+    /** Test performMenu method. */
+    public void testPerformMenu() {
+        new CompileJavaAction().performMenu(node);
+    }
+    
+    /** Test performShortcut method. */
+    public void testPerformShortcut() {
+        new CompileJavaAction().performShortcut(node);
     }
     
 }

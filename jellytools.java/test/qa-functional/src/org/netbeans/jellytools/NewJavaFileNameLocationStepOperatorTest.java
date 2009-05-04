@@ -40,18 +40,17 @@
  */
 package org.netbeans.jellytools;
 
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-import org.netbeans.junit.NbTestSuite;
 
 /**
  * Test of org.netbeans.jellytools.NewFileNameLocationStepOperator.
  * @author tb115823
  */
-public class NewFileNameLocationStepOperatorTest extends JellyTestCase {
+public class NewJavaFileNameLocationStepOperatorTest extends JellyTestCase {
 
-    public static NewFileNameLocationStepOperator op;
+    public static NewJavaFileNameLocationStepOperator op;
 
     /** Use for internal test execution inside IDE
      * @param args command line arguments
@@ -60,24 +59,31 @@ public class NewFileNameLocationStepOperatorTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
+    public static String[] tests = new String[] {
+        "testInvoke", "testComponents"};
+    
     /** Method used for explicit testsuite definition
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new NewFileNameLocationStepOperatorTest("testInvoke"));
         suite.addTest(new NewFileNameLocationStepOperatorTest("testComponents"));
         return suite;
+         */
+        return createModuleTest(NewJavaFileNameLocationStepOperatorTest.class, tests);
     }
     
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
     }
     
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
-    public NewFileNameLocationStepOperatorTest(String testName) {
+    public NewJavaFileNameLocationStepOperatorTest(String testName) {
         super(testName);
     }
     
@@ -92,7 +98,7 @@ public class NewFileNameLocationStepOperatorTest extends JellyTestCase {
         wop.selectCategory(javaClassesLabel);
         wop.selectFileType(javaClassLabel);
         wop.next();
-        op = new NewFileNameLocationStepOperator();
+        op = new NewJavaFileNameLocationStepOperator();
     }
     
     public void testComponents() {

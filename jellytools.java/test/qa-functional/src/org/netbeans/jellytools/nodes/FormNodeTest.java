@@ -41,8 +41,8 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.FilesTabOperator;
@@ -51,7 +51,7 @@ import org.netbeans.jellytools.MainWindowOperator;
 import org.netbeans.jellytools.SaveAsTemplateOperator;
 import org.netbeans.jellytools.actions.SaveAllAction;
 import org.netbeans.jellytools.modules.form.FormDesignerOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.testutils.NodeUtils;
 
 /** Test of org.netbeans.jellytools.nodes.FormNode
  */
@@ -67,6 +67,7 @@ public class FormNodeTest extends JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new FormNodeTest("testVerifyPopup"));
         suite.addTest(new FormNodeTest("testOpen"));
@@ -78,6 +79,17 @@ public class FormNodeTest extends JellyTestCase {
         suite.addTest(new FormNodeTest("testSaveAsTemplate"));
         suite.addTest(new FormNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(FormNodeTest.class, 
+        "testVerifyPopup",
+        "testOpen",
+        "testEdit",
+        "testCompile",
+        "testCut",
+        "testCopy",
+        "testDelete",
+        "testSaveAsTemplate",
+        "testProperties");
     }
     
     /** Use for internal test execution inside IDE
@@ -90,8 +102,9 @@ public class FormNodeTest extends JellyTestCase {
     private static FormNode formNode;
     
     /** Find node. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         if(formNode == null) {
             formNode = new FormNode(new FilesTabOperator().getProjectNode("SampleProject"),
                                     "src|sample1|JFrameSample.java"); // NOI18N
@@ -134,20 +147,20 @@ public class FormNodeTest extends JellyTestCase {
     public void testCut() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         formNode.cut();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test copy  */
     public void testCopy() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         formNode.copy();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
 
     /** Test delete */
     public void testDelete() {
         formNode.delete();
-        Utils.closeSafeDeleteDialog();
+        NodeUtils.closeSafeDeleteDialog();
     }
     
     /** Test saveAsTemplate. */
@@ -159,6 +172,6 @@ public class FormNodeTest extends JellyTestCase {
     /** Test properties */
     public void testProperties() {
         formNode.properties();
-        Utils.closeProperties("JFrameSample");  // NOI18N
+        NodeUtils.closeProperties("JFrameSample");  // NOI18N
     }
 }

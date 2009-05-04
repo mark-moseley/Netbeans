@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,19 +41,18 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.FilesTabOperator;
 import org.netbeans.jellytools.FindInFilesOperator;
 import org.netbeans.jellytools.MainWindowOperator;
-import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.NewFileNameLocationStepOperator;
+import org.netbeans.jellytools.NewJavaFileNameLocationStepOperator;
 import org.netbeans.jellytools.NewFileWizardOperator;
-import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
+import org.netbeans.jellytools.NewJavaProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.TopComponentOperator;
-import org.netbeans.junit.ide.ProjectSupport;
 
 /** Test of org.netbeans.jellytools.nodes.FolderNode
  *
@@ -72,8 +71,9 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static junit.framework.Test suite() {
+        /*
         junit.framework.TestSuite suite = new org.netbeans.junit.NbTestSuite();
-        // Cannot test because folder at different view has different items. */
+        // Cannot test because folder at different view has different items. 
         // suite.addTest(new FolderNodeTest("testVerifyPopup"));
         // Explore from here is used on web services node but to create such
         // a node you need application server installed. For now we skip this test.
@@ -88,6 +88,17 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
         suite.addTest(new FolderNodeTest("testProperties"));
         suite.addTest(new FolderNodeTest("testNewFile"));
         return suite;
+         */
+        return createModuleTest(FolderNodeTest.class, 
+        "testFind",
+        "testCompile",
+        "testCut",
+        "testCopy",
+        "testPaste",
+        "testDelete",
+        "testRename",
+        "testProperties",
+        "testNewFile");
     }
     
     /** Use for internal test execution inside IDE
@@ -97,13 +108,11 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
         junit.textui.TestRunner.run(suite());
     }
     
-    // "Confirm Object Deletion"
-    private static final String confirmTitle = Bundle.getString("org.openide.explorer.Bundle",
-                                                                "MSG_ConfirmDeleteObjectTitle"); // NOI18N
-    
     /** Test case setup. */
-    protected void setUp() {
+    @Override
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
     }
     
     /** Test verifyPopup method.
@@ -126,7 +135,7 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
     private static final String SAMPLE_WEB_SERVICE_NAME = "SampleWebService";  //NOI18N
 
     /** Test exploreFromHere. */
-    public void testExploreFromHere() {
+    public void testExploreFromHere() throws Exception {
         // create new web application project
         
         NewProjectWizardOperator npwo = NewProjectWizardOperator.invoke();
@@ -137,7 +146,7 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
         String webApplicationLabel = org.netbeans.jellytools.Bundle.getString("org.netbeans.modules.web.project.ui.wizards.Bundle", "Templates/Project/Web/emptyWeb.xml");
         npwo.selectProject(webApplicationLabel);
         npwo.next();
-        NewProjectNameLocationStepOperator npnlso = new NewProjectNameLocationStepOperator();
+        NewJavaProjectNameLocationStepOperator npnlso = new NewJavaProjectNameLocationStepOperator();
         npnlso.txtProjectName().setText(SAMPLE_WEB_PROJECT_NAME);
         npnlso.txtProjectLocation().setText(System.getProperty("netbeans.user")); // NOI18N
         npnlso.finish();
@@ -146,18 +155,23 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
         // wait index.jsp is opened in editor
         EditorOperator editor = new EditorOperator("index.jsp"); // NOI18N
         // wait classpath scanning finished
-        ProjectSupport.waitScanFinished();
+        try {
+            Class.forName("org.netbeans.api.java.source.SourceUtils", true, Thread.currentThread().getContextClassLoader()).
+                    getMethod("waitScanFinished").invoke(null);
+        } catch (ClassNotFoundException x) {
+            System.err.println("Warning: org.netbeans.api.java.source.SourceUtils could not be found, will not wait for scan to finish");
+        }
         
         // create a web service
 
         // "Web Services"
         String webServicesLabel = Bundle.getString(
-                "org.netbeans.modules.websvc.dev.wizard.Bundle", "Templates/WebServices");
+                "org.netbeans.modules.websvc.core.client.wizard.Bundle", "Templates/WebServices");
         // "Web Service"
-        String webServiceLabel = org.netbeans.jellytools.Bundle.getString(
-                "org.netbeans.modules.websvc.dev.wizard.Bundle", "Templates/WebServices/WebService");
+        String webServiceLabel = Bundle.getString(
+                "org.netbeans.modules.websvc.core.dev.wizard.Bundle", "Templates/WebServices/WebService.java");
         NewFileWizardOperator.invoke(projectRootNode, webServicesLabel, webServiceLabel);
-        NewFileNameLocationStepOperator nameStepOper = new NewFileNameLocationStepOperator();
+        NewJavaFileNameLocationStepOperator nameStepOper = new NewJavaFileNameLocationStepOperator();
         nameStepOper.setPackage("dummy"); // NOI18N
         nameStepOper.setObjectName(SAMPLE_WEB_SERVICE_NAME);
         nameStepOper.finish();
@@ -166,7 +180,7 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
 
         // "Web Services"
         String webServicesNodeLabel = Bundle.getString(
-                "org.netbeans.modules.websvc.core.webservices.ui.Bundle", "LBL_WebServices");
+                "org.netbeans.modules.websvc.core.Bundle", "LBL_WebServices");
         FolderNode wsNode = new FolderNode(projectRootNode, webServicesNodeLabel+"|"+SAMPLE_WEB_SERVICE_NAME);
         wsNode.exploreFromHere();
         new TopComponentOperator(SAMPLE_WEB_SERVICE_NAME).close();  // NOI18N
@@ -191,8 +205,8 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
         FolderNode sample2Node = new FolderNode(sample1Node, "sample2"); // NOI18N
         sample2Node.copy();
         sample1Node.paste();
-        new FolderNode(sample1Node, "sample2_1").delete();  // NOI18N
-        new NbDialogOperator(confirmTitle).yes();
+        FolderNode sample21Node = new FolderNode(sample1Node, "sample2_1");  // NOI18N
+        Utils.performSafeDelete(sample21Node);
     }
     
     /** Test cut. */
@@ -215,7 +229,7 @@ public class FolderNodeTest extends org.netbeans.jellytools.JellyTestCase {
     public void testDelete() {
         FolderNode folderNode = new FolderNode(new SourcePackagesNode("SampleProject"), "sample1"); // NOI18N
         folderNode.delete();
-        Utils.closeConfirmDialog();
+        Utils.closeSafeDeleteDialog();
     }
     
     /** Test rename */

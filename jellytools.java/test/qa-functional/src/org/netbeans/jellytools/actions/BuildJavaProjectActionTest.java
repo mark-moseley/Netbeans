@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,45 +38,41 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.jellytools.nodes;
 
-import java.awt.Toolkit;
-import org.netbeans.junit.NbTestSuite;
+package org.netbeans.jellytools.actions;
+
+import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-
-import org.netbeans.jellytools.EditorOperator;
-import org.netbeans.jellytools.FilesTabOperator;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.SaveAsTemplateOperator;
+import org.netbeans.jellytools.MainWindowOperator;
+import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.junit.NbTestSuite;
 
-/** Test of org.netbeans.jellytools.nodes.JavaNode
+/** Test of org.netbeans.jellytools.actions.BuildProjectAction
  *
- * @author <a href="mailto:adam.sotona@sun.com">Adam Sotona</a>
  * @author Jiri.Skrivanek@sun.com
  */
-public class JavaNodeTest extends JellyTestCase {
-    
+public class BuildJavaProjectActionTest extends JellyTestCase {
+
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
      */
-    public JavaNodeTest(String testName) {
+    public BuildJavaProjectActionTest(String testName) {
         super(testName);
     }
     
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
-        suite.addTest(new JavaNodeTest("testVerifyPopup"));
-        suite.addTest(new JavaNodeTest("testOpen"));
-        suite.addTest(new JavaNodeTest("testCut"));
-        suite.addTest(new JavaNodeTest("testCopy"));
-        suite.addTest(new JavaNodeTest("testDelete"));
-        suite.addTest(new JavaNodeTest("testSaveAsTemplate"));
-        suite.addTest(new JavaNodeTest("testProperties"));
+        suite.addTest(new BuildProjectActionTest("testPerformPopup"));
         return suite;
+         */
+        return createModuleTest(BuildJavaProjectActionTest.class, "testPerformPopup");
     }
     
     /** Use for internal test execution inside IDE
@@ -85,59 +81,23 @@ public class JavaNodeTest extends JellyTestCase {
     public static void main(java.lang.String[] args) {
         TestRunner.run(suite());
     }
-    
-    protected static JavaNode javaNode = null;
-    
-    /** Finds node before each test case. */
-    protected void setUp() {
-        System.out.println("### "+getName()+" ###");
-        if(javaNode == null) {
-            javaNode = new JavaNode(new FilesTabOperator().getProjectNode("SampleProject"),
-                                      "src|sample1|SampleClass1.java"); // NOI18N
-        }
+
+    @Override
+    protected void setUp() throws IOException {
+        openDataProjects("SampleProject");
     }
-    
-    /** Test verifyPopup */
-    public void testVerifyPopup() {
-        javaNode.verifyPopup();
+
+    /** Test performPopup method. */
+    public void testPerformPopup() {
+        Node n = new ProjectsTabOperator().getProjectRootNode("SampleProject"); // NOI18N
+        MainWindowOperator.StatusTextTracer statusTextTracer = 
+                            MainWindowOperator.getDefault().getStatusTextTracer();
+        statusTextTracer.start();
+        new BuildJavaProjectAction().performPopup(n);
+        // wait status text "Building SampleProject (jar)"
+        statusTextTracer.waitText("jar", true); // NOI18N
+        // wait status text "Finished building SampleProject (jar)"
+        statusTextTracer.waitText("jar", true); // NOI18N
+        statusTextTracer.stop();
     }
-    
-    /** Test open */
-    public void testOpen() {
-        javaNode.open();
-        new EditorOperator("SampleClass1.java").closeDiscard();  // NOI18N
-    }
-    
-    /** Test cut  */
-    public void testCut() {
-        Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
-        javaNode.cut();
-        Utils.testClipboard(clipboard1);
-    }
-    
-    /** Test copy */
-    public void testCopy() {
-        Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
-        javaNode.copy();
-        Utils.testClipboard(clipboard1);
-    }
-    
-    /** Test delete */
-    public void testDelete() {
-        javaNode.delete();
-        Utils.closeSafeDeleteDialog();
-    }
-    
-    /** Test properties */
-    public void testProperties() {
-        javaNode.properties();
-        Utils.closeProperties("SampleClass1.java"); // NOI18N
-    }
-    
-    /** Test saveAsTemplate */
-    public void testSaveAsTemplate() {
-        javaNode.saveAsTemplate();
-        new SaveAsTemplateOperator().close();
-    }
-    
 }

@@ -41,9 +41,9 @@
 package org.netbeans.jellytools;
 
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.actions.CloseAction;
+import org.netbeans.jellytools.nodes.ProjectRootNode;
 
 /**
  * Test of org.netbeans.jellytools.NewProjectWizardOperator.
@@ -53,9 +53,7 @@ public class NewProjectWizardOperatorTest extends JellyTestCase {
 
     public static NewProjectWizardOperator op;
     // "Java Application"
-    private static final String javaApplicationLabel =
-            Bundle.getString("org.netbeans.modules.java.j2seproject.ui.wizards.Bundle",
-                             "Templates/Project/Standard/emptyJ2SE.xml");
+    private static String javaApplicationLabel;
     
     /** Use for internal test execution inside IDE
      * @param args command line arguments
@@ -64,10 +62,18 @@ public class NewProjectWizardOperatorTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
+    public static final String[] tests = new String[] {
+                "testCreateTwo",
+                "testCreate", "testVerifyCreated",
+                "testInvokeTitle", "testInvoke",
+                "testSelectCategoryAndProject",
+                "testVerify", "testGetDescription"};
+    
     /** Method used for explicit testsuite definition
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new NewProjectWizardOperatorTest("testInvokeTitle"));
         suite.addTest(new NewProjectWizardOperatorTest("testInvoke"));
@@ -75,10 +81,16 @@ public class NewProjectWizardOperatorTest extends JellyTestCase {
         suite.addTest(new NewProjectWizardOperatorTest("testVerify"));
         suite.addTest(new NewProjectWizardOperatorTest("testGetDescription"));
         return suite;
+         */
+        return createModuleTest(NewProjectWizardOperatorTest.class,
+                tests);
     }
     
     protected void setUp() {
         System.out.println("### "+getName()+" ###");
+        javaApplicationLabel =
+            Bundle.getString("org.netbeans.modules.java.j2seproject.ui.wizards.Bundle",
+                             "Templates/Project/Standard/emptyJ2SE.xml");
     }
     
     /** Constructor required by JUnit.
@@ -118,5 +130,42 @@ public class NewProjectWizardOperatorTest extends JellyTestCase {
     public void testGetDescription() {
         assertTrue("Wrong description.", op.getDescription().indexOf("Java SE application")>0);
         op.cancel();
+    }
+
+    public void testCreateTwo() {
+        createJavaProject("MyJavaProjectOne");
+        createJavaProject("MyJavaProjectTwo");
+        ProjectsTabOperator projects = new ProjectsTabOperator();
+        ProjectRootNode one = new ProjectRootNode(projects.tree(), "MyJavaProjectOne");
+        ProjectRootNode two = new ProjectRootNode(projects.tree(), "MyJavaProjectTwo");
+        new CloseAction().perform(one);
+        new CloseAction().perform(two);
+    }
+    public void testCreate() {
+        createJavaProject("MyJavaProject");
+    }
+
+    public void createJavaProject(String projectName) {
+        //workaround for 142928
+        //NewProjectWizardOperator.invoke().cancel();
+        NewProjectWizardOperator npwo = NewProjectWizardOperator.invoke();
+        npwo.selectCategory("Java");
+        npwo.selectProject("Java Application");
+        npwo.next();
+        NewJavaProjectNameLocationStepOperator npnlso = new NewJavaProjectNameLocationStepOperator();
+        npnlso.txtProjectName().setText(projectName);
+        npnlso.txtProjectLocation().setText(getDataDir().getAbsolutePath()); // NOI18N
+        npnlso.finish();
+    /*
+    op.next();
+    NewProjectNameLocationStepOperator pnop = new NewProjectNameLocationStepOperator();
+    pnop.txtProjectName().typeText("MyJavaProject");
+    pnop.txtProjectLocation().typeText(getDataDir().getAbsolutePath());
+    pnop.finish();
+     */
+    }
+
+    public void testVerifyCreated() {
+        new ProjectRootNode(new ProjectsTabOperator().tree(), "MyJavaProject");
     }
 }

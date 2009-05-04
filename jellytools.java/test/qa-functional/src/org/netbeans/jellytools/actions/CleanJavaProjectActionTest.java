@@ -41,37 +41,43 @@
 
 package org.netbeans.jellytools.actions;
 
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.MainWindowOperator;
+import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
-import org.netbeans.junit.NbTestSuite;
 
-/** Test org.netbeans.jellytools.actions.CleanProjectAction
+/** Test of org.netbeans.jellytools.actions.CleanProjectAction
  *
  * @author Jiri.Skrivanek@sun.com
  */
-public class CompileActionTest extends JellyTestCase {
+public class CleanJavaProjectActionTest extends JellyTestCase {
 
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
      */
-    public CompileActionTest(String testName) {
+    public CleanJavaProjectActionTest(String testName) {
         super(testName);
     }
     
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
-        suite.addTest(new CompileActionTest("testPerformPopup"));
-        suite.addTest(new CompileActionTest("testPerformMenu"));
-        suite.addTest(new CompileActionTest("testPerformShortcut"));
+        suite.addTest(new CleanProjectActionTest("testPerformPopup"));
         return suite;
+         */
+        return createModuleTest(CleanJavaProjectActionTest.class, "testPerformPopup");
     }
+
+    @Override
+    protected void setUp() throws IOException {
+        openDataProjects("SampleProject");
+    }
+    
     
     /** Use for internal test execution inside IDE
      * @param args command line arguments
@@ -79,41 +85,18 @@ public class CompileActionTest extends JellyTestCase {
     public static void main(java.lang.String[] args) {
         TestRunner.run(suite());
     }
-    
-    private static Node node;
-    private static MainWindowOperator.StatusTextTracer statusTextTracer;
-    
-    public void setUp() {
-        if(node ==null) {
-            node = new Node(new SourcePackagesNode("SampleProject"), "sample1|SampleClass1.java");
-        }
-        if(statusTextTracer == null) {
-            statusTextTracer = MainWindowOperator.getDefault().getStatusTextTracer();
-        }
-        statusTextTracer.start();
-    }
 
-    public void tearDown() {
-        // wait status text "Building SampleProject (compile-single)"
-        statusTextTracer.waitText("compile-single", true); // NOI18N
-        // wait status text "Finished building SampleProject (compile-single).
-        statusTextTracer.waitText("compile-single", true); // NOI18N
-        statusTextTracer.stop();
-    }
-    
     /** Test performPopup method. */
     public void testPerformPopup() {
-        new CompileAction().performPopup(node);
+        Node n = new ProjectsTabOperator().getProjectRootNode("SampleProject"); // NOI18N
+        MainWindowOperator.StatusTextTracer statusTextTracer = 
+                            MainWindowOperator.getDefault().getStatusTextTracer();
+        statusTextTracer.start();
+        new CleanJavaProjectAction().performPopup(n);
+        // wait status text "Building SampleProject (clean)"
+        statusTextTracer.waitText("clean", true); // NOI18N
+        // wait status text "Finished building SampleProject (clean).
+        statusTextTracer.waitText("clean", true); // NOI18N
+        statusTextTracer.stop();
     }
-    
-    /** Test performMenu method. */
-    public void testPerformMenu() {
-        new CompileAction().performMenu(node);
-    }
-    
-    /** Test performShortcut method. */
-    public void testPerformShortcut() {
-        new CompileAction().performShortcut(node);
-    }
-    
 }

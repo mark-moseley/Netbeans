@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,22 +40,14 @@
  */
 package org.netbeans.jellytools;
 
-import java.io.File;
-import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jemmy.JemmyException;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.jemmy.operators.JComboBoxOperator;
-import org.netbeans.jellytools.NbDialogOperator;
 
 /**
  * Test of org.netbeans.jellytools.NameLocationStepOperator.
  * @author tb115823
  */
-public class NewProjectNameLocationStepOperatorTest extends JellyTestCase {
+public class NewJavaProjectNameLocationStepOperatorTest extends JellyTestCase {
     
     /** Use for internal test execution inside IDE
      * @param args command line arguments
@@ -64,10 +56,17 @@ public class NewProjectNameLocationStepOperatorTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
+    public static final String[] tests = new String[] {
+        "testJavaApplicationPanel", "testJavaAntProjectPanel",
+                "testJavaLibraryPanel", "testJavaWithExistingSourcesPanel"
+                //"testWebApplication"
+    };
+    
     /** Method used for explicit testsuite definition
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new NewProjectNameLocationStepOperatorTest("testJavaApplicationPanel"));
         suite.addTest(new NewProjectNameLocationStepOperatorTest("testJavaAntProjectPanel"));
@@ -75,22 +74,27 @@ public class NewProjectNameLocationStepOperatorTest extends JellyTestCase {
         suite.addTest(new NewProjectNameLocationStepOperatorTest("testJavaWithExistingSourcesPanel"));
         suite.addTest(new NewProjectNameLocationStepOperatorTest("testWebApplication"));
         return suite;
+         */
+        return createModuleTest(NewJavaProjectNameLocationStepOperatorTest.class,
+                tests);
     }
     
+    @Override
     protected void setUp() {
         System.out.println("### "+getName()+" ###");
+        standardLabel = Bundle.getString("org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", 
+                                                                 "Templates/Project/Standard");
     }
     
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
-    public NewProjectNameLocationStepOperatorTest(String testName) {
+    public NewJavaProjectNameLocationStepOperatorTest(String testName) {
         super(testName);
     }
     
     // Standard
-    private static final String standardLabel = Bundle.getString("org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", 
-                                                                 "Templates/Project/Standard");
+    private static String standardLabel;
     
     /** Test components on Java Application panel */
     public void testJavaApplicationPanel() {
@@ -100,11 +104,13 @@ public class NewProjectNameLocationStepOperatorTest extends JellyTestCase {
         // Java Application
         op.selectProject(Bundle.getString("org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", "Templates/Project/Standard/emptyJ2SE.xml"));
         op.next();
-        NewProjectNameLocationStepOperator stpop = new NewProjectNameLocationStepOperator();
+        NewJavaProjectNameLocationStepOperator stpop = new NewJavaProjectNameLocationStepOperator();
         stpop.txtProjectName().setText("NewProject");   // NOI18N
         stpop.btBrowseProjectLocation().pushNoBlock();
-        new NbDialogOperator("Select").cancel(); //TODO I18N
-        stpop.txtProjectLocation().setText("/tmp");
+        String selectProjectLocation = org.netbeans.jellytools.Bundle.getString(
+                "org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", "LBL_NWP1_SelectProjectLocation");
+        new NbDialogOperator(selectProjectLocation).cancel(); //I18N
+        stpop.txtProjectLocation().setText("/tmp"); //NOI18N
         stpop.txtProjectFolder().getText();
         stpop.cbCreateMainClass().setSelected(false);
         stpop.cbSetAsMainProject().setSelected(false);
@@ -121,18 +127,31 @@ public class NewProjectNameLocationStepOperatorTest extends JellyTestCase {
         // Java Project with Existing Ant Script
         op.selectProject(Bundle.getString("org.netbeans.modules.java.freeform.resources.Bundle", "Templates/Project/Standard/j2sefreeform.xml"));
         op.next();
-        NewProjectNameLocationStepOperator stpop = new NewProjectNameLocationStepOperator();
+        NewJavaProjectNameLocationStepOperator stpop = new NewJavaProjectNameLocationStepOperator();
         stpop.txtLocation().setText("/tmp");
-        stpop.txtBuildScript().setText("/path/to/antscript");//TODO I18N
-        stpop.txtProjectName().setText("ant project");//TODO I18N
-        stpop.txtProjectFolder().setText("/ant/folder");//TODO I18N
+        stpop.txtBuildScript().setText("/path/to/antscript");//NOI18N
+        stpop.txtProjectName().setText("ant project");//NOI18N
+        stpop.txtProjectFolder().setText("/ant/folder");//NOI18N
         stpop.cbSetAsMainProject().setSelected(true);
         stpop.btBrowseLocation().pushNoBlock();
-        new NbDialogOperator("Browse Existing Ant Project Folder").cancel();//TODO I18N
+
+        String browseExistingAntProjectFolder =
+                org.netbeans.jellytools.Bundle.getString(
+                "org.netbeans.modules.ant.freeform.ui.Bundle", "LBL_Browse_Location");
+        new NbDialogOperator(browseExistingAntProjectFolder).cancel();// I18N
         stpop.btBrowseBuildScript().pushNoBlock();
-        new NbDialogOperator("Browse Existing Ant Build Script").cancel();//TODO I18N
+
+        String browseExistingAntBuildScript =
+                org.netbeans.jellytools.Bundle.getString(
+                "org.netbeans.modules.ant.freeform.ui.Bundle", "LBL_Browse_Build_Script");
+
+        new NbDialogOperator(browseExistingAntBuildScript).cancel();// I18N
         stpop.btBrowseProjectFolder().pushNoBlock();
-        new NbDialogOperator("Browse New Project Folder").cancel();//TODO I18N
+
+        String browseNewProjectFolder =
+                org.netbeans.jellytools.Bundle.getString(
+                "org.netbeans.modules.ant.freeform.ui.Bundle", "LBL_Browse_Project_Folder");
+        new NbDialogOperator(browseNewProjectFolder).cancel();// I18N
         stpop.cancel();
     }
 
@@ -143,12 +162,15 @@ public class NewProjectNameLocationStepOperatorTest extends JellyTestCase {
         // Java Class Library
         op.selectProject(Bundle.getString("org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", "Templates/Project/Standard/emptyJ2SElibrary.xml"));
         op.next();
-        NewProjectNameLocationStepOperator stpop = new NewProjectNameLocationStepOperator();
-        stpop.txtProjectLocation().setText("/tmp");
+        NewJavaProjectNameLocationStepOperator stpop = new NewJavaProjectNameLocationStepOperator();
+        stpop.txtProjectLocation().setText("/tmp"); //NOI18N
         stpop.txtProjectName().setText("NewLibraryProject");
         stpop.txtProjectFolder().getText();
         stpop.btBrowseProjectLocation().pushNoBlock();
-        new NbDialogOperator("Select Project Location").cancel(); //TODO I18N
+        String selectProjectLocation =
+                org.netbeans.jellytools.Bundle.getString(
+                "org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", "LBL_NWP1_SelectProjectLocation");
+        new NbDialogOperator(selectProjectLocation).cancel(); //I18N
         stpop.cancel();
     }
 
@@ -159,17 +181,21 @@ public class NewProjectNameLocationStepOperatorTest extends JellyTestCase {
         op.selectProject(Bundle.getString("org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", "Templates/Project/Standard/existingJ2SE.xml"));
         op.next();
         
-        NewProjectNameLocationStepOperator stpop = new NewProjectNameLocationStepOperator();
+        NewJavaProjectNameLocationStepOperator stpop = new NewJavaProjectNameLocationStepOperator();
         stpop.txtProjectName().setText("MyNewProject");
-        stpop.txtProjectFolder().setText("D:\\tmp");
+        stpop.txtProjectFolder().setText("/tmp"); //NOI18N
         stpop.txtProjectFolder().getText();
         stpop.cbSetAsMainProject().setSelected(false);
         stpop.btBrowseProjectLocation().pushNoBlock();
-        new NbDialogOperator("Select Project Location").cancel(); //TODO I18N
+        String selectProjectLocation =
+                org.netbeans.jellytools.Bundle.getString(
+                "org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", "LBL_NWP1_SelectProjectLocation");
+        new NbDialogOperator(selectProjectLocation).cancel(); //I18N
         stpop.cancel();
     }
-    
-    
+
+    //TODO: separate
+    /*
     public void testWebApplication() {
         NewProjectWizardOperator op = NewProjectWizardOperator.invoke();
         // Web
@@ -182,13 +208,15 @@ public class NewProjectNameLocationStepOperatorTest extends JellyTestCase {
         
         NewWebProjectNameLocationStepOperator stpop = new NewWebProjectNameLocationStepOperator();
         stpop.txtProjectName().setText("NewProject");
+        stpop.cbSetAsMainProject().setSelected(false);                
         stpop.btBrowseProjectLocation().pushNoBlock();
-        new NbDialogOperator("Select Project Location").cancel(); //TODO I18N
-        stpop.txtProjectLocation().setText("/tmp");//TODO I18N
+        String selectProjectLocation =
+                org.netbeans.jellytools.Bundle.getString(
+                "org.netbeans.modules.java.j2seproject.ui.wizards.Bundle", "LBL_NWP1_SelectProjectLocation");
+        new NbDialogOperator(selectProjectLocation).cancel(); //I18N
+        stpop.txtProjectLocation().setText("/tmp");//NOI18N
         stpop.txtProjectFolder().getText();
         stpop.cbSetAsMainProject().setSelected(false);
-        assertEquals(stpop.txtContextPath().getText(), "/NewProject");  //NOI18N
-        stpop.selectJ2EEVersion("J2EE 1.4");  // NOI18N
         stpop.cancel();
-    }
+    }*/
 }
