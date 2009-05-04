@@ -71,7 +71,7 @@ public final class ProfilingMonitor {
 
         private TargetAppRunner runner;
         private ThreadsDataManager threadsDataManager;
-        private VMTelemetryDataManager VMTelemetryManager;
+        private VMTelemetryDataManager vmTelemetryManager;
         private boolean doUpdateLiveResults;
         private boolean keepRunning = true;
 
@@ -86,16 +86,18 @@ public final class ProfilingMonitor {
         public void monitor(final TargetAppRunner runner) {
             this.runner = runner;
             this.threadsDataManager = Profiler.getDefault().getThreadsManager();
-            this.VMTelemetryManager = Profiler.getDefault().getVMTelemetryManager();
+            this.vmTelemetryManager = Profiler.getDefault().getVMTelemetryManager();
 
             if (runner != null) {
-                this.VMTelemetryManager.maxHeapSize = runner.getProfilingSessionStatus().maxHeapSize;
+                this.vmTelemetryManager.maxHeapSize = runner.getProfilingSessionStatus().maxHeapSize;
             }
         }
 
         public void run() {
             Project project = NetBeansProfiler.getDefaultNB().getProfiledProject();
-            final int ppsize = ProfilingPointsManager.getDefault().getProfilingPoints(project, false).size(); // PPs are not modifiable during runtime!
+            final int ppsize = ProfilingPointsManager.getDefault().getProfilingPoints(
+                               project, ProfilerIDESettings.getInstance().
+                               getIncludeProfilingPointsDependencies(), false).size(); // PPs are not modifiable during runtime!
 
             while (keepRunning) { // Main loop
 
@@ -110,7 +112,7 @@ public final class ProfilingMonitor {
                                     public void run() {
                                         try {
                                             threadsDataManager.processData(md);
-                                            VMTelemetryManager.processData(md);
+                                            vmTelemetryManager.processData(md);
 
                                             // ---------------------------------------------------------
                                             // Temporary workaround to refresh profiling points when LiveResultsWindow is not refreshing

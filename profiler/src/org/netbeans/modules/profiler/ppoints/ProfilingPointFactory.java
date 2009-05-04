@@ -47,6 +47,7 @@ import org.netbeans.modules.profiler.utils.IDEUtils;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
 import java.beans.PropertyChangeEvent;
@@ -77,8 +78,8 @@ public abstract class ProfilingPointFactory {
     private static final String PROFILING_POINT_STORAGE_EXT = "pp"; // NOI18N
     public static final int SCOPE_CODE = 1; // Scope of the Profiling Point: Code (see CodeProfilingPoint)
     public static final int SCOPE_GLOBAL = 2; // Scope of the Profiling Point: Global (see GlobalProfilingPoint)
-    public static final Icon SCOPE_CODE_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/codeProfilingPoint.png")); // NOI18N
-    public static final Icon SCOPE_GLOBAL_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/globalProfilingPoint.png")); // NOI18N
+    public static final Icon SCOPE_CODE_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/codeProfilingPoint.png", false); // NOI18N
+    public static final Icon SCOPE_GLOBAL_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/globalProfilingPoint.png", false); // NOI18N
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -200,7 +201,7 @@ public abstract class ProfilingPointFactory {
 
     void saveProfilingPoints(Project project) throws IOException {
         saveProfilingPoints((ProfilingPoint[]) ProfilingPointsManager.getDefault()
-                                                                     .getProfilingPoints(getProfilingPointsClass(), project)
+                                                                     .getProfilingPoints(getProfilingPointsClass(), project, false)
                                                                      .toArray(new ProfilingPoint[0]), project);
     }
 
