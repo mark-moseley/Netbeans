@@ -47,15 +47,21 @@ import javax.swing.Action;
 import javax.swing.KeyStroke;
 import java.util.*;
 
+import java.util.prefs.Preferences;
+import javax.swing.SwingUtilities;
 import org.netbeans.spi.viewmodel.*;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.api.debugger.jpda.*;
+import org.netbeans.modules.debugger.jpda.ui.models.VariablesTreeModelFilter;
 import org.netbeans.spi.viewmodel.Models;
 import org.netbeans.spi.viewmodel.NodeModel;
 import org.openide.util.NbBundle;
 
 import org.netbeans.modules.debugger.jpda.ui.models.WatchesNodeModel;
+import org.openide.util.NbPreferences;
 import org.openide.util.datatransfer.PasteType;
+import org.openide.windows.TopComponent;
+import org.openide.windows.WindowManager;
 
 /**
  * Manages lifecycle and presentation of fixed watches. Should be
@@ -65,10 +71,10 @@ import org.openide.util.datatransfer.PasteType;
  * @author Jan Jancura, Maros Sandor
  */
 public class FixedWatchesManager implements TreeModelFilter, 
-NodeActionsProviderFilter, ExtendedNodeModelFilter {
+NodeActionsProviderFilter, ExtendedNodeModelFilter, TableModelFilter {
             
     public static final String FIXED_WATCH =
-        "org/netbeans/modules/debugger/resources/watchesView/FixedWatch.gif";
+        "org/netbeans/modules/debugger/resources/watchesView/watch_type3_16.png";
     private final Action DELETE_ACTION = Models.createAction (
         NbBundle.getBundle (FixedWatchesManager.class).getString 
             ("CTL_DeleteFixedWatch_Label"),
@@ -79,7 +85,7 @@ NodeActionsProviderFilter, ExtendedNodeModelFilter {
             public void perform (Object[] nodes) {
                 int i, k = nodes.length;
                 for (i = 0; i < k; i++)
-                    fixedWatches.remove (nodes [i]);
+                    fixedWatches.remove (new KeyWrapper(nodes [i]));
                 fireModelChanged(new ModelEvent.NodeChanged(
                         FixedWatchesManager.this,
                         TreeModel.ROOT,
@@ -99,19 +105,39 @@ NodeActionsProviderFilter, ExtendedNodeModelFilter {
             ("CTL_CreateFixedWatch_Label"),
         new Models.ActionPerformer () {
             public boolean isEnabled (Object node) {
-                return !WatchesNodeModel.isEmptyWatch(node);
+                return !WatchesNodeModel.isEmptyWatch(node) && !isPrimitive(node);
             }
             public void perform (Object[] nodes) {
                 int i, k = nodes.length;
                 for (i = 0; i < k; i++)
                     createFixedWatch (nodes [i]);
             }
+            private boolean isPrimitive (Object node) {
+                if (!(node instanceof Variable)) {
+                    return false;
+                }
+                Variable v = (Variable) node;
+                if (!VariablesTreeModelFilter.isEvaluated(v)) {
+                    return false;
+                }
+                String type = v.getType ();
+                return "".equals(type)        ||
+                        "boolean".equals(type)||
+                        "byte".equals (type)  || 
+                        "char".equals (type)  || 
+                        "short".equals (type) ||
+                        "int".equals (type)   || 
+                        "long".equals (type)  || 
+                        "float".equals (type) || 
+                        "double".equals (type);
+            }
+
         },
         Models.MULTISELECTION_TYPE_ALL
     );
         
         
-    private Map             fixedWatches = new LinkedHashMap ();
+    private Map             fixedWatches = new LinkedHashMap();
     private HashSet         listeners;
     private ContextProvider contextProvider;
 
@@ -119,7 +145,16 @@ NodeActionsProviderFilter, ExtendedNodeModelFilter {
     public FixedWatchesManager (ContextProvider contextProvider) {
         this.contextProvider = contextProvider;
     }
-    
+
+    public void deleteAllFixedWatches() {
+        Collection nodes = new ArrayList(fixedWatches.keySet());
+        for (Iterator iter = nodes.iterator(); iter.hasNext();) {
+            fixedWatches.remove(new KeyWrapper(iter.next()));
+            fireModelChanged(new ModelEvent.NodeChanged(FixedWatchesManager.this,
+                TreeModel.ROOT,
+                ModelEvent.NodeChanged.CHILDREN_MASK));
+        }
+    }
 
     // TreeModelFilter .........................................................
     
@@ -150,8 +185,10 @@ NodeActionsProviderFilter, ExtendedNodeModelFilter {
                 children = new Object [0];
             }
             Object [] allChildren = new Object [children.length + fixedSize];
-
-            fixedWatches.keySet ().toArray (allChildren);
+            int index = 0;
+            for (Object wrapper : fixedWatches.keySet()) {
+                allChildren[index++] = ((KeyWrapper)wrapper).value;
+            }
             System.arraycopy (
                 children, 
                 0, 
@@ -218,11 +255,9 @@ NodeActionsProviderFilter, ExtendedNodeModelFilter {
     throws UnknownTypeException {
         Action [] actions = original.getActions (node);
         List myActions = new ArrayList();
-        if (fixedWatches.containsKey (node)) {
-            return new Action[] {
-                DELETE_ACTION
-            };
-        }
+        if (fixedWatches.containsKey (new KeyWrapper(node))) {
+            myActions.add (0, DELETE_ACTION);
+        } else
         if (node instanceof Variable) {
             myActions.add (CREATE_FIXED_WATCH_ACTION);
         } else 
@@ -239,8 +274,9 @@ NodeActionsProviderFilter, ExtendedNodeModelFilter {
     
     public String getDisplayName (NodeModel original, Object node) 
     throws UnknownTypeException {
-        if (fixedWatches.containsKey (node))
-            return (String) fixedWatches.get (node);
+        KeyWrapper wrapper = new KeyWrapper(node);
+        if (fixedWatches.containsKey (wrapper))
+            return (String) fixedWatches.get (wrapper);
         return original.getDisplayName (node);
     }
     
@@ -291,11 +327,23 @@ NodeActionsProviderFilter, ExtendedNodeModelFilter {
                 }
             } catch (Exception ex) {} // Ignore any exceptions
         }
-        fixedWatches.put (variable, name);
+        fixedWatches.put (new KeyWrapper(variable), name);
         fireModelChanged (new ModelEvent.NodeChanged(
                 this,
                 TreeModel.ROOT,
                 ModelEvent.NodeChanged.CHILDREN_MASK));
+        // Open the watches view, where the fixed watch was added:
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                Preferences preferences = NbPreferences.forModule(ContextProvider.class).node("variables_view"); // NOI18N
+                String viewName = preferences.getBoolean("show_watches", true) ? "localsView" : "watchesView"; // NOI18N
+                TopComponent view = WindowManager.getDefault().findTopComponent(viewName);
+                if (view != null) {
+                    view.open();
+                    view.requestVisible();
+                }
+            }
+        });
     }
 
     private void fireModelChanged (ModelEvent event) {
@@ -339,9 +387,47 @@ NodeActionsProviderFilter, ExtendedNodeModelFilter {
     }
 
     public String getIconBaseWithExtension(ExtendedNodeModel original, Object node) throws UnknownTypeException {
-        if (fixedWatches.containsKey (node))
+        if (fixedWatches.containsKey (new KeyWrapper(node)))
             return FIXED_WATCH;
         return original.getIconBaseWithExtension (node);
+    }
+
+    public Object getValueAt(TableModel original, Object node, String columnID) throws UnknownTypeException {
+        return original.getValueAt(node, columnID);
+    }
+
+    public boolean isReadOnly(TableModel original, Object node, String columnID) throws UnknownTypeException {
+        if (fixedWatches.containsKey(new KeyWrapper(node))) {
+            return true;
+        } else {
+            return original.isReadOnly(node, columnID);
+        }
+    }
+
+    public void setValueAt(TableModel original, Object node, String columnID, Object value) throws UnknownTypeException {
+        original.setValueAt(node, columnID, value);
+    }
+
+    private static class KeyWrapper {
+
+        private Object value;
+
+        KeyWrapper(Object value) {
+            this.value = value;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof KeyWrapper)) {
+                return false;
+            }
+            return value == ((KeyWrapper) obj).value;
+        }
+
+        @Override
+        public int hashCode() {
+            return value.hashCode();
+        }
     }
 
 }
