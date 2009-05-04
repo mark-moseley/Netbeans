@@ -44,21 +44,14 @@ package org.netbeans.modules.cnd.modelimpl.trace;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.api.project.NativeFileItemSet;
 import org.netbeans.modules.cnd.api.project.NativeProject;
 import org.netbeans.modules.cnd.api.project.NativeProjectItemsListener;
-import org.netbeans.modules.cnd.loaders.CCDataLoader;
-import org.netbeans.modules.cnd.loaders.CCDataObject;
-import org.netbeans.modules.cnd.loaders.CDataLoader;
-import org.netbeans.modules.cnd.loaders.CDataObject;
-import org.netbeans.modules.cnd.loaders.CndDataObject;
-import org.netbeans.modules.cnd.loaders.HDataLoader;
-import org.netbeans.modules.cnd.loaders.HDataObject;
+import org.netbeans.modules.cnd.utils.MIMENames;
+import org.netbeans.modules.cnd.utils.MIMESupport;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
@@ -92,6 +85,34 @@ public final class NativeProjectProvider {
 	}
     }
     
+    public static void setUserMacros(NativeProject nativeProject, List<String> usrMacros) {
+	if( nativeProject instanceof NativeProjectImpl) {
+	    ((NativeProjectImpl) nativeProject).usrMacros.clear();
+            ((NativeProjectImpl) nativeProject).usrMacros.addAll(usrMacros);
+	}
+    }
+
+    public static NativeFileItem.Language getLanguage(File file, DataObject dobj) {
+        FileObject fo = null;
+        String mimeType = "";
+        if (dobj != null) {
+            fo = dobj.getPrimaryFile();
+        }
+        if (fo != null) {
+            mimeType = MIMESupport.getFileMIMEType(fo);
+        } else {
+            mimeType = MIMESupport.getFileMIMEType(file);
+        }
+        if (MIMENames.CPLUSPLUS_MIME_TYPE.equals(mimeType)) {
+            return NativeFileItem.Language.CPP;
+        } else if (MIMENames.C_MIME_TYPE.equals(mimeType)) {
+            return NativeFileItem.Language.C;
+        } else if (MIMENames.HEADER_MIME_TYPE.equals(mimeType)) {
+            return NativeFileItem.Language.C_HEADER;
+        }
+        return NativeFileItem.Language.OTHER;
+    }
+
     private static final class NativeProjectImpl implements NativeProject {
 	
 	private final List<String> sysIncludes;
@@ -105,7 +126,7 @@ public final class NativeProjectProvider {
 	private boolean pathsRelCurFile;
 	
 	private List<NativeProjectItemsListener> listeners = new ArrayList<NativeProjectItemsListener>();
-	private Object listenersLock = new Object();
+	private final Object listenersLock = new Object();
 
 	public NativeProjectImpl(String projectRoot,
 		List<String> sysIncludes, List<String> usrIncludes, 
@@ -161,7 +182,7 @@ public final class NativeProjectProvider {
         }
 
         public String getProjectDisplayName() {
-            return getProjectRoot();
+            return "DummyProject"; // NOI18N
         }
 
         public List<NativeFileItem> getAllFiles() {
@@ -226,46 +247,12 @@ public final class NativeProjectProvider {
 	    this.files.add(item);
 	}
 	
-	NativeFileItem.Language getLanguage(File file, DataObject dobj) {
-	    if (dobj == null) {
-		String path = file.getAbsolutePath();
-		if (CCDataLoader.getInstance().getExtensions().isRegistered(path)) {
-		    return NativeFileItem.Language.CPP;
-		} else if (CDataLoader.getInstance().getExtensions().isRegistered(path)) {
-		    return NativeFileItem.Language.C;
-		} else if (HDataLoader.getInstance().getExtensions().isRegistered(path)) {
-		    return NativeFileItem.Language.C_HEADER;
-		} else {
-		    return NativeFileItem.Language.OTHER;
-		}
-	    } else if (dobj instanceof CCDataObject) {
-		return NativeFileItem.Language.CPP;
-	    } else if (dobj instanceof HDataObject) {
-		return NativeFileItem.Language.C_HEADER;
-	    } else if (dobj instanceof CDataObject) {
-		return NativeFileItem.Language.C;
-	    } else {
-		return NativeFileItem.Language.OTHER;
-	    }
-	}
-	
-//        /*package*/ void addHeaders(List<String> files) {
-//            addFiles(files, this.sources, NativeFileItem.Language.C_HEADER);
-//        }
-//        
-//        /*package*/ void addSources(List<String> files) {
-//            addFiles(files, this.sources, NativeFileItem.Language.CPP);
-//        }
-//        
-//        private void addFiles(List<String> files, List<NativeFileItem> dest, NativeFileItem.Language lang) {
-//            for (String path : files) {
-//                NativeFileItem item = new NativeFileItemImpl(path, this, lang);
-//                dest.add(item);
-//            }
-//        }
-
         public List<NativeProject> getDependences() {
             return Collections.<NativeProject>emptyList();
+        }
+
+        public void runOnCodeModelReadiness(Runnable task) {
+            task.run();
         }
     }    
 
@@ -292,35 +279,12 @@ public final class NativeProjectProvider {
     /*package*/ static void registerItemInDataObject(DataObject obj, NativeFileItem item) {
         if (obj != null) {
             NativeFileItemSet set = obj.getLookup().lookup(NativeFileItemSet.class);
-            if (set == null) {
-                set = new NativeFileItemSetImpl();
-                if (obj instanceof CndDataObject) {
-                    ((CndDataObject)obj).addCookie(set);
-                }
+            if (set != null) {
+                set.add(item);
             }
-            set.add(item);
         }
     }
     
-    private static class NativeFileItemSetImpl implements NativeFileItemSet {
-        private List<NativeFileItem> items = new ArrayList<NativeFileItem>(1);
-        
-        public synchronized Collection<NativeFileItem> getItems() {
-            return new ArrayList<NativeFileItem>(items);
-        }
-        public synchronized void add(NativeFileItem item){
-            if (!items.contains(item)) {
-                items.add(item);
-            }
-        }
-        public synchronized void remove(NativeFileItem item){
-            items.remove(item);
-        }
-        public boolean isEmpty() {
-            return items.isEmpty();
-        }
-    }
-
     private static final class NativeFileItemImpl implements NativeFileItem {
 	
         private final File file;
@@ -330,7 +294,7 @@ public final class NativeProjectProvider {
         public NativeFileItemImpl(File file, NativeProjectImpl project, NativeFileItem.Language language) {
 	    
             this.project = project;
-            this.file = file;
+            this.file = FileUtil.normalizeFile(file);
             this.lang = language;
         }
         
@@ -387,5 +351,11 @@ public final class NativeProjectProvider {
         public boolean isExcluded() {
             return false;
         }
+
+        @Override
+        public String toString() {
+            return file.getAbsolutePath();
+        }
+
     }
 }
