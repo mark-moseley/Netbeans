@@ -42,7 +42,6 @@
 package org.netbeans.modules.xml.text.navigator;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Container;
 import java.awt.Graphics;
 import java.awt.Toolkit;
@@ -54,11 +53,9 @@ import java.awt.event.MouseListener;
 import java.beans.PropertyChangeEvent;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.InvocationTargetException;
 import java.util.WeakHashMap;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
-import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
@@ -68,7 +65,6 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 import javax.swing.border.EmptyBorder;
@@ -89,15 +85,11 @@ import org.netbeans.modules.xml.text.navigator.base.AbstractXMLNavigatorContent;
 import org.openide.ErrorManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.loaders.DataObject;
-import org.openide.nodes.Node;
-import org.openide.nodes.NodeEvent;
-import org.openide.nodes.NodeMemberEvent;
-import org.openide.nodes.NodeReorderEvent;
 import org.openide.text.DataEditorSupport;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.UserQuestionException;
-import org.openide.util.Utilities;
 import org.openide.windows.TopComponent;
 
 
@@ -109,14 +101,6 @@ import org.openide.windows.TopComponent;
 public class NavigatorContent extends AbstractXMLNavigatorContent   {
     
     private static final boolean DEBUG = false;
-    private static NavigatorContent navigatorContentInstance = null;
-    
-    
-    public static synchronized NavigatorContent getDefault() {
-        if(navigatorContentInstance == null)
-            navigatorContentInstance = new NavigatorContent();
-        return navigatorContentInstance;
-    }
     
     //suppose we always have only one instance of the navigator panel at one time
     //so using the static fields is OK. TheeNodeAdapter is reading these two
@@ -124,28 +108,12 @@ public class NavigatorContent extends AbstractXMLNavigatorContent   {
     static boolean showAttributes = true;
     static boolean showContent = true;
     
-    private JPanel active = null;
-    private final JPanel emptyPanel;
-    
-    private JLabel msgLabel;
-    
     private DataObject peerDO = null;
-    
     private WeakHashMap uiCache = new WeakHashMap();
-    
     private boolean editorOpened = false;
     
-    private Icon waitIcon;
-
-    private NavigatorContent() {
+    public NavigatorContent() {
         setLayout(new BorderLayout());
-        //init empty panel
-        setBackground(Color.WHITE);
-        emptyPanel = new JPanel();
-        emptyPanel.setBackground(Color.WHITE);
-        emptyPanel.setLayout(new BorderLayout());
-        msgLabel = new JLabel();
-        emptyPanel.add(msgLabel, BorderLayout.CENTER);
     }
     
     public void navigate(DataObject d) {
@@ -174,7 +142,7 @@ public class NavigatorContent extends AbstractXMLNavigatorContent   {
                 
             }catch(UserQuestionException uqe) {
                 //do not open a question dialog when the document is just loaded into the navigator
-                showDocumentTooLarge();
+                showError(AbstractXMLNavigatorContent.ERROR_TOO_LARGE_DOCUMENT);
             }catch(IOException e) {
                 ErrorManager.getDefault().notify(e);
             }
@@ -184,7 +152,7 @@ public class NavigatorContent extends AbstractXMLNavigatorContent   {
     public void navigate(final DataObject documentDO, final BaseDocument bdoc) {
         if(DEBUG) System.out.println("[xml navigator] navigating to DOCUMENT " + bdoc.hashCode());
         //called from AWT thread
-        showScanningPanel();
+        showWaitPanel();
         
         //try to find the UI in the UIcache
         final JPanel cachedPanel;
@@ -213,7 +181,7 @@ public class NavigatorContent extends AbstractXMLNavigatorContent   {
                 //get document model for the file
                 try {
                     final DocumentModel model;
-                    if(cachedPanel == null)
+                    if(cachedPanel == null && bdoc.getLength() != 0)
                         model = DocumentModel.getDocumentModel(bdoc);
                     else
                         model = null; //if the panel is cached it holds a refs to the model - not need to init it again
@@ -264,7 +232,7 @@ public class NavigatorContent extends AbstractXMLNavigatorContent   {
                             });
                     } else {
                         //model is null => show message
-                        showCannotNavigate();
+                        showError(AbstractXMLNavigatorContent.ERROR_CANNOT_NAVIGATE);
                     }
                 }catch(DocumentModelException dme) {
                     ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, dme);
@@ -301,51 +269,7 @@ public class NavigatorContent extends AbstractXMLNavigatorContent   {
             }
         }
     }
-    
-    public void showDocumentTooLarge() {
-        removeAll();
-        msgLabel.setForeground(Color.GRAY);
-        msgLabel.setText(NbBundle.getMessage(NavigatorContent.class, "LBL_TooLarge"));
-        msgLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        add(emptyPanel, BorderLayout.CENTER);
-        repaint();
-    }
-    
-    public void showCannotNavigate() {
-        removeAll();
-        msgLabel.setIcon(null);
-        msgLabel.setForeground(Color.GRAY);
-        msgLabel.setText(NbBundle.getMessage(NavigatorContent.class, "LBL_CannotNavigate"));
-        msgLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        add(emptyPanel, BorderLayout.CENTER);
-        repaint();
-    }
-    
-    private void showScanningPanel() {
-        removeAll();
-        if (waitIcon == null) {
-            waitIcon = new ImageIcon( Utilities.loadImage(
-            "org/netbeans/modules/xml/text/navigator/resources/wait.gif" ) ); //NOI18N
-        }
-        msgLabel.setIcon(waitIcon);
-        msgLabel.setHorizontalAlignment(SwingConstants.LEFT);
-        msgLabel.setForeground(Color.BLACK);
-        msgLabel.setText(NbBundle.getMessage(NavigatorContent.class, "LBL_Scan"));
-        add(emptyPanel, BorderLayout.NORTH);
-        repaint();
-    }
-    
-    
-    private void showWaitPanel() {
-        removeAll();
-        msgLabel.setIcon(null);
-        msgLabel.setForeground(Color.GRAY);
-        msgLabel.setHorizontalAlignment(SwingConstants.LEFT);
-        msgLabel.setText(NbBundle.getMessage(NavigatorContent.class, "LBL_Wait"));
-        add(emptyPanel, BorderLayout.NORTH);
-        repaint();
-    }
-    
+        
     public void propertyChange(PropertyChangeEvent evt) {
         if(evt.getPropertyName() == EditorCookie.Observable.PROP_DOCUMENT) {
             if(evt.getNewValue() == null) {
@@ -544,15 +468,13 @@ public class NavigatorContent extends AbstractXMLNavigatorContent   {
             desc.addFilter(ATTRIBUTES_FILTER,
                     NbBundle.getMessage(NavigatorContent.class, "LBL_ShowAttributes"),     //NOI18N
                     NbBundle.getMessage(NavigatorContent.class, "LBL_ShowAttributesTip"),     //NOI18N
-                    showAttributes,
-                    new ImageIcon(org.openide.util.Utilities.loadImage("org/netbeans/modules/xml/text/navigator/resources/a.png")), //NOI18N
+                    showAttributes, ImageUtilities.loadImageIcon("org/netbeans/modules/xml/text/navigator/resources/a.png", false), //NOI18N
                     null
                     );
             desc.addFilter(CONTENT_FILTER,
                     NbBundle.getMessage(NavigatorContent.class, "LBL_ShowContent"),     //NOI18N
                     NbBundle.getMessage(NavigatorContent.class, "LBL_ShowContentTip"),     //NOI18N
-                    showContent,
-                    new ImageIcon(org.openide.util.Utilities.loadImage("org/netbeans/modules/xml/text/navigator/resources/content.png")), //NOI18N
+                    showContent, ImageUtilities.loadImageIcon("org/netbeans/modules/xml/text/navigator/resources/content.png", false), //NOI18N
                     null
                     );
             
