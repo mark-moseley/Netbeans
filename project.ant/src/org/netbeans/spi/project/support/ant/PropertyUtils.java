@@ -43,6 +43,7 @@ package org.netbeans.spi.project.support.ant;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -68,12 +69,13 @@ import java.util.regex.Pattern;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.ProjectManager;
-import org.netbeans.modules.project.ant.FileChangeSupport;
-import org.netbeans.modules.project.ant.FileChangeSupportEvent;
-import org.netbeans.modules.project.ant.FileChangeSupportListener;
 import org.openide.ErrorManager;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Mutex;
@@ -238,7 +240,7 @@ public class PropertyUtils {
     /**
      * Provider based on a named properties file.
      */
-    private static final class FilePropertyProvider implements PropertyProvider, FileChangeSupportListener {
+    private static final class FilePropertyProvider implements PropertyProvider, FileChangeListener {
         
         private static final RequestProcessor RP = new RequestProcessor("PropertyUtils.FilePropertyProvider.RP"); // NOI18N
         
@@ -249,7 +251,7 @@ public class PropertyUtils {
         
         public FilePropertyProvider(File properties) {
             this.properties = properties;
-            FileChangeSupport.DEFAULT.addListener(this, properties);
+            FileUtil.addFileChangeListener(this, properties);
         }
         
         public Map<String,String> getProperties() {
@@ -270,6 +272,8 @@ public class PropertyUtils {
                         Properties props = new Properties();
                         props.load(is);
                         return NbCollections.checkedMapByFilter(props, String.class, String.class, true);
+                    } catch (IllegalArgumentException iae) {
+                        Logger.getLogger(PropertyUtils.class.getName()).log(Level.WARNING, "Property file: " + properties.getPath(), iae);
                     } finally {
                         is.close();
                     }
@@ -316,25 +320,34 @@ public class PropertyUtils {
             cs.removeChangeListener(l);
         }
 
-        public void fileCreated(FileChangeSupportEvent event) {
-            //System.err.println("FPP: " + event);
+        public void fileFolderCreated(FileEvent fe) {
             fireChange();
         }
 
-        public void fileDeleted(FileChangeSupportEvent event) {
-            //System.err.println("FPP: " + event);
+        public void fileDataCreated(FileEvent fe) {
             fireChange();
         }
 
-        public void fileModified(FileChangeSupportEvent event) {
-            //System.err.println("FPP: " + event);
+        public void fileChanged(FileEvent fe) {
             fireChange();
         }
-        
+
+        public void fileRenamed(FileRenameEvent fe) {
+            fireChange();
+        }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) {
+            fireChange();
+        }
+
+        public void fileDeleted(FileEvent fe) {
+            fireChange();
+        }
+
+        @Override
         public String toString() {
             return "FilePropertyProvider[" + properties + ":" + getProperties() + "]"; // NOI18N
         }
-        
     }
     
     /**
@@ -773,7 +786,7 @@ public class PropertyUtils {
         private final PropertyProvider preprovider;
         private final PropertyProvider[] providers;
         private Map<String,String> defs;
-        private final List<PropertyChangeListener> listeners = new ArrayList<PropertyChangeListener>();
+        private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
         
         public SequentialPropertyEvaluator(final PropertyProvider preprovider, final PropertyProvider[] providers) {
             this.preprovider = preprovider;
@@ -829,15 +842,11 @@ public class PropertyUtils {
         }
         
         public void addPropertyChangeListener(PropertyChangeListener listener) {
-            synchronized (listeners) {
-                listeners.add(listener);
-            }
+            pcs.addPropertyChangeListener(listener);
         }
         
         public void removePropertyChangeListener(PropertyChangeListener listener) {
-            synchronized (listeners) {
-                listeners.remove(listener);
-            }
+            pcs.removePropertyChangeListener(listener);
         }
         
         public void stateChanged(ChangeEvent e) {
@@ -865,14 +874,8 @@ public class PropertyUtils {
                 }
                 assert !events.isEmpty();
                 defs = newdefs;
-                PropertyChangeListener[] _listeners;
-                synchronized (listeners) {
-                    _listeners = listeners.toArray(new PropertyChangeListener[listeners.size()]);
-                }
-                for (PropertyChangeListener l : _listeners) {
-                    for (PropertyChangeEvent ev : events) {
-                        l.propertyChange(ev);
-                    }
+                for (PropertyChangeEvent ev : events) {
+                    pcs.firePropertyChange(ev);
                 }
             }
         }
