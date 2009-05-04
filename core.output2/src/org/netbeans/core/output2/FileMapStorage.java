@@ -53,17 +53,15 @@ import org.openide.util.Exceptions;
  *
  */
 class FileMapStorage implements Storage {
-    /** A file channel for writing the mapped file */
-    private FileChannel writeChannel;
-    /** A file channel for reading the mapped file */
-    private FileChannel readChannel;
+    /** A file channel for reading/writing the mapped file */
+    private FileChannel fileChannel;
     /** The base number of bytes to allocate when a getWriteBuffer for writing is
      * needed. */
     private static final int BASE_BUFFER_SIZE = 8196;
     /**
-     * max possible range to map.. 20 MB
+     * max possible range to map.. 1 MB
      */
-    private static final long MAX_MAP_RANGE = 1024 * 1024 * 20;
+    private static final long MAX_MAP_RANGE = 1024 * 1024;
     /**
      * The byte getWriteBuffer that write operations write into.  Actual buffers are
      * provided for writing by calling master.slice(); this getWriteBuffer simply
@@ -98,6 +96,8 @@ class FileMapStorage implements Storage {
     private File outfile = null;
     
     private int outstandingBufferCount = 0;
+    
+    private boolean closed;
 
     FileMapStorage() {
         init();
@@ -108,10 +108,10 @@ class FileMapStorage implements Storage {
         mappedRange = -1;
         mappedStart = 0;
         master = ByteBuffer.allocateDirect (BASE_BUFFER_SIZE);
-        readChannel = null;
-        writeChannel = null;
+        fileChannel = null;
         buffer = null;
         bytesWritten = 0;
+        closed = true;
     }
 
     /**
@@ -124,15 +124,10 @@ class FileMapStorage implements Storage {
                 outdir += File.separator;
             }
             File dir = new File (outdir);
-            if (!dir.exists() || !dir.canWrite()) {
-                //Handle the (unlikely) case we cannot write to the system
-                //temporary directory
-                IllegalStateException ise = new IllegalStateException ("Cannot" + //NOI18N
-                " write to " + outdir); //NOI18N
-                Exceptions.attachLocalizedMessage(ise,
-                                                  NbBundle.getMessage(OutWriter.class,
-                                                                      "FMT_CannotWrite",
-                                                                      outdir));
+            if (!dir.exists()) {
+                //Handle the event that we cannot find the system temporary directory
+                IllegalStateException ise = new IllegalStateException ("Cannot find temp directory " + outdir); //NOI18N
+                Exceptions.attachLocalizedMessage(ise, NbBundle.getMessage(OutWriter.class, "FMT_CannotWrite", outdir));
                 throw ise;
             }
             //#47196 - if user holds down F9, many threads can enter this method
@@ -146,6 +141,12 @@ class FileMapStorage implements Storage {
                     outfile = new File(fname.toString());
                 }
                 outfile.createNewFile();
+                if (!outfile.exists() || !outfile.canWrite()) {
+                    //Handle the (unlikely) case we cannot write to the system temporary directory
+                    IllegalStateException ise = new IllegalStateException ("Cannot write to " + fname); //NOI18N
+                    Exceptions.attachLocalizedMessage(ise, NbBundle.getMessage(OutWriter.class, "FMT_CannotWrite", outdir));
+                    throw ise;
+                }
                 outfile.deleteOnExit();
             }
         }
@@ -155,18 +156,24 @@ class FileMapStorage implements Storage {
     public String toString() {
         return outfile == null ? "[unused or disposed FileMapStorage]" : outfile.getPath();
     }
+    
+    private FileChannel writeChannel() {
+        FileChannel channel = fileChannel();
+        closed = !channel.isOpen();
+        return channel;
+    }
 
     /**
-     * Get a FileChannel opened for writing against the output file.
+     * Get a FileChannel opened for reading/writing against the output file.
      */
-    private FileChannel writeChannel() {
+    private FileChannel fileChannel() {
         try {
-            if (writeChannel == null) {
+            if (fileChannel == null || !fileChannel.isOpen()) {
                 ensureFileExists();
-                FileOutputStream fos = new FileOutputStream(outfile, true);
-                writeChannel = fos.getChannel();
+                RandomAccessFile raf = new RandomAccessFile(outfile, "rw");
+                fileChannel = raf.getChannel();
             }
-            return writeChannel;
+            return fileChannel;
         } catch (FileNotFoundException fnfe) {
             fnfe.printStackTrace(); //XXX
         } catch (IOException ioe) {
@@ -176,28 +183,10 @@ class FileMapStorage implements Storage {
     }
 
     /**
-     * Fetch a FileChannel for readin the file.
-     */
-    private FileChannel readChannel() {
-        //TODO may be better to use RandomAccessFile and a single bidirectional
-        //FileChannel rather than maintaining two separate ones.
-        if (readChannel == null) {
-            try {
-                ensureFileExists();
-                FileInputStream fis = new FileInputStream (outfile);
-                readChannel = fis.getChannel();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        return readChannel;
-    }
-
-    /**
      * Fetch a getWriteBuffer of a specified size to use for appending new data to the
      * end of the file.
      */
-    public synchronized ByteBuffer getWriteBuffer (int size) throws IOException {
+    public synchronized ByteBuffer getWriteBuffer (int size) {
         if (master.capacity() - master.position() < size) {
             int newSize = Math.max (BASE_BUFFER_SIZE * 2, 
                 size + BASE_BUFFER_SIZE);
@@ -223,7 +212,7 @@ class FileMapStorage implements Storage {
      * Dispose of a ByteBuffer which has been acquired for writing by one of
      * the write methods, writing its contents to the file.
      */
-    public int write (ByteBuffer bb, boolean addNewLine) throws IOException {
+    public int write (ByteBuffer bb) throws IOException {
         synchronized (this) {
             if (bb == buffer) {
                 buffer = null;
@@ -232,13 +221,11 @@ class FileMapStorage implements Storage {
         int position = size();
         int byteCount = bb.position();
         bb.flip();
-        if (writeChannel().isOpen()) { //If a thread was terminated while writing, it will be closed
-            writeChannel().write (bb);
-            if (addNewLine) {
-                writeChannel().write(ByteBuffer.wrap(OutWriter.lineSepBytes));
-            }
+        FileChannel channel = writeChannel();
+        if (channel.isOpen()) { //If a thread was terminated while writing, it will be closed
+            channel.write (bb);
             synchronized (this) {
-                bytesWritten += byteCount +  (addNewLine ? OutWriter.lineSepBytes.length : 0);
+                bytesWritten += byteCount;
                 outstandingBufferCount--;
             }
         }
@@ -250,18 +237,11 @@ class FileMapStorage implements Storage {
             Controller.log ("Disposing file map storage");
             Controller.logStack();
         }
-        if (writeChannel != null && writeChannel.isOpen()) {
+        if (fileChannel != null && fileChannel.isOpen()) {
             try {
-                writeChannel.close();
-                writeChannel = null;
-            } catch (Exception e) {
-                Exceptions.printStackTrace(e);
-            }
-        }
-        if (readChannel != null && readChannel.isOpen()) {
-            try {
-                readChannel.close();
-                readChannel = null;
+                fileChannel.close();
+                fileChannel = null;
+                closed = true;
             } catch (Exception e) {
                 Exceptions.printStackTrace(e);
             }
@@ -286,34 +266,24 @@ class FileMapStorage implements Storage {
     public ByteBuffer getReadBuffer(int start, int byteCount) throws IOException {
         ByteBuffer cont;
         synchronized (this) {
-            //XXX Some optimizations possible here:
-            // - Don't map the entire file, just what is requested (perhaps if the mapped
-            //    start - currentlyMappedStart > someThreshold
-            // - Use RandomAccessFile and use one buffer for reading and writing (this may
-            //    cause contention problems blocking repaints)
             cont = this.contents;
             if (cont == null || start + byteCount > mappedRange || start < mappedStart) {
-                FileChannel ch = readChannel();
-                long offset = start + byteCount;
-                mappedStart = Math.max((long)0, (long)(start - (MAX_MAP_RANGE /2)));
+                FileChannel ch = fileChannel();
+                mappedStart = Math.max((long)0, start - (MAX_MAP_RANGE /2));
                 long prevMappedRange = mappedRange;
                 long map = byteCount > (MAX_MAP_RANGE / 2) ? (byteCount + byteCount / 10) : (MAX_MAP_RANGE / 2);
                 mappedRange = Math.min(ch.size(), start + map);
                 try {
                     try {
-                        cont = ch.map(FileChannel.MapMode.READ_ONLY,
-                            mappedStart, mappedRange - mappedStart);
+                        cont = ch.map(FileChannel.MapMode.READ_ONLY, mappedStart, mappedRange - mappedStart);
                         this.contents = cont;
                     } catch (IOException ioe) {
-                        Logger.getAnonymousLogger().info("Failed to memory map output file for " + //NOI18N
-                                "reading.  Trying to read it normally."); //NOI18N
+                        Logger.getAnonymousLogger().info("Failed to memory map output file for reading. Trying to read it normally."); //NOI18N
                         Exceptions.printStackTrace(ioe);
 
-                        //If a lot of processes have crashed with mapped files (generally when testing),
-                        //this exception may simply be that the memory cannot be allocated for mapping.
-                        //Try to do it non-mapped
+                        // Memory mapping failed, fallback to non-mapped
                         cont = ByteBuffer.allocate((int) (mappedRange - mappedStart));
-                        ch.position(mappedStart).read(cont);
+                        ch.read(cont, mappedStart);
                         this.contents = cont;
                     }
                 } catch (IOException ioe) {
@@ -347,22 +317,20 @@ class FileMapStorage implements Storage {
     public void flush() throws IOException {
         if (buffer != null) {
             if (Controller.LOG) Controller.log("FILEMAP STORAGE flush(): " + outstandingBufferCount);
-            write (buffer, false);
-            writeChannel.force(false);
+            write (buffer);
+            fileChannel.force(false);
             buffer = null;
         }
     }
 
     public void close() throws IOException {
-        if (writeChannel != null) {
+        if (fileChannel != null) {
             flush();
-            writeChannel.close();
-            writeChannel = null;
-            if (Controller.LOG) Controller.log("FILEMAP STORAGE CLOSE.  Outstanding buffer count: " + outstandingBufferCount);
         }
+        closed = true;
     }
 
     public boolean isClosed() {
-        return writeChannel == null || !writeChannel.isOpen();
+        return fileChannel == null || closed;
     }
 }
