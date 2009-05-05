@@ -55,25 +55,33 @@ import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
  * Method, which contains it's body right at throws POD (point of declaration)
  * @author Vladimir Kvasihn
  */
-public class MethodDDImpl<T> extends MethodImpl<T> implements CsmFunctionDefinition<T> {
+public class MethodDDImpl<T> extends MethodImpl<T> implements CsmFunctionDefinition {
 
     private final CsmCompoundStatement body;
     
-    public MethodDDImpl(AST ast, ClassImpl cls, CsmVisibility visibility) {
-        this(ast, cls, visibility, true);
-    }
-    
-    protected MethodDDImpl(AST ast, ClassImpl cls, CsmVisibility visibility, boolean register) {
-        super(ast, cls, visibility, false);
+    public MethodDDImpl(AST ast, ClassImpl cls, CsmVisibility visibility, boolean register, boolean global) throws AstRendererException {
+        super(ast, cls, visibility, false, global);
         body = AstRenderer.findCompoundStatement(ast, getContainingFile(), this);
-        assert body != null : "null body in function definition, line " + getStartPosition().getLine() + ":" + getContainingFile().getAbsolutePath();
+        if (body == null) {
+            throw new AstRendererException((FileImpl)getContainingFile(), getStartOffset(),
+                    "Null body in method definition."); // NOI18N
+        }
         if (register) {
             registerInProject();
         }
     }
 
+    @Override
     public CsmFunction getDeclaration() {
         return this;
+    }
+
+    @Override
+    public void dispose() {
+        super.dispose();
+        if (body instanceof Disposable) {
+            ((Disposable)body).dispose();
+        }
     }
 
     @Override

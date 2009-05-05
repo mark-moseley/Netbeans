@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
 import java.io.DataInput;
@@ -58,15 +57,19 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.netbeans.modules.cnd.api.model.CsmClass;
 import org.netbeans.modules.cnd.api.model.CsmDeclaration;
-import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmDeclaration.Kind;
 import org.netbeans.modules.cnd.api.model.CsmFriend;
 import org.netbeans.modules.cnd.api.model.CsmFriendClass;
 import org.netbeans.modules.cnd.api.model.CsmFriendFunction;
 import org.netbeans.modules.cnd.api.model.CsmFunction;
+import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
+import org.netbeans.modules.cnd.api.model.util.UIDs;
+import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.repository.DeclarationContainerKey;
+import org.netbeans.modules.cnd.modelimpl.repository.NamespaceDeclarationContainerKey;
 import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
@@ -74,88 +77,113 @@ import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.support.SelfPersistent;
 import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
 import org.netbeans.modules.cnd.modelimpl.textcache.UniqueNameCache;
+import org.netbeans.modules.cnd.modelimpl.uid.UIDUtilities;
 
 /**
- * Storage for project declarations. Class was extracted from ProjectBase.
+ * Storage for project or namespace declarations.
  * @author Alexander Simon
  */
-/*package-local*/ class DeclarationContainer extends ProjectComponent implements Persistent, SelfPersistent {
-    
+public class DeclarationContainer extends ProjectComponent implements Persistent, SelfPersistent {
+
     private SortedMap<CharSequence, Object> declarations = new TreeMap<CharSequence, Object>(CharSequenceKey.Comparator);
     private ReadWriteLock declarationsLock = new ReentrantReadWriteLock();
-    
     private Map<CharSequence, Set<CsmUID<? extends CsmFriend>>> friends = new ConcurrentHashMap<CharSequence, Set<CsmUID<? extends CsmFriend>>>();
+    // empty stub
+    private static final DeclarationContainer EMPTY = new DeclarationContainer() {
+
+        @Override
+        public void put() {
+        }
+
+        @Override
+        public void putDeclaration(CsmOffsetableDeclaration decl) {
+        }
+    };
 
     /** Creates a new instance of ProjectDeclarations */
     public DeclarationContainer(ProjectBase project) {
-	super(new DeclarationContainerKey(project.getUniqueName().toString()));
-	put();
+        super(new DeclarationContainerKey(project.getUniqueName().toString()), false);
+        put();
     }
-    
+
+    /** Creates a new instance of ProjectDeclarations */
+    public DeclarationContainer(CsmNamespace ns) {
+        super(new NamespaceDeclarationContainerKey(ns), false);
+        put();
+    }
+
     public DeclarationContainer(DataInput input) throws IOException {
-	super(input);
-	read(input);
+        super(input);
+        read(input);
     }
 
-    public void removeDeclaration(CsmDeclaration decl) {
-	CharSequence uniqueName = CharSequenceKey.create(decl.getUniqueName());
-//	synchronized(declarations){
-	Object o = null;
-	try {
-	    declarationsLock.writeLock().lock();
-	    o = declarations.get(uniqueName);
+    // only for EMPTY static field
+    private DeclarationContainer() {
+        super((org.netbeans.modules.cnd.repository.spi.Key) null, false);
+    }
 
-	    if (o instanceof CsmUID[]) {
+    public static DeclarationContainer empty() {
+        return EMPTY;
+    }
+
+    public void removeDeclaration(CsmOffsetableDeclaration decl) {
+        CharSequence uniqueName = CharSequenceKey.create(decl.getUniqueName());
+        CsmUID<CsmOffsetableDeclaration> anUid = UIDCsmConverter.declarationToUID(decl);
+        Object o = null;
+        try {
+            declarationsLock.writeLock().lock();
+            o = declarations.get(uniqueName);
+
+            if (o instanceof CsmUID[]) {
                 @SuppressWarnings("unchecked")
-		CsmUID<CsmOffsetableDeclaration>[] uids = (CsmUID<CsmOffsetableDeclaration>[])o;
-		int size = uids.length;
-		CsmUID<CsmOffsetableDeclaration> res = null;
-		int k = size;
-		for(int i = 0; i < size; i++){
-		    CsmUID<CsmOffsetableDeclaration> uid = uids[i];
-		    if (isSameFile(uid,(CsmOffsetableDeclaration)decl)){
-			uids[i] = null;
-			k--;
-		    } else {
-			res = uid;
-		    }
-		}
-		if (k == 0) {
-		    declarations.remove(uniqueName);
-		} else if (k == 1){
-		    declarations.put(uniqueName,res);
-		} else {
+                CsmUID<CsmOffsetableDeclaration>[] uids = (CsmUID<CsmOffsetableDeclaration>[]) o;
+                int size = uids.length;
+                CsmUID<CsmOffsetableDeclaration> res = null;
+                int k = size;
+                for (int i = 0; i < size; i++) {
+                    CsmUID<CsmOffsetableDeclaration> uid = uids[i];
+                    if (UIDUtilities.isSameFile(uid, anUid)) {
+                        uids[i] = null;
+                        k--;
+                    } else {
+                        res = uid;
+                    }
+                }
+                if (k == 0) {
+                    declarations.remove(uniqueName);
+                } else if (k == 1) {
+                    declarations.put(uniqueName, res);
+                } else {
                     @SuppressWarnings("unchecked")
-		    CsmUID<CsmOffsetableDeclaration>[] newUids = new CsmUID[k];
-		    k = 0;
-		    for(int i = 0; i < size; i++){
-			CsmUID<CsmOffsetableDeclaration> uid = uids[i];
-			if (uid != null){
-			    newUids[k]=uid;
-			    k++;
-			}
-		    }
-		    declarations.put(uniqueName,newUids);
-		}
-	    } else if (o instanceof CsmUID){
-		declarations.remove(uniqueName);
-	    }
-	} finally {
-	    declarationsLock.writeLock().unlock();
-	}
-	removeFriend(decl);
-//	}
-	put();
+                    CsmUID<CsmOffsetableDeclaration>[] newUids = new CsmUID[k];
+                    k = 0;
+                    for (int i = 0; i < size; i++) {
+                        CsmUID<CsmOffsetableDeclaration> uid = uids[i];
+                        if (uid != null) {
+                            newUids[k] = uid;
+                            k++;
+                        }
+                    }
+                    declarations.put(uniqueName, newUids);
+                }
+            } else if (o instanceof CsmUID) {
+                declarations.remove(uniqueName);
+            }
+        } finally {
+            declarationsLock.writeLock().unlock();
+        }
+        removeFriend(decl);
+        put();
     }
-    
-    private void removeFriend(CsmDeclaration decl){
+
+    private void removeFriend(CsmOffsetableDeclaration decl) {
         if (CsmKindUtilities.isFriendClass(decl)) {
             CsmFriendClass cls = (CsmFriendClass) decl;
             CharSequence name = CharSequenceKey.create(cls.getName());
             Set<CsmUID<? extends CsmFriend>> set = friends.get(name);
             if (set != null) {
-                set.remove(cls.getUID());
-                if (set.size()==0){
+                set.remove(UIDs.get(cls));
+                if (set.size() == 0) {
                     friends.remove(name);
                 }
             }
@@ -164,8 +192,8 @@ import org.netbeans.modules.cnd.modelimpl.textcache.UniqueNameCache;
             CharSequence name = CharSequenceKey.create(fun.getSignature());
             Set<CsmUID<? extends CsmFriend>> set = friends.get(name);
             if (set != null) {
-                set.remove(fun.getUID());
-                if (set.size()==0){
+                set.remove(UIDs.get(fun));
+                if (set.size() == 0) {
                     friends.remove(name);
                 }
             }
@@ -173,101 +201,171 @@ import org.netbeans.modules.cnd.modelimpl.textcache.UniqueNameCache;
     }
 
     public void putDeclaration(CsmOffsetableDeclaration decl) {
-	CharSequence name = UniqueNameCache.getManager().getString(decl.getUniqueName());
-        @SuppressWarnings("unchecked")
-	CsmUID<CsmOffsetableDeclaration> uid = RepositoryUtils.put(decl);
-	assert uid != null;
-//            synchronized(declarations) {
-	try {
-	    declarationsLock.writeLock().lock();
+        CharSequence name = UniqueNameCache.getManager().getString(decl.getUniqueName());
+        CsmUID<CsmOffsetableDeclaration> uid = RepositoryUtils.put(decl);
+        assert uid != null;
+        if (!(uid instanceof SelfPersistent)) {
+            String line = " ["+decl.getStartPosition().getLine()+":"+decl.getStartPosition().getColumn()+"-"+ // NOI18N
+                          decl.getEndPosition().getLine()+":"+decl.getEndPosition().getColumn()+"]"; // NOI18N
+            new Exception("attempt to put local declaration " + decl + line).printStackTrace(); // NOI18N
+        }
+        try {
+            declarationsLock.writeLock().lock();
 
-	    Object o = declarations.get(name);
-	    if (o instanceof CsmUID[]) {
+            Object o = declarations.get(name);
+            if (o instanceof CsmUID[]) {
                 @SuppressWarnings("unchecked")
-		CsmUID<CsmOffsetableDeclaration>[] uids = (CsmUID[])o;
-		boolean find = false;
-		for(int i = 0; i < uids.length; i++){
-		    if (isSameFile(uids[i],uid)){
-			uids[i] = uid;
-			find = true;
-			break;
-		    }
-		}
-		if (!find){
+                CsmUID<CsmOffsetableDeclaration>[] uids = (CsmUID[]) o;
+                boolean find = false;
+                for (int i = 0; i < uids.length; i++) {
+                    if (UIDUtilities.isSameFile(uids[i], uid)) {
+                        uids[i] = uid;
+                        find = true;
+                        break;
+                    }
+                }
+                if (!find) {
                     @SuppressWarnings("unchecked")
-		    CsmUID<CsmOffsetableDeclaration>[] res = new CsmUID[uids.length+1];
-		    res[0]=uid;
-		    for(int i = 0; i < uids.length; i++){
-			res[i+1] = uids[i];
-		    }
-		    declarations.put(name, res);
-		}
-	    } else if (o instanceof CsmUID) {
+                    CsmUID<CsmOffsetableDeclaration>[] res = new CsmUID[uids.length + 1];
+                    res[0] = uid;
+                    for (int i = 0; i < uids.length; i++) {
+                        res[i + 1] = uids[i];
+                    }
+                    declarations.put(name, res);
+                }
+            } else if (o instanceof CsmUID) {
                 @SuppressWarnings("unchecked")
-		CsmUID<CsmOffsetableDeclaration> oldUid = (CsmUID<CsmOffsetableDeclaration>)o;
-		if (isSameFile(oldUid,uid)) {
-		    declarations.put(name, uid);
-		} else {
-		    CsmUID[] uids = new CsmUID[]{uid,oldUid};
-		    declarations.put(name, uids);
-		}
-	    } else {
-		declarations.put(name, uid);
-	    }
-	} finally {
-	    declarationsLock.writeLock().unlock();
-	}
-	putFriend(decl);
-//            }
+                CsmUID<CsmOffsetableDeclaration> oldUid = (CsmUID<CsmOffsetableDeclaration>) o;
+                if (UIDUtilities.isSameFile(oldUid, uid)) {
+                    declarations.put(name, uid);
+                } else {
+                    CsmUID[] uids = new CsmUID[]{uid, oldUid};
+                    declarations.put(name, uids);
+                }
+            } else {
+                declarations.put(name, uid);
+            }
+        } finally {
+            declarationsLock.writeLock().unlock();
+        }
+        putFriend(decl);
+        put();
     }
-    
-    private void putFriend(CsmDeclaration decl){
+
+    private void putFriend(CsmDeclaration decl) {
         if (CsmKindUtilities.isFriendClass(decl)) {
             CsmFriendClass cls = (CsmFriendClass) decl;
             CharSequence name = CharSequenceKey.create(cls.getName());
             Set<CsmUID<? extends CsmFriend>> set = friends.get(name);
             if (set == null) {
                 set = new HashSet<CsmUID<? extends CsmFriend>>();
-                friends.put(name,set);
+                friends.put(name, set);
             }
-            set.add(cls.getUID());
+            set.add(UIDs.get(cls));
         } else if (CsmKindUtilities.isFriendMethod(decl)) {
             CsmFriendFunction fun = (CsmFriendFunction) decl;
             CharSequence name = CharSequenceKey.create(fun.getSignature());
             Set<CsmUID<? extends CsmFriend>> set = friends.get(name);
             if (set == null) {
                 set = new HashSet<CsmUID<? extends CsmFriend>>();
-                friends.put(name,set);
+                friends.put(name, set);
             }
-            set.add(fun.getUID());
+            set.add(UIDs.get(fun));
         }
-	put();
     }
-    
-    public Collection<CsmOffsetableDeclaration> getDeclarationsRange(CharSequence from, CharSequence to) {
-        List<CsmUID<CsmOffsetableDeclaration>> list = new ArrayList<CsmUID<CsmOffsetableDeclaration>>();
+
+    public Collection<CsmUID<CsmOffsetableDeclaration>> getUIDsRange(CharSequence from, CharSequence to) {
+        Collection<CsmUID<CsmOffsetableDeclaration>> list = new ArrayList<CsmUID<CsmOffsetableDeclaration>>();
         from = CharSequenceKey.create(from);
         to = CharSequenceKey.create(to);
         try {
             declarationsLock.readLock().lock();
-            for (Map.Entry<CharSequence, Object> entry : declarations.subMap(from, to).entrySet()){
-                Object o = entry.getValue();
-                if (o instanceof CsmUID[]) {
-                    CsmUID[] uids = (CsmUID[])o;
-                    for(CsmUID uid:uids){
-                        list.add(uid);
-                    }
-                } else if (o instanceof CsmUID){
-                    list.add((CsmUID)o);
-                }
+            for (Map.Entry<CharSequence, Object> entry : declarations.subMap(from, to).entrySet()) {
+                addAll(list, entry.getValue());
             }
         } finally {
             declarationsLock.readLock().unlock();
         }
-        return UIDCsmConverter.UIDsToDeclarations(list);
+        return list;
     }
-    
-    public Collection<CsmFriend> findFriends(CsmOffsetableDeclaration decl){
+
+    public Collection<CsmUID<CsmOffsetableDeclaration>> getUIDsFQN(CharSequence fqn, Kind[] kinds) {
+        Collection<CsmUID<CsmOffsetableDeclaration>> list = new ArrayList<CsmUID<CsmOffsetableDeclaration>>();
+        char maxChar = 255; //Character.MAX_VALUE;
+        for(Kind kind : kinds) {
+            String prefix = Utils.getCsmDeclarationKindkey(kind) + OffsetableDeclarationBase.UNIQUE_NAME_SEPARATOR + fqn;
+            CharSequence from  = CharSequenceKey.create(prefix);
+            CharSequence to  = CharSequenceKey.create(prefix+maxChar);
+            try {
+                declarationsLock.readLock().lock();
+                for (Map.Entry<CharSequence, Object> entry : declarations.subMap(from, to).entrySet()) {
+                    addAll(list, entry.getValue());
+                }
+            } finally {
+                declarationsLock.readLock().unlock();
+            }
+        }
+        return list;
+    }
+
+    // for unit test
+    SortedMap<CharSequence, Object> testDeclarations() {
+        try {
+            declarationsLock.readLock().lock();
+            return new TreeMap<CharSequence, Object>(declarations);
+        } finally {
+            declarationsLock.readLock().unlock();
+        }
+    }
+
+    SortedMap<CharSequence, Set<CsmUID<? extends CsmFriend>>> testFriends(){
+        return new TreeMap<CharSequence, Set<CsmUID<? extends CsmFriend>>>(friends);
+    }
+
+    /**
+     * Adds ether object to the collection or array of objects
+     * @param list
+     * @param o - can be CsmUID or CsmUID[]
+     */
+    private static void addAll(Collection<CsmUID<CsmOffsetableDeclaration>> list, Object o) {
+        if (o instanceof CsmUID<?>[]) {
+            // we know the template type to be CsmOffsetableDeclaration
+            @SuppressWarnings("unchecked") // checked
+            final CsmUID<CsmOffsetableDeclaration>[] uids = (CsmUID<CsmOffsetableDeclaration>[]) o;
+            for (CsmUID<CsmOffsetableDeclaration> uid : uids) {
+                list.add(uid);
+            }
+        } else if (o instanceof CsmUID<?>) {
+            // we know the template type to be CsmOffsetableDeclaration
+            @SuppressWarnings("unchecked") // checked
+            final CsmUID<CsmOffsetableDeclaration> uid = (CsmUID<CsmOffsetableDeclaration>) o;
+            list.add(uid);
+        }
+    }
+
+    public Collection<CsmOffsetableDeclaration> getDeclarationsRange(CharSequence from, CharSequence to) {
+        return UIDCsmConverter.UIDsToDeclarations(getUIDsRange(from, to));
+    }
+
+    public Collection<CsmOffsetableDeclaration> getDeclarationsRange(CharSequence fqn, Kind[] kinds) {
+        return UIDCsmConverter.UIDsToDeclarations(getUIDsFQN(fqn, kinds));
+    }
+
+    public Collection<CsmUID<CsmOffsetableDeclaration>> getDeclarationsUIDs() {
+        // add all declarations
+        Collection<CsmUID<CsmOffsetableDeclaration>> list = new ArrayList<CsmUID<CsmOffsetableDeclaration>>();
+        try {
+            declarationsLock.readLock().lock();
+            for (Object o : declarations.values()) {
+                addAll(list, o);
+            }
+        } finally {
+            declarationsLock.readLock().unlock();
+        }
+        return list;
+    }
+
+    public Collection<CsmFriend> findFriends(CsmOffsetableDeclaration decl) {
         CharSequence name = null;
         if (CsmKindUtilities.isClass(decl)) {
             CsmClass cls = (CsmClass) decl;
@@ -288,18 +386,18 @@ import org.netbeans.modules.cnd.modelimpl.textcache.UniqueNameCache;
             } finally {
                 declarationsLock.readLock().unlock();
             }
-            if (list.size()>0){
+            if (list.size() > 0) {
                 Collection<CsmFriend> res = new ArrayList<CsmFriend>();
-                for(CsmUID<? extends CsmFriend> friendUID : list){
+                for (CsmUID<? extends CsmFriend> friendUID : list) {
                     CsmFriend friend = friendUID.getObject();
                     if (CsmKindUtilities.isFriendClass(friend)) {
                         CsmFriendClass cls = (CsmFriendClass) friend;
-                        if (decl.equals(cls.getReferencedClass())){
+                        if (decl.equals(cls.getReferencedClass())) {
                             res.add(cls);
                         }
                     } else if (CsmKindUtilities.isFriendMethod(friend)) {
                         CsmFriendFunction fun = (CsmFriendFunction) friend;
-                        if (decl.equals(fun.getReferencedFunction())){
+                        if (decl.equals(fun.getReferencedFunction())) {
                             res.add(fun);
                         }
                     }
@@ -309,27 +407,19 @@ import org.netbeans.modules.cnd.modelimpl.textcache.UniqueNameCache;
         }
         return Collections.<CsmFriend>emptyList();
     }
-    
+
     public Collection<CsmOffsetableDeclaration> findDeclarations(CharSequence uniqueName) {
-        List<CsmUID<CsmOffsetableDeclaration>> list = new ArrayList<CsmUID<CsmOffsetableDeclaration>>();
+        Collection<CsmUID<CsmOffsetableDeclaration>> list = new ArrayList<CsmUID<CsmOffsetableDeclaration>>();
         uniqueName = CharSequenceKey.create(uniqueName);
         try {
             declarationsLock.readLock().lock();
-            Object o = declarations.get(uniqueName);
-            if (o instanceof CsmUID[]) {
-                CsmUID[] uids = (CsmUID[])o;
-                for(CsmUID uid:uids){
-                    list.add(uid);
-                }
-            } else if (o instanceof CsmUID){
-                list.add((CsmUID)o);
-            }
+            addAll(list, declarations.get(uniqueName));
         } finally {
             declarationsLock.readLock().unlock();
         }
         return UIDCsmConverter.UIDsToDeclarations(list);
     }
-    
+
     public CsmDeclaration getDeclaration(CharSequence uniqueName) {
         CsmDeclaration result;
         CsmUID<CsmDeclaration> uid = null;
@@ -337,19 +427,27 @@ import org.netbeans.modules.cnd.modelimpl.textcache.UniqueNameCache;
         try {
             declarationsLock.readLock().lock();
             Object o = declarations.get(uniqueName);
-            if (o instanceof CsmUID[]) {
-                uid = ((CsmUID[])o)[0];
-            } else if (o instanceof CsmUID){
-                uid = (CsmUID)o;
+            if (o instanceof CsmUID<?>[]) {
+                // we know the template type to be CsmDeclaration
+                @SuppressWarnings("unchecked") // checked
+                final CsmUID<CsmDeclaration>[] uids = (CsmUID<CsmDeclaration>[]) o;
+                uid = uids[0];
+            } else if (o instanceof CsmUID<?>) {
+                // we know the template type to be CsmDeclaration
+                @SuppressWarnings("unchecked") // checked
+                final CsmUID<CsmDeclaration> uidt = (CsmUID<CsmDeclaration>) o;
+                uid = uidt;
             }
         } finally {
             declarationsLock.readLock().unlock();
         }
         result = UIDCsmConverter.UIDtoDeclaration(uid);
-        assert result != null || uid == null : "no declaration for UID " + uid;
+        if (uid != null && result == null) {
+            DiagnosticExceptoins.register(new IllegalStateException("no declaration for UID " + uid)); // NOI18N
+        }
         return result;
     }
-    
+
     public void clearDeclarations() {
         try {
             declarationsLock.writeLock().lock();
@@ -359,11 +457,10 @@ import org.netbeans.modules.cnd.modelimpl.textcache.UniqueNameCache;
             declarationsLock.writeLock().unlock();
         }
     }
-    
-    
+
     @Override
     public void write(DataOutput aStream) throws IOException {
-	super.write(aStream);
+        super.write(aStream);
         try {
             declarationsLock.readLock().lock();
             UIDObjectFactory.getDefaultFactory().writeStringToArrayUIDMap(declarations, aStream, false);
@@ -371,28 +468,8 @@ import org.netbeans.modules.cnd.modelimpl.textcache.UniqueNameCache;
             declarationsLock.readLock().unlock();
         }
     }
-    
+
     private void read(DataInput aStream) throws IOException {
         UIDObjectFactory.getDefaultFactory().readStringToArrayUIDMap(declarations, aStream, UniqueNameCache.getManager());
-    }
-    
-    private boolean isSameFile(CsmUID<CsmOffsetableDeclaration> uid1, CsmUID<CsmOffsetableDeclaration> uid2){
-        return isSameFile(uid1.getObject(), uid2.getObject());
-    }
-    
-    private boolean isSameFile(CsmUID<CsmOffsetableDeclaration> uid1, CsmOffsetableDeclaration decl2){
-        return isSameFile(uid1.getObject(), decl2);
-    }
-    
-    private boolean isSameFile(CsmOffsetableDeclaration decl1, CsmOffsetableDeclaration decl2){
-        if (decl1 != null && decl2 != null){
-            CsmFile file1 = decl1.getContainingFile();
-            CsmFile file2 = decl2.getContainingFile();
-            if (file1 != null && file1 != null) {
-                return file1.equals(file2);
-            }
-        }
-        // assert?
-        return false;
     }
 }

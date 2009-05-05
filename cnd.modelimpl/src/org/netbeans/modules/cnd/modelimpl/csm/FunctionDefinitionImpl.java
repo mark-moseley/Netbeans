@@ -67,22 +67,23 @@ public class FunctionDefinitionImpl<T> extends FunctionImplEx<T> implements CsmF
     public FunctionDefinitionImpl(AST ast, CsmFile file, CsmScope scope, boolean register, boolean global) throws AstRendererException {
         super(ast, file, scope, false, global);
         body = AstRenderer.findCompoundStatement(ast, getContainingFile(), this);
-        boolean assertionCondition = body != null;
-        if (!assertionCondition) {
-            if (register) {
-                RepositoryUtils.hang(this);
-            } else {
-                Utils.setSelfUID(this);
-            }
+        if (body == null) {
             throw new AstRendererException((FileImpl) file, getStartOffset(),
                     "Null body in function definition."); // NOI18N
-        //assert body != null : "null body in function definition, line " + getStartPosition().getLine() + ":" + file.getAbsolutePath();
         }
         if (register) {
             registerInProject();
         }
     }
 
+    @Override
+    public void dispose() {
+        super.dispose();
+        if (body instanceof Disposable) {
+            ((Disposable) body).dispose();
+        }
+    }
+    
     @Override
     public CsmCompoundStatement getBody() {
         return body;
@@ -127,8 +128,8 @@ public class FunctionDefinitionImpl<T> extends FunctionImplEx<T> implements CsmF
         if (i1 > 0) {
             s1 = "operator  " + s1.substring(i1 + 2); // NOI18N
         }
-        Iterator<CsmMember> it = CsmSelect.getDefault().getClassMembers(owner,
-                CsmSelect.getDefault().getFilterBuilder().createNameFilter("operator", false, true, false)); // NOI18N
+        Iterator<CsmMember> it = CsmSelect.getClassMembers(owner,
+                CsmSelect.getFilterBuilder().createNameFilter("operator", false, true, false)); // NOI18N
         while (it.hasNext()) {
             CsmMember m = it.next();
             String s2 = m.getName().toString();
@@ -154,15 +155,15 @@ public class FunctionDefinitionImpl<T> extends FunctionImplEx<T> implements CsmF
         if (def == null) {
             CsmObject owner = findOwner(parent);
             if (owner instanceof CsmClass) {
-                Iterator<CsmMember> it = CsmSelect.getDefault().getClassMembers((CsmClass) owner,
-                        CsmSelect.getDefault().getFilterBuilder().createNameFilter(getName().toString(), true, true, false));
+                Iterator<CsmMember> it = CsmSelect.getClassMembers((CsmClass) owner,
+                        CsmSelect.getFilterBuilder().createNameFilter(getName(), true, true, false));
                 def = findByName(it, getName());
                 if (def == null && isOperator()) {
                     def = fixCastOperator((CsmClass)owner);
                 }
             } else if (owner instanceof CsmNamespace) {
-                Iterator<CsmOffsetableDeclaration> it = CsmSelect.getDefault().getDeclarations(((CsmNamespace) owner),
-                        CsmSelect.getDefault().getFilterBuilder().createNameFilter(getName().toString(), true, true, false));
+                Iterator<CsmOffsetableDeclaration> it = CsmSelect.getDeclarations(((CsmNamespace) owner),
+                        CsmSelect.getFilterBuilder().createNameFilter(getName(), true, true, false));
                 def = findByName(it, getName());
             }
         }

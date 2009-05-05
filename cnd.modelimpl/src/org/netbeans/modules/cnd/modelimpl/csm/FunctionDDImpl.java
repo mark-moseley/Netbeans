@@ -43,12 +43,15 @@ package org.netbeans.modules.cnd.modelimpl.csm;
 
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.api.model.deep.CsmCompoundStatement;
-import java.util.List;
 import antlr.collections.AST;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Iterator;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 
@@ -57,15 +60,28 @@ import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
  * for those cases, when they coinside (i.e. implivit inlines)
  * @author Vladimir Kvasihn
  */
-public class FunctionDDImpl<T> extends FunctionImpl<T> implements CsmFunctionDefinition<T> {
+public class FunctionDDImpl<T> extends FunctionImpl<T> implements CsmFunctionDefinition {
     
     private final CsmCompoundStatement body;
 
-    public FunctionDDImpl(AST ast, CsmFile file, CsmScope scope) {
-        super(ast, file, scope, false);
+    public FunctionDDImpl(AST ast, CsmFile file, CsmScope scope, boolean global) throws AstRendererException {
+        super(ast, file, scope, false, global);
         body = AstRenderer.findCompoundStatement(ast, getContainingFile(), this);
-        assert body != null : "null body in function definition, line " + getStartPosition().getLine() + ":" + file.getAbsolutePath();
-        registerInProject();
+        if (body == null) {
+            throw new AstRendererException((FileImpl)file, getStartOffset(),
+                    "Null body in function definition."); // NOI18N
+        }
+        if (global) {
+            registerInProject();
+        }
+    }
+
+    @Override
+    public void dispose() {
+        super.dispose();
+        if (body instanceof Disposable) {
+            ((Disposable) body).dispose();
+        }
     }
 
     @Override
@@ -73,14 +89,32 @@ public class FunctionDDImpl<T> extends FunctionImpl<T> implements CsmFunctionDef
         return body;
     }
 
+    @Override
     public CsmFunction getDeclaration() {
+        if( isCStyleStatic() ) {
+            CharSequence name = getName();
+            CsmFilter filter = CsmSelect.getFilterBuilder().createNameFilter(
+                               name, true, true, false);
+            Iterator<CsmFunction> it = CsmSelect.getStaticFunctions(getContainingFile(), filter);
+            while(it.hasNext()){
+                CsmFunction fun = it.next();
+                if( name.equals(fun.getName()) ) {
+                    return fun;
+                }
+            }
+            return this;
+        }
         String uname = Utils.getCsmDeclarationKindkey(CsmDeclaration.Kind.FUNCTION) + UNIQUE_NAME_SEPARATOR + getUniqueNameWithoutPrefix();
         CsmProject prj = getContainingFile().getProject();
         CsmDeclaration decl = findDeclaration(prj, uname);
-        if( decl != null && decl.getKind() == CsmDeclaration.Kind.FUNCTION ) {
-            return (CsmFunction) decl;
+        if (decl != null && decl.getKind() == CsmDeclaration.Kind.FUNCTION) {
+            if (!isStatic() || CsmKindUtilities.isClassMember(this)
+                    || !CsmKindUtilities.isOffsetableDeclaration(decl)
+                    || getContainingFile().equals(((CsmOffsetableDeclaration)decl).getContainingFile())) {
+                return (CsmFunction) decl;
+            }
         }
-        for (CsmProject lib : prj.getLibraries()){
+        for (CsmProject lib : prj.getLibraries()) {
             CsmFunction def = findDeclaration(lib, uname);
             if (def != null) {
                 return def;
@@ -88,19 +122,25 @@ public class FunctionDDImpl<T> extends FunctionImpl<T> implements CsmFunctionDef
         }
         return this;
     }
-    
+
+    @Override
+    public boolean isPureDefinition() {
+        return false;
+    }
+
     private CsmFunction findDeclaration(CsmProject prj, String uname){
         CsmDeclaration decl = prj.findDeclaration(uname);
         if( decl != null && decl.getKind() == CsmDeclaration.Kind.FUNCTION ) {
             return (CsmFunction) decl;
         }
-        if (getParameters().size()!=0){
+        FunctionParameterListImpl parameterList = getParameterList();
+        if (parameterList != null && !parameterList.isEmpty()) {
             CsmFile file = getContainingFile();
             if (!ProjectBase.isCppFile(file)){
                 uname = uname.substring(0,uname.indexOf('('))+"()"; // NOI18N
                 decl = prj.findDeclaration(uname);
-                if( (decl instanceof FunctionImpl) &&
-                        !((FunctionImpl)decl).isVoidParameterList()) {
+                if( (decl instanceof FunctionImpl<?>) &&
+                        !((FunctionImpl<?>)decl).isVoidParameterList()) {
                     return (CsmFunction) decl;
                 }
             }
