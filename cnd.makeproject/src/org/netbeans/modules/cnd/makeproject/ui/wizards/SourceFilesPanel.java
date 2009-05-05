@@ -38,17 +38,12 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.ui.wizards;
 
-import java.awt.Color;
-import java.awt.Component;
 import java.io.File;
+import java.util.List;
 import java.util.StringTokenizer;
 import java.util.Vector;
-import javax.swing.DefaultCellEditor;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
@@ -56,81 +51,67 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellEditor;
-import javax.swing.table.TableCellRenderer;
-import org.netbeans.modules.cnd.api.utils.AllFileFilter;
-import org.netbeans.modules.cnd.api.utils.AllSourceFileFilter;
-import org.netbeans.modules.cnd.api.utils.CCSourceFileFilter;
-import org.netbeans.modules.cnd.api.utils.CSourceFileFilter;
 import org.netbeans.modules.cnd.api.utils.FileChooser;
-import org.netbeans.modules.cnd.api.utils.FortranSourceFileFilter;
-import org.netbeans.modules.cnd.api.utils.HeaderSourceFileFilter;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
-import org.netbeans.modules.cnd.api.utils.ResourceFileFilter;
 import org.netbeans.modules.cnd.api.utils.SourceFileFilter;
-import org.netbeans.modules.cnd.settings.CppSettings;
+import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfigurationDescriptor;
 import org.openide.util.NbBundle;
 
 public class SourceFilesPanel extends javax.swing.JPanel {
-    private Vector data = new Vector();
+
+    private Vector<FolderEntry> data = new Vector<FolderEntry>();
     private SourceFileTable sourceFileTable = null;
-    
     private String baseDir;
     private String wd;
-    
+
     /** Creates new form SourceFilesPanel */
     public SourceFilesPanel() {
         initComponents();
         scrollPane.getViewport().setBackground(java.awt.Color.WHITE);
-        
-        // File type filters
-        filterComboBox.removeAllItems();
-        filterComboBox.addItem(CSourceFileFilter.getInstance().getSuffixesAsString());
-        filterComboBox.addItem(CCSourceFileFilter.getInstance().getSuffixesAsString());
-        filterComboBox.addItem(HeaderSourceFileFilter.getInstance().getSuffixesAsString());
-        if (CppSettings.getDefault().isFortranEnabled())
-            filterComboBox.addItem(FortranSourceFileFilter.getInstance().getSuffixesAsString());
-        filterComboBox.addItem(ResourceFileFilter.getInstance().getSuffixesAsString());
-        filterComboBox.addItem(AllSourceFileFilter.getInstance().getSuffixesAsString());
-        filterComboBox.addItem(AllFileFilter.getInstance().getSuffixesAsString());
-        
-        filterComboBox.setSelectedItem(AllSourceFileFilter.getInstance().getSuffixesAsString());
-        
+
         getAccessibleContext().setAccessibleDescription(getString("SourceFilesPanelAD"));
         addButton.getAccessibleContext().setAccessibleDescription(getString("AddButtonAD"));
         deleteButton.getAccessibleContext().setAccessibleDescription(getString("DeleteButtonAD"));
         refresh();
         initFocus();
     }
-    
+
     public void setSeed(String baseDir, String wd) {
         this.baseDir = baseDir;
         this.wd = wd;
     }
-    
+
+    public void setFoldersFilter(String regex) {
+        ignoreFoldersTextField.setText(regex);
+    }
+
+    public String getFoldersFilter() {
+        return ignoreFoldersTextField.getText();
+    }
+
     public void initFocus() {
         IpeUtils.requestFocus(addButton);
     }
-    
-    public Vector getListData() {
-        //FolderEntry.setFileFilter((FileFilter)filterComboBox.getSelectedItem());
-        String suffixes = (String)filterComboBox.getSelectedItem();
-        FolderEntry.setFileFilter(new CustomFileFilter(suffixes));
+
+    public List<FolderEntry> getListData() {
         return data;
     }
-    
-    private class CustomFileFilter extends SourceFileFilter {
+
+    private static class CustomFileFilter extends SourceFileFilter {
+
         String[] suffixes;
+
         CustomFileFilter(String suffixesString) {
             StringTokenizer st = new StringTokenizer(suffixesString);
-            Vector vec = new Vector();
+            Vector<String> vec = new Vector<String>();
             while (st.hasMoreTokens()) {
                 String nextToken = st.nextToken();
-                if (nextToken.charAt(0) == '.')
+                if (nextToken.charAt(0) == '.') {
                     nextToken = nextToken.substring(1);
+                }
                 vec.add(nextToken);
             }
-            suffixes = (String[])vec.toArray(new String[vec.size()]);
+            suffixes = vec.toArray(new String[vec.size()]);
         }
 
         public String getDescription() {
@@ -140,122 +121,125 @@ public class SourceFilesPanel extends javax.swing.JPanel {
         public String[] getSuffixes() {
             return suffixes;
         }
-
     }
-    
+
     private class TargetSelectionListener implements ListSelectionListener {
+
         public void valueChanged(ListSelectionEvent e) {
-            if (e.getValueIsAdjusting())
+            if (e.getValueIsAdjusting()) {
                 return;
+            }
             validateSelection();
         }
     }
-    
+
     private void validateSelection() {
         addButton.setEnabled(true);
-        if (data.size() == 0 || sourceFileTable.getSelectedRow() < 0)
+        if (data.size() == 0 || sourceFileTable.getSelectedRow() < 0) {
             deleteButton.setEnabled(false);
-        else
+        } else {
             deleteButton.setEnabled(true);
+        }
     }
-    
+
     private void refresh() {
         scrollPane.setViewportView(sourceFileTable = new SourceFileTable()); // FIXUP: how to refresh ??
         sourceFilesLabel.setLabelFor(sourceFileTable);
         validateSelection();
     }
-    
+
     class SourceFileTable extends JTable {
+
         public SourceFileTable() {
             //setTableHeader(null); // Hides table headers
             setModel(new MyTableModel());
             // Left align table header
-            ((DefaultTableCellRenderer)getTableHeader().getDefaultRenderer()).setHorizontalAlignment(SwingConstants.LEFT);
-            getColumnModel().getColumn(0).setPreferredWidth(95);
-            getColumnModel().getColumn(0).setMaxWidth(95);
-            getColumnModel().getColumn(0).setResizable(false);
-            
+            ((DefaultTableCellRenderer) getTableHeader().getDefaultRenderer()).setHorizontalAlignment(SwingConstants.LEFT);
+
             getSelectionModel().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             getSelectionModel().addListSelectionListener(new TargetSelectionListener());
             getAccessibleContext().setAccessibleDescription(getString("SourceFileTableAD"));
         }
-        
+
+        @Override
         public boolean getShowHorizontalLines() {
             return false;
         }
-        
+
+        @Override
         public boolean getShowVerticalLines() {
             return false;
         }
-        
-        public TableCellRenderer getCellRenderer(int row, int column) {
-            return new MyTableCellRenderer();
-        }
-        
-        public TableCellEditor getCellEditor(int row, int col) {
-            JCheckBox checkBox = new JCheckBox();
-            return new DefaultCellEditor(checkBox);
-        }
-        
-        public void setValueAt(Object value, int row, int col) {
-            if (col == 0) {
-                FolderEntry fileEntry = (FolderEntry)data.elementAt(row);
-                fileEntry.setAddSubfoldersSelected(!fileEntry.isAddSubfoldersSelected());
-            }
-        }
+
+//        @Override
+//        public TableCellRenderer getCellRenderer(int row, int column) {
+//            return new MyTableCellRenderer();
+//        }
+
+//        @Override
+//        public TableCellEditor getCellEditor(int row, int col) {
+//            JCheckBox checkBox = new JCheckBox();
+//            return new DefaultCellEditor(checkBox);
+//        }
+
+//        @Override
+//        public void setValueAt(Object value, int row, int col) {
+//            if (col == 0) {
+//                FolderEntry fileEntry = data.elementAt(row);
+//                fileEntry.setAddSubfoldersSelected(!fileEntry.isAddSubfoldersSelected());
+//            }
+//        }
     }
-    
+
     class MyTableModel extends DefaultTableModel {
+
+        @Override
         public String getColumnName(int col) {
-            if (col == 0)
-                return " " + getString("TABLE_COLUMN_0_TXT"); // NOI18N
-            else
-                return " " + getString("TABLE_COLUMN_1_TXT"); // NOI18N
+            return " " + getString("TABLE_COLUMN_1_TXT"); // NOI18N
         }
-        
+
+        @Override
         public int getColumnCount() {
-            return 2;
+            return 1;
         }
-        
+
+        @Override
         public int getRowCount() {
             return data.size();
         }
-        
+
+        @Override
         public Object getValueAt(int row, int col) {
-            if (col == 0) {
-                return data.elementAt(row);
-            } else {
-                return ((FolderEntry)data.elementAt(row)).getFolderName();
-            }
+            return data.elementAt(row).getFolderName();
         }
-        
+
+        @Override
         public boolean isCellEditable(int row, int col) {
-            if (col == 0)
-                return true;
-            else
-                return false;
+            return false;
         }
     }
-    
-    class MyTableCellRenderer extends DefaultTableCellRenderer {
-        public Component getTableCellRendererComponent(JTable table, Object color, boolean isSelected, boolean hasFocus, int row, int col) {
-            if (col == 0) {
-                JCheckBox checkBox = new JCheckBox();
-                checkBox.setBackground(Color.WHITE);
-                checkBox.setSelected(((FolderEntry)data.elementAt(row)).isAddSubfoldersSelected());
-                //checkBox.setText(((FileEntry)data.elementAt(row)).getFile().getPath());
-                return checkBox;
-            } else
-                return super.getTableCellRendererComponent(table, color, isSelected, hasFocus, row, col);
-        }
-    }
-    
+
+//    class MyTableCellRenderer extends DefaultTableCellRenderer {
+//
+//        @Override
+//        public Component getTableCellRendererComponent(JTable table, Object color, boolean isSelected, boolean hasFocus, int row, int col) {
+//            if (col == 0) {
+//                JCheckBox checkBox = new JCheckBox();
+//                checkBox.setBackground(Color.WHITE);
+//                checkBox.setSelected((data.elementAt(row)).isAddSubfoldersSelected());
+//                //checkBox.setText(((FileEntry)data.elementAt(row)).getFile().getPath());
+//                return checkBox;
+//            } else {
+//                return super.getTableCellRendererComponent(table, color, isSelected, hasFocus, row, col);
+//            }
+//        }
+//    }
     /** This method is called from within the constructor to
      * initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
@@ -265,14 +249,18 @@ public class SourceFilesPanel extends javax.swing.JPanel {
         buttonPanel = new javax.swing.JPanel();
         addButton = new javax.swing.JButton();
         deleteButton = new javax.swing.JButton();
-        filterText = new javax.swing.JLabel();
-        filterComboBox = new javax.swing.JComboBox();
+        ignoreFolderPanel = new javax.swing.JPanel();
+        ignoreFoldersLabel = new javax.swing.JLabel();
+        ignoreFoldersTextField = new javax.swing.JTextField();
+        ignoreFoldersDefaultButton = new javax.swing.JButton();
+        seeAlsoLabel = new javax.swing.JLabel();
 
         setLayout(new java.awt.GridBagLayout());
 
         sourceFilesLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("SourceFileFoldersMN").charAt(0));
         sourceFilesLabel.setLabelFor(list);
-        sourceFilesLabel.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("SourceFileFoldersLbl"));
+        java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle"); // NOI18N
+        sourceFilesLabel.setText(bundle.getString("SourceFileFoldersLbl")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -294,13 +282,12 @@ public class SourceFilesPanel extends javax.swing.JPanel {
         buttonPanel.setLayout(new java.awt.GridBagLayout());
 
         addButton.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("AddButtonMN").charAt(0));
-        addButton.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("AddButtonTxt"));
+        addButton.setText(bundle.getString("AddButtonTxt")); // NOI18N
         addButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 addButtonActionPerformed(evt);
             }
         });
-
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -309,13 +296,12 @@ public class SourceFilesPanel extends javax.swing.JPanel {
         buttonPanel.add(addButton, gridBagConstraints);
 
         deleteButton.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("DeleteButtonMn").charAt(0));
-        deleteButton.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("DeleteButtonTxt"));
+        deleteButton.setText(bundle.getString("DeleteButtonTxt")); // NOI18N
         deleteButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 deleteButtonActionPerformed(evt);
             }
         });
-
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 1;
@@ -331,58 +317,88 @@ public class SourceFilesPanel extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(0, 4, 0, 0);
         add(buttonPanel, gridBagConstraints);
 
-        filterText.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("FileTypesFilterMN").charAt(0));
-        filterText.setLabelFor(filterComboBox);
-        filterText.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("FileTypesFilterLBL"));
+        ignoreFolderPanel.setLayout(new java.awt.GridBagLayout());
+
+        ignoreFoldersLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("SourceFilesPanel.ignoreFoldersLabel.mn").charAt(0));
+        ignoreFoldersLabel.setLabelFor(ignoreFoldersTextField);
+        ignoreFoldersLabel.setText(org.openide.util.NbBundle.getMessage(SourceFilesPanel.class, "SourceFilesPanel.ignoreFoldersLabel.text")); // NOI18N
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
+        ignoreFolderPanel.add(ignoreFoldersLabel, gridBagConstraints);
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 1;
+        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        gridBagConstraints.weightx = 1.0;
+        ignoreFolderPanel.add(ignoreFoldersTextField, gridBagConstraints);
+
+        ignoreFoldersDefaultButton.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/wizards/Bundle").getString("SourceFilesPanel.ignoreFoldersDefaultButton.mn").charAt(0));
+        ignoreFoldersDefaultButton.setText(org.openide.util.NbBundle.getMessage(SourceFilesPanel.class, "SourceFilesPanel.ignoreFoldersDefaultButton.text")); // NOI18N
+        ignoreFoldersDefaultButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                ignoreFoldersDefaultButtonActionPerformed(evt);
+            }
+        });
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 1;
+        gridBagConstraints.gridy = 1;
+        ignoreFolderPanel.add(ignoreFoldersDefaultButton, gridBagConstraints);
+
+        seeAlsoLabel.setText(org.openide.util.NbBundle.getMessage(SourceFilesPanel.class, "SourceFilesPanel.seeAlsoLabel.text")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 2;
+        gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(4, 0, 0, 0);
-        add(filterText, gridBagConstraints);
+        ignoreFolderPanel.add(seeAlsoLabel, gridBagConstraints);
 
-        filterComboBox.setEditable(true);
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 3;
+        gridBagConstraints.gridy = 2;
+        gridBagConstraints.gridwidth = 2;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(4, 0, 0, 0);
-        add(filterComboBox, gridBagConstraints);
-
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
+        gridBagConstraints.weightx = 1.0;
+        gridBagConstraints.weighty = 1.0;
+        gridBagConstraints.insets = new java.awt.Insets(6, 0, 0, 0);
+        add(ignoreFolderPanel, gridBagConstraints);
     }// </editor-fold>//GEN-END:initComponents
-        
+
     private void deleteButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_deleteButtonActionPerformed
         int index = sourceFileTable.getSelectedRow();
-        if (index < 0 || index >= data.size())
+        if (index < 0 || index >= data.size()) {
             return;
+        }
         data.remove(index);
         refresh();
         if (data.size() > 0) {
-            if (data.size() > index)
+            if (data.size() > index) {
                 sourceFileTable.getSelectionModel().setSelectionInterval(index, index);
-            else
-                sourceFileTable.getSelectionModel().setSelectionInterval(index-1, index-1);
+            } else {
+                sourceFileTable.getSelectionModel().setSelectionInterval(index - 1, index - 1);
+            }
         }
     }//GEN-LAST:event_deleteButtonActionPerformed
-    
+
     private void addButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_addButtonActionPerformed
         String seed = null;
         if (FileChooser.getCurrectChooserFile() != null) {
             seed = FileChooser.getCurrectChooserFile().getPath();
         }
         if (seed == null) {
-            if (wd != null && wd.length() > 0 && !IpeUtils.isPathAbsolute(wd))
+            if (wd != null && wd.length() > 0 && !IpeUtils.isPathAbsolute(wd)) {
                 seed = baseDir + File.separator + wd;
-            else if (wd != null)
+            } else if (wd != null) {
                 seed = wd;
-            else
+            } else {
                 seed = baseDir;
+            }
         }
         FileChooser fileChooser = new FileChooser(getString("FOLDER_CHOOSER_TITLE_TXT"), getString("FOLDER_CHOOSER_BUTTON_TXT"), FileChooser.DIRECTORIES_ONLY, null, seed, true);
         int ret = fileChooser.showOpenDialog(this);
-        if (ret == FileChooser.CANCEL_OPTION)
+        if (ret == FileChooser.CANCEL_OPTION) {
             return;
+        }
         if (!fileChooser.getSelectedFile().exists() || !fileChooser.getSelectedFile().isDirectory()) {
             // FIXUP: error message
             return;
@@ -390,19 +406,26 @@ public class SourceFilesPanel extends javax.swing.JPanel {
         data.add(new FolderEntry(fileChooser.getSelectedFile(), IpeUtils.toAbsoluteOrRelativePath(baseDir, fileChooser.getSelectedFile().getPath())));
         refresh();
     }//GEN-LAST:event_addButtonActionPerformed
-    
-    
+
+    private void ignoreFoldersDefaultButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_ignoreFoldersDefaultButtonActionPerformed
+        // TODO add your handling code here:
+        ignoreFoldersTextField.setText(MakeConfigurationDescriptor.DEFAULT_IGNORE_FOLDERS_PATTERN);
+}//GEN-LAST:event_ignoreFoldersDefaultButtonActionPerformed
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton addButton;
     private javax.swing.JPanel buttonPanel;
     private javax.swing.JButton deleteButton;
-    private javax.swing.JComboBox filterComboBox;
-    private javax.swing.JLabel filterText;
+    private javax.swing.JPanel ignoreFolderPanel;
+    private javax.swing.JButton ignoreFoldersDefaultButton;
+    private javax.swing.JLabel ignoreFoldersLabel;
+    private javax.swing.JTextField ignoreFoldersTextField;
     private javax.swing.JList list;
     private javax.swing.JScrollPane scrollPane;
+    private javax.swing.JLabel seeAlsoLabel;
     private javax.swing.JLabel sourceFilesLabel;
     // End of variables declaration//GEN-END:variables
-    
+
     private static String getString(String s) {
         return NbBundle.getMessage(SourceFilesPanel.class, s);
     }
