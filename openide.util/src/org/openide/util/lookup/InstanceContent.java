@@ -40,12 +40,12 @@
  */
 package org.openide.util.lookup;
 
-import org.openide.util.lookup.AbstractLookup;
 import org.openide.util.lookup.AbstractLookup.Pair;
 
 import java.lang.ref.WeakReference;
 
 import java.util.*;
+import java.util.concurrent.Executor;
 
 
 /** A special content implementation that can be passed to AbstractLookup
@@ -71,6 +71,14 @@ public final class InstanceContent extends AbstractLookup.Content {
     public InstanceContent() {
     }
 
+    /** Creates a content associated with an executor to handle dispatch
+     * of changes.
+     * @param notifyIn the executor to notify changes in
+     * @since  7.16
+     */
+    public InstanceContent(Executor notifyIn) {
+        super(notifyIn);
+    }
     /** The method to add instance to the lookup with.
      * @param inst instance
      */
@@ -78,7 +86,17 @@ public final class InstanceContent extends AbstractLookup.Content {
         addPair(new SimpleItem<Object>(inst));
     }
 
-    /** The method to add instance to the lookup with.
+    /** Adds a convertible instance into the lookup. The <code>inst</code>
+     * argument is just a key, not the actual value to appear in the lookup.
+     * The value will be created on demand, later when it is really needed
+     * by calling <code>convertor</code> methods.
+     * <p>
+     * This method is useful to delay creation of heavy weight objects.
+     * Instead just register lightweight key and a convertor.
+     * <p>
+     * To remove registered object from lookup use {@link #remove(java.lang.Object, org.openide.util.lookup.InstanceContent.Convertor)}
+     * with the same arguments.
+     *
      * @param inst instance
      * @param conv convertor which postponing an instantiation,
      * if <code>conv==null</code> then the instance is registered directly.
@@ -190,6 +208,7 @@ public final class InstanceContent extends AbstractLookup.Content {
             return obj;
         }
 
+        @Override
         public boolean equals(Object o) {
             if (o instanceof SimpleItem) {
                 return obj.equals(((SimpleItem) o).obj);
@@ -198,6 +217,7 @@ public final class InstanceContent extends AbstractLookup.Content {
             }
         }
 
+        @Override
         public int hashCode() {
             return obj.hashCode();
         }
@@ -292,6 +312,7 @@ public final class InstanceContent extends AbstractLookup.Content {
             return converted;
         }
 
+        @Override
         public boolean equals(Object o) {
             if (o instanceof ConvertingItem) {
                 return obj.equals(((ConvertingItem) o).obj);
@@ -300,6 +321,7 @@ public final class InstanceContent extends AbstractLookup.Content {
             }
         }
 
+        @Override
         public int hashCode() {
             return obj.hashCode();
         }
