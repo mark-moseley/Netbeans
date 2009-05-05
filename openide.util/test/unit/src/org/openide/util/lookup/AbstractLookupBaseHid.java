@@ -1617,6 +1617,93 @@ public class AbstractLookupBaseHid extends NbTestCase {
         assertTrue("It is empty: " + c, c.isEmpty());
     }
 
+    public void testCanProxyLookupHaveWrongResults() {
+        class L implements LookupListener {
+            ProxyLookup pl;
+            Lookup.Result<String> original;
+            Lookup.Result<String> wrapped;
+            boolean ok;
+
+            public void test() {
+                pl = new ProxyLookup(lookup);
+                original = lookup.lookupResult(String.class);
+
+                original.addLookupListener(this);
+
+                wrapped = pl.lookupResult(String.class);
+
+                assertEquals("Original empty", 0, original.allInstances().size());
+                assertEquals("Wrapped empty", 0, wrapped.allInstances().size());
+
+                ic.add("Hello!");
+            }
+
+            public void resultChanged(LookupEvent ev) {
+                ok = true;
+
+                assertEquals("Original has hello", 1, original.allInstances().size());
+                assertEquals("Wrapped has hello", 1, wrapped.allInstances().size());
+            }
+
+        }
+        L listener = new L();
+        listener.test();
+        assertTrue("Listener called", listener.ok);
+    }
+
+    public void testObjectFromInstanceContentConverterDisappearsIfNotReferenced() {
+        Conv converter = new Conv("foo");
+        ic.add (converter, converter);
+        Lookup lkp = instanceLookup;
+        StringBuilder sb = lookup.lookup (StringBuilder.class);
+        assertNotNull (sb);
+        int hash = System.identityHashCode(sb);
+        assertEquals ("foo", sb.toString());
+        Reference<StringBuilder> r = new WeakReference<StringBuilder>(sb);
+        sb = null;
+        assertGC("Lookup held onto object", r);
+        sb = lookup.lookup (StringBuilder.class);
+        assertNotSame(hash, System.identityHashCode(sb));
+        r = new WeakReference<StringBuilder>(sb);
+        sb = null;
+        assertGC("Lookup held onto object", r);
+        ic.remove (converter, converter);
+        Reference <InstanceContent.Convertor> cref = new WeakReference<InstanceContent.Convertor>(converter);
+        converter = null;
+        assertGC("Converter still referenced", cref); 
+
+        sb = lkp.lookup(StringBuilder.class);
+        assertNull ("Converter removed from lookup, but object it " +
+                "created still present:'" + sb +"'", sb);
+        converter = new Conv("bar");
+        ic.add (converter, converter);
+        assertNotNull (lkp.lookup(StringBuilder.class));
+        assertEquals ("bar", lkp.lookup(StringBuilder.class).toString());
+    }
+
+    private static class Conv implements InstanceContent.Convertor<Conv, StringBuilder> {
+        private final String str;
+        private Conv (String str) {
+            this.str = str;
+        }
+
+        public StringBuilder convert(Conv obj) {
+            return new StringBuilder (str);
+        }
+
+        public Class<? extends StringBuilder> type(Conv obj) {
+            return StringBuilder.class;
+        }
+
+        public String id(Conv obj) {
+            return "Foo";
+        }
+
+        public String displayName(Conv obj) {
+            return "Foo";
+        }
+    } // end of Conv
+
     public void testCanGCResults() throws Exception {
         class L implements LookupListener {
             int cnt;
@@ -1656,6 +1743,7 @@ public class AbstractLookupBaseHid extends NbTestCase {
     void beforeActualTest(String n) {
         if (n.equals("testEqualsIsNotCalledTooMuch")) {
             CntPair.cnt = 0;
+            CntPair.hashCnt = 0;
             CntPair.instances = 0;
             int how = 1000;
 
