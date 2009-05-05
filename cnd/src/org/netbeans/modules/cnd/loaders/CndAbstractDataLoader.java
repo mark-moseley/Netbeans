@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,21 +38,30 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.loaders;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.Date;
 import java.util.Map;
 import java.text.DateFormat;
+import org.netbeans.api.queries.FileEncodingQuery;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.ExtensionList;
 import org.openide.loaders.MultiDataObject;
 import org.openide.loaders.FileEntry;
 import org.openide.loaders.UniFileLoader;
 import org.openide.modules.InstalledFileLocator;
 import org.netbeans.modules.cnd.settings.CppSettings;
+import org.openide.filesystems.FileLock;
+import org.openide.filesystems.FileUtil;
+import org.openide.loaders.CreateFromTemplateAttributesProvider;
+import org.openide.loaders.DataFolder;
+import org.openide.loaders.DataObject;
+import org.openide.util.Lookup;
 
 /**
  * DataLoader for recognising C/C++/Fortran (C-C-F) source files.
@@ -70,20 +79,12 @@ public abstract class CndAbstractDataLoader extends UniFileLoader {
         super(representationClassName);
     }
 
-    protected final void createExtentions(String[] extensions) {
-        ExtensionList extensionList = new ExtensionList();
-        for (int i = 0; i < extensions.length; i++) {
-            extensionList.addExtension(extensions[i]);
-        }
-        setExtensions(extensionList);
-    }
-
     protected abstract String getMimeType();
 
     @Override
-    protected void initialize() {
+    protected final void initialize() {
         super.initialize();
-//        getExtensions().addMimeType(getMimeType());
+        getExtensions().addMimeType(getMimeType());
     }
 
     @Override
@@ -99,24 +100,16 @@ public abstract class CndAbstractDataLoader extends UniFileLoader {
     }
 
 // Inner class: Substitute important template parameters...
-    /*package*/static class CndFormat extends FileEntry.Format {
+    /*package*/
+    static class CndFormat extends FileEntry.Format {
 
         public CndFormat(MultiDataObject obj, FileObject primaryFile) {
             super(obj, primaryFile);
         }
 
-        @Override
-        public FileObject createFromTemplate(FileObject f, String name) throws IOException {
-            FileObject fo = super.createFromTemplate(f, name);
-            if (fo.getAttribute(TemplateExtensionUtils.NAME_ATTRIBUTE) != null) {
-                fo.setAttribute(TemplateExtensionUtils.NAME_ATTRIBUTE, null);
-            }
-            return fo;
-        }
-
         protected java.text.Format createFormat(FileObject target, String name, String ext) {
 
-            Map map = (CppSettings.findObject(CppSettings.class, true)).getReplaceableStringsProps();
+            Map<Object, Object> map = (CppSettings.findObject(CppSettings.class, true)).getReplaceableStringsProps();
 
             String packageName = target.getPath().replace('/', '_');
             // add an underscore to the package name if it is not an empty string
@@ -126,8 +119,15 @@ public abstract class CndAbstractDataLoader extends UniFileLoader {
             map.put("PACKAGE_AND_NAME", packageName + name); // NOI18N
             map.put("NAME", name); // NOI18N
             map.put("EXTENSION", ext); // NOI18N
-            String guardName = name.replace('-', '_').replace('.', '_'); // NOI18N
-            map.put("GUARD_NAME", guardName.toUpperCase()); // NOI18N
+//            String guardName = (name + "_" + ext).replace('-', '_').replace('.', '_'); // NOI18N
+            String fullName = name + "_" + ext; //NOI18N
+            StringBuilder guardName = new StringBuilder();
+            for (int i = 0; i < fullName.length(); i++) {
+                char c = fullName.charAt(i);
+                guardName.append(Character.isJavaIdentifierPart(c) ? Character.toUpperCase(c) : '_');
+            }
+
+            map.put("GUARD_NAME", guardName.toString()); // NOI18N
             /*
             This is a ugly hack but I don't have a choice. That's because
             NetBeans will not pass me the name the user typed in as the
@@ -150,11 +150,11 @@ public abstract class CndAbstractDataLoader extends UniFileLoader {
             if (crop != -1) {
                 name = name.substring(0, crop);
             }
-	    map.put("CROPPEDNAME", name);  // NOI18N
-	    map.put("DATE", DateFormat.getDateInstance	// NOI18N
-		     (DateFormat.LONG).format(new Date()));
-	    map.put("TIME", DateFormat.getTimeInstance	// NOI18N
-		     (DateFormat.SHORT).format(new Date()));
+            map.put("CROPPEDNAME", name);  // NOI18N
+            map.put("DATE", DateFormat.getDateInstance // NOI18N
+                    (DateFormat.LONG).format(new Date()));
+            map.put("TIME", DateFormat.getTimeInstance // NOI18N
+                    (DateFormat.SHORT).format(new Date()));
             //	    map.put("USER", System.getProperty("user.name"));	// NOI18N
             String nbHome = null; //System.getProperty("netbeans.home");
             File file = InstalledFileLocator.getDefault().locate("lib", null, false); // NOI18N
@@ -166,6 +166,20 @@ public abstract class CndAbstractDataLoader extends UniFileLoader {
             }
             map.put("NBDIR", nbHome); // NOI18N
             map.put("QUOTES", "\""); // NOI18N
+
+            for (CreateFromTemplateAttributesProvider provider :
+                    Lookup.getDefault().lookupAll(CreateFromTemplateAttributesProvider.class)) {
+                Map<String, ?> attrs = provider.attributesFor(getDataObject(),
+                        DataFolder.findFolder(target), name);
+                if (attrs != null) {
+                    Object username = attrs.get("user"); // NOI18N
+                    if (username instanceof String) {
+                        map.put("USER", (String) username); // NOI18N
+                        break;
+                    }
+                }
+            }
+
             org.openide.util.MapFormat format = new org.openide.util.MapFormat(map);
 
             // Use "%<%" and "%>%" instead of "__" (which most other templates
@@ -177,5 +191,76 @@ public abstract class CndAbstractDataLoader extends UniFileLoader {
             format.setRightBrace("%>%"); // NOI18N
             return format;
         }
+
+        /**
+         * Creates dataobject from template. Copies the file and applies
+         * substitutions provided by the createFormat method.
+         *
+         * Overriding parent implementation to add encoding conversion (IZ 163832).
+         * Copied with minor modifications from IndentFileEntry (java.source module).
+         *
+         * @param f  the folder to create instance in
+         * @param name  name of the file or null if it should be choosen automaticly
+         * @return  created file
+         * @throws java.io.IOException
+         */
+        @Override
+        public FileObject createFromTemplate(FileObject f, String name) throws IOException {
+            String ext = getFile().getExt();
+            if (name == null) {
+                name = FileUtil.findFreeFileName(f, getFile().getName(), ext);
+            }
+
+            FileObject fo = f.createData(name, ext);
+            java.text.Format frm = createFormat(f, name, ext);
+
+            BufferedReader r = new BufferedReader(new InputStreamReader(
+                    getFile().getInputStream(), FileEncodingQuery.getEncoding(getFile())));
+            try {
+                FileLock lock = fo.lock();
+                try {
+                    BufferedWriter w = new BufferedWriter(new OutputStreamWriter(
+                            fo.getOutputStream(lock), FileEncodingQuery.getEncoding(fo)));
+                    try {
+                        String current;
+                        while ((current = r.readLine()) != null) {
+                            w.write(frm.format(current));
+                            w.newLine();
+                        }
+                    } finally {
+                        w.close();
+                    }
+                } finally {
+                    lock.releaseLock();
+                }
+            } finally {
+                r.close();
+            }
+
+            // copy attributes
+            FileUtil.copyAttributes(getFile(), fo);
+
+            // unmark template state
+            setTemplate(fo, false);
+
+            return fo;
+        }
     }
+
+    protected static boolean setTemplate(FileObject fo, boolean newTempl) throws IOException {
+        boolean oldTempl = false;
+
+        Object o = fo.getAttribute(DataObject.PROP_TEMPLATE);
+        if ((o instanceof Boolean) && ((Boolean) o).booleanValue()) {
+            oldTempl = true;
+        }
+        if (oldTempl == newTempl) {
+            return false;
+        }
+
+        fo.setAttribute(DataObject.PROP_TEMPLATE, (newTempl ? Boolean.TRUE : null));
+
+        return true;
+    }
+
 }
