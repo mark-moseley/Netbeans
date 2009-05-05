@@ -38,29 +38,31 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManagerEvents;
 
-public class Configurations {
+public final class Configurations {
 
     public static final String PROP_DEFAULT = "default"; // NOI18N
     public static final String PROP_ACTIVE_CONFIGURATION = "activeconfiguration"; // NOI18N
-
-    private PropertyChangeSupport pcs;
-    private List<Configuration> configurations;
+    private final PropertyChangeSupport pcs;
+    private final List<Configuration> configurations = new ArrayList<Configuration>();
+    private final ReadWriteLock configurationsLock = new ReentrantReadWriteLock();
+    private final List<Runnable> tasks = new ArrayList<Runnable>();
 
     public Configurations() {
         pcs = new PropertyChangeSupport(this);
     }
-    
+
     public void addPropertyChangeListener(PropertyChangeListener l) {
         pcs.addPropertyChangeListener(l);
     }
@@ -68,144 +70,229 @@ public class Configurations {
     public void removePropertyChangeListener(PropertyChangeListener l) {
         pcs.removePropertyChangeListener(l);
     }
-    
-    /*
-     * Initialize from a comma separated list of configurations ("Debug,Release").
-     */
-    /*
-    public Confs init(String configurationNames) {
-	init(configurationNames, null);
-	return this;
-    }
-    */
 
-    /*
-     * Initialize from a comma separated list of configurations ("Debug,Release"). Also
-     * setting default comfiguration if specified, othervise default configuration is
-     * set to first configuration.
-     */
-    /*
-    public Confs init(String configurationNames, String defaultConf) {
-	configurations = new ArrayList();
-	StringTokenizer st = new StringTokenizer(configurationNames, ","); // NOI18N
-	while (st.hasMoreTokens()) {
-	    String displayName = st.nextToken();
-	    configurations.add(new Conf(displayName));
-	}
-	if (defaultConf != null)
-	     setDefault(defaultConf);
-	else
-	    setDefault(0);
-	return this;
-    }
-    */
     public Configurations init(Configuration[] confs, int defaultConf) {
-	configurations = new ArrayList();
-	for (int i = 0; i < confs.length; i ++)
-	    configurations.add(confs[i]);
-	if (defaultConf >= 0 && confs != null && confs.length > 0)
-	    setActive(defaultConf);
-	return this;
+        List<Runnable> toRun = new ArrayList<Runnable>();
+        Configuration def = null;
+        configurationsLock.writeLock().lock();
+        try {
+            configurations.clear();
+            if (confs != null) {
+                int current = 0;
+                for (int i = 0; i < confs.length; i++) {
+                    if (confs[i] != null) {
+                        configurations.add(confs[i]);
+                        if (current == defaultConf) {
+                            confs[i].setDefault(true);
+                            def = confs[i];
+                        } else {
+                            confs[i].setDefault(false);
+                        }
+                        current++;
+                    } else {
+                        new Exception("Configuration["+i+"]==null").printStackTrace(); // NOI18N
+                    }
+                }
+                if (def != null) {
+                    toRun.addAll(tasks);
+                    tasks.clear();
+                }
+            }
+        } finally {
+            configurationsLock.writeLock().unlock();
+        }
+//        if (def != null) {
+//            pcs.firePropertyChange(PROP_ACTIVE_CONFIGURATION, null, def);
+//            pcs.firePropertyChange(PROP_DEFAULT, null, null);
+//        }
+        for (Runnable task : toRun) {
+            runOnCodeModelReadiness(task, false);
+        }
+        return this;
     }
 
+    public void runOnCodeModelReadiness(Runnable task) {
+        runOnCodeModelReadiness(task, true);
+    }
+
+    private void runOnCodeModelReadiness(Runnable task, boolean postpone) {
+        MakeConfiguration active = null;
+        configurationsLock.writeLock().lock();
+        try {
+            active = (MakeConfiguration) getActive();
+            if (active == null) {
+                if (postpone) {
+                    tasks.add(task);
+                }
+            }
+        } finally {
+            configurationsLock.writeLock().unlock();
+        }
+        if (active != null) {
+            DevelopmentHostConfiguration host = active.getDevelopmentHost();
+            CompilerSetManagerEvents.get(host.getExecutionEnvironment()).runOnCodeModelReadiness(task);
+        }
+    }
 
     public int size() {
-	return configurations.size();
+        configurationsLock.readLock().lock();
+        try {
+            return configurations.size();
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
     }
-
 
     /*
      * Get all configurations
-    */
+     */
     public Configuration[] getConfs() {
-	return (Configuration[]) configurations.toArray(new Configuration[size()]);
+        configurationsLock.readLock().lock();
+        try {
+            return configurations.toArray(new Configuration[size()]);
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+    }
+
+    public List<Configuration> getConfigurtions() {
+        configurationsLock.readLock().lock();
+        try {
+            return new ArrayList<Configuration>(configurations);
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
     }
 
     public Collection<Configuration> getConfsAsCollection() {
         Collection<Configuration> collection = new LinkedHashSet<Configuration>();
-        collection.addAll(configurations);
-        return collection;
+        configurationsLock.readLock().lock();
+        try {
+            collection.addAll(configurations);
+            return collection;
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
     }
-    
+
     public Configuration[] getClonedConfs() {
-	Configuration[] cs = new Configuration[size()];
-	for (int i = 0; i < size(); i++) {
-	    Configuration c = (Configuration)configurations.get(i);
-	    cs[i] = c.cloneConf();
-	}
-	return cs;
+        configurationsLock.readLock().lock();
+        try {
+            Configuration[] cs = new Configuration[size()];
+            for (int i = 0; i < size(); i++) {
+                Configuration c = configurations.get(i);
+                cs[i] = c.cloneConf();
+            }
+            return cs;
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
     }
 
     public String[] getConfsAsDisplayNames() {
-	String[] names = new String[size()];
-	for (int i = 0; i < size(); i++) {
-	    Configuration configuration = (Configuration)configurations.get(i);
-	    names[i] = configuration.toString();
-	}
-	return names;
+        configurationsLock.readLock().lock();
+        try {
+            String[] names = new String[size()];
+            for (int i = 0; i < size(); i++) {
+                Configuration configuration = configurations.get(i);
+                names[i] = configuration.toString();
+            }
+            return names;
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
     }
 
     public String[] getConfsAsNames() {
-	String[] names = new String[size()];
-	for (int i = 0; i < size(); i++) {
-	    Configuration configuration = (Configuration)configurations.get(i);
-	    names[i] = configuration.getName();
-	}
-	return names;
+        configurationsLock.readLock().lock();
+        try {
+            String[] names = new String[size()];
+            for (int i = 0; i < size(); i++) {
+                Configuration configuration = configurations.get(i);
+                names[i] = configuration.getName();
+            }
+            return names;
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
     }
 
-    
     /*
      * Get a specific configuration
      */
     public Configuration getConf(int index) {
-	checkValidIndex(index);
-	return (Configuration)configurations.get(index);
+        configurationsLock.readLock().lock();
+        try {
+            if (checkValidIndex(index)) {
+                return configurations.get(index);
+            }
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+        return null;
     }
 
     public Configuration getConfByDisplayName(String displayName) {
-	    Configuration ret = null;
-	    for (Iterator it = configurations.iterator(); it.hasNext(); ) {
-		Configuration c = (Configuration)it.next();
-		if (c.getDisplayName().equals(displayName)) {
-		    ret = c;
-		    break;
-		}
-	    }
-	    return ret;
+        Configuration ret = null;
+        configurationsLock.readLock().lock();
+        try {
+            for (Configuration c : configurations) {
+                if (c.getDisplayName().equals(displayName)) {
+                    ret = c;
+                    break;
+                }
+            }
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+        return ret;
     }
 
     public Configuration getConf(String name) {
-	    Configuration ret = null;
-	    for (Iterator it = configurations.iterator(); it.hasNext(); ) {
-		Configuration c = (Configuration)it.next();
-		if (c.getName().equals(name)) {
-		    ret = c;
-		    break;
-		}
-	    }
-	    return ret;
+        Configuration ret = null;
+        configurationsLock.readLock().lock();
+        try {
+            for (Configuration c : configurations) {
+                if (c.getName().equals(name)) {
+                    ret = c;
+                    break;
+                }
+            }
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+        return ret;
     }
-
 
     /*
      * Set default configuration
      */
     public void setActive(Configuration def) {
-        if (def == null)
+        if (def == null) {
             return;
-        Configuration old = getActive();
-        if (def == old)
-            return; // Nothing has changed
-        
-	    for (Iterator it = configurations.iterator(); it.hasNext(); ) {
-		Configuration c = (Configuration)it.next();
-		c.setDefault(false);
-            if (c == def) {
-	    def.setDefault(true);
-        pcs.firePropertyChange(PROP_ACTIVE_CONFIGURATION, old, def);
-        pcs.firePropertyChange(PROP_DEFAULT, null, null);
-    }
+        }
+        Configuration old;
+        boolean fire = false;
+        configurationsLock.readLock().lock();
+        try {
+            old = getActive();
+            if (def == old) {
+                return; // Nothing has changed
+            }
+
+            for (Configuration c : configurations) {
+                c.setDefault(false);
+                if (c == def) {
+                    def.setDefault(true);
+                    fire = true;
+                }
+            }
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+        if (fire) {
+            pcs.firePropertyChange(PROP_ACTIVE_CONFIGURATION, old, def);
+            pcs.firePropertyChange(PROP_DEFAULT, null, null);
         }
     }
 
@@ -217,33 +304,44 @@ public class Configurations {
     }
 
     public void setActive(int index) {
-        Configuration old = getActive();
-	checkValidIndex(index);
-	Configuration def = (Configuration)configurations.get(index);
-	if (def != null) {
-	    for (Iterator it = configurations.iterator(); it.hasNext(); ) {
-		Configuration c = (Configuration)it.next();
-		c.setDefault(false);
-	    }
-	    def.setDefault(true);
-	}
-        
+        if (index < 0) {
+            return;
+        }
+        Configuration old;
+        Configuration def;
+        configurationsLock.readLock().lock();
+        try {
+            old = getActive();
+            if (!checkValidIndex(index)){
+                return;
+            }
+            def = configurations.get(index);
+            if (def != null) {
+                for (Configuration c : configurations) {
+                    c.setDefault(false);
+                }
+                def.setDefault(true);
+            }
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+
         pcs.firePropertyChange(PROP_ACTIVE_CONFIGURATION, old, def);
         pcs.firePropertyChange(PROP_DEFAULT, null, null);
     }
-
 
     /*
      * Get default configuration
      */
     public String getActiveDisplayName() {
-	String defDisplayName = null;
-	Configuration def = getActive();
-	if (def != null)
-	    defDisplayName = def.getDisplayName();
-	return defDisplayName;
+        String defDisplayName = null;
+        Configuration def = getActive();
+        if (def != null) {
+            defDisplayName = def.getDisplayName();
+        }
+        return defDisplayName;
     }
-    
+
     /**
      * @deprecated. Use getActive()
      */
@@ -252,42 +350,55 @@ public class Configurations {
     }
 
     public Configuration getActive() {
-	    for (Iterator it = configurations.iterator(); it.hasNext(); ) {
-		Configuration c = (Configuration)it.next();
-		if (c.isDefault()) {
+        configurationsLock.readLock().lock();
+        try {
+            for (Configuration c : configurations) {
+                if (c.isDefault()) {
                     return c;
-		}
-	    }
-	    return null;
+                }
+            }
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+        return null;
     }
 
     public int getActiveAsIndex() {
-	    int index = -1;
-	    for (Iterator it = configurations.iterator(); it.hasNext(); ) {
-		index++;
-		Configuration c = (Configuration)it.next();
-		if (c.isDefault()) {
-		    return index;
-		}
-	    }
-	    return -1;
+        configurationsLock.readLock().lock();
+        try {
+            int index = -1;
+            for (Configuration c : configurations) {
+                index++;
+                if (c.isDefault()) {
+                    return index;
+                }
+            }
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+        return -1;
     }
-
 
     /*
      * Check valid index
      */
-    private void checkValidIndex(int index) {
-	if (index < 0 || index >= size()) {
-	    ;// Error ???
-	    ;// FIXUP ???
-	}
+    private boolean checkValidIndex(int index) {
+        if (index < 0 || index >= size()) {
+            new ArrayIndexOutOfBoundsException(index).printStackTrace(); // NOI18N
+            // Error ???
+            // FIXUP ???
+        }
+        return true;
     }
 
     public Configurations cloneConfs() {
-	Configurations clone = new Configurations();
-	clone.init(getClonedConfs(), getActiveAsIndex());
-	return clone;
+        Configurations clone = new Configurations();
+        configurationsLock.readLock().lock();
+        try {
+            clone.init(getClonedConfs(), getActiveAsIndex());
+        } finally {
+            configurationsLock.readLock().unlock();
+        }
+        return clone;
     }
-    
 }
