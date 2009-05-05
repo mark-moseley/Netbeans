@@ -53,6 +53,7 @@ import java.util.Date;
 import java.util.Enumeration;
 import org.netbeans.modules.masterfs.filebasedfs.naming.FileNaming;
 import org.netbeans.modules.masterfs.filebasedfs.utils.FSException;
+import org.netbeans.modules.masterfs.filebasedfs.utils.FileChangedManager;
 import org.netbeans.modules.masterfs.filebasedfs.utils.FileInfo;
 import org.netbeans.modules.masterfs.providers.ProvidedExtensions;
 import org.openide.filesystems.FileLock;
@@ -84,6 +85,10 @@ public class FileObj extends BaseFileObj {
     }
     
     public OutputStream getOutputStream(final FileLock lock, ProvidedExtensions extensions, FileObject mfo) throws IOException {
+        if (!isValid()) {
+            throw new FileNotFoundException("FileObject " + this + " is not valid."); //NOI18N
+        }
+
         final File f = getFileName().getFile();
 
         if (!Utilities.isWindows() && !f.isFile()) {
@@ -112,13 +117,13 @@ public class FileObj extends BaseFileObj {
                 closable.close();
             }
             FileNotFoundException fex = e;                        
-            if (!f.exists()) {
+            if (!FileChangedManager.getInstance().exists(f)) {
                 fex = (FileNotFoundException)new FileNotFoundException(e.getLocalizedMessage()).initCause(e);
             } else if (!f.canWrite()) {
                 fex = (FileNotFoundException)new FileNotFoundException(e.getLocalizedMessage()).initCause(e);
             } else if (f.getParentFile() == null) {
                 fex = (FileNotFoundException)new FileNotFoundException(e.getLocalizedMessage()).initCause(e);
-            } else if (!f.getParentFile().exists()) {
+            } else if (!FileChangedManager.getInstance().exists(f.getParentFile())) {
                 fex = (FileNotFoundException)new FileNotFoundException(e.getLocalizedMessage()).initCause(e);
             } 
             FSException.annotateException(fex);            
@@ -128,15 +133,24 @@ public class FileObj extends BaseFileObj {
     }
 
     public InputStream getInputStream() throws FileNotFoundException {
+        if (!isValid()) {
+            throw new FileNotFoundException("FileObject " + this + " is not valid.");  //NOI18N
+        }
+
         final File f = getFileName().getFile();
                         
         InputStream inputStream;
         MutualExclusionSupport.Closeable closeableReference = null;
         
         try {
-            if (!Utilities.isWindows() && !f.isFile()) { 
-                return new ByteArrayInputStream(new byte[] {});  
-            }             
+            if (Utilities.isWindows()) {
+                // #157056 - don't try to open locked windows files
+                if (getName().toLowerCase().contains("ntuser")) {  //NOI18N
+                    return new ByteArrayInputStream(new byte[] {});
+                }
+            } else if (!f.isFile()) {
+                return new ByteArrayInputStream(new byte[] {});
+            }
             final MutualExclusionSupport.Closeable closable = MutualExclusionSupport.getDefault().addResource(this, true);
             closeableReference = closable;            
             inputStream = new FileInputStream(f) {
@@ -151,13 +165,13 @@ public class FileObj extends BaseFileObj {
             }
             
             FileNotFoundException fex = null;                        
-            if (!f.exists()) {
+            if (!FileChangedManager.getInstance().exists(f)) {
                 fex = (FileNotFoundException)new FileNotFoundException(e.getLocalizedMessage()).initCause(e);
             } else if (!f.canRead()) {
                 fex = (FileNotFoundException)new FileNotFoundException(e.getLocalizedMessage()).initCause(e);
             } else if (f.getParentFile() == null) {
                 fex = (FileNotFoundException)new FileNotFoundException(e.getLocalizedMessage()).initCause(e);
-            } else if (!f.getParentFile().exists()) {
+            } else if (!FileChangedManager.getInstance().exists(f.getParentFile())) {
                 fex = (FileNotFoundException)new FileNotFoundException(e.getLocalizedMessage()).initCause(e);
             } else if ((new FileInfo(f)).isUnixSpecialFile()) {
                 fex = (FileNotFoundException) new FileNotFoundException(e.toString()).initCause(e);
@@ -195,10 +209,12 @@ public class FileObj extends BaseFileObj {
     }
 
     final void setLastModified(long lastModified) {
-        if (this.lastModified != -1 && !realLastModifiedCached) {
-            realLastModifiedCached = true;
+        if (this.lastModified != 0) { // #130998 - don't set when already invalidated
+            if (this.lastModified != -1 && !realLastModifiedCached) {
+                realLastModifiedCached = true;
+            }
+            this.lastModified = lastModified;
         }
-        this.lastModified = lastModified;
     }
     
     
@@ -248,6 +264,10 @@ public class FileObj extends BaseFileObj {
         if (fire && oldLastModified != -1 && lastModified != -1 && lastModified != 0 && isModified) {
             fireFileChangedEvent(expected);
         }
+        if (fire && lastModified != 0) {
+            // #129178 - event consumed in org.openide.text.DataEditorSupport and used to change editor read-only state
+            fireFileAttributeChangedEvent("DataEditorSupport.read-only.refresh", null, null);  //NOI18N
+        }
     }
     
     public final void refresh(final boolean expected) {
@@ -278,7 +298,7 @@ public class FileObj extends BaseFileObj {
             return result;
         } catch (FileNotFoundException ex) {
             FileNotFoundException fex = ex;                        
-            if (!me.exists()) {
+            if (!FileChangedManager.getInstance().exists(me)) {
                 fex = (FileNotFoundException)new FileNotFoundException(ex.getLocalizedMessage()).initCause(ex);
             } else if (!me.canRead()) {
                 fex = (FileNotFoundException)new FileNotFoundException(ex.getLocalizedMessage()).initCause(ex);
@@ -286,7 +306,7 @@ public class FileObj extends BaseFileObj {
                 fex = (FileNotFoundException)new FileNotFoundException(ex.getLocalizedMessage()).initCause(ex);
             } else if (me.getParentFile() == null) {
                 fex = (FileNotFoundException)new FileNotFoundException(ex.getLocalizedMessage()).initCause(ex);
-            } else if (!me.getParentFile().exists()) {
+            } else if (!FileChangedManager.getInstance().exists(me.getParentFile())) {
                 fex = (FileNotFoundException)new FileNotFoundException(ex.getLocalizedMessage()).initCause(ex);
             }                                                             
             FSException.annotateException(fex);            
