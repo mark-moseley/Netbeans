@@ -41,24 +41,22 @@
 
 package org.netbeans.core.startup;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -81,7 +79,6 @@ import org.netbeans.core.startup.layers.ModuleLayeredFileSystem;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.modules.Dependency;
 import org.openide.modules.ModuleInstall;
 import org.openide.modules.SpecificationVersion;
@@ -101,7 +98,9 @@ import org.xml.sax.SAXException;
  * @author Jesse Glick, Jan Pokorsky, Jaroslav Tulach, et al.
  */
 final class NbInstaller extends ModuleInstaller {
-    
+
+    private static final Logger LOG = Logger.getLogger(NbInstaller.class.getName());
+
     /** set of manifest sections for each module */
     private final Map<Module,Set<ManifestSection>> sections = new HashMap<Module,Set<ManifestSection>>(100);
     /** ModuleInstall classes for each module that declares one */
@@ -118,8 +117,10 @@ final class NbInstaller extends ModuleInstaller {
     private ModuleManager mgr;
     /** set of permitted core or package dependencies from a module */
     private final Map<Module,Set<String>> kosherPackages = new HashMap<Module,Set<String>>(100);
-    /** Package prefixes passed as special system property. */
-    private static String[] specialResourcePrefixes = null;
+    /** classpath ~ JRE packages to be hidden from a module */
+    private final Map<Module,List<Module.PackageExport>> hiddenClasspathPackages = new  HashMap<Module,List<Module.PackageExport>>();
+    /** #164510: similar to {@link #hiddenClasspathPackages} but backwards for efficiency */
+    private final Map<Module.PackageExport,List<Module>> hiddenClasspathPackagesReverse = new HashMap<Module.PackageExport,List<Module>>();
         
     /** Create an NbInstaller.
      * You should also call {@link #registerManager} and if applicable
@@ -143,6 +144,7 @@ final class NbInstaller extends ModuleInstaller {
     // @SuppressWarnings("unchecked")
     public void prepare(Module m) throws InvalidException {
         ev.log(Events.PREPARE, m);
+        checkForHiddenPackages(m);
         Set<ManifestSection> mysections = null;
         Class<?> clazz = null;
         {
@@ -232,6 +234,59 @@ final class NbInstaller extends ModuleInstaller {
             layers.put(m, layerResource);
         }
     }
+
+    private void checkForHiddenPackages(Module m) throws InvalidException {
+        List<Module.PackageExport> hiddenPackages = new ArrayList<Module.PackageExport>();
+        List<Module> mWithDeps = new LinkedList<Module>();
+        mWithDeps.add(m);
+        for (Dependency d : m.getDependencies()) {
+            if (d.getType() == Dependency.TYPE_MODULE) {
+                Module _m = mgr.get((String) Util.parseCodeName(d.getName())[0]);
+                assert _m != null : d;
+                mWithDeps.add(_m);
+            }
+        }
+        for (Module _m : mWithDeps) {
+            String hidden = (String) _m.getAttribute("OpenIDE-Module-Hide-Classpath-Packages"); // NOI18N
+            if (hidden != null) {
+                for (String piece : hidden.trim().split("[ ,]+")) { // NOI18N
+                    try {
+                        if (piece.endsWith(".*")) { // NOI18N
+                            String pkg = piece.substring(0, piece.length() - 2);
+                            Dependency.create(Dependency.TYPE_MODULE, pkg);
+                            if (pkg.lastIndexOf('/') != -1) {
+                                throw new IllegalArgumentException("Illegal OpenIDE-Module-Hide-Classpath-Packages: " + hidden); // NOI18N
+                            }
+                            hiddenPackages.add(new Module.PackageExport(pkg.replace('.', '/') + '/', false));
+                        } else if (piece.endsWith(".**")) { // NOI18N
+                            String pkg = piece.substring(0, piece.length() - 3);
+                            Dependency.create(Dependency.TYPE_MODULE, pkg);
+                            if (pkg.lastIndexOf('/') != -1) {
+                                throw new IllegalArgumentException("Illegal OpenIDE-Module-Hide-Classpath-Packages: " + hidden); // NOI18N
+                            }
+                            hiddenPackages.add(new Module.PackageExport(pkg.replace('.', '/') + '/', true));
+                        } else {
+                            throw new IllegalArgumentException("Illegal OpenIDE-Module-Hide-Classpath-Packages: " + hidden); // NOI18N
+                        }
+                    } catch (IllegalArgumentException x) {
+                        throw new InvalidException(_m, x.getMessage());
+                    }
+                }
+            }
+        }
+        if (!hiddenPackages.isEmpty()) {
+            synchronized (hiddenClasspathPackages) {
+                hiddenClasspathPackages.put(m, hiddenPackages);
+                for (Module.PackageExport pkg : hiddenPackages) {
+                    List<Module> ms = hiddenClasspathPackagesReverse.get(pkg);
+                    if (ms == null) {
+                        hiddenClasspathPackagesReverse.put(pkg, ms = new LinkedList<Module>());
+                    }
+                    ms.add(m);
+                }
+            }
+        }
+    }
     
     public void dispose(Module m) {
         Util.err.fine("dispose: " + m);
@@ -245,6 +300,13 @@ final class NbInstaller extends ModuleInstaller {
         installs.remove(m);
         layers.remove(m);
         kosherPackages.remove(m);
+        synchronized (hiddenClasspathPackages) {
+            hiddenClasspathPackages.remove(m);
+            for (List<Module> ms : hiddenClasspathPackagesReverse.values()) {
+                ms.remove(m);
+                // could also delete entry if ms.isEmpty()
+            }
+        }
     }
     
     public void load(List<Module> modules) {
@@ -259,7 +321,6 @@ final class NbInstaller extends ModuleInstaller {
         
         for (Module m: modules) {
             checkForDeprecations(m);
-            openideModuleEnabled(m);
         }
         
         loadLayers(modules, true);
@@ -267,7 +328,7 @@ final class NbInstaller extends ModuleInstaller {
 	
         ev.log(Events.PERF_START, "NbInstaller.load - sections"); // NOI18N
         ev.log(Events.LOAD_SECTION);
-        CoreBridge.conditionallyLoaderPoolTransaction(true);
+        CoreBridge.getDefault().loaderPoolTransaction(true);
         try {
             for (Module m: modules) {
                 try {
@@ -280,7 +341,7 @@ final class NbInstaller extends ModuleInstaller {
                 ev.log(Events.PERF_TICK, "sections for " + m.getCodeName() + " loaded"); // NOI18N
             }
         } finally {
-            CoreBridge.conditionallyLoaderPoolTransaction(false);
+            CoreBridge.getDefault().loaderPoolTransaction(false);
         }
         ev.log(Events.PERF_END, "NbInstaller.load - sections"); // NOI18N
 
@@ -327,7 +388,7 @@ final class NbInstaller extends ModuleInstaller {
                 Util.err.log(Level.SEVERE, null, le);
             }
         }
-        CoreBridge.conditionallyLoaderPoolTransaction(true);
+        CoreBridge.getDefault().loaderPoolTransaction(true);
         try {
             for (Module m: modules) {
                 try {
@@ -340,7 +401,7 @@ final class NbInstaller extends ModuleInstaller {
             }
         } finally {
             try {
-                CoreBridge.conditionallyLoaderPoolTransaction(false);
+                CoreBridge.getDefault().loaderPoolTransaction(false);
             } catch (RuntimeException e) {
                 Util.err.log(Level.SEVERE, null, e);
             }
@@ -497,23 +558,30 @@ final class NbInstaller extends ModuleInstaller {
      * If a module has no declared layer, does nothing.
      */
     private void loadLayers(List<Module> modules, boolean load) {
-        if (
-            ModuleLayeredFileSystem.getUserModuleLayer().isLayersOK() &&
-            ModuleLayeredFileSystem.getInstallationModuleLayer().isLayersOK()
-        ) {
-            return;
-        }
         ev.log(load ? Events.LOAD_LAYERS : Events.UNLOAD_LAYERS, modules);
         // #23609: dependent modules should be able to override:
         modules = new ArrayList<Module>(modules);
         Collections.reverse(modules);
-        Map<ModuleLayeredFileSystem,List<URL>> urls = new HashMap<ModuleLayeredFileSystem,List<URL>>(5);
-        urls.put(ModuleLayeredFileSystem.getUserModuleLayer(), new ArrayList<URL>(1000));
-        urls.put(ModuleLayeredFileSystem.getInstallationModuleLayer(), new ArrayList<URL>(1000));
+        Map<ModuleLayeredFileSystem,Collection<URL>> urls = new HashMap<ModuleLayeredFileSystem,Collection<URL>>(5);
+        ModuleLayeredFileSystem userModuleLayer = ModuleLayeredFileSystem.getUserModuleLayer();
+        ModuleLayeredFileSystem installationModuleLayer = ModuleLayeredFileSystem.getInstallationModuleLayer();
+        urls.put(userModuleLayer, new LinkedHashSet<URL>(1000));
+        urls.put(installationModuleLayer, new LinkedHashSet<URL>(1000));
         for (Module m: modules) {
+            // #19458: only put reloadables into the "session layer"
+            // (where they will not have their layers cached). All others
+            // should go into "installation layer" (so that they can mask
+            // layers according to cross-dependencies).
+            ModuleLayeredFileSystem host = m.isReloadable() ? userModuleLayer : installationModuleLayer;
+            Collection<URL> theseurls = urls.get(host);
+            if (theseurls == null) {
+                theseurls = new LinkedHashSet<URL>(1000);
+                urls.put(host, theseurls);
+            }
+            ClassLoader cl = m.getClassLoader();
             String s = layers.get(m);
             if (s != null) {
-                Util.err.fine("loadLayer: " + s + " load=" + load);
+                Util.err.log(Level.FINE, "loadLayer: {0} load={1}", new Object[] { s, load });
                 // Actually add a sequence of layers, in locale order.
                 String base, ext;
                 int idx = s.lastIndexOf('.'); // NOI18N
@@ -523,22 +591,6 @@ final class NbInstaller extends ModuleInstaller {
                 } else {
                     base = s.substring(0, idx);
                     ext = s.substring(idx);
-                }
-                ClassLoader cl = m.getClassLoader();
-                ModuleLayeredFileSystem host;
-                // #19458: only put reloadables into the "session layer"
-                // (where they will not have their layers cached). All others
-                // should go into "installation layer" (so that they can mask
-                // layers according to cross-dependencies).
-                if (m.isReloadable()) {
-                    host = ModuleLayeredFileSystem.getUserModuleLayer();
-                } else {
-                    host = ModuleLayeredFileSystem.getInstallationModuleLayer();
-                }
-                List<URL> theseurls = urls.get(host);
-                if (theseurls == null) {
-                    theseurls = new ArrayList<URL>(1000);
-                    urls.put(host, theseurls);
                 }
                 boolean foundSomething = false;
                 for (String suffix : NbCollections.iterable(NbBundle.getLocalizingSuffixes())) {
@@ -555,20 +607,33 @@ final class NbInstaller extends ModuleInstaller {
                     continue;
                 }
             }
+            try { // #149136
+                // Cannot use getResources because we do not wish to delegate to parents.
+                // In fact both URLClassLoader and ProxyClassLoader override this method to be public.
+                Method findResources = ClassLoader.class.getDeclaredMethod("findResources", String.class); // NOI18N
+                findResources.setAccessible(true);
+                Enumeration e = (Enumeration) findResources.invoke(cl, "META-INF/generated-layer.xml"); // NOI18N
+                while (e.hasMoreElements()) {
+                    URL u = (URL)e.nextElement();
+                    theseurls.add(u);
+                }
+            } catch (Exception x) {
+                Exceptions.printStackTrace(x);
+            }
         }
         // Now actually do it.
-        for (Map.Entry<ModuleLayeredFileSystem,List<URL>> entry: urls.entrySet()) {
+        for (Map.Entry<ModuleLayeredFileSystem,Collection<URL>> entry: urls.entrySet()) {
             ModuleLayeredFileSystem host = entry.getKey();
-            List<URL> theseurls = entry.getValue();
-            Util.err.fine("Adding/removing layer URLs: host=" + host + " urls=" + theseurls);
+            Collection<URL> theseurls = entry.getValue();
+            Util.err.log(Level.FINE, "Adding/removing layer URLs: host={0} urls={1}", new Object[] { host, theseurls });
             try {
                 if (load) {
                     host.addURLs(theseurls);
                 } else {
                     // #106737: we might have the wrong host, since it switches when reloadable flag is toggled.
                     // To be safe, remove from both.
-                    ModuleLayeredFileSystem.getUserModuleLayer().removeURLs(theseurls);
-                    ModuleLayeredFileSystem.getInstallationModuleLayer().removeURLs(theseurls);
+                    userModuleLayer.removeURLs(theseurls);
+                    installationModuleLayer.removeURLs(theseurls);
                 }
             } catch (Exception e) {
                 Util.err.log(Level.WARNING, null, e);
@@ -652,6 +717,19 @@ final class NbInstaller extends ModuleInstaller {
             }
         }
     }
+
+    private static String cacheCnb;
+    private static Set<Dependency> cacheDeps;
+    @Override
+    protected Set<Dependency> loadDependencies(String cnb) {
+        return cnb.equals(cacheCnb) ? cacheDeps : null;
+    }
+    @SuppressWarnings("unchecked")
+    static void register(String name, Object obj) {
+        cacheCnb = name;
+        cacheDeps = (Set<Dependency>)obj;
+    }
+
     
     private AutomaticDependencies autoDepsHandler = null;
     
@@ -675,7 +753,7 @@ final class NbInstaller extends ModuleInstaller {
             return;
         }
         if (autoDepsHandler == null) {
-            FileObject depsFolder = Repository.getDefault().getDefaultFileSystem().findResource("ModuleAutoDeps");
+            FileObject depsFolder = FileUtil.getConfigFile("ModuleAutoDeps");
             if (depsFolder != null) {
                 FileObject[] kids = depsFolder.getChildren();
                 List<URL> urls = new ArrayList<URL>(Math.max(kids.length, 1));
@@ -736,8 +814,9 @@ final class NbInstaller extends ModuleInstaller {
                 arr.add("org.openide.modules.os.Solaris"); // NOI18N
             }
             
-            // module format is now 1
-            arr.add ("org.openide.modules.ModuleFormat1"); // NOI18N
+            // module format is now 2
+            arr.add("org.openide.modules.ModuleFormat1"); // NOI18N
+            arr.add("org.openide.modules.ModuleFormat2"); // NOI18N
             
             return arr.toArray (new String[0]);
         }
@@ -752,33 +831,56 @@ final class NbInstaller extends ModuleInstaller {
             for (String cppkg : CLASSPATH_PACKAGES) {
                 if (pkg.startsWith(cppkg) && !findKosher(m).contains(cppkg)) {
                     // Undeclared use of a classpath package. Refuse it.
-                    if (Util.err.isLoggable(Level.FINE)) {
-                        Util.err.fine("Refusing to load classpath package " + pkg + " for " + m.getCodeNameBase() + " without a proper dependency"); // NOI18N
+                    if (LOG.isLoggable(Level.FINE)) {
+                        LOG.fine("Refusing to load classpath package " + pkg + " for " + m.getCodeNameBase() + " without a proper dependency"); // NOI18N
                     }
                     return false;
+                }
+            }
+            List<Module.PackageExport> hiddenPackages;
+            synchronized (hiddenClasspathPackages) {
+                hiddenPackages = hiddenClasspathPackages.get(m);
+            }
+            if (hiddenPackages != null) {
+                for (Module.PackageExport hidden : hiddenPackages) {
+                    if (hidden.recursive ? pkg.startsWith(hidden.pkg) : pkg.equals(hidden.pkg)) {
+                        if (LOG.isLoggable(Level.FINE)) {
+                            LOG.fine("Refusing to load classpath package " + pkg + " for " + m.getCodeNameBase());
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+        if (LOG.isLoggable(Level.FINER) && /* otherwise ClassCircularityError on LogRecord*/!pkg.equals("java/util/logging/")) {
+            LOG.finer("Delegating resource " + pkg + " from " + parent + " for " + m.getCodeNameBase());
+        }
+        return true;
+    }
+
+    public @Override boolean shouldDelegateClasspathResource(String pkg) {
+        synchronized (hiddenClasspathPackages) {
+            for (Map.Entry<Module.PackageExport,List<Module>> entry : hiddenClasspathPackagesReverse.entrySet()) {
+                Module.PackageExport hidden = entry.getKey();
+                if (hidden.recursive ? pkg.startsWith(hidden.pkg) : pkg.equals(hidden.pkg)) {
+                    for (Module m : entry.getValue()) {
+                        if (m.isEnabled()) {
+                            if (LOG.isLoggable(Level.FINE)) {
+                                LOG.fine("Refusing to load classpath package " + pkg + " because of " + m.getCodeNameBase());
+                            }
+                            return false;
+                        }
+                    }
                 }
             }
         }
         return true;
     }
     
-    private static final String[] CLASSPATH_PACKAGES = new String[] {
+    private static final String[] CLASSPATH_PACKAGES = {
         // core.jar shall be inaccessible
         "org/netbeans/core/startup/",
-        // Java language infrastructure bundled with IDE; do not want clashes with JDK 6:
-        "com/sun/tools/javac/",
-        "com/sun/tools/javadoc/",
-        "com/sun/javadoc/",
-        "com/sun/source/",
-        "javax/annotation/",
-        "javax/lang/model/",
-        "javax/tools/",
-        // do not want JAX-WS 2.0 classes from JDK 6;
-        "javax/xml/bind/", // NOI18N
-        "javax/xml/ws/", // NOI18N
-        "javax/xml/stream/", // NOI18N
-        "javax/jws/", // NOI18N
-        "javax/xml/soap/" // NOI18N
+        // Do not add JRE packages here! See issue #96711 for the alternative.
     };
     
     private Set<String> findKosher(Module m) {
@@ -838,41 +940,6 @@ final class NbInstaller extends ModuleInstaller {
         }
         return s;
     }
-
-    /** true if optimizations of openide classloading shall be disabled.
-     */
-    private static boolean withoutOptimizations;
-    /** Whenever an openide module is enabled, it is checked to be 
-     * on for whose we provide optimizations.
-     */
-    static void openideModuleEnabled(Module module) {
-        String m = module.getCodeNameBase();
-        if (!m.startsWith("org.openide.")) {
-            return;
-        }
-        
-        if ("org.openide.util".equals(m)) return; // NOI18N
-        if ("org.openide.actions".equals(m)) return; // NOI18N
-        if ("org.openide.awt".equals(m)) return; // NOI18N
-        if ("org.openide.modules".equals(m)) return; // NOI18N
-        if ("org.openide.nodes".equals(m)) return; // NOI18N
-        if ("org.openide.windows".equals(m)) return; // NOI18N
-        if ("org.openide.explorer".equals(m)) return; // NOI18N
-        if ("org.openide.util.enumerations".equals(m)) return; // NOI18N
-        if ("org.openide.execution".equals(m)) return; // NOI18N
-        if ("org.openide.options".equals(m)) return; // NOI18N
-        if ("org.openide.execution".equals(m)) return; // NOI18N
-        if ("org.openide.loaders".equals(m)) return; // NOI18N
-        if ("org.openide.dialogs".equals(m)) return; // NOI18N
-        if ("org.openide.filesystems".equals(m)) return; // NOI18N
-        if ("org.openide.io".equals(m)) return; // NOI18N
-        if ("org.openide.text".equals(m)) return; // NOI18N
-        if ("org.openide.src".equals(m)) return; // NOI18N
-        
-        Util.err.warning("Disabling openide load optimizations due to use of " + m); // NOI18N
-        
-        withoutOptimizations = true;
-    }
     
     /** Information about contents of some JARs on the startup classpath (both lib/ and lib/ext/).
      * The first item in each is a prefix for JAR filenames.
@@ -894,90 +961,6 @@ final class NbInstaller extends ModuleInstaller {
         // No one ought to be using boot.jar:
         {"boot"}, // NOI18N
     };
-    
-    /** These packages have been refactored into several modules.
-     * Disable the domain cache for them.
-     */
-    public @Override boolean isSpecialResource(String pkg) {
-        // JST-PENDING here is experimental enumeration of shared packages in openide
-        // maybe this will speed up startup, but it is not accurate as if
-        // someone enables some long time deprecated openide jar list will
-        // get wrong.
-        // Probably I need to watch for list of modules that export org.openide
-        // or subclass and if longer than expected, disable this optimization
-        
-        // the old good way:
-        if (pkg.startsWith("org/openide/")) {
-            
-            // util & dialogs
-            if ("org/openide/".equals (pkg)) return true; // NOI18N
-            // loaders, actions, and who know what else
-            if ("org/openide/actions/".equals (pkg)) return true; // NOI18N
-            // loaders & awt
-            if ("org/openide/awt/".equals (pkg)) return true; // NOI18N
-            // loaders, nodes, text...
-            if ("org/openide/cookies/".equals (pkg)) return true; // NOI18N
-
-            // some are provided by java/srcmodel
-            if ("org/openide/explorer/propertysheet/editors/".equals (pkg)) return true; // NOI18N
-
-            // windows & io 
-            if ("org/openide/windows/".equals (pkg)) return true; // NOI18N
-
-            // text & loaders
-            if ("org/openide/text/".equals (pkg)) return true; // NOI18N
-
-            // util & nodes
-            if ("org/openide/util/actions/".equals (pkg)) return true; // NOI18N
-
-            if (withoutOptimizations) {
-                // these should be removed as soon as we get rid of org-openide-compat
-                if ("org/openide/explorer/".equals (pkg)) return true; // NOI18N
-                if ("org/openide/util/".equals (pkg)) return true; // NOI18N
-            }
-        }
-
-        if (isSpecialResourceFromSystemProperty(pkg)) {
-            return true;
-        }
-        
-        // Some classes like DOMError are only in xerces.jar, not in JDK:
-        if (pkg.equals("org/w3c/dom/")) return true; // NOI18N
-        // #36578: JDK 1.5 has DOM3
-        if (pkg.equals("org/w3c/dom/ls/")) return true; // NOI18N
-        return super.isSpecialResource(pkg);
-    }
-    
-    /**
-     * Checks the passed in package for having a prefix one
-     * of the strings specified in the system property 
-     * "org.netbeans.core.startup.specialResource".
-     */
-    private boolean isSpecialResourceFromSystemProperty(String pkg) {
-        for (String prefix : getSpecialResourcePrefixes()) {
-            if (pkg.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false; 
-    }
-    
-    /**
-     * Reads the system property 
-     * "org.netbeans.core.startup.specialResource"
-     * and extracts the comma separated entries in it.
-     */
-    private static String[] getSpecialResourcePrefixes() {
-        if (specialResourcePrefixes == null) {
-            String sysProp = System.getProperty("org.netbeans.core.startup.specialResource");
-            if (sysProp != null) {
-                specialResourcePrefixes = sysProp.split(",");
-            } else {
-                specialResourcePrefixes = new String[0];
-            }
-        }
-        return specialResourcePrefixes;
-    }
     
     /** Get the effective "classpath" used by a module.
      * Specific syntax: classpath entries as usual, but
@@ -1174,7 +1157,7 @@ final class NbInstaller extends ModuleInstaller {
      * or there is no available cache directory.
      */
     private boolean usingManifestCache;
-    private Object MANIFEST_CACHE = new Object();
+    private final Object MANIFEST_CACHE = new Object();
 
     {
         usingManifestCache = Boolean.valueOf(System.getProperty("netbeans.cache.manifests", "true")).booleanValue();
@@ -1213,13 +1196,9 @@ final class NbInstaller extends ModuleInstaller {
         }
         DateAndManifest entry = cache.get(jar);
         if (entry != null) {
-            if (entry.date == jar.lastModified()) {
-                // Cache hit.
-                MANIFEST_LOG.fine("Found manifest for " + jar + " in cache");
-                return entry.manifest;
-            } else {
-                MANIFEST_LOG.fine("Wrong timestamp for " + jar + " in manifest cache");
-            }
+            // Cache hit.
+            MANIFEST_LOG.fine("Found manifest for " + jar + " in cache");
+            return entry.manifest;
         } else {
             MANIFEST_LOG.fine("No entry for " + jar + " in manifest cache");
         }
