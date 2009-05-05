@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.loaders;
 
 import java.io.BufferedReader;
@@ -46,125 +45,83 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.editor.BaseDocument;
 
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.DataObject;
 import org.openide.loaders.MultiDataObject;
 import org.openide.loaders.DataObjectExistsException;
-import org.openide.util.NbBundle;
-
-import org.netbeans.modules.cnd.MIMENames;
-import org.openide.util.SharedClassObject;
 
 /**
  *  Recognizes single files in the Repository as being of a certain type.
  */
-public class ShellDataLoader extends CndAbstractDataLoader {
-
-    private static ShellDataLoader instance = null;
+public class ShellDataLoader extends CndAbstractDataLoaderExt {
 
     /** Serial version number */
     static final long serialVersionUID = -7173746465817543299L;
-
-    /** The suffix list for shell files */
-    private static final String[] shellExtensions =
-	    {"bash", "csh", "ksh", "sh", "zsh", "bat", "cmd"}; // NOI18N
-
 
     /**
      *  Default constructor
      */
     public ShellDataLoader() {
-	super("org.netbeans.modules.cnd.loaders.ShellDataObject"); // NOI18N
-	instance = this;
-	createExtentions(shellExtensions);
+        super("org.netbeans.modules.cnd.loaders.ShellDataObject"); // NOI18N
     }
-    
-    public static ShellDataLoader getInstance() {
-        if (instance == null) {
-            instance = SharedClassObject.findObject(ShellDataLoader.class, true);
-        }
-	return instance;
-    }
-    
+
     @Override
-    protected String actionsContext () {
+    protected String actionsContext() {
         return "Loaders/text/sh/Actions/"; // NOI18N
     }
 
+    @Override
     protected String getMimeType() {
         return MIMENames.SHELL_MIME_TYPE;
-    }
-
-    /** set the default display name */
-    @Override
-    protected String defaultDisplayName() {
-	return NbBundle.getMessage(ShellDataLoader.class, "PROP_ShellDataLoader_Name"); // NOI18N
     }
 
     /**
      *  Create the DataObject.
      */
     protected MultiDataObject createMultiObject(FileObject primaryFile) throws DataObjectExistsException, IOException {
-	return new ShellDataObject(primaryFile, this);
+        return new ShellDataObject(primaryFile, this);
     }
 
     @Override
     protected MultiDataObject.Entry createPrimaryEntry(MultiDataObject obj, FileObject primaryFile) {
-	return new ShellFormat(obj, primaryFile);
-    }
-  
-
-    /** Call the method we use to find the primary file */
-    @Override
-    protected FileObject findPrimaryFile(FileObject fo) {
-	if (fo.isFolder()) {
-	    return null;
-	}
-
-        /* First, look for an extension */
-        if (getExtensions().isRegistered(fo)) {
-            return fo;
-        }
-        
-        /*
-         * Now let the mime resolver do it. This could cause bytes to be read in
-         * the mime resolver.
-         */
-	String mime = fo.getMIMEType();
-        if (mime != null && mime.equals(MIMENames.SHELL_MIME_TYPE)) {
-            return fo;
-        }
-
-	return null;
+        return new ShellFormat(obj, primaryFile);
     }
 
     // Inner class: Substitute important template parameters...
     private static class ShellFormat extends CndFormat {
-        
-	public ShellFormat(MultiDataObject obj, FileObject primaryFile) {
-	    super(obj, primaryFile);
-	}
+
+        public ShellFormat(MultiDataObject obj, FileObject primaryFile) {
+            super(obj, primaryFile);
+        }
 
         // This method was taken fom base class to replace "new line" string.
         // Shell scripts shouldn't contains "\r"
         // API doesn't provide method to replace platform dependant "new line" string.
         @Override
         public FileObject createFromTemplate(FileObject f, String name) throws IOException {
-            String ext = getFile().getExt();
-            if (name == null) {
-                name = FileUtil.findFreeFileName(f, getFile().getName(), ext);
+
+            // passed name already contains extension, don't append another one
+            String ext = FileUtil.getExtension(name);
+            if (ext.length() != 0) {
+                name = name.substring(0, name.length() - ext.length() - 1);
+            } else {
+                ext = getFile().getExt();
             }
+
             FileObject fo = f.createData(name, ext);
             java.text.Format frm = createFormat(f, name, ext);
-            BufferedReader r = new BufferedReader(new InputStreamReader(getFile().getInputStream()));
+            BufferedReader r = new BufferedReader(new InputStreamReader(
+                    getFile().getInputStream(), FileEncodingQuery.getEncoding(getFile())));
             try {
                 FileLock lock = fo.lock();
                 try {
-                    BufferedWriter w = new BufferedWriter(new OutputStreamWriter(fo.getOutputStream(lock)));
+                    BufferedWriter w = new BufferedWriter(new OutputStreamWriter(
+                            fo.getOutputStream(lock), FileEncodingQuery.getEncoding(fo)));
                     try {
                         String current;
                         while ((current = r.readLine()) != null) {
@@ -181,16 +138,9 @@ public class ShellDataLoader extends CndAbstractDataLoader {
                 r.close();
             }
             FileUtil.copyAttributes(getFile(), fo);
-            setTemplate(fo);
+            setTemplate(fo, false);
             return fo;
         }
-        
-        // do what package-local DataObject.setTemplate (fo, false) does
-        private void setTemplate(FileObject fo) throws IOException {
-            Object o = fo.getAttribute(DataObject.PROP_TEMPLATE);
-            if ((o instanceof Boolean) && ((Boolean)o).booleanValue()) {
-                fo.setAttribute(DataObject.PROP_TEMPLATE, null);
-            }
-        }
+
     }
 }
