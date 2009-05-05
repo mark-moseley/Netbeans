@@ -112,7 +112,7 @@ public class MultiFileObjectTestHid extends TestBaseHid {
         testFo = mfs.findResource("/fold20/fold21/fold22");
         fsAssert("/fold20/fold21/fold22 should not be present",testFo == null);
     }    
-    
+
     public void testBug19425 () throws IOException {
         String whereRes = "/fold10";
         String whatRes = "/fold20/fold23.txt";
@@ -154,5 +154,26 @@ public class MultiFileObjectTestHid extends TestBaseHid {
             fsFail ("Null delegates should be supported"); 
         }
     }
-    
+
+    /** Tests FileAlreadyLockedException is thrown and 'locked by' is reported. */
+    public void testAlreadyLocked() throws IOException {
+        FileSystem mfs = this.testedFS;
+        FileObject testFo = mfs.findResource("/fold20/fold23.txt");
+        fsAssert("/fold20/fold23.txt should be present", testFo != null);
+
+        FileLock lock = testFo.lock();
+        try {
+            testFo.lock();
+            fail("FileAlreadyLockedException not thrown if already locked.");
+        } catch (FileAlreadyLockedException e) {
+            // OK
+            boolean asserts = false;
+            assert asserts = true;
+            if (asserts) {
+                assertNotNull("Init cause not set.", e.getCause());
+            }
+        } finally {
+            lock.releaseLock();
+        }
+    }
 }
