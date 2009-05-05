@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -23,42 +23,40 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.refactoring.ruby;
 
-
 import java.util.Iterator;
 import javax.swing.text.Document;
-
-import org.jruby.nb.ast.ArgumentNode;
-import org.jruby.nb.ast.ClassNode;
-import org.jruby.nb.ast.ClassVarAsgnNode;
-import org.jruby.nb.ast.ClassVarDeclNode;
-import org.jruby.nb.ast.ClassVarNode;
-import org.jruby.nb.ast.ConstNode;
-import org.jruby.nb.ast.GlobalAsgnNode;
-import org.jruby.nb.ast.GlobalVarNode;
-import org.jruby.nb.ast.IScopingNode;
-import org.jruby.nb.ast.InstAsgnNode;
-import org.jruby.nb.ast.InstVarNode;
-import org.jruby.nb.ast.MethodDefNode;
-import org.jruby.nb.ast.ModuleNode;
-import org.jruby.nb.ast.Node;
-import org.jruby.nb.ast.NodeType;
-import org.jruby.nb.ast.SClassNode;
-import org.jruby.nb.ast.SymbolNode;
-import org.netbeans.modules.gsf.api.ElementKind;
+import org.jrubyparser.ast.ArgumentNode;
+import org.jrubyparser.ast.ClassNode;
+import org.jrubyparser.ast.ClassVarAsgnNode;
+import org.jrubyparser.ast.ClassVarDeclNode;
+import org.jrubyparser.ast.ClassVarNode;
+import org.jrubyparser.ast.ConstNode;
+import org.jrubyparser.ast.GlobalAsgnNode;
+import org.jrubyparser.ast.GlobalVarNode;
+import org.jrubyparser.ast.IScopingNode;
+import org.jrubyparser.ast.InstAsgnNode;
+import org.jrubyparser.ast.InstVarNode;
+import org.jrubyparser.ast.MethodDefNode;
+import org.jrubyparser.ast.ModuleNode;
+import org.jrubyparser.ast.Node;
+import org.jrubyparser.ast.SClassNode;
+import org.jrubyparser.ast.SymbolNode;
 import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.napi.gsfret.source.CompilationInfo;
 import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.csl.api.ElementKind;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.ruby.Arity;
 import org.netbeans.modules.ruby.AstPath;
-import org.netbeans.modules.ruby.AstPath;
 import org.netbeans.modules.ruby.AstUtilities;
+import org.netbeans.modules.ruby.ContextKnowledge;
 import org.netbeans.modules.ruby.RubyIndex;
+import org.netbeans.modules.ruby.RubyType;
+import org.netbeans.modules.ruby.RubyTypeInferencer;
 import org.netbeans.modules.ruby.RubyUtils;
-import org.netbeans.modules.ruby.RubyTypeAnalyzer;
 import org.netbeans.modules.ruby.elements.AstElement;
 import org.netbeans.modules.ruby.elements.Element;
 import org.netbeans.modules.ruby.elements.IndexedElement;
@@ -67,21 +65,21 @@ import org.netbeans.modules.ruby.lexer.Call;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.openide.filesystems.FileObject;
 
-
 /**
  * This is a holder class for a Ruby element as well as its
  * context - used in various places in the refactoring classes.
  * These need to be able to be mapped from one AST to another,
  * and correspond (roughly) to the TreePath, RubyElementCtx,
- * Element and ElementHandle classes (plus some friends like CompilationInfo
+ * Element and ElementHandle classes (plus some friends like ParserResult
  * and FileObject) passed around in the equivalent Java refactoring code.
  *
  * @author Tor Norbye
  */
 public class RubyElementCtx {
+    
     private Node node;
     private Node root;
-    private CompilationInfo info;
+    private ParserResult info;
     private FileObject fileObject;
     private AstPath path;
     private int caret;
@@ -98,16 +96,16 @@ public class RubyElementCtx {
     private String defClass;
 
     public RubyElementCtx(Node root, Node node, Element element, FileObject fileObject,
-        CompilationInfo info) {
+        ParserResult info) {
         initialize(root, node, element, fileObject, info);
     }
 
     /** Create a new element holder representing the node closest to the given caret offset in the given compilation job */
-    public RubyElementCtx(CompilationInfo info, int caret) {
-        Node root = AstUtilities.getRoot(info);
+    public RubyElementCtx(ParserResult parserResult, int caret) {
+        Node _root = AstUtilities.getRoot(parserResult);
 
-        int astOffset = AstUtilities.getAstOffset(info, caret);
-        path = new AstPath(root, astOffset);
+        int astOffset = AstUtilities.getAstOffset(parserResult, caret);
+        path = new AstPath(_root, astOffset);
 
         Node leaf = path.leaf();
         if (leaf == null) {
@@ -115,63 +113,63 @@ public class RubyElementCtx {
         }
 
         Iterator<Node> it = path.leafToRoot();
-    FindNode:
+        FindNode:
         while (it.hasNext()) {
             leaf = it.next();
-            switch (leaf.nodeId) {
-            case ARGUMENTNODE:
-            case LOCALVARNODE:
-            case LOCALASGNNODE:
-            case DVARNODE:
-            case DASGNNODE:
-            case SYMBOLNODE:
-            case FCALLNODE:
-            case VCALLNODE:
-            case CALLNODE:
-            case GLOBALVARNODE:
-            case GLOBALASGNNODE:
-            case INSTVARNODE:
-            case INSTASGNNODE:
-            case CLASSVARNODE:
-            case CLASSVARASGNNODE:
-            case CLASSVARDECLNODE:
-            case COLON2NODE:
-            case CONSTNODE:
-            case CONSTDECLNODE:
-                break FindNode;
+            switch (leaf.getNodeType()) {
+                case ARGUMENTNODE:
+                case LOCALVARNODE:
+                case LOCALASGNNODE:
+                case DVARNODE:
+                case DASGNNODE:
+                case SYMBOLNODE:
+                case FCALLNODE:
+                case VCALLNODE:
+                case CALLNODE:
+                case GLOBALVARNODE:
+                case GLOBALASGNNODE:
+                case INSTVARNODE:
+                case INSTASGNNODE:
+                case CLASSVARNODE:
+                case CLASSVARASGNNODE:
+                case CLASSVARDECLNODE:
+                case COLON2NODE:
+                case CONSTNODE:
+                case CONSTDECLNODE:
+                    break FindNode;
             }
             if (!it.hasNext()) {
                 leaf = path.leaf();
                 break;
             }
         }
-        Element element = AstElement.create(info, leaf);
+        Element _element = AstElement.create(parserResult, leaf);
 
-        initialize(root, leaf, element, info.getFileObject(), info);
+        initialize(_root, leaf, _element, RubyUtils.getFileObject(parserResult), parserResult);
     }
 
     /** Create a new element holder representing the given node in the same context as the given existing context */
     public RubyElementCtx(RubyElementCtx ctx, Node node) {
-        Element element = AstElement.create(info, node);
+        Element _element = AstElement.create(info, node);
 
-        initialize(ctx.getRoot(), node, element, ctx.getFileObject(), ctx.getInfo());
+        initialize(ctx.getRoot(), node, _element, ctx.getFileObject(), ctx.getInfo());
     }
 
     public RubyElementCtx(IndexedElement element) {
-        CompilationInfo[] infoHolder = new CompilationInfo[1];
-        Node node = AstUtilities.getForeignNode(element, infoHolder);
-        CompilationInfo info = infoHolder[0];
+        ParserResult[] infoHolder = new ParserResult[1];
+        Node _node = AstUtilities.getForeignNode(element, infoHolder);
+        ParserResult _info = infoHolder[0];
 
-        Element e = AstElement.create(info, node);
+        Element e = AstElement.create(_info, _node);
 
         FileObject fo = element.getFileObject();
         document = RetoucheUtils.getDocument(null, fo);
 
-        initialize(root, node, e, fo, info);
+        initialize(root, _node, e, fo, _info);
     }
 
     private void initialize(Node root, Node node, Element element, FileObject fileObject,
-        CompilationInfo info) {
+        ParserResult info) {
         this.root = root;
         this.node = node;
         this.element = element;
@@ -201,7 +199,7 @@ public class RubyElementCtx {
 
     public ElementKind getKind() {
         if (kind == null) {
-            switch (node.nodeId) {
+            switch (node.getNodeType()) {
             case DEFNNODE:
             case DEFSNODE:
                 kind = AstUtilities.isConstructorMethod((MethodDefNode)node)
@@ -226,10 +224,10 @@ public class RubyElementCtx {
                 kind = ElementKind.VARIABLE;
                 break;
             case ARGUMENTNODE: {
-                AstPath path = getPath();
+                AstPath _path = getPath();
 
-                if (path.leafParent() instanceof MethodDefNode) {
-                    kind = AstUtilities.isConstructorMethod((MethodDefNode)path.leafParent())
+                if (_path.leafParent() instanceof MethodDefNode) {
+                    kind = AstUtilities.isConstructorMethod((MethodDefNode)_path.leafParent())
                         ? ElementKind.CONSTRUCTOR : ElementKind.METHOD;
                 } else {
                     // TODO - are ArgumentNodes used anywhere else?
@@ -303,7 +301,7 @@ public class RubyElementCtx {
         this.node = node;
     }
 
-    public CompilationInfo getInfo() {
+    public ParserResult getInfo() {
         return info;
     }
 
@@ -349,10 +347,10 @@ public class RubyElementCtx {
             } else if (AstUtilities.isCall(node)) {
                 arity = Arity.getCallArity(node);
             } else if (node instanceof ArgumentNode) {
-                AstPath path = getPath();
+                AstPath _path = getPath();
 
-                if (path.leafParent() instanceof MethodDefNode) {
-                    arity = Arity.getDefArity(path.leafParent());
+                if (_path.leafParent() instanceof MethodDefNode) {
+                    arity = Arity.getDefArity(_path.leafParent());
                 }
             }
         }
@@ -362,7 +360,7 @@ public class RubyElementCtx {
 
     public BaseDocument getDocument() {
         if (document == null) {
-            document = RetoucheUtils.getDocument(info, info.getFileObject());
+            document = RetoucheUtils.getDocument(info, RubyUtils.getFileObject(info));
         }
 
         return document;
@@ -372,8 +370,9 @@ public class RubyElementCtx {
         return null;
     }
 
-    /** If the node is a method call, return the class of the method we're looking
-     * for (if any)
+    /**
+     * If the node is a method call, return the class of the method we're
+     * looking for (if any)
      */
     public String getDefClass() {
         if (defClass == null) {
@@ -389,22 +388,27 @@ public class RubyElementCtx {
                 Call call = Call.getCallType(doc, th, astOffset);
                 int lexOffset = LexUtilities.getLexerOffset(info, astOffset);
 
-                String type = call.getType();
+                RubyType types = RubyType.createUnknown();
+                final RubyType callType = call.getType();
+                if (callType.isKnown() && !call.isLHSConstant()) {
+                    types = callType;
+                }
                 String lhs = call.getLhs();
 
-                if ((type == null) && (lhs != null) && (node != null) && call.isSimpleIdentifier()) {
+                if ((types.isKnown()) && (lhs != null) && (node != null) && call.isSimpleIdentifier()) {
                     Node method = AstUtilities.findLocalScope(node, getPath());
 
                     if (method != null) {
                         // TODO - if the lhs is "foo.bar." I need to split this
                         // up and do it a bit more cleverly
-                        RubyTypeAnalyzer analyzer =
-                            new RubyTypeAnalyzer(null, method, node, astOffset, lexOffset, doc, null);
-                        type = analyzer.getType(lhs);
+                        ContextKnowledge knowledge =
+                            new ContextKnowledge(null, method, node, astOffset, lexOffset, doc, null);
+                        RubyTypeInferencer rti = RubyTypeInferencer.normal(knowledge);
+                        types = rti.inferType(lhs);
                     }
                 } else if (call == Call.LOCAL) {
                     // Look in the index to see which method it's coming from... 
-                    RubyIndex index = RubyIndex.get(info.getIndex(RubyUtils.RUBY_MIME_TYPE), info.getFileObject());
+                    RubyIndex index = RubyIndex.get(info);
                     String fqn = AstUtilities.getFqnName(getPath());
 
                     if ((fqn == null) || (fqn.length() == 0)) {
@@ -421,10 +425,11 @@ public class RubyElementCtx {
 
                 if (defClass == null) {
                     // Just an inherited method call?
-                    if ((type == null) && (lhs == null)) {
+                    if ((types.isKnown()) && (lhs == null)) {
                         defClass = AstUtilities.getFqnName(getPath());
-                    } else if (type != null) {
-                        defClass = type;
+                    } else if (types.isKnown()) {
+                        // TODO handle all types - types.getRealTypes();
+                        defClass = types.isSingleton() ? types.first() : null;
                     } else {
                         defClass = RubyIndex.UNKNOWN_CLASS;
                     }
@@ -477,4 +482,5 @@ public class RubyElementCtx {
         // Restargs - "*" ?
         return null;
     }
+
 }

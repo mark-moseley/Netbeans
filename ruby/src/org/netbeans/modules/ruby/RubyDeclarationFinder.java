@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,74 +42,65 @@ package org.netbeans.modules.ruby;
 
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 
-import org.jruby.nb.ast.AliasNode;
-import org.jruby.nb.ast.ArgsNode;
-import org.jruby.nb.ast.ArgumentNode;
-import org.jruby.nb.ast.BlockArgNode;
-import org.jruby.nb.ast.CallNode;
-import org.jruby.nb.ast.ClassNode;
-import org.jruby.nb.ast.ClassVarDeclNode;
-import org.jruby.nb.ast.ClassVarNode;
-import org.jruby.nb.ast.Colon2Node;
-import org.jruby.nb.ast.ConstDeclNode;
-import org.jruby.nb.ast.ConstNode;
-import org.jruby.nb.ast.DAsgnNode;
-import org.jruby.nb.ast.DVarNode;
-import org.jruby.nb.ast.FCallNode;
-import org.jruby.nb.ast.GlobalAsgnNode;
-import org.jruby.nb.ast.GlobalVarNode;
-import org.jruby.nb.ast.HashNode;
-import org.jruby.nb.ast.InstAsgnNode;
-import org.jruby.nb.ast.InstVarNode;
-import org.jruby.nb.ast.ListNode;
-import org.jruby.nb.ast.LocalAsgnNode;
-import org.jruby.nb.ast.LocalVarNode;
-import org.jruby.nb.ast.MethodDefNode;
-import org.jruby.nb.ast.Node;
-import org.jruby.nb.ast.StrNode;
-import org.jruby.nb.ast.SymbolNode;
-import org.jruby.nb.ast.VCallNode;
-import org.jruby.nb.ast.types.INameNode;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.DeclarationFinder.DeclarationLocation;
-import org.netbeans.modules.gsf.api.ElementHandle;
-import org.netbeans.modules.gsf.api.HtmlFormatter;
-import org.netbeans.modules.gsf.api.Index;
-import org.netbeans.modules.gsf.api.NameKind;
-import org.netbeans.modules.gsf.api.OffsetRange;
+import org.jrubyparser.ast.AliasNode;
+import org.jrubyparser.ast.ArgsNode;
+import org.jrubyparser.ast.ArgumentNode;
+import org.jrubyparser.ast.BlockArgNode;
+import org.jrubyparser.ast.CallNode;
+import org.jrubyparser.ast.ClassNode;
+import org.jrubyparser.ast.ClassVarDeclNode;
+import org.jrubyparser.ast.ClassVarNode;
+import org.jrubyparser.ast.Colon2Node;
+import org.jrubyparser.ast.ConstNode;
+import org.jrubyparser.ast.DAsgnNode;
+import org.jrubyparser.ast.DVarNode;
+import org.jrubyparser.ast.FCallNode;
+import org.jrubyparser.ast.GlobalAsgnNode;
+import org.jrubyparser.ast.GlobalVarNode;
+import org.jrubyparser.ast.HashNode;
+import org.jrubyparser.ast.InstAsgnNode;
+import org.jrubyparser.ast.InstVarNode;
+import org.jrubyparser.ast.ListNode;
+import org.jrubyparser.ast.LocalAsgnNode;
+import org.jrubyparser.ast.LocalVarNode;
+import org.jrubyparser.ast.MethodDefNode;
+import org.jrubyparser.ast.Node;
+import org.jrubyparser.ast.StrNode;
+import org.jrubyparser.ast.SymbolNode;
+import org.jrubyparser.ast.VCallNode;
+import org.jrubyparser.ast.INameNode;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
-import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
-import org.netbeans.modules.gsf.api.SourceModelFactory;
-import org.netbeans.modules.ruby.elements.AstElement;
+import org.netbeans.modules.csl.api.DeclarationFinder;
+import org.netbeans.modules.csl.api.DeclarationFinder.AlternativeLocation;
+import org.netbeans.modules.csl.api.DeclarationFinder.DeclarationLocation;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.csl.spi.ParserResult;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
 import org.netbeans.modules.ruby.elements.IndexedClass;
 import org.netbeans.modules.ruby.elements.IndexedElement;
 import org.netbeans.modules.ruby.elements.IndexedField;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
-import org.netbeans.modules.ruby.elements.RubyElement;
 import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.netbeans.modules.ruby.lexer.Call;
 import org.netbeans.modules.ruby.lexer.RubyCommentTokenId;
 import org.netbeans.modules.ruby.lexer.RubyTokenId;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
-import org.openide.util.NbBundle;
 
 
 /**
@@ -127,9 +118,8 @@ import org.openide.util.NbBundle;
  * 
  * @author Tor Norbye
  */
-public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.DeclarationFinder {
-    private static final boolean CHOOSE_ONE_DECLARATION = Boolean.getBoolean("ruby.choose_one_decl");
-    
+public class RubyDeclarationFinder extends RubyDeclarationFinderHelper implements DeclarationFinder {
+
     /** An increasing number; I will be using this number modulo the  */
     private static int methodSelector = 0;
 
@@ -238,23 +228,23 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return OffsetRange.NONE;
     }
 
-    public DeclarationLocation findDeclaration(CompilationInfo info, int lexOffset) {
+    public DeclarationLocation findDeclaration(ParserResult parserResult, int lexOffset) {
         // Is this a require-statement? If so, jump to the required file
         try {
-            Document document = info.getDocument();
+            Document document = RubyUtils.getDocument(parserResult, true);
             if (document == null) {
                 return DeclarationLocation.NONE;
             }
             TokenHierarchy<Document> th = TokenHierarchy.get(document);
             BaseDocument doc = (BaseDocument)document;
 
-            int astOffset = AstUtilities.getAstOffset(info, lexOffset);
+            int astOffset = AstUtilities.getAstOffset(parserResult, lexOffset);
             if (astOffset == -1) {
                 return DeclarationLocation.NONE;
             }
 
-            if (RubyUtils.isRhtmlFile(info.getFileObject())) {
-                DeclarationLocation loc = findRailsFile(info, doc, th, lexOffset, astOffset);
+            if (RubyUtils.isRhtmlFile(RubyUtils.getFileObject(parserResult))) {
+                DeclarationLocation loc = findRailsFile(parserResult, doc, th, lexOffset, astOffset);
 
                 if (loc != DeclarationLocation.NONE) {
                     return loc;
@@ -271,13 +261,13 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             // click on a link for the left or the right?
             boolean leftSide = range.getEnd() <= lexOffset;
 
-            Node root = AstUtilities.getRoot(info);
+            Node root = AstUtilities.getRoot(parserResult);
 
+            RubyIndex index = RubyIndex.get(parserResult);
             if (root == null) {
                 // No parse tree - try to just use the syntax info to do a simple index lookup
                 // for methods and classes
                 String text = doc.getText(range.getStart(), range.getLength());
-                RubyIndex index = RubyIndex.get(info.getIndex(RubyInstallation.RUBY_MIME_TYPE), info.getFileObject());
 
                 if ((index == null) || (text.length() == 0)) {
                     return DeclarationLocation.NONE;
@@ -286,26 +276,28 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 if (Character.isUpperCase(text.charAt(0))) {
                     // A Class or Constant?
                     Set<IndexedClass> classes =
-                        index.getClasses(text, NameKind.EXACT_NAME, true, false, false);
+                        index.getClasses(text, QuerySupport.Kind.EXACT, true, false, false);
 
                     if (classes.size() == 0) {
                         return DeclarationLocation.NONE;
                     }
 
-                    DeclarationLocation l = getClassDeclaration(info, classes, null, null, index);
+                    RubyClassDeclarationFinder cdf = new RubyClassDeclarationFinder(null, null, null, index, null);
+                    DeclarationLocation l = cdf.getElementDeclaration(classes, null);
+
                     if (l != null) {
                         return l;
                     }
                 } else {
                     // A method?
                     Set<IndexedMethod> methods =
-                        index.getMethods(text, null, NameKind.EXACT_NAME, RubyIndex.ALL_SCOPE);
+                        index.getMethods(text, (String) null, QuerySupport.Kind.EXACT);
 
                     if (methods.size() == 0) {
-                        methods = index.getMethods(text, null, NameKind.EXACT_NAME);
+                        methods = index.getMethods(text, QuerySupport.Kind.EXACT);
                     }
 
-                    DeclarationLocation l = getMethodDeclaration(info, text, methods, 
+                    DeclarationLocation l = getMethodDeclaration(parserResult, text, methods,
                          null, null, index, astOffset, lexOffset);
 
                     if (l != null) {
@@ -315,8 +307,6 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
                 return DeclarationLocation.NONE;
             }
-
-            RubyIndex index = RubyIndex.get(info.getIndex(RubyInstallation.RUBY_MIME_TYPE), info.getFileObject());
 
             int tokenOffset = lexOffset;
 
@@ -331,11 +321,9 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 String require = LexUtilities.getStringAt(tokenOffset, th);
 
                 if (require != null) {
-                    String file = index.getRequiredFileUrl(require);
+                    FileObject fo = index.getRequiredFile(require);
 
-                    if (file != null) {
-                        FileObject fo = RubyIndex.getFileObject(file);
-
+                    if (fo != null) {
                         return new DeclarationLocation(fo, 0);
                     }
                 }
@@ -351,10 +339,10 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             }
 
             // See if the hyperlink is over a method reference in an rdoc comment
-            DeclarationLocation rdoc = findRDocMethod(info, doc, astOffset, lexOffset, root, path, closest, index);
+            DeclarationLocation rdoc = findRDocMethod(parserResult, doc, astOffset, lexOffset, root, path, closest, index);
 
             if (rdoc != DeclarationLocation.NONE) {
-                return fix(rdoc, info);
+                return fix(rdoc, parserResult);
             }
 
             // Look at the parse tree; find the closest node and jump based on the context
@@ -363,32 +351,32 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 String name = ((INameNode)closest).getName();
                 Node method = AstUtilities.findLocalScope(closest, path);
 
-                return fix(findLocal(info, method, name), info);
+                return fix(findLocal(parserResult, method, name), parserResult);
             } else if (closest instanceof DVarNode) {
                 // A dynamic variable read or assignment
                 String name = ((DVarNode)closest).getName(); // Does not implement INameNode
                 Node block = AstUtilities.findDynamicScope(closest, path);
 
-                return fix(findDynamic(info, block, name), info);
+                return fix(findDynamic(parserResult, block, name), parserResult);
             } else if (closest instanceof DAsgnNode) {
                 // A dynamic variable read or assignment
                 String name = ((INameNode)closest).getName();
                 Node block = AstUtilities.findDynamicScope(closest, path);
 
-                return fix(findDynamic(info, block, name), info);
+                return fix(findDynamic(parserResult, block, name), parserResult);
             } else if (closest instanceof InstVarNode) {
                 // A field variable read
                 String name = ((INameNode)closest).getName();
-                return findInstanceFromIndex(info, name, path, index);
+                return findInstanceFromIndex(parserResult, name, path, index);
             } else if (closest instanceof ClassVarNode) {
                 // A class variable read
                 String name = ((INameNode)closest).getName();
-                return findInstanceFromIndex(info, name, path, index);
+                return findInstanceFromIndex(parserResult, name, path, index);
             } else if (closest instanceof GlobalVarNode) {
                 // A global variable read
                 String name = ((GlobalVarNode)closest).getName(); // GlobalVarNode does not implement INameNode
 
-                return fix(findGlobal(info, root, name), info);
+                return fix(findGlobal(parserResult, root, name), parserResult);
             } else if (closest instanceof FCallNode || closest instanceof VCallNode ||
                     closest instanceof CallNode) {
                 // A method call
@@ -396,18 +384,20 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
                 Call call = Call.getCallType(doc, th, lexOffset);
 
-                String type = call.getType();
+                RubyType type = call.getType();
                 String lhs = call.getLhs();
 
-                if ((type == null) && (lhs != null) && (closest != null) &&
+                if (!type.isKnown() && lhs != null && closest != null &&
                         call.isSimpleIdentifier()) {
                     Node method = AstUtilities.findLocalScope(closest, path);
 
                     if (method != null) {
                         // TODO - if the lhs is "foo.bar." I need to split this
                         // up and do it a bit more cleverly
-                        RubyTypeAnalyzer analyzer = new RubyTypeAnalyzer(/*info.getParserResult(),*/ index, method, closest, astOffset, lexOffset, doc, info.getFileObject());
-                        type = analyzer.getType(lhs);
+                        ContextKnowledge knowledge = new ContextKnowledge(
+                                index, root, method, astOffset, lexOffset, doc, RubyUtils.getFileObject(parserResult));
+                        RubyTypeInferencer inferencer = RubyTypeInferencer.normal(knowledge);
+                        type = inferencer.inferType(lhs);
                     }
                 }
 
@@ -416,7 +406,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 // in which case I should show it, but that is discouraged and people
                 // SHOULD override initialize, which is what the default new method will
                 // call for initialization.
-                if (type == null) { // unknown type - search locally
+                if (!type.isKnown()) { // search locally
 
                     if (name.equals("new")) { // NOI18N
                         name = "initialize"; // NOI18N
@@ -424,7 +414,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
                     Arity arity = Arity.getCallArity(closest);
 
-                    DeclarationLocation loc = fix(findMethod(info, root, name, arity), info);
+                    DeclarationLocation loc = fix(findMethod(parserResult, root, name, arity), parserResult);
 
                     if (loc != DeclarationLocation.NONE) {
                         return loc;
@@ -436,71 +426,46 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                     fqn = "Object";
                 }
 
-                return findMethod(name, fqn, type, call, info, astOffset, lexOffset, path, closest, index);
+                return findMethod(name, fqn, type, call, parserResult, astOffset, lexOffset, path, closest, index);
             } else if (closest instanceof ConstNode || closest instanceof Colon2Node) {
-                // POSSIBLY a class usage.
-                String name = ((INameNode)closest).getName();
-                // Disable local class searching for now - it should instead be a criterion for increasing match priority
-                Node localClass = null; // findClass(root, name);
-
-                if (localClass != null) {
-                    // Ensure that we have the right FQN if specific
-                    if (closest instanceof Colon2Node) {
-                        AstPath classPath = new AstPath(root, localClass);
-
-                        if (classPath.leaf() != null) {
-                            String fqn1 = AstUtilities.getFqn((Colon2Node)closest);
-                            String fqn2 = AstUtilities.getFqnName(classPath);
-
-                            if (fqn1.equals(fqn2)) {
-                                return fix(getLocation(info, localClass), info);
-                            }
-                        } else {
-                            assert false : localClass.toString();
-                        }
-                    } else {
-                        return fix(getLocation(info, localClass), info);
-                    }
+                // try Class usage
+                RubyClassDeclarationFinder classDF = new RubyClassDeclarationFinder(parserResult, root, path, index, closest);
+                DeclarationLocation decl = classDF.findClassDeclaration();
+                if (decl != DeclarationLocation.NONE) {
+                    return decl;
                 }
-
-                if (closest instanceof Colon2Node) {
-                    name = AstUtilities.getFqn((Colon2Node)closest);
-                }
-
-                // E.g. for "include Assertions" within Test::Unit::TestCase, try looking
-                // for Test::Unit::TestCase::Assertions, Test::Unit:Assertions, Test::Assertions.
-                // And for "include Util::Backtracefilter" try Test::Unit::Util::Backtracefilter etc.
-                String fqn = AstUtilities.getFqnName(path);
-
-                return findClass(name, fqn, info, path, closest, index);
+                // try Constant usage
+                RubyConstantDeclarationFinder constantDF = new RubyConstantDeclarationFinder(parserResult, root, path, index, closest);
+                return constantDF.findConstantDeclaration();
             } else if (closest instanceof SymbolNode) {
                 String name = ((SymbolNode)closest).getName();
 
                 // Search for methods, fields, etc.
                 Arity arity = Arity.UNKNOWN;
-                DeclarationLocation location = findMethod(info, root, name, arity);
+                DeclarationLocation location = findMethod(parserResult, root, name, arity);
 
                 if (location == DeclarationLocation.NONE) {
-                    location = findInstance(info, root, name);
+                    location = findInstance(parserResult, root, name);
                 }
 
                 if (location == DeclarationLocation.NONE) {
-                    location = findClassVar(info, root, name);
+                    location = findClassVar(parserResult, root, name);
                 }
 
                 if (location == DeclarationLocation.NONE) {
-                    location = findGlobal(info, root, name);
+                    location = findGlobal(parserResult, root, name);
                 }
 
                 if (location == DeclarationLocation.NONE) {
-                    Node clz = findClass(root, ((INameNode)closest).getName());
+                    RubyClassDeclarationFinder cdf = new RubyClassDeclarationFinder();
+                    Node clz = cdf.findClass(root, ((INameNode)closest).getName(), ignoreAlias);
 
                     if (clz != null) {
-                        location = getLocation(info, clz);
+                        location = getLocation(parserResult, clz);
                     }
                 }
 
-                return fix(location, info);
+                return fix(location, parserResult);
             } else if (closest instanceof AliasNode) {
                 AliasNode an = (AliasNode)closest;
 
@@ -529,34 +494,35 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
                         try {
                             DeclarationLocation location =
-                                findLocal(info, AstUtilities.findLocalScope(closest, path), name);
+                                findLocal(parserResult, AstUtilities.findLocalScope(closest, path), name);
 
                             if (location == DeclarationLocation.NONE) {
-                                location = findDynamic(info, AstUtilities.findDynamicScope(closest, path),
+                                location = findDynamic(parserResult, AstUtilities.findDynamicScope(closest, path),
                                         name);
                             }
 
                             if (location == DeclarationLocation.NONE) {
-                                location = findMethod(info, root, name, Arity.UNKNOWN);
+                                location = findMethod(parserResult, root, name, Arity.UNKNOWN);
                             }
 
                             if (location == DeclarationLocation.NONE) {
-                                location = findInstance(info, root, name);
+                                location = findInstance(parserResult, root, name);
                             }
 
                             if (location == DeclarationLocation.NONE) {
-                                location = findClassVar(info, root, name);
+                                location = findClassVar(parserResult, root, name);
                             }
 
                             if (location == DeclarationLocation.NONE) {
-                                location = findGlobal(info, root, name);
+                                location = findGlobal(parserResult, root, name);
                             }
 
                             if (location == DeclarationLocation.NONE) {
-                                Node clz = findClass(root, name);
+                                RubyClassDeclarationFinder cdf = new RubyClassDeclarationFinder();
+                                Node clz = cdf.findClass(root, name, ignoreAlias);
 
                                 if (clz != null) {
-                                    location = getLocation(info, clz);
+                                    location = getLocation(parserResult, clz);
                                 }
                             }
 
@@ -565,7 +531,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                             if (location == DeclarationLocation.NONE) {
                                 return location;
                             } else {
-                                return fix(location, info);
+                                return fix(location, parserResult);
                             }
                         } finally {
                             ignoreAlias = false;
@@ -573,7 +539,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                     } else {
                         // It's over the new word: this counts as a declaration. Nothing to do here except
                         // maybe jump right back to the beginning.
-                        return new DeclarationLocation(info.getFileObject(), aliasPos + 4);
+                        return new DeclarationLocation(RubyUtils.getFileObject(parserResult), aliasPos + 4);
                     }
                 }
             } else if (closest instanceof ArgumentNode) {
@@ -590,7 +556,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                         // Parameter (check to see if its under ArgumentNode)
                         Node method = AstUtilities.findLocalScope(closest, path);
 
-                        return fix(findLocal(info, method, name), info);
+                        return fix(findLocal(parserResult, method, name), parserResult);
                     }
                 }
             }
@@ -609,29 +575,45 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
      * @param classLocation if true, returns the location of the class rather then the method.
      */
     public static DeclarationLocation getTestDeclaration(FileObject fileInProject, String testString, boolean classLocation) {
+        return getTestDeclaration(fileInProject, testString, classLocation, true);
+    }
+
+    public static DeclarationLocation getTestDeclaration(FileObject fileInProject, String testString, 
+            boolean classLocation, boolean requireDeclaredClass) {
+        
         int methodIndex = testString.indexOf('/'); //NOI18N
         if (methodIndex == -1) {
             return DeclarationLocation.NONE;
         }
 
-        Index gsfIndex = SourceModelFactory.getInstance().getIndex(fileInProject, RubyInstallation.RUBY_MIME_TYPE);
-        if (gsfIndex == null) {
+        RubyIndex index = RubyIndex.get(QuerySupport.findRoots(fileInProject,
+                Collections.singleton(RubyLanguage.SOURCE),
+                Collections.singleton(RubyLanguage.BOOT),
+                Collections.<String>emptySet()));
+
+        if (index == null) {
             return DeclarationLocation.NONE;
         }
 
         String className = testString.substring(0, methodIndex);
         String methodName = testString.substring(methodIndex+1);
 
-        RubyIndex index = RubyIndex.get(gsfIndex, fileInProject);
-        Set<IndexedMethod> methods = index.getMethods(methodName, className, NameKind.EXACT_NAME, RubyIndex.SOURCE_SCOPE);
+        Set<IndexedMethod> methods = index.getMethods(methodName, className, QuerySupport.Kind.EXACT);
         DeclarationLocation methodLocation = getLocation(methods);
-        if (!classLocation || methodLocation.getFileObject() == null) {
+        if (!classLocation) {
+            if (DeclarationLocation.NONE == methodLocation && !requireDeclaredClass) {
+                // the test method is not defined in the class
+                methodLocation = getLocation(index.getMethods(methodName, QuerySupport.Kind.EXACT));
+            }
             return methodLocation;
         }
-        
         Set<IndexedClass> classes =
-                index.getClasses(className, NameKind.EXACT_NAME, false, false, true, RubyIndex.SOURCE_SCOPE, null);
+                index.getClasses(className, QuerySupport.Kind.EXACT, false, false, true, null);
         DeclarationLocation classDeclarationLocation = getLocation(classes);
+        
+        if (DeclarationLocation.NONE == methodLocation && classLocation) {
+            return classDeclarationLocation;
+        }
         if (methodLocation.getFileObject().equals(classDeclarationLocation.getFileObject())) {
             return classDeclarationLocation;
         }
@@ -654,7 +636,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             }
             if (loc == DeclarationLocation.NONE) {
                 int offset = -1;
-                Node node = AstUtilities.getForeignNode(element, (Node[])null);
+                Node node = AstUtilities.getForeignNode(element);
                 if (node != null) {
                     offset = AstUtilities.getRange(node).getStart();
                 }
@@ -667,7 +649,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return loc;
     }
 
-    private DeclarationLocation findRailsFile(CompilationInfo info, BaseDocument doc, TokenHierarchy<Document> th, int lexOffset, int astOffset) {
+    private DeclarationLocation findRailsFile(ParserResult info, BaseDocument doc, TokenHierarchy<Document> th, int lexOffset, int astOffset) {
         RailsTarget target = findRailsTarget(doc, th, lexOffset);
         if (target != null) {
             String type = target.type;
@@ -679,7 +661,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 if (slashIndex != -1) {
                     
                     // Find app dir, and build up a relative path to the view file in the process
-                    FileObject app = info.getFileObject().getParent();
+                    FileObject app = RubyUtils.getFileObject(info);
 
                     while (app != null) {
                         if (app.getName().equals("views") && // NOI18N
@@ -704,7 +686,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                     name = "_" + target.name.substring(slashIndex+1); // NOI18N
                     
                 } else {
-                    dir = info.getFileObject().getParent();
+                    dir = RubyUtils.getFileObject(info);
                     name = "_" + target.name; // NOI18N
                 }
                 
@@ -734,7 +716,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 
             } else if (type.indexOf("controller") != -1 || type.indexOf("action") != -1) { // NOI18N
                 // Look for the controller file in the corresponding directory
-                FileObject file = info.getFileObject();
+                FileObject file = RubyUtils.getFileObject(info);
                 file = file.getParent();
                 //FileObject dir = file.getParent();
 
@@ -748,7 +730,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                     if (!fileName.startsWith("_")) { // NOI18N
                                                      // For partials like "_foo", just use the surrounding view
                         path = fileName;
-                        action = info.getFileObject().getName();
+                        action = RubyUtils.getFileObject(info).getName();
                     }
                 }
                 
@@ -808,7 +790,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
      * @return A string[2] where string[0] is the controller or null, and string[1] is the
      *   action or null
      */
-    private String[] findControllerAction(CompilationInfo info, int lexOffset, int astOffset) {
+    private String[] findControllerAction(ParserResult info, int lexOffset, int astOffset) {
         String[] result = new String[2];
         
         Node root = AstUtilities.getRoot(info);
@@ -877,6 +859,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
     private RailsTarget findRailsTarget(BaseDocument doc, TokenHierarchy<Document> th, int lexOffset) {
         try {
+            doc.readLock();
             // TODO - limit this to RHTML files only?
             int begin = Utilities.getRowStart(doc, lexOffset);
             if (begin != -1) {
@@ -932,13 +915,15 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             }
         } catch (BadLocationException ble) {
             Exceptions.printStackTrace(ble);
+        } finally {
+            doc.readUnlock();
         }
 
         return null;
     }
     
-    private DeclarationLocation findMethod(String name, String possibleFqn, String type, Call call,
-        CompilationInfo info, int caretOffset, int lexOffset, AstPath path, Node closest, RubyIndex index) {
+    private DeclarationLocation findMethod(String name, String possibleFqn, RubyType type, Call call,
+        ParserResult info, int caretOffset, int lexOffset, AstPath path, Node closest, RubyIndex index) {
         Set<IndexedMethod> methods = getApplicableMethods(name, possibleFqn, type, call, index);
 
         int astOffset = caretOffset;
@@ -947,13 +932,12 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
         return l;
     }
-        
 
     private Set<IndexedMethod> getApplicableMethods(String name, String possibleFqn, 
-            String type, Call call, RubyIndex index) {
+            RubyType type, Call call, RubyIndex index) {
         Set<IndexedMethod> methods = new HashSet<IndexedMethod>();
         String fqn = possibleFqn;
-        if (type == null && possibleFqn != null && call.getLhs() == null && call != Call.UNKNOWN) {
+        if (!type.isKnown() && possibleFqn != null && call.getLhs() == null && call != Call.UNKNOWN) {
             fqn = possibleFqn;
 
             // Possibly a class on the left hand side: try searching with the class as a qualifier.
@@ -961,7 +945,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             // Test::Unit when there's a call to Foo.x, we'll try
             // Test::Unit::Foo, and Test::Foo
             while (methods.size() == 0 && (fqn.length() > 0)) {
-                methods = index.getInheritedMethods(fqn, name, NameKind.EXACT_NAME);
+                methods = index.getInheritedMethods(fqn, name, QuerySupport.Kind.EXACT);
 
                 int f = fqn.lastIndexOf("::");
 
@@ -973,7 +957,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             }
         }
 
-        if (type != null && methods.size() == 0) {
+        if (type.isKnown() && methods.size() == 0) {
             fqn = possibleFqn;
 
             // Possibly a class on the left hand side: try searching with the class as a qualifier.
@@ -981,7 +965,9 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             // Test::Unit when there's a call to Foo.x, we'll try
             // Test::Unit::Foo, and Test::Foo
             while (methods.size() == 0 && fqn != null && (fqn.length() > 0)) {
-                methods = index.getInheritedMethods(fqn + "::" + type, name, NameKind.EXACT_NAME);
+                for (String realType : type.getRealTypes()) {
+                    methods.addAll(index.getInheritedMethods(fqn + "::" + realType, name, QuerySupport.Kind.EXACT));
+                }
 
                 int f = fqn.lastIndexOf("::");
 
@@ -994,22 +980,29 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
             if (methods.size() == 0) {
                 // Add methods in the class (without an FQN)
-                methods = index.getInheritedMethods(type, name, NameKind.EXACT_NAME);
+                for (String realType : type.getRealTypes()) {
+                    methods.addAll(index.getInheritedMethods(realType, name, QuerySupport.Kind.EXACT));
+                }
                 
-                if (methods.size() == 0 && type.indexOf("::") == -1) {
-                    // Perhaps we specified a class without its FQN, such as "TableDefinition"
-                    // -- go and look for the full FQN and add in all the matches from there
-                    Set<IndexedClass> classes = index.getClasses(type, NameKind.EXACT_NAME, false, false, false);
-                    Set<String> fqns = new HashSet<String>();
-                    for (IndexedClass cls : classes) {
-                        String f = cls.getFqn();
-                        if (f != null) {
-                            fqns.add(f);
-                        }
-                    }
-                    for (String f : fqns) {
-                        if (!f.equals(type)) {
-                            methods.addAll(index.getInheritedMethods(f, name, NameKind.EXACT_NAME));
+                if (methods.size() == 0) {
+                    for (String realType : type.getRealTypes()) {
+                        assert realType != null : "Should not be null";
+                        if (realType.indexOf("::") == -1) {
+                            // Perhaps we specified a class without its FQN, such as "TableDefinition"
+                            // -- go and look for the full FQN and add in all the matches from there
+                            Set<IndexedClass> classes = index.getClasses(realType, QuerySupport.Kind.EXACT, false, false, false);
+                            Set<String> fqns = new HashSet<String>();
+                            for (IndexedClass cls : classes) {
+                                String f = cls.getFqn();
+                                if (f != null) {
+                                    fqns.add(f);
+                                }
+                            }
+                            for (String f : fqns) {
+                                if (!f.equals(realType)) {
+                                    methods.addAll(index.getInheritedMethods(f, name, QuerySupport.Kind.EXACT));
+                                }
+                            }
                         }
                     }
                 }
@@ -1018,122 +1011,27 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             // Fall back to ALL methods across classes
             // Try looking at the libraries too
             if (methods.size() == 0) {
-                fqn = possibleFqn;
-                while ((methods.size() == 0) && fqn != null && (fqn.length() > 0)) {
-                    methods = index.getMethods(name, fqn + "::" + type, NameKind.EXACT_NAME);
-
-                    int f = fqn.lastIndexOf("::");
-
-                    if (f == -1) {
-                        break;
-                    } else {
-                        fqn = fqn.substring(0, f);
-                    }
-                }
+                methods.addAll(index.getMethods(name, QuerySupport.Kind.EXACT));
             }
         }
 
         if (methods.size() == 0) {
-            methods = index.getMethods(name, type, NameKind.EXACT_NAME);
-            if (methods.size() == 0 && type != null) {
-                methods = index.getMethods(name, null, NameKind.EXACT_NAME);
+            if (!type.isKnown()) {
+                methods.addAll(index.getMethods(name, QuerySupport.Kind.EXACT));
+            } else {
+                methods.addAll(index.getMethods(name, type, QuerySupport.Kind.EXACT));
+            }
+            if (methods.size() == 0 && type.isKnown()) {
+                methods = index.getMethods(name, QuerySupport.Kind.EXACT);
             }
         }
         
         return methods;
     }
 
-    private DeclarationLocation findClass(String name, String possibleFqn, CompilationInfo info,
-        AstPath path, Node closest, RubyIndex index) {
-        // Try searching by qualified name by context first, if it's not qualified
-        Set<IndexedClass> classes = Collections.emptySet();
-        String fqn = possibleFqn;
-
-        // First try looking only at the local scope
-        Set<String> uniqueClasses = new HashSet<String>();
-        while ((classes.size() == 0) && (fqn.length() > 0)) {
-            classes =
-                index.getClasses(fqn + "::" + name, NameKind.EXACT_NAME, true, false, // NOI18N
-                    false, RubyIndex.ALL_SCOPE, uniqueClasses);
-
-            int f = fqn.lastIndexOf("::"); // NOI18N
-
-            if (f == -1) {
-                break;
-            } else {
-                fqn = fqn.substring(0, f);
-            }
-        }
-
-        if (classes.size() == 0) {
-            classes = index.getClasses(name, NameKind.EXACT_NAME, true, false, false,
-                    RubyIndex.ALL_SCOPE, uniqueClasses);
-        }
-
-        // If no success with looking only at the source scope, look in libraries as well
-        if (classes.size() == 0) {
-            fqn = possibleFqn;
-
-            // Try looking at the libraries too
-            while ((classes.size() == 0) && (fqn.length() > 0)) {
-                classes =
-                    index.getClasses(fqn + "::" + name, NameKind.EXACT_NAME, true, false, // NOI18N
-                        false);
-
-                int f = fqn.lastIndexOf("::");
-
-                if (f == -1) {
-                    break;
-                } else {
-                    fqn = fqn.substring(0, f);
-                }
-            }
-
-            if (classes.size() == 0) {
-                classes = index.getClasses(name, NameKind.EXACT_NAME, true, false, false);
-            }
-        }
-
-        return getClassDeclaration(info, classes, path, closest, index);
-    }
-    
-    private DeclarationLocation getClassDeclaration(CompilationInfo info, Set<IndexedClass> classes, 
-            AstPath path, Node closest, RubyIndex index) {
-        final IndexedClass candidate =
-            findBestClassMatch(classes, path, closest, index);
-
-        if (candidate != null) {
-            IndexedElement com = candidate;
-            Node node = AstUtilities.getForeignNode(com, (Node[])null);
-
-            DeclarationLocation loc = new DeclarationLocation(com.getFile().getFileObject(),
-                node.getPosition().getStartOffset(), com);
-
-            if (!CHOOSE_ONE_DECLARATION && classes.size() > 1) {
-                // Could the :nodoc: alternatives: if there is only one nodoc'ed alternative
-                // don't ask user!
-                int not_nodoced = 0;
-                for (final IndexedClass clz : classes) {
-                    if (!clz.isNoDoc()) {
-                        not_nodoced++;
-                    }
-                }
-                if (not_nodoced >= 2) {
-                    for (final IndexedClass clz : classes) {
-                        loc.addAlternative(new RubyAltLocation(clz, clz == candidate));
-                    }
-                }
-            }
-
-            return loc;
-        }
-     
-        return DeclarationLocation.NONE;
-    }
-    
-    private DeclarationLocation getMethodDeclaration(CompilationInfo info, String name, Set<IndexedMethod> methods, 
+    private DeclarationLocation getMethodDeclaration(ParserResult info, String name, Set<IndexedMethod> methods,
             AstPath path, Node closest, RubyIndex index, int astOffset, int lexOffset) {
-        BaseDocument doc = (BaseDocument)info.getDocument();
+        BaseDocument doc = RubyUtils.getDocument(info);
         if (doc == null) {
             return DeclarationLocation.NONE;
         }
@@ -1143,12 +1041,12 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 astOffset, lexOffset, path, closest, index);
 
         if (candidate != null) {
-            FileObject fileObject = candidate.getFile().getFileObject();
+            FileObject fileObject = candidate.getFileObject();
             if (fileObject == null) {
                 return DeclarationLocation.NONE;
             }
 
-            Node node = AstUtilities.getForeignNode(candidate, (Node[])null);
+            Node node = AstUtilities.getForeignNode(candidate);
             int nodeOffset = node != null ? node.getPosition().getStartOffset() : 0;
 
             DeclarationLocation loc = new DeclarationLocation(
@@ -1177,20 +1075,20 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
     }
     
     /** Locate the method declaration for the given method call */
-    public IndexedMethod findMethodDeclaration(CompilationInfo info, Node callNode, AstPath path,
+    public IndexedMethod findMethodDeclaration(Parser.Result parserResult, Node callNode, AstPath path,
             Set<IndexedMethod>[] alternativesHolder) {
         int astOffset = AstUtilities.getCallRange(callNode).getStart();
 
         // Is this a require-statement? If so, jump to the required file
         try {
-            Document doc = info.getDocument();
+            Document doc = RubyUtils.getDocument(parserResult);
             if (doc == null) {
                 return null;
             }
 
             // Determine the bias (if the caret is between two tokens, did we
             // click on a link for the left or the right?
-            int lexOffset = LexUtilities.getLexerOffset(info, astOffset);
+            int lexOffset = LexUtilities.getLexerOffset(parserResult, astOffset);
             if (lexOffset == -1) {
                 return null;
             }
@@ -1202,13 +1100,14 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
             boolean leftSide = range.getEnd() <= astOffset;
 
-            Node root = AstUtilities.getRoot(info);
+            Node root = AstUtilities.getRoot(parserResult);
 
+            RubyIndex index = RubyIndex.get(parserResult);
             if (root == null) {
                 // No parse tree - try to just use the syntax info to do a simple index lookup
                 // for methods and classes
                 String text = doc.getText(range.getStart(), range.getLength());
-                RubyIndex index = RubyIndex.get(info.getIndex(RubyInstallation.RUBY_MIME_TYPE), info.getFileObject());
+
 
                 if ((index == null) || (text.length() == 0)) {
                     return null;
@@ -1220,7 +1119,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                     return null;
                 } else {
                     // A method?
-                    Set<IndexedMethod> methods = index.getMethods(text, null, NameKind.EXACT_NAME);
+                    Set<IndexedMethod> methods = index.getMethods(text, QuerySupport.Kind.EXACT);
 
                     BaseDocument bdoc = (BaseDocument)doc;
                     IndexedMethod candidate =
@@ -1230,8 +1129,6 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                     return candidate;
                 } // TODO: @ - field?
             }
-
-            RubyIndex index = RubyIndex.get(info.getIndex(RubyInstallation.RUBY_MIME_TYPE), info.getFileObject());
 
             TokenHierarchy<Document> th = TokenHierarchy.get(doc);
 
@@ -1254,28 +1151,29 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             boolean done = call.isMethodExpected();
             boolean skipInstanceMethods = call.isStatic();
 
-            String type = call.getType();
+            RubyType type = call.getType();
             String lhs = call.getLhs();
-            NameKind kind = NameKind.EXACT_NAME;
+            QuerySupport.Kind kind = QuerySupport.Kind.EXACT;
 
             Node node = callNode;
-            if ((type == null) && (lhs != null) && (node != null) && call.isSimpleIdentifier()) {
+            if ((!type.isKnown()) && (lhs != null) && (node != null) && call.isSimpleIdentifier()) {
                 Node method = AstUtilities.findLocalScope(node, path);
 
                 if (method != null) {
                     // TODO - if the lhs is "foo.bar." I need to split this
                     // up and do it a bit more cleverly
-                    RubyTypeAnalyzer analyzer = new RubyTypeAnalyzer(/*info.getParserResult(),*/ index, method, node, astOffset, lexOffset, 
-                            (BaseDocument)doc, info.getFileObject());
-                    type = analyzer.getType(lhs);
+                    ContextKnowledge knowledge = new ContextKnowledge(
+                            index, root, method, astOffset, lexOffset, (BaseDocument) doc, RubyUtils.getFileObject(parserResult));
+                    RubyTypeInferencer inferencer = RubyTypeInferencer.normal(knowledge);
+                    type = inferencer.inferType(lhs);
                 }
             }
 
             // I'm not doing any data flow analysis at this point, so
             // I can't do anything with a LHS like "foo.". Only actual types.
-            if ((type != null) && (type.length() > 0)) {
+            if (type.isKnown()) {
                 if ("self".equals(lhs)) {
-                    type = fqn;
+                    type = RubyType.create(fqn);
                     skipPrivate = false;
                 } else if ("super".equals(lhs)) {
                     skipPrivate = false;
@@ -1283,17 +1181,17 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                     IndexedClass sc = index.getSuperclass(fqn);
 
                     if (sc != null) {
-                        type = sc.getFqn();
+                        type = RubyType.create(sc.getFqn());
                     } else {
                         ClassNode cls = AstUtilities.findClass(path);
 
                         if (cls != null) {
-                            type = AstUtilities.getSuperclass(cls);
+                            type = RubyType.create(AstUtilities.getSuperclass(cls));
                         }
                     }
 
-                    if (type == null) {
-                        type = "Object"; // NOI18N
+                    if (!type.isKnown()) {
+                        type = RubyType.OBJECT; // NOI18N
                     }
                 }
             }
@@ -1324,23 +1222,8 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return null;
     }
 
-    private DeclarationLocation fix(DeclarationLocation location, CompilationInfo info) {
-        if ((location != DeclarationLocation.NONE) && (location.getFileObject() == null) &&
-                (location.getUrl() == null)) {
-            return new DeclarationLocation(info.getFileObject(), location.getOffset(), location.getElement());
-        }
-
-        return location;
-    }
-
-    private DeclarationLocation getLocation(CompilationInfo info, Node node) {
-        AstElement element = AstElement.create(info, node);
-        return new DeclarationLocation(null, LexUtilities.getLexerOffset(info, node.getPosition().getStartOffset()), 
-                element);
-    }
-
     @SuppressWarnings("empty-statement")
-    private DeclarationLocation findRDocMethod(CompilationInfo info, Document doc, int astOffset, int lexOffset, 
+    private DeclarationLocation findRDocMethod(ParserResult info, Document doc, int astOffset, int lexOffset,
             Node root, AstPath path, Node closest, RubyIndex index) {
         TokenHierarchy<Document> th = TokenHierarchy.get(doc);
         TokenSequence<?> ts = LexUtilities.getRubyTokenSequence((BaseDocument)doc, lexOffset);
@@ -1407,7 +1290,8 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 String clz = method.substring(0, methodIndex);
                 method = method.substring(methodIndex+1);
 
-                return findMethod(method, null, clz, Call.UNKNOWN, info, astOffset, lexOffset, path, closest, index);
+                return findMethod(method, null, RubyType.create(clz), Call.UNKNOWN,
+                        info, astOffset, lexOffset, path, closest, index);
             }
         }
 
@@ -1415,14 +1299,14 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
     }
     
     @SuppressWarnings("empty-statement")
-    DeclarationLocation findLinkedMethod(CompilationInfo info, String method) {
+    DeclarationLocation findLinkedMethod(ParserResult info, String method) {
         Node root = AstUtilities.getRoot(info);
         AstPath path = new AstPath();
         path.descend(root);
         Node closest = root;
         int astOffset = 0;
         int lexOffset = 0;
-        RubyIndex index = RubyIndex.get(info.getIndex(RubyInstallation.RUBY_MIME_TYPE), info.getFileObject());
+        RubyIndex index = RubyIndex.get(info);
 
         if (root == null) {
             return DeclarationLocation.NONE;
@@ -1459,189 +1343,10 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             String clz = method.substring(0, methodIndex);
             method = method.substring(methodIndex+1);
 
-            return findMethod(method, null, clz, Call.UNKNOWN, info, astOffset, lexOffset, path, closest, index);
+            return findMethod(method, null, RubyType.create(clz), Call.UNKNOWN, info, astOffset, lexOffset, path, closest, index);
         }
         
         return DeclarationLocation.NONE;
-    }
-
-    IndexedClass findBestClassMatch(Set<IndexedClass> classSet,
-        AstPath path, Node reference, RubyIndex index) {
-        // Make sure that the best fit method actually has a corresponding valid source location
-        // and parse tree
-        Set<IndexedClass> classes = new HashSet<IndexedClass>(classSet);
-        
-        while (!classes.isEmpty()) {
-            IndexedClass clz = findBestClassMatchHelper(classes, path, reference, index);
-            Node node = AstUtilities.getForeignNode(clz, (Node[])null);
-
-            if (node != null) {
-                return clz;
-            }
-
-            // TODO: Sort results, then pick candidate number modulo methodSelector
-            if (!classes.contains(clz)) {
-                // Avoid infinite loop when we somehow don't find the node for
-                // the best class and we keep trying it
-                classes.remove(classes.iterator().next());
-            } else {
-                classes.remove(clz);
-            }
-        }
-
-        return null;
-    }
-
-    // Now that I have a common RubyObject superclass, can I combine this and findBestMethodMatchHelper
-    // since there's a lot of code duplication that could be shared by just operating on RubyObjects ?
-    private IndexedClass findBestClassMatchHelper(Set<IndexedClass> classes,
-        AstPath path, Node reference, RubyIndex index) {
-        // 1. First see if the reference is fully qualified. If so the job should
-        //   be easier: prune the result set down
-        // If I have the fqn, I can also call RubyIndex.getRDocLocation to pick the
-        // best candidate
-        Set<IndexedClass> candidates = new HashSet<IndexedClass>();
-
-        if (reference instanceof Colon2Node) {
-            String fqn = AstUtilities.getFqn((Colon2Node)reference);
-
-            while ((fqn != null) && (fqn.length() > 0)) {
-                for (IndexedClass clz : classes) {
-                    if (fqn.equals(clz.getSignature())) {
-                        candidates.add(clz);
-                    }
-                }
-
-                // TODO: Use the fqn to check if the class is documented: if so, prefer it
-
-                // Check inherited methods; for example, if we've determined
-                // that you're looking for Integer::foo, I should happily match
-                // Numeric::foo.
-                IndexedClass superClass = index.getSuperclass(fqn);
-
-                if (superClass != null) {
-                    fqn = superClass.getSignature();
-                } else {
-                    break;
-                }
-            }
-        }
-
-        if (candidates.size() == 1) {
-            return candidates.iterator().next();
-        } else if (!candidates.isEmpty()) {
-            classes = candidates;
-        }
-
-        // 2. See if the reference is followed by a method call - if so, that may
-        //   help disambiguate which reference we're after.
-        // TODO
-
-        // 3. See which of the class references are defined in files directly
-        //   required by this file.
-        Set<String> requires = null;
-
-        if (path != null) {
-            candidates = new HashSet<IndexedClass>();
-
-            requires = AstUtilities.getRequires(path.root());
-
-            for (IndexedClass clz : classes) {
-                String require = clz.getRequire();
-
-                if (requires.contains(require)) {
-                    candidates.add(clz);
-                }
-            }
-
-            if (candidates.size() == 1) {
-                return candidates.iterator().next();
-            } else if (!candidates.isEmpty()) {
-                classes = candidates;
-            }
-        }
-
-        // 4. See if any of the classes are "kernel" classes (builtins) and for these
-        //   go to the known locations
-        candidates = new HashSet<IndexedClass>();
-
-        for (IndexedClass clz : classes) {
-            String url = clz.getFileUrl();
-
-            if (url != null && url.indexOf("rubystubs") != -1) { // NOI18N
-                candidates.add(clz);
-            }
-        }
-
-        if (candidates.size() == 1) {
-            return candidates.iterator().next();
-        } else if (!candidates.isEmpty()) {
-            classes = candidates;
-        }
-
-        // 5. See which classes are documented, and prefer those over undocumented classes
-        candidates = new HashSet<IndexedClass>();
-
-        int longestDocLength = 0;
-
-        for (IndexedClass clz : classes) {
-            int length = clz.getDocumentationLength();
-
-            if (length > longestDocLength) {
-                candidates.clear();
-                candidates.add(clz);
-                longestDocLength = length;
-            } else if ((length > 0) && (length == longestDocLength)) {
-                candidates.add(clz);
-            }
-        }
-
-        if (candidates.size() == 1) {
-            return candidates.iterator().next();
-        } else if (!candidates.isEmpty()) {
-            classes = candidates;
-        }
-
-        // 6. Look at transitive closure of require statements and see which files
-        //  are most likely candidates
-        if ((index != null) && (requires != null)) {
-            candidates = new HashSet<IndexedClass>();
-
-            Set<String> allRequires = index.getRequiresTransitively(requires);
-
-            for (IndexedClass clz : classes) {
-                String require = clz.getRequire();
-
-                if (allRequires.contains(require)) {
-                    candidates.add(clz);
-                }
-            }
-
-            if (candidates.size() == 1) {
-                return candidates.iterator().next();
-            } else if (!candidates.isEmpty()) {
-                classes = candidates;
-            }
-        }
-
-        // 7. Other heuristics: Look at the method definition with the
-        //   most methods associated with it. Look at other uses of this
-        //   class in this parse tree, look at the methods and see if we
-        //   can rule out candidates based on that
-        // 7b. Give priority to class definitions that are local: obviously
-        //   there are class definitions in the same file, and then in the same project
-
-        // 8. Look at superclasses and consider -their- requires to figure out
-        //   which class we're supposed to use
-        // TODO
-        candidates = new HashSet<IndexedClass>();
-
-        // Pick one arbitrarily
-        if (classes.size() > 0) {
-            return classes.iterator().next();
-        } else {
-            return null;
-        }
     }
 
     IndexedMethod findBestMethodMatch(String name, Set<IndexedMethod> methodSet,
@@ -1654,7 +1359,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         while (!methods.isEmpty()) {
             IndexedMethod method =
                 findBestMethodMatchHelper(name, methods, doc, astOffset, lexOffset, path, call, index);
-            Node node = AstUtilities.getForeignNode(method, (Node[])null);
+            Node node = AstUtilities.getForeignNode(method);
 
             if (node != null) {
                 return method;
@@ -1737,11 +1442,11 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
             candidates = new HashSet<IndexedMethod>();
 
-            String type = call.getType();
+            RubyType type = call.getType();
 
             // I'm not doing any data flow analysis at this point, so
             // I can't do anything with a LHS like "foo.". Only actual types.
-            if ((type != null) && (type.length() > 0)) {
+            if (type.isKnown()) {
                 String lhs = call.getLhs();
 
                 String fqn = AstUtilities.getFqnName(path);
@@ -1750,7 +1455,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 // (and picking just one of them), I should use the FIRST match as the
                 // one to show! (closest super class or include definition)
                 if ("self".equals(lhs)) {
-                    type = fqn;
+                    type = RubyType.create(fqn);
                     skipPrivate = false;
                 } else if ("super".equals(lhs)) {
                     skipPrivate = false;
@@ -1758,24 +1463,24 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                     IndexedClass sc = index.getSuperclass(fqn);
 
                     if (sc != null) {
-                        type = sc.getFqn();
+                        type = RubyType.create(sc.getFqn());
                     } else {
                         ClassNode cls = AstUtilities.findClass(path);
 
                         if (cls != null) {
-                            type = AstUtilities.getSuperclass(cls);
+                            type = RubyType.create(AstUtilities.getSuperclass(cls));
                         }
                     }
                 }
 
-                if ((type != null) && (type.length() > 0)) {
+                if (type.isKnown()) {
                     // Possibly a class on the left hand side: try searching with the class as a qualifier.
                     // Try with the LHS + current FQN recursively. E.g. if we're in
                     // Test::Unit when there's a call to Foo.x, we'll try
                     // Test::Unit::Foo, and Test::Foo
                     while (candidates.size() == 0) {
                         candidates = index.getInheritedMethods(fqn + "::" + type, name,
-                                NameKind.EXACT_NAME);
+                                QuerySupport.Kind.EXACT);
 
                         int f = fqn.lastIndexOf("::");
 
@@ -1788,7 +1493,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
 
                     // Add methods in the class (without an FQN)
                     if (candidates.size() == 0) {
-                        candidates = index.getInheritedMethods(type, name, NameKind.EXACT_NAME);
+                        candidates = index.getInheritedMethods(type, name, QuerySupport.Kind.EXACT);
                     }
                 }
             }
@@ -1824,7 +1529,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
                 for (IndexedMethod m : candidates) {
                     // AppendIO might be the lhs - e.g. AppendIO.new, yet its FQN is Shell::AppendIO
                     // so do suffix comparison
-                    if ((m.getIn() != null) && m.getIn().endsWith(type)) {
+                    if ((m.getIn() != null) && type.isSingleton() && m.getIn().endsWith(type.first())) {
                         cs.add(m);
                     }
                 }
@@ -1898,7 +1603,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         for (IndexedMethod method : methods) {
             String url = method.getFileUrl();
 
-            if (url != null && url.indexOf("rubystubs") != -1) { // NOI18N
+            if (RubyUtils.isRubyStubsURL(url)) {
                 candidates.add(method);
             }
         }
@@ -1971,7 +1676,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         }
     }
 
-    private DeclarationLocation findLocal(CompilationInfo info, Node node, String name) {
+    private DeclarationLocation findLocal(ParserResult info, Node node, String name) {
         if (node instanceof LocalAsgnNode) {
             if (((INameNode)node).getName().equals(name)) {
                 return getLocation(info, node);
@@ -1983,7 +1688,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         } else if (node instanceof ArgsNode) {
             ArgsNode an = (ArgsNode)node;
 
-            if (an.getRequiredArgsCount() > 0) {
+            if (an.getRequiredCount() > 0) {
                 List<Node> args = an.childNodes();
 
                 for (Node arg : args) {
@@ -2006,8 +1711,8 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             }
 
             // Rest args
-            if (an.getRestArgNode() != null) {
-                ArgumentNode bn = an.getRestArgNode();
+            if (an.getRest() != null) {
+                ArgumentNode bn = an.getRest();
 
                 if (bn.getName().equals(name)) {
                     return getLocation(info, bn);
@@ -2015,8 +1720,8 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
             }
 
             // Block args
-            if (an.getBlockArgNode() != null) {
-                BlockArgNode bn = an.getBlockArgNode();
+            if (an.getBlock() != null) {
+                BlockArgNode bn = an.getBlock();
 
                 if (bn.getName().equals(name)) {
                     return getLocation(info, bn);
@@ -2040,7 +1745,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return DeclarationLocation.NONE;
     }
 
-    private DeclarationLocation findDynamic(CompilationInfo info, Node node, String name) {
+    private DeclarationLocation findDynamic(ParserResult info, Node node, String name) {
         if (node instanceof DAsgnNode) {
             if (((INameNode)node).getName().equals(name)) {
                 return getLocation(info, node);
@@ -2067,7 +1772,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return DeclarationLocation.NONE;
     }
 
-    private DeclarationLocation findInstance(CompilationInfo info, Node node, String name) {
+    private DeclarationLocation findInstance(ParserResult info, Node node, String name) {
         if (node instanceof InstAsgnNode) {
             if (((INameNode)node).getName().equals(name)) {
                 return getLocation(info, node);
@@ -2104,7 +1809,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return DeclarationLocation.NONE;
     }
 
-    private DeclarationLocation findClassVar(CompilationInfo info, Node node, String name) {
+    private DeclarationLocation findClassVar(ParserResult info, Node node, String name) {
         if (node instanceof ClassVarDeclNode) {
             if (((INameNode)node).getName().equals(name)) {
                 return getLocation(info, node);
@@ -2143,20 +1848,20 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return DeclarationLocation.NONE;
     }
 
-    private DeclarationLocation findInstanceFromIndex(CompilationInfo info, String name, AstPath path, RubyIndex index) {
+    private DeclarationLocation findInstanceFromIndex(ParserResult info, String name, AstPath path, RubyIndex index) {
         String fqn = AstUtilities.getFqnName(path);
 
         // TODO - if fqn has multiple ::'s, try various combinations? or is 
         // add inherited already doing that?
-        Set<IndexedField> f = index.getInheritedFields(fqn, name, NameKind.EXACT_NAME, false);
+        Set<IndexedField> f = index.getInheritedFields(fqn, name, QuerySupport.Kind.EXACT, false);
         for (IndexedField field : f) {
             // How do we choose one?
             // For now, just pick the first one
             
-            Node node = AstUtilities.getForeignNode(field, (Node[])null);
+            Node node = AstUtilities.getForeignNode(field);
 
             if (node != null) {
-                return new DeclarationLocation(field.getFile().getFileObject(),
+                return new DeclarationLocation(field.getFileObject(),
                     node.getPosition().getStartOffset(), field);
             }
         }
@@ -2164,7 +1869,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return DeclarationLocation.NONE;
     }
     
-    private DeclarationLocation findGlobal(CompilationInfo info, Node node, String name) {
+    private DeclarationLocation findGlobal(ParserResult info, Node node, String name) {
         if (node instanceof GlobalAsgnNode) {
             if (((INameNode)node).getName().equals(name)) {
                 return getLocation(info, node);
@@ -2191,7 +1896,7 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return DeclarationLocation.NONE;
     }
 
-    private DeclarationLocation findMethod(CompilationInfo info, Node node, String name, Arity arity) {
+    private DeclarationLocation findMethod(ParserResult info, Node node, String name, Arity arity) {
         // Recursively search for methods or method calls that match the name and arity
         if (node instanceof MethodDefNode) {
             if (((MethodDefNode)node).getName().equals(name) &&
@@ -2221,228 +1926,4 @@ public class RubyDeclarationFinder implements org.netbeans.modules.gsf.api.Decla
         return DeclarationLocation.NONE;
     }
 
-    private Node findClass(Node node, String name) {
-        if (node instanceof ClassNode) {
-            String n = AstUtilities.getClassOrModuleName((ClassNode)node);
-
-            if (n.equals(name)) {
-                return node;
-            }
-        } else if (node instanceof ConstDeclNode) {
-            if (((INameNode)node).getName().equals(name)) {
-                return node;
-            }
-        } else if (!ignoreAlias && node instanceof AliasNode) {
-            if (((AliasNode)node).getNewName().equals(name)) {
-                return node;
-            }
-        }
-
-        List<Node> list = node.childNodes();
-
-        for (Node child : list) {
-            if (child.isInvisible()) {
-                continue;
-            }
-            Node match = findClass(child, name);
-
-            if (match != null) {
-                return match;
-            }
-        }
-
-        return null;
-    }
-    
-    private static class RubyAltLocation implements AlternativeLocation {
-        private IndexedElement element;
-        private boolean isPreferred;
-        private String cachedDisplayItem;
-        
-        RubyAltLocation(IndexedElement element, boolean isPreferred) {
-            this.element = element;
-            this.isPreferred = isPreferred;
-        }
-
-        public String getDisplayHtml(HtmlFormatter formatter) {
-            formatter.setMaxLength(120);
-            if (cachedDisplayItem == null) {
-                formatter.reset();
-
-                boolean nodoc = element.isNoDoc();
-                boolean documented = element.isDocumented();
-                if (isPreferred) {
-                    formatter.emphasis(true);
-                } else if (nodoc) {
-                    formatter.deprecated(true);
-                }
-
-                if (element instanceof IndexedMethod) {
-                    if (element.getFqn() != null) {
-                        formatter.appendText(element.getFqn());
-                        formatter.appendText(".");
-                    }
-                    formatter.appendText(element.getName());
-                    IndexedMethod method = (IndexedMethod)element;
-                    Collection<String> parameters = method.getParameters();
-
-                    if ((parameters != null) && (parameters.size() > 0)) {
-                        formatter.appendText("("); // NOI18N
-
-                        Iterator<String> it = parameters.iterator();
-
-                        while (it.hasNext()) { // && tIt.hasNext()) {
-                            formatter.parameters(true);
-                            formatter.appendText(it.next());
-                            formatter.parameters(false);
-
-                            if (it.hasNext()) {
-                                formatter.appendText(", "); // NOI18N
-                            }
-                        }
-
-                        formatter.appendText(")"); // NOI18N
-                    }
-                } else {
-                    formatter.appendText(element.getFqn());
-                }
-
-                String filename = null;
-                String url = element.getFilenameUrl();
-                if (url == null) {
-                    // Deleted file?
-                    // Just leave out the file name
-                } else if (url.indexOf("rubystubs") != -1) {
-                    filename = NbBundle.getMessage(RubyDeclarationFinder.class, "RubyLib");
-                    
-                    if (url.indexOf("/stub_") == -1) {
-                        // Not a stub file, such as ftools.rb
-                        // TODO - don't hardcode for version 0.2
-                        String stub = "rubystubs/1.8.6-p110/";
-                        int stubStart = url.indexOf(stub);
-                        if (stubStart != -1) {
-                            filename = filename+": " + url.substring(stubStart);
-                        }
-                    }
-                } else {
-                    FileObject fo = element.getFileObject();
-                    if (fo != null) {
-                        filename = fo.getNameExt();
-                    } else {
-                        // Perhaps a file that isn't present here, such as something in site_ruby
-                        int lastIndex = url.lastIndexOf('/');
-                        if (lastIndex != -1) {
-                            String s = url.substring(0, lastIndex);
-                            int almostLastIndex = s.lastIndexOf('/');
-                            if (almostLastIndex != -1 && ((url.length()-almostLastIndex) < 40)) {
-                                filename = url.substring(almostLastIndex+1);
-                                if (filename.indexOf(':') != -1) {
-                                    // Don't include prefix like cluster:, file:, etc.
-                                    filename = url.substring(lastIndex+1);
-                                }
-                            } else {
-                                filename = url.substring(lastIndex+1);
-                            }
-                        }
-                    }
-                    
-                    // TODO - make this work with 1.9 etc.
-                    //final String GEM_LOC = "lib/ruby/gems/1.8/gems/";
-                    Pattern p = Pattern.compile("lib/ruby/gems/\\d+\\.\\d+/gems/");
-                    Matcher m = p.matcher(url);
-                    //int gemIndex = url.indexOf(GEM_LOC);
-                    //if (gemIndex != -1) {
-                    if (m.find()) {
-                        //int gemIndex = m.start();
-                        //gemIndex += GEM_LOC.length();
-                        int gemIndex = m.end();
-                        int gemEnd = url.indexOf('/', gemIndex);
-                        if (gemEnd != -1) {
-                            //int libIndex = url.indexOf("lib/", gemEnd);
-                            //if (libIndex != -1) {
-                            //    filename = url.substring(libIndex+4);
-                            //}
-                            filename = url.substring(gemIndex, gemEnd) + ": " + filename;
-                        }
-                    }
-                }
-
-                if (filename != null) {
-                    formatter.appendText(" ");
-                    formatter.appendText(NbBundle.getMessage(RubyDeclarationFinder.class, "In"));
-                    formatter.appendText(" ");
-                    formatter.appendText(filename);
-                }
-                
-                if (documented) {
-                    formatter.appendText(" ");
-                    formatter.appendText(NbBundle.getMessage(RubyDeclarationFinder.class, "Documented"));
-                } else if (nodoc) {
-                    formatter.appendText(" ");
-                    formatter.appendText(NbBundle.getMessage(RubyDeclarationFinder.class, "NoDoced"));
-                }
-
-                if (isPreferred) {
-                    formatter.emphasis(false);
-                } else if (nodoc) {
-                    formatter.deprecated(false);
-                }
-
-                cachedDisplayItem = formatter.getText();
-            }
-            
-            return cachedDisplayItem;
-        }
-
-        public DeclarationLocation getLocation() {
-            Node node = AstUtilities.getForeignNode(element, (Node[])null);
-            int lineOffset = node != null ? node.getPosition().getStartOffset() : -1;
-            DeclarationLocation loc = new DeclarationLocation(element.getFileObject(),
-                lineOffset, element);
-
-            return loc;
-        }
-
-        public ElementHandle getElement() {
-            return element;
-        }
-
-        public int compareTo(AlternativeLocation alternative) {
-            RubyAltLocation alt = (RubyAltLocation)alternative;
-
-            // The preferred item should be chosen
-            if (isPreferred) {
-                return -1;
-            } else if (alt.isPreferred) {
-                return 1;
-            } // Can't both be so no else == check
-            
-            // Nodoced items last
-            if (element.isNoDoc() != alt.element.isNoDoc()) {
-                return element.isNoDoc() ? 1 : -1;
-            }
-            
-            // Documented items on top
-            if (element.isDocumented() != alt.element.isDocumented()) {
-                return element.isDocumented() ? -1 : 1;
-            }
-
-            // TODO: Sort by gem?
-            
-            // Sort by containing clz - just do fqn here?
-            String thisIn = element.getIn() != null ? element.getIn() : "";
-            String thatIn = alt.element.getIn() != null ? alt.element.getIn() : "";
-            int cmp = thisIn.compareTo(thatIn);
-            if (cmp != 0) {
-                return cmp;
-            }
-
-            // Sort by file
-            String thisFile = element.getFileObject() != null ? element.getFileObject().getNameExt() : "";
-            String thatFile = alt.element.getFileObject() != null ? alt.element.getFileObject().getNameExt() : "";
-            cmp = thisFile.compareTo(thatFile);
-            
-            return cmp;
-        }
-    }
 }

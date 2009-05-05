@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,53 +40,29 @@
  */
 package org.netbeans.modules.ruby;
 
-import org.netbeans.modules.gsf.api.ElementHandle;
-import org.netbeans.modules.gsf.api.Index;
-import org.netbeans.modules.ruby.elements.CommentElement;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
-
-import javax.swing.ImageIcon;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
-
-import org.jruby.nb.ast.ArgsNode;
-import org.jruby.nb.ast.ArgumentNode;
-import org.jruby.nb.ast.CallNode;
-import org.jruby.nb.ast.ClassNode;
-import org.jruby.nb.ast.FCallNode;
-import org.jruby.nb.ast.ListNode;
-import org.jruby.nb.ast.LocalAsgnNode;
-import org.jruby.nb.ast.MethodDefNode;
-import org.jruby.nb.ast.Node;
-import org.jruby.nb.ast.NodeType;
-import org.jruby.nb.ast.types.INameNode;
-import org.jruby.nb.lexer.yacc.ISourcePosition;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.CodeCompletionHandler;
-import org.netbeans.modules.gsf.api.CompletionProposal;
-import org.netbeans.modules.gsf.api.DeclarationFinder.DeclarationLocation;
-import org.netbeans.modules.ruby.elements.Element;
-import org.netbeans.modules.gsf.api.ElementKind;
-import org.netbeans.modules.gsf.api.HtmlFormatter;
-import org.netbeans.modules.ruby.elements.IndexedField;
-import static org.netbeans.modules.gsf.api.Index.*;
-import org.netbeans.modules.gsf.api.Modifier;
-import org.netbeans.modules.gsf.api.NameKind;
-import org.netbeans.modules.gsf.api.OffsetRange;
-import org.netbeans.modules.gsf.api.ParameterInfo;
+import org.jrubyparser.SourcePosition;
+import org.jrubyparser.ast.ArgsNode;
+import org.jrubyparser.ast.ArgumentNode;
+import org.jrubyparser.ast.ClassNode;
+import org.jrubyparser.ast.ListNode;
+import org.jrubyparser.ast.LocalAsgnNode;
+import org.jrubyparser.ast.MethodDefNode;
+import org.jrubyparser.ast.Node;
+import org.jrubyparser.ast.NodeType;
+import org.jrubyparser.ast.INameNode;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
@@ -94,23 +70,39 @@ import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.api.ruby.platform.RubyInstallation;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
-import org.netbeans.modules.gsf.api.CodeCompletionContext;
-import org.netbeans.modules.gsf.api.CodeCompletionResult;
-import org.netbeans.modules.gsf.spi.DefaultCompletionProposal;
-import org.netbeans.modules.gsf.spi.DefaultCompletionResult;
-import org.netbeans.modules.ruby.RubyParser.Sanitize;
+import org.netbeans.modules.csl.api.CodeCompletionContext;
+import org.netbeans.modules.csl.api.CodeCompletionHandler;
+import org.netbeans.modules.csl.api.CodeCompletionHandler.QueryType;
+import org.netbeans.modules.csl.api.CodeCompletionResult;
+import org.netbeans.modules.csl.api.CompletionProposal;
+import org.netbeans.modules.csl.api.DeclarationFinder.DeclarationLocation;
+import org.netbeans.modules.csl.api.ElementHandle;
+import org.netbeans.modules.csl.api.ElementKind;
+import org.netbeans.modules.csl.api.ParameterInfo;
+import org.netbeans.modules.csl.spi.DefaultCompletionResult;
+import org.netbeans.modules.csl.spi.ParserResult;
+import org.netbeans.modules.parsing.api.Snapshot;
+import org.netbeans.modules.parsing.api.Source;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
+import org.netbeans.modules.ruby.RubyCompletionItem.CallItem;
+import org.netbeans.modules.ruby.RubyCompletionItem.ClassItem;
+import org.netbeans.modules.ruby.RubyCompletionItem.FieldItem;
+import org.netbeans.modules.ruby.RubyCompletionItem.MethodItem;
+import org.netbeans.modules.ruby.RubyCompletionItem.ParameterItem;
 import org.netbeans.modules.ruby.elements.AstElement;
 import org.netbeans.modules.ruby.elements.AstFieldElement;
 import org.netbeans.modules.ruby.elements.AstNameElement;
-import org.netbeans.modules.ruby.elements.ClassElement;
+import org.netbeans.modules.ruby.elements.CommentElement;
+import org.netbeans.modules.ruby.elements.Element;
 import org.netbeans.modules.ruby.elements.IndexedClass;
 import org.netbeans.modules.ruby.elements.IndexedElement;
+import org.netbeans.modules.ruby.elements.IndexedField;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
 import org.netbeans.modules.ruby.elements.IndexedVariable;
 import org.netbeans.modules.ruby.elements.KeywordElement;
 import org.netbeans.modules.ruby.elements.RubyElement;
-import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.netbeans.modules.ruby.lexer.Call;
+import org.netbeans.modules.ruby.lexer.LexUtilities;
 import org.netbeans.modules.ruby.lexer.RubyStringTokenId;
 import org.netbeans.modules.ruby.lexer.RubyTokenId;
 import org.openide.filesystems.FileObject;
@@ -118,9 +110,9 @@ import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
-
 /**
  * Code completion handler for Ruby.
+ * 
  * Bug: I add lists of fields etc. But if these -overlap- the current line,
  *  I throw them away. The problem is that there may be other references
  *  to the field that I should -not- throw away, elsewhere!
@@ -221,141 +213,6 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     /** Default name values for ATTR_UNUSEDLOCAL and friends */
     private static final String ATTR_DEFAULTS = "defaults"; // NOI18N
 
-    private static final String[] RUBY_BUILTIN_VARS =
-        new String[] {
-            // Predefined variables
-            "__FILE__", "__LINE__", "STDIN", "STDOUT", "STDERR", "ENV", "ARGF", "ARGV", "DATA",
-            "RUBY_VERSION", "RUBY_RELEASE_DATE", "RUBY_PLATFORM",
-        };
-    
-    private static final String[] RUBY_REGEXP_WORDS =
-        new String[] {
-            "^", "Start of line",
-            "$", "End of line",
-            "\\A", "Beginning of string",
-            "\\z", "End of string",
-            "\\Z", "End of string (except \\n)",
-            "\\w", "Letter or digit; same as [0-9A-Za-z]",
-            "\\W", "Neither letter or digit",
-            "\\s", "Space character; same as [ \\t\\n\\r\\f]",
-            "\\S", "Non-space character",
-            "\\d", "Digit character; same as [0-9]",
-            "\\D", "Non-digit character",
-            "\\b", "Backspace (0x08) (only if in a range specification)",
-            "\\b", "Word boundary (if not in a range specification)",
-            "\\B", "Non-word boundary",
-            "*", "Zero or more repetitions of the preceding",
-            "+", "One or more repetitions of the preceding",
-            "{m,n}", "At least m and at most n repetitions of the preceding",
-            "?", "At most one repetition of the preceding; same as {0,1}",
-            "|", "Either preceding or next expression may match",
-            "()", "Grouping",
-            "[:alnum:]", "Alphanumeric character class",
-            "[:alpha:]", "Uppercase or lowercase letter",
-            "[:blank:]", "Blank and tab",
-            "[:cntrl:]", "Control characters (at least 0x00-0x1f,0x7f)",
-            "[:digit:]", "Digit",
-            "[:graph:]", "Printable character excluding space",
-            "[:lower:]", "Lowecase letter",
-            "[:print:]", "Any printable letter (including space)",
-            "[:punct:]", "Printable character excluding space and alphanumeric",
-            "[:space:]", "Whitespace (same as \\s)",
-            "[:upper:]", "Uppercase letter",
-            "[:xdigit:]", "Hex digit (0-9, a-f, A-F)",
-        };
-
-    private static final String[] RUBY_PERCENT_WORDS =
-        new String[] {
-            "%q", "String (single-quoting rules)",
-            "%Q", "String (double-quoting rules)",
-            "%r", "Regular Expression",
-            "%x", "Commands",
-            "%W", "String Array (double quoting rules)",
-            "%w", "String Array (single quoting rules)",
-            "%s", "Symbol",
-        };
-    
-    private static final String[] RUBY_STRING_PAIRS =
-        new String[] {
-            "(", "(delimiters)",
-            "{", "{delimiters}",
-            "[", "[delimiters]",
-            "x", "<i>x</i>delimiters<i>x</i>",
-        };
-
-    // Cf. http://en.wikibooks.org/wiki/Ruby_Programming/Syntax/Variables_and_Constants
-    private static final String[] RUBY_DOLLAR_VARIABLES =
-        new String[] {
-            "$!",         "The exception information message set by 'raise'.",
-            "$@",         "Array of backtrace of the last exception thrown.",
-
-            "$&",         "The string matched by the last successful pattern match in this scope.",
-            "$`",         "The string to the left  of the last successful match.",
-            "$'",         "The string to the right of the last successful match.",
-            "$+",         "The last bracket matched by the last successful match.",
-            "$n",         "The Nth group of the last successful regexp match.",
-            "$~",         "The information about the last match in the current scope.",
-
-            "$=",         "The flag for case insensitive, nil by default.",
-            "$/",         "The input record separator, newline by default.",
-            "$\\",         "The output record separator for the print and IO#write. Default is nil.",
-            "$,",         "The output field separator for the print and Array#join.",
-            "$;",         "The default separator for String#split.",
-
-            "$.",         "The current input line number of the last file that was read.",
-            "$<",         "The virtual concatenation file of the files given on command line.",
-            "$>",         "The default output for print, printf. $stdout by default.",
-            "$_",         "The last input line of string by gets or readline.",
-
-            "$0",         "Contains the name of the script being executed. May be assignable.",
-            "$*",         "Command line arguments given for the script sans args.",
-            "$$",         "The process number of the Ruby running this script.",
-            "$?",         "The status of the last executed child process.",
-            "$:",         "Load path for scripts and binary modules by load or require.",
-
-            "$\"",        "The array contains the module names loaded by require.",
-            "$DEBUG",     "The status of the -d switch.",
-            "$FILENAME",  "Current input file from $&lt;. Same as $&lt;.filename.",
-            "$LOAD_PATH", "The alias to the $:.",
-            "$stderr",    "The current standard error output.",
-            "$stdin",     "The current standard input.",
-            "$stdout",    "The current standard output.",
-            "$VERBOSE",   "The verbose flag, which is set by the -v switch.",
-            "$-0",        "The alias to $/.",
-            "$-a",        "True if option -a (\"autosplit\" mode) is set. Read-only variable.",
-            "$-d",        "The alias to $DEBUG.",
-            "$-F",        "The alias to $;.",
-            "$-i",        "If in-place-edit mode is set, this variable holds the extension, otherwise nil.",
-            "$-I",        "The alias to $:.",
-            "$-l",        "True if option -l is set (\"line-ending processing\" is on). Read-only variable.",
-            "$-p",        "True if option -p is set (\"loop\" mode is on). Read-only variable.",
-            "$-v",        "The alias to $VERBOSE.",
-            "$-w",        "True if option -w is set.",
-        };
-    
-    private static final String[] RUBY_QUOTED_STRING_ESCAPES =
-        new String[] {
-            "\\a", "Bell/alert (0x07)",
-            "\\b", "Backspace (0x08)",
-            "\\x", "\\x<i>nn</i>: Hex <i>nn</i>",
-            "\\e", "Escape (0x1b)",
-            "\\c", "Control-<i>x</i>",
-            "\\C-", "Control-<i>x</i>",
-            "\\f", "Formfeed (0x0c)",
-            "\\n", "Newline (0x0a)",
-            "\\M-", "\\M-<i>x</i>: Meta-<i>x</i>",
-            "\\r", "Return (0x0d)",
-            "\\M-\\C-", "Meta-control-<i>x</i>",
-            "\\s", "Space (0x20)",
-            "\\", "\\nnn Octal <i>nnn</i>",
-            //"\\", "<i>x</i>",
-            "\\t", "Tab (0x09)",
-            "#{", "#{expr}: Value of expr",
-            "\\v", "Vertical tab (0x0b)",
-        };
-
-    private static ImageIcon keywordIcon;
-    private static ImageIcon symbolIcon;
     private static final Set<String> selectionTemplates = new HashSet<String>();
 
     static {
@@ -373,13 +230,17 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     public RubyCodeCompleter() {
     }
 
-    private boolean startsWith(String theString, String prefix) {
+    static boolean startsWith(String theString, String prefix, boolean caseSensitive) {
         if (prefix.length() == 0) {
             return true;
         }
 
         return caseSensitive ? theString.startsWith(prefix)
                              : theString.toLowerCase().startsWith(prefix.toLowerCase());
+    }
+
+    private boolean startsWith(String theString, String prefix) {
+        return RubyCodeCompleter.startsWith(theString, prefix, caseSensitive);
     }
 
     /**
@@ -391,9 +252,9 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
      * kick in.
      */
     @SuppressWarnings("unchecked")
-    public String getPrefix(CompilationInfo info, int lexOffset, boolean upToOffset) {
+    public String getPrefix(ParserResult info, int lexOffset, boolean upToOffset) {
         try {
-            BaseDocument doc = (BaseDocument)info.getDocument();
+            BaseDocument doc = RubyUtils.getDocument(info);
             if (doc == null) {
                 return null;
             }
@@ -651,101 +512,6 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         return null;
     }
 
-    private boolean completeKeywords(List<CompletionProposal> proposals, CompletionRequest request,
-        boolean isSymbol) {
-        
-        String prefix = request.prefix;
-        
-        // Keywords
-        if (prefix.equals("$")) {
-            // Show dollar variable matches (global vars from the user's
-            // code will also be shown
-            for (int i = 0, n = RUBY_DOLLAR_VARIABLES.length; i < n; i += 2) {
-                String word = RUBY_DOLLAR_VARIABLES[i];
-                String desc = RUBY_DOLLAR_VARIABLES[i + 1];
-
-                KeywordItem item = new KeywordItem(word, desc, anchor, request);
-
-                if (isSymbol) {
-                    item.setSymbol(true);
-                }
-
-                proposals.add(item);
-            }
-        }
-
-        for (String keyword : RUBY_BUILTIN_VARS) {
-            if (startsWith(keyword, prefix)) {
-                KeywordItem item = new KeywordItem(keyword, null, anchor, request);
-
-                if (isSymbol) {
-                    item.setSymbol(true);
-                }
-
-                proposals.add(item);
-            }
-        }
-
-        for (String keyword : RubyUtils.RUBY_KEYWORDS) {
-            if (startsWith(keyword, prefix)) {
-                KeywordItem item = new KeywordItem(keyword, null, anchor, request);
-
-                if (isSymbol) {
-                    item.setSymbol(true);
-                }
-
-                proposals.add(item);
-            }
-        }
-
-        return false;
-    }
-
-    private boolean completeRegexps(List<CompletionProposal> proposals, CompletionRequest request) {
-        String prefix = request.prefix;
-
-        // Regular expression matching.  {
-        for (int i = 0, n = RUBY_REGEXP_WORDS.length; i < n; i += 2) {
-            String word = RUBY_REGEXP_WORDS[i];
-            String desc = RUBY_REGEXP_WORDS[i + 1];
-
-            if (startsWith(word, prefix)) {
-                KeywordItem item = new KeywordItem(word, desc, anchor, request);
-                proposals.add(item);
-            }
-        }
-
-        return true;
-    }
-
-    private boolean completePercentWords(List<CompletionProposal> proposals, CompletionRequest request) {
-        String prefix = request.prefix;
-
-        for (int i = 0, n = RUBY_PERCENT_WORDS.length; i < n; i += 2) {
-            String word = RUBY_PERCENT_WORDS[i];
-            String desc = RUBY_PERCENT_WORDS[i + 1];
-
-            if (startsWith(word, prefix)) {
-                KeywordItem item = new KeywordItem(word, desc, anchor, request);
-                proposals.add(item);
-            }
-        }
-
-        return true;
-    }
-
-    private boolean completeStringBegins(List<CompletionProposal> proposals, CompletionRequest request) {
-        for (int i = 0, n = RUBY_STRING_PAIRS.length; i < n; i += 2) {
-            String word = RUBY_STRING_PAIRS[i];
-            String desc = RUBY_STRING_PAIRS[i + 1];
-
-            KeywordItem item = new KeywordItem(word, desc, anchor, request);
-            proposals.add(item);
-        }
-
-        return true;
-    }
-
     /** Determine if we're trying to complete the name for a "def" (in which case
      * we'd show the inherited methods).
      * This needs to be enhanced to handle "Foo." prefixes, e.g. def self.foo
@@ -755,7 +521,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         String prefix = request.prefix;
         int lexOffset = request.lexOffset;
         TokenHierarchy<Document> th = request.th;
-        NameKind kind = request.kind;
+        QuerySupport.Kind kind = request.kind;
         
         TokenSequence<?extends RubyTokenId> ts = LexUtilities.getRubyTokenSequence(th, lexOffset);
 
@@ -854,166 +620,11 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
 
         return false;
     }
-
-    /** Determine if we're trying to complete the name of a method on another object rather
-     * than an inherited or local one. These should list ALL known methods, unless of course
-     * we know the type of the method we're operating on (such as strings or regexps),
-     * or types inferred through data flow analysis
-     *
-     * @todo Look for self or this or super; these should be limited to inherited.
-     */
-    private boolean completeObjectMethod(List<CompletionProposal> proposals, CompletionRequest request, String fqn,
-        Call call) {
-        
-        RubyIndex index = request.index;
-        String prefix = request.prefix;
-        int astOffset = request.astOffset;
-        int lexOffset = request.lexOffset;
-        TokenHierarchy<Document> th = request.th;
-        BaseDocument doc = request.doc;
-        AstPath path = request.path;
-        NameKind kind = request.kind;
-        FileObject fileObject = request.fileObject;
-        Node node = request.node;
-
-        TokenSequence<?extends RubyTokenId> ts = LexUtilities.getRubyTokenSequence(th, lexOffset);
-
-        // Look in the token stream for constructs of the type
-        //   foo.x^
-        // or
-        //   foo.^
-        // and if found, add all methods
-        // (no keywords etc. are possible matches)
-        if ((index != null) && (ts != null)) {
-            boolean skipPrivate = true;
-
-            if ((call == Call.LOCAL) || (call == Call.NONE)) {
-                return false;
-            }
-
-            // If we're not sure we're only looking for a method, don't abort after this
-            boolean done = call.isMethodExpected();
-
-            boolean skipInstanceMethods = call.isStatic();
-
-            Set<IndexedMethod> methods = Collections.emptySet();
-
-            String type = call.getType();
-            String lhs = call.getLhs();
-
-            if ((type == null) && (lhs != null) && (node != null) && call.isSimpleIdentifier()) {
-                Node method = AstUtilities.findLocalScope(node, path);
-
-                if (method != null) {
-                    // TODO - if the lhs is "foo.bar." I need to split this
-                    // up and do it a bit more cleverly
-                    RubyTypeAnalyzer analyzer = new RubyTypeAnalyzer(/*request.info.getParserResult(),*/ index, method, node, astOffset, lexOffset, doc, fileObject);
-                    type = analyzer.getType(lhs);
-                }
-            }
-
-            // I'm not doing any data flow analysis at this point, so
-            // I can't do anything with a LHS like "foo.". Only actual types.
-            if ((type != null) && (type.length() > 0)) {
-                if ("self".equals(lhs)) { // NOI18N
-                    type = fqn;
-                    skipPrivate = true;
-                } else if ("super".equals(lhs)) { // NOI18N
-                    skipPrivate = true;
-
-                    IndexedClass sc = index.getSuperclass(fqn);
-
-                    if (sc != null) {
-                        type = sc.getFqn();
-                    } else {
-                        ClassNode cls = AstUtilities.findClass(path);
-
-                        if (cls != null) {
-                            type = AstUtilities.getSuperclass(cls);
-                        }
-                    }
-
-                    if (type == null) {
-                        type = "Object"; // NOI18N
-                    }
-                }
-
-                if ((type != null) && (type.length() > 0)) {
-                    // Possibly a class on the left hand side: try searching with the class as a qualifier.
-                    // Try with the LHS + current FQN recursively. E.g. if we're in
-                    // Test::Unit when there's a call to Foo.x, we'll try
-                    // Test::Unit::Foo, and Test::Foo
-                    while (methods.isEmpty()) {
-                        methods = index.getInheritedMethods(fqn + "::" + type, prefix, kind);
-
-                        int f = fqn.lastIndexOf("::");
-
-                        if (f == -1) {
-                            break;
-                        } else {
-                            fqn = fqn.substring(0, f);
-                        }
-                    }
-
-                    // Add methods in the class (without an FQN)
-                    Set<IndexedMethod> m = index.getInheritedMethods(type, prefix, kind);
-
-                    if (!m.isEmpty()) {
-                        methods.addAll(m);
-                    }
-                }
-            }
-
-            // Try just the method call (e.g. across all classes). This is ignoring the 
-            // left hand side because we can't resolve it.
-            if ((methods.isEmpty())) {
-                methods = index.getMethods(prefix, null, kind);
-            }
-
-            for (IndexedMethod method : methods) {
-                // Don't include private or protected methods on other objects
-                if (skipPrivate && (method.isPrivate() && !"new".equals(method.getName()))) {
-                    // TODO - "initialize" removal here should not be necessary since they should
-                    // be marked as private, but index doesn't contain that yet
-                    continue;
-                }
-
-                // We can only call static methods. And module class is a special case (#110267)
-                if (skipInstanceMethods && !method.isStatic() && !method.doesBelongToModule()) {
-                    continue;
-                }
-
-                // Do not offer instance methods of Module class as instance methods (issue #110267)
-                if (!skipInstanceMethods && method.doesBelongToModule()) {
-                    continue;
-                }
-
-                if (method.isNoDoc()) {
-                    continue;
-                }
-
-                if (method.getMethodType() == IndexedMethod.MethodType.DBCOLUMN) {
-                    DbItem item = new DbItem(method.getName(), method.getIn(), anchor, request);
-                    proposals.add(item);
-                    continue;
-                }
-
-                MethodItem methodItem = new MethodItem(method, anchor, request);
-                // Exact matches
-                methodItem.setSmart(method.isSmart());
-                proposals.add(methodItem);
-            }
-
-            return done;
-        }
-
-        return false;
-    }
     
     private void completeGlobals(List<CompletionProposal> proposals, CompletionRequest request, boolean showSymbols) {
         RubyIndex index = request.index;
         String prefix = request.prefix;
-        NameKind kind = request.kind;
+        QuerySupport.Kind kind = request.kind;
         
         Set<IndexedVariable> globals = index.getGlobals(prefix, kind);
         for (IndexedVariable global : globals) {
@@ -1028,599 +639,16 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         }
     }
 
-    /** Determine if we're trying to complete the name for a "def" (in which case
-     * we'd show the inherited methods) */
-    private boolean completeClasses(List<CompletionProposal> proposals, CompletionRequest request,
-        boolean showSymbols, Call call) {
-
-        RubyIndex index = request.index;
-        String prefix = request.prefix;
-        NameKind kind = request.kind;
-        
-        int classAnchor = anchor;
-        int fqnIndex = prefix.lastIndexOf("::");
-
-        if (fqnIndex != -1) {
-            classAnchor += (fqnIndex + 2);
-        }
-
-        String fullPrefix = prefix;
-
-        // foo.| or foo.b|  -> we're expecting a method call. For Foo:: we don't know.
-        if (call.isMethodExpected()) {
-            return false;
-        }
-
-        String type = call.getType();
-        String lhs = call.getLhs();
-
-        if ((lhs != null) && lhs.equals(type)) {
-            fullPrefix = type + "::" + prefix;
-        }
-
-        AstPath path = request.path;
-        String ctx = AstUtilities.getFqnName(path);
-
-        Set<String> uniqueClasses = new HashSet<String>();
-        Set<IndexedClass> classes = index.getClasses(fullPrefix, kind, false, false, false, RubyIndex.ALL_SCOPE, uniqueClasses);
-
-        // Also try looking or classes scoped by the current class
-        if ((ctx != null) && (ctx.length() > 0)) {
-            Set<IndexedClass> extraClasses = index.getClasses(ctx + "::" + fullPrefix, kind, false, false, false, RubyIndex.ALL_SCOPE, uniqueClasses);
-            classes.addAll(extraClasses);
-        }
-
-        // Prefix the current class if necessary
-        for (IndexedClass cls : classes) {
-            if (cls.isNoDoc()) {
-                continue;
-            }
-
-            ClassItem item = new ClassItem(cls, classAnchor, request);
-            item.setSmart(true);
-
-            if (showSymbols) {
-                item.setSymbol(true);
-            }
-
-            proposals.add(item);
-        }
-
-        return false;
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean completeStrings(List<CompletionProposal> proposals, CompletionRequest request) {
-        RubyIndex index = request.index;
-        String prefix = request.prefix;
-        int lexOffset = request.lexOffset;
-        TokenHierarchy<Document> th = request.th;
-        
-        TokenSequence<?extends RubyTokenId> ts = LexUtilities.getRubyTokenSequence(th, lexOffset);
-
-        if ((index != null) && (ts != null)) {
-            ts.move(lexOffset);
-
-            if (!ts.moveNext() && !ts.movePrevious()) {
-                return false;
-            }
-
-            if (ts.offset() == lexOffset) {
-                // We're looking at the offset to the RIGHT of the caret
-                // and here I care about what's on the left
-                ts.movePrevious();
-            }
-
-            Token<?extends RubyTokenId> token = ts.token();
-
-            if (token != null) {
-                TokenId id = token.id();
-
-                if (id == RubyTokenId.LINE_COMMENT || id == RubyTokenId.DOCUMENTATION) {
-                    // Comment completion - rdoc tags and such
-                    
-                    if (request.queryType == QueryType.DOCUMENTATION) {
-                        BaseDocument doc = request.doc;
-                        OffsetRange commentBlock = LexUtilities.getCommentBlock(doc, lexOffset);
-                        
-                        if (commentBlock != OffsetRange.NONE) {
-                            try {
-                                String text = doc.getText(commentBlock.getStart(), commentBlock.getLength());
-                                if (text.startsWith("=begin\n") && text.endsWith("=end")) { // NOI18N
-                                    text = text.substring("=begin\n".length(), text.length() - "=end".length()); // NOI18N
-                                }
-                                Element element = new CommentElement(text);
-                                ClassItem item = new ClassItem(element, anchor, request);
-                                proposals.add(item);
-                                return true;
-                            } catch (BadLocationException ble) {
-                                Exceptions.printStackTrace(ble);
-                            }
-                        }
-                    }
-                    
-                    // No other possible completions in comments
-                    return true;
-                }
-                
-                // We're within a String that has embedded Ruby. Drop into the
-                // embedded language and see if we're within a literal string there.
-                if (id == RubyTokenId.EMBEDDED_RUBY) {
-                    ts = (TokenSequence)ts.embedded();
-                    assert ts != null;
-                    ts.move(lexOffset);
-
-                    if (!ts.moveNext() && !ts.movePrevious()) {
-                        return false;
-                    }
-
-                    token = ts.token();
-                    id = token.id();
-                }
-
-                boolean inString = false;
-                boolean isQuoted = false;
-                boolean inRegexp = false;
-                String tokenText = token.text().toString();
-
-                // Percent completion
-                if ((id == RubyTokenId.STRING_BEGIN) || (id == RubyTokenId.QUOTED_STRING_BEGIN) ||
-                        ((id == RubyTokenId.ERROR) && tokenText.equals("%"))) {
-                    int offset = ts.offset();
-
-                    if ((offset == (lexOffset - 1)) && (tokenText.length() > 0) &&
-                            (tokenText.charAt(0) == '%')) {
-                        if (completePercentWords(proposals, request)) {
-                            return true;
-                        }
-                    }
-                }
-
-                // Incomplete String/Regexp marker:  %x|{
-                if (((id == RubyTokenId.STRING_BEGIN) || (id == RubyTokenId.QUOTED_STRING_BEGIN) ||
-                        (id == RubyTokenId.REGEXP_BEGIN)) &&
-                        ((token.length() == 3) && (lexOffset == (ts.offset() + 2)))) {
-                    if (Character.isLetter(tokenText.charAt(1))) {
-                        completeStringBegins(proposals, request);
-
-                        return true;
-                    }
-                }
-
-                // Skip back to the beginning of the String. I have to loop since I
-                // may have embedded Ruby segments.
-                while ((id == RubyTokenId.ERROR) || (id == RubyTokenId.STRING_LITERAL) ||
-                        (id == RubyTokenId.QUOTED_STRING_LITERAL) ||
-                        (id == RubyTokenId.REGEXP_LITERAL) || (id == RubyTokenId.EMBEDDED_RUBY)) {
-                    if (id == RubyTokenId.QUOTED_STRING_LITERAL) {
-                        isQuoted = true;
-                    }
-                    if (!ts.movePrevious()) {
-                        return false;
-                    }
-
-                    token = ts.token();
-                    id = token.id();
-                }
-
-                if (id == RubyTokenId.STRING_BEGIN) {
-                    inString = true;
-                } else if (id == RubyTokenId.QUOTED_STRING_BEGIN) {
-                    inString = true;
-                    isQuoted = true;
-                } else if (id == RubyTokenId.REGEXP_BEGIN) {
-                    inRegexp = true;
-                }
-
-                
-                if (inRegexp) {
-                    if (completeRegexps(proposals, request)) {
-                        request.completionResult.setFilterable(false);
-                        return true;
-                    }
-                } else if (inString) {
-                    // Completion of literal strings within require calls
-                    while (ts.movePrevious()) {
-                        token = ts.token();
-
-                        if ((token.id() == RubyTokenId.WHITESPACE) ||
-                                (token.id() == RubyTokenId.LPAREN) ||
-                                (token.id() == RubyTokenId.STRING_LITERAL) ||
-                                (token.id() == RubyTokenId.QUOTED_STRING_LITERAL) ||
-                                (token.id() == RubyTokenId.STRING_BEGIN) ||
-                                (token.id() == RubyTokenId.QUOTED_STRING_BEGIN)) {
-                            continue;
-                        }
-
-                        if (token.id() == RubyTokenId.IDENTIFIER) {
-                            String text = token.text().toString();
-
-                            if (text.equals("require") || text.equals("load")) {
-                                // Do require-completion
-                                Set<String[]> requires =
-                                    index.getRequires(prefix,
-                                        caseSensitive ? NameKind.PREFIX
-                                                      : NameKind.CASE_INSENSITIVE_PREFIX);
-
-                                for (String[] require : requires) {
-                                    assert require.length == 2;
-
-                                    // If a method is an "initialize" method I should do something special so that
-                                    // it shows up as a "constructor" (in a new() statement) but not as a directly
-                                    // callable initialize method (it should already be culled because it's private)
-                                    KeywordItem item =
-                                        new KeywordItem(require[0], require[1], anchor, request);
-                                    proposals.add(item);
-                                }
-
-                                return true;
-                            } else {
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-
-                    if (inString && isQuoted) {
-                        for (int i = 0, n = RUBY_QUOTED_STRING_ESCAPES.length; i < n; i += 2) {
-                            String word = RUBY_QUOTED_STRING_ESCAPES[i];
-                            String desc = RUBY_QUOTED_STRING_ESCAPES[i + 1];
-
-                            if (!word.startsWith(prefix)) {
-                                continue;
-                            }
-
-                            KeywordItem item = new KeywordItem(word, desc, anchor, request);
-                            proposals.add(item);
-                        }
-
-                        return true;
-                    } else if (inString) {
-                        // No completions for single quoted strings
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
-    }
-    
-    private static int callLineStart = -1;
-    static IndexedMethod callMethod;
-
-    /** Compute the current method call at the given offset. Returns false if we're not in a method call. 
-     * The argument index is returned in parameterIndexHolder[0] and the method being
-     * called in methodHolder[0].
-     */
-    static boolean computeMethodCall(CompilationInfo info, int lexOffset, int astOffset,
-            IndexedMethod[] methodHolder, int[] parameterIndexHolder, int[] anchorOffsetHolder,
-            Set<IndexedMethod>[] alternativesHolder, NameKind kind) {
-        try {
-            Node root = AstUtilities.getRoot(info);
-
-            if (root == null) {
-                return false;
-            }
-
-            IndexedMethod targetMethod = null;
-            int index = -1;
-
-            AstPath path = null;
-            // Account for input sanitation
-            // TODO - also back up over whitespace, and if I hit the method
-            // I'm parameter number 0
-            int originalAstOffset = astOffset;
-
-            // Adjust offset to the left
-            BaseDocument doc = (BaseDocument) info.getDocument();
-            if (doc == null) {
-                return false;
-            }
-            int newLexOffset = LexUtilities.findSpaceBegin(doc, lexOffset);
-            if (newLexOffset < lexOffset) {
-                astOffset -= (lexOffset-newLexOffset);
-            }
-
-            RubyParseResult rpr = AstUtilities.getParseResult(info);
-            OffsetRange range = rpr.getSanitizedRange();
-            if (range != OffsetRange.NONE && range.containsInclusive(astOffset)) {
-                if (astOffset != range.getStart()) {
-                    astOffset = range.getStart()-1;
-                    if (astOffset < 0) {
-                        astOffset = 0;
-                    }
-                    path = new AstPath(root, astOffset);
-                }
-            }
-
-            if (path == null) {
-                path = new AstPath(root, astOffset);
-            }
-
-            int currentLineStart = Utilities.getRowStart(doc, lexOffset);
-            if (callLineStart != -1 && currentLineStart == callLineStart) {
-                // We know the method call
-                targetMethod = callMethod;
-                // if (targetMethod != null) {
-                    // Somehow figure out the argument index
-                    // Perhaps I can keep the node tree around and look in it
-                    // (This is all trying to deal with temporarily broken
-                    // or ambiguous calls.
-                // }
-            }
-            // Compute the argument index
-
-            Node call = null;
-            int anchorOffset = -1;
-
-            if (targetMethod != null) {
-                Iterator<Node> it = path.leafToRoot();
-                String name = targetMethod.getName();
-                while (it.hasNext()) {
-                    Node node = it.next();
-                    if (AstUtilities.isCall(node) &&
-                            name.equals(AstUtilities.getCallName(node))) {
-                        if (node.nodeId == NodeType.CALLNODE) {
-                            Node argsNode = ((CallNode)node).getArgsNode();
-
-                            if (argsNode != null) {
-                                index = AstUtilities.findArgumentIndex(argsNode, astOffset);
-
-                                if (index == -1 && astOffset < originalAstOffset) {
-                                    index = AstUtilities.findArgumentIndex(argsNode, originalAstOffset);
-                                }
-
-                                if (index != -1) {
-                                    call = node;
-                                    anchorOffset = argsNode.getPosition().getStartOffset();
-                                }
-                            }
-                        } else if (node.nodeId == NodeType.FCALLNODE) {
-                            Node argsNode = ((FCallNode)node).getArgsNode();
-
-                            if (argsNode != null) {
-                                index = AstUtilities.findArgumentIndex(argsNode, astOffset);
-
-                                if (index == -1 && astOffset < originalAstOffset) {
-                                    index = AstUtilities.findArgumentIndex(argsNode, originalAstOffset);
-                                }
-
-                                if (index != -1) {
-                                    call = node;
-                                    anchorOffset = argsNode.getPosition().getStartOffset();
-                                }
-                            }
-                        } else if (node.nodeId == NodeType.VCALLNODE) {
-                            // We might be completing at the end of a method call
-                            // and we don't have parameters yet so it just looks like
-                            // a vcall, e.g.
-                            //   create_table |
-                            // This is okay as long as the caret is outside and to
-                            // the right of this call. However
-                            final OffsetRange callRange = AstUtilities.getCallRange(node);
-                            AstUtilities.getCallName(node);
-                            if (originalAstOffset > callRange.getEnd()) {
-                                index = 0;
-                                call = node;
-                                anchorOffset = callRange.getEnd()+1;
-                            }
-                        }
-                        
-                        break;
-                    }
-                }
-            }
-
-            boolean haveSanitizedComma = rpr.getSanitized() == Sanitize.EDITED_DOT ||
-                    rpr.getSanitized() == Sanitize.ERROR_DOT;
-            if (haveSanitizedComma) {
-                // We only care about removed commas since that
-                // affects the parameter count
-                if (rpr.getSanitizedContents().indexOf(',') == -1) {
-                    haveSanitizedComma = false;
-                }
-            }
-
-            if (call == null) {
-                // Find the call in around the caret. Beware of 
-                // input sanitization which could have completely
-                // removed the current parameter (e.g. with just
-                // a comma, or something like ", @" or ", :")
-                // where we accidentally end up in the previous
-                // parameter.
-                ListIterator<Node> it = path.leafToRoot();
-             nodesearch:
-                while (it.hasNext()) {
-                    Node node = it.next();
-
-                    if (kind == NameKind.EXACT_NAME) {
-                        // For documentation popups, don't go up through blocks
-                        if (node.nodeId == NodeType.ITERNODE || node.nodeId == NodeType.DEFNNODE || node.nodeId == NodeType.DEFSNODE) {
-                            // Don't consider calls outside the current block or method (149540)
-                            break;
-                        }
-                    }
-
-                    if (node.nodeId == NodeType.CALLNODE) {
-                        final OffsetRange callRange = AstUtilities.getCallRange(node);
-                        if (haveSanitizedComma && originalAstOffset > callRange.getEnd() && it.hasNext()) {
-                            for (int i = 0; i < 3 && it.hasNext(); i++) {
-                                // It's not really a peek in the sense
-                                // that there's no reason to retry these
-                                // nodes later
-                                Node peek = it.next();
-                                if (AstUtilities.isCall(peek) &&
-                                        Utilities.getRowStart(doc, LexUtilities.getLexerOffset(info, peek.getPosition().getStartOffset())) ==
-                                        Utilities.getRowStart(doc, lexOffset)) {
-                                    // Use the outer method call instead
-                                    if (it.hasPrevious()) {
-                                        it.previous();
-                                    }
-                                    continue nodesearch;
-                                }
-                            }
-                        }
-                        
-                        Node argsNode = ((CallNode)node).getArgsNode();
-
-                        if (argsNode != null) {
-                            index = AstUtilities.findArgumentIndex(argsNode, astOffset);
-
-                            if (index == -1 && astOffset < originalAstOffset) {
-                                index = AstUtilities.findArgumentIndex(argsNode, originalAstOffset);
-                            }
-
-                            if (index != -1) {
-                                call = node;
-                                anchorOffset = argsNode.getPosition().getStartOffset();
-
-                                break;
-                            }
-                        } else {
-                            if (originalAstOffset > callRange.getEnd()) {
-                                index = 0;
-                                call = node;
-                                anchorOffset = callRange.getEnd()+1;
-                                break;
-                            }
-                        }
-                    } else if (node.nodeId == NodeType.FCALLNODE) {
-                        final OffsetRange callRange = AstUtilities.getCallRange(node);
-                        if (haveSanitizedComma && originalAstOffset > callRange.getEnd() && it.hasNext()) {
-                            for (int i = 0; i < 3 && it.hasNext(); i++) {
-                                // It's not really a peek in the sense
-                                // that there's no reason to retry these
-                                // nodes later
-                                Node peek = it.next();
-                                if (AstUtilities.isCall(peek) &&
-                                        Utilities.getRowStart(doc, LexUtilities.getLexerOffset(info, peek.getPosition().getStartOffset())) ==
-                                        Utilities.getRowStart(doc, lexOffset)) {
-                                    // Use the outer method call instead
-                                    if (it.hasPrevious()) {
-                                        it.previous();
-                                    }
-                                    continue nodesearch;
-                                }
-                            }
-                        }
-                        
-                        Node argsNode = ((FCallNode)node).getArgsNode();
-
-                        if (argsNode != null) {
-                            index = AstUtilities.findArgumentIndex(argsNode, astOffset);
-
-                            if (index == -1 && astOffset < originalAstOffset) {
-                                index = AstUtilities.findArgumentIndex(argsNode, originalAstOffset);
-                            }
-
-                            if (index != -1) {
-                                call = node;
-                                anchorOffset = argsNode.getPosition().getStartOffset();
-
-                                break;
-                            }
-                        }
-                    } else if (node.nodeId == NodeType.VCALLNODE) {
-                        // We might be completing at the end of a method call
-                        // and we don't have parameters yet so it just looks like
-                        // a vcall, e.g.
-                        //   create_table |
-                        // This is okay as long as the caret is outside and to
-                        // the right of this call.
-                        
-                        final OffsetRange callRange = AstUtilities.getCallRange(node);
-                        if (haveSanitizedComma && originalAstOffset > callRange.getEnd() && it.hasNext()) {
-                            for (int i = 0; i < 3 && it.hasNext(); i++) {
-                                // It's not really a peek in the sense
-                                // that there's no reason to retry these
-                                // nodes later
-                                Node peek = it.next();
-                                if (AstUtilities.isCall(peek) &&
-                                        Utilities.getRowStart(doc, LexUtilities.getLexerOffset(info, peek.getPosition().getStartOffset())) ==
-                                        Utilities.getRowStart(doc, lexOffset)) {
-                                    // Use the outer method call instead
-                                    if (it.hasPrevious()) {
-                                        it.previous();
-                                    }
-                                    continue nodesearch;
-                                }
-                            }
-                        }
-                        
-                        if (originalAstOffset > callRange.getEnd()) {
-                            index = 0;
-                            call = node;
-                            anchorOffset = callRange.getEnd()+1;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (index != -1 && haveSanitizedComma && call != null) {
-                Node an = null;
-                if (call.nodeId == NodeType.FCALLNODE) {
-                    an = ((FCallNode)call).getArgsNode();
-                } else if (call.nodeId == NodeType.CALLNODE) {
-                    an = ((CallNode)call).getArgsNode();
-                }
-                if (an != null && index < an.childNodes().size() &&
-                        ((Node)an.childNodes().get(index)).nodeId == NodeType.HASHNODE) {
-                    // We should stay within the hashnode, so counteract the
-                    // index++ which follows this if-block
-                    index--;
-                }
-
-                // Adjust the index to account for our removed
-                // comma
-                index++;
-            }
-            
-            if ((call == null) || (index == -1)) {
-                callLineStart = -1;
-                callMethod = null;
-                return false;
-            } else if (targetMethod == null) {
-                // Look up the
-                // See if we can find the method corresponding to this call
-                targetMethod = new RubyDeclarationFinder().findMethodDeclaration(info, call, path, 
-                        alternativesHolder);
-                if (targetMethod == null) {
-                    return false;
-                }
-            }
-
-            callLineStart = currentLineStart;
-            callMethod = targetMethod;
-
-            methodHolder[0] = callMethod;
-            parameterIndexHolder[0] = index;
-
-            // TODO - if you're in a splat node, I should be highlighting the splat node!!
-            if (anchorOffset == -1) {
-                anchorOffset = call.getPosition().getStartOffset(); // TODO - compute
-            }
-            anchorOffsetHolder[0] = anchorOffset;
-        } catch (BadLocationException ble) {
-            Exceptions.printStackTrace(ble);
-            return false;
-        }
-
-        return true;
-    }
-    
     private boolean addParameters(List<CompletionProposal> proposals, CompletionRequest request) {
         IndexedMethod[] methodHolder = new IndexedMethod[1];
         @SuppressWarnings("unchecked")
         Set<IndexedMethod>[] alternatesHolder = new Set[1];
         int[] paramIndexHolder = new int[1];
         int[] anchorOffsetHolder = new int[1];
-        CompilationInfo info = request.info;
+        ParserResult info = request.parserResult;
         int lexOffset = request.lexOffset;
         int astOffset = request.astOffset;
-        if (!computeMethodCall(info, lexOffset, astOffset,
+        if (!RubyMethodCompleter.computeMethodCall(info, lexOffset, astOffset,
                 methodHolder, paramIndexHolder, anchorOffsetHolder, alternatesHolder, request.kind)) {
 
             return false;
@@ -2015,7 +1043,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     }
 
     private void completeModels(List<CompletionProposal> proposals, IndexedMethod target, CompletionRequest request, boolean isLastArg) {
-        Set<IndexedClass> clz = request.index.getSubClasses(request.prefix, "ActiveRecord::Base", request.kind, RubyIndex.SOURCE_SCOPE);
+        Set<IndexedClass> clz = request.index.getSubClasses(request.prefix, RubyIndex.ACTIVE_RECORD_BASE, request.kind);
         
         String prefix = request.prefix;
         // I originally stripped ":" to make direct (INameNode)getName()
@@ -2051,15 +1079,15 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     
 
     // TODO: Move to the top
-    public CodeCompletionResult complete(CodeCompletionContext context) {
-        CompilationInfo info = context.getInfo();
+    public CodeCompletionResult complete(final CodeCompletionContext context) {
+        ParserResult ir = context.getParserResult();
         int lexOffset = context.getCaretOffset();
         String prefix = context.getPrefix();
-        NameKind kind = context.getNameKind();
+        QuerySupport.Kind kind = context.isPrefixMatch() ? QuerySupport.Kind.PREFIX : QuerySupport.Kind.EXACT;
         QueryType queryType = context.getQueryType();
         this.caseSensitive = context.isCaseSensitive();
 
-        final int astOffset = AstUtilities.getAstOffset(info, lexOffset);
+        final int astOffset = AstUtilities.getAstOffset(ir, lexOffset);
         if (astOffset == -1) {
             return null;
         }
@@ -2074,20 +1102,20 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
 
         anchor = lexOffset - prefix.length();
 
-        final RubyIndex index = RubyIndex.get(info.getIndex(RubyInstallation.RUBY_MIME_TYPE), info.getFileObject());
+        final RubyIndex index = RubyIndex.get(ir);
 
-        final Document document = info.getDocument();
+        final Document document = RubyUtils.getDocument(ir);
         if (document == null) {
             return CodeCompletionResult.NONE;
         }
 
         // TODO - move to LexUtilities now that this applies to the lexing offset?
-        lexOffset = AstUtilities.boundCaretOffset(info, lexOffset);
+        lexOffset = AstUtilities.boundCaretOffset(ir, lexOffset);
 
         // Discover whether we're in a require statement, and if so, use special completion
         final TokenHierarchy<Document> th = TokenHierarchy.get(document);
         final BaseDocument doc = (BaseDocument)document;
-        final FileObject fileObject = info.getFileObject();
+        final FileObject fileObject = RubyUtils.getFileObject(ir);
         
         boolean showLower = true;
         boolean showUpper = true;
@@ -2124,24 +1152,15 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         
         // Carry completion context around since this logic is split across lots of methods
         // and I don't want to pass dozens of parameters from method to method; just pass
-        // a request context with supporting info needed by the various completion helpers i
-        CompletionRequest request = new CompletionRequest();
-        request.completionResult = completionResult;
-        request.lexOffset = lexOffset;
-        request.astOffset = astOffset;
-        request.index = index;
-        request.doc = doc;
-        request.info = info;
-        request.prefix = prefix;
-        request.th = th;
-        request.kind = kind;
-        request.queryType = queryType;
-        request.fileObject = fileObject;
+        // a request context with supporting parserResult needed by the various completion helpers.
+        CompletionRequest request = new CompletionRequest(
+                completionResult, th, ir, lexOffset, astOffset,
+                doc, prefix, index, kind, queryType, fileObject);
         
         // See if we're inside a string or regular expression and if so,
         // do completions applicable to strings - require-completion,
         // escape codes for quoted strings and regular expressions, etc.
-        if (completeStrings(proposals, request)) {
+        if (RubyStringCompleter.complete(proposals, request, anchor, caseSensitive)) {
             completionResult.setFilterable(false);
             return completionResult;
         }
@@ -2150,11 +1169,10 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
 
         // Fields
         // This is a bit stupid at the moment, not looking at the current typing context etc.
-        Node root = AstUtilities.getRoot(info);
+        Node root = AstUtilities.getRoot(ir);
 
         if (root == null) {
-            completeKeywords(proposals, request, showSymbols);
-
+            RubyKeywordCompleter.complete(proposals, request, anchor, caseSensitive, showSymbols);
             return completionResult;
         }
 
@@ -2164,8 +1182,8 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         final int astLineEnd;
 
         try {
-            astLineBegin = AstUtilities.getAstOffset(info, Utilities.getRowStart(doc, lexOffset));
-            astLineEnd = AstUtilities.getAstOffset(info, Utilities.getRowEnd(doc, lexOffset));
+            astLineBegin = AstUtilities.getAstOffset(ir, Utilities.getRowStart(doc, lexOffset));
+            astLineEnd = AstUtilities.getAstOffset(ir, Utilities.getRowEnd(doc, lexOffset));
         } catch (BadLocationException ble) {
             Exceptions.printStackTrace(ble);
             return CodeCompletionResult.NONE;
@@ -2180,7 +1198,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         Map<String, Node> constants = new HashMap<String, Node>();
 
         final Node closest = path.leaf();
-        request.node = closest;
+        request.target = closest;
 
         // Don't try to add local vars, globals etc. as part of calls or class fqns
         if (call.getLhs() == null) {
@@ -2239,7 +1257,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                 if (prefix.startsWith("$") || showSymbols) {
                     completeGlobals(proposals, request, showSymbols);
                     // Dollar variables too
-                    completeKeywords(proposals, request, showSymbols);
+                    RubyKeywordCompleter.complete(proposals, request, anchor, caseSensitive, showSymbols);
                     if (!showSymbols) {
                         return completionResult;
                     }
@@ -2248,11 +1266,12 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         }
 
         // TODO: should only include fields etc. down to caret location??? Decide. (Depends on language semantics. Can I have forward referemces?
-        if (showUpper || showSymbols) {
+        if (call.isConstantExpected()) {
             addConstants(root, constants);
+            RubyConstantCompleter.complete(proposals, request, anchor, caseSensitive, call);
         }
         
-        // If we're in a call, add in some info and help for the code completion call
+        // If we're in a call, add in some parserResult and help for the code completion call
         boolean inCall = addParameters(proposals, request);
 
         // Code completion from the index.
@@ -2270,7 +1289,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                 }
 
                 if ((fqn != null) &&
-                        completeObjectMethod(proposals, request, fqn, call)) {
+                        RubyMethodCompleter.complete(proposals, request, fqn, call, anchor, caseSensitive)) {
                     return completionResult;
                 }
 
@@ -2282,6 +1301,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                     Set<IndexedMethod> inheritedMethods =
                         index.getInheritedMethods(fqn, prefix, kind);
 
+                    inheritedMethods = RubyDynamicFindersCompleter.proposeDynamicMethods(inheritedMethods, proposals, request, anchor);
                     // Handle action view completion for RHTML and Markaby files
                     if (RubyUtils.isRhtmlFile(fileObject) || RubyUtils.isMarkabyFile(fileObject)) {
                         addActionViewMethods(inheritedMethods, fileObject, index, prefix, kind);
@@ -2354,21 +1374,21 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                     (!call.isMethodExpected() && call.getLhs() != null && call.getLhs().length() > 0)))
                     || (showSymbols && !inCall)) {
                 // TODO - allow method calls if you're already entered the first char!
-                completeClasses(proposals, request, showSymbols, call);
+                RubyClassCompleter.complete(proposals, request, anchor, caseSensitive, call, showSymbols);
             }
         }
-        assert (kind == NameKind.PREFIX) || (kind == NameKind.CASE_INSENSITIVE_PREFIX) ||
-        (kind == NameKind.EXACT_NAME);
+        assert (kind == QuerySupport.Kind.PREFIX) || (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX) ||
+        (kind == QuerySupport.Kind.EXACT);
 
         // TODO
         // Remove fields and variables whose names are already taken, e.g. do a fields.removeAll(variables) etc.
         for (String variable : variables.keySet()) {
-            if (((kind == NameKind.EXACT_NAME) && prefix.equals(variable)) ||
-                    ((kind != NameKind.EXACT_NAME) && startsWith(variable, prefix))) {
+            if (((kind == QuerySupport.Kind.EXACT) && prefix.equals(variable)) ||
+                    ((kind != QuerySupport.Kind.EXACT) && startsWith(variable, prefix))) {
                 Node node = variables.get(variable);
 
                 if (!overlapsLine(node, astLineBegin, astLineEnd)) {
-                    AstElement co = new AstNameElement(info, node, variable,
+                    AstElement co = new AstNameElement(ir, node, variable,
                             ElementKind.VARIABLE);
                     RubyCompletionItem item = new RubyCompletionItem(co, anchor, request);
                     item.setSmart(true);
@@ -2383,15 +1403,15 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         }
 
         for (String field : fields.keySet()) {
-            if (((kind == NameKind.EXACT_NAME) && prefix.equals(field)) ||
-                    ((kind != NameKind.EXACT_NAME) && startsWith(field, prefix))) {
+            if (((kind == QuerySupport.Kind.EXACT) && prefix.equals(field)) ||
+                    ((kind != QuerySupport.Kind.EXACT) && startsWith(field, prefix))) {
                 Node node = fields.get(field);
 
                 if (overlapsLine(node, astLineBegin, astLineEnd)) {
                     continue;
                 }
 
-                Element co = new AstFieldElement(info, node);
+                Element co = new AstFieldElement(ir, node);
                 FieldItem item = new FieldItem(co, anchor, request);
                 item.setSmart(true);
 
@@ -2405,7 +1425,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
 
         // TODO - model globals and constants using different icons / etc.
         for (String variable : globals.keySet()) {
-            // TODO - kind.EXACT_NAME
+            // TODO - kind.EXACT
             if (startsWith(variable, prefix) ||
                     (showSymbols && startsWith(variable.substring(1), prefix))) {
                 Node node = globals.get(variable);
@@ -2414,7 +1434,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                     continue;
                 }
 
-                AstElement co = new AstNameElement(info, node, variable,
+                AstElement co = new AstNameElement(ir, node, variable,
                         ElementKind.VARIABLE);
                 RubyCompletionItem item = new RubyCompletionItem(co, anchor, request);
                 item.setSmart(true);
@@ -2426,11 +1446,11 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                 proposals.add(item);
             }
         }
-
+        
         // TODO - model globals and constants using different icons / etc.
         for (String variable : constants.keySet()) {
-            if (((kind == NameKind.EXACT_NAME) && prefix.equals(variable)) ||
-                    ((kind != NameKind.EXACT_NAME) && startsWith(variable, prefix))) {
+            if (((kind == QuerySupport.Kind.EXACT) && prefix.equals(variable)) ||
+                    ((kind != QuerySupport.Kind.EXACT) && startsWith(variable, prefix))) {
                 // Skip constants that are known to be classes
                 Node node = constants.get(variable);
 
@@ -2440,14 +1460,14 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
 
                 //                ComObject co;
                 //                if (isClassName(variable)) {
-                //                    co = JRubyNode.create(node, null);  
+                //                    co = JRubyNode.create(target, null);
                 //                    if (co == null) {
                 //                        continue;
                 //                    }
                 //                } else {
                 //                    co = new DefaultComVariable(variable, false, -1, -1);
-                //                    ((DefaultComVariable)co).setNode(node);
-                AstElement co = new AstNameElement(info, node, variable,
+                //                    ((DefaultComVariable)co).setNode(target);
+                AstElement co = new AstNameElement(ir, node, variable,
                         ElementKind.VARIABLE);
 
                 RubyCompletionItem item = new RubyCompletionItem(co, anchor, request);
@@ -2461,12 +1481,12 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             }
         }
 
-        if (completeKeywords(proposals, request, showSymbols)) {
+        if (RubyKeywordCompleter.complete(proposals, request, anchor, caseSensitive, showSymbols)) {
             return completionResult;
         }
 
         if (queryType == QueryType.DOCUMENTATION) {
-            proposals = filterDocumentation(proposals, root, doc, info, astOffset, lexOffset, prefix, path,
+            proposals = filterDocumentation(proposals, root, doc, ir, astOffset, lexOffset, prefix, path,
                     index);
         }
         } finally {
@@ -2477,7 +1497,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     }
         
     private void addActionViewMethods(Set<IndexedMethod> inheritedMethods, FileObject fileObject, RubyIndex index, String prefix, 
-            NameKind kind) { 
+            QuerySupport.Kind kind) { 
         // RHTML and Markaby: Add in the helper methods etc. from the associated files
         boolean isMarkaby = RubyUtils.isMarkabyFile(fileObject);
         if (isMarkaby) {
@@ -2508,7 +1528,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     }       
 
     private void addActionViewFields(Set<IndexedField> inheritedFields, FileObject fileObject, RubyIndex index, String prefix, 
-            NameKind kind) { 
+            QuerySupport.Kind kind) { 
         // RHTML and Markaby: Add in the helper methods etc. from the associated files
         boolean isMarkaby = RubyUtils.isMarkabyFile(fileObject);
         if (isMarkaby) {
@@ -2548,12 +1568,12 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
      */
     // TODO - pass in request object here!
     private List<CompletionProposal> filterDocumentation(List<CompletionProposal> proposals,
-        Node root, BaseDocument doc, CompilationInfo info, int astOffset, int lexOffset, String name,
+        Node root, BaseDocument doc, ParserResult parserResult, int astOffset, int lexOffset, String name,
         AstPath path, RubyIndex index) {
         // Look to see if this symbol is either a "class Foo" or a "def foo", and if we invoke
         // completion on it, prefer this element provided it has documentation
         List<CompletionProposal> candidates = new ArrayList<CompletionProposal>();
-        FileObject fo = info.getFileObject();
+        FileObject fo = RubyUtils.getFileObject(parserResult);
         Map<IndexedElement, CompletionProposal> elementMap =
             new HashMap<IndexedElement, CompletionProposal>();
         Set<IndexedMethod> methods = new HashSet<IndexedMethod>();
@@ -2595,16 +1615,16 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             Node node = AstUtilities.findBySignature(root, signature);
 
             if (node != null) {
-                ISourcePosition pos = node.getPosition();
-                int startPos = LexUtilities.getLexerOffset(info, pos.getStartOffset());
+                SourcePosition pos = node.getPosition();
+                int startPos = LexUtilities.getLexerOffset(parserResult, pos.getStartOffset());
 
                 try {
-                    int lineBegin = AstUtilities.getAstOffset(info, Utilities.getRowFirstNonWhite(doc, startPos));
-                    int lineEnd = AstUtilities.getAstOffset(info, Utilities.getRowEnd(doc, startPos));
+                    int lineBegin = AstUtilities.getAstOffset(parserResult, Utilities.getRowFirstNonWhite(doc, startPos));
+                    int lineEnd = AstUtilities.getAstOffset(parserResult, Utilities.getRowEnd(doc, startPos));
 
                     if ((astOffset >= lineBegin) && (astOffset <= lineEnd)) {
                         // Look for documentation
-                        List<String> rdoc = AstUtilities.gatherDocumentation(info, doc, node);
+                        List<String> rdoc = AstUtilities.gatherDocumentation(parserResult.getSnapshot(), node);
 
                         if (rdoc != null && !rdoc.isEmpty()) {
                             return Collections.singletonList(candidate);
@@ -2620,12 +1640,13 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         // Try to pick the best match among many documentation entries: Heuristic time.
         // Similar to heuristics used for Go To Declaration: Prefer long documentation,
         // prefer documentation related to the require-statements in this file, etc.
-        RubyDeclarationFinder finder = new RubyDeclarationFinder();
         IndexedElement candidate = null;
 
         if (!classes.isEmpty()) {
-            candidate = finder.findBestClassMatch(classes, path, path.leaf(), index);
+            RubyClassDeclarationFinder cdf = new RubyClassDeclarationFinder(parserResult, null, path, index, path.leaf());
+            candidate = cdf.findBestElementMatch(classes);
         } else if (!methods.isEmpty()) {
+            RubyDeclarationFinder finder = new RubyDeclarationFinder();
             candidate = finder.findBestMethodMatch(name, methods, doc, astOffset, lexOffset, path,
                     path.leaf(), index);
         }
@@ -2654,10 +1675,10 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     //        return Character.isLowerCase(s.charAt(1));
     //    }
     private boolean overlapsLine(Node node, int lineBegin, int lineEnd) {
-        ISourcePosition pos = node.getPosition();
+        SourcePosition pos = node.getPosition();
 
         //return (((pos.getStartOffset() <= lineEnd) && (pos.getEndOffset() >= lineBegin)));
-        // Don't look to see if the line is within the node. See if the node is started on this line (where
+        // Don't look to see if the line is within the target. See if the target is started on this line (where
         // the declaration is, e.g. it might be an incomplete line.
         return ((pos.getStartOffset() >= lineBegin) && (pos.getStartOffset() <= lineEnd));
     }
@@ -2682,7 +1703,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     //    }
 
     static void addLocals(Node node, Map<String, Node> variables) {
-        switch (node.nodeId) {
+        switch (node.getNodeType()) {
         case LOCALASGNNODE: {
             String name = ((INameNode)node).getName();
 
@@ -2697,7 +1718,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             // However, I've gotta find the parameter nodes themselves too!
             ArgsNode an = (ArgsNode)node;
 
-            if (an.getRequiredArgsCount() > 0) {
+            if (an.getRequiredCount() > 0) {
                 List<Node> args = an.childNodes();
 
                 for (Node arg : args) {
@@ -2716,22 +1737,22 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             }
 
             // Rest args
-            if (an.getRestArgNode() != null) {
-                String name = an.getRestArgNode().getName();
-                variables.put(name, an.getRestArgNode());
+            if (an.getRest() != null) {
+                String name = an.getRest().getName();
+                variables.put(name, an.getRest());
             }
 
             // Block args
-            if (an.getBlockArgNode() != null) {
-                String name = an.getBlockArgNode().getName();
-                variables.put(name, an.getBlockArgNode());
+            if (an.getBlock() != null) {
+                String name = an.getBlock().getName();
+                variables.put(name, an.getBlock());
             }
             
             break;
         }
 
-        //        } else if (node instanceof AliasNode) {
-        //            AliasNode an = (AliasNode)node;
+        //        } else if (target instanceof AliasNode) {
+        //            AliasNode an = (AliasNode)target;
         // Tricky -- which NODE do we add here? Completion creator needs to be aware of new name etc. Do later.
         // Besides, do we show it as a field or a method or what?
 
@@ -2752,7 +1773,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             if (child.isInvisible()) {
                 continue;
             }
-            switch (child.nodeId) {
+            switch (child.getNodeType()) {
             case DEFNNODE:
             case DEFSNODE:
             case CLASSNODE:
@@ -2767,15 +1788,15 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     }
 
     static void addDynamic(Node node, Map<String, Node> variables) {
-        if (node.nodeId == NodeType.DASGNNODE) {
+        if (node.getNodeType() == NodeType.DASGNNODE) {
             String name = ((INameNode)node).getName();
 
             if (!variables.containsKey(name)) {
                 variables.put(name, node);
             }
 
-            //} else if (node instanceof ArgsNode) {
-            //    ArgsNode an = (ArgsNode)node;
+            //} else if (target instanceof ArgsNode) {
+            //    ArgsNode an = (ArgsNode)target;
             //
             //    if (an.getArgsCount() > 0) {
             //        List<Node> args = an.childNodes();
@@ -2798,8 +1819,8 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             //            }
             //        }
             //    }
-            //        } else if (!ignoreAlias && node instanceof AliasNode) {
-            //            AliasNode an = (AliasNode)node;
+            //        } else if (!ignoreAlias && target instanceof AliasNode) {
+            //            AliasNode an = (AliasNode)target;
             //
             //            if (an.getNewName().equals(name)) {
             //                OffsetRange range = AstUtilities.getAliasNewRange(an);
@@ -2816,7 +1837,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             if (child.isInvisible()) {
                 continue;
             }
-            switch (child.nodeId) {
+            switch (child.getNodeType()) {
             case ITERNODE:
             //case BLOCKNODE:
             case DEFNNODE:
@@ -2832,7 +1853,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
     }
 
     private void addConstants(Node node, Map<String, Node> constants) {
-        if (node.nodeId == NodeType.CONSTDECLNODE) {
+        if (node.getNodeType() == NodeType.CONSTDECLNODE) {
             constants.put(((INameNode)node).getName(), node);
         }
 
@@ -2910,7 +1931,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
      * definition have associated rdoc, as well as choosing between them based on the
      * require statements in the file.
      */
-    private IndexedElement findDocumentationEntry(Node root, IndexedElement obj) {
+    static IndexedElement findDocumentationEntry(Node root, IndexedElement obj) {
         // 1. Find entries known to have documentation
         String fqn = obj.getSignature();
         Set<?extends IndexedElement> result = obj.getIndex().getDocumented(fqn);
@@ -2950,7 +1971,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         for (IndexedElement o : result) {
             String url = o.getFileUrl();
 
-            if (url.indexOf("rubystubs") != -1) {
+            if (RubyUtils.isRubyStubsURL(url)) {
                 candidates.add(o);
             }
         }
@@ -2973,12 +1994,12 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
      *   the documentation for that symbol!
      * 
      * @param element The element we want to look up comments for
-     * @param info The (optional) compilation info for a document referencing the element.
+     * @param parserResult The (optional) compilation parserResult for a document referencing the element.
      *   This is used to consult require-statements in the given compilation context etc.
      *   to choose among many alternatives. May be null, in which case the element had
      *   better be an IndexedElement.
      */
-    private List<String> getComments(CompilationInfo info, Element element) {
+    static List<String> getComments(ParserResult info, Element element) {
         assert info != null || element instanceof IndexedElement;
         
         if (element == null) {
@@ -3003,7 +2024,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                 element = com;
             }
 
-            node = AstUtilities.getForeignNode(com, (Node[])null);
+            node = AstUtilities.getForeignNode(com);
 
             if (node == null) {
                 return null;
@@ -3023,18 +2044,12 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         // When I started looking in the document itself, I realized I might as well
         // do all the manipulation on the document, since having the Comment nodes
         // don't particularly help.
-        Document doc = null;
-        BaseDocument baseDoc = null;
-
+        Snapshot snapshot;
         if (element instanceof IndexedElement) {
-            doc = ((IndexedElement)element).getDocument();
-            info = null;
+            FileObject f = ((IndexedElement) element).getFileObject();
+            snapshot = Source.create(f).createSnapshot();
         } else if (info != null) {
-            doc = info.getDocument();
-        }
-
-        if (doc instanceof BaseDocument) {
-            baseDoc = (BaseDocument)doc;
+            snapshot = info.getSnapshot();
         } else {
             return null;
         }
@@ -3053,7 +2068,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                 String name = AstUtilities.getClassOrModuleName(clz);
 
                 if (name.equals(className)) {
-                    comments = AstUtilities.gatherDocumentation(info, baseDoc, clz);
+                    comments = AstUtilities.gatherDocumentation(snapshot, clz);
 
                     if ((comments != null) && (!comments.isEmpty())) {
                         break;
@@ -3061,7 +2076,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                 }
             }
         } else {
-            comments = AstUtilities.gatherDocumentation(info, baseDoc, node);
+            comments = AstUtilities.gatherDocumentation(snapshot, node);
         }
 
         if ((comments == null) || (comments.isEmpty())) {
@@ -3071,7 +2086,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         return comments;
     }
     
-    public String document(CompilationInfo info, ElementHandle handle) {
+    public String document(ParserResult info, ElementHandle handle) {
         Element element = null;
         if (handle instanceof ElementHandle.UrlHandle) {
             String url = ((ElementHandle.UrlHandle)handle).getUrl();
@@ -3176,7 +2191,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         return null;
     }
     
-    public Set<String> getApplicableTemplates(CompilationInfo info, int selectionBegin,
+    public Set<String> getApplicableTemplates(ParserResult info, int selectionBegin,
         int selectionEnd) {
 
         // TODO - check the code at the AST path and determine whether it makes sense to
@@ -3186,7 +2201,13 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         boolean valid = false;
 
         if (selectionEnd != -1) {
+            BaseDocument doc = RubyUtils.getDocument(info);
+            if (doc == null) {
+                return Collections.emptySet();
+            }
+
             try {
+                doc.readLock();
                 if (selectionBegin == selectionEnd) {
                     return Collections.emptySet();
                 } else if (selectionEnd < selectionBegin) {
@@ -3194,11 +2215,6 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                     selectionBegin = selectionEnd;
                     selectionEnd = temp;
                 }
-                BaseDocument doc = (BaseDocument) info.getDocument();
-                if (doc == null) {
-                    return Collections.emptySet();
-                }
-
                 boolean startLineIsEmpty = Utilities.isRowEmpty(doc, selectionBegin);
                 boolean endLineIsEmpty = Utilities.isRowEmpty(doc, selectionEnd);
 
@@ -3231,6 +2247,8 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
                 }
             } catch (BadLocationException ble) {
                 Exceptions.printStackTrace(ble);
+            } finally {
+                doc.readUnlock();
             }
         } else {
             valid = true;
@@ -3243,7 +2261,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         }
     }
 
-    private String suggestName(CompilationInfo info, int caretOffset, String prefix, Map params) {
+    private String suggestName(ParserResult info, int caretOffset, String prefix, Map params) {
         // Look at the given context, compute fields and see if I can find a free name
         caretOffset = AstUtilities.boundCaretOffset(info, caretOffset);
 
@@ -3333,7 +2351,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         }
     }
 
-    public String resolveTemplateVariable(String variable, CompilationInfo info, int caretOffset,
+    public String resolveTemplateVariable(String variable, ParserResult result, int caretOffset,
         String name, Map params) {
         if (variable.equals(KEY_PIPE)) {
             return "||";
@@ -3341,11 +2359,11 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
 
         // Old-style format - support temporarily
         if (variable.equals(ATTR_UNUSEDLOCAL)) { // TODO REMOVEME
-            return suggestName(info, caretOffset, name, params);            
+            return suggestName(result, caretOffset, name, params);
         }
 
         if (params != null && params.containsKey(ATTR_UNUSEDLOCAL)) {
-            return suggestName(info, caretOffset, name, params);
+            return suggestName(result, caretOffset, name, params);
         }
 
         if ((!(variable.equals(KEY_METHOD) || variable.equals(KEY_METHOD_FQN) ||
@@ -3355,9 +2373,9 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             return null;
         }
 
-        caretOffset = AstUtilities.boundCaretOffset(info, caretOffset);
+        caretOffset = AstUtilities.boundCaretOffset(result, caretOffset);
 
-        Node root = AstUtilities.getRoot(info);
+        Node root = AstUtilities.getRoot(result);
 
         if (root == null) {
             return null;
@@ -3394,9 +2412,8 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
             ClassNode node = AstUtilities.findClass(path);
 
             if (node != null) {
-                Index idx = info.getIndex(RubyInstallation.RUBY_MIME_TYPE);
-                if (idx != null) {
-                    RubyIndex index = RubyIndex.get(idx, info.getFileObject());
+                RubyIndex index = RubyIndex.get(result);
+                if (index != null) {
                     IndexedClass cls = index.getSuperclass(AstUtilities.getFqnName(path));
 
                     if (cls != null) {
@@ -3415,21 +2432,21 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         } else if (variable.equals(KEY_CLASS_FQN)) {
             return AstUtilities.getFqnName(path);
         } else if (variable.equals(KEY_FILE)) {
-            return FileUtil.toFile(info.getFileObject()).getName();
+            return FileUtil.toFile(result.getSnapshot().getSource().getFileObject()).getName();
         } else if (variable.equals(KEY_PATH)) {
-            return FileUtil.toFile(info.getFileObject()).getPath();
+            return FileUtil.toFile(RubyUtils.getFileObject(result)).getPath();
         }
 
         return null;
     }
 
-    public ParameterInfo parameters(CompilationInfo info, int lexOffset, CompletionProposal proposal) {
+    public ParameterInfo parameters(ParserResult info, int lexOffset, CompletionProposal proposal) {
         IndexedMethod[] methodHolder = new IndexedMethod[1];
         int[] paramIndexHolder = new int[1];
         int[] anchorOffsetHolder = new int[1];
         int astOffset = AstUtilities.getAstOffset(info, lexOffset);
-        if (!computeMethodCall(info, lexOffset, astOffset,
-                methodHolder, paramIndexHolder, anchorOffsetHolder, null, NameKind.PREFIX)) {
+        if (!RubyMethodCompleter.computeMethodCall(info, lexOffset, astOffset,
+                methodHolder, paramIndexHolder, anchorOffsetHolder, null, QuerySupport.Kind.PREFIX)) {
 
             return ParameterInfo.NONE;
         }
@@ -3463,759 +2480,11 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         return ParameterInfo.NONE;
     }
     
-    private static class CompletionRequest {
-        private DefaultCompletionResult completionResult;
-        private TokenHierarchy<Document> th;
-        private CompilationInfo info;
-        private AstPath path;
-        private Node node;
-        private int lexOffset;
-        private int astOffset;
-        private BaseDocument doc;
-        private String prefix;
-        private RubyIndex index;
-        private NameKind kind;
-        private QueryType queryType;
-        private FileObject fileObject;
-    }
-
-    private class RubyCompletionItem extends DefaultCompletionProposal {
-        protected CompletionRequest request;
-        protected Element element;
-        protected boolean symbol;
-
-        private RubyCompletionItem(Element element, int anchorOffset, CompletionRequest request) {
-            this.element = element;
-            this.anchorOffset = anchorOffset;
-            this.request = request;
-        }
-
-        @Override
-        public String getName() {
-            return element.getName();
-        }
-
-        public void setSymbol(boolean symbol) {
-            this.symbol = symbol;
-        }
-
-        @Override
-        public String getInsertPrefix() {
-            if (symbol) {
-                return ":" + getName();
-            } else {
-                return getName();
-            }
-        }
-
-        public ElementHandle getElement() {
-            return element;
-        }
-
-        @Override
-        public ElementKind getKind() {
-            return element.getKind();
-        }
-
-        @Override
-        public ImageIcon getIcon() {
-            return null;
-        }
-
-        @Override
-        public String getRhsHtml(HtmlFormatter formatter) {
-            if (element.getKind() == ElementKind.GLOBAL && (element instanceof IndexedVariable)) {
-                IndexedVariable idx = (IndexedVariable)element;
-
-                String in = idx.getIn();
-                if (in != null) {
-                    formatter.appendText(in);
-                    return formatter.getText();
-                }
-            }
-            
-            return null;
-        }
-
-        @Override
-        public Set<Modifier> getModifiers() {
-            return element.getModifiers();
-        }
-
-        @Override
-        public String toString() {
-            String cls = getClass().getName();
-            cls = cls.substring(cls.lastIndexOf('.') + 1);
-
-            return cls + "(" + getKind() + "): " + getName();
-        }
-
-        @Override
-        public String[] getParamListDelimiters() {
-            return new String[] { "(", ")" }; // NOI18N
-        }
-    }
-
-    private class MethodItem extends RubyCompletionItem {
-
-        private final IndexedMethod method;
-
-        MethodItem(IndexedMethod element, int anchorOffset, CompletionRequest request) {
-            super(element, anchorOffset, request);
-            this.method = element;
-        }
-
-        @Override
-        public String getLhsHtml(HtmlFormatter formatter) {
-            ElementKind kind = getKind();
-            boolean emphasize = !method.isInherited();
-            if (emphasize) {
-                formatter.emphasis(true);
-            }
-            formatter.name(kind, true);
-            formatter.appendText(getName());
-            formatter.name(kind, false);
-            if (emphasize) {
-                formatter.emphasis(false);
-            }
-
-            Collection<String> parameters = method.getParameters();
-
-            if ((parameters != null) && (!parameters.isEmpty())) {
-                formatter.appendHtml("("); // NOI18N
-
-                Iterator<String> it = parameters.iterator();
-
-                while (it.hasNext()) { // && tIt.hasNext()) {
-                    formatter.parameters(true);
-                    formatter.appendText(it.next());
-                    formatter.parameters(false);
-
-                    if (it.hasNext()) {
-                        formatter.appendText(", "); // NOI18N
-                    }
-                }
-
-                formatter.appendHtml(")"); // NOI18N
-            }
-            
-            if (method.hasBlock() && !method.isBlockOptional()) {
-                formatter.appendText(" { }");
-            }
-
-            return formatter.getText();
-        }
-
-        @Override
-        public String getRhsHtml(HtmlFormatter formatter) {
-            // Top level methods (defined on Object) : print
-            // the defining file instead
-            if (method.isTopLevel() && method.getRequire() != null) {
-                formatter.appendText(method.getRequire());
-
-                return formatter.getText();
-            }
-
-            String in = method.getIn();
-
-            if (in != null) {
-                formatter.appendText(in);
-                return formatter.getText();
-            } else {
-                return null;
-            }
-        }
-
-        @Override
-        public String getCustomInsertTemplate() {
-            final String insertPrefix = getInsertPrefix();
-            List<String> params = method.getParameters();
-            
-            String startDelimiter;
-            String endDelimiter;
-            boolean hasBlock = false;
-            int paramCount = params.size();
-            int printArgs = paramCount;
-
-            boolean hasHashArgs = method.getEncodedAttributes() != null &&
-                    method.getEncodedAttributes().indexOf("=>") != -1; // NOI18N
-
-            if (paramCount > 0 && params.get(paramCount-1).startsWith("&")) { // NOI18N
-                hasBlock = true;
-                printArgs--;
-
-                // Force parentheses around the call when using { } blocks
-                // to avoid presedence problems
-                startDelimiter = "("; // NOI18N
-                endDelimiter = ")"; // NOI18N
-            } else if (method.hasBlock()) {
-                hasBlock = true;
-                if (paramCount > 0) {
-                    // Force parentheses around the call when using { } blocks
-                    // to avoid presedence problems
-                    startDelimiter = "("; // NOI18N
-                    endDelimiter = ")"; // NOI18N
-                } else {
-                    startDelimiter = "";
-                    endDelimiter = "";
-                }
-            } else {
-                String[] delimiters = getParamListDelimiters();
-                assert delimiters.length == 2;
-                startDelimiter = delimiters[0];
-                endDelimiter = delimiters[1];
-                
-                // When there are no args, don't use parentheses - and no spaces
-                // Don't add two blank spaces for the case where there are no args
-                if (printArgs == 0 /*&& startDelimiter.length() > 0 && startDelimiter.charAt(0) == ' '*/) {
-                    startDelimiter = "";
-                    endDelimiter = "";
-                }
-            }
-
-            StringBuilder sb = new StringBuilder();
-            sb.append(insertPrefix);
-
-            if (hasHashArgs) {
-                // Uhm, no don't do this until we get to the first arg that takes a hash
-                // For methods with hashes, rely on code completion to insert args
-                sb.append(" ");
-                return sb.toString();
-            }
-
-            sb.append(startDelimiter);
-            
-            int id = 1;
-            for (int i = 0; i < printArgs; i++) {
-                String paramDesc = params.get(i);
-                sb.append("${"); //NOI18N
-                // Ensure that we don't use one of the "known" logical parameters
-                // such that a parameter like "path" gets replaced with the source file
-                // path!
-                sb.append("ruby-cc-"); // NOI18N
-                sb.append(Integer.toString(id++));
-                sb.append(" default=\""); // NOI18N
-                sb.append(paramDesc);
-                sb.append("\""); // NOI18N
-                sb.append("}"); //NOI18N
-                if (i < printArgs-1) {
-                    sb.append(", "); //NOI18N
-                }
-            }
-            sb.append(endDelimiter);
-            
-            if (hasBlock) {
-                String[] blockArgs = null;
-                String attrs = method.getEncodedAttributes();
-                int yieldNameBegin = attrs.indexOf(';');
-                if (yieldNameBegin != -1) {
-                    int yieldNameEnd = attrs.indexOf(';', yieldNameBegin+1);
-                    if (yieldNameEnd != -1) {
-                        blockArgs = attrs.substring(yieldNameBegin+1,
-                                yieldNameEnd).split(",");
-                    }
-                }
-                // TODO - if it's not an indexed class, pull this from the
-                // method comments instead!
-                
-                sb.append(" { |"); // NOI18N
-                if (blockArgs != null && blockArgs.length > 0) {
-                    for (int i = 0; i < blockArgs.length; i++) {
-                        if (i > 0) {
-                            sb.append(","); // NOI18N
-                        }
-                        String arg = blockArgs[i];
-                        sb.append("${unusedlocal defaults=\""); // NOI18N
-                        sb.append(arg);
-                        sb.append("\"}"); // NOI18N
-                    }
-                } else {
-                    sb.append("${unusedlocal defaults=\"i,e\"}"); // NOI18N
-                }
-                sb.append("| ${"); // NOI18N
-                sb.append("ruby-cc-"); // NOI18N
-                sb.append(Integer.toString(id++));
-                sb.append(" default=\"\"} }${cursor}"); // NOI18N
-                
-            } else {
-                sb.append("${cursor}"); // NOI18N
-            }
-            
-            // Facilitate method parameter completion on this item
-            try {
-                callLineStart = Utilities.getRowStart(request.doc, anchorOffset);
-                callMethod = method;
-            } catch (BadLocationException ble) {
-                Exceptions.printStackTrace(ble);
-            }
-            
-            return sb.toString();
-        }
-        
-        @Override
-        public String[] getParamListDelimiters() {
-            // TODO - convert methods with NO parameters that take a block to insert { <here> }
-            String n = getName();
-            String in = element.getIn();
-            if ("Module".equals(in)) {
-                // Module.attr_ methods typically shouldn't use parentheses
-                if (n.startsWith("attr_"))  {
-                    return new String[] { " :", " " };
-                } else if (n.equals("include") || n.equals("import")) { // NOI18N
-                    return new String[] { " ", " " };
-                } else if (n.equals("include_package")) { // NOI18N
-                    return new String[] { " '", "'" }; // NOI18N
-                }
-            } else if ("Kernel".equals(in)) {
-                // Module.require: insert quotes!
-                if (n.equals("require")) { // NOI18N
-                    return new String[] { " '", "'" }; // NOI18N
-                } else if (n.equals("p")) {
-                    return new String[] { " ", " " }; // NOI18N
-                }
-            } else if ("Object".equals(in)) {
-                if (n.equals("include_class")) { // NOI18N
-                    return new String[] { " '", "'" }; // NOI18N
-                }
-            }
-            
-            if (forceCompletionSpaces()) {
-                // Can't have "" as the second arg because a bug causes pressing
-                // return to complete editing the last field (at he end of a buffer)
-                // such that the caret ends up BEFORE the last char instead of at the
-                // end of it
-                boolean ambiguous = false;
-                
-                AstPath path = request.path;
-                if (path != null) {
-                    Iterator<Node> it = path.leafToRoot();
-
-                    while (it.hasNext()) {
-                        Node node = it.next();
-
-                        if (AstUtilities.isCall(node)) {
-                            // We're in a call; see if it has parens
-                            // TODO - no problem with ambiguity if it's on a separate line, correct?
-                            
-                            // Is this the method we're trying to complete?
-                            if (node != request.node) {
-                                // See if the outer call has parentheses!
-                                ambiguous = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                if (ambiguous) {
-                    return new String[] { "(", ")" }; // NOI18N
-                } else {
-                    return new String[] { " ", " " }; // NOI18N
-                }
-            }
-
-            if (element instanceof IndexedElement) {
-                List<String> comments = getComments(null, element);
-                if (comments != null && !comments.isEmpty()) {
-                    // Look through the comment, attempting to identify
-                    // a usage of the current method and determine whether it
-                    // is using parentheses or not.
-                    // We only look for comments that look like code; e.g. they
-                    // are indented according to rdoc conventions.
-                    String name = getName();
-                    boolean spaces = false;
-                    boolean parens = false;
-                    for (String line : comments) {
-                        if (line.startsWith("#  ")) { // NOI18N
-                            // Look for usages - there could be many
-                            int i = 0;
-                            int length = line.length();
-                            while (true) {
-                                int index = line.indexOf(name, i);
-                                if (index == -1) {
-                                    break;
-                                }
-                                index += name.length();
-                                i = index;
-                                if (index < length) {
-                                    char c = line.charAt(index);
-                                    if (c == ' ') {
-                                        spaces = true;
-                                    } else if (c == '(') {
-                                        parens = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Only use spaces if no parens were seen and we saw spaces
-                    if (!parens && spaces) {
-                        //return new String[] { " ", "" }; // NOI18N
-                        // HACK because live code template editing doesn't seem to work - it places the caret at theront of the word when the last param is in the text!                        
-                        return new String[] { " ", " " }; // NOI18N
-                    }
-                }
-                
-                // Take a look at the method definition itself and look for parens there
-                
-            }
-
-            // Default - (,)
-            return super.getParamListDelimiters();
-        }
-
-        @Override
-        public ElementKind getKind() {
-            if (method.getMethodType() == IndexedMethod.MethodType.ATTRIBUTE) {
-                return ElementKind.ATTRIBUTE;
-            }
-
-            return element.getKind();
-        }
-    }
-
-    private class KeywordItem extends RubyCompletionItem {
-        
-        private static final String RUBY_KEYWORD = "org/netbeans/modules/ruby/jruby.png"; //NOI18N
-        private final String keyword;
-        private final String description;
-
-        KeywordItem(String keyword, String description, int anchorOffset, CompletionRequest request) {
-            super(null, anchorOffset, request);
-            this.keyword = keyword;
-            this.description = description;
-        }
-
-        @Override
-        public String getName() {
-            return keyword;
-        }
-
-        @Override
-        public ElementKind getKind() {
-            return ElementKind.KEYWORD;
-        }
-
-        @Override
-        public String getRhsHtml(final HtmlFormatter formatter) {
-            return null;
-        }
-
-        @Override
-        public String getLhsHtml(final HtmlFormatter formatter) {
-            ElementKind kind = getKind();
-            formatter.name(kind, true);
-            formatter.appendText(keyword);
-            formatter.appendText(" "); // NOI18N
-            formatter.name(kind, false);
-            if (description != null) {
-                formatter.appendHtml(description);
-            }
-            return formatter.getText();
-        }
-
-        @Override
-        public ImageIcon getIcon() {
-            if (keywordIcon == null) {
-                keywordIcon = new ImageIcon(org.openide.util.ImageUtilities.loadImage(RUBY_KEYWORD));
-            }
-
-            return keywordIcon;
-        }
-
-        @Override
-        public Set<Modifier> getModifiers() {
-            return Collections.emptySet();
-        }
-        
-        @Override
-        public ElementHandle getElement() {
-            // For completion documentation
-            return new KeywordElement(keyword);
-        }
-    }
-
-    private class ClassItem extends RubyCompletionItem {
-        ClassItem(Element element, int anchorOffset, CompletionRequest request) {
-            super(element, anchorOffset, request);
-        }
-
-        @Override
-        public String getRhsHtml(HtmlFormatter formatter) {
-            String in = ((ClassElement)element).getIn();
-
-            if (in != null) {
-                formatter.appendText(in);
-            } else {
-                return null;
-            }
-
-            return formatter.getText();
-        }
-    }
-
-    private class FieldItem extends RubyCompletionItem {
-        FieldItem(Element element, int anchorOffset, CompletionRequest request) {
-            super(element, anchorOffset, request);
-        }
-
-        @Override
-        public String getLhsHtml(HtmlFormatter formatter) {
-            if (element instanceof IndexedField) {
-                IndexedField field = (IndexedField)element;
-                boolean emphasize = !field.isInherited();
-                if (emphasize) {
-                    formatter.emphasis(true);
-                }
-                formatter.name(ElementKind.FIELD, true);
-                formatter.appendText(getName());
-                formatter.name(ElementKind.FIELD, false);
-                if (emphasize) {
-                    formatter.emphasis(false);
-                }
-                
-                return formatter.getText();
-            }
-            return super.getLhsHtml(formatter);
-        }
-        
-        @Override
-        public String getInsertPrefix() {
-            String name;
-            if (element.getModifiers().contains(Modifier.STATIC)) {
-                name = "@@" + getName();
-            } else {
-                name = "@" + getName();
-            }
-            if (symbol) {
-                name = ":" + name;
-            }
-            
-            return name;
-        }
-        
-        @Override
-        public String getRhsHtml(HtmlFormatter formatter) {
-            // Top level methods (defined on Object) : print
-            // the defining file instead
-            if (element instanceof IndexedField) {
-                IndexedField idx = (IndexedField)element;
-
-                // TODO - check if top level?
-                //if (me.isTopLevel() && me instanceof IndexedMethod) {
-                //IndexedMethod im = (IndexedMethod)element;
-                //if (im.isTopLevel() && im.getRequire() != null) {
-                //    formatter.appendText(im.getRequire());
-                //
-                //    return formatter.getText();
-                //}
-                //}
-
-                String in = idx.getIn();
-                if (in != null) {
-                    formatter.appendText(in);
-                    return formatter.getText();
-                }
-            }
-
-            return null;
-        }
-    }
-    
-    private class ParameterItem extends RubyCompletionItem {   
-        private static final String CONSTANT_ICON = "org/netbeans/modules/ruby/symbol.png"; //NOI18N
-        private final String name;
-        private final String desc;
-        private final String insert;
-        
-        ParameterItem(IndexedMethod element, String name, String symbol, String insert, int anchorOffset, CompletionRequest request) {
-            super(element, anchorOffset, request);
-            this.name = name;
-            this.desc = symbol;
-            this.insert = insert;
-        }
-
-        @Override
-        public String getRhsHtml(HtmlFormatter formatter) {
-            if (desc != null) {
-                formatter.appendText(desc);
-                return formatter.getText();
-            } else {
-                return null;
-            }
-        }
-        
-        @Override
-        public ElementKind getKind() {
-            return ElementKind.PARAMETER;
-        }
-
-        @Override
-        public ImageIcon getIcon() {
-            if (symbolIcon == null) {
-                symbolIcon = new ImageIcon(org.openide.util.ImageUtilities.loadImage(CONSTANT_ICON));
-            }
-
-            return symbolIcon;
-        }
-
-        @Override
-        public String getName() {
-            return name;
-        }
-
-        @Override
-        public String getInsertPrefix() {
-            return insert;
-        }
-    }
-    
-    private class CallItem extends MethodItem {
-
-        private final IndexedMethod method;
-        private final int index;
-        
-        CallItem(IndexedMethod method, int parameterIndex, int anchorOffset, CompletionRequest request) {
-            super(method, anchorOffset, request);
-            this.method = method;
-            this.index = parameterIndex;
-        }
-
-        @Override
-        public ElementKind getKind() {
-            return ElementKind.CALL;
-        }
-
-        @Override
-        public String getInsertPrefix() {
-            return "";
-        }
-
-        @Override
-        public String getLhsHtml(HtmlFormatter formatter) {
-            ElementKind kind = getKind();
-            formatter.name(kind, true);
-            formatter.appendText(getName());
-
-            List<String> parameters = method.getParameters();
-
-            if ((parameters != null) && (!parameters.isEmpty())) {
-                formatter.appendHtml("("); // NOI18N
-
-                if (index > 0 && index < parameters.size()) {
-                    formatter.appendText("... , ");
-                }
-                
-                formatter.active(true);
-                formatter.appendText(parameters.get(Math.min(parameters.size()-1, index)));
-                formatter.active(false);
-                
-                if (index < parameters.size()-1) {
-                    formatter.appendText(", ...");
-                }
-
-                formatter.appendHtml(")"); // NOI18N
-            }
-            
-            if (method.hasBlock() && !method.isBlockOptional()) {
-                formatter.appendText(" { }");
-            }
-
-            formatter.name(kind, false);
-
-            return formatter.getText();
-        }
-
-        @Override
-        public boolean isSmart() {
-            return true;
-        }
-
-        @Override
-        public List<String> getInsertParams() {
-            return null;
-        }
-        
-        @Override
-        public String getCustomInsertTemplate() {
-            return null;
-        }
-    }
-
-    /** Methods/attributes inferred from ActiveRecord migrations */
-    private class DbItem extends RubyCompletionItem {
-        
-        private final String name;
-        private final String type;
-        
-        DbItem(String name, String type, int anchorOffset, CompletionRequest request) {
-            super(null, anchorOffset, request);
-            this.name = name;
-            this.type = type;
-        }
-        
-        @Override
-        public String getLhsHtml(HtmlFormatter formatter) {
-            formatter.emphasis(true);
-            formatter.name(ElementKind.DB, true);
-            formatter.appendText(getName());
-            formatter.name(ElementKind.DB, false);
-            formatter.emphasis(false);
-
-            return formatter.getText();
-        }
-
-        @Override
-        public String getInsertPrefix() {
-            return name;
-        }
-        
-        @Override
-        public String getRhsHtml(HtmlFormatter formatter) {
-            // TODO - include table name somewhere?
-            formatter.appendText(type);
-            return formatter.getText();
-        }
-
-        @Override
-        public String getName() {
-            return name;
-        }
-
-        @Override
-        public ElementKind getKind() {
-            return ElementKind.DB;
-        }
-
-        @Override
-        public ImageIcon getIcon() {
-            return null;
-        }
-
-        @Override
-        public Set<Modifier> getModifiers() {
-            return Collections.emptySet();
-        }
-
-        @Override
-        public boolean isSmart() {
-            // All database attributes are considered smart matches
-            return true;
-        }
-    }
-    
     /** Return true if we always want to use parentheses
      * @todo Make into a user-configurable option
      * @todo Avoid doing this if there's possible ambiguity (e.g. nested method calls
      *   without spaces
      */
-    
-    private static boolean forceCompletionSpaces() {
-        return FORCE_COMPLETION_SPACES;
-    }
-    
-    private static final boolean FORCE_COMPLETION_SPACES = Boolean.getBoolean("ruby.complete.spaces"); // NOI18N
     
     public QueryType getAutoQuery(JTextComponent component, String typedText) {
         char c = typedText.charAt(0);
@@ -4229,7 +2498,7 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         }
 
         int offset = component.getCaretPosition();
-        BaseDocument doc = (BaseDocument)component.getDocument();
+        BaseDocument doc = (BaseDocument) component.getDocument();
 
         if (".".equals(typedText)) { // NOI18N
             // See if we're in Ruby context
@@ -4299,4 +2568,5 @@ public class RubyCodeCompleter implements CodeCompletionHandler {
         
         return true;
     }
+
 }
