@@ -44,19 +44,19 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.profiler.ppoints.ui.StopwatchCustomizer;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import java.io.File;
 import java.text.MessageFormat;
 import java.util.Properties;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 
 
 /**
  *
  * @author Jiri Sedlacek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.ppoints.ProfilingPointFactory.class)
 public class StopwatchProfilingPointFactory extends CodeProfilingPointFactory {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -69,22 +69,13 @@ public class StopwatchProfilingPointFactory extends CodeProfilingPointFactory {
     private static final String PP_DEFAULT_NAME = NbBundle.getMessage(StopwatchProfilingPointFactory.class,
                                                                       "StopwatchProfilingPointFactory_PpDefaultName"); // NOI18N
                                                                                                                        // -----
-    public static final Icon RESET_RESULTS_PP_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/stopwatchProfilingPoint.png"));
+    public static final Icon RESET_RESULTS_PP_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/stopwatchProfilingPoint.png", false);
     public static final String RESET_RESULTS_PP_TYPE = PP_TYPE;
     public static final String RESET_RESULTS_PP_DESCR = PP_DESCR;
     private static final String START_LOCATION_PREFIX = "start_"; // NOI18N
     private static final String END_LOCATION_PREFIX = "end_"; // NOI18N
-    private static StopwatchProfilingPointFactory defaultInstance;
-
+    
     //~ Methods ------------------------------------------------------------------------------------------------------------------
-
-    public static synchronized StopwatchProfilingPointFactory getDefault() {
-        if (defaultInstance == null) {
-            defaultInstance = new StopwatchProfilingPointFactory();
-        }
-
-        return defaultInstance;
-    }
 
     public String getDescription() {
         return RESET_RESULTS_PP_DESCR;
@@ -116,25 +107,27 @@ public class StopwatchProfilingPointFactory extends CodeProfilingPointFactory {
                 String filename = ""; // NOI18N
                 String name = Utils.getUniqueName(getType(), "", project); // NOI18N
 
-                return new StopwatchProfilingPoint(name, location, null, project);
+                return new StopwatchProfilingPoint(name, location, null, project, this);
             } else {
-                String filename = FileUtil.toFileObject(new File(location.getFile())).getName();
+                File file = FileUtil.normalizeFile(new File(location.getFile()));
+                String filename = FileUtil.toFileObject(file).getName();
                 String name = Utils.getUniqueName(getType(),
                                                   MessageFormat.format(PP_DEFAULT_NAME,
                                                                        new Object[] { "", filename, location.getLine() }), project); // NOI18N
 
-                return new StopwatchProfilingPoint(name, location, null, project);
+                return new StopwatchProfilingPoint(name, location, null, project, this);
             }
         } else {
             CodeProfilingPoint.Location startLocation = selectionLocations[0];
             CodeProfilingPoint.Location endLocation = selectionLocations[1];
-            String filename = FileUtil.toFileObject(new File(startLocation.getFile())).getName();
+            File file = FileUtil.normalizeFile(new File(startLocation.getFile()));
+            String filename = FileUtil.toFileObject(file).getName();
             String name = Utils.getUniqueName(getType(),
                                               MessageFormat.format(PP_DEFAULT_NAME,
                                                                    new Object[] { "", filename, startLocation.getLine() }),
                                               project); // NOI18N
 
-            return new StopwatchProfilingPoint(name, startLocation, endLocation, project);
+            return new StopwatchProfilingPoint(name, startLocation, endLocation, project, this);
         }
     }
 
@@ -176,7 +169,7 @@ public class StopwatchProfilingPointFactory extends CodeProfilingPointFactory {
         StopwatchProfilingPoint profilingPoint = null;
 
         try {
-            profilingPoint = new StopwatchProfilingPoint(name, startLocation, endLocation, project);
+            profilingPoint = new StopwatchProfilingPoint(name, startLocation, endLocation, project, this);
             profilingPoint.setEnabled(Boolean.parseBoolean(enabledStr));
         } catch (Exception e) {
             ErrorManager.getDefault().log(ErrorManager.ERROR, e.getMessage());

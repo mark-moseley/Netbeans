@@ -47,8 +47,7 @@ import org.netbeans.modules.profiler.utils.IDEUtils;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.util.Utilities;
-import org.openide.util.WeakListeners;
+import org.openide.util.ImageUtilities;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
@@ -57,13 +56,11 @@ import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.HashSet;
 import java.util.InvalidPropertiesFormatException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 
 
 /**
@@ -77,8 +74,8 @@ public abstract class ProfilingPointFactory {
     private static final String PROFILING_POINT_STORAGE_EXT = "pp"; // NOI18N
     public static final int SCOPE_CODE = 1; // Scope of the Profiling Point: Code (see CodeProfilingPoint)
     public static final int SCOPE_GLOBAL = 2; // Scope of the Profiling Point: Global (see GlobalProfilingPoint)
-    public static final Icon SCOPE_CODE_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/codeProfilingPoint.png")); // NOI18N
-    public static final Icon SCOPE_GLOBAL_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/globalProfilingPoint.png")); // NOI18N
+    public static final Icon SCOPE_CODE_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/codeProfilingPoint.png", false); // NOI18N
+    public static final Icon SCOPE_GLOBAL_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/globalProfilingPoint.png", false); // NOI18N
 
     //~ Instance fields ----------------------------------------------------------------------------------------------------------
 
@@ -200,7 +197,7 @@ public abstract class ProfilingPointFactory {
 
     void saveProfilingPoints(Project project) throws IOException {
         saveProfilingPoints((ProfilingPoint[]) ProfilingPointsManager.getDefault()
-                                                                     .getProfilingPoints(getProfilingPointsClass(), project)
+                                                                     .getProfilingPoints(getProfilingPointsClass(), project, false)
                                                                      .toArray(new ProfilingPoint[0]), project);
     }
 

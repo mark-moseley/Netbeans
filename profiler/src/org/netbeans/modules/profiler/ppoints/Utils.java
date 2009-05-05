@@ -52,8 +52,6 @@ import org.netbeans.lib.profiler.ui.components.table.EnhancedTableCellRenderer;
 import org.netbeans.lib.profiler.ui.components.table.LabelTableCellRenderer;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.profiler.utils.IDEUtils;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
-import org.netbeans.modules.profiler.utils.SourceUtils;
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.LineCookie;
 import org.openide.filesystems.FileObject;
@@ -63,13 +61,14 @@ import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.text.Line;
 import org.openide.text.NbDocument;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import java.awt.Component;
 import java.awt.Font;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -89,6 +88,8 @@ import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import javax.swing.text.StyledDocument;
 import org.netbeans.modules.profiler.NetBeansProfiler;
+import org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities;
+import org.netbeans.modules.profiler.projectsupport.utilities.SourceUtils;
 
 
 /**
@@ -330,11 +331,12 @@ public class Utils {
     private static final String TODAY_DATE_FORMAT_HIRES = NbBundle.getMessage(Utils.class, "Utils_TodayDateFormatHiRes"); // NOI18N
     private static final String DAY_DATE_FORMAT = NbBundle.getMessage(Utils.class, "Utils_DayDateFormat"); // NOI18N
     private static final String CANNOT_OPEN_SOURCE_MSG = NbBundle.getMessage(Utils.class, "Utils_CannotOpenSourceMsg"); // NOI18N
+    private static final String INVALID_PP_LOCATION_MSG = NbBundle.getMessage(Utils.class, "Utils_InvalidPPLocationMsg"); // NOI18N
                                                                                                            // -----
     private static final String PROJECT_DIRECTORY_MARK = "{$projectDirectory}"; // NOI18N
 
     // TODO: Move to more "universal" location
-    public static final ImageIcon EMPTY_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/resources/empty16.gif")); // NOI18N
+    public static final ImageIcon EMPTY_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/resources/empty16.gif", false); // NOI18N
     private static final ProjectPresenterRenderer projectRenderer = new ProjectPresenterRenderer();
     private static final ProjectPresenterListRenderer projectListRenderer = new ProjectPresenterListRenderer();
     private static final EnhancedTableCellRenderer scopeRenderer = new ProfilingPointScopeRenderer();
@@ -362,7 +364,8 @@ public class Utils {
     }
 
     public static String getClassName(CodeProfilingPoint.Location location) {
-        FileObject fileObject = FileUtil.toFileObject(new File(location.getFile()));
+        File file = FileUtil.normalizeFile(new File(location.getFile()));
+        FileObject fileObject = FileUtil.toFileObject(file);
 
         if ((fileObject == null) || !fileObject.isValid()) {
             return null;
@@ -375,6 +378,23 @@ public class Utils {
         }
 
         return SourceUtils.getEnclosingClassName(fileObject, documentOffset);
+    }
+    
+    public static String getMethodName(CodeProfilingPoint.Location location) {
+        File file = FileUtil.normalizeFile(new File(location.getFile()));
+        FileObject fileObject = FileUtil.toFileObject(file);
+
+        if ((fileObject == null) || !fileObject.isValid()) {
+            return null;
+        }
+
+        int documentOffset = getDocumentOffset(location);
+
+        if (documentOffset == -1) {
+            return null;
+        }
+
+        return SourceUtils.getEnclosingMethodName(fileObject, documentOffset);
     }
 
     public static CodeProfilingPoint.Location getCurrentLocation(int lineOffset) {
@@ -531,7 +551,8 @@ public class Utils {
     }
 
     public static int getDocumentOffset(CodeProfilingPoint.Location location) {
-        FileObject fileObject = FileUtil.toFileObject(new File(location.getFile()));
+        File file = FileUtil.normalizeFile(new File(location.getFile()));
+        FileObject fileObject = FileUtil.toFileObject(file);
 
         if ((fileObject == null) || !fileObject.isValid()) {
             return -1;
@@ -657,6 +678,41 @@ public class Utils {
 
         return null;
     }
+    
+    public static boolean isValidLocation(CodeProfilingPoint.Location location) {
+        // Fail if location not in method
+        String methodName = Utils.getMethodName(location);
+        if (methodName == null) return false;
+        
+        // Succeed if location in method body
+        if (location.isLineStart()) return true;
+        else if (location.isLineEnd()) {
+            CodeProfilingPoint.Location startLocation = new CodeProfilingPoint.Location(
+                    location.getFile(), location.getLine(), CodeProfilingPoint.Location.OFFSET_START);
+            if (methodName.equals(Utils.getMethodName(startLocation))) return true;
+        }
+
+        Line line = getEditorLine(location); 
+        if (line == null) return false;
+        
+        // Fail if location immediately after method declaration - JUST A BEST GUESS!
+        String lineText = line.getText().trim();
+        if (lineText.endsWith("{") && lineText.indexOf("{") == lineText.lastIndexOf("{")) return false; // NOI18N
+        
+        return true;
+    }
+    
+    public static void checkLocation(CodeProfilingPoint.Single ppoint) {
+        if (!isValidLocation(ppoint.getLocation())) NetBeansProfiler.getDefaultNB().displayWarningAndWait(
+                MessageFormat.format(INVALID_PP_LOCATION_MSG, new Object[] { ppoint.getName() }));
+    }
+    
+    public static void checkLocation(CodeProfilingPoint.Paired ppoint) {
+        if (!isValidLocation(ppoint.getStartLocation())) NetBeansProfiler.getDefaultNB().displayWarningAndWait(
+                MessageFormat.format(INVALID_PP_LOCATION_MSG, new Object[] { ppoint.getName() }));
+        else if (ppoint.usesEndLocation() && !isValidLocation(ppoint.getEndLocation())) NetBeansProfiler.getDefaultNB().displayWarningAndWait(
+                MessageFormat.format(INVALID_PP_LOCATION_MSG, new Object[] { ppoint.getName() }));
+    }
 
     public static Project getMostActiveJavaProject() {
         JavaEditorContext mostActiveContext = getMostActiveJavaEditorContext();
@@ -692,7 +748,7 @@ public class Utils {
 
         List<CodeProfilingPoint> lineProfilingPoints = new ArrayList();
         List<CodeProfilingPoint> profilingPoints = ProfilingPointsManager.getDefault()
-                                                                         .getProfilingPoints(CodeProfilingPoint.class, null);
+                                                                         .getProfilingPoints(CodeProfilingPoint.class, null, false);
 
         for (CodeProfilingPoint profilingPoint : profilingPoints) {
             for (CodeProfilingPoint.Annotation annotation : profilingPoint.getAnnotations()) {
@@ -730,8 +786,10 @@ public class Utils {
             return sourceFileAbsolutePath; // file not placed in project directory
         }
 
-        return PROJECT_DIRECTORY_MARK + "/"
-               + FileUtil.getRelativePath(project.getProjectDirectory(), FileUtil.toFileObject(new File(sourceFileAbsolutePath))); // file placed in project directory => relative path used
+        File file = FileUtil.normalizeFile(new File(sourceFileAbsolutePath));
+
+        return PROJECT_DIRECTORY_MARK + "/" // NOI18N
+               + FileUtil.getRelativePath(project.getProjectDirectory(), FileUtil.toFileObject(file)); // file placed in project directory => relative path used
     }
 
     public static EnhancedTableCellRenderer getScopeRenderer() {
@@ -758,7 +816,7 @@ public class Utils {
     }
 
     public static String getUniqueName(String name, String nameSuffix, Project project) {
-        List<ProfilingPoint> projectProfilingPoints = ProfilingPointsManager.getDefault().getProfilingPoints(project, true);
+        List<ProfilingPoint> projectProfilingPoints = ProfilingPointsManager.getDefault().getProfilingPoints(project, false, true);
         List<String> projectProfilingPointsNames = new LinkedList();
 
         for (ProfilingPoint projectProfilingPoint : projectProfilingPoints) {
@@ -811,7 +869,8 @@ public class Utils {
     }
 
     public static void openLocation(CodeProfilingPoint.Location location) {
-        final FileObject fileObject = FileUtil.toFileObject(new File(location.getFile()));
+        File file = FileUtil.normalizeFile(new File(location.getFile()));
+        final FileObject fileObject = FileUtil.toFileObject(file);
 
         if ((fileObject == null) || !fileObject.isValid()) {
             return;

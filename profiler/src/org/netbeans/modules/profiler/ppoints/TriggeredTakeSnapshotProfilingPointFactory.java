@@ -42,21 +42,20 @@ package org.netbeans.modules.profiler.ppoints;
 
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.modules.profiler.ppoints.ui.TakeSnapshotCustomizer;
 import org.netbeans.modules.profiler.ppoints.ui.TriggeredTakeSnapshotCustomizer;
 import org.openide.ErrorManager;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import java.text.MessageFormat;
 import java.util.Properties;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 
 
 /**
  *
  * @author Jiri Sedlacek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.ppoints.ProfilingPointFactory.class)
 public class TriggeredTakeSnapshotProfilingPointFactory extends CodeProfilingPointFactory {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -69,20 +68,11 @@ public class TriggeredTakeSnapshotProfilingPointFactory extends CodeProfilingPoi
     private static final String PP_DEFAULT_NAME = NbBundle.getMessage(TriggeredTakeSnapshotProfilingPointFactory.class,
                                                                       "TriggeredTakeSnapshotProfilingPointFactory_PpDefaultName"); // NOI18N
                                                                                                                                    // -----
-    public static final Icon TAKE_SNAPSHOT_PP_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/triggeredTakeSnapshotProfilingPoint.png")); // NOI18N
+    public static final Icon TAKE_SNAPSHOT_PP_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/triggeredTakeSnapshotProfilingPoint.png", false); // NOI18N
     public static final String TAKE_SNAPSHOT_PP_TYPE = PP_TYPE;
     public static final String TAKE_SNAPSHOT_PP_DESCR = PP_DESCR;
-    private static TriggeredTakeSnapshotProfilingPointFactory defaultInstance;
-
+    
     //~ Methods ------------------------------------------------------------------------------------------------------------------
-
-    public static TriggeredTakeSnapshotProfilingPointFactory getDefault() {
-        if (defaultInstance == null) {
-            defaultInstance = new TriggeredTakeSnapshotProfilingPointFactory();
-        }
-
-        return defaultInstance;
-    }
 
     public String getDescription() {
         return TAKE_SNAPSHOT_PP_DESCR;
@@ -111,7 +101,7 @@ public class TriggeredTakeSnapshotProfilingPointFactory extends CodeProfilingPoi
                                                                    "", ProjectUtils.getInformation(project).getDisplayName()
                                                                }), project);
 
-        return new TriggeredTakeSnapshotProfilingPoint(name, project);
+        return new TriggeredTakeSnapshotProfilingPoint(name, project, this);
     }
 
     public boolean supportsCPU() {
@@ -158,7 +148,7 @@ public class TriggeredTakeSnapshotProfilingPointFactory extends CodeProfilingPoi
         TriggeredTakeSnapshotProfilingPoint profilingPoint = null;
 
         try {
-            profilingPoint = new TriggeredTakeSnapshotProfilingPoint(name, project);
+            profilingPoint = new TriggeredTakeSnapshotProfilingPoint(name, project, this);
             profilingPoint.setEnabled(Boolean.parseBoolean(enabledStr));
             profilingPoint.setSnapshotType(type);
             profilingPoint.setSnapshotTarget(target);

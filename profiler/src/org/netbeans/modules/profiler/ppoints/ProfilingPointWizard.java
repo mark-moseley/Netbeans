@@ -45,7 +45,6 @@ import org.netbeans.modules.profiler.NetBeansProfiler;
 import org.netbeans.modules.profiler.ppoints.ui.ValidityAwarePanel;
 import org.netbeans.modules.profiler.ppoints.ui.ValidityListener;
 import org.netbeans.modules.profiler.ppoints.ui.WizardPanel1UI;
-import org.openide.NotifyDescriptor;
 import org.openide.WizardDescriptor;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
@@ -415,13 +414,13 @@ public class ProfilingPointWizard implements WizardDescriptor.Iterator {
 
     public void nextPanel() {
         getCurrentWizardPanel().hiding();
-        wizardDescriptor.putProperty("WizardPanel_contentSelectedIndex", new Integer(++currentPanel)); // NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(++currentPanel)); // NOI18N
         getCurrentWizardPanel().showing();
     }
 
     public void previousPanel() {
         getCurrentWizardPanel().hiding();
-        wizardDescriptor.putProperty("WizardPanel_contentSelectedIndex", new Integer(--currentPanel)); // NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(--currentPanel)); // NOI18N
         getCurrentWizardPanel().showing();
     }
 
@@ -437,10 +436,10 @@ public class ProfilingPointWizard implements WizardDescriptor.Iterator {
         wizardDescriptor.setTitle(WIZARD_TITLE);
         wizardDescriptor.setTitleFormat(new MessageFormat("{0}")); // NOI18N
 
-        wizardDescriptor.putProperty("WizardPanel_autoWizardStyle", Boolean.TRUE); // NOI18N
-        wizardDescriptor.putProperty("WizardPanel_contentDisplayed", Boolean.TRUE); // NOI18N
-        wizardDescriptor.putProperty("WizardPanel_contentNumbered", Boolean.TRUE); // NOI18N
-        wizardDescriptor.putProperty("WizardPanel_contentSelectedIndex", new Integer(0)); // NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE); // NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE); // NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE); // NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(0)); // NOI18N
     }
 
     private void initWizardPanels() {
@@ -452,7 +451,7 @@ public class ProfilingPointWizard implements WizardDescriptor.Iterator {
             wizardSteps[i] = wizardPanels[i].getName();
         }
 
-        wizardDescriptor.putProperty("WizardPanel_contentData", wizardSteps); // NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_CONTENT_DATA, wizardSteps); // NOI18N
 
         if (preferredPanelSize == null) {
             preferredPanelSize = new Dimension(DEFAULT_PREFERRED_PANEL_SIZE);

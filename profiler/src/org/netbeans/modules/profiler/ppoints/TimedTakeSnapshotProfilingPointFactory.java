@@ -42,21 +42,20 @@ package org.netbeans.modules.profiler.ppoints;
 
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.modules.profiler.ppoints.ui.TakeSnapshotCustomizer;
 import org.netbeans.modules.profiler.ppoints.ui.TimedTakeSnapshotCustomizer;
 import org.openide.ErrorManager;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import java.text.MessageFormat;
 import java.util.Properties;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 
 
 /**
  *
  * @author Jiri Sedlacek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.profiler.ppoints.ProfilingPointFactory.class)
 public class TimedTakeSnapshotProfilingPointFactory extends CodeProfilingPointFactory {
     //~ Static fields/initializers -----------------------------------------------------------------------------------------------
 
@@ -69,20 +68,11 @@ public class TimedTakeSnapshotProfilingPointFactory extends CodeProfilingPointFa
     private static final String PP_DEFAULT_NAME = NbBundle.getMessage(TimedTakeSnapshotProfilingPointFactory.class,
                                                                       "TimedTakeSnapshotProfilingPointFactory_PpDefaultName"); // NOI18N
                                                                                                                                // -----
-    public static final Icon TAKE_SNAPSHOT_PP_ICON = new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/ppoints/ui/resources/timedTakeSnapshotProfilingPoint.png")); // NOI18N
+    public static final Icon TAKE_SNAPSHOT_PP_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/profiler/ppoints/ui/resources/timedTakeSnapshotProfilingPoint.png", false); // NOI18N
     public static final String TAKE_SNAPSHOT_PP_TYPE = PP_TYPE;
     public static final String TAKE_SNAPSHOT_PP_DESCR = PP_DESCR;
-    private static TimedTakeSnapshotProfilingPointFactory defaultInstance;
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
-
-    public static TimedTakeSnapshotProfilingPointFactory getDefault() {
-        if (defaultInstance == null) {
-            defaultInstance = new TimedTakeSnapshotProfilingPointFactory();
-        }
-
-        return defaultInstance;
-    }
 
     public String getDescription() {
         return TAKE_SNAPSHOT_PP_DESCR;
@@ -111,7 +101,7 @@ public class TimedTakeSnapshotProfilingPointFactory extends CodeProfilingPointFa
                                                                    "", ProjectUtils.getInformation(project).getDisplayName()
                                                                }), project);
 
-        return new TimedTakeSnapshotProfilingPoint(name, project);
+        return new TimedTakeSnapshotProfilingPoint(name, project, this);
     }
 
     public boolean supportsCPU() {
@@ -156,7 +146,7 @@ public class TimedTakeSnapshotProfilingPointFactory extends CodeProfilingPointFa
         TimedTakeSnapshotProfilingPoint profilingPoint = null;
 
         try {
-            profilingPoint = new TimedTakeSnapshotProfilingPoint(name, project);
+            profilingPoint = new TimedTakeSnapshotProfilingPoint(name, project, this);
             profilingPoint.setEnabled(Boolean.parseBoolean(enabledStr));
             profilingPoint.setSnapshotType(type);
             profilingPoint.setSnapshotTarget(target);
