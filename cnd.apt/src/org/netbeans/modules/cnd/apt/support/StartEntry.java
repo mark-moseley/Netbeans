@@ -59,12 +59,12 @@ public final class StartEntry implements Persistent, SelfPersistent{
     //private boolean isCPP; // TODO: flag to be used for understanding C/C++ lang
     private final Key startFileProject;
     public StartEntry(String startFile, Key startFileProject) {
-        this.startFile = FilePathCache.getString(startFile).toString();
+        this.startFile = FilePathCache.getManager().getString(startFile);
         this.startFileProject = startFileProject;
     }
     
-    public String getStartFile(){
-        return startFile.toString();
+    public CharSequence getStartFile(){
+        return startFile;
     }
 
     public Key getStartFileProject(){
@@ -79,10 +79,37 @@ public final class StartEntry implements Persistent, SelfPersistent{
     
     public StartEntry(final DataInput input) throws IOException {
         assert input != null;
-        startFile = FilePathCache.getString(input.readUTF());
+        startFile = FilePathCache.getManager().getString(input.readUTF());
         startFileProject = KeyFactory.getDefaultFactory().readKey(input);
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final StartEntry other = (StartEntry) obj;
+        if (this.startFile != other.startFile && (this.startFile == null || !this.startFile.equals(other.startFile))) {
+            return false;
+        }
+        if (this.startFileProject != other.startFileProject && (this.startFileProject == null || !this.startFileProject.equals(other.startFileProject))) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 89 * hash + (this.startFile != null ? this.startFile.hashCode() : 0);
+        hash = 89 * hash + (this.startFileProject != null ? this.startFileProject.hashCode() : 0);
+        return hash;
+    }
+
+    
     @Override
     public String toString() {
         StringBuilder out = new StringBuilder();
