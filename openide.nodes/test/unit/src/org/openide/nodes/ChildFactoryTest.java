@@ -44,8 +44,7 @@ import java.awt.EventQueue;
 import java.beans.*;
 import java.util.*;
 import junit.framework.TestCase;
-import org.openide.nodes.*;
-import org.openide.nodes.NodeAdapter;
+import org.openide.nodes.ChildFactory.Detachable;
 import org.openide.util.NbBundle;
 
 /** Test for AsynchChildren, ChildFactory and SynchChildren.
@@ -112,12 +111,26 @@ public class ChildFactoryTest extends TestCase {
         synchronized (factory.lock) {
             factory.lock.wait(300);
         }
-        Thread.currentThread().yield();
+        Thread.yield();
         new NL(node);
         Node[] n = kids.getNodes(true);
         assertEquals(4, n.length);
     }
-    
+
+    public void testFindChildWaits() throws Exception {
+        System.out.println("testFindChildWaits");
+        factory.wait = false;
+        Node n = kids.findChild("D");
+        assertNotNull(n);
+    }
+
+    public void testGetNodesWaitsFirstTime() {
+        System.out.println("testGetNodesWaits");
+        factory.wait = false;
+        Node[] n = kids.getNodes(true);
+        assertEquals(4, n.length);
+    }
+
     public void testInitialNodeIsWaitNode() throws Exception {
         System.out.println("testInitialNodeIsWaitNode");
         factory.wait = true;
@@ -133,7 +146,7 @@ public class ChildFactoryTest extends TestCase {
         }
         for (int i = 0; i < 5 && n.length != 4; i++) {
             n = kids.getNodes(true);
-            Thread.currentThread().yield();
+            Thread.yield();
         }
         assertEquals(4, n.length);
     }
@@ -141,7 +154,7 @@ public class ChildFactoryTest extends TestCase {
     public void testBatch() throws Exception {
         System.out.println("testBatch");
         kids2.addNotify();
-        Thread.currentThread().yield();
+        Thread.yield();
         synchronized (factory2.lock) {
             factory2.lock.notifyAll();
         }
@@ -174,15 +187,15 @@ public class ChildFactoryTest extends TestCase {
         factory.assertCreateKeysCalled();
         factory.assertCreateNodesForKeyCalled();
         Node[] nodes = nd.getChildren().getNodes(true);
-        assertEquals(factory.CONTENTS1.size(), nodes.length);
+        assertEquals(SynchProviderImpl.CONTENTS1.size(), nodes.length);
         int ix = 0;
-        for (String s : factory.CONTENTS1) {
+        for (String s : SynchProviderImpl.CONTENTS1) {
             assertEquals(s, nodes[ix].getName());
             ix++;
         }
         factory.switchChildren();
         nodes = nd.getChildren().getNodes(true);
-        assertEquals(factory.CONTENTS2.size(), nodes.length);
+        assertEquals(SynchProviderImpl.CONTENTS2.size(), nodes.length);
         ix = 0;
         for (String s : factory.CONTENTS2) {
             assertEquals(s, nodes[ix].getName());
@@ -195,7 +208,7 @@ public class ChildFactoryTest extends TestCase {
         Thread.interrupted();
         factory.wait = true;
         kids.addNotify();
-        Thread.currentThread().yield();
+        Thread.yield();
         synchronized (factory.lock) {
             factory.lock.wait(500);
         }
@@ -207,14 +220,54 @@ public class ChildFactoryTest extends TestCase {
         assertTrue(kids.cancelled);
         assertTrue(factory.cancelled);
     }
-    
+
+    public void testAddRemoveNotifySynch() throws Exception {
+        DetachableImpl r = new DetachableImpl();
+        Children ch = Children.create(r, false);
+        new AbstractNode (ch);
+        ch.addNotify();
+        r.assertAdded();
+        ch.removeNotify();
+        r.assertRemoved();
+        r = new DetachableImpl();
+        ch = Children.create(r, false);
+        Node[] n = ch.getNodes(true);
+        assertEquals (2, n.length);
+        assertEquals ("foo", n[0].getDisplayName());
+        assertEquals ("bar", n[1].getDisplayName());
+        ch.removeNotify();
+        r.assertRemoved();
+    }
+
+    public void testAddRemoveNotifyAsynch() throws Exception {
+        DetachableImpl r = new DetachableImpl();
+        Children ch = Children.create(r, true);
+        new AbstractNode (ch);
+        ch.addNotify();
+        synchronized(r) {
+            r.wait(1000);
+        }
+        r.assertAdded();
+        Node[] n = ch.getNodes(true);
+        assertEquals (2, n.length);
+        assertEquals ("foo", n[0].getDisplayName());
+        assertEquals ("bar", n[1].getDisplayName());
+        ch.removeNotify();
+        synchronized(r) {
+            r.wait(1000);
+        }
+        r.assertRemoved();
+    }
+
+
     static final class ProviderImpl extends ChildFactory <String> {
-        Object lock = new Object();
+        final Object lock = new Object();
         volatile boolean wait = false;
         
         public @Override Node[] createNodesForKey(String key) {
             AbstractNode nd = new AbstractNode(Children.LEAF);
             nd.setDisplayName(key);
+            nd.setName(key);
             return new Node[] { nd };
         }
         
@@ -222,7 +275,7 @@ public class ChildFactoryTest extends TestCase {
         public boolean createKeys(List <String> result) {
             try {
                 while (wait) {
-                    Thread.currentThread().yield();
+                    Thread.yield();
                 }
                 synchronized (lock) {
                     lock.notifyAll();
@@ -256,7 +309,7 @@ public class ChildFactoryTest extends TestCase {
             return new Node[] { nd };
         }
         
-        Object lock = new Object();
+        final Object lock = new Object();
         int callCount = 0;
         public boolean createKeys(List <String> result) {
             callCount++;
@@ -290,6 +343,23 @@ public class ChildFactoryTest extends TestCase {
             return true;
         }
     }
+
+    public static void assertNodeAndEvent(final NodeEvent ev, final List<Node> snapshot) {
+        Children.MUTEX.readAccess(new Runnable() {
+            public void run() {
+                int cnt = snapshot.size();
+                assertEquals("Same number of nodes", ev.getNode().getChildren().getNodesCount(), cnt);
+                for (int i = 0; i < cnt; i++) {
+                    Node fromEv = snapshot.get(i);
+                    if (fromEv instanceof EntrySupport.Lazy.DummyNode) {
+                        continue;
+                    }
+                    Node fromCh = ev.getNode().getChildren().getNodeAt(i);
+                    assertSame("The nodes are same at " + i, fromCh, fromEv);
+                }
+            }
+        });
+    }
     
     private static final class NL implements NodeListener {
         NL(Node n) {
@@ -306,20 +376,25 @@ public class ChildFactoryTest extends TestCase {
         NL() {
             
         }
+
         
         public void childrenAdded(NodeMemberEvent ev) {
+            assertNodeAndEvent(ev, ev.getSnapshot());
             go();
         }
         
         public void childrenRemoved(NodeMemberEvent ev) {
+            assertNodeAndEvent(ev, ev.getSnapshot());
             go();
         }
         
         public void childrenReordered(NodeReorderEvent ev) {
+            assertNodeAndEvent(ev, ev.getSnapshot());
             go();
         }
         
         public void nodeDestroyed(NodeEvent ev) {
+            assertNodeAndEvent(ev, Collections.<Node>emptyList());
         }
         
         public void propertyChange(PropertyChangeEvent arg0) {
@@ -390,6 +465,52 @@ public class ChildFactoryTest extends TestCase {
         void switchChildren() {
             switched = !switched;
             refresh(true);
+        }
+    }
+
+    private static final class DetachableImpl extends Detachable<String> {
+        boolean removed;
+        boolean added;
+
+        @Override
+        protected boolean createKeys(List<String> toPopulate) {
+            toPopulate.add("foo");
+            toPopulate.add("bar");
+            synchronized(this) {
+                notifyAll();
+            }
+            return true;
+        }
+
+        @Override
+        protected void removeNotify() {
+            assertFalse (removed);
+            synchronized(this) {
+                notifyAll();
+            }
+            removed = true;
+            added = false;
+        }
+
+        @Override
+        protected Node createNodeForKey(String key) {
+            AbstractNode nd = new AbstractNode(Children.LEAF);
+            nd.setDisplayName(key);
+            return nd;
+        }
+
+        @Override
+        protected void addNotify() {
+            assertFalse (added);
+            added = true;
+        }
+
+        void assertAdded() {
+            assertTrue (added);
+        }
+
+        void assertRemoved() {
+            assertTrue (removed);
         }
     }
 }
