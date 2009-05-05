@@ -132,7 +132,7 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
      */
     public void closed() {
         ToolsPanel.removeCompilerSetModifiedListener(this);
-        for(Item item : getProjectItems()){
+        for (Item item : getProjectItems()) {
             DataObject dao = item.getDataObject();
             if (dao != null) {
                 dao.removePropertyChangeListener(item);
@@ -141,20 +141,20 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
         closed(rootFolder);
     }
 
-    private void closed(Folder folder){
-        if (folder != null){
-            for(Folder f : folder.getAllFolders(false)){
+    private void closed(Folder folder) {
+        if (folder != null) {
+            for (Folder f : folder.getAllFolders(false)) {
                 closed(f);
             }
             folder.detachListener();
         }
     }
 
-    public void clean(){
+    public void clean() {
         Configurations confs = getConfs();
         if (confs != null) {
-            for(Configuration conf : confs.getConfs()){
-                if (conf != null){
+            for (Configuration conf : confs.getConfs()) {
+                if (conf != null) {
                     conf.setAuxObjects(Collections.<ConfigurationAuxObject>emptyList());
                 }
             }
@@ -383,14 +383,21 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
     public Item findItemByFile(File file) {
         Collection<Item> coll = projectItems.values();
         Iterator<Item> it = coll.iterator();
+        Item canonicalItem = null;
         while (it.hasNext()) {
             Item item = it.next();
-            File itemFile = item.getCanonicalFile();
+            File itemFile = item.getNormalizedFile();
             if (itemFile == file || itemFile.getPath().equals(file.getPath())) {
                 return item;
             }
+            if (canonicalItem == null) {
+                File canonicalItemFile = item.getCanonicalFile();
+                if (canonicalItemFile == file || canonicalItemFile.getPath().equals(file.getPath())) {
+                    canonicalItem = item;
+                }
+            }
         }
-        return null;
+        return canonicalItem;
     }
 
     public Item findProjectItemByPath(String path) {
@@ -501,7 +508,7 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
         setProjectItemsMap(((MakeConfigurationDescriptor) clonedConfigurationDescriptor).getProjectItemsMap());
         setProjectItemsChangeListeners(((MakeConfigurationDescriptor) clonedConfigurationDescriptor).getProjectItemsChangeListeners());
         setSourceRoots(((MakeConfigurationDescriptor) clonedConfigurationDescriptor).getSourceRootsRaw());
-        setFolderVisibilityQuery(((MakeConfigurationDescriptor)clonedConfigurationDescriptor).getFolderVisibilityQuery().getRegEx());
+        setFolderVisibilityQuery(((MakeConfigurationDescriptor) clonedConfigurationDescriptor).getFolderVisibilityQuery().getRegEx());
     }
 
     public ConfigurationDescriptor cloneProjectDescriptor() {
@@ -575,8 +582,7 @@ public class MakeConfigurationDescriptor extends ConfigurationDescriptor impleme
     public void setFolderVisibilityQuery(String regex) {
         if (folderVisibilityQuery == null) {
             folderVisibilityQuery = new CndVisibilityQuery(regex);
-        }
-        else {
+        } else {
             folderVisibilityQuery.setPattern(regex);
         }
     }
