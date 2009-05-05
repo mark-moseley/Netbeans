@@ -42,6 +42,7 @@
 package org.netbeans.modules.autoupdate.ui;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URL;
 import java.text.Collator;
@@ -51,7 +52,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
-import java.util.LinkedList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
@@ -62,10 +63,6 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import org.netbeans.api.autoupdate.OperationContainer;
-import org.netbeans.api.autoupdate.OperationContainer.OperationInfo;
-import org.netbeans.api.autoupdate.OperationSupport;
 import org.netbeans.api.autoupdate.UpdateElement;
 import org.netbeans.api.autoupdate.UpdateManager;
 import org.netbeans.api.autoupdate.UpdateUnit;
@@ -80,6 +77,8 @@ import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
 import org.netbeans.api.autoupdate.UpdateUnitProvider.CATEGORY;
+import org.openide.util.Task;
+import org.openide.util.TaskListener;
 
 /**
  *
@@ -94,10 +93,20 @@ public class Utilities {
     public static String PLUGIN_MANAGER_CHECK_INTERVAL = "plugin.manager.check.interval";
     
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat ("yyyy/MM/dd"); // NOI18N
+    public static final String TIME_OF_MODEL_INITIALIZATION = "time_of_model_initialization"; // NOI18N
+    public static final String TIME_OF_REFRESH_UPDATE_CENTERS = "time_of_refresh_update_centers"; // NOI18N
     
     static final String UNSORTED_CATEGORY = NbBundle.getMessage (Utilities.class, "Utilities_Unsorted_Category");
     static final String LIBRARIES_CATEGORY = NbBundle.getMessage (Utilities.class, "Utilities_Libraries_Category");
     static final String BRIDGES_CATEGORY = NbBundle.getMessage (Utilities.class, "Utilities_Bridges_Category");
+    
+    private static final String FIRST_CLASS_MODULES = "org.netbeans.modules.autoupdate.services, org.netbeans.modules.autoupdate.ui"; // NOI18N
+    private static final String PLUGIN_MANAGER_FIRST_CLASS_MODULES = "plugin.manager.first.class.modules"; // NOI18N
+    
+    private static final String ALLOW_SHOWING_BALLOON = "plugin.manager.allow.showing.balloon"; // NOI18N
+    private static final String SHOWING_BALLOON_TIMEOUT = "plugin.manager.showing.balloon.timeout"; // NOI18N
+    
+    private static Collection<String> first_class_modules = null;
     
     @SuppressWarnings ("deprecation")
     public static List<UnitCategory> makeInstalledCategories (List<UpdateUnit> units) {
@@ -125,6 +134,14 @@ public class Utilities {
         };
 
     public static List<UnitCategory> makeUpdateCategories (final List<UpdateUnit> units, boolean isNbms) {
+        if (! isNbms && ! units.isEmpty ()) {
+            List<UnitCategory> fcCats = makeFirstClassUpdateCategories ();
+            if (! fcCats.isEmpty ()) {
+                return fcCats;
+            } else if(hasPendingFirstClassModules()) {
+                return new ArrayList <UnitCategory>();
+            }
+        }
         List<UnitCategory> res = new ArrayList<UnitCategory> ();
         List<String> names = new ArrayList<String> ();
         for (UpdateUnit u : units) {
@@ -150,6 +167,69 @@ public class Utilities {
         return res;
     };
 
+    public static long getTimeOfInitialization () {
+        return getPreferences ().getLong (TIME_OF_MODEL_INITIALIZATION, 0);
+    }
+    
+    public static void putTimeOfInitialization (long time) {
+        getPreferences ().putLong (TIME_OF_MODEL_INITIALIZATION, time);
+    }
+    
+    public static long getTimeOfRefreshUpdateCenters () {
+        return getPreferences ().getLong (TIME_OF_REFRESH_UPDATE_CENTERS, 0);
+    }
+
+    public static void putTimeOfRefreshUpdateCenters (long time) {
+        getPreferences ().putLong (TIME_OF_REFRESH_UPDATE_CENTERS, time);
+    }
+
+    private static List<UnitCategory> makeFirstClassUpdateCategories () {
+        Collection<UpdateUnit> units = UpdateManager.getDefault ().getUpdateUnits (UpdateManager.TYPE.MODULE);
+        List<UnitCategory> res = new ArrayList<UnitCategory> ();
+        List<String> names = new ArrayList<String> ();
+        for (UpdateUnit u : units) {
+            UpdateElement el = u.getInstalled ();
+            if (! u.isPending() && el != null) {
+                List<UpdateElement> updates = u.getAvailableUpdates ();
+                if (updates.isEmpty()) {
+                    continue;
+                }
+                if (getFirstClassModules ().contains (el.getCodeName ())) {
+                    String catName = el.getCategory();
+                    if (names.contains (catName)) {
+                        UnitCategory cat = res.get (names.indexOf (catName));
+                        cat.addUnit (new Unit.Update (u, false, catName));
+                    } else {
+                        UnitCategory cat = new UnitCategory (catName);
+                        cat.addUnit (new Unit.Update (u, false, catName));
+                        res.add (cat);
+                        names.add (catName);
+                    }
+                }
+            }
+        }
+        logger.log(Level.FINER, "makeFirstClassUpdateCategories (" + units.size () + ") returns " + res.size ());
+        return res;
+    }
+    
+    private static boolean hasPendingFirstClassModules () {
+        Collection<UpdateUnit> units = UpdateManager.getDefault ().getUpdateUnits (UpdateManager.TYPE.MODULE);
+        final Collection <String> firstClass = getFirstClassModules ();
+        for (UpdateUnit u : units) {
+            UpdateElement el = u.getInstalled ();
+            if (u.isPending() && el != null) {
+                List<UpdateElement> updates = u.getAvailableUpdates ();
+                if (updates.isEmpty()) {
+                    continue;
+                }
+                if (firstClass.contains (el.getCodeName ())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
     public static List<UnitCategory> makeAvailableCategories (final List<UpdateUnit> units, boolean isNbms) {
         List<UnitCategory> res = new ArrayList<UnitCategory> ();
         List<String> names = new ArrayList<String> ();
@@ -186,19 +266,6 @@ public class Utilities {
         } else {
             logger.log (Level.INFO, "No URLDisplayer found.");
         }
-    }
-    
-    public static List<UpdateElement> getRequiredElements(UpdateUnit unit, UpdateElement el, OperationContainer<OperationSupport> container) {
-        List<UpdateElement> reqs = Collections.emptyList();
-        if (container.canBeAdded(unit, el)) {
-            OperationInfo<OperationSupport> info = container.add (unit,el);
-            reqs = new LinkedList<UpdateElement> (info.getRequiredElements());
-        }
-        return reqs;
-    }        
-        
-    public static boolean isGtk () {
-        return "GTK".equals (UIManager.getLookAndFeel ().getID ()); // NOI18N
     }
     
     public static String getDownloadSizeAsString (int size) {
@@ -296,19 +363,60 @@ public class Utilities {
     }
 
     public static void startAsWorkerThread(final PluginManagerUI manager, final Runnable runnableCode, final String progressDisplayName) {
+        startAsWorkerThread (manager, runnableCode, progressDisplayName, 0);
+    }
+    
+    public static void startAsWorkerThread (final PluginManagerUI manager,
+            final Runnable runnableCode,
+            final String progressDisplayName,
+            final long estimatedTime) {
         startAsWorkerThread(new Runnable() {
             public void run() {
-                ProgressHandle handle = ProgressHandleFactory.createHandle(progressDisplayName); // NOI18N                
+                final ProgressHandle handle = ProgressHandleFactory.createHandle(progressDisplayName); // NOI18N                
                 JComponent progressComp = ProgressHandleFactory.createProgressComponent(handle);
                 JLabel detailLabel = ProgressHandleFactory.createDetailLabelComponent(handle);
                 
                 try {                    
                     detailLabel.setHorizontalAlignment(SwingConstants.LEFT);
                     manager.setProgressComponent(detailLabel, progressComp);
-                    handle.setInitialDelay(0);                    
-                    handle.start();                    
-                    handle.progress (progressDisplayName);
-                    runnableCode.run();
+                    handle.setInitialDelay(0);
+                    if (estimatedTime == 0) {
+                        handle.start ();                    
+                        handle.progress (progressDisplayName);
+                        runnableCode.run ();
+                    } else {
+                        assert estimatedTime > 0 : "Estimated time " + estimatedTime;
+                        final long friendlyEstimatedTime = estimatedTime + 2/*friendly constant*/;
+                        handle.start ((int) friendlyEstimatedTime * 10, friendlyEstimatedTime); 
+                        handle.progress (progressDisplayName, 0);
+                        final RequestProcessor.Task runnableTask = RequestProcessor.getDefault ().post (runnableCode);
+                        RequestProcessor.getDefault ().post (new Runnable () {
+                            public void run () {
+                                int i = 0;
+                                while (! runnableTask.isFinished ()) {
+                                    try {
+                                        if (friendlyEstimatedTime * 10 > i++) {
+                                            handle.progress (progressDisplayName, i);
+                                        } else {
+                                            handle.switchToIndeterminate ();
+                                            handle.progress (progressDisplayName);
+                                            return ;
+                                        }
+                                        Thread.sleep (100);
+                                    } catch (InterruptedException ex) {
+                                        // no worries
+                                    }
+                                }
+                            }
+                        });
+                        runnableTask.addTaskListener (new TaskListener () {
+                            public void taskFinished (Task task) {
+                                task.removeTaskListener (this);
+                                handle.finish ();
+                            }
+                        });
+                        runnableTask.waitFinished ();
+                    }
                 } finally {
                     if (handle != null) {
                         handle.finish();
@@ -366,6 +474,54 @@ public class Utilities {
     
     public static String getCustomCheckIntervalInMinutes () {
         return System.getProperty (PLUGIN_MANAGER_CHECK_INTERVAL);
+    }
+    
+    private static String getCustomFirstClassModules () {
+        return System.getProperty (PLUGIN_MANAGER_FIRST_CLASS_MODULES);
+    }
+    
+    public static Collection<String> getFirstClassModules () {
+        if (first_class_modules != null) {
+            return first_class_modules;
+        }
+        String names = getCustomFirstClassModules ();
+        if (names == null || names.length () == 0) {
+            names = FIRST_CLASS_MODULES;
+        }
+        first_class_modules = new HashSet<String> ();
+        StringTokenizer en = new StringTokenizer (names, ","); // NOI18N
+        while (en.hasMoreTokens ()) {
+            first_class_modules.add (en.nextToken ().trim ());
+        }
+        return first_class_modules;
+    }
+    
+    /** Allow show Windows-like balloon in the status line.
+     * 
+     * @return <code>true</code> if showing is allowed, <code>false</code> if don't, or <code>null</code> was not specified in <code>plugin.manager.allow.showing.balloon</code>
+     */
+    public static Boolean allowShowingBalloon () {
+        String allowShowing = System.getProperty (ALLOW_SHOWING_BALLOON);
+        return allowShowing == null ? null : Boolean.valueOf (allowShowing);
+    }
+
+    /** Gets defalut timeout for showing Windows-like balloon in the status line.
+     * The timeout can be specified in <code>plugin.manager.showing.balloon.timeout</code>. The dafault value is 30*1000.
+     * The value 0 means unlimited timeout.
+     * 
+     * @return the amout of time to show the ballon in miliseconds.
+     */
+    public static int getShowingBalloonTimeout () {
+        String timeoutS = System.getProperty (SHOWING_BALLOON_TIMEOUT);
+        int timeout = 30 * 1000;
+        try {
+            if (timeoutS != null) {
+                timeout = Integer.parseInt (timeoutS);
+            }
+        } catch (NumberFormatException nfe) {
+            logger.log (Level.INFO, nfe + " while parsing " + timeoutS + " for " + SHOWING_BALLOON_TIMEOUT);
+        }
+        return timeout;
     }
 
     /** Do auto-check for available new plugins a while after startup.
@@ -459,6 +615,46 @@ public class Utilities {
         }
         
         return Collections.unmodifiableList (files);
+    }
+    
+    public static boolean canWriteInCluster (File cluster) {
+        assert cluster != null : "dir cannot be null";
+        assert cluster.exists () : cluster + " must exists";
+        assert cluster.isDirectory () : cluster + " is directory";
+        if (cluster == null || ! cluster.exists () || ! cluster.isDirectory ()) {
+            logger.log (Level.INFO, "Invalid cluster " + cluster);
+            return false;
+        }
+        // workaround the bug: http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4420020
+        if (cluster.canWrite () && cluster.canRead () && org.openide.util.Utilities.isWindows ()) {
+            File trackings = new File (cluster, "update_tracking"); // NOI18N
+            if (trackings.exists () && trackings.isDirectory ()) {
+                for (File f : trackings.listFiles ()) {
+                    if (f.exists () && f.isFile ()) {
+                        FileWriter fw = null;
+                        try {
+                            fw = new FileWriter (f, true);
+                        } catch (IOException ioe) {
+                            // just check of write permission
+                            logger.log (Level.FINE, f + " has no write permission", ioe);
+                            return false;
+                        } finally {
+                            try {
+                                if (fw != null) {
+                                    fw.close ();
+                                }
+                            } catch (IOException ex) {
+                                logger.log (Level.INFO, ex.getLocalizedMessage (), ex);
+                            }
+                        }
+                        logger.log (Level.FINE, f + " has write permission");
+                        return true;
+                    }
+                }
+            }
+        }
+        logger.log (Level.FINE, "Can write into " + cluster + "? " + cluster.canWrite ());
+        return cluster.canWrite ();
     }
     
     private static File getPlatformDir () {
