@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -46,13 +46,18 @@ import com.sun.source.tree.Tree.Kind;
 import com.sun.source.util.TreePath;                                                                                                                                                                                           
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.tree.JCTree;                                                                                                                                                                                        
+import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.StringTokenizer;
-import java.util.logging.Logger;                                                                                                                                                                                                    
+import java.util.logging.Logger;
+import java.util.logging.Level;
 import javax.lang.model.element.Element;                                                                                                                                                                                       
 import javax.lang.model.element.ElementKind;
 import javax.swing.text.Position;
@@ -69,6 +74,7 @@ import org.openide.text.CloneableEditorSupport;
 import org.openide.text.EditorSupport;
 import org.openide.text.PositionRef;                                                                                                                                                                                           
 import org.openide.util.Exceptions;
+import org.openide.util.Parameters;
                                                                                                                                                                                                                                
 /**                                                                                                                                                                                                                            
  * Represents a handle for {@link TreePath} which can be kept and later resolved                                                                                                                                               
@@ -105,7 +111,8 @@ import org.openide.util.Exceptions;
  *                                                                                                                                                                                                                             
  * @author Jan Becicka                                                                                                                                                                                                         
  */                                                                                                                                                                                                                            
-public final class TreePathHandle {                                                                                                                                                                                            
+public final class TreePathHandle {
+    private static Logger log = Logger.getLogger(TreePathHandle.class.getName());
 
     private final Delegate delegate;
     
@@ -128,18 +135,22 @@ public final class TreePathHandle {
     /**                                                                                                                                                                                                                        
      * Resolves an {@link TreePath} from the {@link TreePathHandle}.                                                                                                                                                           
      * @param compilationInfo representing the {@link javax.tools.CompilationTask}                                                                                                                                             
-     * @return resolved subclass of {@link Element} or null if the elment does not exist on                                                                                                                                    
+     * @return resolved subclass of {@link Element} or null if the element does not exist on                                                                                                                                    
      * the classpath/sourcepath of {@link javax.tools.CompilationTask}.
      * @throws {@link IllegalArgumentException} when this {@link TreePathHandle} is not created for a source
      * represented by the compilationInfo.
      */                                                                                                                                                                                                                        
     public TreePath resolve (final CompilationInfo compilationInfo) throws IllegalArgumentException {
-        return this.delegate.resolve(compilationInfo);
+        final TreePath result = this.delegate.resolve(compilationInfo);
+        if (result == null) {
+            Logger.getLogger(TreePathHandle.class.getName()).info("Cannot resolve: "+toString());
+        }
+        return result;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (obj == null && !(obj instanceof TreePathHandle)) {
+        if (!(obj instanceof TreePathHandle)) {
             return false;
         }
         
@@ -147,7 +158,7 @@ public final class TreePathHandle {
             return false;
         }
         
-        return delegate.equals(((TreePathHandle) obj).delegate);
+        return delegate.equalsHandle(((TreePathHandle) obj).delegate);
     }
 
     @Override
@@ -158,11 +169,17 @@ public final class TreePathHandle {
     /**                                                                                                                                                                                                                        
      * Resolves an {@link Element} from the {@link TreePathHandle}.                                                                                                                                                            
      * @param compilationInfo representing the {@link javax.tools.CompilationTask}                                                                                                                                             
-     * @return resolved subclass of {@link Element} or null if the elment does not exist on                                                                                                                                    
+     * @return resolved subclass of {@link Element} or null if the element does not exist on                                                                                                                                    
      * the classpath/sourcepath of {@link javax.tools.CompilationTask}.                                                                                                                                                        
      */                                                                                                                                                                                                                        
     public Element resolveElement(final CompilationInfo info) {
-        return this.delegate.resolveElement(info);
+        Parameters.notNull("info", info);
+        
+        final Element result = this.delegate.resolveElement(info);
+        if (result == null) {
+            Logger.getLogger(TreePathHandle.class.getName()).info("Cannot resolve: "+toString());
+        }
+        return result;
     }                                                                                                                                                                                                                          
                                                                                                                                                                                                                                
     /**                                                                                                                                                                                                                        
@@ -185,9 +202,17 @@ public final class TreePathHandle {
      * @throws java.lang.IllegalArgumentException if arguments are not supported
      */
     public static TreePathHandle create(final TreePath treePath, CompilationInfo info) throws IllegalArgumentException {
+        Parameters.notNull("treePath", treePath);
+        Parameters.notNull("info", info);
+        
         FileObject file;
         try {
-            file = URLMapper.findFileObject(treePath.getCompilationUnit().getSourceFile().toUri().toURL());
+            URL url = treePath.getCompilationUnit().getSourceFile().toUri().toURL();
+            file = URLMapper.findFileObject(url);
+            if (file == null) {
+                //#155161:
+                throw new IllegalStateException("Cannot find FileObject for: " + url);
+            }
         } catch (MalformedURLException e) {
             throw (RuntimeException) new RuntimeException().initCause(e);
         }
@@ -280,7 +305,7 @@ public final class TreePathHandle {
     
     @Override
     public String toString() {
-        return "TreePathHandle[kind:" + getKind();// + ", enclosingElement:" + enclosingElement + "]";
+        return "TreePathHandle[delegate:"+delegate+"]";
     }
 
     static interface Delegate {
@@ -299,17 +324,12 @@ public final class TreePathHandle {
 
     private static final class TreeDelegate implements Delegate {
         
-        private PositionRef position;
-
-        private KindPath kindPath;
-
-        private FileObject file;
-
-        private ElementHandle enclosingElement;
-
-        private boolean enclElIsCorrespondingEl;
-
-        private Tree.Kind kind;
+        private final PositionRef position;
+        private final KindPath kindPath;
+        private final FileObject file;
+        private final ElementHandle enclosingElement;
+        private final boolean enclElIsCorrespondingEl;
+        private final Tree.Kind kind;
 
         private TreeDelegate(PositionRef position, KindPath kindPath, FileObject file, ElementHandle element, boolean enclElIsCorrespondingEl) {
             this.kindPath = kindPath;
@@ -328,7 +348,11 @@ public final class TreePathHandle {
                         kind = Tree.Kind.VARIABLE;
                     } else if (k == ElementKind.METHOD || k == ElementKind.CONSTRUCTOR) {
                         kind = Tree.Kind.METHOD;
+                    } else {
+                        kind = null;
                     }
+                } else {
+                    kind = null;
                 }
             }
         }
@@ -344,7 +368,7 @@ public final class TreePathHandle {
         /**                                                                                                                                                                                                                        
          * Resolves an {@link TreePath} from the {@link TreePathHandle}.                                                                                                                                                           
          * @param compilationInfo representing the {@link javax.tools.CompilationTask}                                                                                                                                             
-         * @return resolved subclass of {@link Element} or null if the elment does not exist on                                                                                                                                    
+         * @return resolved subclass of {@link Element} or null if the element does not exist on                                                                                                                                    
          * the classpath/sourcepath of {@link javax.tools.CompilationTask}.
          * @throws {@link IllegalArgumentException} when this {@link TreePathHandle} is not created for a source
          * represented by the compilationInfo.
@@ -352,7 +376,30 @@ public final class TreePathHandle {
         public TreePath resolve(final CompilationInfo compilationInfo) throws IllegalArgumentException {
             assert compilationInfo != null;
             if (!compilationInfo.getFileObject().equals(getFileObject())) {
-                throw new IllegalArgumentException("TreePathHandle [" + FileUtil.getFileDisplayName(getFileObject()) + "] was not created from " + FileUtil.getFileDisplayName(compilationInfo.getFileObject()));
+                StringBuilder debug  = new StringBuilder();
+                FileObject    mine   = getFileObject();
+                FileObject    remote = compilationInfo.getFileObject();
+                
+                debug.append("TreePathHandle [" + FileUtil.getFileDisplayName(mine) + "] was not created from " + FileUtil.getFileDisplayName(remote));
+                debug.append("\n");
+
+                try {
+                    debug.append("mine: id=" + System.identityHashCode(mine) + ", valid=" + mine.isValid() + ", url=");
+                    debug.append(mine.getURL().toExternalForm());
+                } catch (FileStateInvalidException ex) {
+                    debug.append(ex.getMessage());
+                }
+
+                debug.append("\n");
+                
+                try {
+                    debug.append("remote: id=" + System.identityHashCode(remote) + ", valid=" + remote.isValid() + ", url=");
+                    debug.append(remote.getURL().toExternalForm());
+                } catch (FileStateInvalidException ex) {
+                    debug.append(ex.getMessage());
+                }
+
+                throw new IllegalArgumentException(debug.toString());
             }
             Element element = enclosingElement.resolve(compilationInfo);
             TreePath tp = null;
@@ -369,7 +416,9 @@ public final class TreePathHandle {
             }
             tp = compilationInfo.getTreeUtilities().pathFor(position.getOffset() + 1);
             while (tp != null) {
-                if (new KindPath(tp).equals(kindPath)) {
+                KindPath kindPath1 = new KindPath(tp);
+                kindPath.getList().remove(Tree.Kind.ERRONEOUS);
+                if (kindPath1.equals(kindPath)) {
                     return tp;
                 }
                 tp = tp.getParentPath();
@@ -413,7 +462,7 @@ public final class TreePathHandle {
         /**                                                                                                                                                                                                                        
          * Resolves an {@link Element} from the {@link TreePathHandle}.                                                                                                                                                            
          * @param compilationInfo representing the {@link javax.tools.CompilationTask}                                                                                                                                             
-         * @return resolved subclass of {@link Element} or null if the elment does not exist on                                                                                                                                    
+         * @return resolved subclass of {@link Element} or null if the element does not exist on                                                                                                                                    
          * the classpath/sourcepath of {@link javax.tools.CompilationTask}.                                                                                                                                                        
          */
         public Element resolveElement(final CompilationInfo info) {
@@ -470,7 +519,7 @@ public final class TreePathHandle {
 
         @Override
         public String toString() {
-            return "TreePathHandle[kind:" + kind + ", enclosingElement:" + enclosingElement + "]";
+            return this.getClass().getSimpleName()+"[kind:" + kind + ", enclosingElement:" + enclosingElement +", file:" + file + "]";
         }
 
         static class KindPath {
@@ -493,16 +542,20 @@ public final class TreePathHandle {
                 }
                 return false;
             }
+
+            public ArrayList<Tree.Kind> getList() {
+                return kindPath;
+            }
         }
 
     }
     
     private static final class ElementDelegate implements Delegate {
 
-        private ElementHandle<? extends Element> el;
-        private URL source;
-        private String qualName;
-        private ClasspathInfo cpInfo;
+        private final ElementHandle<? extends Element> el;
+        private final URL source;
+        private final String qualName;
+        private final ClasspathInfo cpInfo;
 
         public ElementDelegate(ElementHandle<? extends Element> el, URL source, String qualName, ClasspathInfo cpInfo) {
             this.el = el;
@@ -514,11 +567,15 @@ public final class TreePathHandle {
         public FileObject getFileObject() {
             //source does not exist
             FileObject file = SourceUtils.getFile(el, cpInfo);
-
+            //tzezula: Very strange and probably useless
             if (file == null && source != null) {
                 FileObject fo = URLMapper.findFileObject(source);
+                if (fo == null) {
+                    log.log(Level.INFO, "There is no fileobject for source: " +source + ". Was this file removed?");
+                    return file;
+                }
                 file = fo;
-                if (fo.getNameExt().endsWith("sig")) {
+                if (fo.getNameExt().endsWith(FileObjects.SIG)) {
                     //NOI18N
                     //conversion sig -> class
                     String pkgName = FileObjects.convertPackage2Folder(qualName);
@@ -529,11 +586,11 @@ public final class TreePathHandle {
                     if (fo != null) {
                         try {
                             URL url = fo.getURL();
-                            URL sourceRoot = Index.getSourceRootForClassFolder(url);
+                            URL sourceRoot = null;//XXX: Index.getSourceRootForClassFolder(url);
                             if (sourceRoot != null) {
                                 FileObject root = URLMapper.findFileObject(sourceRoot);
                                 String resourceName = FileUtil.getRelativePath(fo, URLMapper.findFileObject(source));
-                                file = root.getFileObject(resourceName.replace(".sig", ".class")); //NOI18N
+                                file = root.getFileObject(resourceName.replace('.'+FileObjects.SIG, '.'+FileObjects.CLASS)); //NOI18N
                             } else {
                                 Logger.getLogger(TreePathHandle.class.getName()).fine("Index.getSourceRootForClassFolder(url) returned null for url=" + url); //NOI18N
                             }
@@ -606,6 +663,10 @@ public final class TreePathHandle {
             return Arrays.hashCode(el.getSignature());
         }
         
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName()+"[elementHandle:"+el+", url:"+source+"]";
+        }
     }
     
 }                                                                                                                                                                                                                              
