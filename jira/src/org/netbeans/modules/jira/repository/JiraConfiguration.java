@@ -40,6 +40,7 @@
 package org.netbeans.modules.jira.repository;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.net.MalformedURLException;
 import java.util.HashMap;
@@ -76,7 +77,7 @@ public class JiraConfiguration extends JiraClientCache {
 
     private JiraClient client;
     private JiraRepository repository;
-    private LazyData data;
+    private ConfigurationData data;
     private Set<String> loadedProjects = new HashSet<String>();
 
     private static final Object USER_LOCK = new Object();
@@ -86,64 +87,37 @@ public class JiraConfiguration extends JiraClientCache {
     protected JiraConfiguration(JiraClient jiraClient, JiraRepository repository) {
         super(jiraClient);
         this.client = jiraClient;
-        this.repository = repository;
-        data = new LazyData();
+        this.repository = repository;        
     }
 
-    public static JiraConfiguration create(final JiraRepository repository) {
+    public static <T extends JiraConfiguration> T create(final JiraRepository repository, final Class<T> clazz) {
         assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt"; // NOI18N
 
         // XXX need logging incl. consumed time
 
-        final JiraConfiguration[] cache = new JiraConfiguration[1];
-        JiraCommand cmd = new JiraCommand() {
+        class ConfigurationCommand extends JiraCommand {
+            private T configuration;
             @Override
             public void execute() throws JiraException, CoreException, IOException, MalformedURLException {
 
-                JiraClient client = Jira.getInstance().getClient(repository.getTaskRepository());
+                final JiraClient client = Jira.getInstance().getClient(repository.getTaskRepository());
 
-                cache[0] = new JiraConfiguration(client, repository);
-
-                NullProgressMonitor nullProgressMonitor = new NullProgressMonitor();
-
-                cache[0].data.projects = client.getProjects(nullProgressMonitor);
-                cache[0].data.projectsById = new HashMap<String, Project>(cache[0].data.projects.length);
-                cache[0].data.projectsByKey = new HashMap<String, Project>(cache[0].data.projects.length);
-                for (Project project : cache[0].data.projects) {
-                    cache[0].data.projectsById.put(project.getId(), project);
-                    cache[0].data.projectsByKey.put(project.getKey(), project);
+                try {
+                    Constructor<T> c = clazz.getDeclaredConstructor(JiraClient.class, JiraRepository.class);
+                    c.setAccessible(true);
+                    configuration = c.newInstance(client, repository);
+                } catch (Exception ex) {
+                    Jira.LOG.log(Level.SEVERE, null, ex);
+                    return;
                 }
-                cache[0].data.priorities = client.getPriorities(nullProgressMonitor);
-                cache[0].data.prioritiesById = new HashMap<String, Priority>(cache[0].data.priorities.length);
-                for (Priority priority : cache[0].data.priorities) {
-                    cache[0].data.prioritiesById.put(priority.getId(), priority);
-                }
-                cache[0].data.resolutions = client.getResolutions(nullProgressMonitor);
-                cache[0].data.resolutionsById = new HashMap<String, Resolution>(cache[0].data.resolutions.length);
-                for (Resolution resolution : cache[0].data.resolutions) {
-                    cache[0].data.resolutionsById.put(resolution.getId(), resolution);
-                }
-                cache[0].data.issueTypes = client.getIssueTypes(nullProgressMonitor);
-                cache[0].data.issueTypesById = new HashMap<String, IssueType>(cache[0].data.issueTypes.length);
-                for (IssueType type : cache[0].data.issueTypes) {
-                    cache[0].data.issueTypesById.put(type.getId(), type);
-                }
-                cache[0].data.statuses = client.getStatuses(nullProgressMonitor);
-                cache[0].data.statusesById = new HashMap<String, JiraStatus>(cache[0].data.statuses.length);
-                for (JiraStatus status : cache[0].data.statuses) {
-                    cache[0].data.statusesById.put(status.getId(), status);
-                }
-                // XXX what else do we need?
-                // XXX issue types by project
-
+                configuration.initialize();
                 hackJiraCache(client);
             }
-
             private void hackJiraCache(JiraClient client) {
                 try {
                     Field f = client.getClass().getDeclaredField("cache");      // NOI18N
                     f.setAccessible(true);
-                    f.set(client, cache[0]);
+                    f.set(client, configuration);
                 } catch (IllegalArgumentException ex) {
                     Jira.LOG.log(Level.SEVERE, null, ex);
                 } catch (IllegalAccessException ex) {
@@ -154,13 +128,57 @@ public class JiraConfiguration extends JiraClientCache {
                     Jira.LOG.log(Level.SEVERE, null, ex);
                 }
             }
-        };
+        }
+        ConfigurationCommand cmd = new ConfigurationCommand();
+
         repository.getExecutor().execute(cmd, true, false);
         if(!cmd.hasFailed()) {
-            return cache[0];
+            return cmd.configuration;
         }
         return null;
     }
+
+    protected void initialize() throws JiraException {
+        NullProgressMonitor nullProgressMonitor = new NullProgressMonitor();
+
+        data = (ConfigurationData) getData();
+        if(data.initialized) {
+            return;
+        }
+        data.projects = client.getProjects(nullProgressMonitor);
+        data.projectsById = new HashMap<String, Project>(data.projects.length);
+        data.projectsByKey = new HashMap<String, Project>(data.projects.length);
+        for (Project project : data.projects) {
+            data.projectsById.put(project.getId(), project);
+            data.projectsByKey.put(project.getKey(), project);
+        }
+        data.priorities = client.getPriorities(nullProgressMonitor);
+        data.prioritiesById = new HashMap<String, Priority>(data.priorities.length);
+        for (Priority priority : data.priorities) {
+            data.prioritiesById.put(priority.getId(), priority);
+        }
+        data.resolutions = client.getResolutions(nullProgressMonitor);
+        data.resolutionsById = new HashMap<String, Resolution>(data.resolutions.length);
+        for (Resolution resolution : data.resolutions) {
+            data.resolutionsById.put(resolution.getId(), resolution);
+        }
+        data.issueTypes = client.getIssueTypes(nullProgressMonitor);
+        data.issueTypesById = new HashMap<String, IssueType>(data.issueTypes.length);
+        for (IssueType type : data.issueTypes) {
+            data.issueTypesById.put(type.getId(), type);
+        }
+        data.statuses = client.getStatuses(nullProgressMonitor);
+        data.statusesById = new HashMap<String, JiraStatus>(data.statuses.length);
+        for (JiraStatus status : data.statuses) {
+            data.statusesById.put(status.getId(), status);
+        }
+
+        data.initialized = true;
+        // XXX what else do we need?
+        // XXX issue types by project
+
+    }
+
     @Override
     public boolean hasDetails() {
         return true; // always
@@ -169,7 +187,7 @@ public class JiraConfiguration extends JiraClientCache {
     @Override
     public JiraClientData getData() {
         if(data == null) {
-             data = new LazyData();
+             data = new ConfigurationData();
         }
         return data;
     }
@@ -255,7 +273,7 @@ public class JiraConfiguration extends JiraClientCache {
 
     @Override
     public void setData(JiraClientData data) {
-        this.data = (LazyData) data;
+        this.data = (ConfigurationData) data;
     }
 
     @Override
@@ -288,7 +306,7 @@ public class JiraConfiguration extends JiraClientCache {
         }
     }
 
-    private void initProject(final Project project) {
+    protected void initProject(final Project project) {
         assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt"; // NOI18N
         JiraCommand cmd = new JiraCommand() {
             @Override
@@ -346,7 +364,7 @@ public class JiraConfiguration extends JiraClientCache {
         return null;
     }
 
-    private class LazyData extends JiraClientData {
+    protected class ConfigurationData extends JiraClientData {
 	Group[] groups = new Group[0];
 	IssueType[] issueTypes = new IssueType[0];
 	Map<String, IssueType> issueTypesById = new HashMap<String, IssueType>();
@@ -363,6 +381,7 @@ public class JiraConfiguration extends JiraClientCache {
 	User[] users = new User[0];
 	Map<String, User> usersByName = new HashMap<String, User>();
 	long lastUpdate;
+        boolean initialized = false;
     }
 
 }
