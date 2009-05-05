@@ -42,48 +42,121 @@
 package org.netbeans.editor;
 
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.io.IOException;
 import java.io.Writer;
 import java.io.CharArrayWriter;
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
+import java.lang.reflect.Method;
+import java.util.Stack;
+import java.util.WeakHashMap;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import javax.swing.text.Document;
-import javax.swing.text.JTextComponent;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.EditorKit;
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.mimelookup.MimePath;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.lib.editor.util.CharSequenceUtilities;
 import org.netbeans.lib.editor.util.swing.DocumentUtilities;
+import org.netbeans.modules.editor.lib.EditorPreferencesDefaults;
+import org.netbeans.modules.editor.lib.KitsTracker;
+import org.netbeans.modules.editor.lib.SettingsConversions;
+import org.openide.util.Lookup;
+import org.openide.util.WeakListeners;
 
 /**
-* Various services related to indentation and text formatting
-* are located here. Each kit can have different formatter
-* so the first action should be getting the right formatter
-* for the given kit by calling Formatter.getFormatter(kitClass).
-*
-* @author Miloslav Metelka
-* @version 1.00
-*/
+ * Various services related to indentation and text formatting
+ * are located here. Each kit can have different formatter
+ * so the first action should be getting the right formatter
+ * for the given kit by calling Formatter.getFormatter(kitClass).
+ *
+ * @author Miloslav Metelka
+ * @version 1.00
+ *
+ * @deprecated Please use Editor Indentation API instead, for details see
+ *   <a href="@org-netbeans-modules-editor-indent@/overview-summary.html">Editor Indentation</a>.
+ */
 
-public class Formatter implements SettingsChangeListener {
+public class Formatter {
 
-    private static Map kitClass2Formatter = new HashMap();
+    private static final Map<Class, Formatter> kitClass2Formatter = new WeakHashMap<Class, Formatter>();
+    private static final Map<MimePath, Formatter> mimePath2Formatter = new WeakHashMap<MimePath, Formatter>();
 
-    /** Get the formatter for the given kit-class */
+    /** 
+     * Gets <code>Formatter</code> implementation for given editor kit's
+     * implementation class.
+     * 
+     * @param kitClass The editor kit's implementation class to get the
+     *   <code>Formatter</code> for.
+     * 
+     * @return <code>Formatter</code> implementation created by the editor kit.
+     * @deprecated Use of editor kit's implementation classes is deprecated
+     *   in favor of mime types.
+     */
     public static synchronized Formatter getFormatter(Class kitClass) {
-        Formatter f = (Formatter)kitClass2Formatter.get(kitClass);
-        if (f == null) {
-            f = BaseKit.getKit(kitClass).createFormatter();
-            kitClass2Formatter.put(kitClass, f);
+        String mimeType = KitsTracker.getInstance().findMimeType(kitClass);
+        if (mimeType != null) {
+            return getFormatter(mimeType);
+        } else {
+            Formatter formatter = kitClass2Formatter.get(kitClass);
+            if (formatter == null) {
+                formatter = BaseKit.getKit(kitClass).createFormatter();
+                kitClass2Formatter.put(kitClass, formatter);
+            }
+            return formatter;
         }
-        return f;
     }
     
-    /** Set the formatter for the given kit-class.
+    /**
+     * Gets <code>Formatter</code> implementation for given mime type.
+     * 
+     * @param mimeType The mime type to get the <code>Formatter</code> for.
+     * 
+     * @return <code>Formatter</code> implementation created by the mime
+     *   type's editor kit.
+     * @deprecated Use Editor Indentation API.
+     * @since 1.18
+     */
+    public static synchronized Formatter getFormatter(String mimeType) {
+        MimePath mimePath = MimePath.parse(mimeType);
+        Formatter formatter = mimePath2Formatter.get(mimePath);
+        
+        if (formatter == null) {
+            EditorKit editorKit = MimeLookup.getLookup(mimePath).lookup(EditorKit.class);
+            if (editorKit instanceof BaseKit) {
+                formatter = ((BaseKit) editorKit).createFormatter();
+            } else {
+                formatter = BaseKit.getKit(BaseKit.class).createFormatter();
+            }
+            mimePath2Formatter.put(mimePath, formatter);
+        }
+        
+        return formatter;
+    }
+    
+    private static synchronized void setFormatter(String mimeType, Formatter formatter) {
+        mimePath2Formatter.put(MimePath.parse(mimeType), formatter);
+    }
+    
+    /** 
+     * Sets the formatter for the given kit-class.
+     * 
      * @param kitClass class of the kit for which the formatter
      *  is being assigned.
      * @param formatter new formatter for the given kit
+     * 
+     * @deprecated Use Editor Indentation API.
      */
     public static synchronized void setFormatter(Class kitClass, Formatter formatter) {
-        kitClass2Formatter.put(kitClass, formatter);
+        String mimeType = KitsTracker.getInstance().findMimeType(kitClass);
+        if (mimeType != null) {
+            setFormatter(mimeType, formatter);
+        } else {
+            kitClass2Formatter.put(kitClass, formatter);
+        }
     }
 
 
@@ -119,13 +192,52 @@ public class Formatter implements SettingsChangeListener {
 
     private boolean customSpacesPerTab;
 
+    private final Preferences prefs;
+    private final PreferenceChangeListener prefsListener = new PreferenceChangeListener() {
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            String key = evt == null ? null : evt.getKey();
+            if (!inited || key == null || SimpleValueNames.TAB_SIZE.equals(key)) {
+                if (!customTabSize) {
+                    tabSize = prefs.getInt(SimpleValueNames.TAB_SIZE, EditorPreferencesDefaults.defaultTabSize);
+                }
+            }
+
+            // Shift-width often depends on the rest of parameters
+            if (!customShiftWidth) {
+                int shw = prefs.getInt(SimpleValueNames.INDENT_SHIFT_WIDTH, -1);
+                if (shw >= 0) {
+                    shiftWidth = shw;
+                }
+            }
+
+            if (!inited || key == null || SimpleValueNames.EXPAND_TABS.equals(key)) {
+                if (!customExpandTabs) {
+                    expandTabs = prefs.getBoolean(SimpleValueNames.EXPAND_TABS, EditorPreferencesDefaults.defaultExpandTabs);
+                }
+            }
+            
+            if (!inited || key == null || SimpleValueNames.SPACES_PER_TAB.equals(key)) {
+                if (!customSpacesPerTab) {
+                    spacesPerTab = prefs.getInt(SimpleValueNames.SPACES_PER_TAB, EditorPreferencesDefaults.defaultSpacesPerTab);
+                }
+            }
+
+            inited = true;
+            
+            SettingsConversions.callSettingsChange(Formatter.this);
+        }
+    };
+    
     /** Construct new formatter.
     * @param kitClass the class of the kit for which this formatter is being
     *  constructed.
     */
     public Formatter(Class kitClass) {
         this.kitClass = kitClass;
-        Settings.addSettingsChangeListener(this);
+        
+        String mimeType = BaseKit.getKit(kitClass).getContentType();
+        prefs = MimeLookup.getLookup(MimePath.parse(mimeType)).lookup(Preferences.class);
+        prefs.addPreferenceChangeListener(WeakListeners.create(PreferenceChangeListener.class, prefsListener, prefs));
     }
 
     /** Get the kit-class for which this formatter is constructed. */
@@ -133,38 +245,9 @@ public class Formatter implements SettingsChangeListener {
         return kitClass;
     }
 
-    public void settingsChange(SettingsChangeEvent evt) {
-        String settingName = (evt != null) ? evt.getSettingName() : null;
-        if (!inited || settingName == null || SettingsNames.TAB_SIZE.equals(settingName)) {
-            if (!customTabSize) {
-                tabSize = SettingsUtil.getInteger(kitClass, SettingsNames.TAB_SIZE,
-                                                  SettingsDefaults.defaultTabSize);
-            }
-        }
-
-        // Shift-width often depends on the rest of parameters
-        if (!customShiftWidth) {
-            Object shw = Settings.getValue(kitClass, SettingsNames.INDENT_SHIFT_WIDTH);
-            if (shw instanceof Integer) {
-                shiftWidth = (Integer)shw;
-            }
-        }
-
-        if (!inited || settingName == null || SettingsNames.EXPAND_TABS.equals(settingName)) {
-            if (!customExpandTabs) {
-                expandTabs = SettingsUtil.getBoolean(kitClass, SettingsNames.EXPAND_TABS,
-                                                     SettingsDefaults.defaultExpandTabs);
-            }
-        }
-        if (!inited || settingName == null || SettingsNames.SPACES_PER_TAB.equals(settingName)) {
-            if (!customSpacesPerTab) {
-                spacesPerTab = SettingsUtil.getInteger(kitClass, SettingsNames.SPACES_PER_TAB,
-                                                       SettingsDefaults.defaultSpacesPerTab);
-            }
-        }
-
-        inited = true;
-    }
+    // ------------------------------------------------------------------------
+    // Formatting Settings setters and getters
+    // ------------------------------------------------------------------------
 
     /** Get the number of spaces the TAB character ('\t') visually represents
      * for non-BaseDocument documents. It shouldn't be used for BaseDocument
@@ -178,8 +261,16 @@ public class Formatter implements SettingsChangeListener {
      * @see BaseDocument.getTabSize()
      */
     public int getTabSize() {
+        Document doc = getFormattingContextDocument();
+        if (doc != null) {
+            Object ret = callIndentUtils("tabSize", doc); //NOI18N
+            if (ret instanceof Integer) {
+                return (Integer) ret;
+            }
+        }
+
         if (!customTabSize && !inited) {
-            settingsChange(null);
+            prefsListener.preferenceChange(null);
         }
 
         return tabSize;
@@ -206,8 +297,16 @@ public class Formatter implements SettingsChangeListener {
      * @see getSpacesPerTab()
      */
     public int getShiftWidth() {
+        Document doc = getFormattingContextDocument();
+        if (doc != null) {
+            Object ret = callIndentUtils("indentLevelSize", doc); //NOI18N
+            if (ret instanceof Integer) {
+                return (Integer) ret;
+            }
+        }
+
         if (!customShiftWidth && !inited) {
-            settingsChange(null);
+            prefsListener.preferenceChange(null);
         }
 
         return (shiftWidth != null) ? shiftWidth.intValue() : getSpacesPerTab();
@@ -227,8 +326,16 @@ public class Formatter implements SettingsChangeListener {
 
     /** Should the typed tabs be expanded to the spaces? */
     public boolean expandTabs() {
+        Document doc = getFormattingContextDocument();
+        if (doc != null) {
+            Object ret = callIndentUtils("isExpandTabs", doc); //NOI18N
+            if (ret instanceof Boolean) {
+                return (Boolean) ret;
+            }
+        }
+
         if (!customExpandTabs && !inited) {
-            settingsChange(null);
+            prefsListener.preferenceChange(null);
         }
 
         return expandTabs;
@@ -243,8 +350,16 @@ public class Formatter implements SettingsChangeListener {
     * instead of one typed tab.
     */
     public int getSpacesPerTab() {
+        Document doc = getFormattingContextDocument();
+        if (doc != null) {
+            Object ret = callIndentUtils("indentLevelSize", doc); //NOI18N
+            if (ret instanceof Integer) {
+                return (Integer) ret;
+            }
+        }
+
         if (!customSpacesPerTab && !inited) {
-            settingsChange(null);
+            prefsListener.preferenceChange(null);
         }
 
         return spacesPerTab;
@@ -255,45 +370,18 @@ public class Formatter implements SettingsChangeListener {
         this.spacesPerTab = spacesPerTab;
     }
 
-    static String getIndentString(int indent, boolean expandTabs, int tabSize) {
-        if (indent <= 0) {
-            return "";
-        }
-
-        if (expandTabs) { // store in 0th slot
-            tabSize = 0;
-        }
-
-        synchronized (Settings.class) {
-            boolean large = (tabSize >= indentStringCache.length)
-                || (indent > ISC_MAX_INDENT_SIZE); // indexed by (indent - 1)
-            String indentString = null;
-            String[] tabCache = null;
-            if (!large) {
-                tabCache = indentStringCache[tabSize]; // cache for this tab
-                if (tabCache == null) {
-                    tabCache = new String[ISC_MAX_INDENT_SIZE];
-                    indentStringCache[tabSize] = tabCache;
-                }
-                indentString = tabCache[indent - 1];
-            }
-
-            if (indentString == null) {
-                indentString = Analyzer.getIndentString(indent, expandTabs, tabSize);
-
-                if (!large) {
-                    tabCache[indent - 1] = indentString;
-                }
-            }
-
-            return indentString;
-        }
-    }
+    // ------------------------------------------------------------------------
+    // Pure API methods
+    // ------------------------------------------------------------------------
 
     public String getIndentString(BaseDocument doc, int indent) {
-        return getIndentString(indent, expandTabs(), doc.getTabSize());
+        pushFormattingContextDocument(doc);
+        try {
+            return getIndentString(indent, expandTabs(), doc.getTabSize());
+        } finally {
+            popFormattingContextDocument(doc);
+        }
     }
-        
         
     /** Get the string that is appropriate for the requested indentation.
     * The returned string respects the <tt>expandTabs()</tt> and
@@ -310,71 +398,90 @@ public class Formatter implements SettingsChangeListener {
      * @param doc document to operate on
      * @param dotPos insertion point
      */
-    public void insertTabString(BaseDocument doc, int dotPos)
+    public void insertTabString (final BaseDocument doc, final int dotPos)
     throws BadLocationException {
-        doc.atomicLock();
+        pushFormattingContextDocument(doc);
         try {
-            // Determine first white char before dotPos
-            int rsPos = Utilities.getRowStart(doc, dotPos);
-            int startPos = Utilities.getFirstNonWhiteBwd(doc, dotPos, rsPos);
-            startPos = (startPos >= 0) ? (startPos + 1) : rsPos;
-            
-            int startCol = Utilities.getVisualColumn(doc, startPos);
-            int endCol = Utilities.getNextTabColumn(doc, dotPos);
-            String tabStr = Analyzer.getWhitespaceString(startCol, endCol, expandTabs(), doc.getTabSize());
-            
-            // Search for the first non-common char
-            char[] removeChars = doc.getChars(startPos, dotPos - startPos);
-            int ind = 0;
-            while (ind < removeChars.length && removeChars[ind] == tabStr.charAt(ind)) {
-                ind++;
-            }
-            
-            startPos += ind;
-            doc.remove(startPos, dotPos - startPos);
-            doc.insertString(startPos, tabStr.substring(ind), null);
-            
+            final BadLocationException[] badLocationExceptions = new BadLocationException [1];
+            doc.runAtomic (new Runnable () {
+                public void run () {
+                    try {
+                        // Determine first white char before dotPos
+                        int rsPos = Utilities.getRowStart(doc, dotPos);
+                        int startPos = Utilities.getFirstNonWhiteBwd(doc, dotPos, rsPos);
+                        startPos = (startPos >= 0) ? (startPos + 1) : rsPos;
+
+                        int startCol = Utilities.getVisualColumn(doc, startPos);
+                        int endCol = Utilities.getNextTabColumn(doc, dotPos);
+                        String tabStr = Analyzer.getWhitespaceString(startCol, endCol, expandTabs(), doc.getTabSize());
+
+                        // Search for the first non-common char
+                        char[] removeChars = doc.getChars(startPos, dotPos - startPos);
+                        int ind = 0;
+                        while (ind < removeChars.length && removeChars[ind] == tabStr.charAt(ind)) {
+                            ind++;
+                        }
+
+                        startPos += ind;
+                        doc.remove(startPos, dotPos - startPos);
+                        doc.insertString(startPos, tabStr.substring(ind), null);
+                    } catch (BadLocationException ex) {
+                        badLocationExceptions [0] = ex;
+                    }
+                }
+            });
+            if (badLocationExceptions[0] != null)
+                throw badLocationExceptions [0];
         } finally {
-            doc.atomicUnlock();
+            popFormattingContextDocument(doc);
         }
     }
 
     /** Change the indent of the given row. Document is atomically locked
     * during this operation.
     */
-    public void changeRowIndent(BaseDocument doc, int pos, int newIndent)
+    public void changeRowIndent (final BaseDocument doc, final int pos, final int newIndent)
     throws BadLocationException {
-        doc.atomicLock();
+        pushFormattingContextDocument(doc);
         try {
-            if (newIndent < 0) {
-                newIndent = 0;
-            }
-            int firstNW = Utilities.getRowFirstNonWhite(doc, pos);
-            if (firstNW == -1) { // valid first non-blank
-                firstNW = Utilities.getRowEnd(doc, pos);
-            }
-            int replacePos = Utilities.getRowStart(doc, pos);
-            int removeLen = firstNW - replacePos;
-            CharSequence removeText = DocumentUtilities.getText(doc, replacePos, removeLen);
-            String newIndentText = getIndentString(doc, newIndent);
-            if (CharSequenceUtilities.startsWith(newIndentText, removeText)) {
-                // Skip removeLen chars at start
-                newIndentText = newIndentText.substring(removeLen);
-                replacePos += removeLen;
-                removeLen = 0;
-            } else if (CharSequenceUtilities.endsWith(newIndentText, removeText)) {
-                // Skip removeLen chars at the end
-                newIndentText = newIndentText.substring(0, newIndentText.length() - removeLen);
-                removeLen = 0;
-            }
-            
-            if (removeLen != 0) {
-                doc.remove(replacePos, removeLen);
-            }
+            final BadLocationException[] badLocationExceptions = new BadLocationException [1];
+            doc.runAtomic (new Runnable () {
+                public void run () {
+                    try {
+                        int indent = newIndent < 0 ? 0 : newIndent;
+                        int firstNW = Utilities.getRowFirstNonWhite(doc, pos);
+                        if (firstNW == -1) { // valid first non-blank
+                            firstNW = Utilities.getRowEnd(doc, pos);
+                        }
+                        int replacePos = Utilities.getRowStart(doc, pos);
+                        int removeLen = firstNW - replacePos;
+                        CharSequence removeText = DocumentUtilities.getText(doc, replacePos, removeLen);
+                        String newIndentText = getIndentString(doc, indent);
+                        if (CharSequenceUtilities.startsWith(newIndentText, removeText)) {
+                            // Skip removeLen chars at start
+                            newIndentText = newIndentText.substring(removeLen);
+                            replacePos += removeLen;
+                            removeLen = 0;
+                        } else if (CharSequenceUtilities.endsWith(newIndentText, removeText)) {
+                            // Skip removeLen chars at the end
+                            newIndentText = newIndentText.substring(0, newIndentText.length() - removeLen);
+                            removeLen = 0;
+                        }
 
-            doc.insertString(replacePos, newIndentText, null);
+                        if (removeLen != 0) {
+                            doc.remove(replacePos, removeLen);
+                        }
+
+                        doc.insertString(replacePos, newIndentText, null);
+                    } catch (BadLocationException ex) {
+                        badLocationExceptions [0] = ex;
+                    }
+                }
+            });
+            if (badLocationExceptions[0] != null)
+                throw badLocationExceptions [0];
         } finally {
-            doc.atomicUnlock();
+            popFormattingContextDocument(doc);
         }
     }
 
@@ -386,61 +493,72 @@ public class Formatter implements SettingsChangeListener {
     * @param shiftCnt positive/negative count of shiftwidths by which indentation
     *   should be shifted right/left
     */
-    public void changeBlockIndent(BaseDocument doc, int startPos, int endPos,
-                                  int shiftCnt) throws BadLocationException {
-
-       
-        GuardedDocument gdoc = (doc instanceof GuardedDocument)
-                               ? (GuardedDocument)doc : null;
-        if (gdoc != null){
-            for (int i = startPos; i<endPos; i++){
-                if (gdoc.isPosGuarded(i)){
-                    java.awt.Toolkit.getDefaultToolkit().beep();
-                    return;
-                }
-            }
-        }
-        
-        doc.atomicLock();
+    public void changeBlockIndent (final BaseDocument doc, final int startPos, final int endPos,
+                                  final int shiftCnt) throws BadLocationException {
+        pushFormattingContextDocument(doc);
         try {
-
-            int indentDelta = shiftCnt * doc.getShiftWidth();
-            if (endPos > 0 && Utilities.getRowStart(doc, endPos) == endPos) {
-                endPos--;
-            }
-
-            int pos = Utilities.getRowStart(doc, startPos );
-            for (int lineCnt = Utilities.getRowCount(doc, startPos, endPos);
-                    lineCnt > 0; lineCnt--
-                ) {
-                int indent = Utilities.getRowIndent(doc, pos);
-                if (Utilities.isRowWhite(doc, pos)) {
-                    indent = -indentDelta; // zero indentation for white line
+            GuardedDocument gdoc = (doc instanceof GuardedDocument)
+                                   ? (GuardedDocument)doc : null;
+            if (gdoc != null){
+                for (int i = startPos; i<endPos; i++){
+                    if (gdoc.isPosGuarded(i)){
+                        java.awt.Toolkit.getDefaultToolkit().beep();
+                        return;
+                    }
                 }
-                changeRowIndent(doc, pos, Math.max(indent + indentDelta, 0));
-                pos = Utilities.getRowStart(doc, pos, +1);
             }
 
+            final BadLocationException[] badLocationExceptions = new BadLocationException [1];
+            doc.runAtomic (new Runnable () {
+                public void run () {
+                    try {
+                        int indentDelta = shiftCnt * doc.getShiftWidth();
+                        int end = (endPos > 0 && Utilities.getRowStart(doc, endPos) == endPos) ?
+                            endPos - 1 : endPos;
+
+                        int pos = Utilities.getRowStart(doc, startPos );
+                        for (int lineCnt = Utilities.getRowCount(doc, startPos, end);
+                                lineCnt > 0; lineCnt--
+                            ) {
+                            int indent = Utilities.getRowIndent(doc, pos);
+                            if (Utilities.isRowWhite(doc, pos)) {
+                                indent = -indentDelta; // zero indentation for white line
+                            }
+                            changeRowIndent(doc, pos, Math.max(indent + indentDelta, 0));
+                            pos = Utilities.getRowStart(doc, pos, +1);
+                        }
+                    } catch (BadLocationException ex) {
+                        badLocationExceptions [0] = ex;
+                    }
+                }
+            });
+            if (badLocationExceptions[0] != null)
+                throw badLocationExceptions [0];
         } finally {
-            doc.atomicUnlock();
+            popFormattingContextDocument(doc);
         }
     }
 
     /** Shift line either left or right */
     public void shiftLine(BaseDocument doc, int dotPos, boolean right)
     throws BadLocationException {
-        int ind = doc.getShiftWidth();
-        if (!right) {
-            ind = -ind;
-        }
+        pushFormattingContextDocument(doc);
+        try {
+            int ind = doc.getShiftWidth();
+            if (!right) {
+                ind = -ind;
+            }
 
-        if (Utilities.isRowWhite(doc, dotPos)) {
-            ind += Utilities.getVisualColumn(doc, dotPos);
-        } else {
-            ind += Utilities.getRowIndent(doc, dotPos);
+            if (Utilities.isRowWhite(doc, dotPos)) {
+                ind += Utilities.getVisualColumn(doc, dotPos);
+            } else {
+                ind += Utilities.getRowIndent(doc, dotPos);
+            }
+            ind = Math.max(ind, 0);
+            changeRowIndent(doc, dotPos, ind);
+        } finally {
+            popFormattingContextDocument(doc);
         }
-        ind = Math.max(ind, 0);
-        changeRowIndent(doc, dotPos, ind);
     }
 
     /** Reformat a block of code.
@@ -451,20 +569,35 @@ public class Formatter implements SettingsChangeListener {
     */
     public int reformat(BaseDocument doc, int startOffset, int endOffset)
     throws BadLocationException {
+        pushFormattingContextDocument(doc);
         try {
-            CharArrayWriter cw = new CharArrayWriter();
-            Writer w = createWriter(doc, startOffset, cw);
-            w.write(doc.getChars(startOffset, endOffset - startOffset));
-            w.close();
-            String out = new String(cw.toCharArray());
-            doc.remove(startOffset, endOffset - startOffset);
-            doc.insertString(startOffset, out, null);
-            return out.length();
-        } catch (IOException e) {
-            Utilities.annotateLoggable(e);
-            return 0;
+            try {
+                CharArrayWriter cw = new CharArrayWriter();
+                Writer w = createWriter(doc, startOffset, cw);
+                String originalString = doc.getText(startOffset, endOffset - startOffset);
+                w.write(originalString);
+                w.close();
+                String out = new String(cw.toCharArray());
+                if(!out.equals(originalString)){
+                    doc.remove(startOffset, endOffset - startOffset);
+                    doc.insertString(startOffset, out, null);
+                    return out.length();
+                }else{
+                    //nothing changed
+                    return 0;
+                }
+            } catch (IOException e) {
+                Utilities.annotateLoggable(e);
+                return 0;
+            }
+        } finally {
+            popFormattingContextDocument(doc);
         }
     }
+
+    // ------------------------------------------------------------------------
+    // Pure SPI methods
+    // ------------------------------------------------------------------------
 
     /** Indents the current line. Should not affect any other
     * lines.
@@ -518,6 +651,10 @@ public class Formatter implements SettingsChangeListener {
     public Writer createWriter(Document doc, int offset, Writer writer) {
         return writer;
     }
+
+    // ------------------------------------------------------------------------
+    // Methods that are called by API clients and overriden by SPI implementors
+    // ------------------------------------------------------------------------
 
     /**
      * Formatter clients should call this method
@@ -626,6 +763,99 @@ public class Formatter implements SettingsChangeListener {
      */
     public void reformatUnlock() {
         // No extra locking by default
+    }
+
+    // ------------------------------------------------------------------------
+    // private implementation
+    // ------------------------------------------------------------------------
+
+    private static ThreadLocal<Stack<Reference<Document>>> FORMATTING_CONTEXT_DOCUMENT = new ThreadLocal<Stack<Reference<Document>>>() {
+        @Override
+        protected Stack<Reference<Document>> initialValue() {
+            return new Stack<Reference<Document>>();
+        }
+    };
+
+    private static Document getFormattingContextDocument() {
+        Stack<Reference<Document>> stack = FORMATTING_CONTEXT_DOCUMENT.get();
+        return stack.isEmpty() ? null : stack.peek().get();
+    }
+
+    /* package */ static void pushFormattingContextDocument(Document doc) {
+        FORMATTING_CONTEXT_DOCUMENT.get().push(new WeakReference<Document>(doc));
+    }
+
+    /* package */ static void popFormattingContextDocument(Document doc) {
+        Stack<Reference<Document>> stack = FORMATTING_CONTEXT_DOCUMENT.get();
+        assert !stack.empty() : "Calling popFormattingContextDocument without pushFormattingContextDocument"; //NOI18N
+
+        Reference<Document> ref = stack.pop();
+        Document docFromStack = ref.get();
+        assert docFromStack == doc : "Popping " + doc + ", but the stack contains " + docFromStack;
+
+        ref.clear();
+    }
+
+    private static boolean noIndentUtils = false;
+    private static WeakReference<Class> indentUtilsClassRef = null;
+    private static Object callIndentUtils(String methodName, Document doc) {
+        if (noIndentUtils) {
+            return null;
+        }
+        
+        Class indentUtilsClass = indentUtilsClassRef == null ? null : indentUtilsClassRef.get();
+        if (indentUtilsClass == null) {
+            try {
+                ClassLoader loader = Lookup.getDefault().lookup(ClassLoader.class);
+                indentUtilsClass = loader.loadClass("org.netbeans.modules.editor.indent.api.IndentUtils"); //NOI18N
+                indentUtilsClassRef = new WeakReference<Class>(indentUtilsClass);
+            } catch (Exception e) {
+                noIndentUtils = true;
+                return null;
+            }
+        }
+
+        try {
+            Method m = indentUtilsClass.getDeclaredMethod(methodName, Document.class);
+            return m.invoke(null, doc);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String getIndentString(int indent, boolean expandTabs, int tabSize) {
+        if (indent <= 0) {
+            return "";
+        }
+
+        if (expandTabs) { // store in 0th slot
+            tabSize = 0;
+        }
+
+        synchronized (indentStringCache) {
+            boolean large = (tabSize >= indentStringCache.length)
+                || (indent > ISC_MAX_INDENT_SIZE); // indexed by (indent - 1)
+            String indentString = null;
+            String[] tabCache = null;
+            if (!large) {
+                tabCache = indentStringCache[tabSize]; // cache for this tab
+                if (tabCache == null) {
+                    tabCache = new String[ISC_MAX_INDENT_SIZE];
+                    indentStringCache[tabSize] = tabCache;
+                }
+                indentString = tabCache[indent - 1];
+            }
+
+            if (indentString == null) {
+                indentString = Analyzer.getIndentString(indent, expandTabs, tabSize);
+
+                if (!large) {
+                    tabCache[indent - 1] = indentString;
+                }
+            }
+
+            return indentString;
+        }
     }
 
 }
