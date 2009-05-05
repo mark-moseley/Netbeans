@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -54,6 +54,7 @@ import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JTable;
+import javax.swing.UIManager;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
@@ -70,7 +71,6 @@ public class UnitTable extends JTable {
     private UnitCategoryTableModel model = null;
     private static final int DARKER_COLOR_COMPONENT = 10;
     private TableCellRenderer enableRenderer = null;
-    private int rowHeight = -1;
     
     /** Creates a new instance of UpdateTable */
     public UnitTable (TableModel model) {
@@ -80,6 +80,9 @@ public class UnitTable extends JTable {
         this.model = (UnitCategoryTableModel) model;
         setShowGrid (false);
         setColumnsSize ();
+        if(UIManager.getLookAndFeel().getID().equals("Nimbus")) {
+            setBackground(new Color(getBackground().getRGB(), false));
+        }
         //setFillsViewportHeight(true);        
         setIntercellSpacing (new Dimension (0, 0));
         revalidate ();
@@ -98,13 +101,18 @@ public class UnitTable extends JTable {
     }
     
     @Override
+    public void removeNotify () {
+        super.removeNotify ();
+        enableRenderer = null;
+    }
+    
+    @Override
     public String getToolTipText (MouseEvent e) {
         String tip = null;
         java.awt.Point p = e.getPoint ();
         int rowIndex = rowAtPoint (p);
         int colIndex = columnAtPoint (p);
         int realColumnIndex = convertColumnIndexToModel (colIndex);
-        UnitCategoryTableModel model = (UnitCategoryTableModel)getModel ();
         tip = model.getToolTipText (rowIndex, realColumnIndex);
         return tip != null ? tip : super.getToolTipText (e);
     }
@@ -112,15 +120,12 @@ public class UnitTable extends JTable {
     void resetEnableRenderer () {
         if (enableRenderer != null) {
             setEnableRenderer (enableRenderer);
-            TableCellRenderer defaultRenderer = getDefaultRenderer(String.class);
-            
         }
     }
     
     void setEnableRenderer (TableCellRenderer renderer) {
         enableRenderer = renderer;
-        TableColumnModel columnModel = getColumnModel();
-        columnModel.getColumn(3).setCellRenderer(renderer);
+        columnModel.getColumn(columnModel.getColumnCount() - 1).setCellRenderer(renderer);
     }
     
     void resortByDefault () {
@@ -169,11 +174,10 @@ public class UnitTable extends JTable {
             JComponent jc = (JComponent)c;
             jc.setBorder(BorderFactory.createEmptyBorder());
         }
-        if (rowHeight < 0) {
-            Font font =  c.getFont();
-            FontMetrics fontMetrics = c.getFontMetrics(font);
+        int fontHeight = c.getFontMetrics(c.getFont()).getHeight();
+        if (rowHeight < 0 || rowHeight < fontHeight) {
             int def = new JTable().getRowHeight();
-            rowHeight = Math.max(def, fontMetrics.getHeight());
+            rowHeight = Math.max(def, fontHeight);
             setRowHeight(rowHeight);
         }
         
