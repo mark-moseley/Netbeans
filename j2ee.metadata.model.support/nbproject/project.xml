@@ -64,12 +64,22 @@
                         <code-name-base>org.netbeans.api.java</code-name-base>
                     </test-dependency>
                     <test-dependency>
+                        <code-name-base>org.netbeans.api.java.classpath</code-name-base>
+                    </test-dependency>
+                    <test-dependency>
                         <!-- for the nbinst: protocol -->
                         <code-name-base>org.netbeans.core.startup</code-name-base>
                         <recursive/>
                     </test-dependency>
                     <test-dependency>
                         <code-name-base>org.netbeans.modules.masterfs</code-name-base>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.projectui</code-name-base>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.editor.mimelookup.impl</code-name-base>
+                        <recursive/>
                     </test-dependency>
                 </test-type>
             </test-dependencies>

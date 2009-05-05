@@ -64,8 +64,10 @@ import junit.framework.Assert;
 import org.netbeans.api.editor.mimelookup.MimePath;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.lexer.JavaTokenId;
+import org.netbeans.api.java.source.ClasspathInfo;
+import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
-import org.netbeans.api.java.source.SourceUtilsTestUtil2;
+import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.gen.WhitespaceIgnoringDiff;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.junit.NbTestCase;
@@ -74,10 +76,12 @@ import org.netbeans.modules.editor.java.JavaCompletionProvider;
 import org.netbeans.modules.editor.java.JavaKit;
 import org.netbeans.modules.editor.java.Utilities;
 import org.netbeans.modules.java.JavaDataLoader;
+import org.netbeans.modules.java.source.parsing.JavacParserFactory;
 import org.netbeans.modules.java.source.usages.BinaryAnalyser;
 import org.netbeans.modules.java.source.usages.ClassIndexImpl;
 import org.netbeans.modules.java.source.usages.ClassIndexManager;
 import org.netbeans.modules.java.source.usages.IndexUtil;
+import org.netbeans.modules.parsing.api.Source;
 import org.netbeans.spi.editor.completion.CompletionItem;
 import org.netbeans.spi.editor.completion.CompletionProvider;
 import org.netbeans.spi.editor.mimelookup.MimeDataProvider;
@@ -88,7 +92,6 @@ import org.openide.LifecycleManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.MultiFileSystem;
 import org.openide.filesystems.Repository;
@@ -137,52 +140,67 @@ public class CompletionTestBase extends NbTestCase {
     }
     
     protected void setUp() throws Exception {
+// this call did not do anything
+//        GlobalSourcePathTestUtil.setUseLibraries (false);
         XMLFileSystem system = new XMLFileSystem();
         system.setXmlUrls(new URL[] {
             JavaCompletionProviderBasicTest.class.getResource("/org/netbeans/modules/java/editor/resources/layer.xml"),
             JavaCompletionProviderBasicTest.class.getResource("/org/netbeans/modules/defaults/mf-layer.xml")
         });
         Repository repository = new Repository(new MultiFileSystem(new FileSystem[] {FileUtil.createMemoryFileSystem(), system}));
+        final ClassPath bootPath = createClassPath(System.getProperty("sun.boot.class.path"));
+        ClassPathProvider cpp = new ClassPathProvider() {
+            public ClassPath findClassPath(FileObject file, String type) {
+                try {
+                    if (type == ClassPath.SOURCE) {
+                        return ClassPathSupport.createClassPath(new FileObject[]{FileUtil.toFileObject(getWorkDir())});
+                    }
+                    if (type == ClassPath.COMPILE) {
+                        return ClassPathSupport.createClassPath(new FileObject[0]);
+                    }
+                    if (type == ClassPath.BOOT) {
+                        return bootPath;
+                    }
+                } catch (IOException ex) {}
+                return null;
+            }
+        };
+        SharedClassObject loader = JavaDataLoader.findObject(JavaDataLoader.class, true);
+        MimeDataProvider mdp = new MimeDataProvider() {
+            public Lookup getLookup(MimePath mimePath) {
+                return Lookups.fixed(new JavaKit(), new JavacParserFactory());
+            }
+        };
+        Lkp.initLookups(new Object[] {repository, loader, cpp, mdp});
         File cacheFolder = new File(getWorkDir(), "var/cache/index");
         cacheFolder.mkdirs();
         IndexUtil.setCacheFolder(cacheFolder);
+        JEditorPane.registerEditorKitForContentType("text/x-java", "org.netbeans.modules.editor.java.JavaKit");
         final ClassPath sourcePath = ClassPathSupport.createClassPath(new FileObject[] {FileUtil.toFileObject(getDataDir())});
         final ClassIndexManager mgr  = ClassIndexManager.getDefault();
         for (ClassPath.Entry entry : sourcePath.entries()) {
             mgr.createUsagesQuery(entry.getURL(), true);
         }
-        final ClassPath bootPath = createClassPath(System.getProperty("sun.boot.class.path"));
-        for (ClassPath.Entry entry : bootPath.entries()) {
-            final URL url = entry.getURL();
-            final ClassIndexImpl cii = mgr.createUsagesQuery(url, false);
-            ClassIndexManager.getDefault().writeLock(new ClassIndexManager.ExceptionAction<Void>() {
-                public Void run() throws IOException, InterruptedException {
-                    BinaryAnalyser ba = cii.getBinaryAnalyser();            
-                    ba.start(url, null, new AtomicBoolean(false), new AtomicBoolean(false));
-                    ba.finish();
-                    return null;
+        final ClasspathInfo cpInfo = ClasspathInfo.create(bootPath, ClassPathSupport.createClassPath(new URL[0]), sourcePath);
+        assertNotNull(cpInfo);
+        final JavaSource js = JavaSource.create(cpInfo);
+        assertNotNull(js);
+        js.runUserActionTask(new Task<CompilationController>() {
+            public void run(CompilationController parameter) throws Exception {
+                for (ClassPath.Entry entry : bootPath.entries()) {
+                    final URL url = entry.getURL();
+                    final ClassIndexImpl cii = mgr.createUsagesQuery(url, false);
+                    ClassIndexManager.getDefault().writeLock(new ClassIndexManager.ExceptionAction<Void>() {
+                        public Void run() throws IOException, InterruptedException {
+                            BinaryAnalyser ba = cii.getBinaryAnalyser();
+                            ba.start(url, new AtomicBoolean(false), new AtomicBoolean(false));
+                            ba.finish();
+                            return null;
+                        }
+                    });
                 }
-            });            
-        }                
-        ClassPathProvider cpp = new ClassPathProvider() {
-            public ClassPath findClassPath(FileObject file, String type) {
-                if (type == ClassPath.SOURCE)
-                    return sourcePath;
-                    if (type == ClassPath.COMPILE)
-                        return ClassPathSupport.createClassPath(new FileObject[0]);
-                    if (type == ClassPath.BOOT)
-                        return bootPath;
-                    return null;
             }
-        };                               
-        SharedClassObject loader = JavaDataLoader.findObject(JavaDataLoader.class, true);
-        MimeDataProvider mdp = new MimeDataProvider() {
-            public Lookup getLookup(MimePath mimePath) {
-                return Lookups.singleton(new JavaKit());
-            }
-        };
-        Lkp.initLookups(new Object[] {repository, loader, cpp, mdp});
-        JEditorPane.registerEditorKitForContentType("text/x-java", "org.netbeans.modules.editor.java.JavaKit");
+        }, true);
         Utilities.setCaseSensitive(true);
     }
     
@@ -206,22 +224,29 @@ public class CompletionTestBase extends NbTestCase {
         final Document doc = ec.openDocument();
         assertNotNull(doc);
         doc.putProperty(Language.class, JavaTokenId.language());
+        doc.putProperty("mimeType", "text/x-java");
         int textToInsertLength = textToInsert != null ? textToInsert.length() : 0;
         if (textToInsertLength > 0)
             doc.insertString(caretPos, textToInsert, null);
-        JavaSource js = JavaSource.forDocument(doc);
-        List<? extends CompletionItem> items = JavaCompletionProvider.query(js, CompletionProvider.COMPLETION_QUERY_TYPE, caretPos + textToInsertLength, caretPos + textToInsertLength);
+        Source s = Source.create(doc);
+        List<? extends CompletionItem> items = JavaCompletionProvider.query(s, CompletionProvider.COMPLETION_QUERY_TYPE, caretPos + textToInsertLength, caretPos + textToInsertLength);
         Collections.sort(items, CompletionItemComparator.BY_PRIORITY);
         
         File output = new File(getWorkDir(), getName() + ".out");
         Writer out = new FileWriter(output);
         for (Object item : items) {
-            out.write(item.toString());
-            out.write("\n");
+            String itemString = item.toString();
+            if (!(org.openide.util.Utilities.isMac() && itemString.equals("apple"))) { //ignoring 'apple' package
+                out.write(itemString);
+                out.write("\n");
+            }
         }
         out.close();
         
-        File goldenFile = new File(getDataDir(), "/goldenfiles/org/netbeans/modules/java/editor/completion/JavaCompletionProviderTest/" + goldenFileName);
+        String version = System.getProperty("java.specification.version");
+        version = "1.5".equals(version) ? "" : version + "/";
+        
+        File goldenFile = new File(getDataDir(), "/goldenfiles/org/netbeans/modules/java/editor/completion/JavaCompletionProviderTest/" + version + goldenFileName);
         File diffFile = new File(getWorkDir(), getName() + ".diff");        
         assertFile(output, goldenFile, diffFile);
         
