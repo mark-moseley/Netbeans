@@ -46,9 +46,7 @@ import org.netbeans.modules.profiler.ppoints.GlobalProfilingPoint;
 import org.netbeans.modules.profiler.ppoints.ProfilingPoint;
 import org.netbeans.modules.profiler.ppoints.ProfilingPointWizard;
 import org.netbeans.modules.profiler.ppoints.ProfilingPointsManager;
-import org.netbeans.modules.profiler.ppoints.Utils;
 import org.netbeans.modules.profiler.ui.ProfilerDialogs;
-import org.netbeans.modules.profiler.utils.ProjectUtilities;
 import org.openide.WizardDescriptor;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
@@ -56,6 +54,7 @@ import org.openide.util.NbBundle;
 import org.openide.util.actions.NodeAction;
 import java.awt.Dialog;
 import javax.swing.SwingUtilities;
+import org.netbeans.modules.profiler.projectsupport.utilities.ProjectUtilities;
 
 
 /**
@@ -113,20 +112,21 @@ public class InsertProfilingPointAction extends NodeAction {
             final Dialog d = ProfilerDialogs.createDialog(wd);
             d.setVisible(true);
 
-            ProfilingPoint profilingPoint = ppWizard.finish(); // Wizard must be finished even in cancelled to release its resources
+            boolean createPPoint = wd.getValue() == WizardDescriptor.FINISH_OPTION;
+            ProfilingPoint profilingPoint = ppWizard.finish(!createPPoint); // Wizard must be finished even in cancelled to release its resources
 
-            if (wd.getValue() == WizardDescriptor.FINISH_OPTION) {
+            if (createPPoint) {
                 ProfilingPointsManager.getDefault().addProfilingPoint(profilingPoint);
 
                 if (profilingPoint instanceof GlobalProfilingPoint) {
                     SwingUtilities.invokeLater(new Runnable() {
-                            public void run() {
-                                if (!ProfilingPointsWindow.getInstance().isOpened()) {
-                                    ProfilingPointsWindow.getInstance().open();
-                                    ProfilingPointsWindow.getInstance().requestVisible();
-                                }
+                        public void run() {
+                            if (!ProfilingPointsWindow.getDefault().isOpened()) {
+                                ProfilingPointsWindow.getDefault().open();
+                                ProfilingPointsWindow.getDefault().requestVisible();
                             }
-                        });
+                        }
+                    });
                 }
             }
         }
