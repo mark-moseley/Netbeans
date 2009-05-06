@@ -23,10 +23,11 @@
                 </dependency>
             </module-dependencies>
             <friend-packages>
-                <friend>org.netbeans.modules.cnd.callgraph</friend>
                 <friend>org.netbeans.modules.cnd.classview</friend>
                 <friend>org.netbeans.modules.cnd.completion</friend>
+                <friend>org.netbeans.modules.cnd.debugger.gdb</friend>
                 <friend>org.netbeans.modules.cnd.discovery</friend>
+                <friend>org.netbeans.modules.cnd.gizmo</friend>
                 <friend>org.netbeans.modules.cnd.gotodeclaration</friend>
                 <friend>org.netbeans.modules.cnd.highlight</friend>
                 <friend>org.netbeans.modules.cnd.make2netbeans</friend>
@@ -36,11 +37,14 @@
                 <friend>org.netbeans.modules.cnd.modelui</friend>
                 <friend>org.netbeans.modules.cnd.modelutil</friend>
                 <friend>org.netbeans.modules.cnd.navigation</friend>
+                <friend>org.netbeans.modules.cnd.profiler.ui</friend>
                 <friend>org.netbeans.modules.cnd.qnavigator</friend>
                 <friend>org.netbeans.modules.cnd.refactoring</friend>
                 <package>org.netbeans.modules.cnd.api.model</package>
                 <package>org.netbeans.modules.cnd.api.model.deep</package>
+                <package>org.netbeans.modules.cnd.api.model.services</package>
                 <package>org.netbeans.modules.cnd.api.model.util</package>
+                <package>org.netbeans.modules.cnd.spi.model</package>
             </friend-packages>
         </data>
     </configuration>
