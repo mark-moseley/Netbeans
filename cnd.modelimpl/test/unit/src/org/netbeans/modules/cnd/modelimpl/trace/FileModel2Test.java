@@ -68,6 +68,36 @@ public class FileModel2Test extends TraceModelTestBase {
         getTraceModel().setDumpPPState(true);
     }
 
+    public void testIZ164583() throws Exception {
+        // IZ#164583: Inaccuracy tests: unstable results in MySQL
+        performTest("iz164583.cpp");
+    }
+
+    public void testIZ149525() throws Exception {
+        // IZ#149525: can't process lazy body of macro expanded function
+        performTest("iz149525.cc");
+    }
+    
+    public void testIZ162280() throws Exception {
+        // IZ#162280: Inaccuracy tests: regression in Boost and Vlc
+        performTest("iz162280_friend_fwd_cls.cpp");
+    }
+    
+    public void testIZ156061() throws Exception {
+        // IZ156061: structure typedefs are highlighted as error
+        performTest("iz156061.cc");
+    }
+    
+    public void testIZ154276() throws Exception {
+        // IZ154276: functions are creted instead of fields
+        performTest("iz154276.cc");
+    }
+
+    public void testIZ154196() throws Exception {
+        // IZ154196: Regression in LiteSQL (Error Highlighting)
+        performTest("iz154196.cc");
+    }
+
     public void testIZ136887() throws Exception {
         // IZ136887: Model do not support bit fields
         performTest("iz136887.cc");
@@ -165,4 +195,73 @@ public class FileModel2Test extends TraceModelTestBase {
         performTest("iz151957_namespace_alias.cc");
     }
 
+    public void testIZ154349() throws Exception {
+        // IZ#154349: wrongly flagged errors for destructor during template specialization
+        performTest("iz154349.cc");
+    }
+
+    public void testIZ157603() throws Exception {
+        // IZ#157603 : Code model does not understand __attribute, constructor, destructor keywords (GNU)
+        performTest("iz157603.cc");
+    }
+
+    public void testIZ157836() throws Exception {
+        // IZ#157836 : parser incorrectly handles expression in else without {}
+        performTest("iz157836.cc");
+    }
+
+    public void testIZ156004() throws Exception {
+        // IZ#156004 : Unexpected token = in variable declaration
+        performTest("iz156004.cc");
+    }
+
+    public void testIZ159324() throws Exception {
+        // IZ#159324 : Unresolved variable definition
+        performTest("iz159324.cc");
+    }
+
+    public void testIZ158872() throws Exception {
+        // IZ#158872 : inline keyword break code model for template definition
+        performTest("iz158872.cc");
+    }
+
+    public void testIZ159238() throws Exception {
+        // IZ#159238 : parser fails on attribute after friend
+        performTest("iz159238.cc");
+    }
+
+    public void testIZ158124() throws Exception {
+        // IZ#158124 : parser breaks on (( ))
+        performTest("iz158124.cc");
+    }
+
+    public void testIZ156009() throws Exception {
+        // IZ#156009 : parser fails on declaration with __attribute__
+        performTest("iz156009.cc");
+    }
+
+    public void testIZ158615() throws Exception {
+        // IZ#158615 : Intervals are unresolved
+        performTest("iz158615.cc");
+    }
+
+    public void testIZ158684() throws Exception {
+        // IZ#158684 : Invalid syntax error
+        performTest("iz158684.cc");
+    }
+
+    public void testIZ134182() throws Exception {
+        // IZ#134182 : missed const in function parameter
+        performTest("iz134182.cc");
+    }
+
+    public void testIZ156696() throws Exception {
+        // IZ#156696 : model miss extern property if declaration statement has two objects
+        performTest("iz156696.cc");
+    }
+
+    public void testIZ142674() throws Exception {
+        // IZ#142674 : Function-try-catch (C++) in editor shows error
+        performTest("iz142674.cc");
+    }
 }
