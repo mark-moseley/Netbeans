@@ -36,6 +36,9 @@
 
 package org.netbeans.installer.wizard.containers;
 
+import com.apple.eawt.Application;
+import com.apple.eawt.ApplicationAdapter;
+import com.apple.eawt.ApplicationEvent;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -48,6 +51,8 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.lang.reflect.InvocationTargetException;
+import java.net.MalformedURLException;
 import javax.swing.AbstractAction;
 import javax.swing.ImageIcon;
 import javax.swing.JRootPane;
@@ -57,14 +62,17 @@ import org.netbeans.installer.utils.ErrorManager;
 import org.netbeans.installer.utils.FileProxy;
 import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StringUtils;
+import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.UiUtils;
 import org.netbeans.installer.utils.exceptions.DownloadException;
+import org.netbeans.installer.utils.exceptions.InitializationException;
 import org.netbeans.installer.utils.helper.swing.NbiButton;
 import org.netbeans.installer.utils.helper.swing.NbiFrame;
 import org.netbeans.installer.utils.helper.swing.NbiLabel;
 import org.netbeans.installer.utils.helper.swing.NbiPanel;
 import org.netbeans.installer.utils.helper.swing.NbiSeparator;
 import org.netbeans.installer.utils.helper.swing.NbiTextPane;
+import org.netbeans.installer.wizard.Wizard;
 import org.netbeans.installer.wizard.ui.SwingUi;
 import org.netbeans.installer.wizard.ui.WizardUi;
 
@@ -106,8 +114,8 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
      * Additionally it initializes and lays out the core swing components of the
      * container.
      */
-    public SwingFrameContainer() {
-        super();
+    public SwingFrameContainer() {        
+        super();    
         
         frameWidth = UiUtils.getDimension(System.getProperties(),
                 WIZARD_FRAME_WIDTH_PROPERTY,
@@ -195,6 +203,10 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
      * {@inheritDoc}
      */
     public void updateWizardUi(final WizardUi wizardUi) {
+        if(wizardUi==null) {
+            currentUi = null;
+            return;
+        }
         if (!SwingUtilities.isEventDispatchThread()) {         
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
@@ -229,6 +241,8 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
         if(isResizable() && (neededMinimumHeight > currentHeight)) {         
             setPreferredSize(new Dimension(getSize().width, 
                                 neededMinimumHeight + EXTRA_SIZE));
+            setMinimumSize(new Dimension(getSize().width,
+                                neededMinimumHeight + EXTRA_SIZE));
             pack();             
         }                      
         contentPane.repaint();
@@ -242,6 +256,9 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
                 CANCEL_ACTION_NAME);
         getRootPane().getActionMap().put(CANCEL_ACTION_NAME, new AbstractAction() {
             public void actionPerformed(ActionEvent event) {
+                if(currentUi == null) {
+                    return;
+                }
                 final NbiButton button = currentUi.getDefaultEscapeButton();
                 if (button != null) {
                     if (button.equals(getHelpButton())) {
@@ -297,28 +314,55 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
     public NbiButton getCancelButton() {
         return contentPane.getCancelButton();
     }
+
+    public void open() {
+        try {
+            SwingUtilities.invokeAndWait(new Runnable() {
+
+                public void run() {
+                    Thread.currentThread().setUncaughtExceptionHandler(
+                            ErrorManager.getExceptionHandler());
+                }
+            });
+        } catch (InvocationTargetException e) {
+            ErrorManager.notifyDebug(ResourceUtils.getString(
+                    SwingFrameContainer.class,
+                    RESOURCE_FAILED_TO_ATTACH_ERROR_HANDLER), e);
+        } catch (InterruptedException e) {
+            ErrorManager.notifyDebug(ResourceUtils.getString(
+                    SwingFrameContainer.class,
+                    RESOURCE_FAILED_TO_ATTACH_ERROR_HANDLER), e);
+        }
+
+        SwingUtilities.invokeLater(new Runnable() {
+
+            public void run() {
+                setVisible(true);
+            }
+        });
+    }
+
+    public void close() {
+        setVisible(false);
+    }
     
     // protected ////////////////////////////////////////////////////////////////////
     /**
      * Initializes and lays out the Swing components for the container frame. This
      * method also sets some frame properties which will be required at runtime,
      * such as size, position, etc.
-     */
-    @Override
-    protected void initComponents() {
-        super.initComponents();
-        
+     */    
+    private void initComponents() {
         try {
             setDefaultCloseOperation(NbiFrame.DO_NOTHING_ON_CLOSE);
             addWindowListener(new WindowAdapter() {
+                @Override
                 public void windowClosing(WindowEvent event) {
-                    if (contentPane.getCancelButton().isEnabled()) {
-                        if (currentUi != null) {
-                            currentUi.evaluateCancelButtonClick();
-                        }
-                    }
+                    cancelContainer();
                 }
             });
+            // perform some additional intiialization for Mac OS
+            initializeMacOS();
         } catch (SecurityException e) {
             // we might fail here with a custom security manager (e.g. the netbeans
             // one); in this case just log the exception and "let it be" (c)
@@ -328,6 +372,20 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
                     RESOURCE_ERROR_SET_CLOSE_OPERATION),
                     e);
         }
+
+        Dimension size = new Dimension(frameWidth, frameHeight);
+        setSize(size);
+        setPreferredSize(size);
+        setMinimumSize(size);
+        
+        try {
+            setIconImage(new ImageIcon(frameIcon.toURI().toURL()).getImage());
+        } catch (MalformedURLException e) {
+            ErrorManager.notifyWarning(ResourceUtils.getString(
+                    SwingFrameContainer.class,
+                    RESOURCE_FAILED_TO_SET_FRAME_CONTAINER_ICON), e);
+        }
+        
         final String resizable = System.getProperty(WIZARD_FRAME_RESIZABLE_PROPERTY);
         if(resizable!=null && (resizable.equals("false") || resizable.equals("FALSE"))) {
             setResizable(false);
@@ -338,29 +396,62 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
         
         contentPane.getHelpButton().addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent event) {
-                currentUi.evaluateHelpButtonClick();
+                if(currentUi!=null) {
+                    currentUi.evaluateHelpButtonClick();
+                }
             }
         });
         
         contentPane.getBackButton().addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent event) {
-                currentUi.evaluateBackButtonClick();
+                if(currentUi!=null) {
+                    currentUi.evaluateBackButtonClick();
+                }
             }
         });
         
         contentPane.getNextButton().addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent event) {
-                currentUi.evaluateNextButtonClick();
+                if(currentUi!=null) {
+                    currentUi.evaluateNextButtonClick();
+                }
             }
         });
         
         contentPane.getCancelButton().addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent event) {
-                currentUi.evaluateCancelButtonClick();
+                if(currentUi!=null) {
+                    currentUi.evaluateCancelButtonClick();
+                }
             }
         });
     }
     
+    private void initializeMacOS() {
+        if (SystemUtils.isMacOS()) {
+            final Application application = Application.getApplication();
+            if(application == null) {
+                // e.g. running OpenJDK port via X11 on Mac OS X
+                return;
+            }
+            application.removeAboutMenuItem();
+            application.removePreferencesMenuItem();
+            application.addApplicationListener(new ApplicationAdapter() {
+
+                @Override
+                public void handleQuit(ApplicationEvent event) {
+                    cancelContainer();
+                }
+            });
+        }
+    }
+    private void cancelContainer() {
+        if (currentUi != null) {
+            if (contentPane.getCancelButton().isEnabled()) {
+                currentUi.evaluateCancelButtonClick();
+            }
+        }
+    }
     /////////////////////////////////////////////////////////////////////////////////
     // Inner Classes
     /**
@@ -537,8 +628,7 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
          */
         private void initComponents() {
             // titleLabel ///////////////////////////////////////////////////////////
-            titleLabel = new NbiLabel();
-            titleLabel.setFocusable(true);
+            titleLabel = new NbiLabel();           
             titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD));
             
             // descriptionPane //////////////////////////////////////////////////////
@@ -595,7 +685,16 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
             
             // topSeparator /////////////////////////////////////////////////////////
             topSeparator = new NbiSeparator();
-            
+            if (SystemUtils.isMacOS()) {
+                // JSeparator`s height on Aqua L&F equals to 12px which is too much in SwingFrameContainer
+                // thus we descrease it to 7px
+                // TODO: possibly move this code to NbiSeparator later
+                Dimension d = topSeparator.getPreferredSize();
+                if (d != null && d.getHeight() == 12) {
+                    d.setSize(d.getWidth(), 7);
+                    topSeparator.setPreferredSize(d);
+                }
+            }
             titlePanel.add(titleLabel, new GridBagConstraints(
                     titlePanelDx , 0,                             // x, y
                     1, 1,                             // width, height
@@ -623,7 +722,16 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
             
             // bottomSeparator //////////////////////////////////////////////////////
             bottomSeparator = new NbiSeparator();
-            
+            if (SystemUtils.isMacOS()) {
+                // JSeparator`s height on Aqua L&F equals to 12px which is too much in SwingFrameContainer
+                // thus we descrease it to 7px
+                // TODO: possibly move this code to NbiSeparator later
+                Dimension d = topSeparator.getPreferredSize();
+                if (d != null && d.getHeight() == 12) {
+                    d.setSize(d.getWidth(), 7);
+                    topSeparator.setPreferredSize(d);
+                }
+            }
             // helpButton ///////////////////////////////////////////////////////////
             helpButton = new NbiButton();
             
@@ -865,16 +973,18 @@ public class SwingFrameContainer extends NbiFrame implements SwingContainer {
     /**
      * Name of a resource bundle entry.
      */
-    private static final String RESOURCE_FAILED_TO_PARSE_SYSTEM_PROPERTY =
-            "SFC.error.failed.to.parse.property"; // NOI18N
-    
-    /**
-     * Name of a resource bundle entry.
-     */
     private static final String RESOURCE_FAILED_TO_DOWNLOAD_WIZARD_ICON =
             "SFC.error.failed.to.download.icon"; // NOI18N
     private static final String RESOURCE_ERROR_SET_CLOSE_OPERATION =
             "SFC.error.close.operation"; //NOI18N
+    private static final String RESOURCE_FAILED_TO_SET_FRAME_CONTAINER_ICON =
+            "SFC.error.failed.to.set.icon";//NOI18N
+    /**
+     * Name of a resource bundle entry.
+     */
+    private static final String RESOURCE_FAILED_TO_ATTACH_ERROR_HANDLER =
+            "SFC.error.failed.to.attach.error.handler"; // NOI18N
+    
     /**
      * Name of the {@link AbstractAction} which is invoked when the user presses the
      * <code>Escape</code> button.
