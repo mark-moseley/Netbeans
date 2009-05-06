@@ -44,6 +44,7 @@ package org.netbeans.modules.project.ui;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.util.concurrent.Future;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.project.uiapi.OpenProjectsTrampoline;
@@ -52,6 +53,7 @@ import org.netbeans.modules.project.uiapi.OpenProjectsTrampoline;
  * List of projects open in the GUI.
  * @author Petr Hrebejk
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.project.uiapi.OpenProjectsTrampoline.class)
 public final class OpenProjectsTrampolineImpl implements OpenProjectsTrampoline, PropertyChangeListener  {
 
     /** Property change listeners registered through API */
@@ -66,8 +68,8 @@ public final class OpenProjectsTrampolineImpl implements OpenProjectsTrampoline,
         return OpenProjectList.getDefault().getOpenProjects();
     }
 
-    public void openAPI (Project[] projects, boolean openRequiredProjects) {
-        OpenProjectList.getDefault().open (projects, openRequiredProjects);
+    public void openAPI (Project[] projects, boolean openRequiredProjects, boolean showProgress) {
+        OpenProjectList.getDefault().open (projects, openRequiredProjects, showProgress);
     }
 
     public void closeAPI(Project[] projects) {
@@ -117,5 +119,9 @@ public final class OpenProjectsTrampolineImpl implements OpenProjectsTrampoline,
     public void setMainProject(Project project) {
         OpenProjectList.getDefault().setMainProject(project);
     }
+    
+    public Future<Project[]> openProjectsAPI() {
+        return OpenProjectList.getDefault().openProjectsAPI();
+}
     
 }

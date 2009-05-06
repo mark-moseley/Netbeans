@@ -42,9 +42,11 @@
 package org.netbeans.api.project.ui;
 
 import java.beans.PropertyChangeListener;
+import java.util.concurrent.Future;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.project.uiapi.OpenProjectsTrampoline;
 import org.netbeans.modules.project.uiapi.Utilities;
+import org.netbeans.spi.project.ui.support.CommonProjectActions;
 
 /**
  * List of projects open in the GUI.
@@ -85,6 +87,7 @@ public final class OpenProjects {
     
     private OpenProjects() {
         this.trampoline = Utilities.getOpenProjectsTrampoline();
+        addPropertyChangeListener( new OpenProjectsListener() );
     }
 
     /**
@@ -114,27 +117,98 @@ public final class OpenProjects {
     }
 
     /**
+     * Method to track progress of projects opening and closing. As the
+     * opening of a project may take long time, and as there can be multiple
+     * projects open at once, it may be necessary to be notified that the process
+     * of open project list modification started or that it has
+     * finished. This method provides a <q>future</q> that can do that.
+     * To find out that the list of open projects is currently modified use:
+     * <pre>
+     * assert openProjects().isDone() == false;
+     * </pre>
+     * To wait for the opening/closing to be finished and then obtain the result
+     * use:
+     * <pre>
+     * Project[] current = openProjects().get();
+     * </pre>
+     * This result is different that a plain call to {@link #getOpenProjects} as
+     * that methods returns the current state, whatever it is. While the call through
+     * the <q>future</q> awaits for current modifications to finish. As such wait
+     * can take a long time one can also wait for just a limited amount of time.
+     * However this waiting methods should very likely only be used from dedicated threads,
+     * where the wait does not block other essencial operations (read: do not
+     * use such methods from AWT or other known threads!).
+     * 
+     * @return future to track computation of open projects
+     * @since 1.27
+     */
+    public Future<Project[]> openProjects() {
+        return trampoline.openProjectsAPI();
+    }
+
+    /**
      * Opens given projects.
-     * Acquires {@link org.netbeans.api.project.ProjectManager#mutex()} in the write mode.
-     * @param projects to be opened. In the case when some of the projects are already opened
-     * these projects are not opened again. If the projects contain duplicates, the duplicated
-     * projects are opened just once.
-     * @param openSubprojects if true also subprojects are opened.
-     * @since org.netbeans.modules.projectuiapi/0 1.2
+     * Acquires {@link org.netbeans.api.project.ProjectManager#mutex()} in write mode.
      * <p class="nonnormative">
-     * This method is designed for use by logical view's Libraries Node to open one or more of dependent
-     * projects. This method can be used also by other project GUI components which need to open certain
-     * project(s), eg. code generation wizards.<br>
-     * The method should not be used for opening newly created project, insted the
-     * {@link org.openide.WizardDescriptor.InstantiatingIterator#instantiate()} used for creation of new project
-     * should return the project directory.<br>
-     * The method should not be also used  to provide a GUI to open subprojects.
-     * The {@link org.netbeans.spi.project.ui.support.CommonProjectActions#openSubprojectsAction()} should be used
-     * instead.
+     * This method is designed for uses such as a logical view's Libraries node to open a dependent
+     * project. It can also be used by other project GUI components which need to open certain
+     * project(s), e.g. code generation wizards.
+     * This should not be used for opening a newly created project; rather,
+     * {@link org.openide.WizardDescriptor.InstantiatingIterator#instantiate}
+     * should return the project directory.
+     * This should also not be used to provide a GUI to open subprojects;
+     * {@link CommonProjectActions#openSubprojectsAction} should be used instead.
      * </p>
+     * @param projects to be opened. If some of the projects are already opened
+     * these projects are ignored. If the list contain duplicates, the duplicated
+     * projects are opened just once.
+     * @param openSubprojects if true subprojects are also opened
+     * @since org.netbeans.modules.projectuiapi/0 1.2
      */
     public void open (Project[] projects, boolean openSubprojects) {
-        trampoline.openAPI (projects,openSubprojects);
+        trampoline.openAPI (projects,openSubprojects, false);
+    }
+
+    /**
+     * Opens given projects.
+     * Acquires {@link org.netbeans.api.project.ProjectManager#mutex()} in write mode.
+     * <p class="nonnormative">
+     * This method is designed for uses such as a logical view's Libraries node to open a dependent
+     * project. It can also be used by other project GUI components which need to open certain
+     * project(s), e.g. code generation wizards.
+     * This should not be used for opening a newly created project; rather,
+     * {@link org.openide.WizardDescriptor.InstantiatingIterator#instantiate}
+     * should return the project directory.
+     * This should also not be used to provide a GUI to open subprojects;
+     * {@link CommonProjectActions#openSubprojectsAction} should be used instead.
+     * </p>
+     * @param projects to be opened. If some of the projects are already opened
+     * these projects are ignored. If the list contain duplicates, the duplicated
+     * projects are opened just once.
+     * @param openSubprojects if true subprojects are also opened
+     * @param showProgress show progress dialog during the open
+     * @since 1.35
+     */
+    public void open (Project[] projects, boolean openSubprojects, boolean showProgress) {
+        trampoline.openAPI (projects,openSubprojects, showProgress);
+    }
+
+    /** Finds out if the project is opened.
+     * @param p the project to verify. Can be <code>null</code> in such case
+     *    the method return <code>false</code>
+     * @return true if this project is among open ones, false otherwise
+     * @since 1.34
+     */
+    public boolean isProjectOpen(Project p) {
+        if (p == null) {
+            return false;
+        }
+        for (Project real : getOpenProjects()) {
+            if (p.equals(real) || real.equals(p)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

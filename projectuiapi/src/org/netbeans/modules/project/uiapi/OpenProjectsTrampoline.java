@@ -42,6 +42,7 @@
 package org.netbeans.modules.project.uiapi;
 
 import java.beans.PropertyChangeListener;
+import java.util.concurrent.Future;
 import org.netbeans.api.project.Project;
 
 /**
@@ -52,11 +53,13 @@ public interface OpenProjectsTrampoline {
 
     public Project[] getOpenProjectsAPI();
 
-    public void openAPI (Project[] projects, boolean openRequiredProjects);
+    public void openAPI (Project[] projects, boolean openRequiredProjects, boolean showProgress);
 
     public void closeAPI (Project[] projects);
 
     public void addPropertyChangeListenerAPI( PropertyChangeListener listener, Object source );
+
+    public Future<Project[]> openProjectsAPI();
 
     public void removePropertyChangeListenerAPI( PropertyChangeListener listener );
     
