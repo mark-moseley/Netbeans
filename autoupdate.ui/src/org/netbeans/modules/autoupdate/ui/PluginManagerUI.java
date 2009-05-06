@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -50,6 +50,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JButton;
@@ -61,6 +62,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.autoupdate.UpdateManager;
 import org.netbeans.api.autoupdate.UpdateUnit;
+import org.netbeans.modules.autoupdate.ui.actions.AutoupdateCheckScheduler;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.util.Exceptions;
@@ -80,25 +82,63 @@ public class PluginManagerUI extends javax.swing.JPanel  {
     private UnitTable updateTable;
     private UnitTable localTable;
     private JButton closeButton;
-    final RequestProcessor.Task initTask;
+    public final RequestProcessor.Task initTask;
     private Object helpInstance = null;
     
     private static RequestProcessor.Task runningTask;
+    private boolean wasSettings = false;
+    public static final int INDEX_OF_UPDATES_TAB = 0;
+    public static final int INDEX_OF_AVAILABLE_TAB = 1;
+    public static final int INDEX_OF_DOWNLOAD_TAB = 2;
+    public static final int INDEX_OF_INSTALLED_TAB = 3;
+    public static final int INDEX_OF_SETTINGS_TAB = 4;
+
+    public static final String[] TAB_NAMES = { "update", "available", "local", "installed" }; //NOI18N
+    private int initialTabToSelect;
+    private boolean detailView;
+    public static final String DETAIL_VIEW_SELECTED_PROP = "plugin.manager.detail.view.selected";//NOI18N
+    
+    public PluginManagerUI (JButton closeButton ) {
+        this(closeButton, null, true);
+    }
+
+    public PluginManagerUI (JButton closeButton, Object initialTab) {
+        this(closeButton, initialTab, Boolean.getBoolean(DETAIL_VIEW_SELECTED_PROP));
+    }
     
     /** Creates new form PluginManagerUI */
-    public PluginManagerUI (JButton closeButton) {
+    public PluginManagerUI (JButton closeButton, Object initialTab, boolean detailView) {
+        this.detailView = detailView;
         this.closeButton = closeButton;
+        int selIndex = -1;
+        for( int i=0; i<TAB_NAMES.length; i++ ) {
+            if( TAB_NAMES[i].equals(initialTab) ) {
+                selIndex = i;
+                break;
+            }
+        }
+        if( selIndex < 0 && null != initialTab ) {
+            throw new IllegalArgumentException("Invalid tab name: " + initialTab); //NOI18N
+        }
+        initialTabToSelect = selIndex;
         initComponents ();
         postInitComponents ();
         //start initialize method as soon as possible
         initTask = Utilities.startAsWorkerThread (new Runnable () {
             public void run () {
                 initialize ();
-                setSelectedTab();
             }
         });
     }
-    
+
+    boolean isDetailView() {
+        return detailView;
+    }
+
+    void setDetailView(boolean detailView) {
+        this.detailView = detailView;
+    }
+
     private Window findWindowParent () {
         Component c = this;
         while(c != null) {
@@ -148,16 +188,19 @@ public class PluginManagerUI extends javax.swing.JPanel  {
                 public void windowOpened (WindowEvent e) {
                     final WindowAdapter waa = this;
                     setWaitingState (true);
-                    Utilities.startAsWorkerThread (PluginManagerUI.this, new Runnable () {
-                        public void run () {
-                            try {
-                                initTask.waitFinished ();
-                                w.removeWindowListener (waa);
-                            } finally {
-                                setWaitingState (false);
-                            }
-                        }
-                    }, NbBundle.getMessage (PluginManagerUI.class, "UnitTab_InitAndCheckingForUpdates"));
+                    Utilities.startAsWorkerThread (PluginManagerUI.this,
+                            new Runnable () {
+                                public void run () {
+                                    try {
+                                        initTask.waitFinished ();
+                                        w.removeWindowListener (waa);
+                                    } finally {
+                                        setWaitingState (false);
+                                    }
+                                }
+                            },
+                            NbBundle.getMessage (PluginManagerUI.class, "UnitTab_InitAndCheckingForUpdates"),
+                            Utilities.getTimeOfInitialization ());
                 }
             });
         }
@@ -180,14 +223,15 @@ public class PluginManagerUI extends javax.swing.JPanel  {
         bClose.doClick ();
     }
     
-    public void initialize () {
+    private void initialize () {
         try {
-            units = UpdateManager.getDefault ().getUpdateUnits (Utilities.getUnitTypes ());
+        units = UpdateManager.getDefault ().getUpdateUnits (Utilities.getUnitTypes ());
             // postpone later
             // getLocalDownloadSupport().getUpdateUnits();
             SwingUtilities.invokeAndWait (new Runnable () {
                 public void run () {
                     refreshUnits ();
+                    setSelectedTab ();
                 }
             });
         } catch (InterruptedException ex) {
@@ -198,11 +242,12 @@ public class PluginManagerUI extends javax.swing.JPanel  {
     }
     
     //workaround of #96282 - Memory leak in org.netbeans.core.windows.services.NbPresenter
-    public void unitilialize () {
+    private void unitilialize () {
         Utilities.startAsWorkerThread (new Runnable () {
             public void run () {
                 //ensures that uninitialization runs after initialization
                 initTask.waitFinished ();
+                AutoupdateCheckScheduler.runCheckAvailableUpdates (0);
                 //ensure exclusivity between this uninitialization code and refreshUnits (which can run even after this dialog is disposed)
                 synchronized(initTask) {
                     units = null;
@@ -240,6 +285,9 @@ public class PluginManagerUI extends javax.swing.JPanel  {
     private void setProgressComponentInAwt (JLabel detail, JComponent progressComponent) {
         assert pProgress != null;
         assert SwingUtilities.isEventDispatchThread () : "Must be called in EQ.";
+        
+        progressComponent.setMinimumSize (progressComponent.getPreferredSize ());
+        
         pProgress.setVisible (true);
 
         java.awt.GridBagConstraints gridBagConstraints;
@@ -270,6 +318,19 @@ public class PluginManagerUI extends javax.swing.JPanel  {
     }
 
     private void setSelectedTab() {
+        if( initialTabToSelect >= 0 && initialTabToSelect != tpTabs.getSelectedIndex()
+                && initialTabToSelect < tpTabs.getComponentCount() ) {
+            Component c = tpTabs.getComponentAt(initialTabToSelect);
+            if (c instanceof UnitTab) {
+                UnitTab unitTab = (UnitTab) c;
+                if (unitTab.getModel().isTabEnabled() && unitTab.getModel().canBePrimaryTab() ) {
+                    tpTabs.setSelectedIndex(initialTabToSelect);
+                    initialTabToSelect = -1;
+                    return;
+                }
+            }
+        }
+        initialTabToSelect = -1;
         Component component = tpTabs.getSelectedComponent();
         if (component instanceof UnitTab) {
             UnitTab unitTab = (UnitTab) component;
@@ -284,7 +345,7 @@ public class PluginManagerUI extends javax.swing.JPanel  {
                         }
                     } else {
                         tpTabs.setSelectedIndex(i);
-                        break;                        
+                        break;
                     }
                 }
             }
@@ -313,7 +374,6 @@ public class PluginManagerUI extends javax.swing.JPanel  {
         bClose = closeButton;
         bHelp = new javax.swing.JButton();
 
-        tpTabs.setBorder(javax.swing.BorderFactory.createEmptyBorder(1, 1, 1, 1));
         tpTabs.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent evt) {
                 tpTabsStateChanged(evt);
@@ -340,11 +400,11 @@ public class PluginManagerUI extends javax.swing.JPanel  {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                         .add(pProgress, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 562, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 123, Short.MAX_VALUE)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 157, Short.MAX_VALUE)
                         .add(bClose)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(bHelp))
-                    .add(tpTabs, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 813, Short.MAX_VALUE))
+                    .add(tpTabs, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 841, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -372,6 +432,18 @@ private void tpTabsStateChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:
     Component component = ((JTabbedPane) evt.getSource ()).getSelectedComponent ();
     if (component instanceof SettingsTab) {
         ((SettingsTab)component).getSettingsTableModel ().refreshModel ();
+        wasSettings = true;
+    } else {
+        if (wasSettings) {
+            final UnitCategoryTableModel availableModel = (UnitCategoryTableModel) (availableTable).getModel ();
+            final Map<String, Boolean> availableState = UnitCategoryTableModel.captureState (availableModel.getUnits ());
+            ((SettingsTab) tpTabs.getComponentAt (INDEX_OF_SETTINGS_TAB)).doLazyRefresh (new Runnable () { // get SettingsTab
+                public void run () {
+                    UnitCategoryTableModel.restoreState (availableModel.getUnits (), availableState, false);
+                }
+            });
+        }
+        wasSettings = false;
     }
 }//GEN-LAST:event_tpTabsStateChanged
 
@@ -460,8 +532,8 @@ private void bHelpActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:e
         installedTable = createTabForModel(new InstalledTableModel(units));
         
         SettingsTab tab = new SettingsTab (this);
-        tpTabs.add (tab,4);
-        tpTabs.setTitleAt(4, tab.getDisplayName());
+        tpTabs.add (tab, INDEX_OF_SETTINGS_TAB);
+        tpTabs.setTitleAt(INDEX_OF_SETTINGS_TAB, tab.getDisplayName());
         bHelp.setEnabled (getHelpInstance () != null);
     }
     
@@ -471,6 +543,11 @@ private void bHelpActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:e
         tpTabs.setTitleAt (index, model.getDecoratedTabTitle());
         tpTabs.setEnabledAt(index, model.isTabEnabled());
         tpTabs.setToolTipTextAt(index, model.getTabTooltipText()); // NOI18N
+    }
+    
+    void undecorateTabTitles () {
+        tpTabs.setTitleAt (INDEX_OF_UPDATES_TAB, NbBundle.getMessage (PluginManagerUI.class, "PluginManagerUI_UnitTab_Update_Title")); // NOI18N // Updates tab
+        tpTabs.setTitleAt (INDEX_OF_AVAILABLE_TAB, NbBundle.getMessage (PluginManagerUI.class, "PluginManagerUI_UnitTab_Available_Title")); // NOI18N // Available tab
     }
     
     private int findRowWithFirstUnit (UnitCategoryTableModel model) {
@@ -503,13 +580,18 @@ private void bHelpActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:e
             //which is synchronized and may wait until cache is created
             //even more AutoUpdateCatalog.getUpdateItems () can at first start call refresh and thus writeToCache again
             units = UpdateManager.getDefault().getUpdateUnits(Utilities.getUnitTypes());
-            UnitCategoryTableModel installTableModel = ((UnitCategoryTableModel)installedTable.getModel());
+            InstalledTableModel installTableModel = (InstalledTableModel)installedTable.getModel();
             UnitCategoryTableModel updateTableModel = ((UnitCategoryTableModel)updateTable.getModel());
             UnitCategoryTableModel availableTableModel = ((UnitCategoryTableModel)availableTable.getModel());
             LocallyDownloadedTableModel localTableModel = ((LocallyDownloadedTableModel)localTable.getModel());
             
             updateTableModel.setUnits(units);
-            installTableModel.setUnits(units);
+            List<UpdateUnit> features = UpdateManager.getDefault().getUpdateUnits(UpdateManager.TYPE.FEATURE);
+            if (isDetailView() && !features.isEmpty()) {
+                installTableModel.setUnits(units);
+            } else {
+                installTableModel.setUnits(units, features);
+            }
             availableTableModel.setUnits(units);
             localTableModel.setUnits(units);
             selectFirstRow(installedTable);
@@ -536,7 +618,7 @@ private void bHelpActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:e
     }
 
     public static void registerRunningTask (RequestProcessor.Task it) {
-        assert runningTask == null || runningTask.isFinished () : "Only once task can be running.";
+        assert runningTask == null || runningTask.isFinished () : "Only once task can be running. Already running : " + runningTask;
         runningTask = it;
     }
     
