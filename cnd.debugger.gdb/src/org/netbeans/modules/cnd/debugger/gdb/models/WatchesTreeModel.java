@@ -44,10 +44,10 @@ package org.netbeans.modules.cnd.debugger.gdb.models;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.ref.WeakReference;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.Vector;
 import java.util.WeakHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 
 import org.netbeans.api.debugger.DebuggerManager;
@@ -59,9 +59,7 @@ import org.netbeans.spi.viewmodel.TreeModel;
 import org.netbeans.spi.viewmodel.ModelListener;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.spi.viewmodel.TreeExpansionModel;
 import org.openide.util.RequestProcessor;
-import org.openide.util.WeakSet;
 
 /*
  * WatchesTreeModel.java
@@ -70,33 +68,22 @@ import org.openide.util.WeakSet;
  *
  */
 
-public class WatchesTreeModel implements TreeModel, TreeExpansionModel, PropertyChangeListener {
+public class WatchesTreeModel implements TreeModel, PropertyChangeListener {
 
-    private GdbDebugger debugger;
-    private ContextProvider lookupProvider;
-    private static WatchesTreeModel watchesTreeModel;
+    private final GdbDebugger debugger;
     private Listener listener;
-    private Vector<ModelListener> listeners = new Vector<ModelListener>();
-    private Map<Watch, AbstractVariable> watchToVariable = new WeakHashMap<Watch, AbstractVariable>(); 
-    private Set<Object> expandedNodes = new WeakSet<Object>();
-    private Set<Object> collapsedNodes = new WeakSet<Object>();
-    private Logger log = Logger.getLogger("gdb.logger"); // NOI18N
-    
+    private final List<ModelListener> listeners = new CopyOnWriteArrayList<ModelListener>();
+    private final Map<Watch, AbstractVariable> watchToVariable = new WeakHashMap<Watch, AbstractVariable>(); 
+    private static final Logger log = Logger.getLogger("gdb.logger"); // NOI18N
     
     public WatchesTreeModel(ContextProvider lookupProvider) {
-        this.lookupProvider = lookupProvider;
-        debugger = (GdbDebugger) lookupProvider.lookupFirst(null, GdbDebugger.class);
+        debugger = lookupProvider.lookupFirst(null, GdbDebugger.class);
         debugger.addPropertyChangeListener(this);
-        watchesTreeModel = this;
     }
 
-    public static WatchesTreeModel getWatchesTreeModel() {
-        return watchesTreeModel;
-    }
-    
     public void propertyChange(PropertyChangeEvent ev) {
         if (ev.getPropertyName().equals(GdbDebugger.PROP_STATE) &&
-                debugger.getState().equals(GdbDebugger.STATE_STOPPED)) {
+                debugger.isStopped()) {
             fireTreeChanged();
         }
     }
@@ -128,7 +115,7 @@ public class WatchesTreeModel implements TreeModel, TreeExpansionModel, Property
      */
     public Object[] getChildren(Object parent, int from, int to) throws UnknownTypeException {
         if (parent == ROOT) {
-            // 1) ger Watches
+            // 1) get Watches
             Watch[] ws = DebuggerManager.getDebuggerManager().getWatches();
             to = Math.min(ws.length, to);
             from = Math.min(ws.length, from);
@@ -141,7 +128,7 @@ public class WatchesTreeModel implements TreeModel, TreeExpansionModel, Property
             for (i = 0; i < k; i++) {
                 AbstractVariable gw = watchToVariable.get(fws[i]);
                 if (gw == null) {
-                    gw = new GdbWatchVariable(this, fws[i]);
+                    gw = new GdbWatchVariable(fws[i]);
                     watchToVariable.put(fws[i], gw);
                 }
                 gws[i] = gw;
@@ -222,82 +209,24 @@ public class WatchesTreeModel implements TreeModel, TreeExpansionModel, Property
     }
     
     protected void fireTreeChanged() {
-        Vector v = (Vector) listeners.clone();
-        int i, k = v.size();
         log.fine("WTM.fireTreeChanged[" + Thread.currentThread().getName() + "]:");
         ModelEvent event = new ModelEvent.TreeChanged(this);
-        for (i = 0; i < k; i++) {
-            ((ModelListener) v.get(i)).modelChanged (event);
+        for (ModelListener l : listeners) {
+            l.modelChanged(event);
         }
     }
     
     private void fireWatchesChanged() {
-        Vector v = (Vector) listeners.clone();
-        int i, k = v.size();
         ModelEvent event = new ModelEvent.NodeChanged(this, ROOT, ModelEvent.NodeChanged.CHILDREN_MASK);
-        for (i = 0; i < k; i++) {
-            ((ModelListener) v.get(i)).modelChanged(event);
+        for (ModelListener l : listeners) {
+            l.modelChanged(event);
         }
     }
         
     void fireTableValueChanged(Object node, String propertyName) {
-        Vector v = (Vector) listeners.clone();
         log.fine("WTM.fireTableValueChanged[" + Thread.currentThread().getName() + "]:");
-        int i, k = v.size();
-        for (i = 0; i < k; i++) {
-            ((ModelListener) v.get(i)).modelChanged(new ModelEvent.TableValueChanged(this, node, propertyName));
-        }
-    }
-  
-    /**
-     * Defines default state (collapsed, expanded) of given node.
-     *
-     * @param node a node
-     * @return default state (collapsed, expanded) of given node
-     */
-    public boolean isExpanded(Object node) throws UnknownTypeException {
-        synchronized (this) {
-            if (expandedNodes.contains(node)) {
-                return true;
-            }
-            if (collapsedNodes.contains(node)) {
-                return false;
-            }
-        }
-        // Default behavior follows:
-        if (node instanceof AbstractVariable) {
-            return false;
-        }
-        throw new UnknownTypeException(node);
-    }
-    
-    /**
-     * Called when given node is expanded.
-     *
-     * @param node a expanded node
-     */
-    public void nodeExpanded(Object node) {
-        if (node instanceof AbstractVariable) {
-            AbstractVariable var = (AbstractVariable) node;
-            if (var.expandChildren()) {
-                fireTreeChanged();
-            }
-        }
-        synchronized (this) {
-            expandedNodes.add(node);
-            collapsedNodes.remove(node);
-        }
-    }
-    
-    /**
-     * Called when given node is collapsed.
-     *
-     * @param node a collapsed node
-     */
-    public void nodeCollapsed(Object node) {
-        synchronized (this) {
-            collapsedNodes.add(node);
-            expandedNodes.remove(node);
+        for (ModelListener l : listeners) {
+            l.modelChanged(new ModelEvent.TableValueChanged(this, node, propertyName));
         }
     }
     
@@ -342,7 +271,11 @@ public class WatchesTreeModel implements TreeModel, TreeExpansionModel, Property
             if (m == null) {
                 return;
             }
-            Object o = m.watchToVariable.remove(watch); // FIXME - check that o is non-null
+            Object o = m.watchToVariable.remove(watch);
+            // fix for the IZ 163112
+            if (o != null && o instanceof GdbWatchVariable) {
+                ((GdbWatchVariable)o).remove();
+            }
             watch.removePropertyChangeListener(this);
             m.fireWatchesChanged();
         }
@@ -362,18 +295,18 @@ public class WatchesTreeModel implements TreeModel, TreeExpansionModel, Property
             if (m == null) {
                 return;
             }
-            if (m.debugger.getState().equals(GdbDebugger.STATE_EXITED)) {
+            if (m.debugger.getState() == GdbDebugger.State.EXITED) {
                 destroy();
                 return;
             }
-            if (m.debugger.getState().equals(GdbDebugger.STATE_RUNNING)) {
+            if (m.debugger.getState() == GdbDebugger.State.RUNNING) {
                 return;
             }
             
             if (evt.getSource() instanceof Watch) {
                 Object node;
                 synchronized (m.watchToVariable) {
-                    node = m.watchToVariable.get(evt.getSource());
+                    node = m.watchToVariable.get((Watch)evt.getSource());
                 }
                 if (node != null) {
                     if (node instanceof AbstractVariable && ((AbstractVariable) node).getFieldsCount() > 0) {
