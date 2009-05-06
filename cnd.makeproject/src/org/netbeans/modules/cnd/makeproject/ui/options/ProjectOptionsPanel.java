@@ -41,20 +41,15 @@
 
 package org.netbeans.modules.cnd.makeproject.ui.options;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
+import java.awt.Color;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
-import javax.swing.JButton;
 import javax.swing.JPanel;
+import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.netbeans.modules.cnd.makeproject.MakeOptions;
-import org.netbeans.modules.cnd.makeproject.api.platforms.Platforms;
-import org.netbeans.modules.cnd.settings.CppSettings;
 import org.netbeans.spi.options.OptionsPanelController;
 import org.openide.util.NbBundle;
 
@@ -66,7 +61,7 @@ public class ProjectOptionsPanel extends JPanel {
     private boolean changed;
     private boolean listen = false;
     
-    private ArrayList propertyChangeListeners = new ArrayList();
+    private ArrayList<PropertyChangeListener> propertyChangeListeners = new ArrayList<PropertyChangeListener>();
     
     private DocumentListener documentListener;
     
@@ -76,9 +71,12 @@ public class ProjectOptionsPanel extends JPanel {
         // Accessible Description
         reuseCheckBox.getAccessibleContext().setAccessibleDescription(getString("REUSE_CHECKBOX_AD"));
         saveCheckBox.getAccessibleContext().setAccessibleDescription(getString("SAVE_CHECKBOX_AD"));
-        platformComboBox.getAccessibleContext().setAccessibleDescription(getString("DEFAULT_PLATFORM_AD"));
+        dependencyCheckingCheckBox.getAccessibleContext().setAccessibleDescription(getString("DEPENDENCY_CHECKBOX_AD"));
+//        platformComboBox.getAccessibleContext().setAccessibleDescription(getString("DEFAULT_PLATFORM_AD"));
         filePathcomboBox.getAccessibleContext().setAccessibleDescription(getString("FILE_PATH_AD"));
         makeOptionsTextField.getAccessibleContext().setAccessibleDescription(getString("MAKE_OPTIONS_AD"));
+        filePathTxt.getAccessibleContext().setAccessibleDescription(getString("FILE_PATH_TXT_AD"));
+        filePathTxt.getAccessibleContext().setAccessibleName(getString("FILE_PATH_TXT_AN"));
         
         
         documentListener = new DocumentListener() {
@@ -97,6 +95,15 @@ public class ProjectOptionsPanel extends JPanel {
         
         makeOptionsTextField.getDocument().addDocumentListener(documentListener);
         setName("TAB_ProjectsTab"); // NOI18N (used as a pattern...)
+        
+        if( "Windows".equals(UIManager.getLookAndFeel().getID()) ) { //NOI18N
+            setOpaque( false );
+        }
+        else {
+            Color c = getBackground();
+            Color cc = new Color(c.getRed(), c.getGreen(), c.getBlue());
+           filePathTxt.setBackground(cc);
+        }
     }
     
     public void update() {
@@ -104,11 +111,11 @@ public class ProjectOptionsPanel extends JPanel {
         MakeOptions makeOptions = MakeOptions.getInstance();
         
         // Platform
-        platformComboBox.removeAllItems();
-        for (int i = 0; i < Platforms.getPlatformDisplayNames().length; i++) {
-            platformComboBox.addItem(Platforms.getPlatformDisplayNames()[i]);
-        }
-        platformComboBox.setSelectedIndex(makeOptions.getPlatform());
+//        platformComboBox.removeAllItems();
+//        for (int i = 0; i < Platforms.getPlatformDisplayNames().length; i++) {
+//            platformComboBox.addItem(Platforms.getPlatformDisplayNames()[i]);
+//        }
+//        platformComboBox.setSelectedIndex(makeOptions.getPlatform());
         
         // Dependency Checking
         dependencyCheckingCheckBox.setSelected(makeOptions.getDepencyChecking());
@@ -139,7 +146,7 @@ public class ProjectOptionsPanel extends JPanel {
         MakeOptions makeOptions = MakeOptions.getInstance();
         
         // Platform
-        makeOptions.setPlatform(platformComboBox.getSelectedIndex());
+//        makeOptions.setPlatform(platformComboBox.getSelectedIndex());
         
         // Dependency Checking
         makeOptions.setDepencyChecking(dependencyCheckingCheckBox.isSelected());
@@ -188,9 +195,11 @@ public class ProjectOptionsPanel extends JPanel {
     }
     
     public void firePropertyChange(PropertyChangeEvent evt) {
-        PropertyChangeListener[] listeners = (PropertyChangeListener[])propertyChangeListeners.toArray(new PropertyChangeListener[propertyChangeListeners.size()]);
-        for (int i = 0; i < listeners.length; i++)
-            listeners[i].propertyChange(evt);
+        ArrayList<PropertyChangeListener> newList = new ArrayList<PropertyChangeListener>();
+        newList.addAll(propertyChangeListeners);
+        for (PropertyChangeListener listener : newList) {
+            listener.propertyChange(evt);
+        }
     }
     
     private static String getString(String key) {
@@ -202,20 +211,16 @@ public class ProjectOptionsPanel extends JPanel {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
-        platformLabel = new javax.swing.JLabel();
-        platformComboBox = new javax.swing.JComboBox();
-        defaultPlatformInfoLabel = new javax.swing.JLabel();
         makeOptionsLabel = new javax.swing.JLabel();
         makeOptionsTextField = new javax.swing.JTextField();
         makeOptionsTxt = new javax.swing.JLabel();
         filePathLabel = new javax.swing.JLabel();
         filePathcomboBox = new javax.swing.JComboBox();
         filePathTxt = new javax.swing.JTextArea();
-        filePathTxt.setBackground(getBackground());
         saveCheckBox = new javax.swing.JCheckBox();
         reuseCheckBox = new javax.swing.JCheckBox();
         dependencyCheckingCheckBox = new javax.swing.JCheckBox();
@@ -223,38 +228,10 @@ public class ProjectOptionsPanel extends JPanel {
 
         setLayout(new java.awt.GridBagLayout());
 
-        platformLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("DEFAULT_PLATFORM_MN").charAt(0));
-        platformLabel.setLabelFor(platformComboBox);
-        platformLabel.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("DEFAULT_PLATFORM"));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(6, 6, 0, 0);
-        add(platformLabel, gridBagConstraints);
-
-        platformComboBox.setMinimumSize(new java.awt.Dimension(60, 18));
-        platformComboBox.setPreferredSize(new java.awt.Dimension(60, 20));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.weightx = 1.0;
-        gridBagConstraints.insets = new java.awt.Insets(6, 4, 0, 0);
-        add(platformComboBox, gridBagConstraints);
-
-        defaultPlatformInfoLabel.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("USED_TXT"));
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 2;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
-        gridBagConstraints.insets = new java.awt.Insets(6, 4, 0, 12);
-        add(defaultPlatformInfoLabel, gridBagConstraints);
-
         makeOptionsLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("MAKE_OPTIONS_MN").charAt(0));
         makeOptionsLabel.setLabelFor(makeOptionsTextField);
-        makeOptionsLabel.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("MAKE_OPTIONS"));
+        java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle"); // NOI18N
+        makeOptionsLabel.setText(bundle.getString("MAKE_OPTIONS")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 1;
@@ -272,7 +249,7 @@ public class ProjectOptionsPanel extends JPanel {
         gridBagConstraints.insets = new java.awt.Insets(6, 4, 0, 12);
         add(makeOptionsTextField, gridBagConstraints);
 
-        makeOptionsTxt.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("MAKE_OPTIONS_TXT"));
+        makeOptionsTxt.setText(bundle.getString("MAKE_OPTIONS_TXT")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 2;
@@ -284,7 +261,7 @@ public class ProjectOptionsPanel extends JPanel {
 
         filePathLabel.setDisplayedMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("FILE_PATH_MN").charAt(0));
         filePathLabel.setLabelFor(filePathcomboBox);
-        filePathLabel.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("FILE_PATH"));
+        filePathLabel.setText(bundle.getString("FILE_PATH")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 4;
@@ -304,7 +281,7 @@ public class ProjectOptionsPanel extends JPanel {
 
         filePathTxt.setEditable(false);
         filePathTxt.setLineWrap(true);
-        filePathTxt.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("FILE_PATH_MODE_TXT"));
+        filePathTxt.setText(bundle.getString("FILE_PATH_MODE_TXT")); // NOI18N
         filePathTxt.setWrapStyleWord(true);
         filePathTxt.setBorder(null);
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -318,8 +295,7 @@ public class ProjectOptionsPanel extends JPanel {
         add(filePathTxt, gridBagConstraints);
 
         saveCheckBox.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("SAVE_CHECKBOX_MN").charAt(0));
-        saveCheckBox.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("SAVE_CHECKBOX_TXT"));
-        saveCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        saveCheckBox.setText(bundle.getString("SAVE_CHECKBOX_TXT")); // NOI18N
         saveCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -329,8 +305,7 @@ public class ProjectOptionsPanel extends JPanel {
         add(saveCheckBox, gridBagConstraints);
 
         reuseCheckBox.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("REUSE_CHECKBOX_MN").charAt(0));
-        reuseCheckBox.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("REUSE_CHECKBOX_TXT"));
-        reuseCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        reuseCheckBox.setText(bundle.getString("REUSE_CHECKBOX_TXT")); // NOI18N
         reuseCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -340,15 +315,13 @@ public class ProjectOptionsPanel extends JPanel {
         add(reuseCheckBox, gridBagConstraints);
 
         dependencyCheckingCheckBox.setMnemonic(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("DEPENDENCY_CHECKING_MN").charAt(0));
-        dependencyCheckingCheckBox.setText(java.util.ResourceBundle.getBundle("org/netbeans/modules/cnd/makeproject/ui/options/Bundle").getString("DEPENDENCY_CHECKING_TXT"));
-        dependencyCheckingCheckBox.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        dependencyCheckingCheckBox.setText(bundle.getString("DEPENDENCY_CHECKING_TXT")); // NOI18N
         dependencyCheckingCheckBox.setMargin(new java.awt.Insets(0, 0, 0, 0));
         dependencyCheckingCheckBox.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 dependencyCheckingCheckBoxActionPerformed(evt);
             }
         });
-
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
@@ -356,7 +329,6 @@ public class ProjectOptionsPanel extends JPanel {
         gridBagConstraints.anchor = java.awt.GridBagConstraints.WEST;
         gridBagConstraints.insets = new java.awt.Insets(0, 6, 0, 11);
         add(dependencyCheckingCheckBox, gridBagConstraints);
-
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridwidth = java.awt.GridBagConstraints.REMAINDER;
@@ -364,7 +336,6 @@ public class ProjectOptionsPanel extends JPanel {
         gridBagConstraints.weightx = 1.0;
         gridBagConstraints.weighty = 1.0;
         add(jSeparator1, gridBagConstraints);
-
     }// </editor-fold>//GEN-END:initComponents
 
     private void dependencyCheckingCheckBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_dependencyCheckingCheckBoxActionPerformed
@@ -378,7 +349,6 @@ public class ProjectOptionsPanel extends JPanel {
     
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JLabel defaultPlatformInfoLabel;
     private javax.swing.JCheckBox dependencyCheckingCheckBox;
     private javax.swing.JLabel filePathLabel;
     private javax.swing.JTextArea filePathTxt;
@@ -387,8 +357,6 @@ public class ProjectOptionsPanel extends JPanel {
     private javax.swing.JLabel makeOptionsLabel;
     private javax.swing.JTextField makeOptionsTextField;
     private javax.swing.JLabel makeOptionsTxt;
-    private javax.swing.JComboBox platformComboBox;
-    private javax.swing.JLabel platformLabel;
     private javax.swing.JCheckBox reuseCheckBox;
     private javax.swing.JCheckBox saveCheckBox;
     // End of variables declaration//GEN-END:variables

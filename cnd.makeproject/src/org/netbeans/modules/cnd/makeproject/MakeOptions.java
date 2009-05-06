@@ -44,7 +44,6 @@ package org.netbeans.modules.cnd.makeproject;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.prefs.Preferences;
-import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.SharedClassObject;
@@ -63,7 +62,7 @@ public class MakeOptions extends SharedClassObject implements PropertyChangeList
     public static final int PATH_REL_OR_ABS = 0;
     public static final int PATH_REL = 1;
     public static final int PATH_ABS = 2;
-    public static String[] PathModeNames = new String[] {
+    public static final String[] PathModeNames = new String[] {
         getString("TXT_Auto"),
         getString("TXT_AlwaysRelative"),
         getString("TXT_AlwaysAbsolute"),
@@ -78,6 +77,14 @@ public class MakeOptions extends SharedClassObject implements PropertyChangeList
     
     // Reuse
     static final String REUSE = "reuse";  // NOI18N
+    
+    // packaging Defaults
+    static final String DEF_EXE_PERM = "defexeperm"; // NOI18N
+    static final String DEF_FILE_PERM = "deffileperm"; // NOI18N
+    static final String DEF_OWNER = "defowner"; // NOI18N
+    static final String DEF_GROUP = "defgroup"; // NOI18N
+
+    static final String PREF_APP_LANGUAGE = "prefAppLanguage"; // NOI18N // Prefered language when creating new Application projects
     
     static public MakeOptions getInstance() {
         if (instance == null) {
@@ -115,15 +122,15 @@ public class MakeOptions extends SharedClassObject implements PropertyChangeList
     }
     
     // Platform
-    public int getPlatform() {
-        return getPreferences().getInt(PLATFORM, Platform.getDefaultPlatform());
-        }
-    public void setPlatform(int value) {
-        int oldValue = getPlatform();
-        getPreferences().putInt(PLATFORM, value);
-        if (oldValue != value)
-            firePropertyChange(PLATFORM, "" + oldValue, "" + value); // NOI18N
-    }
+//    public int getPlatform() {
+//        return getPreferences().getInt(PLATFORM, Platform.getDefaultPlatform());
+//        }
+//    public void setPlatform(int value) {
+//        int oldValue = getPlatform();
+//        getPreferences().putInt(PLATFORM, value);
+//        if (oldValue != value)
+//            firePropertyChange(PLATFORM, "" + oldValue, "" + value); // NOI18N
+//    }
     
     // Path Mode
     public int getPathMode() {
@@ -133,18 +140,18 @@ public class MakeOptions extends SharedClassObject implements PropertyChangeList
         int oldValue = getPathMode();
         getPreferences().putInt(PATH_MODE, pathMode);
         if (oldValue != pathMode)
-            firePropertyChange(PATH_MODE, new Integer(oldValue), new Integer(pathMode));
+            firePropertyChange(PATH_MODE, Integer.valueOf(oldValue), Integer.valueOf(pathMode));
     }
     
     // Dependency Checking
     public boolean getDepencyChecking() {
-        return getPreferences().getBoolean(DEPENDENCY_CHECKING, false);
+        return getPreferences().getBoolean(DEPENDENCY_CHECKING, true);
     }
     public void setDepencyChecking(boolean dependencyChecking) {
         boolean oldValue = getDepencyChecking();
         getPreferences().putBoolean(DEPENDENCY_CHECKING, dependencyChecking);
         if (oldValue != dependencyChecking)
-            firePropertyChange(DEPENDENCY_CHECKING, new Boolean(oldValue), new Boolean(dependencyChecking));
+            firePropertyChange(DEPENDENCY_CHECKING, Boolean.valueOf(oldValue), Boolean.valueOf(dependencyChecking));
     }
     
     // Save
@@ -155,7 +162,7 @@ public class MakeOptions extends SharedClassObject implements PropertyChangeList
         boolean oldValue = getSave();
         getPreferences().putBoolean(SAVE, save);
         if (oldValue != save)
-            firePropertyChange(SAVE, new Boolean(oldValue), new Boolean(save));
+            firePropertyChange(SAVE, Boolean.valueOf(oldValue), Boolean.valueOf(save));
     }
     
     // Reuse
@@ -166,7 +173,64 @@ public class MakeOptions extends SharedClassObject implements PropertyChangeList
         boolean oldValue = getReuse();
         getPreferences().putBoolean(REUSE, reuse);
         if (oldValue != reuse)
-            firePropertyChange(REUSE, new Boolean(oldValue), new Boolean(reuse));
+            firePropertyChange(REUSE, Boolean.valueOf(oldValue), Boolean.valueOf(reuse));
+    }
+    
+    
+    // Def Exe Perm
+    public String getDefExePerm() {
+        return getPreferences().get(DEF_EXE_PERM, "755"); // NOI18N
+    }
+    public void setDefExePerm(String value) {
+        String oldValue = getDefExePerm();
+        getPreferences().put(DEF_EXE_PERM, value);
+        if (!oldValue.equals(value))
+            firePropertyChange(DEF_EXE_PERM, oldValue, value);
+    }
+    
+    // Def File Perm
+    public String getDefFilePerm() {
+        return getPreferences().get(DEF_FILE_PERM, "644"); // NOI18N
+    }
+    public void setDefFilePerm(String value) {
+        String oldValue = getDefFilePerm();
+        getPreferences().put(DEF_FILE_PERM, value);
+        if (!oldValue.equals(value))
+            firePropertyChange(DEF_FILE_PERM, oldValue, value);
+    }
+    
+    // Def Owner Perm
+    public String getDefOwner() {
+        return getPreferences().get(DEF_OWNER, "root"); // NOI18N
+    }
+    public void setDefOwner(String value) {
+        String oldValue = getDefOwner();
+        getPreferences().put(DEF_OWNER, value);
+        if (!oldValue.equals(value))
+            firePropertyChange(DEF_OWNER, oldValue, value);
+    }
+    
+    // Def Group Perm
+    public String getDefGroup() {
+        return getPreferences().get(DEF_GROUP, "bin"); // NOI18N
+    }
+    public void setDefGroup(String value) {
+        String oldValue = getDefGroup();
+        getPreferences().put(DEF_GROUP, value);
+        if (!oldValue.equals(value))
+            firePropertyChange(DEF_GROUP, oldValue, value);
+    }
+
+
+    // Prefered language when creating new Application projects
+    public String getPrefApplicationLanguage() {
+        return getPreferences().get(PREF_APP_LANGUAGE, "C++"); // NOI18N
+    }
+    public void setPrefApplicationLanguage(String value) {
+        String oldValue = getPrefApplicationLanguage();
+        getPreferences().put(PREF_APP_LANGUAGE, value);
+        if (!oldValue.equals(value))
+            firePropertyChange(PREF_APP_LANGUAGE, oldValue, value);
     }
     
     public void propertyChange(PropertyChangeEvent pce) {
