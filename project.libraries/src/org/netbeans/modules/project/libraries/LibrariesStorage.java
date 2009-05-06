@@ -47,8 +47,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
@@ -60,6 +58,7 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.TreeSet;
+import java.util.logging.Logger;
 import javax.xml.parsers.ParserConfigurationException;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
 import org.netbeans.spi.project.libraries.LibraryTypeProvider;
@@ -70,18 +69,28 @@ import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.NbBundle;
+import org.openide.util.Task;
+import org.openide.util.TaskListener;
 import org.openide.xml.XMLUtil;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
-public class LibrariesStorage extends FileChangeAdapter implements WritableLibraryProvider<LibraryImplementation> {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.project.libraries.LibraryProvider.class)
+public class LibrariesStorage extends FileChangeAdapter
+implements WritableLibraryProvider<LibraryImplementation>, TaskListener {
 
     private static final String NB_HOME_PROPERTY = "netbeans.home";  //NOI18N
     private static final String LIBRARIES_REPOSITORY = "org-netbeans-api-project-libraries/Libraries";  //NOI18N
     private static final String TIME_STAMPS_FILE = "libraries-timestamps.properties"; //NOI18B
     private static final String XML_EXT = "xml";    //NOI18N
+
+    static final Logger LOG = Logger.getLogger(LibrariesStorage.class.getName());
+    
+    //Lock to prevent FileAlreadyLocked exception.
+    private static final Object TIMESTAMPS_LOCK = new Object ();
 
     // persistent storage, it may be null for before first library is store into storage
     private FileObject storage = null;
@@ -125,9 +134,8 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
      * @return new storage or null on I/O error.
      */
     private static final FileObject createStorage () {
-        FileSystem storageFS = Repository.getDefault().getDefaultFileSystem();        
         try {
-            return FileUtil.createFolder(storageFS.getRoot(), LIBRARIES_REPOSITORY);
+            return FileUtil.createFolder(FileUtil.getConfigRoot(), LIBRARIES_REPOSITORY);
         } catch (IOException e) {
             return null;
         }
@@ -202,6 +210,7 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
             }            
             this.loadFromStorage();            
             this.storage.addFileChangeListener (this);
+            LibraryTypeRegistry.getDefault().addTaskListener(this);
             initialized = true;
         }
     }
@@ -249,44 +258,37 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
     }
 
     private static void writeLibraryDefinition (final FileObject definitionFile, final LibraryImplementation library, final LibraryTypeProvider libraryTypeProvider) throws IOException {
-        FileLock lock = null;
-        PrintWriter out = null;
-        try {
-            lock = definitionFile.lock();
-            out = new PrintWriter(new OutputStreamWriter(definitionFile.getOutputStream (lock),"UTF-8"));
-            // XXX use DOM and XMLUtil.write instead
-            out.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");      //NOI18N
-            out.println("<!DOCTYPE library PUBLIC \"-//NetBeans//DTD Library Declaration 1.0//EN\" \"http://www.netbeans.org/dtds/library-declaration-1_0.dtd\">"); //NOI18N
-            out.println("<library version=\"1.0\">");       			//NOI18N
-            out.println("\t<name>"+library.getName()+"</name>");        //NOI18N
-            out.println("\t<type>"+library.getType()+"</type>");            
-            String description = library.getDescription();
-            if (description != null && description.length() > 0) {
-                out.println("\t<description>"+description+"</description>");   //NOI18N
-            }
-            String localizingBundle = library.getLocalizingBundle();
-            if (localizingBundle != null && localizingBundle.length() > 0) {
-                out.println("\t<localizing-bundle>"+XMLUtil.toElementContent(localizingBundle)+"</localizing-bundle>");   //NOI18N
-            }
-            String[] volumeTypes = libraryTypeProvider.getSupportedVolumeTypes ();
-            for (String vtype : volumeTypes) {
-                out.println("\t<volume>");      //NOI18N
-                out.println ("\t\t<type>" + vtype + "</type>");   //NOI18N
-                List<URL> volume = library.getContent(vtype);
-                if (volume != null) {
-                    //If null -> broken library, repair it.
-                    for (URL url : volume) {
-                        out.println("\t\t<resource>"+XMLUtil.toElementContent(url.toExternalForm())+"</resource>"); //NOI18N
-                    }
+        Document doc = XMLUtil.createDocument("library", null,
+                "-//NetBeans//DTD Library Declaration 1.0//EN",
+                "http://www.netbeans.org/dtds/library-declaration-1_0.dtd"); // NOI18N
+        Element libraryE = doc.getDocumentElement();
+        libraryE.setAttribute("version", "1.0"); // NOI18N
+        libraryE.appendChild(doc.createElement("name")).appendChild(doc.createTextNode(library.getName())); // NOI18N
+        libraryE.appendChild(doc.createElement("type")).appendChild(doc.createTextNode(library.getType())); // NOI18N
+        String description = library.getDescription();
+        if (description != null && description.length() > 0) {
+            libraryE.appendChild(doc.createElement("description")).appendChild(doc.createTextNode(description)); // NOI18N
+        }
+        String localizingBundle = library.getLocalizingBundle();
+        if (localizingBundle != null && localizingBundle.length() > 0) {
+            libraryE.appendChild(doc.createElement("localizing-bundle")).appendChild(doc.createTextNode(localizingBundle)); // NOI18N
+        }
+        for (String vtype : libraryTypeProvider.getSupportedVolumeTypes()) {
+            Element volumeE = (Element) libraryE.appendChild(doc.createElement("volume")); // NOI18N
+            volumeE.appendChild(doc.createElement("type")).appendChild(doc.createTextNode(vtype)); // NOI18N
+            List<URL> volume = library.getContent(vtype);
+            if (volume != null) {
+                //If null -> broken library, repair it.
+                for (URL url : volume) {
+                    volumeE.appendChild(doc.createElement("resource")).appendChild(doc.createTextNode(url.toString())); // NOI18N
                 }
-                out.println("\t</volume>");     //NOI18N
             }
-            out.println("</library>");  //NOI18N
+        }
+        OutputStream os = definitionFile.getOutputStream();
+        try {
+            XMLUtil.write(doc, os, "UTF-8"); // NOI18N
         } finally {
-            if (out !=  null)
-                out.close();
-            if (lock != null)
-                lock.releaseLock();
+            os.close();
         }
     }
 
@@ -308,7 +310,7 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
     /**
      * Return all libraries in memory.
      */
-    public final LibraryImplementation[] getLibraries() {
+    public final synchronized LibraryImplementation[] getLibraries() {
         this.initStorage();
         assert this.storage != null : "Storage is not initialized";
         return libraries.values().toArray(new LibraryImplementation[libraries.size()]);
@@ -480,26 +482,28 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
     
     private void saveTimeStamps () throws IOException {        
         if (this.storage != null) {
-            Properties timeStamps = getTimeStamps();
-            if (timeStamps.get(NB_HOME_PROPERTY) == null) {
-                String currNbLoc = getNBRoots();
-                timeStamps.put(NB_HOME_PROPERTY,currNbLoc);
-            }
-            FileObject parent = storage.getParent();
-            FileObject timeStampFile = parent.getFileObject(TIME_STAMPS_FILE);
-            if (timeStampFile == null) {
-                timeStampFile = parent.createData(TIME_STAMPS_FILE);
-            }
-            FileLock lock = timeStampFile.lock();
-            try {
-                OutputStream out = timeStampFile.getOutputStream(lock);
-                try {
-                    timeStamps.store (out, null);    
-                } finally {
-                    out.close();
+            synchronized (TIMESTAMPS_LOCK) {
+                Properties timeStamps = getTimeStamps();
+                if (timeStamps.get(NB_HOME_PROPERTY) == null) {
+                    String currNbLoc = getNBRoots();
+                    timeStamps.put(NB_HOME_PROPERTY,currNbLoc);
                 }
-            } finally {
-                lock.releaseLock();
+                FileObject parent = storage.getParent();
+                FileObject timeStampFile = parent.getFileObject(TIME_STAMPS_FILE);
+                if (timeStampFile == null) {
+                    timeStampFile = parent.createData(TIME_STAMPS_FILE);
+                }
+                FileLock lock = timeStampFile.lock();
+                try {
+                    OutputStream out = timeStampFile.getOutputStream(lock);
+                    try {
+                        timeStamps.store (out, null);    
+                    } finally {
+                        out.close();
+                    }
+                } finally {
+                    lock.releaseLock();
+                }
             }
         }
     }        
@@ -556,6 +560,17 @@ public class LibrariesStorage extends FileChangeAdapter implements WritableLibra
             }
         }
         return sb.toString();
+    }
+
+    public void taskFinished(Task task) {
+        if (initialized) {
+            HashMap<String, LibraryImplementation> clone;
+            clone = new HashMap<String,LibraryImplementation>(libraries);
+            loadFromStorage();
+            if (!clone.equals(libraries)) {
+                fireLibrariesChanged();
+            }
+        }
     }
 
 }
