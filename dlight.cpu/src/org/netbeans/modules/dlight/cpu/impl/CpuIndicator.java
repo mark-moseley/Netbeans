@@ -36,78 +36,75 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.sync;
+package org.netbeans.modules.dlight.cpu.impl;
 
+import org.netbeans.modules.dlight.util.DLightLogger;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
-import javax.swing.JComponent;
-import javax.swing.JEditorPane;
+import javax.swing.*;
 import org.netbeans.modules.dlight.api.storage.DataRow;
 import org.netbeans.modules.dlight.api.storage.DataTableMetadata.Column;
 import org.netbeans.modules.dlight.indicators.graph.GraphConfig;
 import org.netbeans.modules.dlight.indicators.graph.RepairPanel;
 import org.netbeans.modules.dlight.spi.indicator.Indicator;
 import org.netbeans.modules.dlight.util.DLightExecutorService;
-import org.netbeans.modules.dlight.util.DLightLogger;
 import org.netbeans.modules.dlight.util.UIThread;
 import org.netbeans.modules.dlight.util.UIUtilities;
 import org.openide.util.NbBundle;
 
 /**
- * Thread usage indicator
+ *
  * @author Vladimir Kvashin
  */
-public class SyncIndicator extends Indicator<SyncIndicatorConfiguration> {
+/*package*/ class CpuIndicator extends Indicator<CpuIndicatorConfiguration> {
 
-    private SyncIndicatorPanel panel;
+    private final CpuIndicatorPanel panel;
     private final Set<String> acceptedColumnNames;
-    private final List<String> acceptedThreadsCountColumnNames;
-    private float lastLocks;
-    private int lastThreads = 1;
+    private final Set<String> acceptedSysColumnNames;
+    private Collection<ActionListener> listeners;
+    private int lastSysValue;
+    private int lastUsrValue;
+    private int seconds;
 
-    public SyncIndicator(SyncIndicatorConfiguration configuration) {
+    CpuIndicator(CpuIndicatorConfiguration configuration, Set<String> sysColumns) {
         super(configuration);
-        this.acceptedColumnNames = new HashSet<String>();
-        for (Column column : getMetadataColumns()) {
-            acceptedColumnNames.add(column.getColumnName());
+        panel = new CpuIndicatorPanel();
+        acceptedColumnNames = new HashSet<String>();
+        for (Column c : getMetadataColumns()) {
+            acceptedColumnNames.add(c.getColumnName());
         }
-        this.acceptedThreadsCountColumnNames = configuration.getThreadColumnNames();
+        acceptedSysColumnNames = sysColumns;
     }
 
     @Override
-    public synchronized JComponent getComponent() {
-        if (panel == null) {
-            panel = new SyncIndicatorPanel();
-        }
+    public JComponent getComponent() {
         return panel.getPanel();
     }
 
     public void reset() {
+        //graph.reset();
     }
 
-    public void updated(List<DataRow> rows) {
-        for (DataRow row : rows) {
+    @Override
+    public void updated(List<DataRow> data) {
+        for (DataRow row : data) {
+            if (DLightLogger.instance.isLoggable(Level.FINE)) {
+                DLightLogger.instance.fine("UPDATE: " + row.getData().get(0) + " " + row.getData().get(1)); // NOI18N
+            }
             for (String column : row.getColumnNames()) {
-                if (acceptedThreadsCountColumnNames.contains(column)) {
-                    String threads = row.getStringValue(column);
-                    try {
-                        lastThreads = Integer.parseInt(threads);
-                    } catch (NumberFormatException ex) {
-                        DLightLogger.instance.log(Level.WARNING, null, ex);
-                    }
+                if (acceptedSysColumnNames.contains(column)) {
+                    lastSysValue = ((Float) row.getData(column)).intValue();
                 } else if (acceptedColumnNames.contains(column)) {
-                    String locks = row.getStringValue(column);
-                    try {
-                        lastLocks = Float.parseFloat(locks);
-                    } catch (NumberFormatException ex) {
-                        DLightLogger.instance.log(Level.WARNING, null, ex);
-                    }
+                    lastUsrValue = ((Float) row.getData(column)).intValue();
                 }
             }
         }
@@ -115,7 +112,40 @@ public class SyncIndicator extends Indicator<SyncIndicatorConfiguration> {
 
     @Override
     protected void tick() {
-        panel.addData(Math.round(lastThreads * lastLocks / 100), lastThreads);
+        panel.addData(lastSysValue, lastUsrValue);
+        panel.setSysValue(lastSysValue);
+        panel.setUsrValue(lastUsrValue);
+        panel.setTime(++seconds);
+    }
+
+    /*package*/ void fireActionPerformed() {
+        ActionEvent ae = new ActionEvent(this, 0, null);
+        for (ActionListener al : getActionListeners()) {
+            al.actionPerformed(ae);
+        }
+    }
+
+    Collection<ActionListener> getActionListeners() {
+        synchronized (this) {
+            return (listeners == null) ? Collections.<ActionListener>emptyList() : new ArrayList<ActionListener>(listeners);
+        }
+    }
+
+    void addActionListener(ActionListener listener) {
+        synchronized (this) {
+            if (listeners == null) {
+                listeners = new ArrayList<ActionListener>();
+            }
+            listeners.add(listener);
+        }
+    }
+
+    void removeActionListener(ActionListener listener) {
+        synchronized (this) {
+            if (listeners != null) {
+                listeners.remove(listener);
+            }
+        }
     }
 
     @Override
@@ -133,7 +163,7 @@ public class SyncIndicator extends Indicator<SyncIndicatorConfiguration> {
                             });
                             return result.get();
                         }
-                    }, "Click On Repair in Sync Indicator task");//NOI18N
+                    }, "Click On Repair in CPU Indicator task");//NOI18N
                 }
             });
             UIThread.invoke(new Runnable() {
@@ -143,7 +173,7 @@ public class SyncIndicator extends Indicator<SyncIndicatorConfiguration> {
                 }
             });
         } else {
-            final JEditorPane label = UIUtilities.createJEditorPane(getRepairActionProvider().getMessage(getRepairActionProvider().getValidationStatus()), true, GraphConfig.TEXT_COLOR);
+            final JEditorPane label= UIUtilities.createJEditorPane(getRepairActionProvider().getMessage(getRepairActionProvider().getValidationStatus()), false, GraphConfig.TEXT_COLOR);
             UIThread.invoke(new Runnable() {
                 public void run() {
                     panel.getPanel().setOverlay(label);
@@ -153,6 +183,6 @@ public class SyncIndicator extends Indicator<SyncIndicatorConfiguration> {
     }
 
     private static String getMessage(String name) {
-        return NbBundle.getMessage(SyncIndicator.class, name);
+        return NbBundle.getMessage(CpuIndicator.class, name);
     }
 }
