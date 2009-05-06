@@ -55,12 +55,16 @@ import org.netbeans.modules.cnd.apt.debug.APTTraceFlags;
 import org.netbeans.modules.cnd.apt.support.APTBaseToken;
 import org.netbeans.modules.cnd.apt.impl.support.APTCommentToken;
 import org.netbeans.modules.cnd.apt.impl.support.APTConstTextToken;
+import org.netbeans.modules.cnd.apt.impl.support.APTMacroParamExpansion;
 import org.netbeans.modules.cnd.apt.impl.support.APTTestToken;
+import org.netbeans.modules.cnd.apt.impl.support.MacroExpandedToken;
+import org.netbeans.modules.cnd.apt.impl.support.lang.APTBaseLanguageFilter;
 import org.netbeans.modules.cnd.apt.support.APTTokenTypes;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
 import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.support.APTTokenAbstact;
+import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
 
 /**
  * APT utilities
@@ -81,14 +85,32 @@ public class APTUtils {
                 LOG.setLevel(Level.SEVERE);
             }
         } else {
-            LOG.setLevel(Level.parse(level));
+            try {
+                LOG.setLevel(Level.parse(level));
+            } catch (IllegalArgumentException e) {
+                // skip
+            }
         }
     }
     
     /** Creates a new instance of APTUtils */
     private APTUtils() {
     }
-    
+
+    public static void setTokenText(APTToken _token, char buf[], int start, int count) {
+        if (_token instanceof APTBaseToken) {
+            _token.setTextID(CharSequenceKey.create(buf, start, count));
+        } else if (_token instanceof APTCommentToken) {
+            // no need to set text in comment token, but set text len
+            ((APTCommentToken)_token).setTextLength(count);
+        } else if (_token instanceof APTConstTextToken) {
+            // no need to set text in comment token
+        } else {
+            System.err.printf("unexpected token %s while assigning text %s", _token, new String(buf, start, count));
+            _token.setText(new String(buf, start, count));
+        }
+    }
+
     public static APTToken createAPTToken(int type) {
         // Preprocessor tokens can be made constText, but we can get '#define' and '# define'
         // which have different text. so for now they are treated as usual tokens
@@ -125,7 +147,21 @@ public class APTUtils {
                 return new APTConstTextToken();
         }
     }
-    
+
+    public static APTToken getLastToken(TokenStream ts) {
+        APTToken last = null;
+        try {
+            for (APTToken token = (APTToken) ts.nextToken(); !APTUtils.isEOF(token);) {
+                assert (token != null) : "list of tokens must not have 'null' elements"; // NOI18N
+                last = token;
+                token = (APTToken) ts.nextToken();
+            }
+        } catch (TokenStreamException ex) {
+            // ignore
+        }
+        return last;
+    }
+
     public static String debugString(TokenStream ts) {
         // use simple stringize
         return stringize(ts, false);
@@ -155,7 +191,7 @@ public class APTUtils {
         try {
             for (APTToken token = (APTToken)ts.nextToken();!isEOF(token);) {
                 assert(token != null) : "list of tokens must not have 'null' elements"; // NOI18N
-                retValue.append(token.getText());
+                retValue.append(token.getTextID());
                 APTToken next =(APTToken)ts.nextToken();
                 if (!isEOF(next) && !inIncludeDirective) { // disable for IZ#124635
                     // if tokens were without spaces => no space
@@ -170,13 +206,13 @@ public class APTUtils {
         return retValue.toString();
     }
     
-    public static String macros2String(Map<String/*getTokenTextKey(token)*/, APTMacro> macros) {
+    public static String macros2String(Map<CharSequence/*getTokenTextKey(token)*/, APTMacro> macros) {
         StringBuilder retValue = new StringBuilder();
         retValue.append("MACROS (sorted "+macros.size()+"):\n"); // NOI18N
-        List<String> macrosSorted = new ArrayList<String>(macros.keySet());
-        Collections.sort(macrosSorted);
-        for (String key : macrosSorted) {
-            APTMacro macro = macros.get(APTUtils.getTokenTextKey(new APTBaseToken(key)));
+        List<CharSequence> macrosSorted = new ArrayList<CharSequence>(macros.keySet());
+        Collections.sort(macrosSorted, CharSequenceKey.Comparator);
+        for (CharSequence key : macrosSorted) {
+            APTMacro macro = macros.get(key);
             assert(macro != null);
             retValue.append(macro);
             retValue.append("'\n"); // NOI18N
@@ -184,16 +220,16 @@ public class APTUtils {
         return retValue.toString();
     }
     
-    public static String includes2String(List<String> includePaths) {
+    public static CharSequence includes2String(List<? extends CharSequence> includePaths) {
         StringBuilder retValue = new StringBuilder();
-        for (Iterator<String> it = includePaths.iterator(); it.hasNext();) {
-            String path = it.next();
+        for (Iterator<? extends CharSequence> it = includePaths.iterator(); it.hasNext();) {
+            CharSequence path = it.next();
             retValue.append(path);
             if (it.hasNext()) {
                 retValue.append('\n'); // NOI18N
             }
         }
-        return retValue.toString();
+        return retValue;
     }
     
     public static boolean isPreprocessorToken(Token token) {
@@ -226,6 +262,18 @@ public class APTUtils {
     public static boolean isID(Token token) {
         return token != null && token.getType() == APTTokenTypes.ID;
     }
+
+    public static boolean isInt(Token token) {
+        if (token != null) {
+            switch (token.getType()) {
+                case APTTokenTypes.DECIMALINT:
+                case APTTokenTypes.HEXADECIMALINT:
+                case APTTokenTypes.OCTALINT:
+                    return true;
+            }
+        }
+        return false;
+    }
     
     public static boolean isEOF(Token token) {
         assert (token != null);
@@ -236,8 +284,8 @@ public class APTUtils {
         return ttype == APTTokenTypes.EOF;
     }
     
-    public static boolean isVaArgsToken(Token token) {
-        return token != null && token.getText().equals(VA_ARGS_TOKEN.getText());
+    public static boolean isVaArgsToken(APTToken token) {
+        return token != null && token.getTextID().equals(VA_ARGS_TOKEN.getTextID());
     }
     
     public static boolean isStartCondition(Token token) {
@@ -387,15 +435,59 @@ public class APTUtils {
         }
         return false;
     }
-    
-    public static List<Token> toList(TokenStream ts) {
-        List<Token> tokens = new ArrayList<Token>();
+
+    public static boolean isMacroExpandedToken(Token token) {
+        if(token instanceof MacroExpandedToken) {
+            return true;
+        } else if (token instanceof APTBaseLanguageFilter.FilterToken) {
+            return isMacroExpandedToken(((APTBaseLanguageFilter.FilterToken)token).getOriginalToken());
+        }
+        return false;
+    }
+
+    public static boolean isMacroParamExpandedToken(Token token) {
+        if (token instanceof APTMacroParamExpansion) {
+            return true;
+        } else if (token instanceof MacroExpandedToken) {
+            return isMacroParamExpandedToken(((MacroExpandedToken) token).getTo());
+        } else if (token instanceof APTBaseLanguageFilter.FilterToken) {
+            return isMacroParamExpandedToken(((APTBaseLanguageFilter.FilterToken) token).getOriginalToken());
+        }
+        return false;
+    }
+
+    public static APTToken getExpandedToken(APTToken token) {
+        if (token instanceof APTMacroParamExpansion) {
+            return getExpandedToken(((APTMacroParamExpansion) token).getOriginal());
+        } else if (token instanceof MacroExpandedToken) {
+            return getExpandedToken(((MacroExpandedToken) token).getTo());
+        } else if (token instanceof APTBaseLanguageFilter.FilterToken) {
+            return getExpandedToken(((APTBaseLanguageFilter.FilterToken) token).getOriginalToken());
+        }
+        return token;
+    }
+
+    public static boolean areAdjacent(APTToken left, APTToken right) {
+        while (left instanceof MacroExpandedToken && right instanceof MacroExpandedToken) {
+            left = ((MacroExpandedToken) left).getTo();
+            right = ((MacroExpandedToken) right).getTo();
+        }
+//        if (left instanceof APTToken && right instanceof APTToken) {
+        return (left).getEndOffset() == (right).getOffset();
+//        } else {
+//            return left.getLine() == right.getLine()
+//                    && left.getColumn() + left.getText().length() == right.getColumn();
+//        }
+    }
+
+    public static List<APTToken> toList(TokenStream ts) {
+        List<APTToken> tokens = new ArrayList<APTToken>();
         try {
-            Token token = ts.nextToken();
+            APTToken token = (APTToken) ts.nextToken();
             while (!isEOF(token)) {
                 assert(token != null) : "list of tokens must not have 'null' elements"; // NOI18N
                 tokens.add(token);
-                token = ts.nextToken();
+                token = (APTToken) ts.nextToken();
             }
         } catch (TokenStreamException ex) {
             LOG.log(Level.INFO, "error on converting token stream to list", ex.getMessage()); // NOI18N
@@ -410,14 +502,8 @@ public class APTUtils {
         return text;
     }
     
-    public static String getTokenTextKey(Token token) {
-        assert (token != null);
-        // now use text, but it will be faster to use textID
-        return token.getText();
-    }
-    
-    public static APTToken createAPTToken(Token token, int ttype) {
-        APTToken newToken = null;
+    public static APTToken createAPTToken(APTToken token, int ttype) {
+        APTToken newToken;
         if (APTTraceFlags.USE_APT_TEST_TOKEN) {
             newToken = new APTTestToken(token, ttype);
         } else {
@@ -426,12 +512,12 @@ public class APTUtils {
         return newToken;
     }
     
-    public static APTToken createAPTToken(Token token) {
+    public static APTToken createAPTToken(APTToken token) {
         return createAPTToken(token, token.getType());
     }
     
     public static APTToken createAPTToken() {
-        APTToken newToken = null;
+        APTToken newToken;
         if (APTTraceFlags.USE_APT_TEST_TOKEN) {
             newToken = new APTTestToken();
         } else {
@@ -443,7 +529,7 @@ public class APTUtils {
     public static final APTToken VA_ARGS_TOKEN; // support ELLIPSIS for IZ#83949 in macros
     public static final APTToken EMPTY_ID_TOKEN; // support ELLIPSIS for IZ#83949 in macros
     public static final APTToken COMMA_TOKEN; // support ELLIPSIS for IZ#83949 in macros
-    public static final List<Token> DEF_MACRO_BODY; //support "1" as content of #defined tokens without body IZ#122091
+    public static final List<APTToken> DEF_MACRO_BODY; //support "1" as content of #defined tokens without body IZ#122091
     static {
         VA_ARGS_TOKEN = createAPTToken();
         VA_ARGS_TOKEN.setType(APTTokenTypes.ID);
@@ -453,14 +539,14 @@ public class APTUtils {
         EMPTY_ID_TOKEN.setType(APTTokenTypes.ID);
         EMPTY_ID_TOKEN.setText(""); // NOI18N        
 
-        COMMA_TOKEN = createAPTToken();
+        COMMA_TOKEN = createAPTToken(APTTokenTypes.COMMA);
         COMMA_TOKEN.setType(APTTokenTypes.COMMA);
         COMMA_TOKEN.setText(","); // NOI18N             
         
         APTToken token = createAPTToken();
         token.setType(APTTokenTypes.NUMBER);
         token.setText("1"); // NOI18N
-        DEF_MACRO_BODY = new ArrayList<Token>();
+        DEF_MACRO_BODY = new ArrayList<APTToken>(1);
         DEF_MACRO_BODY.add(token);
     }
     
@@ -472,7 +558,7 @@ public class APTUtils {
         }
     };
     
-    private static class APTEOFToken extends APTTokenAbstact {
+    private static final class APTEOFToken extends APTTokenAbstact {
         public APTEOFToken() {
         }
         
@@ -497,12 +583,12 @@ public class APTUtils {
         }
         
         @Override
-        public int getTextID() {
+        public CharSequence getTextID() {
             throw new UnsupportedOperationException("getTextID must not be used"); // NOI18N
         }
         
         @Override
-        public void setTextID(int id) {
+        public void setTextID(CharSequence id) {
             throw new UnsupportedOperationException("setTextID must not be used"); // NOI18N
         }
         
@@ -530,5 +616,32 @@ public class APTUtils {
         public int getType() {
             return APTTokenTypes.EOF;
         }
+
+        @Override
+        public String getText() {
+            return "<EOF>"; // NOI18N
+        }
+
+        @Override
+        public int getColumn() {
+            return Integer.MAX_VALUE;
+        }
+
+        @Override
+        public int getLine() {
+            return Integer.MAX_VALUE;
+        }
+
+        @Override
+        public int hashCode() {
+            return 1;
+        }
+
+        @Override
+        @SuppressWarnings("EqualsWhichDoesntCheckParameterClass")
+        public boolean equals(Object obj) {
+            return this == obj;
+        }
+
     }
 }
