@@ -97,6 +97,7 @@ import org.w3c.dom.Element;
  *
  * @author mkleint
  */
+@NodeFactory.Registration(projectType="org-netbeans-modules-ant-freeform")
 public class FolderNodeFactory implements NodeFactory {
     
     /** Creates a new instance of FolderNodeFactory */
@@ -274,7 +275,9 @@ public class FolderNodeFactory implements NodeFactory {
                 
         public boolean acceptFileObject(FileObject fo) {
             String path = FileUtil.getRelativePath(root, fo);
-            assert path != null : fo + " not in " + root;  //NOI18N
+            if (path == null) {
+                return false;
+            }
             if (fo.isFolder()) {
                 path += "/"; // NOI18N
             }
