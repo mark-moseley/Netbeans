@@ -42,7 +42,6 @@
 package org.netbeans.modules.options.keymap;
 
 
-import java.awt.Component;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
@@ -52,38 +51,35 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
-import java.util.Vector;
-import javax.swing.AbstractButton;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
-import javax.swing.event.TreeModelEvent;
-import javax.swing.event.TreeModelListener;
-import javax.swing.tree.TreeModel;
-import javax.swing.tree.TreePath;
+import javax.swing.table.DefaultTableModel;
 import org.netbeans.core.options.keymap.api.ShortcutAction;
 import org.netbeans.core.options.keymap.api.ShortcutsFinder;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
-import org.openide.awt.Mnemonics;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 
-
 /**
  *
  * @author Jan Jancura
+ * @author Max Sauer
  */
-public class KeymapViewModel implements TreeModel, ShortcutsFinder {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.core.options.keymap.api.ShortcutsFinder.class)
+public class KeymapViewModel extends DefaultTableModel implements ShortcutsFinder {
     
-    private Vector<TreeModelListener> listeners = new Vector<TreeModelListener> ();
     private String              currentProfile;
     private KeymapModel         model = new KeymapModel ();
     // Map (String ("xx/yy") > List (Object (action)))
@@ -98,77 +94,51 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
     // Map (String (keymapName) > Map (ShortcutAction > Set (String (shortcut Ctrl+F)))).
     private Map<String, Map<ShortcutAction, Set<String>>> shortcutsCache = 
             new HashMap<String, Map<ShortcutAction, Set<String>>> ();
+
     
     static final ActionsComparator actionsComparator = new ActionsComparator ();
+    private String searchText = "";
     
     
     /** 
      * Creates a new instance of KeymapModel 
      */
     public KeymapViewModel () {
+        super(new String[]{
+                    NbBundle.getMessage(KeymapViewModel.class, "Actions"), //NOI18N
+                    NbBundle.getMessage(KeymapViewModel.class, "Shortcut"), //NOI18N
+                    NbBundle.getMessage(KeymapViewModel.class, "Category"), //NOI18N
+                    NbBundle.getMessage(KeymapViewModel.class, "Scope") //NOI18N
+                }, 0);
         currentProfile = model.getCurrentProfile ();
     }
 
+
+    // DefaultTableModel
+    @Override
+    public Class getColumnClass(int columnIndex) {
+        switch(columnIndex) {
+            case 0:
+                return ActionHolder.class;
+            case 1:
+                return ShortcutCell.class;
+            default:
+                return String.class;
+        }
+    }
+
+    @Override
+    public boolean isCellEditable(int rowIndex, int columnIndex) {
+        if (columnIndex == 1) //shotcuts cells editable
+            return true;
+        else
+            return false;
+    }
+
     
-    // TreeModel ...............................................................
-
-    public Object getRoot () {
-        return "";
+    void setSearchText(String searchText) {
+        this.searchText = searchText;
     }
-    
-    public Object getChild (Object parent, int index) {
-        return getItems ((String) parent).get (index);
-    }
-
-    public int getChildCount (Object parent) {
-        if (parent instanceof String)
-            return getItems ((String) parent).size ();
-        return 0;
-    }
-
-    public boolean isLeaf (Object node) {
-        return !(node instanceof String);
-    }
-
-    public void valueForPathChanged (TreePath path, Object newValue) {}
-
-    public int getIndexOfChild (Object parent, Object child) {
-        return getItems ((String) parent).indexOf (child);
-    }
-
-    public void addTreeModelListener (TreeModelListener l) {
-        listeners.add (l);
-    }
-
-    public void removeTreeModelListener (TreeModelListener l) {
-        listeners.remove (l);
-    }
-    
-    private void treeChanged () {
-        final Vector v = (Vector) listeners.clone ();
-        SwingUtilities.invokeLater (new Runnable () {
-            public void run () {
-                TreeModelEvent tme = new TreeModelEvent (this, new TreePath(getRoot()));
-                int i, k = v.size ();
-                for (i = 0; i < k; i++) {
-                    ((TreeModelListener) v.get (i)).treeStructureChanged (tme);
-                }
-            }
-        });
-    }
-    
-    private void nodeChanged (final TreePath path) {
-        final Vector v = (Vector) listeners.clone ();
-        SwingUtilities.invokeLater (new Runnable () {
-            public void run () {
-                TreeModelEvent tme = new TreeModelEvent (this, path);
-                int i, k = v.size ();
-                for (i = 0; i < k; i++)
-                    ((TreeModelListener) v.get (i)).treeNodesChanged (tme);
-            }
-        });
-    }
-
     
     // ListModel ...............................................................
 
@@ -230,14 +200,55 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
         return result;
     }
 
-//    public ListCellRenderer getListCellRenderer () {
-//        return new KeymapListRenderer (this);
-//    }
-    
     
     // other methods ...........................................................
 
-    List getProfiles () {
+    void update() {
+        boolean caseSensitiveSearch = false;
+        String searchTxt;
+
+        if (searchText.matches(".*[A-Z].*")) { //NOI18N
+            caseSensitiveSearch = true;
+            searchTxt = searchText;
+        } else {
+            searchTxt = searchText.toLowerCase();
+        }
+
+        getDataVector().removeAllElements();
+        for (String category : getCategories().get("")) {
+            for (Object o : getItems(category)) {
+                if (o instanceof ShortcutAction) {
+                    ShortcutAction sca = (ShortcutAction) o;
+                    String[] shortcuts = getShortcuts(sca);
+                    String displayName = sca.getDisplayName();
+//                    System.out.println("### " + sca.getDisplayName() + " " + searched(displayName.toLowerCase()));
+                    if (searched(caseSensitiveSearch ? displayName : displayName.toLowerCase(), searchTxt)) {
+                        if (shortcuts.length == 0)
+                            addRow(new Object[]{new ActionHolder(sca, false), new ShortcutCell(), category, ""});
+                        else
+                            for (int i = 0; i < shortcuts.length; i++) {
+                                String shortcut = shortcuts[i];
+//                                String shownDisplayName = i == 0 ? displayName : displayName + " (alternative shortcut)";
+                                addRow(new Object[]{
+                                            i == 0 ? new ActionHolder(sca, false) : new ActionHolder(sca, true),
+                                            new ShortcutCell(shortcut), category, ""
+                                        });
+                            }
+                    }
+                }
+            }
+        }
+        fireTableDataChanged();
+    }
+
+    private boolean searched(String displayName, String searchText) {
+        if (displayName.length() == 0 || displayName.startsWith(searchText) || displayName.contains(searchText))
+            return true;
+        else
+            return false;
+    }
+
+    List<String> getProfiles () {
         Set<String> result = new HashSet<String> (model.getProfiles ());
         result.addAll (modifiedProfiles.keySet ());
         List<String> r = new ArrayList<String> (result);
@@ -249,7 +260,7 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
         return model.isCustomProfile (profile);
     }
     
-    void deleteProfile (String profile) {
+    void deleteOrRestoreProfile (String profile) {
         if (model.isCustomProfile (profile)) {
             deletedProfiles.add (profile);
             modifiedProfiles.remove (profile);
@@ -257,7 +268,7 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
             Map<ShortcutAction, Set<String>> m = model.getKeymapDefaults (profile);
             m = convertFromEmacs (m);
             modifiedProfiles.put (profile, m);
-            treeChanged ();
+            update();
         }
     }
     
@@ -267,7 +278,6 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
     
     void setCurrentProfile (String currentKeymap) {
         this.currentProfile = currentKeymap;
-        treeChanged ();
     }
     
     void cloneProfile (String newProfileName) {
@@ -283,9 +293,9 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
         Iterator it = getItems (category).iterator ();
         while (it.hasNext ()) {
             Object o = it.next ();
-            if (o instanceof String)
+            if (o instanceof String) {
                 cloneProfile ((String) o, result);
-            else {
+            } else {
                 String[] shortcuts = getShortcuts ((ShortcutAction) o);
                 result.put ((ShortcutAction)o, new HashSet<String> (Arrays.asList (shortcuts)));
             }
@@ -293,25 +303,72 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
     }
     
     public ShortcutAction findActionForShortcut (String shortcut) {
-        return findActionForShortcut (shortcut, "");
+        return findActionForShortcut (shortcut, "", false, null, "");
     }
-    
-    private ShortcutAction findActionForShortcut (String shortcut, String category) {
+
+    /**
+     * Finds action with conflicting shortcut (or a prefix, for a multi-keybinding)
+     * for a shortcut
+     * @param shortcut the shortcut to look for
+     * @return action with same shortcut, or shortcutprefix. If the prefix is same
+     * but the rest of multi-keybinding is different, returns <code>null</code> (no conflict).
+     */
+    Set<ShortcutAction> findActionForShortcutPrefix(String shortcut) {
+        Set<ShortcutAction> set = new HashSet<ShortcutAction>();
+        if (shortcut.length() == 0) {
+            return set;
+        }
+        //has to work with multi-keybinding properly,
+        //ie. not allow 'Ctrl+J' and 'Ctrl+J X' at the same time
+        if (shortcut.contains(" ")) {
+            findActionForShortcut(shortcut.substring(0, shortcut.indexOf(' ')), "", true, set, shortcut);
+        } else {
+            findActionForShortcut(shortcut, "", true, set, shortcut);
+        }
+        return set;
+    }
+
+    private ShortcutAction findActionForShortcut (String shortcut, String category, boolean prefixSearch, Set<ShortcutAction> set, String completeMultikeySC) {
+        //search in modified profiles first
+        Map<ShortcutAction, Set<String>> map = modifiedProfiles.get(currentProfile);
+        if (map != null)
+            for (Entry<ShortcutAction, Set<String>> entry : map.entrySet()) {
+                for (String sc : entry.getValue()) {
+                    if (prefixSearch) {
+                        if (sc.equals(shortcut) || (sc.startsWith(completeMultikeySC) && shortcut.equals(completeMultikeySC) && sc.contains(" "))) {
+                            set.add(entry.getKey());
+                        }
+                    } else if (sc.equals(shortcut)) {
+                        return entry.getKey();
+                    }
+                }
+            }
+
         Iterator it = getItems (category).iterator ();
         while (it.hasNext ()) {
             Object o = it.next ();
             if (o instanceof String) {
-                ShortcutAction result = findActionForShortcut (shortcut, (String) o);
-                if (result != null) return result;
+                ShortcutAction result = findActionForShortcut (shortcut, (String) o, prefixSearch, set, completeMultikeySC);
+                if (result != null) {
+                    if (!prefixSearch) {
+                        return result;
+                    }
+                }
                 continue;
             }
             ShortcutAction action = (ShortcutAction) o;
             String[] shortcuts = getShortcuts (action);
             int i, k = shortcuts.length;
             for (i = 0; i < k; i++) {
-                if (shortcuts [i].equals (shortcut)) return action;
-                if (shortcuts [i].equals (shortcut + " ")) return action;
+                if (prefixSearch) {
+                    if (shortcuts[i].equals(shortcut) || (shortcuts[i].startsWith(completeMultikeySC) && shortcut.equals(completeMultikeySC) && shortcuts[i].contains(" "))) {
+                        set.add(action);
+                    }
+                } else if (shortcuts[i].equals(shortcut)) {
+                    return action;
+                }
             }
+
         }
         return null;
     }
@@ -360,34 +417,127 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
             }
         }
         
-        if (!shortcutsCache.containsKey (currentProfile)) {
+        Map<ShortcutAction, Set<String>> profileMap = getProfileMap(currentProfile);
+        Set<String> shortcuts = profileMap.get (action);
+        if (shortcuts == null) {
+            return new String [0];
+        }
+        return shortcuts.toArray (new String [shortcuts.size ()]);
+    }
+
+    /**
+     * Provides mapping of actions to their (non modified) shortcuts for a profile
+     * @param profile given profile
+     * @return the mapping
+     */
+    private Map<ShortcutAction, Set<String>> getProfileMap(String profile) {
+        if (!shortcutsCache.containsKey (profile)) {
             // read profile and put it to cache
-            Map<ShortcutAction, Set<String>> profileMap = convertFromEmacs (model.getKeymap (currentProfile));
+            Map<ShortcutAction, Set<String>> profileMap = convertFromEmacs (model.getKeymap (profile));
             shortcutsCache.put (
-                currentProfile, 
+                profile,
                 profileMap
              );
         }
-        Map<ShortcutAction, Set<String>> profileMap = shortcutsCache.get (currentProfile);
-        Set<String> shortcuts = profileMap.get (action);
-        if (shortcuts == null) return new String [0];
-        return shortcuts.toArray (new String [shortcuts.size ()]);
+        return shortcutsCache.get (profile);
     }
-    
-    void addShortcut (TreePath path, String shortcut) {
-        // delete old shortcut
-        ShortcutAction action = findActionForShortcut (shortcut);
-        if (action != null) {
-            removeShortcut (action, shortcut);
+
+    /**
+     * Set of all shortcuts used by current profile (including modifications)
+     * In case there is a multikey keybinding used, its prefix is included
+     * @return set of shortcuts
+     */
+    public Set<String> getAllCurrentlyUsedShortcuts() {
+        Set<String> set = new LinkedHashSet<String>();
+        //add modified shortcuts, if any
+        Map<ShortcutAction, Set<String>> modMap = modifiedProfiles.get(currentProfile);
+        if (modMap != null)
+            for (Entry<ShortcutAction, Set<String>> entry : modMap.entrySet()) {
+                for (String sc : entry.getValue()) {
+                    set.add(sc);
+                    if (sc.contains(" ")) {
+                        set.add(sc.substring(0, sc.indexOf(' ')));
+                    }
+                }
+            }
+        //add default shortcuts
+        for (Entry<ShortcutAction, Set<String>> entry : getProfileMap(currentProfile).entrySet()) {
+            for (String sc : entry.getValue()) {
+                    set.add(sc);
+                    if (sc.contains(" ")) {
+                        set.add(sc.substring(0, sc.indexOf(' ')));
+                    }
+                }
         }
-        action = (ShortcutAction) path.getLastPathComponent ();
-        Set<String> s = new HashSet<String> ();
-        s.add (shortcut);
-        s.addAll (Arrays.asList (getShortcuts (action)));
-        setShortcuts (action, s);
-        nodeChanged (path);
+
+        return set;
     }
-    
+
+    void addShortcut (ShortcutAction action, String shortcut) {
+        // delete old shortcut
+        ShortcutAction act = findActionForShortcut (shortcut);
+        if (act != null && act != action) {
+            removeShortcut (act, shortcut);
+            this.fireTableDataChanged();
+            update();
+        }
+        Set<String> s = new LinkedHashSet<String> ();
+        s.addAll (Arrays.asList (getShortcuts (action)));
+        s.add (shortcut);
+        setShortcuts (action, s);
+    }
+
+    void revertShortcutsToDefault(ShortcutAction action) {
+        Map<ShortcutAction, Set<String>> m = model.getKeymapDefaults (currentProfile);
+        m = convertFromEmacs(m);
+        Set<String> shortcuts = m.get(action);
+        if (shortcuts == null)
+            shortcuts = Collections.<String>emptySet(); //this action has no default shortcut
+        //lets search for conflicting SCs
+        Set<ShortcutAction> conflictingActions = new HashSet<ShortcutAction>();
+        for(String sc : shortcuts) {
+            ShortcutAction ac = findActionForShortcut(sc);
+            if (ac != null && !ac.equals(action)) {
+                conflictingActions.add(ac);
+            }
+        }
+        if(conflictingActions.size() > 0) {
+            if(overrideAll(conflictingActions)) {
+                for (String sc : shortcuts) {
+                    ShortcutAction sca = findActionForShortcut(sc);
+                    removeShortcut(sca, sc);
+                }
+            } else {
+                return;
+            }
+        }
+
+        setShortcuts(action, shortcuts);
+        update();
+    }
+
+    private boolean overrideAll(Set<ShortcutAction> actions) {
+        JPanel innerPane = new JPanel();
+        StringBuffer display = new StringBuffer();
+        for(ShortcutAction sc : actions) {
+            display.append(" '" + sc.getDisplayName() + "'<br>"); //NOI18N
+        }
+
+        innerPane.add(new JLabel(NbBundle.getMessage(KeymapViewModel.class, "Override_All", display))); //NOI18N
+        DialogDescriptor descriptor = new DialogDescriptor(
+                innerPane,
+                NbBundle.getMessage(KeymapViewModel.class, "Conflicting_Shortcut_Dialog"), //NOI18N
+                true,
+                DialogDescriptor.YES_NO_OPTION,
+                null,
+                null);
+        DialogDisplayer.getDefault().notify(descriptor);
+
+        if (descriptor.getValue().equals(DialogDescriptor.YES_OPTION))
+            return true;
+        else return false;
+    }
+
     public void setShortcuts (ShortcutAction action, Set<String> shortcuts) {
         Map<ShortcutAction, Set<String>> actionToShortcuts = modifiedProfiles.get (currentProfile);
         if (actionToShortcuts == null) {
@@ -396,15 +546,9 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
         }
         actionToShortcuts.put (action, shortcuts);
     }
-    
-    void removeShortcut (TreePath path, String shortcut) {
-        ShortcutAction action = (ShortcutAction) path.getLastPathComponent ();
-        removeShortcut (action, shortcut);
-        nodeChanged (path);
-    }
-    
-    private void removeShortcut (ShortcutAction action, String shortcut) {
-        Set<String> s = new HashSet<String> (Arrays.asList (getShortcuts (action)));
+
+    public void removeShortcut (ShortcutAction action, String shortcut) {
+        Set<String> s = new LinkedHashSet<String> (Arrays.asList (getShortcuts (action)));
         s.remove (shortcut);
         setShortcuts(action, s);
     }
@@ -433,7 +577,7 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
                 deletedProfiles = new HashSet<String> ();
                 shortcutsCache = new HashMap<String, Map<ShortcutAction, Set<String>>> ();
                 model = new KeymapModel ();
-            }
+    }
         });
     }
     
@@ -448,10 +592,23 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
         setCurrentProfile (model.getCurrentProfile ());
         model = new KeymapModel ();
     }
+
+    Map<String, Map<ShortcutAction, Set<String>>> getModifiedProfiles() {
+        return modifiedProfiles;
+    }
+
+    Set<String> getDeletedProfiles() {
+        return deletedProfiles;
+    }
+
+    void setModifiedProfiles(Map<String, Map<ShortcutAction, Set<String>>> mp) {
+        this.modifiedProfiles = mp;
+    }
+
+    void setDeletedProfiles(Set<String> dp) {
+        this.deletedProfiles = dp;
+    }
     
-    /**
-     *
-     */
     public String showShortcutsDialog() {
         final ShortcutsDialog d = new ShortcutsDialog ();
         d.init(this);
@@ -525,7 +682,7 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
         Map<ShortcutAction, Set<String>> result = new HashMap<ShortcutAction, Set<String>> ();
         for (Map.Entry<ShortcutAction, Set<String>> entry: emacs.entrySet()) {
             ShortcutAction action = entry.getKey();
-            Set<String> shortcuts = new HashSet<String> ();
+            Set<String> shortcuts = new LinkedHashSet<String> ();
             for (String emacsShortcut: entry.getValue()) {
                 KeyStroke[] keyStroke = Utilities.stringToKeys (emacsShortcut);
                 shortcuts.add (Utils.getKeyStrokesAsText (keyStroke, " "));
@@ -557,20 +714,7 @@ public class KeymapViewModel implements TreeModel, ShortcutsFinder {
         return NbBundle.getMessage (KeymapPanel.class, key);
     }
     
-    private static void loc (Component c, String key) {
-        if (c instanceof AbstractButton)
-            Mnemonics.setLocalizedText (
-                (AbstractButton) c, 
-                loc (key)
-            );
-        else
-            Mnemonics.setLocalizedText (
-                (JLabel) c, 
-                loc (key)
-            );
-    }
-    
-    
+
     // innerclasses ............................................................
 
     static class ActionsComparator implements Comparator {
