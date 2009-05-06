@@ -73,6 +73,8 @@ public class CndLexerUnitTest extends NbTestSuite {
         addTestSuite(DoxygenLexerTestCase.class);
         addTestSuite(PreprocLexerTestCase.class);
         addTestSuite(EscapeLineTestCase.class);
+        addTestSuite(MakefileLexerTestCase.class);
+        addTestSuite(ShLexerTestCase.class);
     }
 
     public static Test suite() {
@@ -80,14 +82,15 @@ public class CndLexerUnitTest extends NbTestSuite {
         return suite;
     }
     
-    public static void dumpTokens(TokenSequence<?> ts) {
+    public static void dumpTokens(TokenSequence<?> ts, String tsName) {
         if (ts != null) {
             while (ts.moveNext()) {
                 Token<?> token = ts.token();
-                System.err.println("LexerTestUtilities.assertNextTokenEquals(ts, CppTokenId." + token.id() + ", \"" + escapeText(token.text()) + "\");");
+                String tokIDName = token.id().getClass().getName();
+                System.err.println("LexerTestUtilities.assertNextTokenEquals(" + tsName + ", " + tokIDName + "." + token.id() + ", \"" + escapeText(token.text()) + "\");");
             }
         }
-        System.err.println("\nassertFalse(\"No more tokens\", ts.moveNext());");
+        System.err.println("\nassertFalse(\"No more tokens\", " + tsName + ".moveNext());");
         System.err.println("------");
     }
     
