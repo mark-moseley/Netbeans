@@ -41,37 +41,26 @@
 
 package org.netbeans.test.php;
 
-import javax.swing.tree.TreePath;
 import org.netbeans.jellytools.ProjectsTabOperator;
+import org.netbeans.jellytools.modules.editor.CompletionJListOperator;
 import org.netbeans.jellytools.nodes.ProjectRootNode;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JPopupMenuOperator;
-import org.netbeans.jemmy.JemmyException;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jemmy.operators.JDialogOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
-import org.netbeans.jellytools.MainWindowOperator;
-import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.jemmy.operators.JListOperator;
 import junit.framework.Test;
-import org.netbeans.jellytools.NewFileWizardOperator;
 import org.netbeans.jemmy.operators.JTextComponentOperator;
-import org.netbeans.jemmy.operators.JToggleButtonOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
-import org.netbeans.jemmy.operators.JComboBoxOperator;
-import org.netbeans.jemmy.operators.JLabelOperator;
-import org.netbeans.jemmy.operators.JTextFieldOperator;
-import org.netbeans.jellytools.modules.editor.CompletionJListOperator;
-import java.util.List;
 import java.io.*;
 import java.util.Enumeration;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipEntry;
-import javax.swing.SwingUtilities;
-import org.openide.util.Exceptions;
+import org.netbeans.jemmy.operators.JFileChooserOperator;
+import org.openide.util.NbBundle;
 
 /**
  *
@@ -101,7 +90,6 @@ public class Commit extends GeneralPHP
   static private final String CLASS_PHP_INITIAL_CONTENT =
     "<?php/**Tochangethistemplate,chooseTools|Templates*andopenthetemplateintheeditor.*//***DescriptionofPHPClass**@author" + System.getProperty( "user.name" ) + "*/classPHPClass{//putyourcodehere}?>";
 
-  static private final int COMPLETION_LIST_THRESHOLD = 5000;
   static private final int COMPLETION_LIST_INCLASS = 22;
 
   private static boolean bUnzipped = false;
@@ -121,9 +109,11 @@ public class Commit extends GeneralPHP
           "ManipulateEmptyPHP",
           "CreateTemplatePHP",
           "ManipulateTemplatePHP",
+
           //"OpenStandalonePHP",
           //"ManipulateStandalonePHP",
           //"CreateCustomPHPApplication",
+
           "CreatePHPWithExistingSources",
           "ManipulatePHPWithExistingSources"
         )
@@ -133,6 +123,7 @@ public class Commit extends GeneralPHP
       );
   }
 
+    @Override
     public void setUp( )
     {
       if( !bUnzipped )
@@ -190,63 +181,6 @@ public class Commit extends GeneralPHP
     endTest( );
   }
 
-  private class CompletionInfo
-  {
-    public CompletionJListOperator listItself;
-    public List listItems;
-  }
-
-  protected CompletionInfo GetCompletion( )
-  {
-    final CompletionInfo result = new CompletionInfo( );
-    result.listItself = null;
-    int iRedo = 10;
-    while( true )
-    {
-      try
-      {
-        try
-        {
-          SwingUtilities.invokeAndWait(new Runnable() {
-              public void run() {
-                  result.listItself = new CompletionJListOperator();
-                  try {
-                      result.listItems = result.listItself.getCompletionItems();
-                  } catch (Exception ex) {
-                  }
-              }
-          });
-          Object o = result.listItems.get( 0 );
-          if(
-              !o.toString( ).contains( "No suggestions" )
-              && !o.toString( ).contains( "Scanning in progress..." )
-            )
-          {
-            return result;
-          }
-          Sleep( 1000 );
-        }
-        catch( java.lang.Exception ex )
-        {
-          return null;
-        }
-      }
-      catch( JemmyException ex )
-      {
-        System.out.println( "Wait completion timeout." );
-        if( 0 == --iRedo )
-          return null;
-      }
-      Sleep( 100 );
-    }
-  }
-
-  protected void Backit( EditorOperator eoPHP, int iCount )
-  {
-    for( int i = 0; i < iCount; i++ )
-      eoPHP.pressKey( KeyEvent.VK_BACK_SPACE );
-  }
-
   protected void EnsureEmptyLine( EditorOperator eoPHP )
   {
     CheckResultRegex( eoPHP, "[ \t\r\n]*" );
@@ -295,30 +229,26 @@ public class Commit extends GeneralPHP
     return sCode + sSuffix;
   }
 
-    protected void CheckCompletionItems(
-        CompletionJListOperator jlist,
-        String[] asIdeal
-      )
+  protected int GetNumber( EditorOperator eo, Object[] oo, String sType )
+  {
+    int iResult = 0;
+    for( Object o : oo )
     {
-      for( String sCode : asIdeal )
-      {
-        int iIndex = jlist.findItemIndex( sCode );
-        if( -1 == iIndex )
-        {
-          try
-          {
-            List list = jlist.getCompletionItems();
-            for( int i = 0; i < list.size( ); i++ )
-              System.out.println( "******" + list.get( i ) );
-          }
-          catch( java.lang.Exception ex )
-          {
-            System.out.println( "#" + ex.getMessage( ) );
-          }
-          fail( "Unable to find " + sCode + " completion." );
-        }
-      }
+      if( eo.getAnnotationType( o ).equals( sType ) )
+        iResult++;
     }
+    return iResult;
+  }
+
+  protected int GetErrorNumber( EditorOperator eo, Object[] oo )
+  {
+    return GetNumber( eo, oo, "org-netbeans-spi-editor-hints-parser_annotation_err" );
+  }
+
+  protected int GetWarningNumber( EditorOperator eo, Object[] oo )
+  {
+    return GetNumber( eo, oo, "org-netbeans-spi-editor-hints-parser_annotation_warn" );
+  }
 
   protected void TestPHPFile(
       String sProjectName,
@@ -328,13 +258,14 @@ public class Commit extends GeneralPHP
       String sCodeLocator,
       boolean bInclass,
       boolean bFormat,
-      int iAnnotations
+      int iAnnotations,
+      int iWarningsExpected
     )
   {
     // Check file in tree
     ProjectsTabOperator pto = new ProjectsTabOperator( );
     ProjectRootNode prn = pto.getProjectRootNode(
-        sProjectName + "|Source Files|" + sFileName
+        sProjectName + "|" + NbBundle.getBundle( "org.netbeans.modules.php.project.Bundle" ).getString( "LBL_Node_Sources" ) + "|" + sFileName
       );
     prn.select( );
 
@@ -361,43 +292,49 @@ public class Commit extends GeneralPHP
     Sleep( 1000 );
 
     // Check code completion list
-    try {
-      final CompletionInfo completionInfo = GetCompletion();
-      if (null == completionInfo) {
-          fail("NPE instead of competion info.");
-          // Magic CC number for complete list
-
+    try
+    {
+      CompletionInfo completionInfo = GetCompletion( );
+      if( null == completionInfo )
+        fail( "NPE instead of competion info." );
+      // Magic CC number for complete list
+      if(
+          ( bInclass ? COMPLETION_LIST_INCLASS : COMPLETION_LIST_THRESHOLD )
+          > completionInfo.listItems.size( )
+        )
+      {
+        fail( "CC list looks to small, there are only: " + completionInfo.listItems.size( ) + " items in." );
       }
-      if ((bInclass ? COMPLETION_LIST_INCLASS : COMPLETION_LIST_THRESHOLD) > completionInfo.listItems.size()) {
-          fail("CC list looks to small, there are only: " + completionInfo.listItems.size() + " items in.");
-      }
 
-      if (!bInclass) {
-          // Check some completions
-          final String[] asCompletions = {
-              "$GLOBALS",
-              "LC_MONETARY",
-              "ibase_wait_event",
-              "mysql_error",
-              "openssl_pkcs12_export_to_file",
-              "str_word_count",
-              "ZendAPI_Queue"
-          };
-          SwingUtilities.invokeAndWait(new Runnable() {
-              public void run() {
-                  CheckCompletionItems(completionInfo.listItself, asCompletions);
-              }
-          });
-          //jCompl.clickOnItem( "$GLOBALS" );
-          //Sleep( 500 );
-          //CheckResult( eoPHP, "$GLOBALS" );
+      if( !bInclass )
+      {
+        // Check some completions
+        String[] asCompletions =
+        {
+          "$GLOBALS",
+          "LC_MONETARY",
+          "ibase_wait_event",
+          "mysql_error",
+          "openssl_pkcs12_export_to_file",
+          "str_word_count",
+          "ZendAPI_Queue"
+        };
+        CheckCompletionItems( completionInfo.listItself, asCompletions );
+        //jCompl.clickOnItem( "$GLOBALS" );
+        //Sleep( 500 );
+        //CheckResult( eoPHP, "$GLOBALS" );
 
-          completionInfo.listItself.hideAll();
+        CompletionJListOperator.hideAll( );
       }
-    } catch (Exception ex) {
-      ex.printStackTrace(System.out);
-      fail("Completion check failed: \"" + ex.getMessage() + "\"");
     }
+    catch( Exception ex )
+    {
+      ex.printStackTrace( System.out );
+      fail( "Completion check failed: \"" + ex.getMessage( ) + "\"" );
+    }
+
+    Sleep( 2000 );
+
     // Brackets
     // Predefined
     String[] asCheckers =
@@ -427,7 +364,11 @@ public class Commit extends GeneralPHP
     String sCharset = "abc123[[[[[((((((\"";
     for( int i = 0; i < 50; i++ )
       sRandom = sRandom + sCharset.charAt( ( int )( Math.random( ) * sCharset.length( ) ) );
+
+    // Okey, this is hack and should be removed later
+    bRandomCheck = true;
     CompletePairCheck( eoPHP, sRandom, CreatePair( sRandom ) );
+    bRandomCheck = false;
 
     // Formatting
     /*
@@ -449,11 +390,8 @@ public class Commit extends GeneralPHP
       Sleep( 1500 );
       eoPHP.typeKey( ' ', InputEvent.CTRL_MASK );
       Sleep( 1500 );
-      CheckResult( eoPHP, "function  __construct() {", -1 );
-      int i = eoPHP.getLineNumber( ) - 1;
-      eoPHP.deleteLine( i );
-      eoPHP.deleteLine( i );
-      eoPHP.deleteLine( i );
+
+      CheckFlex( eoPHP, "function __construct(){;}", true );
     }
     else
     {
@@ -474,18 +412,40 @@ public class Commit extends GeneralPHP
     TypeCode( eoPHP, "public $a, $b;\nprotected $c, $d;\nprivate $e, $f;\n" );
 
     // Check existing notes
-    Sleep( 5000 );
-    Object[] oo = eoPHP.getAnnotations( );
-    if( iAnnotations != oo.length )
+    int iErrorChecks = 0;
+    boolean bRecheck = true;
+    while( bRecheck )
     {
-      fail( "Invalid number of detected errors. Found: " + oo.length + ", expected: " + iAnnotations );
+      Sleep( 5000 );
+      Object[] oo = eoPHP.getAnnotations( );
+      int iErrors = GetErrorNumber( eoPHP, oo );
+      int iWarnings = GetWarningNumber( eoPHP, oo );
+      if( iAnnotations == iErrors )
+      {
+        if( iWarningsExpected != iWarnings )
+        {
+          for( Object o : oo )
+          {
+            System.out.println( "***" + eoPHP.getAnnotationType( o ) + " : " + eoPHP.getAnnotationShortDescription( o ) );
+          }
+          fail( "Invalid number of detected warnings. Found: " + iWarnings + ", expected: " + iWarningsExpected );
+        }
+        bRecheck = false;
+      }
+      else
+      if( 5 <= ++iErrorChecks )
+      {
+        for( Object o : oo )
+        {
+          System.out.println( "***" + eoPHP.getAnnotationType( o ) + " : " + eoPHP.getAnnotationShortDescription( o ) );
+        }
+        fail( "Invalid number of detected errors. Found: " + iErrors + ", expected: " + iAnnotations );
+      }
+      else
+      {
+        System.out.println( "---Error check failed (" + iErrorChecks + ")" );
+      }
     }
-    /*
-    for( Object o : oo )
-    {
-      System.out.println( "***" + eoPHP.getAnnotationType( o ) + " : " + eoPHP.getAnnotationShortDescription( o ) );
-    }
-    */
 
     // Insert constructor
     Sleep( 1500 );
@@ -497,7 +457,10 @@ public class Commit extends GeneralPHP
 
     ClickListItemNoBlock( jlList, 0, 1 );
 
-    JDialogOperator jdGenerator = new JDialogOperator( "Generate Constructor" );
+    JDialogOperator jdGenerator = new JDialogOperator(
+        NbBundle.getBundle( "org.netbeans.modules.php.editor.codegen.Bundle" ).getString( "LBL_TITLE_CONSTRUCTOR" )
+        //"Generate Constructor"
+      );
 
     // Select all but $c
     JTreeOperator jtTree = new JTreeOperator( jdGenerator, 0 );
@@ -510,24 +473,14 @@ public class Commit extends GeneralPHP
     jdGenerator.waitClosed( );
 
     // Check result
-    String[] asResult =
-    {
-      "function __construct($a, $d, $e) {",
-      "$this->a = $a;",
-      "$this->d = $d;",
-      "$this->e = $e;",
-      "}"
-    };
-    CheckResult( eoPHP, asResult, -3 );
-    // Remove added
-    int il = eoPHP.getLineNumber( ) - 3;
-    eoPHP.deleteLine( il );
-    eoPHP.deleteLine( il );
-    eoPHP.deleteLine( il );
-    eoPHP.deleteLine( il );
-    eoPHP.deleteLine( il );
+    CheckFlex(
+        eoPHP,
+        "function __construct($a,$d,$e){$this->a=$a;$this->d=$d;$this->e=$e;}",
+        true
+      );
     Sleep( 1500 );
 
+    boolean b = true;
     // Insert get
     eoPHP.pressKey( KeyEvent.VK_INSERT, InputEvent.ALT_MASK );
     Sleep( 1500 );
@@ -537,7 +490,10 @@ public class Commit extends GeneralPHP
 
     ClickListItemNoBlock( jlList, 3, 1 );
 
-    jdGenerator = new JDialogOperator( "Generate Getters and Setters" );
+    jdGenerator = new JDialogOperator(
+        NbBundle.getBundle( "org.netbeans.modules.php.editor.codegen.Bundle" ).getString( "LBL_TITLE_GETTERS_AND_SETTERS" )
+        //"Generate Getters and Setters"
+      );
 
     // Select all but $c
     jtTree = new JTreeOperator( jdGenerator, 0 );
@@ -550,40 +506,16 @@ public class Commit extends GeneralPHP
     jdGenerator.waitClosed( );
 
     // Check result
-    String[] asResult2 =
-    {
-      "public function getB() {",
-      "return $this->b;",
-      "}",
-      "",  
-      "public function setB($b) {",
-      "$this->b = $b;",
-      "}",
-      "",  
-      "public function getC() {",
-      "return $this->c;",
-      "}",
-      "",  
-      "public function setC($c) {",
-      "$this->c = $c;",
-      "}",
-      "",  
-      "public function getF() {",
-      "return $this->f;",
-      "}",
-      "",  
-      "public function setF($f) {",
-      "$this->f = $f;",
-      "}"
-    };
-    CheckResult( eoPHP, asResult2, -24 );
-    // Remove added
-    il = eoPHP.getLineNumber( ) - 24;
-    for( int i = 0; i < asResult.length; i++ )
-      eoPHP.deleteLine( il );
+    CheckFlex(
+        eoPHP,
+        "public function getB(){return $this->b;}public function setB($b){$this->b=$b;}public function getC(){return $this->c;}public function setC($c){$this->c=$c;}public function getF(){return $this->f;}public function setF($f){$this->f=$f;}",
+        true
+      );
 
+    Sleep( 2000 );
     // Close to prevent affect on next tests
     eoPHP.close( false );
+
   }
 
   public void ManipulateIndexPHP( )
@@ -598,43 +530,11 @@ public class Commit extends GeneralPHP
         "// put your code here",
         false,
         true,
-        4
+        5,
+        0
       );
 
     endTest( );
-  }
-
-  protected void CreatePHPFile(
-      String sProject,
-      String sItem,
-      String sName
-    )
-  {
-    ProjectsTabOperator pto = new ProjectsTabOperator( );
-    ProjectRootNode prn = pto.getProjectRootNode( sProject );
-    prn.select( );
-
-    // Workaround for MacOS platform
-    NewFileWizardOperator.invoke().cancel( );
-
-    NewFileWizardOperator opNewFileWizard = NewFileWizardOperator.invoke( );
-    opNewFileWizard.selectCategory( "PHP" );
-    opNewFileWizard.selectFileType( sItem );
-    opNewFileWizard.next( );
-
-    JDialogOperator jdNew = new JDialogOperator( "New " + sItem );
-    JTextComponentOperator jt = new JTextComponentOperator( jdNew, 0 );
-    if( null != sName )
-      jt.setText( sName );
-    else
-      sName = jt.getText( );
-
-    opNewFileWizard.finish( );
-
-    // Check created schema in project tree
-    String sPath = sProject + "|Source Files|" + sName;
-    prn = pto.getProjectRootNode( sPath );
-    prn.select( );
   }
 
   public void CreateEmptyPHP( )
@@ -658,7 +558,8 @@ public class Commit extends GeneralPHP
         "*/",
         false,
         true,
-        4
+        5,
+        0
       );
 
     endTest( );
@@ -685,6 +586,7 @@ public class Commit extends GeneralPHP
         "//put your code here",
         true,
         false,
+        0,
         0
       );
 
@@ -722,7 +624,10 @@ public class Commit extends GeneralPHP
 
     NewProjectWizardOperator opNewProjectWizard = NewProjectWizardOperator.invoke( );
     opNewProjectWizard.selectCategory( PHP_CATEGORY_NAME );
-    opNewProjectWizard.selectProject( "PHP Application with Existing Sources" );
+    opNewProjectWizard.selectProject(
+        NbBundle.getBundle( "org.netbeans.modules.php.project.ui.wizards.Bundle" ).getString( "Templates/Project/PHP/existingPHPProject.php" )
+        //"PHP Application with Existing Sources"
+      );
 
     opNewProjectWizard.next( );
 
@@ -730,14 +635,21 @@ public class Commit extends GeneralPHP
 
     JButtonOperator jbBrowse = new JButtonOperator( jdNew, "Browse...", 1 );
     jbBrowse.pushNoBlock( );
-    JDialogOperator jdBrowse = new JDialogOperator( "Select Project Folder" );
+
+    JDialogOperator jdBrowse = new JDialogOperator(
+        NbBundle.getBundle( "org.netbeans.modules.php.project.ui.wizards.Bundle" ).getString( "LBL_SelectProjectFolder" )
+        //"Select Project Folder"
+      );
 
     JTextComponentOperator jtLocation = new JTextComponentOperator( jdBrowse, 0 );
     String sProjectPath = getDataDir( ).getPath( ) + File.separator + "LoginSample";
     jtLocation.setText( sProjectPath );
 
-    JButtonOperator jbOpen = new JButtonOperator( jdBrowse, "Open" );
-    jbOpen.push( );
+    JFileChooserOperator jfcOpen = new JFileChooserOperator( );
+    jfcOpen.approve( );
+
+    //JButtonOperator jbOpen = new JButtonOperator( jdBrowse, "Open" );
+    //jbOpen.push( );
 
     jdBrowse.waitClosed( );
 
@@ -779,7 +691,8 @@ public class Commit extends GeneralPHP
         "<?",
         false,
         false,
-        4
+        5,
+        2
       );
 
     endTest( );
