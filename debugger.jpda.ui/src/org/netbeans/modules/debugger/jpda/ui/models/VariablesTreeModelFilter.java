@@ -42,18 +42,26 @@
 package org.netbeans.modules.debugger.jpda.ui.models;
 
 import java.awt.datatransfer.Transferable;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import javax.security.auth.RefreshFailedException;
 import javax.security.auth.Refreshable;
 import javax.swing.Action;
+import org.netbeans.api.debugger.Properties;
 import org.netbeans.api.debugger.jpda.JPDAClassType;
 import org.netbeans.api.debugger.jpda.ObjectVariable;
 import org.netbeans.api.debugger.jpda.Variable;
+import org.netbeans.modules.debugger.jpda.ui.views.VariablesViewButtons;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.debugger.jpda.VariablesFilter;
 import org.netbeans.spi.viewmodel.ExtendedNodeModel;
@@ -69,6 +77,7 @@ import org.netbeans.spi.viewmodel.TreeModel;
 import org.netbeans.spi.viewmodel.TreeModelFilter;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.openide.util.Exceptions;
+import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
 import org.openide.util.datatransfer.PasteType;
 
@@ -89,11 +98,17 @@ ExtendedNodeModelFilter, TableModelFilter, NodeActionsProviderFilter, Runnable {
     private RequestProcessor.Task evaluationTask;
     
     private LinkedList evaluationQueue = new LinkedList();
-    
+
+    private Preferences preferences = NbPreferences.forModule(VariablesViewButtons.class).node(VariablesViewButtons.PREFERENCES_NAME);
+    private VariablesPreferenceChangeListener prefListener = new ViewPreferenceChangeListener();
     
     public VariablesTreeModelFilter (ContextProvider lookupProvider) {
         this.lookupProvider = lookupProvider;
         evaluationRP = lookupProvider.lookupFirst(null, RequestProcessor.class);
+        prefListener = new VariablesPreferenceChangeListener();
+        preferences.addPreferenceChangeListener(prefListener);
+        Properties properties = Properties.getDefault().getProperties("debugger.options.JPDA"); // NOI18N
+        properties.addPropertyChangeListener(prefListener);
     }
 
     /** 
@@ -427,7 +442,8 @@ ExtendedNodeModelFilter, TableModelFilter, NodeActionsProviderFilter, Runnable {
     
     
     // helper methods ..........................................................
-    
+
+    private final Object filtersLock = new Object();
     private HashMap typeToFilter;
     private HashMap ancestorToFilter;
     
@@ -440,30 +456,37 @@ ExtendedNodeModelFilter, TableModelFilter, NodeActionsProviderFilter, Runnable {
      * @return The filter or <code>null</code>.
      */
     private VariablesFilter getFilter (Object o, boolean checkEvaluated, Runnable whenEvaluated) {
-        if (typeToFilter == null) {
-            typeToFilter = new HashMap ();
-            ancestorToFilter = new HashMap ();
-            List l = lookupProvider.lookup (null, VariablesFilter.class);
-            int i, k = l.size ();
-            for (i = 0; i < k; i++) {
-                VariablesFilter f = (VariablesFilter) l.get (i);
-                String[] types = f.getSupportedAncestors ();
-                int j, jj = types.length;
-                for (j = 0; j < jj; j++)
-                    ancestorToFilter.put (types [j], f);
-                types = f.getSupportedTypes ();
-                jj = types.length;
-                for (j = 0; j < jj; j++)
-                    typeToFilter.put (types [j], f);
+        Map typeToFilterL;
+        Map ancestorToFilterL;
+        synchronized (filtersLock) {
+            if (typeToFilter == null) {
+                typeToFilter = new HashMap ();
+                ancestorToFilter = new HashMap ();
+                List l = lookupProvider.lookup (null, VariablesFilter.class);
+                int i, k = l.size ();
+                for (i = 0; i < k; i++) {
+                    VariablesFilter f = (VariablesFilter) l.get (i);
+                    String[] types = f.getSupportedAncestors ();
+                    int j, jj = types.length;
+                    for (j = 0; j < jj; j++)
+                        ancestorToFilter.put (types [j], f);
+                    types = f.getSupportedTypes ();
+                    jj = types.length;
+                    for (j = 0; j < jj; j++)
+                        typeToFilter.put (types [j], f);
+                }
             }
+
+            if (typeToFilter.size() == 0 && ancestorToFilter.size() == 0) return null; // Optimization for corner case
+
+            typeToFilterL = typeToFilter;
+            ancestorToFilterL = ancestorToFilter;
         }
-        
-        if (typeToFilter.size() == 0 && ancestorToFilter.size() == 0) return null; // Optimization for corner case
-        
+
         if (!(o instanceof Variable)) return null;
-        
+
         Variable v = (Variable) o;
-        
+
         if (checkEvaluated) {
             if (!isEvaluated(v)) {
                 if (whenEvaluated != null) {
@@ -472,11 +495,11 @@ ExtendedNodeModelFilter, TableModelFilter, NodeActionsProviderFilter, Runnable {
                 return null;
             }
         }
-        
+
         String type = v.getType ();
-        VariablesFilter vf = (VariablesFilter) typeToFilter.get (type);
+        VariablesFilter vf = (VariablesFilter) typeToFilterL.get (type);
         if (vf != null) return vf;
-        
+
         if (!(o instanceof ObjectVariable)) return null;
         ObjectVariable ov = (ObjectVariable) o;
         // TODO: List<JPDAClassType> ov.getAllInterfaces();
@@ -492,14 +515,14 @@ ExtendedNodeModelFilter, TableModelFilter, NodeActionsProviderFilter, Runnable {
         if (allInterfaces != null) {
             for (JPDAClassType ct : allInterfaces) {
                 type = ct.getName();
-                vf = (VariablesFilter) ancestorToFilter.get (type);
+                vf = (VariablesFilter) ancestorToFilterL.get (type);
                 if (vf != null) return vf;
             }
         }
-        ov = ov.getSuper ();
+        // Consider ancestors as the type + it's ancestors
         while (ov != null) {
             type = ov.getType ();
-            vf = (VariablesFilter) ancestorToFilter.get (type);
+            vf = (VariablesFilter) ancestorToFilterL.get (type);
             if (vf != null) return vf;
             ov = ov.getSuper ();
         }
@@ -576,6 +599,37 @@ ExtendedNodeModelFilter, TableModelFilter, NodeActionsProviderFilter, Runnable {
         } else {
             return ((ExtendedNodeModelFilter) vf).getIconBaseWithExtension(original, node);
         }
+    }
+
+    private class VariablesPreferenceChangeListener implements PreferenceChangeListener, PropertyChangeListener {
+
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            String key = evt.getKey();
+            if (VariablesViewButtons.SHOW_VALUE_AS_STRING.equals(key)) {
+                refresh();
+            }
+        }
+
+        public void propertyChange(PropertyChangeEvent evt) {
+            if ("VariableFormatters".equals(evt.getPropertyName())) {
+                synchronized (filtersLock) {
+                    typeToFilter = null;
+                    ancestorToFilter = null;
+                }
+                refresh();
+            }
+        }
+
+        private void refresh() {
+            try {
+                fireModelChange(new ModelEvent.NodeChanged(this, TreeModel.ROOT));
+            } catch (ThreadDeath td) {
+                throw td;
+            } catch (Throwable t) {
+                Exceptions.printStackTrace(t);
+            }
+        }
+
     }
 
 }
