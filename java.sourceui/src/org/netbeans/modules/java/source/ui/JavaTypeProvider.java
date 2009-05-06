@@ -41,39 +41,37 @@
 
 package org.netbeans.modules.java.source.ui;
 
-import java.io.IOException;
-import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.java.source.ClasspathInfo;
-import org.netbeans.spi.java.classpath.support.ClassPathSupport;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Set;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 import javax.lang.model.element.TypeElement;
 import javax.swing.Icon;
 import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.java.classpath.GlobalPathRegistry;
-import org.netbeans.api.java.classpath.GlobalPathRegistryListener;
 import org.netbeans.api.java.queries.SourceForBinaryQuery;
 import org.netbeans.api.java.source.ClassIndex;
 import org.netbeans.api.java.source.ClasspathInfo;
-import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.ElementHandle;
-import org.netbeans.api.java.source.JavaSource;
-import org.netbeans.api.java.source.Task;
+import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.ui.TypeElementFinder;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.java.BinaryElementOpen;
-import org.netbeans.modules.java.source.usages.RepositoryUpdater;
+import org.netbeans.modules.java.source.usages.ClassIndexManager;
+import org.netbeans.modules.java.source.usages.ClassIndexManagerEvent;
+import org.netbeans.modules.java.source.usages.ClassIndexManagerListener;
+import org.netbeans.modules.parsing.impl.indexing.PathRegistry;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.jumpto.type.SearchType;
 import org.netbeans.spi.jumpto.type.TypeProvider;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -81,6 +79,7 @@ import org.openide.util.NbBundle;
 /**
  * @author Petr Hrebejk
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.jumpto.type.TypeProvider.class)
 public class JavaTypeProvider implements TypeProvider {
     private static final Logger LOGGER = Logger.getLogger(JavaTypeProvider.class.getName());
     private static final ClassPath EMPTY_CLASSPATH = ClassPathSupport.createClassPath( new FileObject[0] );
@@ -88,7 +87,7 @@ public class JavaTypeProvider implements TypeProvider {
     private volatile boolean isCanceled = false;
     private final TypeElementFinder.Customizer customizer;
     private ClasspathInfo cpInfo;
-    private GlobalPathRegistryListener pathListener;
+    private static final Level LEVEL = Level.FINE;
 
     public String name() {
         return "java"; // NOI18N
@@ -98,63 +97,36 @@ public class JavaTypeProvider implements TypeProvider {
         // TODO - i18n
         return "Java Classes";
     }
-    
+
     public void cleanup() {
-        cache = null;
-        if (pathListener != null)
-            GlobalPathRegistry.getDefault().removeGlobalPathRegistryListener(pathListener);
+        isCanceled = false;
+//        cache = null;
+        setCache(null);
     }
 
     public void cancel() {
         isCanceled = true;
     }
-    
+
     public JavaTypeProvider() {
         this(null, null);
-//        pathListener = new GlobalPathRegistryListener() {
-//
-//            public void pathsAdded(GlobalPathRegistryEvent event) {
-//                cache = null; cpInfo = null;
-//            }
-//
-//            public void pathsRemoved(GlobalPathRegistryEvent event) {
-//                cache = null; cpInfo = null;
-//            }
-//        };
-//        GlobalPathRegistry.getDefault().addGlobalPathRegistryListener(pathListener);
     }
-   
+
     public JavaTypeProvider(ClasspathInfo cpInfo, TypeElementFinder.Customizer customizer) {
         this.cpInfo = cpInfo;
         this.customizer = customizer;
     }
-    
-//    // This is essentially the code from OpenDeclAction
-//    // TODO: Was OpenDeclAction used for anything else?
-//    public void gotoType(TypeDescriptor type) {
-//    //public void actionPerformed(ActionEvent e) {
-//        Lookup lkp = WindowManager.getDefault().getRegistry().getActivated().getLookup();
-//        DataObject activeFile = (DataObject) lkp.lookup(DataObject.class);
-//        Element value = (Element) lkp.lookup(Element.class);
-//        if (activeFile != null && value != null) {
-//            JavaSource js = JavaSource.forFileObject(activeFile.getPrimaryFile());
-//            if (js != null) {
-//                ClasspathInfo cpInfo = js.getClasspathInfo();
-//                assert cpInfo != null;
-//                UiUtils.open(cpInfo,value);
-//            }
-//        }
-//    }
 
-    public void computeTypeNames(Context context, Result res) {
+    public void computeTypeNames(Context context, final Result res) {
+        isCanceled = false;
         String text = context.getText();
         SearchType searchType = context.getSearchType();
-        
+
         boolean hasBinaryOpen = Lookup.getDefault().lookup(BinaryElementOpen.class) != null;
         final ClassIndex.NameKind nameKind;
         switch (searchType) {
         case EXACT_NAME: nameKind = ClassIndex.NameKind.SIMPLE_NAME; break;
-        case CASE_INSENSITIVE_EXACT_NAME: nameKind = ClassIndex.NameKind.CASE_INSENSITIVE_REGEXP; break;        
+        case CASE_INSENSITIVE_EXACT_NAME: nameKind = ClassIndex.NameKind.CASE_INSENSITIVE_REGEXP; break;
         case PREFIX: nameKind = ClassIndex.NameKind.PREFIX; break;
         case CASE_INSENSITIVE_PREFIX: nameKind = ClassIndex.NameKind.CASE_INSENSITIVE_PREFIX; break;
         case REGEXP: nameKind = ClassIndex.NameKind.REGEXP; break;
@@ -162,70 +134,61 @@ public class JavaTypeProvider implements TypeProvider {
         case CAMEL_CASE: nameKind = ClassIndex.NameKind.CAMEL_CASE; break;
         default: throw new RuntimeException("Unexpected search type: " + searchType);
         }
-        
-        long time;
 
-        long cp, gss, gsb, sfb, gtn, add, sort;
-        cp = gss = gsb = sfb = gtn = add = sort = 0;
-
-        if (RepositoryUpdater.getDefault().isScanInProgress()) {
-            String message = NbBundle.getMessage(JavaTypeProvider.class, "LBL_ScanInProgress_warning");
-            res.setMessage(message);
+        Future<Project[]> openProjectsTask = OpenProjects.getDefault().openProjects();
+        try {
+            openProjectsTask.get();
+        } catch (InterruptedException ex) {
+            LOGGER.fine(ex.getMessage());
+        } catch (ExecutionException ex) {
+            LOGGER.fine(ex.getMessage());
         }
-        if (cache == null) {
+
+        if (getCache() == null) {
             Set<CacheItem> sources = null;
 
             if (cpInfo == null) {
-                // Sources
-                time = System.currentTimeMillis();
-                ClassPath scp = RepositoryUpdater.getDefault().getScannedSources();
-                FileObject roots[] = scp.getRoots();
-                gss += System.currentTimeMillis() - time; 
-                FileObject root[] = new FileObject[1];
-                sources = new HashSet<CacheItem>( roots.length );
-                for (int i = 0; i < roots.length; i++ ) {                    
-                    root[0] = roots[i];
-                    time = System.currentTimeMillis();                
-                    ClasspathInfo ci = ClasspathInfo.create( EMPTY_CLASSPATH, EMPTY_CLASSPATH, ClassPathSupport.createClassPath(root));               //create(roots[i]);
+                // XXX: sources will in fact contain not only java related roots, but also roots
+                // defined by other languages. Ideally PathRegistry should allow filtering roots by their ID.
+
+                // Sources - ClassPath.SOURCE
+                sources = new HashSet<CacheItem>();
+                for (URL url : PathRegistry.getDefault().getSources()) {
+                    ClasspathInfo ci = ClasspathInfo.create( EMPTY_CLASSPATH, EMPTY_CLASSPATH, ClassPathSupport.createClassPath(url));
                     if ( isCanceled ) {
                         return;
                     }
                     else {
-                        sources.add( new CacheItem( roots[i], ci, false ) );
-                    }                        
-                    cp += System.currentTimeMillis() - time;
+                        sources.add( new CacheItem( url, ci, false ) );
+                    }
                 }
 
-
-
-                // Binaries
-                time = System.currentTimeMillis();                
-                scp = RepositoryUpdater.getDefault().getScannedBinaries();
-                roots = scp.getRoots(); 
-                gsb += System.currentTimeMillis() - time;
-                root = new FileObject[1];
-                for (int i = 0; i < roots.length; i++ ) {
+                // Translated ClassPath.COMPILE & ClassPath.BOOT
+                for (URL url : PathRegistry.getDefault().getLibraries()) {
+                    ClasspathInfo ci = ClasspathInfo.create( EMPTY_CLASSPATH, EMPTY_CLASSPATH, ClassPathSupport.createClassPath(url));
+                    if ( isCanceled ) {
+                        return;
+                    }
+                    else {
+                        sources.add( new CacheItem( url, ci, false ) );
+                    }
+                }
+                
+                // Binaries - not translated ClassPath.COMPILE & ClassPath.BOOT
+                for (URL url : PathRegistry.getDefault().getBinaryLibraries()) {
                     try {
                         if ( isCanceled ) {
                             return;
                         }
-                        time = System.currentTimeMillis();
                         if (!hasBinaryOpen) {
-                        SourceForBinaryQuery.Result result = SourceForBinaryQuery.findSourceRoots(roots[i].getURL());
-                        if ( result.getRoots().length == 0 ) {
-                            continue;
-                        }       
+                            SourceForBinaryQuery.Result result = SourceForBinaryQuery.findSourceRoots(url);
+                            if ( result.getRoots().length == 0 ) {
+                                continue;
+                            }
                         }
-                        sfb += System.currentTimeMillis() - time;                        
-                        time = System.currentTimeMillis();                        
-                        root[0] = roots[i];
-                        ClasspathInfo ci = ClasspathInfo.create(ClassPathSupport.createClassPath(root), EMPTY_CLASSPATH, EMPTY_CLASSPATH );//create(roots[i]);                                
-                        sources.add( new CacheItem( roots[i], ci, true ) );                                                
-                        cp += System.currentTimeMillis() - time;
+                        ClasspathInfo ci = ClasspathInfo.create(ClassPathSupport.createClassPath(url), EMPTY_CLASSPATH, EMPTY_CLASSPATH );//create(roots[i]);
+                        sources.add( new CacheItem( url, ci, true ) );
                     }
-                    catch ( FileStateInvalidException e ) {
-                        continue;
-                    }                   
                     finally {
                         if ( isCanceled ) {
                             return;
@@ -234,54 +197,49 @@ public class JavaTypeProvider implements TypeProvider {
                 }
             } else { // user provided classpath
 
-                FileObject[] bootRoots = cpInfo.getClassPath(ClasspathInfo.PathKind.BOOT).getRoots();
-                FileObject[] compileRoots = cpInfo.getClassPath(ClasspathInfo.PathKind.COMPILE).getRoots();
-                FileObject[] sourceRoots = cpInfo.getClassPath(ClasspathInfo.PathKind.SOURCE).getRoots();
-                sources = new HashSet<CacheItem>(bootRoots.length + compileRoots.length + sourceRoots.length);
+                final List<ClassPath.Entry> bootRoots = cpInfo.getClassPath(ClasspathInfo.PathKind.BOOT).entries();
+                final List<ClassPath.Entry> compileRoots = cpInfo.getClassPath(ClasspathInfo.PathKind.COMPILE).entries();
+                final List<ClassPath.Entry> sourceRoots = cpInfo.getClassPath(ClasspathInfo.PathKind.SOURCE).entries();
+                sources = new HashSet<CacheItem>(bootRoots.size() + compileRoots.size() + sourceRoots.size());
 
                 // bootPath
-                for (int i = 0; i < bootRoots.length; i++ ) {                    
-                    time = System.currentTimeMillis();                
-                    ClasspathInfo ci = ClasspathInfo.create(ClassPathSupport.createClassPath(bootRoots[i]), EMPTY_CLASSPATH, EMPTY_CLASSPATH);
+                for (ClassPath.Entry entry : bootRoots) {
+                    ClasspathInfo ci = ClasspathInfo.create(ClassPathSupport.createClassPath(entry.getURL()), EMPTY_CLASSPATH, EMPTY_CLASSPATH);
                     if ( isCanceled ) {
                         return;
                     }
                     else {
-                        sources.add( new CacheItem( bootRoots[i], ci, true ) );
-                    }                        
-                    cp += System.currentTimeMillis() - time;
+                        sources.add( new CacheItem( entry.getURL(), ci, true ) );
+                    }
                 }
 
                 // classPath
-                for (int i = 0; i < compileRoots.length; i++ ) {                    
-                    time = System.currentTimeMillis();                
-                    ClasspathInfo ci = ClasspathInfo.create(EMPTY_CLASSPATH, ClassPathSupport.createClassPath(compileRoots[i]), EMPTY_CLASSPATH);
+                for (ClassPath.Entry entry : compileRoots) {
+                    ClasspathInfo ci = ClasspathInfo.create(EMPTY_CLASSPATH, ClassPathSupport.createClassPath(entry.getURL()), EMPTY_CLASSPATH);
                     if ( isCanceled ) {
                         return;
                     }
                     else {
-                        sources.add( new CacheItem( compileRoots[i], ci, true ) );
-                    }                        
-                    cp += System.currentTimeMillis() - time;
+                        sources.add( new CacheItem( entry.getURL(), ci, true ) );
+                    }
                 }
 
                 // sourcePath
-                for (int i = 0; i < sourceRoots.length; i++ ) {                    
-                    time = System.currentTimeMillis();                
-                    ClasspathInfo ci = ClasspathInfo.create(EMPTY_CLASSPATH, EMPTY_CLASSPATH, ClassPathSupport.createClassPath(sourceRoots[i]));
+                for (ClassPath.Entry entry : sourceRoots) {
+                    ClasspathInfo ci = ClasspathInfo.create(EMPTY_CLASSPATH, EMPTY_CLASSPATH, ClassPathSupport.createClassPath(entry.getURL()));
                     if ( isCanceled ) {
                         return;
                     }
                     else {
-                        sources.add( new CacheItem( sourceRoots[i], ci, false ) );
-                    }                        
-                    cp += System.currentTimeMillis() - time;
+                        sources.add( new CacheItem( entry.getURL(), ci, false ) );
+                    }
                 }
 
             }
-                
+
             if ( !isCanceled ) {
-                cache = sources;
+//                cache = sources;
+                setCache(sources);
             }
             else {
                 return;
@@ -289,85 +247,104 @@ public class JavaTypeProvider implements TypeProvider {
 
         }
 
-        ArrayList<JavaTypeDescription> types = new ArrayList<JavaTypeDescription>(cache.size() * 20);
-        Set<ElementHandle<TypeElement>> names = null;
-        for(final CacheItem ci : cache) {
-            time = System.currentTimeMillis();
+        Set<CacheItem> c = getCache();
+        if (c == null) return;
+        ArrayList<JavaTypeDescription> types = new ArrayList<JavaTypeDescription>(c.size() * 20);
 
-            final String textForQuery;
-            switch( nameKind ) {
-                case REGEXP:
-                case CASE_INSENSITIVE_REGEXP:
-                    text = removeNonJavaChars(text);
-                    String pattern = searchType == SearchType.CASE_INSENSITIVE_EXACT_NAME ? text : text + "*"; // NOI18N
-                    pattern = pattern.replace( "*", ".*" ).replace( '?', '.' );
-                    textForQuery = pattern;
-                    break;
-                default:
-                    textForQuery = text;
-            }
+        // is scan in progress? If so, provide a message to user.
+        boolean scanInProgress = SourceUtils.isScanInProgress();
+        if (scanInProgress) {
+            // ui message
+            String message = NbBundle.getMessage(JavaTypeProvider.class, "LBL_ScanInProgress_warning");
+            res.setMessage(message);
+        } else {
+            res.setMessage(null);
+        }
 
-            if (customizer != null) {
-                names = customizer.query(ci.classpathInfo, textForQuery, nameKind, EnumSet.of(ci.isBinary ? ClassIndex.SearchScope.DEPENDENCIES : ClassIndex.SearchScope.SOURCE));
-            } else {
-                @SuppressWarnings("unchecked")
-                final Set<ElementHandle<TypeElement>>[] n = new Set[1];
-                JavaSource source = JavaSource.create(ci.classpathInfo, new FileObject[0]);
-                try {
-                    source.runUserActionTask(new Task<CompilationController>() {
-
-                        public void run(CompilationController parameter) throws Exception {
-                            n[0] = ci.classpathInfo.getClassIndex().getDeclaredTypes(textForQuery, nameKind, EnumSet.of(ci.isBinary ? ClassIndex.SearchScope.DEPENDENCIES : ClassIndex.SearchScope.SOURCE));
+        final String textForQuery;
+        switch( nameKind ) {
+            case REGEXP:
+            case CASE_INSENSITIVE_REGEXP:
+                text = removeNonJavaChars(text);
+                String pattern = searchType == SearchType.CASE_INSENSITIVE_EXACT_NAME ? text : text + "*"; // NOI18N
+                pattern = pattern.replace( "*", ".*" ).replace( '?', '.' );
+                textForQuery = pattern;
+                break;
+            default:
+                textForQuery = text;
+        }
+        LOGGER.fine("Text For Query '" + text + "'.");
+        if (customizer != null) {
+            c = getCache();
+            if (c != null) {
+                for (final CacheItem ci : c) {
+                    Set<ElementHandle<TypeElement>> names = customizer.query(
+                            ci.classpathInfo, textForQuery, nameKind,
+                            EnumSet.of(ci.isBinary ? ClassIndex.SearchScope.DEPENDENCIES : ClassIndex.SearchScope.SOURCE)
+                    );
+                    for (ElementHandle<TypeElement> name : names) {
+                        JavaTypeDescription td = new JavaTypeDescription(ci, name);
+                        types.add(td);
+                        if (isCanceled) {
+                            return;
                         }
-                    }, true);
-                    names = n[0];
-                } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
+                    }
                 }
             }
 
-            if ( isCanceled ) {
-                return;
-            }
+        } else {
+            ClassIndexManager.getDefault().addClassIndexManagerListener(new ClassIndexManagerListener() {
 
-            gtn += System.currentTimeMillis() - time;            
-            time = System.currentTimeMillis();
+                public void classIndexAdded(ClassIndexManagerEvent event) {
+                    synchronized (JavaTypeProvider.this) {
+                        JavaTypeProvider.this.notify();
+                    }
+                }
 
-//              Removed because of bad performance To reenable see diff between 1.15 and 1.16
-//              ClassPath.Entry defEntry = ci.getDefiningEntry();
-            for (ElementHandle<TypeElement> name : names) {
-//                    Removed because of bad performance To reenable see diff between 1.15 and 1.16
-//                    if (defEntry.includes(convertToSourceName(name.getBinaryName()))) {
-                    JavaTypeDescription td = new JavaTypeDescription(ci, name );
-                    types.add(td);
-//                    }
+                public void classIndexRemoved(ClassIndexManagerEvent event) {
+                }
+            });
+            do {
+                c = getCache();
+                if (c == null) return;
+                for (final CacheItem ci : getCache()) {
+                    @SuppressWarnings("unchecked")
+                    final Set<ElementHandle<TypeElement>> names = ci.classpathInfo.getClassIndex().getDeclaredTypes(
+                            textForQuery, nameKind, EnumSet.of(ci.isBinary ? ClassIndex.SearchScope.DEPENDENCIES : ClassIndex.SearchScope.SOURCE)
+                    );
+                    for (ElementHandle<TypeElement> name : names) {
+                        JavaTypeDescription td = new JavaTypeDescription(ci, name);
+                        types.add(td);
+                        if (isCanceled) {
+                            return;
+                        }
+                    }
+                }
+
+                if (types.isEmpty() && scanInProgress) {
+                    try {
+                        synchronized (JavaTypeProvider.this) {
+                            this.wait(2000);
+                        }
+                    } catch (InterruptedException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                }
+
                 if ( isCanceled ) {
                     return;
                 }
-            }
-            add += System.currentTimeMillis() - time;
+                scanInProgress = SourceUtils.isScanInProgress();
+            } while (scanInProgress && types.isEmpty());
         }
-
-        if ( !isCanceled ) {            
-            time = System.currentTimeMillis();
+        if ( !isCanceled ) {
             // Sorting is now done on the Go To Tpe dialog side
             // Collections.sort(types);
-            sort += System.currentTimeMillis() - time;
-            LOGGER.fine("PERF - " + " GSS:  " + gss + " GSB " + gsb + " CP: " + cp + " SFB: " + sfb + " GTN: " + gtn + "  ADD: " + add + "  SORT: " + sort );
             res.addResult(types);
         }
+
     }
-    
-    private static boolean isAllUpper( String text ) {
-        for( int i = 0; i < text.length(); i++ ) {
-            if ( !Character.isUpperCase( text.charAt( i ) ) ) {
-                return false;
-            }
-        }
-        
-        return true;
-    }
-   
+
     private static String removeNonJavaChars(String text) {
        StringBuilder sb = new StringBuilder();
 
@@ -379,22 +356,39 @@ public class JavaTypeProvider implements TypeProvider {
        }
        return sb.toString();
     }
-   
-   static class CacheItem {
+
+    private static Logger log = Logger.getLogger(JavaTypeProvider.class.getName());
+
+    private Set<CacheItem> getCache() {
+        if (cache == null && log.isLoggable(LEVEL)) {
+            log.log(LEVEL, "Returning null cache entries.", new Exception());
+        }
+        return cache;
+    }
+
+    private void setCache(Set<CacheItem> cache) {
+        if (log.isLoggable(LEVEL)) {
+            log.log(LEVEL, "Setting cache entries from " + this.cache + " to " + cache + ".", new Exception());
+        }
+        this.cache = cache;
+    }
+
+    static class CacheItem {
 
         public final boolean isBinary;
-        public final FileObject fileObject;
+        public final URL root;
         public final ClasspathInfo classpathInfo;
         public String projectName;
         public Icon projectIcon;
         private ClassPath.Entry defEntry;
-                
-        public CacheItem ( FileObject fileObject, ClasspathInfo classpathInfo, boolean isBinary ) {
+        private FileObject cachedRoot;
+
+        public CacheItem ( URL root, ClasspathInfo classpathInfo, boolean isBinary ) {
             this.isBinary = isBinary;
-            this.fileObject = fileObject;
+            this.root = root;
             this.classpathInfo = classpathInfo;
         }
-        
+
 //        Removed because of bad performance To reenable see diff between 1.15 and 1.16
 //        
 //        public ClassPath.Entry getDefiningEntry () {
@@ -411,51 +405,66 @@ public class JavaTypeProvider implements TypeProvider {
 //            }
 //            return defEntry;
 //        }
-        
+
         @Override
         public int hashCode () {
-            return this.fileObject == null ? 0 : this.fileObject.hashCode();
+            return this.root == null ? 0 : this.root.hashCode();
         }
-        
+
         @Override
         public boolean equals (Object other) {
             if (other instanceof CacheItem) {
                 CacheItem otherItem = (CacheItem) other;
-                return this.fileObject == null ? otherItem.fileObject == null : this.fileObject.equals(otherItem.fileObject);
+                return this.root == null ? otherItem.root == null : this.root.equals(otherItem.root);
             }
             return false;
         }
-    
+
         public FileObject getRoot() {
-            return fileObject;
+            synchronized (this) {
+                if (cachedRoot != null) {
+                    return cachedRoot;
+                }
+            }
+            FileObject _tmp = URLMapper.findFileObject(root);
+            synchronized (this) {
+                if (cachedRoot == null) {
+                    cachedRoot = _tmp;
+                }
+            }
+            return _tmp;
         }
-        
+
         public boolean isBinary() {
             return isBinary;
         }
-        
+
         public synchronized String getProjectName() {
             if ( !isBinary && projectName == null) {
                 initProjectInfo();
             }
             return projectName;
         }
-        
+
         public synchronized Icon getProjectIcon() {
             if ( !isBinary && projectIcon == null ) {
                 initProjectInfo();
             }
             return projectIcon;
         }
-        
+
         private void initProjectInfo() {
-            Project p = FileOwnerQuery.getOwner(fileObject);                    
-            if (p != null) {
-                ProjectInformation pi = ProjectUtils.getInformation( p );
-                projectName = pi.getDisplayName();
-                projectIcon = pi.getIcon();
+            try {
+                Project p = FileOwnerQuery.getOwner(this.root.toURI());
+                if (p != null) {
+                    ProjectInformation pi = ProjectUtils.getInformation( p );
+                    projectName = pi.getDisplayName();
+                    projectIcon = pi.getIcon();
+                }
+            } catch (URISyntaxException e) {
+                Exceptions.printStackTrace(e);
             }
         }
-        
+
     }
 }
