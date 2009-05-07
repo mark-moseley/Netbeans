@@ -41,12 +41,12 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.SaveAsTemplateOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.testutils.NodeUtils;
 
 /** Test of org.netbeans.jellytools.nodes.URLNode
  *
@@ -54,6 +54,16 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class URLNodeTest extends JellyTestCase {
+    
+    public static final String[] tests = new String[] {
+        "testVerifyPopup",
+        "testCut",
+        "testCopy",
+        "testDelete",
+        "testRename",
+        "testSaveAsTemplate",
+        "testProperties"
+    };
     
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
@@ -65,6 +75,7 @@ public class URLNodeTest extends JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new URLNodeTest("testVerifyPopup"));
         suite.addTest(new URLNodeTest("testCut"));
@@ -74,6 +85,9 @@ public class URLNodeTest extends JellyTestCase {
         suite.addTest(new URLNodeTest("testSaveAsTemplate"));
         suite.addTest(new URLNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(URLNodeTest.class, 
+        tests);
     }
     
     /** Use for internal test execution inside IDE
@@ -86,8 +100,9 @@ public class URLNodeTest extends JellyTestCase {
     protected static URLNode urlNode = null;
     
     /** Finds node before each test case. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         // find node
         if(urlNode == null) {
             urlNode = new URLNode(new SourcePackagesNode("SampleProject"), "sample1|url.url");  // NOI18N
@@ -103,32 +118,32 @@ public class URLNodeTest extends JellyTestCase {
     public void testCut() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         urlNode.cut();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test copy  */
     public void testCopy() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         urlNode.copy();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test delete  */
     public void testDelete() {
         urlNode.delete();
-        Utils.closeConfirmDialog();
+        NodeUtils.closeConfirmDeleteDialog();
     }
     
     /** Test rename  */
     public void testRename() {
         urlNode.rename();
-        Utils.closeRenameDialog();
+        NodeUtils.closeRenameDialog();
     }
     
     /** Test properties  */
     public void testProperties() {
         urlNode.properties();
-        Utils.closeProperties("url"); //NOI18N
+        NodeUtils.closeProperties("url"); //NOI18N
     }
     
     /** Test saveAsTemplate  */

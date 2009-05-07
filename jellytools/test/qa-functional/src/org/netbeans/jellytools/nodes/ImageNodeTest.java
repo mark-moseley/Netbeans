@@ -41,17 +41,13 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.SaveAsTemplateOperator;
 import org.netbeans.jellytools.TopComponentOperator;
-import org.netbeans.jellytools.properties.PropertySheetOperator;
-import org.netbeans.jemmy.operators.JDialogOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.testutils.NodeUtils;
 
 /** Test of org.netbeans.jellytools.nodes.ImageNode
  *
@@ -59,6 +55,16 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class ImageNodeTest extends JellyTestCase {
+    public static final String[] tests = new String[] {
+        "testVerifyPopup",
+        "testOpen",
+        "testCut",
+        "testCopy",
+        "testDelete",
+        "testRename",
+        "testSaveAsTemplate",
+        "testProperties"
+    };
     
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
@@ -70,6 +76,7 @@ public class ImageNodeTest extends JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new ImageNodeTest("testVerifyPopup"));
         suite.addTest(new ImageNodeTest("testOpen"));
@@ -80,13 +87,17 @@ public class ImageNodeTest extends JellyTestCase {
         suite.addTest(new ImageNodeTest("testSaveAsTemplate"));
         suite.addTest(new ImageNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(ImageNodeTest.class, 
+        tests);
     }
     
     protected static ImageNode imageNode = null;
     
     /** Find node. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         if(imageNode == null) {
             imageNode = new ImageNode(new SourcePackagesNode("SampleProject"),
                                       "sample1|image.gif"); // NOI18N
@@ -115,32 +126,32 @@ public class ImageNodeTest extends JellyTestCase {
     public void testCut() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         imageNode.cut();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test copy */
     public void testCopy() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         imageNode.copy();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test delete */
     public void testDelete() {
         imageNode.delete();
-        Utils.closeConfirmDialog();
+        NodeUtils.closeConfirmDeleteDialog();
     }
     
     /** Test rename */
     public void testRename() {
         imageNode.rename();
-        Utils.closeRenameDialog();
+        NodeUtils.closeRenameDialog();
     }
     
     /** Test properties */
     public void testProperties() {
         imageNode.properties();
-        Utils.closeProperties("image"); // NOI18N
+        NodeUtils.closeProperties("image"); // NOI18N
     }
     
     /** Test saveAsTemplate */

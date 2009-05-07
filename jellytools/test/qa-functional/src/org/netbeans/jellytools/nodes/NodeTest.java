@@ -40,11 +40,11 @@
  */
 package org.netbeans.jellytools.nodes;
 
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Arrays;
 import javax.swing.tree.TreePath;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.EditorOperator;
@@ -60,7 +60,7 @@ import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.JButtonOperator;
 import org.netbeans.jemmy.operators.JDialogOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.testutils.JavaNodeUtils;
 
 /** Test of org.netbeans.jellytools.nodes.
  *
@@ -79,6 +79,7 @@ public class NodeTest extends JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new NodeTest("testConstructor"));
         suite.addTest(new NodeTest("testSelect"));
@@ -100,6 +101,27 @@ public class NodeTest extends JellyTestCase {
         suite.addTest(new NodeTest("testIsChildPresent"));
         suite.addTest(new NodeTest("testNodeRecreated"));
         return suite;
+         */
+        return createModuleTest(NodeTest.class, 
+        "testConstructor",
+        "testSelect",
+        "testSelectDoubleClick",
+        "testPerformAPIAction",
+        "testPerformAPIActionNoBlock",
+        "testPerformMenuAction",
+        "testPerformMenuActionNoBlock",
+        "testPerformPopupAction",
+        "testPerformPopupActionNoBlock",
+        "testGetPath",
+        "testGetParentPath",                
+        "testGetChildren",
+        "testIsLeaf",         
+        "testIsPresent",
+        "testVerifyPopup",
+        "testWaitNotPresent",
+        "testWaitChildNotPresent",
+        "testIsChildPresent",
+        "testNodeRecreated");
     }
     
     private static Node projectRootNode;
@@ -109,8 +131,12 @@ public class NodeTest extends JellyTestCase {
     
     /** method called before each testcase */
     @Override
-    protected void setUp() {
+    protected void setUp() throws IOException {
+        safeDeleteTitle = safeDeleteTitle = Bundle.getString("org.netbeans.modules.refactoring.java.ui.Bundle",
+                "LBL_SafeDel_Delete"); // NOI18N
+        
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         if(projectRootNode == null) {
             projectRootNode = new ProjectsTabOperator().getProjectRootNode("SampleProject");
         }
@@ -138,17 +164,14 @@ public class NodeTest extends JellyTestCase {
     }
     
     // "Safe Delete"
-    private static String safeDeleteTitle = Bundle.getString("org.netbeans.modules.refactoring.spi.impl.Bundle",
-                                                             "LBL_SafeDel"); // NOI18N
-
-    // "Runtime"
-    private static final String runtimeLabel = Bundle.getString("org.netbeans.core.Bundle",
-                                                                "UI/Runtime"); // NOI18N
+    private static String safeDeleteTitle;
     
     /** Test constructor  */
     public void testConstructor() {
-        Node n = new Node(RuntimeTabOperator.invoke().tree(), "");
-        assertEquals(n.getText(), runtimeLabel);
+        Node n = new Node(ProjectsTabOperator.invoke().tree(), "SampleProject");
+
+        assertTrue(n.isPresent());
+        assertEquals(n.getText(), "SampleProject");
         
         Node sample1Node = new Node(sourcePackagesNode, "sample1"); // NOI18N
         Node node = new Node(sample1Node, "SampleClass1.java"); // NOI18N
@@ -156,7 +179,7 @@ public class NodeTest extends JellyTestCase {
         
         String children[] = sample1Node.getChildren();
         assertTrue(children.length>0);
-        for (int i=0; i<children.length; i++) {
+        for (int i=0; i<children.length; i++) {            
             assertEquals(new Node(sample1Node, i).getText(), children[i]);
         }
     }
@@ -190,7 +213,7 @@ public class NodeTest extends JellyTestCase {
     /** Test performAPIAction */
     public void testPerformAPIAction() {
         sampleClass1Node.performAPIAction("org.openide.actions.PropertiesAction");  // NOI18N
-        Utils.closeProperties("SampleClass1.java"); // NOI18N
+        JavaNodeUtils.closeProperties("SampleClass1.java"); // NOI18N
     }
     
     /** Test performAPIActionNoBlock */
@@ -203,16 +226,16 @@ public class NodeTest extends JellyTestCase {
     /** Test performMenuAction */
     public void testPerformMenuAction() {
         // Window|Properties
-        String propertiesPath = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Window")+
+        String propertiesPath = Bundle.getStringTrimmed("org.netbeans.core.windows.resources.Bundle", "Menu/Window")+
                                 "|"+
                                 Bundle.getStringTrimmed("org.openide.actions.Bundle", "Properties");
         sampleClass1Node.performMenuAction(propertiesPath);
-        Utils.closeProperties("SampleClass1.java"); // NOI18N
+        JavaNodeUtils.closeProperties("SampleClass1.java"); // NOI18N
     }
     
     /** Test performMenuActionNoBlock */
     public void testPerformMenuActionNoBlock() {
-        String helpItem = Bundle.getStringTrimmed("org.netbeans.core.Bundle", "Menu/Help");
+        String helpItem = Bundle.getStringTrimmed("org.netbeans.core.ui.resources.Bundle", "Menu/Help");
         String aboutItem = Bundle.getStringTrimmed("org.netbeans.core.actions.Bundle", "About");
         sourcePackagesNode.performMenuActionNoBlock(helpItem+"|"+aboutItem);    // NOI18N
         String aboutTitle = Bundle.getString("org.netbeans.core.startup.Bundle", "CTL_About_Title");
@@ -232,7 +255,7 @@ public class NodeTest extends JellyTestCase {
         // "Delete"
         String deleteItem = Bundle.getStringTrimmed("org.openide.actions.Bundle", "Delete");
         sampleClass1Node.performPopupActionNoBlock(deleteItem);
-        Utils.closeSafeDeleteDialog();
+        JavaNodeUtils.closeSafeDeleteDialog();
     }
     
     /** Test getPath */
@@ -276,13 +299,12 @@ public class NodeTest extends JellyTestCase {
     public void testIsPresent() {
         new CopyAction().performAPI(sampleClass1Node);
         performPaste(sample1Node);
-        Node node = new Node(sample1Node, "SampleClass11"); // NOI18N
+        Node node = new Node(sample1Node, "SampleClass11"); // NOI18N        
         assertTrue(node.isPresent());
-        new DeleteAction().perform(node);
-        new NbDialogOperator(safeDeleteTitle).ok();
+        JavaNodeUtils.performSafeDelete(node);
         try {
             Thread.sleep(1000);
-        } catch (Exception e){}
+        } catch (Exception e){}          
         assertTrue(!node.isPresent());
     }
     
@@ -302,7 +324,7 @@ public class NodeTest extends JellyTestCase {
         final Node duplNode = new Node(sample1Node, "SampleClass11"); // NOI18N
         new Thread(new Runnable() {
             public void run() {
-                performSafeDelete(duplNode);
+                JavaNodeUtils.performSafeDelete(duplNode);
             }
         }, "thread performing action through API").start(); // NOI18N
         duplNode.waitNotPresent();
@@ -315,7 +337,7 @@ public class NodeTest extends JellyTestCase {
         final Node duplNode = new Node(sample1Node, "SampleClass11");// NOI18N
         new Thread(new Runnable() {
             public void run() {
-                performSafeDelete(duplNode);
+                JavaNodeUtils.performSafeDelete(duplNode);
             }
         }, "thread performing action through API").start(); // NOI18N
         sample1Node.waitChildNotPresent("SampleClass11");// NOI18N
@@ -388,7 +410,7 @@ public class NodeTest extends JellyTestCase {
             super(treeOperator, treePath);
         }
         public ImmutableNode(Node node) {
-            super(node.treeOperator, node.treePath);
+            super(node.tree(), node.getTreePath());
         }
         
         private int count = 0;

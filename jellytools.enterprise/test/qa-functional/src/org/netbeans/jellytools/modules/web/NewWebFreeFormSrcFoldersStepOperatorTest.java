@@ -45,26 +45,19 @@ import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.NewFileWizardOperator;
-import org.netbeans.jellytools.NewProjectWizardOperator;
-import org.netbeans.jellytools.NewWebProjectNameLocationStepOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.nodes.ProjectRootNode;
 import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.ide.ProjectSupport;
 
 /**
  * Test of org.netbeans.jellytools.NewJspFileNameStepOperator.
  * @author Martin.Schovanek@sun.com
  */
-public class NewWebFreeFormNameStepOperatorTest extends JellyTestCase {
+public class NewWebFreeFormSrcFoldersStepOperatorTest extends JellyTestCase {
     
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
-    public NewWebFreeFormNameStepOperatorTest(String testName) {
+    public NewWebFreeFormSrcFoldersStepOperatorTest(String testName) {
         super(testName);
     }
     
@@ -73,9 +66,12 @@ public class NewWebFreeFormNameStepOperatorTest extends JellyTestCase {
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
-        suite.addTest(new NewWebFreeFormNameStepOperatorTest("testVerify"));
+        suite.addTest(new NewWebFreeFormSrcFoldersStepOperatorTest("testVerify"));
         return suite;
+         */
+        return createModuleTest(NewWebFreeFormSrcFoldersStepOperatorTest.class);
     }
 
     
@@ -85,11 +81,20 @@ public class NewWebFreeFormNameStepOperatorTest extends JellyTestCase {
 
     
     /** Invokes and verifies the dialog. */
-    public void testVerify() {
-        NewWebFreeFormNameStepOperator nameStep =
-                NewWebFreeFormNameStepOperator.invoke();
-        nameStep.verify();
-        nameStep.close();
+    public void testVerify() throws IOException {
+        NewWebFreeFormNameStepOperator
+                nameStep = NewWebFreeFormNameStepOperator.invoke();
+        System.out.println("project="+new File(getDataDir(), "WebFreeFormSrc").
+                getCanonicalPath());
+        nameStep.setProjectLocation(new File(getDataDir(), "WebFreeFormSrc").
+                getCanonicalPath());
+        nameStep.next();
+        new NewWebFreeFormActionsStepOperator().next();
+        new NewWebFreeFormWebSrcStepOperator().next();
+        NewWebFreeFormSrcFoldersStepOperator
+                srcFoldersStep = new NewWebFreeFormSrcFoldersStepOperator();
+        srcFoldersStep.verify();
+        srcFoldersStep.close();
     }
 
     

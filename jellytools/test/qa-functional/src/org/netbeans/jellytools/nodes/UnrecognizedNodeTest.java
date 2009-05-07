@@ -41,13 +41,13 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.SaveAsTemplateOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.testutils.NodeUtils;
 
 /** Test of org.netbeans.jellytools.nodes.UnrecognizedNode
  *
@@ -55,6 +55,17 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class UnrecognizedNodeTest extends JellyTestCase {
+    
+    public static final String[] tests = new String[] {
+        "testVerifyPopup",
+        "testOpen",
+        "testCut",
+        "testCopy",
+        "testDelete",
+        "testRename",
+        "testSaveAsTemplate",
+        "testProperties"
+    };
     
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
@@ -65,6 +76,7 @@ public class UnrecognizedNodeTest extends JellyTestCase {
     
     /** method used for explicit testsuite definition */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new UnrecognizedNodeTest("testVerifyPopup"));
         suite.addTest(new UnrecognizedNodeTest("testOpen"));
@@ -75,6 +87,9 @@ public class UnrecognizedNodeTest extends JellyTestCase {
         suite.addTest(new UnrecognizedNodeTest("testSaveAsTemplate"));
         suite.addTest(new UnrecognizedNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(UnrecognizedNodeTest.class, 
+        tests);                
     }
     
     /** Use for internal test execution inside IDE
@@ -87,8 +102,9 @@ public class UnrecognizedNodeTest extends JellyTestCase {
     protected static UnrecognizedNode unrecognizedNode = null;
     
     /** Finds node before each test case. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         // find node
         if(unrecognizedNode == null) {
             unrecognizedNode = new UnrecognizedNode(new SourcePackagesNode("SampleProject"), "sample1|unrecognized");  // NOI18N
@@ -110,32 +126,32 @@ public class UnrecognizedNodeTest extends JellyTestCase {
     public void testCut() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         unrecognizedNode.cut();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test copy */
     public void testCopy() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         unrecognizedNode.copy();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test delete  */
     public void testDelete() {
         unrecognizedNode.delete();
-        Utils.closeConfirmDialog();
+        NodeUtils.closeConfirmDeleteDialog();
     }
     
     /** Test rename */
     public void testRename() {
         unrecognizedNode.rename();
-        Utils.closeRenameDialog();
+        NodeUtils.closeRenameDialog();
     }
     
     /** Test properties */
     public void testProperties() {
         unrecognizedNode.properties();
-        Utils.closeProperties("unrecognized"); // NOI18N
+        NodeUtils.closeProperties("unrecognized"); // NOI18N
     }
     
     /** Test saveAsTemplate */

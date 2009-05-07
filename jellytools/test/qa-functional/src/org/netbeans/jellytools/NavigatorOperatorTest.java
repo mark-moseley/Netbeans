@@ -38,36 +38,58 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.jellytools.modules.j2ee.nodes;
+
+package org.netbeans.jellytools;
 
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.RuntimeTabOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.actions.OpenAction;
+import org.netbeans.jellytools.modules.web.NavigatorOperator;
+import org.netbeans.jellytools.nodes.JavaProjectRootNode;
+import org.netbeans.jellytools.nodes.Node;
+
 
 /**
- * Test of org.netbeans.jellytools.nodes.J2eeServerNode
+ * Test of org.netbeans.jellytools.NewJspFileNameStepOperator.
+ * @author Jindrich Sedek
  */
-public class J2eeServerNodeTest extends JellyTestCase {
-    
-    /** constructor required by JUnit
+public class NavigatorOperatorTest extends JellyTestCase {
+
+    /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
-    public J2eeServerNodeTest(String testName) {
+    public NavigatorOperatorTest(String testName) {
         super(testName);
     }
     
-    /** method used for explicit testsuite definition */
-    public static Test suite() {
-        TestSuite suite = new NbTestSuite();
-        suite.addTest(new J2eeServerNodeTest("testVerifyPopup"));
-        suite.addTest(new J2eeServerNodeTest("testProperties"));
-        return suite;
+    /** Method used for explicit testsuite definition
+     * @return  created suite
+     */
+    public static Test suite() {        
+        return createModuleTest(NavigatorOperatorTest.class, "testOperator");
     }
+    
+    public void setUp() throws Exception {
+        System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
+        Node lrNode = new Node(new JavaProjectsTabOperator().getJavaProjectRootNode("SampleProject"),
+                "Source Packages|sample1|SampleClass1.java");
+
+        new OpenAction().perform(lrNode);
+    }
+    
+    /** Invokes and verifies the dialog. */
+    public void testOperator() {
+        new EditorOperator("SampleClass1.java").setVisible(true);
+        // test INVOKE
+        NavigatorOperator operator = NavigatorOperator.invokeNavigator();
+        assertNotNull(operator);
+        // test CONSTRUCTOR
+        NavigatorOperator operator2 = new NavigatorOperator();
+        assertNotNull(operator2);
+        assertNotNull("TREE", operator.getTree());
+    }
+    
     
     /** Use for internal test execution inside IDE
      * @param args command line arguments
@@ -76,27 +98,4 @@ public class J2eeServerNodeTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
-    private static J2eeServerNode serverNode;
-    
-    protected void setUp() {
-        System.out.println("### "+getName()+" ###");
-        if(serverNode == null) {
-            RuntimeTabOperator.invoke();
-            serverNode = new J2eeServerNode("GlassFish");
-        }
-    }
-    
-    /** Test verifyPopup */
-    public void testVerifyPopup() {
-        serverNode.verifyPopup();
-    }
-    
-    /** Test properties */
-    public void testProperties() {
-        serverNode.properties();
-        final String SERVER_MANAGER = Bundle.getString(
-                "org.netbeans.modules.j2ee.deployment.devmodules.api.Bundle",
-                "TXT_ServerManager");
-        new NbDialogOperator(SERVER_MANAGER).close();
-    }
 }

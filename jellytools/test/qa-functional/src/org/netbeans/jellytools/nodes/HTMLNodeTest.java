@@ -41,13 +41,13 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.SaveAsTemplateOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.testutils.NodeUtils;
 
 /** Test of org.netbeans.jellytools.nodes.HTMLNode
  *
@@ -55,6 +55,16 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class HTMLNodeTest extends JellyTestCase {
+    public static final String[] tests = {
+        "testVerifyPopup",
+        "testOpen",
+        "testCut",
+        "testCopy",
+        "testDelete",
+        "testRename",
+        "testSaveAsTemplate",
+        "testProperties"
+    };
     
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
@@ -66,6 +76,7 @@ public class HTMLNodeTest extends JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new HTMLNodeTest("testVerifyPopup"));
         suite.addTest(new HTMLNodeTest("testOpen"));
@@ -76,6 +87,9 @@ public class HTMLNodeTest extends JellyTestCase {
         suite.addTest(new HTMLNodeTest("testSaveAsTemplate"));
         suite.addTest(new HTMLNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(HTMLNodeTest.class, 
+        tests);
     }
     
     /** Use for internal test execution inside IDE
@@ -88,8 +102,9 @@ public class HTMLNodeTest extends JellyTestCase {
     protected static HTMLNode htmlNode = null;
     
     /** Find node. */
-    protected void setUp() {
+    protected void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
         if(htmlNode == null) {
             htmlNode = new HTMLNode(new SourcePackagesNode("SampleProject"),
                                     "sample1|html.html"); // NOI18N
@@ -111,32 +126,32 @@ public class HTMLNodeTest extends JellyTestCase {
     public void testCut() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         htmlNode.cut();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test copy */
     public void testCopy() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         htmlNode.copy();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test delete */
     public void testDelete() {
         htmlNode.delete();
-        Utils.closeConfirmDialog();
+        NodeUtils.closeConfirmDeleteDialog();
     }
     
     /** Test rename */
     public void testRename() {
         htmlNode.rename();
-        Utils.closeRenameDialog();
+        NodeUtils.closeRenameDialog();
     }
     
     /** Test properties */
     public void testProperties() {
         htmlNode.properties();
-        Utils.closeProperties("html"); // NOI18N
+        NodeUtils.closeProperties("html"); // NOI18N
     }
     
     /** Test saveAsTemplate */

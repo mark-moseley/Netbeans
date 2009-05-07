@@ -40,6 +40,7 @@
  */
 package org.netbeans.jellytools.modules.form.properties.editors;
 
+import java.io.IOException;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.modules.form.FormDesignerOperator;
@@ -48,12 +49,21 @@ import org.netbeans.jemmy.EventTool;
 import org.netbeans.junit.NbTestSuite;
 
 /**
- * Test of org.netbeans.jellytools.modules.form.properties.editors.PropertyPickerOperator.
+ * Test of org.netbeans.jellytools.modules.form.properties.editors.MethodPickerOperator.
  *
  * @author Jiri.Skrivanek@sun.com
  */
-public class PropertyPickerOperatorTest extends FormPropertiesEditorsTestCase {
+public class MethodPickerOperatorTest extends FormPropertiesEditorsTestCase {
     
+    public static final String[] tests = new String[] {
+        "testLblComponent",
+        "testCboComponent",
+        "testLblMethods",
+        "testLstMethods",
+        "testSetComponent",
+        "testSetMethods",
+        "testClose"
+    };
     /** Use for internal test execution inside IDE
      * @param args command line arguments
      */
@@ -65,82 +75,88 @@ public class PropertyPickerOperatorTest extends FormPropertiesEditorsTestCase {
      * @return  created suite
      */
     public static NbTestSuite suite() {
+        /*
         NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new PropertyPickerOperatorTest("testLblComponent"));
-        suite.addTest(new PropertyPickerOperatorTest("testCboComponent"));
-        suite.addTest(new PropertyPickerOperatorTest("testLblProperties"));
-        suite.addTest(new PropertyPickerOperatorTest("testLstProperties"));
-        suite.addTest(new PropertyPickerOperatorTest("testSetComponent"));
-        suite.addTest(new PropertyPickerOperatorTest("testSetProperty"));
-        suite.addTest(new PropertyPickerOperatorTest("testClose"));
+        suite.addTest(new MethodPickerOperatorTest("testLblComponent"));
+        suite.addTest(new MethodPickerOperatorTest("testCboComponent"));
+        suite.addTest(new MethodPickerOperatorTest("testLblMethods"));
+        suite.addTest(new MethodPickerOperatorTest("testLstMethods"));
+        suite.addTest(new MethodPickerOperatorTest("testSetComponent"));
+        suite.addTest(new MethodPickerOperatorTest("testSetMethods"));
+        suite.addTest(new MethodPickerOperatorTest("testClose"));
         return suite;
+         */
+        return (NbTestSuite) createModuleTest(MethodPickerOperatorTest.class, 
+        tests);
     }
     
-    /** Redirect output to log files, wait before each test case. */
-    protected void setUp() {
+    /** Opens method picker. */
+    @Override
+    protected void setUp() throws IOException {
         super.setUp();
-        if(ppo == null) {
+        if(mpo == null) {
             // need to wait because combo box is not refreshed in time
             new EventTool().waitNoEvent(1000);
             // set "Value from existing component"
             fceo.setMode(Bundle.getString("org.netbeans.modules.form.Bundle", "CTL_FormConnection_DisplayName"));
             ParametersPickerOperator paramPicker = new ParametersPickerOperator(PROPERTY_NAME);
-            paramPicker.property();
-            paramPicker.selectProperty();
-            ppo = new PropertyPickerOperator();
+            paramPicker.methodCall();
+            paramPicker.selectMethod();
+            mpo = new MethodPickerOperator();
         }
     }
-
-    private static PropertyPickerOperator ppo;
+    
+    private static MethodPickerOperator mpo;
     
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
-    public PropertyPickerOperatorTest(java.lang.String testName) {
+    public MethodPickerOperatorTest(String testName) {
         super(testName);
     }
     
     /** Test of lblComponent method. */
     public void testLblComponent() {
         String expected = Bundle.getStringTrimmed("org.netbeans.modules.form.Bundle", "CTL_CW_Component");
-        String label = ppo.lblComponent().getText();
+        String label = mpo.lblComponent().getText();
         assertEquals("Wrong label found.", expected, label);
     }
     
     /** Test of cboComponent method. */
     public void testCboComponent() {
-        ppo.cboComponent();
+        mpo.cboComponent();
     }
     
-    /** Test of lblProperties method. */
-    public void testLblProperties() {
-        String expected = Bundle.getStringTrimmed("org.netbeans.modules.form.Bundle", "CTL_CW_PropertyList");
-        String label = ppo.lblProperties().getText();
+    /** Test of lblMethods method. */
+    public void testLblMethods() {
+        String expected = Bundle.getStringTrimmed("org.netbeans.modules.form.Bundle", "CTL_CW_MethodList");
+        String label = mpo.lblMethods().getText();
         assertEquals("Wrong label found.", expected, label);
     }
     
-    /** Test of lstProperties method. */
-    public void testLstProperties() {
-        ppo.lstProperties();
+    /** Test of lstMethods method. */
+    public void testLstMethods() {
+        mpo.lstMethods();
     }
     
     /** Test of setComponent method. */
     public void testSetComponent() {
         String expected = Bundle.getString("org.netbeans.modules.form.Bundle", "CTL_FormTopContainerName");
-        ppo.setComponent(expected);
-        assertEquals("Select component failed.", expected, ppo.cboComponent().getSelectedItem());
+        mpo.setComponent(expected);
+        assertEquals("Select component failed.", expected, mpo.cboComponent().getSelectedItem());
     }
     
-    /** Test of setProperty method. Also closes opened windows. */
-    public void testSetProperty() {
-        String expected = "title";
-        ppo.setProperty(expected);
-        assertEquals("Select property failed.", expected, ppo.lstProperties().getSelectedValue());
+    /** Test of setMethods method. */
+    public void testSetMethods() {
+        String expected = "getTitle()";
+        mpo.setMethods(expected);
+        assertEquals("Select method failed.", expected, mpo.lstMethods().getSelectedValue());
     }
     
     /** Clean-up after tests. Close opened dialog and property sheet. */
     public void testClose() {
-        ppo.close();
+        mpo.close();
+        fceo.close();
         fceo = null;
         new PropertySheetOperator("[JFrame]").close();
         new FormDesignerOperator(SAMPLE_FRAME_NAME).closeDiscard();

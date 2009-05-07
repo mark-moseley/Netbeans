@@ -38,62 +38,56 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.jellytools.modules.web;
 
-import java.io.File;
+package org.netbeans.jellytools.modules.web;
 import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.JellyTestCase;
+import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.junit.NbTestSuite;
+
 
 /**
  * Test of org.netbeans.jellytools.NewJspFileNameStepOperator.
  * @author Martin.Schovanek@sun.com
  */
-public class NewWebFreeFormSrcFoldersStepOperatorTest extends JellyTestCase {
-    
+public class NewJspFileNameStepOperatorTest extends JellyTestCase {
+
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
-    public NewWebFreeFormSrcFoldersStepOperatorTest(String testName) {
+    public NewJspFileNameStepOperatorTest(String testName) {
         super(testName);
     }
-    
     
     /** Method used for explicit testsuite definition
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
-        suite.addTest(new NewWebFreeFormSrcFoldersStepOperatorTest("testVerify"));
+        suite.addTest(new NewWebProjectTest("createSampleWebProject"));
+        suite.addTest(new NewJspFileNameStepOperatorTest("testVerify"));
         return suite;
+         */
+        return createModuleTest(NewJspFileNameStepOperatorTest.class, "testVerify");
     }
-
     
-    public void setUp() {
+    public void setUp() throws IOException, Exception {
         System.out.println("### "+getName()+" ###");
-    }    
-
+        new NewWebProjectTest("").createSampleWebProject();
+    }
     
     /** Invokes and verifies the dialog. */
-    public void testVerify() throws IOException {
-        NewWebFreeFormNameStepOperator
-                nameStep = NewWebFreeFormNameStepOperator.invoke();
-        System.out.println("project="+new File(getDataDir(), "WebFreeFormSrc").
-                getCanonicalPath());
-        nameStep.setProjectLocation(new File(getDataDir(), "WebFreeFormSrc").
-                getCanonicalPath());
-        nameStep.next();
-        new NewWebFreeFormActionsStepOperator().next();
-        new NewWebFreeFormWebSrcStepOperator().next();
-        NewWebFreeFormSrcFoldersStepOperator
-                srcFoldersStep = new NewWebFreeFormSrcFoldersStepOperator();
-        srcFoldersStep.verify();
-        srcFoldersStep.close();
+    public void testVerify() {
+        ProjectsTabOperator.invoke().getProjectRootNode("SampleWebApplication").select();
+        NewJspFileNameStepOperator nameStep = NewJspFileNameStepOperator.invoke();
+        nameStep.verify();
+        nameStep.close();
     }
-
+    
     
     /** Use for internal test execution inside IDE
      * @param args command line arguments
@@ -101,4 +95,5 @@ public class NewWebFreeFormSrcFoldersStepOperatorTest extends JellyTestCase {
     public static void main(java.lang.String[] args) {
         TestRunner.run(suite());
     }
+    
 }

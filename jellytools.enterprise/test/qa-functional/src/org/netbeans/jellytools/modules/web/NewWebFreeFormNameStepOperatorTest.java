@@ -40,31 +40,22 @@
  */
 package org.netbeans.jellytools.modules.web;
 
-import java.io.File;
-import java.io.IOException;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.NewFileWizardOperator;
-import org.netbeans.jellytools.NewProjectWizardOperator;
-import org.netbeans.jellytools.NewWebProjectNameLocationStepOperator;
-import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.nodes.ProjectRootNode;
 import org.netbeans.junit.NbTestSuite;
-import org.netbeans.junit.ide.ProjectSupport;
 
 /**
  * Test of org.netbeans.jellytools.NewJspFileNameStepOperator.
  * @author Martin.Schovanek@sun.com
  */
-public class NewWebFreeFormWebSrcStepOperatorTest extends JellyTestCase {
+public class NewWebFreeFormNameStepOperatorTest extends JellyTestCase {
     
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
-    public NewWebFreeFormWebSrcStepOperatorTest(String testName) {
+    public NewWebFreeFormNameStepOperatorTest(String testName) {
         super(testName);
     }
     
@@ -73,9 +64,12 @@ public class NewWebFreeFormWebSrcStepOperatorTest extends JellyTestCase {
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
-        suite.addTest(new NewWebFreeFormWebSrcStepOperatorTest("testVerify"));
+        suite.addTest(new NewWebFreeFormNameStepOperatorTest("testVerify"));
         return suite;
+         */
+        return createModuleTest(NewWebFreeFormNameStepOperatorTest.class, "testVerify");
     }
 
     
@@ -85,17 +79,11 @@ public class NewWebFreeFormWebSrcStepOperatorTest extends JellyTestCase {
 
     
     /** Invokes and verifies the dialog. */
-    public void testVerify() throws IOException {
-        NewWebFreeFormNameStepOperator
-                nameStep = NewWebFreeFormNameStepOperator.invoke();
-        nameStep.setProjectLocation(new File(getDataDir(), "WebFreeFormSrc").
-                getCanonicalPath());
-        nameStep.next();
-        new NewWebFreeFormActionsStepOperator().next();
-        NewWebFreeFormWebSrcStepOperator
-                webSrcStep = new NewWebFreeFormWebSrcStepOperator();
-        webSrcStep.verify();
-        webSrcStep.close();
+    public void testVerify() {
+        NewWebFreeFormNameStepOperator nameStep =
+                NewWebFreeFormNameStepOperator.invoke();
+        nameStep.verify();
+        nameStep.close();
     }
 
     

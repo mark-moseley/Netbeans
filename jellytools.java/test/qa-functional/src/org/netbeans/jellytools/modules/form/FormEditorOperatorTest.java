@@ -41,6 +41,7 @@
 package org.netbeans.jellytools.modules.form;
 
 import java.awt.Component;
+import java.io.IOException;
 import javax.swing.JButton;
 
 import junit.framework.Test;
@@ -62,6 +63,16 @@ import org.netbeans.jemmy.operators.JFrameOperator;
  * and ComponentInspectorOperator.
  */
 public class FormEditorOperatorTest extends JellyTestCase {
+    public final static String[] tests = new String[] {
+        "testOpen",
+        "testSourceButton",
+        "testEditor",
+        "testDesignButton",
+        "testDesign",
+        "testProperties",
+        "testPreviewForm",
+        "testClose"
+    };
     
     /** Use for internal test execution inside IDE
      * @param args command line arguments
@@ -74,6 +85,7 @@ public class FormEditorOperatorTest extends JellyTestCase {
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new TestSuite();
         suite.addTest(new FormEditorOperatorTest("testOpen"));
         suite.addTest(new FormEditorOperatorTest("testSourceButton"));
@@ -84,6 +96,9 @@ public class FormEditorOperatorTest extends JellyTestCase {
         suite.addTest(new FormEditorOperatorTest("testPreviewForm"));
         suite.addTest(new FormEditorOperatorTest("testClose"));
         return(suite);
+         */
+        return createModuleTest(FormEditorOperatorTest.class, 
+        tests);
     }
     
     /** Constructor required by JUnit.
@@ -96,8 +111,9 @@ public class FormEditorOperatorTest extends JellyTestCase {
     private static final String SAMPLE_FRAME = "JFrameSample.java";
     
     /** Print out test name. */
-    public void setUp() {
+    public void setUp() throws IOException {
         System.out.println("### "+getName()+" ###");
+        openDataProjects("SampleProject");
     }
     
     /** Opens sample JFrame. */
