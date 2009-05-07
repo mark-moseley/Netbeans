@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.cnd.apt.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import java.util.Collection;
 
@@ -50,9 +49,17 @@ import java.util.Collection;
  * @author Vladimir Voskresensky
  */
 public interface APTMacro {
-    public boolean isSystem();
+    public Kind getKind();
     public boolean isFunctionLike();
-    public Token getName();
-    public Collection<Token> getParams();
+    public APTToken getName();
+    public Collection<APTToken> getParams();
     public TokenStream getBody();
+    public CharSequence getFile(); // macro defined in code using #define directive has file information
+
+    public enum Kind {
+        COMPILER_PREDEFINED, // compiler predefined macro, for example __STDC__
+        POSITION_PREDEFINED, // predefined macro names changing it's value based on position in file __FILE__, __LINE__, ...
+        USER_SPECIFIED, // macro defined in project properties or in command line with -D compile option
+        DEFINED // macro defined in code using #define directive
+    }
 }
