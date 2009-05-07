@@ -40,6 +40,7 @@
 
 package org.netbeans.lib.profiler.server;
 
+import org.netbeans.lib.profiler.global.Platform;
 import org.netbeans.lib.profiler.server.system.Threads;
 import org.netbeans.lib.profiler.server.system.Timers;
 
@@ -63,8 +64,8 @@ public class ProfilerRuntimeCPUSampledInstr extends ProfilerRuntimeCPU {
     static class SamplingThread extends Thread {
         //~ Static fields/initializers -------------------------------------------------------------------------------------------
 
-        private static final boolean isSolaris = System.getProperty("os.name").startsWith("Sun"); // NOI18N
-        private static final boolean isLinux = System.getProperty("os.name").startsWith("Linux"); // NOI18N
+        private static final boolean isSolaris = Platform.isSolaris();
+        private static final boolean isLinux = Platform.isLinux();
         private static final boolean isUnix = isSolaris || isLinux;
         private static final int VIOLATION_THRESHOLD = 10;
         private static final boolean DEBUG = false;
@@ -196,14 +197,22 @@ public class ProfilerRuntimeCPUSampledInstr extends ProfilerRuntimeCPU {
             ti.inCallGraph = true;
         }
 
-        // This is to bypass what seems to be a compiler bug (at least C1 on Windows): when methodId > 64K/2 is passed here
-        // using our instrumentation's sipush command at the call site, it's treated here as a signed integer. Thus without
+        // when methodId > 64K/2 is passed here using our instrumentation's sipush command at the call site, 
+        // it's treated here as a signed integer. Thus without
         // the below fix we can get e.g. an ArrayIndexOutOfBoundsException(-32768) when methodId == 32768 (***)
-        methodId = (char) ((int) methodId);
-
-        // DO NOT perform instrumentation of its immediate callees
-        if (!instrMethodInvoked[methodId]) {
-            instrMethodInvoked[methodId] = true;
+        int methodIdInt = methodId&0xff;
+        methodIdInt |= methodId&0xff00;
+            
+        if (!instrMethodInvoked[methodIdInt]) {
+            if (ti.rootMethodStackDepth > 0) { // marker method under root method - perform instrumentation of nearest callees
+                long absTimeStamp = Timers.getCurrentTimeInCounts();
+                long threadTimeStamp = Timers.getThreadCPUTimeInNanos();
+                externalActionsHandler.handleFirstTimeMethodInvoke(methodId);
+                instrMethodInvoked[methodIdInt] = true; // Mark this method as invoked
+                writeAdjustTimeEvent(ti, absTimeStamp, threadTimeStamp);
+            } else { // DO NOT perform instrumentation of its immediate callees
+                instrMethodInvoked[methodIdInt] = true;
+            }
         }
 
         ti.stackDepth++; //= 1;  // This is the logical stack depth
@@ -236,28 +245,24 @@ public class ProfilerRuntimeCPUSampledInstr extends ProfilerRuntimeCPU {
                 return;
             }
 
-            if (ti.rootMethodStackDepth > 0) {
-                methodExit(methodId);
+            ti.inProfilingRuntimeMethod++;
+
+            //System.out.println("------markerMethodExit for " + instrMethodClasses[methodId] + "." + instrMethodNames[methodId] + ", depth = " + ti.stackDepth + ", id = " + (int) methodId);
+            ti.stackDepth--;
+
+            if (ti.stackDepth < 1) {
+                ti.inCallGraph = false; // We are exiting the marker method of our call subgraph
+                writeTimeStampedEvent(MARKER_EXIT, ti, methodId);
             } else {
-                ti.inProfilingRuntimeMethod++;
-
-                //System.out.println("------markerMethodExit for " + instrMethodClasses[methodId] + "." + instrMethodNames[methodId] + ", depth = " + ti.stackDepth + ", id = " + (int) methodId);
-                ti.stackDepth--;
-
-                if (ti.stackDepth < 1) {
-                    ti.inCallGraph = false; // We are exiting the marker method of our call subgraph
-                    writeTimeStampedEvent(MARKER_EXIT, ti, methodId);
+                if (!ti.sampleDue) {
+                    writeUnstampedEvent(MARKER_EXIT_UNSTAMPED, ti, methodId);
                 } else {
-                    if (!ti.sampleDue) {
-                        writeUnstampedEvent(MARKER_EXIT_UNSTAMPED, ti, methodId);
-                    } else {
-                        writeTimeStampedEvent(MARKER_EXIT, ti, methodId);
-                        ti.sampleDue = false;
-                    }
+                    writeTimeStampedEvent(MARKER_EXIT, ti, methodId);
+                    ti.sampleDue = false;
                 }
-
-                ti.inProfilingRuntimeMethod--;
             }
+
+            ti.inProfilingRuntimeMethod--;
         }
     }
 
@@ -278,14 +283,15 @@ public class ProfilerRuntimeCPUSampledInstr extends ProfilerRuntimeCPU {
             //System.out.println("++++++methodEntry, depth = " + ti.stackDepth + ", id = " + (int) methodId);
 
             // See comment marked with (***)
-            methodId = (char) ((int) methodId);
-
+            int methodIdInt = methodId&0xff;
+            methodIdInt |= methodId&0xff00;
+            
             // Now check if it's the first invocation of this method, and if so, perform instrumentation of nearest callees
-            if (!instrMethodInvoked[methodId]) {
+            if (!instrMethodInvoked[methodIdInt]) {
                 long absTimeStamp = Timers.getCurrentTimeInCounts();
                 long threadTimeStamp = Timers.getThreadCPUTimeInNanos();
                 externalActionsHandler.handleFirstTimeMethodInvoke(methodId);
-                instrMethodInvoked[methodId] = true; // Mark this method as invoked
+                instrMethodInvoked[methodIdInt] = true; // Mark this method as invoked
                 writeAdjustTimeEvent(ti, absTimeStamp, threadTimeStamp);
             }
 
@@ -332,6 +338,8 @@ public class ProfilerRuntimeCPUSampledInstr extends ProfilerRuntimeCPU {
             if (ti.stackDepth < 1) {
                 ti.inCallGraph = false; // We are exiting the root method of our call subgraph
                 writeTimeStampedEvent(ROOT_EXIT, ti, methodId);
+            } else if (ti.rootMethodStackDepth == 0) { // We are exiting the root method, which was under marker method
+                writeTimeStampedEvent(ROOT_EXIT, ti, methodId);
             } else {
                 if (!ti.sampleDue) {
                     // short path: not taking time stamp
@@ -376,7 +384,7 @@ public class ProfilerRuntimeCPUSampledInstr extends ProfilerRuntimeCPU {
             return;
         }
 
-        if ((ti != null) && ti.inCallGraph && (ti.rootMethodStackDepth > 0)) {
+        if (ti.isInitialized() && ti.inCallGraph && (ti.rootMethodStackDepth > 0)) {
             methodEntry(methodId);
         } else { // Entered the root method from outside this call subgraph
                  //if (instrMethodClasses != null && methodId < instrMethodClasses.length) System.out.println("++++++Root methodEntry for " + instrMethodClasses[methodId] + "." + instrMethodNames[methodId] + ", thread = " + Thread.currentThread());
@@ -401,29 +409,21 @@ public class ProfilerRuntimeCPUSampledInstr extends ProfilerRuntimeCPU {
                     return;
                 }
             } else {
-                if (ti.stackDepth > 0) {
-                    ti.rootMethodStackDepth = ti.stackDepth + 1;
-                    methodEntry(methodId);
+                ti.inProfilingRuntimeMethod++;
 
-                    return;
-                } else {
-                    ti.inProfilingRuntimeMethod++;
-
-                    if (!ProfilerServer.startProfilingPointsActive()) {
-                        ti.inCallGraph = true;
-                    }
+                if (ti.stackDepth == 0 && !ProfilerServer.startProfilingPointsActive()) {
+                    ti.inCallGraph = true;
                 }
             }
 
-            // This is to bypass what seems to be a compiler bug (at least C1 on Windows): when methodId > 64K/2 is passed here
-            // using our instrumentation's sipush command at the call site, it's treated here as a signed integer. Thus without
-            // the below fix we can get e.g. an ArrayIndexOutOfBoundsException(-32768) when methodId == 32768 (***)
-            methodId = (char) ((int) methodId);
-
+            // See comment marked with (***)
+            int methodIdInt = methodId&0xff;
+            methodIdInt |= methodId&0xff00;
+            
             // Check if it's the first invocation of this method, and if so, perform instrumentation of its immediate callees
-            if (!instrMethodInvoked[methodId]) {
+            if (!instrMethodInvoked[methodIdInt]) {
                 externalActionsHandler.handleFirstTimeMethodInvoke(methodId);
-                instrMethodInvoked[methodId] = true;
+                instrMethodInvoked[methodIdInt] = true;
             }
 
             ti.stackDepth++; //= 1;  // This is the logical stack depth
