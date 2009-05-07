@@ -36,68 +36,23 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-
 package org.netbeans.modules.php.editor.model;
 
+import org.netbeans.api.annotations.common.NonNull;
 import org.netbeans.modules.csl.spi.ParserResult;
-import org.netbeans.modules.php.editor.model.impl.ModelVisitor;
-import org.netbeans.modules.php.editor.parser.api.Utils;
-import org.openide.util.Parameters;
 
 /**
  * @author Radek Matous
  */
-public final class Model {
-    private ModelVisitor modelVisitor;
-    private ParserResult info;
-    private int offset;
+public class ModelFactory {
+    private ModelFactory() {}
 
-    Model(ParserResult info) {
-        this.info = info;
-        this.offset = -1;
+    @NonNull
+    public static Model getModel(ParserResult info) {
+        return new Model(info);
     }
-
-    public FileScope getFileScope() {
-        return getModelVisitor(-1).getModelScope();
-    }
-
-    public IndexScope getIndexScope() {
-        return ModelVisitor.getIndexScope(info);
-    }
-
-    public OccurencesSupport getOccurencesSupport(final int offset) {
-        return new OccurencesSupport(getModelVisitor(offset), offset);
-    }
-
-    public ParameterInfoSupport getParameterInfoSupport(final int offset) {
-        return new ParameterInfoSupport(getModelVisitor(-1), info.getSnapshot().getSource().getDocument(false), offset);
-    }
-
-    public VariableScope getVariableScope(final int offset) {
-        return getModelVisitor(-1).getVariableScope(offset);
-    }
-
-    /**
-     * @return the modelVisitor
-     */
-    private ModelVisitor getModelVisitor(int offset) {
-        if (modelVisitor == null || (offset >= 0 && this.offset != offset)) {
-            if (offset < 0) {
-                modelVisitor = new ModelVisitor(info);
-            } else {
-                modelVisitor = new ModelVisitor(info, offset);
-            }
-            modelVisitor.scan(Utils.getRoot(info));
-        }
-
-        return modelVisitor;
-    }
-    ModelVisitor getModelVisitor(ModelElement element) {
-        Parameters.notNull("element", element);
-        if (modelVisitor == null) {
-            modelVisitor = new ModelVisitor(info, element);
-            modelVisitor.scan(Utils.getRoot(info));
-        }
-        return modelVisitor;
-    }
+    
+    /*public static IndexScope getIndex(PHPIndex index) {
+        return ModelVisitor.getIndexScope(index);
+    }*/
 }
