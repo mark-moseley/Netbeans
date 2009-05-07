@@ -42,9 +42,12 @@ package org.netbeans.modules.jira.issue;
 import java.awt.Font;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -59,17 +62,21 @@ import javax.swing.UIManager;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.mylyn.internal.jira.core.JiraAttribute;
-import org.eclipse.mylyn.internal.jira.core.model.Attachment;
-import org.eclipse.mylyn.internal.jira.core.model.Comment;
 import org.eclipse.mylyn.internal.jira.core.model.IssueType;
 import org.eclipse.mylyn.internal.jira.core.model.JiraStatus;
 import org.eclipse.mylyn.internal.jira.core.model.Priority;
 import org.eclipse.mylyn.internal.jira.core.model.Resolution;
 import org.eclipse.mylyn.internal.jira.core.service.JiraException;
+import org.eclipse.mylyn.internal.tasks.core.AbstractTask;
+import org.eclipse.mylyn.internal.tasks.core.data.FileTaskAttachmentSource;
+import org.eclipse.mylyn.tasks.core.IRepositoryPerson;
 import org.eclipse.mylyn.tasks.core.RepositoryResponse;
 import org.eclipse.mylyn.tasks.core.TaskRepository;
+import org.eclipse.mylyn.tasks.core.data.TaskAttachmentMapper;
 import org.eclipse.mylyn.tasks.core.data.TaskAttribute;
+import org.eclipse.mylyn.tasks.core.data.TaskCommentMapper;
 import org.eclipse.mylyn.tasks.core.data.TaskData;
+import org.eclipse.mylyn.tasks.core.data.TaskOperation;
 import org.netbeans.modules.bugtracking.spi.IssueNode;
 import org.netbeans.modules.jira.Jira;
 import org.netbeans.modules.bugtracking.spi.Issue;
@@ -79,6 +86,7 @@ import org.netbeans.modules.bugtracking.util.BugtrackingUtil;
 import org.netbeans.modules.jira.commands.JiraCommand;
 import org.netbeans.modules.jira.repository.JiraRepository;
 import org.netbeans.modules.jira.util.JiraUtils;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 
@@ -97,6 +105,10 @@ public class NbJiraIssue extends Issue {
     static final String LABEL_NAME_STATUS       = "jira.issue.status";      // NOI18N
     static final String LABEL_NAME_RESOLUTION   = "jira.issue.resolution";  // NOI18N
     static final String LABEL_NAME_SUMMARY      = "jira.issue.summary";     // NOI18N
+
+    private static final String DATE_FORMAT = "yyyy-MM-dd HH:mm";               // NOI18N
+
+    private static final String FIXED = "Fixed";                        //NOI18N
 
     /**
      * Issue wasn't seen yet
@@ -171,6 +183,9 @@ public class NbJiraIssue extends Issue {
     }
 
     private Map<String, String> attributes;
+    private Map<String, TaskOperation> availableOperations;
+
+    private static final SimpleDateFormat CC_DATE_FORMAT = new SimpleDateFormat(DATE_FORMAT);
     
     /**
      * Defines columns for a view table.
@@ -188,6 +203,7 @@ public class NbJiraIssue extends Issue {
         assert !taskData.isPartial();
         this.taskData = taskData;
         attributes = null; // reset
+        availableOperations = null;
         Jira.getInstance().getRequestProcessor().post(new Runnable() {
             public void run() {
                 ((JiraIssueNode)getNode()).fireDataChanged();
@@ -242,24 +258,27 @@ public class NbJiraIssue extends Issue {
     }
 
     Comment[] getComments() {
-        return null; // XXX
+        List<TaskAttribute> attrs = taskData.getAttributeMapper().getAttributesByType(taskData, TaskAttribute.TYPE_COMMENT);
+        if (attrs == null) {
+            return new Comment[0];
+        }
+        List<Comment> comments = new ArrayList<Comment>(attrs.size());
+        for (TaskAttribute taskAttribute : attrs) {
+            comments.add(new Comment(taskAttribute));
+        }
+        return comments.toArray(new Comment[comments.size()]);
     }
 
     Attachment[] getAttachments() {
-        return null; // XXX
-    }
-
-    public void addComment(String comment) {
-//        try {
-//            Jira.getInstance().getClient(repository.getTaskRepository()).addCommentToIssue(issue, comment, new NullProgressMonitor());
-//        } catch (JiraException ex) {
-//            Jira.LOG.log(Level.SEVERE, null, ex);
-//        }
-    }
-
-    void addAttachment(File f) throws JiraException {
-        // XXX
-//        Jira.getInstance().getClient(repository.getTaskRepository()).addAttachment(issue, "attachment", f.getName(), f, "text/plain", new NullProgressMonitor());
+        List<TaskAttribute> attrs = taskData.getAttributeMapper().getAttributesByType(taskData, TaskAttribute.TYPE_ATTACHMENT);
+        if (attrs == null) {
+            return new Attachment[0];
+        }
+        List<Attachment> attachments = new ArrayList<Attachment>(attrs.size());
+        for (TaskAttribute taskAttribute : attrs) {
+            attachments.add(new Attachment(taskAttribute));
+        }
+        return attachments.toArray(new Attachment[attachments.size()]);
     }
 
     /**
@@ -294,14 +313,104 @@ public class NbJiraIssue extends Issue {
         return true;
     }
 
+    /**
+     * Tries to update the taskdata and set issue to Resolved:resolution.
+     * <strong>Do not forget to submit the issue</strong>
+     * @param resolution
+     * @param comment can be null, in such case no comment will be set
+     * @throws org.eclipse.mylyn.internal.jira.core.service.JiraException
+     * @throws java.lang.IllegalStateException if resolve operation is not permitted for this issue
+     */
     public void resolve(Resolution resolution, String comment) throws JiraException {
-//        issue.setResolution(resolution);
-////		issue.setFixVersions(new Version[0]); // XXX set version
-//        String resolveOperationId = Jira.getInstance().getResolveOperation(repository.getTaskRepository(), getKey());
-//        if(resolveOperationId == null) {
-//            Jira.LOG.severe("Can't resolve issue '" + getKey() + "'");
-//        }
-//        Jira.getInstance().getClient(repository.getTaskRepository()).advanceIssueWorkflow(issue, resolveOperationId, comment, new NullProgressMonitor());
+        if (Jira.LOG.isLoggable(Level.FINE)) {
+            Jira.LOG.fine(getClass().getName() + ": resolve issue " + getKey() + ": " + resolution.getName());    //NOI18N
+        }
+        TaskAttribute rta = taskData.getRoot();
+
+        Map<String, TaskOperation> operations = getAvailableOperations();
+        TaskOperation operation = null;
+        for (Map.Entry<String, TaskOperation> entry : operations.entrySet()) {
+            String operationLabel = entry.getValue().getLabel();
+            if (Jira.LOG.isLoggable(Level.FINEST)) {
+                Jira.LOG.finest(getClass().getName() + ": resolving issue" + getKey() + ": available operation: " + operationLabel + "(" + entry.getValue().getOperationId() + ")"); //NOI18N
+            }
+            if (JiraUtils.isResolveOperation(operationLabel)) {
+                operation = entry.getValue();
+                break;
+            }
+        }
+        if (operation == null) {
+            throw new IllegalStateException("Resolve operation not permitted"); //NOI18N
+        } else {
+            setOperation(operation);
+        }
+
+        TaskAttribute ta = rta.getMappedAttribute(TaskAttribute.RESOLUTION);
+        ta.setValue(resolution.getId());
+        addComment(comment);
+    }
+
+    /**
+     * Tries to update the taskdata and set issue to Open.
+     * <strong>Do not forget to submit the issue</strong>
+     * @param comment can be null, in such case no comment will be set
+     * @throws org.eclipse.mylyn.internal.jira.core.service.JiraException
+     * @throws java.lang.IllegalStateException if resolve operation is not permitted for this issue
+     */
+    void reopen(String comment) {
+        if (Jira.LOG.isLoggable(Level.FINE)) {
+            Jira.LOG.fine(getClass().getName() + ": reopening issue" + getKey()); //NOI18N
+        }
+        TaskAttribute rta = taskData.getRoot();
+
+        Map<String, TaskOperation> operations = getAvailableOperations();
+        TaskOperation operation = null;
+        for (Map.Entry<String, TaskOperation> entry : operations.entrySet()) {
+            String operationLabel = entry.getValue().getLabel();
+            if (Jira.LOG.isLoggable(Level.FINEST)) {
+                Jira.LOG.finest(getClass().getName() + ": reopening issue" + getKey() + ": available operation: " + operationLabel + "(" + entry.getValue().getOperationId() + ")"); //NOI18N
+            }
+            if (JiraUtils.isReopenOperation(operationLabel)) {
+                operation = entry.getValue();
+                break;
+            }
+        }
+        if (operation == null) {
+            throw new IllegalStateException("Reopen operation not permitted"); //NOI18N
+        } else {
+            setOperation(operation);
+        }
+        addComment(comment);
+    }
+
+    /**
+     * Updates task data and sets the operation field
+     * @param operationId id of requested operation
+     * @throws java.lang.IllegalArgumentException if the operation is not permitted for this issue
+     */
+
+    public void setOperation (String operationId) {
+        Map<String, TaskOperation> operations = getAvailableOperations();
+        TaskOperation operation = null;
+        for (Map.Entry<String, TaskOperation> entry : operations.entrySet()) {
+            String operationLabel = entry.getValue().getLabel().toLowerCase();
+            if (Jira.LOG.isLoggable(Level.FINEST)) {
+                Jira.LOG.finest(getClass().getName() + ": setOperation: operation " + operationLabel + "(" + entry.getValue().getOperationId() + ") is available");
+            }
+            if (entry.getValue().getOperationId().equals(operationId)) {
+                operation = entry.getValue();
+                break;
+            }
+        }
+        if (operation == null) {
+            throw new IllegalArgumentException("Operation with id " + operationId + " is not permitted"); //NOI18N
+        }
+        setOperation(operation);
+    }
+
+    private void setOperation (TaskOperation operation) {
+        TaskAttribute ta = taskData.getRoot().getMappedAttribute(TaskAttribute.OPERATION);
+        ta.setValue(operation.getOperationId());
     }
 
     public void resolveFixed(String val) {
@@ -345,14 +454,93 @@ public class NbJiraIssue extends Issue {
         return node;
     }
 
-    @Override
-    public void addComment(String comment, boolean closeAsFixed) {
-        throw new UnsupportedOperationException("Not supported yet.");
+    // XXX carefull - implicit double refresh
+    public void addComment(String comment, boolean close) {
+        assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt"; // NOI18N
+        if (Jira.LOG.isLoggable(Level.FINE)) {
+            Jira.LOG.fine(getClass().getName() + ": adding comment to issue: " + getKey());    //NOI18N
+        }
+        if(comment == null && !close) {
+            return;
+        }
+        refresh();
+
+        // resolved attrs
+        if(close) {
+            try {
+                resolve(JiraUtils.getResolutionByName(repository, FIXED), comment); // XXX constant, what about setting in options?
+            } catch (JiraException ex) {
+                Jira.LOG.log(Level.SEVERE, null, ex);
+            }
+        }
+
+        JiraCommand submitCmd = new JiraCommand() {
+            public void execute() throws CoreException, IOException {
+                submitAndRefresh();
+            }
+        };
+        repository.getExecutor().execute(submitCmd);
+    }
+
+    /**
+     * Add comment to isseue.
+     * <strong>Do not forget to submit</strong>
+     * @param comment
+     */
+    public void addComment(String comment) {
+        if(comment != null) {
+            if (Jira.LOG.isLoggable(Level.FINE)) {
+                Jira.LOG.fine(getClass().getName() + ": adding comment to issue " + getKey());    //NOI18N
+            }
+            TaskAttribute ta = taskData.getRoot().createMappedAttribute(TaskAttribute.COMMENT_NEW);
+            ta.setValue(comment);
+        }
+    }
+
+    void addAttachment(File file, final String comment, final String desc, String contentType, final boolean patch) {
+        assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt"; // NOI18N
+        final FileTaskAttachmentSource attachmentSource = new FileTaskAttachmentSource(file);
+        if (contentType == null) {
+            file = FileUtil.normalizeFile(file);
+            String ct = FileUtil.getMIMEType(FileUtil.toFileObject(file));
+            if ((ct != null) && (!"content/unknown".equals(ct))) { // NOI18N
+                contentType = ct;
+            } else {
+                contentType = FileTaskAttachmentSource.getContentTypeFromFilename(file.getName());
+            }
+        }
+        attachmentSource.setContentType(contentType);
+
+        TaskAttachmentMapper mapper = new TaskAttachmentMapper();
+        if (desc != null) {
+            mapper.setDescription(desc);
+        }
+        mapper.setPatch(new Boolean(patch));
+        mapper.setContentType(contentType);
+        final TaskAttribute attAttribute = new TaskAttribute(taskData.getRoot(),  TaskAttribute.TYPE_ATTACHMENT);
+        mapper.applyTo(attAttribute);
+        JiraCommand cmd = new JiraCommand() {
+            public void execute() throws CoreException, IOException {
+                refresh();
+                if (Jira.LOG.isLoggable(Level.FINER)) {
+                    Jira.LOG.finer("adding an attachment: issue: " + getKey());
+                }
+                IssueTask task = new IssueTask(repository.getUrl(), NbJiraIssue.this.getTaskData().getTaskId(), "Attachment upload task", getKey());
+                if (!Jira.getInstance().getRepositoryConnector().getTaskAttachmentHandler().canPostContent(repository.getTaskRepository(), task)) {
+                    Jira.LOG.warning("adding an attachment: cannot post content: issue: " + getKey());
+                    return;
+                }
+                Jira.getInstance().getRepositoryConnector().getTaskAttachmentHandler().postContent(repository.getTaskRepository(),
+                        task, attachmentSource, comment, attAttribute, new NullProgressMonitor());
+                refresh(); // XXX to much refresh - is there no other way?
+            }
+        };
+        repository.getExecutor().execute(cmd);
     }
 
     @Override
     public void attachPatch(File file, String description) {
-        throw new UnsupportedOperationException("Not supported yet.");
+        addAttachment(file, null, description, null, true);
     }
 
     @Override
@@ -612,6 +800,26 @@ public class NbJiraIssue extends Issue {
         return seenAtributes;
     }
 
+    /**
+     * Returns available operations for this issue
+     * @return
+     */
+    public Map<String, TaskOperation> getAvailableOperations () {
+        if (availableOperations == null) {
+            HashMap<String, TaskOperation> operations = new HashMap<String, TaskOperation>(5);
+            List<TaskAttribute> allOperations = taskData.getAttributeMapper().getAttributesByType(taskData, TaskAttribute.TYPE_OPERATION);
+            for (TaskAttribute operation : allOperations) {
+                // the test must be here, 'operation' (applying writable action) is also among allOperations
+                if (operation.getId().startsWith(TaskAttribute.PREFIX_OPERATION)) {
+                    operations.put(operation.getId().substring(TaskAttribute.PREFIX_OPERATION.length()), TaskOperation.createFrom(operation));
+                }
+            }
+            availableOperations = operations;
+        }
+
+        return availableOperations;
+    }
+
     private class Controller extends BugtrackingController {
         private JComponent issuePanel;
 
@@ -653,6 +861,169 @@ public class NbJiraIssue extends Issue {
         @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(org.netbeans.modules.jira.issue.NbJiraIssue.class);
+        }
+    }
+
+    public static final class Comment {
+        private final Date when;
+        private final String who;
+        private final Long number;
+        private final String text;
+        private final String url;
+
+        public Comment(TaskAttribute a) {
+            TaskCommentMapper comment = TaskCommentMapper.createFrom(a);
+            when = comment.getCreationDate();
+            IRepositoryPerson person = comment.getAuthor();
+            who = person == null ? null : person.getName();
+            number = a.getTaskData().getAttributeMapper().getLongValue(a.getMappedAttribute(TaskAttribute.COMMENT_NUMBER));
+            url = comment.getUrl();
+            text = comment.getText();
+        }
+
+        public Long getNumber() {
+            return number;
+        }
+
+        public String getText() {
+            return text;
+        }
+
+        public Date getWhen() {
+            return when;
+        }
+
+        public String getWho() {
+            return who;
+        }
+
+        public String getUrl () {
+            return url;
+        }
+    }
+
+    public final class Attachment {
+        private final String desc;
+        private final String filename;
+        private final String author;
+        private final Date date;
+        private final String id;
+//        private String contentType;
+//        private String isDeprecated;
+        private String size;
+//        private String isPatch;
+        private String url;
+        private final TaskAttribute attachmentAttribute;
+
+
+        public Attachment(TaskAttribute ta) {
+            attachmentAttribute = ta;
+            TaskAttachmentMapper taskAttachment = TaskAttachmentMapper.createFrom(ta);
+            id = taskAttachment.getAttachmentId();
+            date = taskAttachment.getCreationDate();
+            filename = taskAttachment.getFileName();
+            desc = taskAttachment.getDescription();
+            IRepositoryPerson person = taskAttachment.getAuthor();
+            author = person == null ? null : person.getName();
+//            contentType = taskAttachment.getContentType();
+//            isDeprecated = JiraUtils.getMappedValue(ta, TaskAttribute.ATTACHMENT_IS_DEPRECATED);
+//            isPatch = JiraUtils.getMappedValue(ta, TaskAttribute.ATTACHMENT_IS_PATCH);
+            size = JiraUtils.getMappedValue(ta, TaskAttribute.ATTACHMENT_SIZE);
+            url = taskAttachment.getUrl();
+        }
+
+        public String getAuthor() {
+            return author;
+        }
+
+        public Date getDate() {
+            return date;
+        }
+
+        public String getDesc() {
+            return desc;
+        }
+
+        public String getFilename() {
+            return filename;
+        }
+
+//        public String getContentType() {
+//            return contentType;
+//        }
+
+        public String getId() {
+            return id;
+        }
+
+//        public String getIsDeprected() {
+//            return isDeprecated;
+//        }
+//
+//        public String getIsPatch() {
+//            return isPatch;
+//        }
+
+        public String getSize() {
+            return size;
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        /**
+         *
+         * @param os is always closed before return
+         */
+        public void getAttachementData(final OutputStream os) {
+            assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt"; // NOI18N
+            JiraCommand cmd = new JiraCommand() {
+                public void execute() throws CoreException, IOException {
+                    if (Jira.LOG.isLoggable(Level.FINER)) {
+                        Jira.LOG.finer("getAttachmentData: id: " + Attachment.this.getId() + ", issue: " + getKey());
+                    }
+                    try {
+                        IssueTask task = new IssueTask(repository.getUrl(), NbJiraIssue.this.getTaskData().getTaskId(), "Attachment download task", getKey());
+                        if (!Jira.getInstance().getRepositoryConnector().getTaskAttachmentHandler().canGetContent(repository.getTaskRepository(), task)) {
+                            Jira.LOG.warning("getAttachmentData: cannot get content: id: " + Attachment.this.getId() + ", issue: " + getKey());
+                            return;
+                        }
+                        InputStream is = Jira.getInstance().getRepositoryConnector().getTaskAttachmentHandler().getContent(repository.getTaskRepository(),
+                                task, attachmentAttribute, new NullProgressMonitor());
+                        if (is != null) {
+                            JiraUtils.copyStreamsCloseAll(os, is);
+                        }
+                    } finally {
+                        os.close();
+                    }
+                }
+            };
+            repository.getExecutor().execute(cmd);
+        }
+    }
+
+    private class IssueTask extends AbstractTask {
+        private final String key;
+
+        public IssueTask(String repositoryUrl, String taskId, String summary, String key) {
+            super(repositoryUrl, taskId, summary);
+            this.key = key;
+        }
+
+        @Override
+        public boolean isLocal() {
+            return true;
+        }
+
+        @Override
+        public String getConnectorKind() {
+            return super.getRepositoryUrl();
+        }
+
+        @Override
+        public String getTaskKey() {
+            return key;
         }
     }
 }
