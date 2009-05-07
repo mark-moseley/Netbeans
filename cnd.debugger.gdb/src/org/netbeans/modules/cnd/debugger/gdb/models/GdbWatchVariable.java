@@ -71,8 +71,10 @@ public class GdbWatchVariable extends AbstractVariable implements PropertyChange
     private final Watch watch;
     private static final Logger log = Logger.getLogger("gdb.logger.watches"); // NOI18N
     
-    private boolean requestType = true;
-    private boolean requestValue = true;
+    private boolean request = true;
+    private boolean requestResolved = true;
+
+    private String resolvedType;
     
     /** Creates a new instance of GdbWatchVariable */
     public GdbWatchVariable(Watch watch) {
@@ -110,8 +112,8 @@ public class GdbWatchVariable extends AbstractVariable implements PropertyChange
                     if (pname.equals(Watch.PROP_EXPRESSION)) {
                         resetVariable();
                     }
-                    requestType = true;
-                    requestValue = true;
+                    request = true;
+                    requestResolved = true;
         } else if (ev.getPropertyName().equals(GdbDebugger.PROP_VALUE_CHANGED)) {
             super.propertyChange(ev);
         }
@@ -136,23 +138,41 @@ public class GdbWatchVariable extends AbstractVariable implements PropertyChange
     
     @Override
     public String getType() {
-        if (requestType) {
-            type = getDebugger().requestWhatis(watch.getExpression());
-            requestType = false;
-        }
+        checkValues();
         return type;
+    }
+
+    @Override
+    protected String getResolvedType() {
+        checkValues();
+        if (requestResolved) {
+            resolvedType = super.getResolvedType();
+            requestResolved = false;
+        }
+        return resolvedType;
     }
     
     @Override
     public String getValue() {
-        synchronized (this) {
-            if (requestValue) {
-                value = getDebugger().evaluate(watch.getExpression());
-                setModifiedValue(value);
-                requestValue = false;
-            }
-        }
+        checkValues();
         return super.getValue();
+    }
+
+    private synchronized void checkValues() {
+        if (request) {
+            String t = getDebugger().requestWhatis(watch.getExpression());
+            if (t != null && t.length() > 0) {
+                type = t;
+                value = getDebugger().evaluate(watch.getExpression());
+            } else {
+                type = ""; // NOI18N
+                value = ""; // NOI18N
+                resolvedType = ""; // NOI18N
+                requestResolved = false;
+            }
+            setModifiedValue(value);
+            request = false;
+        }
     }
     
     @Override
