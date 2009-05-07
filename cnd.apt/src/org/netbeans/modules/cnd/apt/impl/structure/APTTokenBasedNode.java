@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.cnd.apt.impl.structure;
 
-import antlr.Token;
 import java.io.Serializable;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.support.APTToken;
@@ -71,15 +70,16 @@ public abstract class APTTokenBasedNode extends APTBaseNode
     }
     
     /** Creates a new instance of APTTokenBasedNode */
-    protected APTTokenBasedNode(Token token) {
-        this.token = (APTToken) token;
+    protected APTTokenBasedNode(APTToken token) {
+        this.token = token;
     }
     
+    @Override
     public void dispose() {
         this.token = APTUtils.EOF_TOKEN;
     }
     
-    public Token getToken() {
+    public APTToken getToken() {
         return token;
     }   
         
@@ -117,7 +117,35 @@ public abstract class APTTokenBasedNode extends APTBaseNode
         assert (next != null) : "null sibling, what for?"; // NOI18N
         assert (this.next == null) : "why do you change immutable APT?"; // NOI18N
         this.next = next;
-    } 
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final APTTokenBasedNode other = (APTTokenBasedNode) obj;
+        return getOffset() == other.getOffset() &&
+                getEndOffset() == other.getEndOffset() &&
+                getType() == other.getType() &&
+                getText().equals(other.getText());
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 5;
+        hash = 29 * hash + getOffset();
+        hash = 29 * hash + getEndOffset();
+        hash = 29 * hash + getType();
+        hash = 29 * hash + getText().hashCode();
+        return hash;
+    }
+
+    
+
     
     public abstract void setFirstChild(APT child);
 }
