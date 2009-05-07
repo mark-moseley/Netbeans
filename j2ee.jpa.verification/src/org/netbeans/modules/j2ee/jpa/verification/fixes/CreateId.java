@@ -91,6 +91,7 @@ public class CreateId implements Fix {
     public ChangeInfo implement(){
         PickOrCreateFieldPanel pnlPickOrCreateField = new PickOrCreateFieldPanel();
         pnlPickOrCreateField.setAvailableFields(getAvailableFields());
+        pnlPickOrCreateField.setFileObject(fileObject);
         
         DialogDescriptor ddesc = new DialogDescriptor(pnlPickOrCreateField,
                 NbBundle.getMessage(CreateId.class, "LBL_AddIDAnnotationDlgTitle"));
@@ -175,8 +176,12 @@ public class CreateId implements Fix {
                     VariableTree fieldTree = null;
                     MethodTree accesorTree = null;
                     MethodTree mutatorTree = null;
-                    
-                    Tree type = typeName == null ? null : genUtils.createType(typeName, clazz);
+                    Tree type;
+                    if (typeName == null || "".equals(typeName) ) {
+                        type = null;
+                    } else {
+                        type = genUtils.createType(typeName, clazz);
+                    }
                     VariableElement fieldElem = ModelUtils.getField(clazz, fieldName);
                     
                     if (fieldElem != null){
