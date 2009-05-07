@@ -1,35 +1,24 @@
 
 
 Document 0
-Delete:  source : <TESTURL>/004_add_sessions.rb
-
-Indexed:
-
-Not Indexed:
-
-
-Document 1
-Delete:
-Indexed:
+Searchable Keys:
   class : AddSessions
   class-ig : addsessions
   extends : ActiveRecord::Migration
   fqn : AddSessions
   method : down|STATIC|
   method : up|STATIC|
-  source : <TESTURL>/004_add_sessions.rb
+  require : 004_add_sessions
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |DOCUMENTED|;1429
 
 
-Document 2
-Delete:
-Indexed:
+Document 1
+Searchable Keys:
   dbtable : sessions
-  source : <TESTURL>/004_add_sessions.rb
 
-Not Indexed:
+Not Searchable Keys:
   dbcolumn : data;text
   dbcolumn : session_id;string
   dbcolumn : updated_at;datetime

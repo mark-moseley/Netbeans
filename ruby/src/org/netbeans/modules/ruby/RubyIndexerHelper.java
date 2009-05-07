@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -23,22 +23,21 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.ruby;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import javax.swing.text.BadLocationException;
-import org.jruby.ast.FCallNode;
-import org.jruby.ast.MethodDefNode;
-import org.jruby.ast.Node;
-import org.jruby.ast.NodeTypes;
-import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.Utilities;
+import org.jrubyparser.ast.FCallNode;
+import org.jrubyparser.ast.MethodDefNode;
+import org.jrubyparser.ast.Node;
+import org.jrubyparser.ast.NodeType;
+import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.modules.csl.spi.GsfUtilities;
+import org.netbeans.modules.parsing.api.Snapshot;
 import org.netbeans.modules.ruby.elements.AstElement;
 import org.netbeans.modules.ruby.elements.IndexedElement;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
@@ -78,7 +77,11 @@ import org.openide.util.Exceptions;
  *
  * @author Tor Norbye
  */
-public class RubyIndexerHelper {
+public final class RubyIndexerHelper {
+    
+    private RubyIndexerHelper() {
+        // Private utility class, not instantiatable
+    }
     /**
      * @todo Compute parameter delimiters (e.g. DSL methods which shouldn't have params should be noted here
      * @todo Compute hash arguments
@@ -96,8 +99,8 @@ public class RubyIndexerHelper {
      * @return An updated signature, or null if this method should be removed from index
      */
     public static String getMethodSignature(AstElement child, Node root,
-            int flags, String signature, FileObject fo, BaseDocument doc) {
-        if (doc == null) { // tests?
+            int flags, String signature, FileObject fo, Snapshot snapshot) {
+        if (snapshot == null) { // tests?
             return signature;
         }
 
@@ -105,11 +108,11 @@ public class RubyIndexerHelper {
             String hashNames = "";
             int originalFlags = flags;
 
-            List<String> callseq = getCallSeq(fo, child, doc);
+            List<String> callseq = getCallSeq(fo, child, snapshot);
 
             // See if the method takes blocks
             //List<Node> yields = new ArrayList<Node>();
-            //AstUtilities.addNodesByType(child.getNode(), new int[]{NodeTypes.YIELDNODE}, yields);
+            //AstUtilities.addNodesByType(child.getNode(), new int[]{NodeType.YIELDNODE}, yields);
             //if (yields.size() > 0) {
             //    // Yes, this method appears to have a yield... compute its args
             //    // See if it's optional...
@@ -127,7 +130,7 @@ public class RubyIndexerHelper {
 
             // Is the block optional?
             List<Node> calls = new ArrayList<Node>();
-            AstUtilities.addNodesByType(child.getNode(), new int[]{NodeTypes.FCALLNODE}, calls);
+            AstUtilities.addNodesByType(child.getNode(), new NodeType[]{NodeType.FCALLNODE}, calls);
             boolean optionalBlock = false;
             for (Node call : calls) {
                 if ("block_given?".equals(((FCallNode)call).getName())) { // NOI18N
@@ -205,9 +208,9 @@ public class RubyIndexerHelper {
             //    yield self if block_given?
             // RDoc :yield: clauses should be specificed on the line of the starting
             // element - the def
-            int lineStart = Utilities.getRowStart(doc, child.getNode().getPosition().getStartOffset());
-            int lineEnd = Utilities.getRowEnd(doc, lineStart);
-            String line = doc.getText(lineStart, lineEnd - lineStart);
+            int lineStart = GsfUtilities.getRowStart(snapshot.getText(), child.getNode().getPosition().getStartOffset());
+            int lineEnd = GsfUtilities.getRowEnd(snapshot.getText(), lineStart);
+            String line = snapshot.getText().subSequence(lineStart, lineEnd).toString();
             int rdocYieldIdx = line.indexOf(":yield:");
             if (rdocYieldIdx == -1) {
                 rdocYieldIdx = line.indexOf(":yields:");
@@ -276,7 +279,7 @@ public class RubyIndexerHelper {
                 flags |= IndexedMethod.BLOCK;
             }
 
-            String returnTypes = getReturnTypes(line, callseq, name);
+            RubyType returnType = getReturnTypes(line, callseq, name);
 
             // Replace attributes
             int attributeIndex = signature.indexOf(';');
@@ -295,6 +298,7 @@ public class RubyIndexerHelper {
             }
 
             MethodDefNode method = (MethodDefNode)child.getNode();
+            //hashNames = getAttribute(file, fo, root, method);
             hashNames = getAttribute(fo, root, method);
             if (hashNames == null) {
                 hashNames = "";
@@ -315,8 +319,8 @@ public class RubyIndexerHelper {
 
 
             // See RubyIndexer for a description of the signature format
-            if (blockArgs.length() > 0 || returnTypes.length() > 0 || hashNames.length() > 0) {
-                return signature + ";" + blockArgs + ";" + returnTypes + ";" + hashNames;
+            if (blockArgs.length() > 0 || returnType.isKnown() || hashNames.length() > 0) {
+                return signature + ";" + blockArgs + ";" + returnType.asIndexedString() + ";" + hashNames; // NOI18N
             } else {
                 return signature;
             }
@@ -334,19 +338,19 @@ public class RubyIndexerHelper {
     public static final int NODOC_ALL = 3;
 
     /** Should the class be removed? Return one of the _DOC constants above */
-    public static int isNodocClass(AstElement child, BaseDocument doc) {
-        if (doc == null) {
+    public static int isNodocClass(AstElement child, Snapshot snapshot) {
+        if (snapshot == null) {
             // tests?
             return DEFAULT_DOC;
         }
         try {
             int start = child.getNode().getPosition().getStartOffset();
-            if (start > doc.getLength()) {
+            if (start > snapshot.getText().length()) {
                 return DEFAULT_DOC;
             }
-            int lineStart = Utilities.getRowStart(doc, start);
-            int lineEnd = Utilities.getRowEnd(doc, lineStart);
-            String line = doc.getText(lineStart, lineEnd - lineStart);
+            int lineStart = GsfUtilities.getRowStart(snapshot.getText(), start);
+            int lineEnd = GsfUtilities.getRowEnd(snapshot.getText(), lineStart);
+            String line = snapshot.getText().subSequence(lineStart, lineEnd).toString();
 
             // Is this element one we don't want to  document? If so,
             // we probably don't want to see it either! Exclude from
@@ -404,13 +408,11 @@ public class RubyIndexerHelper {
         return true;
     }
 
-    private static List<String> getCallSeq(FileObject fo, AstElement child,
-            BaseDocument doc) {
+    private static List<String> getCallSeq(FileObject fo, AstElement child, Snapshot snapshot) {
         List<String> callseq = null;
         if (fo.getParent() != null && fo.getParent().getParent() != null && 
-                "rubystubs".equals(fo.getParent().getParent().getName())) { // NOI18N
-            List<String> comments = AstUtilities.gatherDocumentation(null, doc,
-                    child.getNode());
+                RubyPlatform.RUBYSTUBS.equals(fo.getParent().getParent().getName())) { // NOI18N
+            List<String> comments = AstUtilities.gatherDocumentation(snapshot, child.getNode());
             for (int i = 0; i < comments.size(); i++) {
                 String line = comments.get(i);
                 if (!line.startsWith("#   ") || line.substring(1).trim().length() == 0) {
@@ -429,138 +431,24 @@ public class RubyIndexerHelper {
         return callseq;
     }
 
-    private static String getReturnTypes(String line, List<String> callseq, String name) {
-        String returnTypes = "";
+    private static RubyType getReturnTypes(String line, List<String> callseq, String name) {
+        
+        RubyType result = RubyMethodTypeInferencer.fastCheckType(name);
+        if (result != null) {
+            return result;
+        }
 
-        // Compute return types
-        if (name.equals("to_s")) {
-            returnTypes = "String";
-        } // XXX what else?
         if (callseq != null) {
-            returnTypes = getReturnTypeFromCallseq(line, callseq, returnTypes);
-        }
-
-        // Methods ending with "?" are probably question methods
-        // returning a boolean
-        if (returnTypes.length() == 0 && name.endsWith("?")) {
-            returnTypes = "boolean";
-        }
-
-        return returnTypes;
-    }
-
-    private static String getReturnTypeFromCallseq(String line,
-            List<String> callseq, String returnTypes) {
-        // TODO - handle methods like the "slice" method in
-        // String which has a number of competing callseqs
-        // but each one is replicated so actually only one of
-        // them applies, and I can look at the parameter name
-        // to determine which one I care about!
-        Set<String> rets = new HashSet<String>();
-        for (String l : callseq) {
-            if (endsWithIgnSpace(l, "=>str") || endsWithIgnSpace(l, "=>new_str") || endsWithIgnSpace(l,
-                    "=>strornil") || endsWithIgnSpace(l, "=>string") || endsWithIgnSpace(l,
-                    "=>aString") || endsWithIgnSpace(l, "=>stringornil")) {
-                rets.add("String");
-            } else if (endsWithIgnSpace(l, "=>strio")) {
-                rets.add("StringIO");
-            }
-            if (endsWithIgnSpace(l, "=>file")) {
-                rets.add("File");
-            }
-            if (endsWithIgnSpace(l, "=>thread") || endsWithIgnSpace(l, "=>thr")) {
-                rets.add("Thread");
-            }
-            if (endsWithIgnSpace(l, "=>trueorfalse") || endsWithIgnSpace(l,
-                    "=>true,false,ornil") || endsWithIgnSpace(l, "=>bool") || endsWithIgnSpace(l,
-                    "=>boolean")) {
-                rets.add("boolean");
-            } else if (endsWithIgnSpace(l, "=>fixnumornil") || endsWithIgnSpace(l,
-                    "=>fixnum") || endsWithIgnSpace(l, "=>aFixnum")) {
-                rets.add("Fixnum");
-            }
-            if (endsWithIgnSpace(l, "=>integer") || endsWithIgnSpace(l, "=>int") || endsWithIgnSpace(l,
-                    "=>integerornil")) {
-                rets.add("Integer");
-            }
-            if (endsWithIgnSpace(l, "=>numornil") || endsWithIgnSpace(l, "=>num") || endsWithIgnSpace(l,
-                    "=>numeric")) {
-                rets.add("Numeric");
-            }
-            if (endsWithIgnSpace(l, "=>symbol") || endsWithIgnSpace(l,
-                    "=>aSymbol") || endsWithIgnSpace(l, "=>sym")) {
-                rets.add("Symbol");
-            }
-            if (endsWithIgnSpace(l, "=>float") || endsWithIgnSpace(l, "=>fl")) {
-                rets.add("Float");
-            }
-            if (endsWithIgnSpace(l, "=>array") || endsWithIgnSpace(l,
-                    "=>arrayornil") || endsWithIgnSpace(l, "=>anArray") || endsWithIgnSpace(l,
-                    "=>arrayornil") || endsWithIgnSpace(l, "=>an_arrayornil") || endsWithIgnSpace(l,
-                    "=>an_array")) {
-                rets.add("Array");
-            }
-            if (endsWithIgnSpace(l, "=>hash") || endsWithIgnSpace(l, "=>aHash") || endsWithIgnSpace(l,
-                    "=>hsh") || endsWithIgnSpace(l, "=>hshornil") || endsWithIgnSpace(l,
-                    "=>a_hash")) {
-                rets.add("Hash");
-            }
-            if (endsWithIgnSpace(l, "=>matchdata") || endsWithIgnSpace(l,
-                    "=>matchdataornil")) {
-                rets.add("MatchData");
-            }
-            if (endsWithIgnSpace(l, "=>regexp")) {
-                rets.add("Regexp");
-            }
-            if (endsWithIgnSpace(l, "=>class") || endsWithIgnSpace(l,
-                    "=>a_class")) {
-                rets.add("Class");
-            }
-            if (endsWithIgnSpace(l, "=>mod") || endsWithIgnSpace(l, "=>a_mod") || endsWithIgnSpace(l,
-                    "=>module")) {
-                rets.add("Module");
-            }
-            if (endsWithIgnSpace(l, "=>exception") || endsWithIgnSpace(l,
-                    "=>an_exceptionorexc")) {
-                rets.add("Exception");
-            }
-            if (endsWithIgnSpace(l, "=>range") || endsWithIgnSpace(l, "=>rng")) {
-                rets.add("Range");
-            }
-            if (endsWithIgnSpace(l, "=>stat")) {
-                rets.add("File::Stat");
-            }
-            if (endsWithIgnSpace(l, "=>time") || endsWithIgnSpace(l, "=>aTime") || endsWithIgnSpace(l,
-                    "=>anArray") || endsWithIgnSpace(l, "=>an_array")) {
-                rets.add("Time");
-            }
-
-            if (rets.size() == 0 && (line.contains("=>") || line.contains("->"))) {
-                String returnExp = line.substring(Math.max(line.indexOf("=>"),
-                        line.indexOf("->")));
-                if (RubyIndexer.PREINDEXING && returnExp.indexOf("obj") == -1
-                        && !returnExp.trim().equals("=>")) {
-                    // Don't warn about obj
-                    System.out.println("Warning: no return type found for " + returnExp);
-                }
+            RubyType types = RDocAnalyzer.collectTypesFromComment(callseq);
+            if (types.isKnown()) {
+                return types;
             }
         }
 
-        // I can't handle the case where there are multiple
-        // return types implied by the call seqs, since
-        // they could be referring to slightly different
-        // method signatures (rdoc which produced the stubs
-        // will produce separate ones but just include the
-        // same whole comment with all callseqs on each and
-        // every one
-        if (rets.size() == 1) {
-            returnTypes = rets.iterator().next();
-        }
-        return returnTypes;
+        return RubyType.createUnknown();
     }
     
-    
-    // BEGIN AUTOMATICALLY GENERATED CODE. SEE THE ruby/indexhelper PROJECT FOR DETAILS.
+    // BEGIN AUTOMATICALLY GENERATED CODE. SEE THE http://hg.netbeans.org/main/misc/ruby/indexhelper PROJECT FOR DETAILS.
     public static final String HASH_KEY_BOOL = "bool"; // NOI18N
     public static final String HASH_KEY_STRING = "string"; // NOI18N
     public static final String HASH_KEY_INTEGER = "string"; // NOI18N
@@ -586,7 +474,7 @@ public class RubyIndexerHelper {
             if ("active_record_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::ActiveRecordHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("form(")) { // NOI18N
                          return "options(action:action)"; // NOI18N
                      }
@@ -600,7 +488,7 @@ public class RubyIndexerHelper {
             if ("aggregations".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::Aggregations::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("composed_of(")) { // NOI18N
                          return "options(=>class_name|mapping|allow_nil:bool)"; // NOI18N
                      }
@@ -611,7 +499,7 @@ public class RubyIndexerHelper {
             if ("asset_tag_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::AssetTagHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("auto_discovery_link_tag(")) { // NOI18N
                          return "type(:rss|:atom),tag_options(=>rel|type|title),url_options(=>anchor|only_path:bool|controller:controller|action:action|trailing_slash:bool|host|protocol)"; // NOI18N
                      }
@@ -625,7 +513,7 @@ public class RubyIndexerHelper {
             if ("associations".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::Associations::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("has_many(")) { // NOI18N
                          return "options(=>class_name|conditions|order|group|foreign_key|dependent|exclusively_dependent|finder_sql|counter_sql|extend|include|limit|offset|select|as|through|source|source_type|uniq),association_id(-table)"; // NOI18N
                      }
@@ -646,15 +534,15 @@ public class RubyIndexerHelper {
         case 'b':
             if ("base".equals(n)) { // NOI18N
                 String clz = clz(root,method);
-                if ("ActiveRecord::Base".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                if (RubyIndex.ACTIVE_RECORD_BASE.equals(clz)) { // NOI18N
+                     String sig = sig(method);
                      if (sig.startsWith("find(")) { // NOI18N
                          return "args(:first|:all),args(=>conditions|order|group|limit|offset|joins|readonly:bool|include|select|from|readonly:bool|lock:bool)"; // NOI18N
                      }
                      return null;
                 }
                 if ("ActionController::Base".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("url_for(")) { // NOI18N
                          return "options(=>anchor|only_path:bool|controller:controller|action:action|trailing_slash:bool|host|protocol)"; // NOI18N
                      }
@@ -674,7 +562,7 @@ public class RubyIndexerHelper {
             if ("benchmark_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::BenchmarkHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("benchmark(")) { // NOI18N
                          return "level(:debug|:info|:warn|:error)"; // NOI18N
                      }
@@ -687,24 +575,24 @@ public class RubyIndexerHelper {
             if ("calculations".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::Calculations::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("calculate(")) { // NOI18N
-                         return "options(=>conditions|joins|order|group|select|distinct:bool),operation(:count|:avg|:min|:max|:sum),column_name-column)"; // NOI18N
+                         return "options(=>conditions|joins|order|group|select|distinct:bool),operation(:count|:avg|:min|:max|:sum),column_name(-column)"; // NOI18N
                      }
                      if (sig.startsWith("count(")) { // NOI18N
                          return "args(=>conditions|joins|include|order|group|select|distinct:bool)"; // NOI18N
                      }
                      if (sig.startsWith("minimum(")) { // NOI18N
-                         return "options(=>conditions|joins|order|group|select|distinct:bool),column_name-column)"; // NOI18N
+                         return "options(=>conditions|joins|order|group|select|distinct:bool),column_name(-column)"; // NOI18N
                      }
                      if (sig.startsWith("average(")) { // NOI18N
-                         return "options(=>conditions|joins|order|group|select|distinct:bool),column_name-column)"; // NOI18N
+                         return "options(=>conditions|joins|order|group|select|distinct:bool),column_name(-column)"; // NOI18N
                      }
                      if (sig.startsWith("sum(")) { // NOI18N
-                         return "options(=>conditions|joins|order|group|select|distinct:bool),column_name-column)"; // NOI18N
+                         return "options(=>conditions|joins|order|group|select|distinct:bool),column_name(-column)"; // NOI18N
                      }
                      if (sig.startsWith("maximum(")) { // NOI18N
-                         return "options(=>conditions|joins|order|group|select|distinct:bool),column_name-column)"; // NOI18N
+                         return "options(=>conditions|joins|order|group|select|distinct:bool),column_name(-column)"; // NOI18N
                      }
                      return null;
                 }
@@ -713,7 +601,7 @@ public class RubyIndexerHelper {
             if ("cgi_process".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionController::Base".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("process_cgi(")) { // NOI18N
                          return "session_options(=>database_manager|session_key|session_id|new_session|session_expires|session_domain|session_secure|session_path)"; // NOI18N
                      }
@@ -726,7 +614,7 @@ public class RubyIndexerHelper {
             if ("date_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::DateHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("date_select(")) { // NOI18N
                          return "options(=>discard_year:bool|discard_month:bool|discard_day:bool|order|disabled:bool)"; // NOI18N
                      }
@@ -742,33 +630,78 @@ public class RubyIndexerHelper {
             if ("form_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::FormHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("form_for(")) { // NOI18N
-                         return "object_name(-model),options(=>url:hash|html:hash|builder)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model),(rgs=>url:hash|html:hash|builder)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model),args(=>url:hash|html:hash|builder)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("fields_for(")) { // NOI18N
-                         return "object_name(-model),options(=>url:hash)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model),args(=>url:hash)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model),args(=>url:hash)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("text_field(")) { // NOI18N
-                         return "object_name(-model)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("password_field(")) { // NOI18N
-                         return "object_name(-model)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("hidden_field(")) { // NOI18N
-                         return "object_name(-model)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("file_field(")) { // NOI18N
-                         return "object_name(-model)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("text_area(")) { // NOI18N
-                         return "object_name(-model)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("check_box(")) { // NOI18N
-                         return "object_name(-model)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("radio_button(")) { // NOI18N
-                         return "object_name(-model)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "record_or_name_or_array(-model)"; // NOI18N // NOI18N
+                             } else {
+                                 return "object_name(-model)"; // NOI18N // NOI18N
+                             }
                      }
                      return null;
                 }
@@ -777,7 +710,7 @@ public class RubyIndexerHelper {
             if ("form_tag_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::FormTagHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("form_tag(")) { // NOI18N
                          return "options(=>anchor|only_path:bool|controller:controller|action:action|trailing_slash:bool|host|protocol)"; // NOI18N
                      }
@@ -805,7 +738,7 @@ public class RubyIndexerHelper {
             if ("kernel".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("Kernel".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("describe(")) { // NOI18N
                          return "args(=>behaviour_type|shared:bool)"; // NOI18N
                      }
@@ -818,7 +751,7 @@ public class RubyIndexerHelper {
             if ("list".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::Acts::List::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("acts_as_list(")) { // NOI18N
                          return "options(=>column|scope)"; // NOI18N
                      }
@@ -831,7 +764,7 @@ public class RubyIndexerHelper {
             if ("nested_set".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::Acts::NestedSet::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("acts_as_nested_set(")) { // NOI18N
                          return "options(=>parent_column|left_column|right_column|scope)"; // NOI18N
                      }
@@ -842,7 +775,7 @@ public class RubyIndexerHelper {
             if ("number_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::NumberHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("number_to_phone(")) { // NOI18N
                          return "options(=>area_code:bool|delimiter|extension|country_code)"; // NOI18N
                      }
@@ -851,9 +784,6 @@ public class RubyIndexerHelper {
                      }
                      if (sig.startsWith("number_to_percentage(")) { // NOI18N
                          return "options(=>precision|separator)"; // NOI18N
-                     }
-                     if (sig.startsWith("number_with_delimiter(")) { // NOI18N
-                         return "options(=>delimiter|separator)"; // NOI18N
                      }
                      return null;
                 }
@@ -864,7 +794,7 @@ public class RubyIndexerHelper {
             if ("pagination".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionController::Pagination".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("paginate(")) { // NOI18N
                          return "options(=>singular_name|class_name|per_page|conditions|order|order_by|joins|join|include|selected|count)"; // NOI18N
                      }
@@ -875,7 +805,7 @@ public class RubyIndexerHelper {
             if ("pagination_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::PaginationHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("pagination_links(")) { // NOI18N
                          return "options(name|window_size|always_show_anchors:bool|link_to_current_page:bool|params),html_options(=>confirm:string|popup:bool|methodclass|id)"; // NOI18N
                      }
@@ -886,7 +816,7 @@ public class RubyIndexerHelper {
             if ("prototype_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::PrototypeHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("observe_field")) { // NOI18N
                          return "options(=>url:hash|function|frequency|update|with|on)"; // NOI18N
                      }
@@ -914,7 +844,7 @@ public class RubyIndexerHelper {
             if ("scaffolding".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionController::Scaffolding::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("scaffold(")) { // NOI18N
                          return "model_id(-model),options(=>suffix:bool)"; // NOI18N
                      }
@@ -925,7 +855,7 @@ public class RubyIndexerHelper {
             if ("schema_definitions".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::ConnectionAdapters::TableDefinition".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("column(")) { // NOI18N
                          return "type(:primary_key|:string|:text|:integer|:float|:decimal|:datetime|:timestamp|:time|:date|:binary|:boolean),options(=>limit|default:nil|null:bool|precision|scale)"; // NOI18N
                      }
@@ -936,7 +866,7 @@ public class RubyIndexerHelper {
             if ("schema_statements".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::ConnectionAdapters::SchemaStatements".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("create_table(")) { // NOI18N
                          return "options(=>id:bool|primary_key:string|options:hash|temporary:bool|force:bool)"; // NOI18N
                      }
@@ -947,7 +877,12 @@ public class RubyIndexerHelper {
                          return "table_name(-table),column_name(-column),options(=>limit|default:nil|null:bool|precision|scale),type(:primary_key|:string|:text|:integer|:float|:decimal|:datetime|:timestamp|:time|:date|:binary|:boolean)"; // NOI18N
                      }
                      if (sig.startsWith("rename_table(")) { // NOI18N
-                         return "name(-table)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "table_name(-table)"; // NOI18N // NOI18N
+                             } else {
+                                 return "name(-table)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("rename_column(")) { // NOI18N
                          return "table_name(-table),column_name(-column)"; // NOI18N
@@ -956,7 +891,12 @@ public class RubyIndexerHelper {
                          return "table_name(-table),column_name(-column)"; // NOI18N
                      }
                      if (sig.startsWith("drop_table(")) { // NOI18N
-                         return "name(-table)"; // NOI18N
+                             String path = file.getPath();
+                             if (path.indexOf("-2") != -1 || path.indexOf("-1") == -1) { // NOI18N
+                                 return "table_name(-table)"; // NOI18N // NOI18N
+                             } else {
+                                 return "name(-table)"; // NOI18N // NOI18N
+                             }
                      }
                      if (sig.startsWith("add_index(")) { // NOI18N
                          return "table_name(-table),column_name(-column)"; // NOI18N
@@ -974,7 +914,7 @@ public class RubyIndexerHelper {
             if ("session_management".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionController::SessionManagement::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("session_store=(")) { // NOI18N
                          return "store(:active_record_store|:drb_store|:mem_cache_store|:memory_store)"; // NOI18N
                      }
@@ -988,7 +928,7 @@ public class RubyIndexerHelper {
             if ("streaming".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionController::Streaming".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("send_file(")) { // NOI18N
                          return "options(=>filename|type|disposition|stream|buffer_size|status)"; // NOI18N
                      }
@@ -1004,7 +944,7 @@ public class RubyIndexerHelper {
             if ("tree".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::Acts::Tree::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("acts_as_tree(")) { // NOI18N
                          return "options(=>foreign_key|order|counter_cache)"; // NOI18N
                      }
@@ -1017,7 +957,7 @@ public class RubyIndexerHelper {
             if ("url_helper".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionView::Helpers::UrlHelper".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("url_for(")) { // NOI18N
                          return "options(=>escape:bool|anchor|only_path:bool|controller:controller|action:action|trailing_slash:bool|host|protocol)"; // NOI18N
                      }
@@ -1039,7 +979,7 @@ public class RubyIndexerHelper {
             if ("validations".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActiveRecord::Validations::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("validates_each(")) { // NOI18N
                          return "attrs(=>on:validationactive|allow_nil:bool|if)"; // NOI18N
                      }
@@ -1080,7 +1020,7 @@ public class RubyIndexerHelper {
             if ("verification".equals(n)) { // NOI18N
                 String clz = clz(root,method);
                 if ("ActionController::Verification::ClassMethods".equals(clz)) { // NOI18N
-                      String sig = sig(method);
+                     String sig = sig(method);
                      if (sig.startsWith("verify(")) { // NOI18N
                          return "options(=>params|session|flash|method|post:submitmethod|xhr:bool|add_flash:hash|add_headers:hash|redirect_to|render|only:bool|except:bool)"; // NOI18N
                      }

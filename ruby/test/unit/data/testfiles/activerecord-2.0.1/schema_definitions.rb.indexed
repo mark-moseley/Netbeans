@@ -1,16 +1,7 @@
 
 
 Document 0
-Delete:  source : <TESTURL>/schema_definitions.rb
-
-Indexed:
-
-Not Indexed:
-
-
-Document 1
-Delete:
-Indexed:
+Searchable Keys:
   attribute : columns
   class : TableDefinition
   class-ig : tabledefinition
@@ -25,17 +16,16 @@ Indexed:
   method : references(*args)
   method : timestamps|DOCUMENTED|
   method : to_sql|DOCUMENTED|
-  source : <TESTURL>/schema_definitions.rb
+  require : schema_definitions
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |DOCUMENTED|;113
   in : ActiveRecord::ConnectionAdapters
   requires : bigdecimal,bigdecimal/util,date
 
 
-Document 2
-Delete:
-Indexed:
+Document 1
+Searchable Keys:
   attribute : default
   attribute : limit
   attribute : name
@@ -60,108 +50,102 @@ Indexed:
   method : human_name|DOCUMENTED|
   method : initialize(name,default,sql_type,null)|DOCUMENTED|PRIVATE|
   method : klass|DOCUMENTED|
-  method : microseconds(time)|DOCUMENTED|PROTECTED|STATIC|
+  method : microseconds(time)|DOCUMENTED|PROTECTED|STATIC|;;Integer;
   method : new(name,default,sql_type,null)|DOCUMENTED|PRIVATE|STATIC|
   method : new_date(year,mon,mday)|PROTECTED|STATIC|
-  method : new_time(year,mon,mday,hour,min,sec,microsec)|PROTECTED|STATIC|
-  method : number?
+  method : new_time(year,mon,mday,hour,min,sec,microsec)|PROTECTED|STATIC|;;NilClass;
+  method : number?;;TrueClass|FalseClass;
   method : simplified_type(field_type)|PRIVATE|
   method : string_to_binary(value)|DOCUMENTED|STATIC|
-  method : string_to_date(string)|STATIC|
-  method : string_to_dummy_time(string)|STATIC|
-  method : string_to_time(string)|STATIC|
-  method : text?
-  method : type_cast(value)|DOCUMENTED|
+  method : string_to_date(string)|STATIC|;;NilClass;
+  method : string_to_dummy_time(string)|STATIC|;;NilClass;
+  method : string_to_time(string)|STATIC|;;NilClass;
+  method : text?;;TrueClass|FalseClass;
+  method : type_cast(value)|DOCUMENTED|;;NilClass;
   method : type_cast_code(var_name)
   method : value_to_boolean(value)|DOCUMENTED|STATIC|
   method : value_to_decimal(value)|DOCUMENTED|STATIC|
-  source : <TESTURL>/schema_definitions.rb
+  require : schema_definitions
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |DOCUMENTED|;48
   in : ActiveRecord::ConnectionAdapters
   requires : bigdecimal,bigdecimal/util,date
 
 
-Document 3
-Delete:
-Indexed:
+Document 2
+Searchable Keys:
   class : ActiveRecord
   class-ig : activerecord
   fqn : ActiveRecord
-  source : <TESTURL>/schema_definitions.rb
+  require : schema_definitions
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |MODULE|
   requires : bigdecimal,bigdecimal/util,date
 
 
-Document 4
-Delete:
-Indexed:
+Document 3
+Searchable Keys:
   class : ColumnDefinition
   class-ig : columndefinition
   extends : new
   fqn : ActiveRecord::ConnectionAdapters::ColumnDefinition
-  method : add_column_options!(sql,options)|PRIVATE|
-  method : sql_type
-  method : to_sql
-  source : <TESTURL>/schema_definitions.rb
+  method : add_column_options!(sql,options)|PRIVATE|NODOC|
+  method : sql_type|NODOC|
+  method : to_sql|NODOC|;;String;
+  require : schema_definitions
 
-Not Indexed:
-  attrs : |CLASS|
+Not Searchable Keys:
+  attrs : |NODOC|
   in : ActiveRecord::ConnectionAdapters
   requires : bigdecimal,bigdecimal/util,date
 
 
-Document 5
-Delete:
-Indexed:
+Document 4
+Searchable Keys:
   class : ConnectionAdapters
   class-ig : connectionadapters
   fqn : ActiveRecord::ConnectionAdapters
-  source : <TESTURL>/schema_definitions.rb
+  require : schema_definitions
 
-Not Indexed:
-  attrs : |MODULE|
+Not Searchable Keys:
+  attrs : |NODOC|MODULE|
   in : ActiveRecord
   requires : bigdecimal,bigdecimal/util,date
 
 
-Document 6
-Delete:
-Indexed:
+Document 5
+Searchable Keys:
   class : Format
   class-ig : format
-  constant : ISO_DATE
-  constant : ISO_DATETIME
+  constant : ISO_DATE;Regexp
+  constant : ISO_DATETIME;Regexp
   fqn : ActiveRecord::ConnectionAdapters::Column::Format
-  source : <TESTURL>/schema_definitions.rb
+  require : schema_definitions
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |MODULE|
   in : ActiveRecord::ConnectionAdapters::Column
   requires : bigdecimal,bigdecimal/util,date
 
 
-Document 7
-Delete:
-Indexed:
+Document 6
+Searchable Keys:
   class : IndexDefinition
   class-ig : indexdefinition
   extends : new
   fqn : ActiveRecord::ConnectionAdapters::IndexDefinition
-  source : <TESTURL>/schema_definitions.rb
+  require : schema_definitions
 
-Not Indexed:
-  attrs : |CLASS|
+Not Searchable Keys:
+  attrs : |NODOC|
   in : ActiveRecord::ConnectionAdapters
   requires : bigdecimal,bigdecimal/util,date
 
 
-Document 8
-Delete:
-Indexed:
+Document 7
+Searchable Keys:
   class : TableDefinition
   class-ig : tabledefinition
   fqn : ActiveRecord::ConnectionAdapters::TableDefinition
@@ -176,9 +160,9 @@ Indexed:
   method : text(names,options);00;;;options(=>limit|default:nil|null:bool|precision|scale)
   method : time(names,options);00;;;options(=>limit|default:nil|null:bool|precision|scale)
   method : timestamp(names,options);00;;;options(=>limit|default:nil|null:bool|precision|scale)
-  source : <TESTURL>/schema_definitions.rb
+  require : schema_definitions
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |CLASS|
   in : ActiveRecord::ConnectionAdapters
   requires : bigdecimal,bigdecimal/util,date

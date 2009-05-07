@@ -1,35 +1,24 @@
 
 
 Document 0
-Delete:  source : <TESTURL>/005_create_orders.rb
-
-Indexed:
-
-Not Indexed:
-
-
-Document 1
-Delete:
-Indexed:
+Searchable Keys:
   class : CreateOrders
   class-ig : createorders
   extends : ActiveRecord::Migration
   fqn : CreateOrders
   method : down|STATIC|
   method : up|STATIC|
-  source : <TESTURL>/005_create_orders.rb
+  require : 005_create_orders
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |DOCUMENTED|;1429
 
 
-Document 2
-Delete:
-Indexed:
+Document 1
+Searchable Keys:
   dbtable : orders
-  source : <TESTURL>/005_create_orders.rb
 
-Not Indexed:
+Not Searchable Keys:
   dbcolumn : address;text
   dbcolumn : email;string
   dbcolumn : name;string

@@ -1,35 +1,24 @@
 
 
 Document 0
-Delete:  source : <TESTURL>/007_create_users.rb
-
-Indexed:
-
-Not Indexed:
-
-
-Document 1
-Delete:
-Indexed:
+Searchable Keys:
   class : CreateUsers
   class-ig : createusers
   extends : ActiveRecord::Migration
   fqn : CreateUsers
   method : down|STATIC|
   method : up|STATIC|
-  source : <TESTURL>/007_create_users.rb
+  require : 007_create_users
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |DOCUMENTED|;1429
 
 
-Document 2
-Delete:
-Indexed:
+Document 1
+Searchable Keys:
   dbtable : users
-  source : <TESTURL>/007_create_users.rb
 
-Not Indexed:
+Not Searchable Keys:
   dbcolumn : hashed_password;string
   dbcolumn : name;string
   dbcolumn : salt;string

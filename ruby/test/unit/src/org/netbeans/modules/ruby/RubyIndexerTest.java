@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,19 +41,6 @@
 
 package org.netbeans.modules.ruby;
 
-import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
-import org.netbeans.api.gsf.CompilationInfo;
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import org.netbeans.api.gsf.CompilationInfo;
-import org.netbeans.api.gsf.Index;
-import org.netbeans.api.gsf.NameKind;
 import org.netbeans.modules.ruby.elements.IndexedClass;
 import org.netbeans.modules.ruby.elements.IndexedElement;
 import org.netbeans.modules.ruby.elements.IndexedField;
@@ -71,185 +58,56 @@ public class RubyIndexerTest extends RubyTestBase {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
+        RubyIndexer.preindexingTest = true;
+        RubyIndexer.skipTypeInferenceForTests = true;
     }
+
 
     @Override
-    protected void tearDown() throws Exception {
-        super.tearDown();
-    }
-    
-    private class TestIndex extends Index {
-        private final String localUrl;
-        private List<String> documents = new ArrayList<String>();
-        private List<String> emptyDocuments = new ArrayList<String>();
-        
-        public TestIndex(String localUrl) {
-            // Leave the end
-            int index = localUrl.lastIndexOf('/');
-            if (index != -1) {
-                localUrl = localUrl.substring(0, index);
-            }
-            this.localUrl = localUrl;
-        }
-        
-        @Override
-        public String toString() {
-            Collections.sort(emptyDocuments);
-            Collections.sort(documents);
-            StringBuilder sb = new StringBuilder();
-            int documentNumber = 0;
-            for (String s : emptyDocuments) {
-                sb.append("\n\nDocument ");
-                sb.append(Integer.toString(documentNumber++));
-                sb.append("\n");
-                sb.append(s);
-            }
-
-            for (String s : documents) {
-                sb.append("\n\nDocument ");
-                sb.append(Integer.toString(documentNumber++));
-                sb.append("\n");
-                sb.append(s);
-            }
-
-
-            return sb.toString().replace(localUrl, "<TESTURL>");
-        }
-        
-        private String sortCommaList(String s) {
-            String[] items = s.split(",");
-            Arrays.sort(items);
-            StringBuilder sb = new StringBuilder();
-            for (String item : items) {
-                if (sb.length() > 0) {
-                    sb.append(",");
-                }
-                sb.append(item);
-            }
-            
-            return sb.toString();
-        }
-        
-        private String prettyPrintValue(String key, String value) {
-            if (value == null) {
-                return value;
-            }
-            if (RubyIndexer.FIELD_METHOD_NAME.equals(key)) {
-                // Decode the attributes
-                int attributeIndex = value.indexOf(';');
-                if (attributeIndex != -1) {
-                    int flags = IndexedElement.stringToFlag(value, attributeIndex+1);
-                    if (flags != 0) {
-                        String desc = IndexedMethod.decodeFlags(flags);
-                        value = value.substring(0, attributeIndex) + desc + value.substring(attributeIndex+3);
-                    }
-                }
-            } else if (RubyIndexer.FIELD_CLASS_ATTRS.equals(key)) {
-                // Decode the attributes
-                int flags = IndexedElement.stringToFlag(value, 0);
-                if (flags != 0) {
-                    String desc = IndexedClass.decodeFlags(flags);
-                    value = desc + value.substring(2);
-                } else {
-                    value = "|CLASS|";
-                }
-            } else if (RubyIndexer.FIELD_FIELD_NAME.equals(key)) {
-                // Decode the attributes
-                int attributeIndex = value.indexOf(';');
-                if (attributeIndex != -1) {
-                    int flags = IndexedElement.stringToFlag(value, attributeIndex+1);
-                    if (flags != 0) {
-                        String desc = IndexedField.decodeFlags(flags);
-                        value = value.substring(0, attributeIndex) + desc + value.substring(attributeIndex+3);
-                    }
-                }
-            }
-            
+    protected String prettyPrintValue(String key, String value) {
+        if (value == null) {
             return value;
         }
-
-        public void gsfStore(Set<Map<String, String>> fieldToData, Set<Map<String, String>> noIndexData, Map<String, String> toDelete) throws IOException {
-            StringBuilder sb = new StringBuilder();
-            sb.append("Delete:");
-            List<String> keys = new ArrayList<String>(toDelete.keySet());
-            Collections.sort(keys);
-            for (String key : keys) {
-                sb.append("  ");
-                sb.append(key);
-                sb.append(" : ");
-                sb.append(toDelete.get(key));
-                sb.append("\n");
-            }
-            sb.append("\n");
-
-            sb.append("Indexed:");
-            sb.append("\n");
-            List<String> strings = new ArrayList<String>();
-            for (Map<String,String> map : fieldToData) {
-                for (String key : map.keySet()) {
-                    strings.add(key + " : " + prettyPrintValue(key, map.get(key)));
+        if (RubyIndexer.FIELD_METHOD_NAME.equals(key)) {
+            // Decode the attributes
+            int attributeIndex = value.indexOf(';');
+            if (attributeIndex != -1 &&
+                    (attributeIndex + 1) < value.length() &&
+                    value.charAt(attributeIndex + 1) != ';') {
+                int flags = IndexedElement.stringToFlag(value, attributeIndex + 1);
+                if (flags != 0) {
+                    String desc = IndexedMethod.decodeFlags(flags);
+                    value = value.substring(0, attributeIndex) + desc + value.substring(attributeIndex + 3);
                 }
             }
-            Collections.sort(strings);
-            for (String string : strings) {
-                sb.append("  ");
-                sb.append(string);
-                sb.append("\n");
-            }
-
-            sb.append("\n");
-            sb.append("Not Indexed:");
-            sb.append("\n");
-            strings = new ArrayList<String>();
-            for (Map<String,String> map : noIndexData) {
-                for (String key : map.keySet()) {
-                    String value = prettyPrintValue(key, map.get(key));
-                    if (value.indexOf(',') != -1) {
-                        value = sortCommaList(value);
-                    }
-                    strings.add(key + " : " + value);
-                }
-            }
-            Collections.sort(strings);
-            for (String string : strings) {
-                sb.append("  ");
-                sb.append(string);
-                sb.append("\n");
-            }
-            
-            String s = sb.toString();
-            if (fieldToData.size() == 0 && noIndexData.size() == 0) {
-                emptyDocuments.add(s);
+        } else if (RubyIndexer.FIELD_CLASS_ATTRS.equals(key)) {
+            // Decode the attributes
+            int flags = IndexedElement.stringToFlag(value, 0);
+            if (flags != 0) {
+                String desc = IndexedClass.decodeFlags(flags);
+                value = desc + value.substring(2);
             } else {
-                documents.add(s);
+                value = "|CLASS|";
+            }
+        } else if (RubyIndexer.FIELD_FIELD_NAME.equals(key)) {
+            // Decode the attributes
+            int attributeIndex = value.indexOf(';');
+            if (attributeIndex != -1) {
+                int flags = IndexedElement.stringToFlag(value, attributeIndex + 1);
+                if (flags != 0) {
+                    String desc = IndexedField.decodeFlags(flags);
+                    value = value.substring(0, attributeIndex) + desc + value.substring(attributeIndex + 3);
+                }
             }
         }
 
-        public void gsfSearch(String primaryField, String name, NameKind kind, Set<SearchScope> scope, Set<SearchResult> result) throws IOException {
-            throw new UnsupportedOperationException("Not supported in this test.");
-        }
-        
+        return value;
     }
-    
-    private void checkIndexer(String relFilePath) throws Exception {
-        CompilationInfo info = getInfo(relFilePath);
-        RubyParseResult rpr = (RubyParseResult) info.getParserResult();
 
-        File rubyFile = new File(getDataDir(), relFilePath);
-        Index index = new TestIndex(rubyFile.toURI().toURL().toExternalForm());
-        RubyIndexer indexer = new RubyIndexer();
-        RubyIndex.setClusterUrl("file:/bogus"); // No translation
-        indexer.updateIndex(index, rpr);
-        
-        String annotatedSource = index.toString();
-
-        assertDescriptionMatches(relFilePath, annotatedSource, false, ".indexed");
-    }
-    
     public void testAnalysis2() throws Exception {
         checkIndexer("testfiles/ape.rb");
     }
-    
+
     public void testAnalysis() throws Exception {
         checkIndexer("testfiles/postgresql_adapter.rb");
     }
@@ -273,15 +131,15 @@ public class RubyIndexerTest extends RubyTestBase {
     public void testRails2() throws Exception {
         checkIndexer("testfiles/action_view.rb");
     }
-    
+
     public void testRails3() throws Exception {
         checkIndexer("testfiles/action_mailer.rb");
     }
-    
+
     public void testRails4() throws Exception {
         checkIndexer("testfiles/action_web_service.rb");
     }
-    
+
     public void testRails5() throws Exception {
         checkIndexer("testfiles/active_record.rb");
     }
@@ -293,7 +151,7 @@ public class RubyIndexerTest extends RubyTestBase {
     public void testTopLevel() throws Exception {
         checkIndexer("testfiles/top_level.rb");
     }
-    
+
     public void testTopLevel2() throws Exception {
         checkIndexer("testfiles/option_parser_spec.rb");
     }
@@ -339,15 +197,15 @@ public class RubyIndexerTest extends RubyTestBase {
     public void testRails20Migrations() throws Exception {
         checkIndexer("testfiles/migrate/100_rails20_migrations.rb");
     }
-    
+
     public void testRails20Migrations2() throws Exception {
         checkIndexer("testfiles/migrate/101_rails20_migrations.rb");
     }
-    
+
     public void testRails20Migrations3() throws Exception {
         checkIndexer("testfiles/migrate/102_rails20_migrations.rb");
     }
-    
+
     public void testSchemaDepot() throws Exception {
         checkIndexer("testfiles/migrate/schemas/depot/db/schema.rb");
     }
@@ -363,6 +221,38 @@ public class RubyIndexerTest extends RubyTestBase {
     public void testRails20SchemaDefs() throws Exception {
         checkIndexer("testfiles/activerecord-2.0.1/schema_definitions.rb");
     }
-    
+
+    public void testTwoClasses() throws Exception {
+        checkIndexer("testfiles/twoclasses.rb");
+    }
+
+    public void testRails21Migrations1() throws Exception {
+        checkIndexer("testfiles/migrate/20070403225818_create_posts.rb");
+    }
+
+    public void testRails21Migrations2() throws Exception {
+        checkIndexer("testfiles/migrate/20080403222904_add_names.rb");
+    }
+
+    public void testEmpty1() throws Exception {
+        checkIndexer("testfiles/empty.rb");
+    }
+
+    public void testGlobals() throws Exception {
+        checkIndexer("testfiles/globals.rb");
+    }
+
+    public void testGlobals2() throws Exception {
+        checkIndexer("testfiles/globals2.rb");
+    }
+
+    public void testConstants() throws Exception {
+        checkIndexer("testfiles/constants.rb");
+    }
+
+    public void testMethodTypeInference() throws Exception {
+        checkIndexer("testfiles/method_type_inference.rb");
+    }
+
     // TODO - test :nodoc: on methods and classes!!!
 }

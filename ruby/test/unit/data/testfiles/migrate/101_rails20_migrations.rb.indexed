@@ -1,35 +1,24 @@
 
 
 Document 0
-Delete:  source : <TESTURL>/101_rails20_migrations.rb
-
-Indexed:
-
-Not Indexed:
-
-
-Document 1
-Delete:
-Indexed:
+Searchable Keys:
   class : Rails20Migrations
   class-ig : rails20migrations
   extends : ActiveRecord::Migration
   fqn : Rails20Migrations
   method : down|STATIC|
   method : up|STATIC|
-  source : <TESTURL>/101_rails20_migrations.rb
+  require : 101_rails20_migrations
 
-Not Indexed:
+Not Searchable Keys:
   attrs : |CLASS|
 
 
-Document 2
-Delete:
-Indexed:
+Document 1
+Searchable Keys:
   dbtable : products
-  source : <TESTURL>/101_rails20_migrations.rb
 
-Not Indexed:
+Not Searchable Keys:
   dbcolumn : created_at;datetime
   dbcolumn : creator_id;integer
   dbcolumn : name;string

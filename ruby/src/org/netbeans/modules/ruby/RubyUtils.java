@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -23,18 +23,26 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2007 Sun Microsystems, Inc.
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.ruby;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
-import javax.swing.text.BadLocationException;
+import java.util.Map;
+import java.util.logging.Logger;
 import javax.swing.text.Document;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.ruby.platform.RubyInstallation;
+import org.netbeans.api.ruby.platform.RubyPlatform;
+import org.netbeans.api.ruby.platform.RubyPlatformProvider;
+import org.netbeans.editor.BaseDocument;
+import org.netbeans.modules.parsing.spi.Parser.Result;
 import org.openide.filesystems.FileObject;
 import org.openide.util.NbBundle;
 
@@ -45,6 +53,8 @@ import org.openide.util.NbBundle;
 public class RubyUtils {
     
     public static final String RUBY_MIME_TYPE = RubyInstallation.RUBY_MIME_TYPE; // NOI18N
+
+    private static final Logger LOGGER = Logger.getLogger(RubyUtils.class.getName());
 
     private RubyUtils() {
     }
@@ -332,7 +342,7 @@ public class RubyUtils {
     }
     
     // There are lots of valid method names...   %, *, +, -, <=>, ...
-    
+
     /**
      * Ruby identifiers should consist of [a-zA-Z0-9_]
      * http://www.headius.com/rubyspec/index.php/Variables
@@ -342,12 +352,33 @@ public class RubyUtils {
      */
     public static boolean isSafeIdentifierName(String name, int fromIndex) {
         int i = fromIndex;
-        for (; i < name.length(); i++) {
+        int nameLength = name.length();
+
+        if ("".equals(name.substring(fromIndex).trim())) {
+            return false;
+        }
+
+        for (; i < nameLength; i++) {
             char c = name.charAt(i);
             if (!(c == '$' || c == '@' || c == ':')) {
                 break;
             }
+            if (i > 0 && c != '@') {
+                return false;
+            }
+            if (i > 1) {
+                return false;
+            }
+            if (i + 1 == nameLength) {
+                return false;
+            }
         }
+        // digits are not allowed as the first char, except in
+        // pre-defined variables which this method does not handle
+        if (Character.isDigit(name.charAt(i))) {
+            return false;
+        }
+        
         for (; i < name.length(); i++) {
             char c = name.charAt(i);
             if (!((c >= 'a' && c <= 'z') || (c == '_') ||
@@ -400,23 +431,55 @@ public class RubyUtils {
         return sb.toString();
     }
 
-    /** Similar to isValidRubyClassName, but allows a number of ::'s to join class names */
-    public static boolean isValidRubyModuleName(String name) {
+    /**
+     * Whether this is valid fully qualified constant name, i.e. similar to
+     * {@link #isValidConstantName}, but allows a number of double-colons
+     * (<em>::</em>) to join scopes (module or class) names. E.g.:
+     *
+     * <pre>
+     *   module Colors
+     *   
+     *     module Converter
+     *       # module definition
+     *     end
+     *
+     *     RED   = "#FF0000"
+     *     GREEN = "#00FF00"
+     *     BLUE  = "#0000FF"
+     *
+     *   end
+     * </pre>
+     *
+     * Colors::Converter is a constant name for module, Color::Constant is
+     * an "common" constant.
+     * 
+     * @param name to check
+     * @return <code>true</code> or <code>false</code>
+     * @see #isValidConstantName
+     */
+    public static boolean isValidConstantFQN(final String name) {
         if (name.trim().length() == 0) {
             return false;
         }
         
         String[] mods = name.split("::"); // NOI18N
         for (String mod : mods) {
-            if (!isValidRubyClassName(mod)) {
+            if (!isValidConstantName(mod)) {
                 return false;
             }
         }
         
         return true;
     }
-    
-    public static boolean isValidRubyClassName(String name) {
+
+    /**
+     * Whether this is a valid constant name, i.e. also class or module name.
+     * 
+     * @param name to check
+     * @return <code>true</code> or <code>false</code>
+     * @see #isValidConstantFQN
+     */
+    public static boolean isValidConstantName(final String name) {
         if (isRubyKeyword(name)) {
             return false;
         }
@@ -444,7 +507,35 @@ public class RubyUtils {
 
         return true;
     }
-    
+
+    /**
+     * Parse out module/class name and constant name out of possibly fully
+     * qualified constant name. When non-FQN is given, returns
+     * <code>Kernel</code> as the receiver name. E.g:
+     *
+     * <pre>
+     *   "Color::HTML::RED" =&gt; {"Color::HTML", "RED"}
+     *   "Color::RED"       =&gt; {"Color"      , "RED"}
+     *   "RED"              =&gt; {"Kernel"     , "RED"}
+     * </pre>
+     *
+     * @param mayBeFqn constant name, might or might not be FQN
+     * @return two-member array, containing module/class name and constant name
+     */
+    static String[] parseConstantName(final String mayBeFqn) {
+        int lastColon2 = mayBeFqn.lastIndexOf("::"); // NOI18N
+        String module;
+        String constant;
+        if (lastColon2 != -1) {
+            constant = mayBeFqn.substring(lastColon2 + 2);
+            module = mayBeFqn.substring(0, lastColon2);
+        } else {
+            constant = mayBeFqn;
+            module = "Kernel";
+        }
+        return new String[]{module, constant};
+    }
+
     public static boolean isValidRubyLocalVarName(String name) {
         if (isRubyKeyword(name)) {
             return false;
@@ -533,15 +624,13 @@ public class RubyUtils {
     }
     
     public static boolean isRubyKeyword(String name) {
-        for (String s : RUBY_KEYWORDS) {
-            if (s.equals(name)) {
-                return true;
-            }
-        }
-        
-        return false;
+        return Arrays.binarySearch(RUBY_KEYWORDS, name) >= 0;
     }
-    
+
+    public static boolean isRubyPredefVar(String name) {
+        return Arrays.binarySearch(RUBY_PREDEF_VAR, name) >= 0;
+    }
+
     public static String getLineCommentPrefix() {
         return "#"; // NOI18N
     }
@@ -567,6 +656,37 @@ public class RubyUtils {
             "nil", "not", "or", "redo", "rescue", "retry", "return", "self", "super", "then", "true",
             "undef", "unless", "until", "when", "while", "yield"
         };
+
+    public static final Map<String, String> RUBY_PREDEF_VARS_CLASSES = new HashMap<String, String>();
+
+    static {
+        RUBY_PREDEF_VARS_CLASSES.put("__FILE__", "String"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("__LINE__", "Fixnum"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("ARGF", "Object"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("ARGV", "Array"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("DATA", "File"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("DATA", "IO"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("ENV", "Object"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("FALSE", "FalseClass"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("NIL", "NilClass"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("RUBY_PLATFORM", "String"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("RUBY_RELEASE_DATE", "String"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("RUBY_VERSION", "String"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("SCRIPT_LINES__", "Hash"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("STDERR", "IO"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("STDIN", "IO"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("STDOUT", "IO"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("TOPLEVEL_BINDING", "Binding"); // NOI18N
+        RUBY_PREDEF_VARS_CLASSES.put("TRUE", "TrueClass"); // NOI18N
+    }
+
+    static final String[] RUBY_PREDEF_VAR =
+            RUBY_PREDEF_VARS_CLASSES.keySet().toArray(new String[RUBY_PREDEF_VARS_CLASSES.size()]);
+
+    static { // so we can use Arrays#binarySearch
+        Arrays.sort(RUBY_KEYWORDS);
+        Arrays.sort(RUBY_PREDEF_VAR);
+    }
 
     /** Return the class name corresponding to the given controller file */
     public static String getControllerClass(FileObject controllerFile) {
@@ -780,4 +900,56 @@ public class RubyUtils {
 
         return controllerFile;
     }
+
+    static String join(final String[] arr, final String separator) {
+        return join(Arrays.asList(arr), separator);
+    }
+
+    static String join(final Iterable<? extends String> iterable, final String separator) {
+        Iterator<? extends String> it = iterable.iterator();
+        if (!it.hasNext()) {
+            return "";
+        }
+        StringBuffer buf = new StringBuffer(60);
+        buf.append(it.next());
+        while (it.hasNext()) {
+            buf.append(separator);
+            buf.append(it.next());
+        }
+
+        return buf.toString();
+    }
+
+    public static BaseDocument getDocument(Result result) {
+        return getDocument(result, false);
+    }
+
+    public static BaseDocument getDocument(Result result, boolean forceOpen) {
+        return (BaseDocument) result.getSnapshot().getSource().getDocument(forceOpen);
+    }
+
+    public static FileObject getFileObject(Result result) {
+        return result.getSnapshot().getSource().getFileObject();
+    }
+
+    static boolean isRubyStubsURL(String url) {
+        return url != null && url.indexOf(RubyPlatform.RUBYSTUBS) != -1; // NOI18N
+    }
+
+    /**
+     * Checks whether the given file is part of the platform (incl. gems)
+     * rather than a source file in a project.
+     * @param fileObject
+     * @return
+     */
+    static boolean isPlatformFile(FileObject fileObject) {
+        Project owner = FileOwnerQuery.getOwner(fileObject);
+        if (owner == null) {
+            return true;
+        }
+        // needed for the dev ide since the bundled jruby is under nbbuild (a free form project)
+        RubyPlatformProvider platformProvider = owner.getLookup().lookup(RubyPlatformProvider.class);
+        return platformProvider == null;
+    }
+
 }
