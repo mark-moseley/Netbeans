@@ -46,9 +46,8 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -57,9 +56,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.event.ChangeListener;
@@ -67,6 +68,7 @@ import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.project.ProjectManager;
+import org.netbeans.modules.apisupport.project.ui.customizer.SingleModuleProperties;
 import org.netbeans.modules.apisupport.project.universe.TestModuleDependency;
 import org.netbeans.modules.apisupport.project.universe.ModuleEntry;
 import org.netbeans.modules.apisupport.project.universe.ModuleList;
@@ -79,10 +81,10 @@ import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.modules.InstalledFileLocator;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Mutex;
 import org.openide.util.RequestProcessor;
+import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
 import org.w3c.dom.Element;
 
@@ -168,7 +170,7 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
     public Map<String,String> getProperties() {
         return delegatingEvaluator(true).getProperties();
     }
-    
+
     private boolean isModuleListDependentProperty(String p) {
         return p.equals("module.classpath") || // NOI18N
                 p.equals("cp") || p.endsWith(".cp") || p.endsWith(".cp.extra") || // NOI18N
@@ -261,8 +263,12 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
     
     /** See issue #69440 for more details. */
     public void setRunInAtomicAction(boolean runInAtomicAction) {
-        assert ProjectManager.mutex().isWriteAccess();
         this.runInAtomicAction = runInAtomicAction;
+    }
+    
+    /** See issue #69440 for more details. */
+    boolean isRunInAtomicAction() {
+        return runInAtomicAction;
     }
     
     public void removeListeners() {
@@ -287,10 +293,11 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
             assert nbroot != null : "netbeans.org-type module not in a complete netbeans.org source root " + dir;
             stock.put("nb_all", nbroot.getAbsolutePath()); // NOI18N
             // Only needed for netbeans.org modules, since for external modules suite.properties suffices.
-            stock.put("netbeans.dest.dir", new File(nbroot, ModuleList.DEST_DIR_IN_NETBEANS_ORG).getAbsolutePath()); // NOI18N
+            stock.put("netbeans.dest.dir", ModuleList.findNetBeansOrgDestDir(nbroot).getAbsolutePath()); // NOI18N
         } else {
             nbroot = null;
         }
+        String codeNameBase = project.getCodeNameBase();
         if (ml != null) {
             // Register *.dir for nb.org modules. There is no equivalent for external modules.
             for (ModuleEntry e : ml.getAllEntriesSoft()) {
@@ -300,7 +307,7 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                     stock.put((nborgPath + ".dir").intern(), e.getClusterDirectory().getAbsolutePath().intern()); // NOI18N
                 }
             }
-            ModuleEntry thisEntry = ml.getEntry(project.getCodeNameBase());
+            ModuleEntry thisEntry = ml.getEntry(codeNameBase);
             if (thisEntry != null) { // can be null e.g. for a broken suite component module
                 assert nbroot == null ^ thisEntry.getNetBeansOrgPath() != null : thisEntry;
                 File clusterDir = thisEntry.getClusterDirectory();
@@ -358,19 +365,30 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
         providers.add(project.getHelper().getPropertyProvider(AntProjectHelper.PRIVATE_PROPERTIES_PATH));
         providers.add(project.getHelper().getPropertyProvider(AntProjectHelper.PROJECT_PROPERTIES_PATH));
         Map<String,String> defaults = new HashMap<String,String>();
-        defaults.put("code.name.base.dashes", project.getCodeNameBase().replace('.', '-')); // NOI18N
+        if (codeNameBase != null) { // #121856
+            defaults.put("code.name.base.dashes", codeNameBase.replace('.', '-')); // NOI18N
+        }
         defaults.put("module.jar.dir", "modules"); // NOI18N
         defaults.put("module.jar.basename", "${code.name.base.dashes}.jar"); // NOI18N
         defaults.put("module.jar", "${module.jar.dir}/${module.jar.basename}"); // NOI18N
         defaults.put("manifest.mf", "manifest.mf"); // NOI18N
         defaults.put("src.dir", "src"); // NOI18N
         defaults.put("build.classes.dir", "build/classes"); // NOI18N
-        defaults.put("test.unit.src.dir", "test/unit/src"); // NOI18N
-        defaults.put("test.qa-functional.src.dir", "test/qa-functional/src"); // NOI18N
-        defaults.put("test.qa-performance.src.dir", "test/qa-performance/src"); // NOI18N
-        defaults.put("build.test.unit.classes.dir", "build/test/unit/classes"); // NOI18N
-        defaults.put("javac.source", "1.4"); // NOI18N
-        defaults.put("test.user.dir", new File(dir, "build/testuserdir").getAbsolutePath()); // NOI18N
+        defaults.put(SingleModuleProperties.JAVAC_SOURCE, "1.4"); // NOI18N
+        if (type == NbModuleProvider.NETBEANS_ORG) {
+            defaults.put("test.user.dir", "${nb_all}/nbbuild/testuserdir"); // NOI18N
+        } else if (type == NbModuleProvider.STANDALONE) {
+            defaults.put("test.user.dir", "build/testuserdir"); // NOI18N
+        } else {
+            defaults.put("test.user.dir", "${suite.dir}/build/testuserdir"); // NOI18N
+        }
+        Set<String> testTypes = new HashSet<String>(Arrays.asList(NbModuleProject.COMMON_TEST_TYPES));
+        // XXX would be good to add in any other types defined in project.xml
+        for (String testType : testTypes) {
+            defaults.put("test." + testType + ".src.dir", "test/" + testType + "/src"); // NOI18N
+            defaults.put("test." + testType + ".data.dir", "test/" + testType + "/data"); // NOI18N
+            defaults.put("build.test." + testType + ".classes.dir", "build/test/" + testType + "/classes"); // NOI18N
+        }
         providers.add(PropertyUtils.fixedPropertyProvider(defaults));
         if (ml != null) {
             providers.add(PropertyUtils.fixedPropertyProvider(Collections.singletonMap("module.classpath", computeModuleClasspath(ml)))); // NOI18N
@@ -380,70 +398,17 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
             buildDefaults.put("run.cp", computeRuntimeModuleClasspath(ml) + ":${cp.extra}:${build.classes.dir}"); // NOI18N
             
             baseEval = PropertyUtils.sequentialPropertyEvaluator(predefs, providers.toArray(new PropertyProvider[providers.size()]));
-            buildDefaults.put("test.unit.cp.extra", ""); // NOI18N
-            String testJars; // #68685 - follow Ant script
-            if (type == NbModuleProvider.NETBEANS_ORG) {
-                // Cf. nbbuild/templates/projectized.xml#test-lib-init
-                buildDefaults.put("xtest.home", "${nb_all}/xtest"); // NOI18N
-                testJars =
-                        "${xtest.home}/lib/junit.jar:" + // NOI18N
-                        "${xtest.home}/lib/nbjunit.jar:" + // NOI18N
-                        "${xtest.home}/lib/nbjunit-ide.jar:" + // NOI18N
-                        "${xtest.home}/lib/insanelib.jar"; // NOI18N
-            } else {
-                // Cf. apisupport/harness/release/build.xml#test-lib-init
-                testJars =
-                        "${test.unit.lib.cp}:" + // NOI18N
-                        // XXX this is ugly, try to look for the JAR using wildcards instead
-                        "${netbeans.dest.dir}/ide6/modules/ext/junit-3.8.1.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/java1/modules/ext/junit-3.8.2.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/java1/modules/ext/junit-4.1.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/testtools/modules/ext/nbjunit.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/testtools/modules/ext/insanelib.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/testtools/modules/org-netbeans-modules-nbjunit.jar:" + // NOI18N, new for 6.0
-                        "${netbeans.dest.dir}/testtools/modules/org-netbeans-modules-nbjunit-ide.jar:" + // NOI18N, new for 6.0
-                        "${netbeans.home}/../ide6/modules/ext/junit-3.8.1.jar:" + // NOI18N
-                        "${netbeans.home}/../java1/modules/ext/junit-3.8.2.jar:" + // NOI18N
-                        "${netbeans.home}/../java1/modules/ext/junit-4.1.jar:" + // NOI18N
-                        "${netbeans.home}/../testtools/modules/ext/nbjunit.jar:" + // NOI18N
-                        "${netbeans.home}/../testtools/modules/ext/insanelib.jar:" + // NOI18N
-                        "${netbeans.home}/../testtools/modules/org-netbeans-modules-nbjunit.jar:" + // NOI18N, new for 6.0
-                        "${netbeans.home}/../testtools/modules/org-netbeans-modules-nbjunit-ide.jar:" + // NOI18N, new for 6.0
-                        "${netbeans.user}/modules/ext/nbjunit.jar:" + // NOI18N
-                        "${netbeans.user}/modules/ext/insanelib.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/../../xtest/lib/junit.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/../../xtest/lib/nbjunit.jar:" + // NOI18N
-                        "${netbeans.dest.dir}/../../xtest/lib/insanelib.jar:" + // NOI18N
-                        "${netbeans.user}/modules/org-netbeans-modules-nbjunit.jar:" + // NOI18N, new for 6.0
-                        "${netbeans.user}/modules/org-netbeans-modules-nbjunit-ide.jar"; // NOI18N, new for 6.0
+
+            Map<String,TestClasspath> testsCPs = computeTestingClassPaths(ml, baseEval, testTypes);
+            testTypes.addAll(testsCPs.keySet());
+            for (String testType : testTypes) {
+                buildDefaults.put("test." + testType + ".cp.extra", ""); // NOI18N
+                TestClasspath tcp = TestClasspath.getOrEmpty(testsCPs, testType);
+                buildDefaults.put("test." + testType + ".cp", "${cp}:${cluster}/${module.jar}:${test." + testType + ".cp.extra}:" + tcp.getCompileClasspath()); // NOI18N
+                buildDefaults.put("test." + testType + ".run.cp.extra", ""); // NOI18N
+                buildDefaults.put("test." + testType + ".run.cp", "${test." + testType + ".cp}:${build.test." + testType + ".classes.dir}:${test." + testType + ".run.cp.extra}:" + tcp.getRuntimeClasspath()); // NOI18N
             }
-            Map<String,TestClasspath> testsCPs = computeTestingClassPaths(ml,baseEval);
-            TestClasspath tcp = TestClasspath.getOrEmpty(testsCPs, "unit"); // NOI18N
-            
-            buildDefaults.put("test.unit.cp", "${cp}:${cluster}/${module.jar}:" + testJars + ":${test.unit.cp.extra}:" + tcp.getCompileClasspath()); // NOI18N
-            buildDefaults.put("test.unit.run.cp.extra", ""); // NOI18N
-            buildDefaults.put("test.unit.run.cp", "${test.unit.cp}:${build.test.unit.classes.dir}:${test.unit.run.cp.extra}:"+ tcp.getRuntimeClasspath()); // NOI18N
-            // #61085: need to treat qa-functional tests the same way...
-            buildDefaults.put("test.qa-functional.cp.extra", ""); // NOI18N
-            // No idea how XTest finds these, some weird magic, so no Ant script to match up to:
-            String jemmyJar = findJemmyJar(baseEval);
-            if (jemmyJar != null) {
-                buildDefaults.put("jemmy.jar", jemmyJar); // NOI18N
-            }
-            String jelly2NbJar = findJelly2NbJar(baseEval);
-            if (jelly2NbJar != null) {
-                buildDefaults.put("jelly2-nb.jar", jelly2NbJar); // NOI18N
-            }
-            tcp = TestClasspath.getOrEmpty(testsCPs, "qa-functional"); // NOI18N
-            buildDefaults.put("test.qa-functional.cp", testJars + // NOI18N
-                    ":${netbeans.home}/../testtools/modules/ext/nbjunit-ide.jar" + // NOI18N
-                    ":${netbeans.user}/testtools/modules/ext/nbjunit.jar" + // NOI18N
-                    ":${jemmy.jar}" + // NOI18N
-                    ":${jelly2-nb.jar}" + // NOI18N
-                    ":${test.qa-functional.cp.extra}:" + // NOI18N
-                     tcp.compile + ':' + tcp.testCompile);
-            buildDefaults.put("build.test.qa-functional.classes.dir", "build/test/qa-functional/classes"); // NOI18N
-            buildDefaults.put("test.qa-functional.run.cp", "${test.qa-functional.cp}:${build.test.qa-functional.classes.dir}" + ':' + tcp.runtime + ':' + tcp.testRuntime); // NOI18N
+
             providers.add(PropertyUtils.fixedPropertyProvider(buildDefaults));
         }
         // skip a bunch of properties irrelevant here - NBM stuff, etc.
@@ -490,33 +455,38 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                     for (JavaPlatform platform : JavaPlatformManager.getDefault().getInstalledPlatforms()) {
                         if (new HashSet<FileObject>(platform.getInstallFolders()).equals(Collections.singleton(homeFO))) {
                             // Matching JDK is registered, so look up its real bootcp.
-                            StringBuffer bootcpSB = new StringBuffer();
                             ClassPath boot = platform.getBootstrapLibraries();
                             boot.removePropertyChangeListener(weakListener);
                             boot.addPropertyChangeListener(weakListener);
-                            for (ClassPath.Entry entry : boot.entries()) {
-                                URL u = entry.getURL();
-                                if (u.toExternalForm().endsWith("!/")) { // NOI18N
-                                    URL nested = FileUtil.getArchiveFile(u);
-                                    if (nested != null) {
-                                        u = nested;
-                                    }
-                                }
-                                if ("file".equals(u.getProtocol())) { // NOI18N
-                                    File f = new File(URI.create(u.toExternalForm()));
-                                    if (bootcpSB.length() > 0) {
-                                        bootcpSB.append(File.pathSeparatorChar);
-                                    }
-                                    bootcpSB.append(f.getAbsolutePath());
-                                }
-                            }
-                            bootcp = bootcpSB.toString();
+                            bootcp = boot.toString(ClassPath.PathConversionMode.WARN);
                             break;
                         }
                     }
                 }
                 if (bootcp == null) {
-                    bootcp = "${nbjdk.home}/jre/lib/rt.jar".replace('/', File.separatorChar); // NOI18N
+                    if (Utilities.isMac()) {
+                        bootcp = "${nbjdk.home}/../Classes/classes.jar";    //NOI18N
+                    }
+                    else {
+                        File jHome;
+                        if (home != null && (jHome = new File(home, "jre/lib")).isDirectory()) {
+                            String[] jars = jHome.list(new FilenameFilter() {
+                                public boolean accept(File dir, String name) {
+                                    String n = name.toLowerCase(Locale.US);
+                                    return n.endsWith(".jar"); // NOI18N
+                                }
+                            });
+                            StringBuilder sb = new StringBuilder();
+                            for (String jar : jars) {
+                                if (sb.length() > 0)
+                                    sb.append(File.pathSeparator);
+                                sb.append("${nbjdk.home}/jre/lib/").append(jar);
+                            }
+                            bootcp = sb.toString().replace('/', File.separatorChar); // NOI18N
+                        } else {
+                            bootcp = "${nbjdk.home}/jre/lib/rt.jar".replace('/', File.separatorChar); // NOI18N
+                        }
+                    }
                 }
             }
             if (bootcp == null) {
@@ -524,7 +494,7 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                 bootcp = "${sun.boot.class.path}"; // NOI18N
             }
             props.put("nbjdk.bootclasspath", bootcp); // NOI18N
-            if (home != null) {
+            if (home != null && !Utilities.isMac()) {   //On Mac everything is in classes.jar, there is no tools.jar
                 props.put("tools.jar", home + "/lib/tools.jar".replace('/', File.separatorChar)); // NOI18N
             }
             if (Util.err.isLoggable(ErrorManager.INFORMATIONAL)) {
@@ -582,46 +552,13 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
     }
     
     /**
-     * Get an Ant location for the root of jemmy.jar.
-     */
-    private String findJemmyJar(PropertyEvaluator eval) {
-        File f = project.getNbrootFile("jemmy/builds/jemmy.jar", eval); // NOI18N
-        if(f == null) {
-            // try to find jemmy.jar installed by Jemmy module
-            f = InstalledFileLocator.getDefault().locate(
-                    "modules/ext/jemmy.jar", "org.netbeans.modules.jemmy", false);  // NOI18N
-        }
-        if (f != null) {
-            return f.getAbsolutePath();
-        } else {
-            return null;
-        }
-    }
-    
-    /**
-     * Get an Ant location for the root of jemmy.jar.
-     */
-    private String findJelly2NbJar(PropertyEvaluator eval) {
-        File f = project.getNbrootFile("jellytools/builds/jelly2-nb.jar", eval); // NOI18N
-        if(f == null) {
-            // try to find jelly2-nb.jar installed by Jellytools module
-            f = InstalledFileLocator.getDefault().locate(
-                    "modules/ext/jelly2-nb.jar", "org.netbeans.modules.jellytools", false);  // NOI18N
-        }
-        if (f != null) {
-            return f.getAbsolutePath();
-        } else {
-            return null;
-        }
-    }
-    
-    /**
      * Should be similar to impl in ParseProjectXml.
      */
     private String computeModuleClasspath(ModuleList ml) {
         Element data = project.getPrimaryConfigurationData();
         Element moduleDependencies = Util.findElement(data,
             "module-dependencies", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
+        assert moduleDependencies != null : "Malformed metadata in " + project;
         StringBuffer cp = new StringBuffer();
         for (Element dep : Util.findSubElements(moduleDependencies)) {
             if (Util.findElement(dep, "compile-dependency", // NOI18N
@@ -695,10 +632,10 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
      * to the {@link TestClasspath test classpath} according to the content in
      * the project's metadata (<em>project.xml<em>).
      */
-    private Map<String,TestClasspath> computeTestingClassPaths(ModuleList ml, PropertyEvaluator evaluator) {
+    private Map<String,TestClasspath> computeTestingClassPaths(ModuleList ml, PropertyEvaluator evaluator, Set<String> extraTestTypes) {
         Map<String, TestClasspath> classpaths = new HashMap<String,TestClasspath>();
         ProjectXMLManager pxm = new ProjectXMLManager(project);
-        Map<String, Set<TestModuleDependency>> testTypes = pxm.getTestDependencies(ml);
+        Map<String, Set<TestModuleDependency>> testDependencies = pxm.getTestDependencies(ml);
         
         String testDistDir =  evaluator.getProperty("test.dist.dir"); // NOI18N
         if (testDistDir == null) {
@@ -718,80 +655,188 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                 testDistDir = moduleDir + File.separatorChar + "build" + File.separatorChar + "testdist"; // NOI18N
             }
         }
-        for (Map.Entry<String,Set<TestModuleDependency>> entry : testTypes.entrySet()) {
+        for (Map.Entry<String,Set<TestModuleDependency>> entry : testDependencies.entrySet()) {
             computeTestType(entry.getKey(), new File(testDistDir), entry.getValue(), classpaths, ml);
+        }
+        for (String testType : extraTestTypes) {
+            if (!testDependencies.containsKey(testType)) {
+                // No declared dependencies of this type, so will definitely need to add in compatibility libraries.
+                computeTestType(testType, new File(testDistDir), Collections.<TestModuleDependency>emptySet(), classpaths, ml);
+            }
         }
         return classpaths;
     }
     
+    private static interface Callback {
+        void callback(TestModuleDependency td, String cnb);
+    }
+    
     private void computeTestType(String ttName, File testDistDir, Set<TestModuleDependency> ttModules, Map<String,TestClasspath> classpaths, ModuleList ml) {
-  
-        Set<String> compileCnds = new HashSet<String>();
-        Set<String> runtimeCnds = new HashSet<String>();
-        Set<String> testCompileCnds = new HashSet<String>();
-        Set<String> testRuntimeCnds = new HashSet<String>();
-        
-        Set<String> processedRecursive = new HashSet<String>();
+        final Set<String> compileCnbs = new HashSet<String>();
+        final Set<String> runtimeCnbs = new HashSet<String>();
+        final Set<String> testCompileCnbs = new HashSet<String>();
+        final Set<String> testRuntimeCnbs = new HashSet<String>();
+
+        // #139339: optimization using processedRecursive set was too bold, removed
+        boolean fullySpecified = false;
         for (TestModuleDependency td : ttModules) {
-            String cnd = td.getModule().getCodeNameBase();
-            if (td.isTest()) {
-                if (td.isCompile()) {
-                    testCompileCnds.add(cnd);
-                } 
-                testRuntimeCnds.add(cnd);
-            }
+            String cnb = td.getModule().getCodeNameBase();
+            fullySpecified |= cnb.equals("org.netbeans.libs.junit4");
+
             if (td.isRecursive()) {
                 // scan cp recursively
-                processTestEntryRecursive(td,compileCnds,runtimeCnds,processedRecursive,ml);         
+                processTestEntryRecursive(td,
+                        new Callback() {
+                            public void callback(TestModuleDependency td, String cnb) {
+                                runtimeCnbs.add(cnb);
+                                if (td.isCompile()) {
+                                    compileCnbs.add(cnb);
+                                }
+                            }
+                        }, ml);
             } else {
-                runtimeCnds.add(cnd);
+                runtimeCnbs.add(cnb);
                 if (td.isCompile()) {
-                    compileCnds.add(cnd);
+                    compileCnbs.add(cnb);
+                }
+            }
+            if (td.isTest()) {
+                if (td.isCompile()) {
+                    testCompileCnbs.add(cnb);
+                }
+                testRuntimeCnbs.add(cnb);
+            }
+        }
+
+        /* debug print
+         if (ttName.equals("unit")) {
+            StringBuilder debugCPs = new StringBuilder();
+            String[] labels = {"compile", "run", "TEST compile", "TEST run"};
+            Set<?>[] cps = new Set<?>[]{compileCnbs, runtimeCnbs, testCompileCnbs, testRuntimeCnbs};
+
+            Map<String, String> processed = new HashMap<String, String>();
+            for (int i = 0; i < cps.length; i++) {
+                Set<?> cpSet = cps[i];
+                for (Object entry : cpSet) {
+                    String se = (String) entry;
+                    if (processed.containsKey(se))
+                        processed.put(se, processed.get(se) + ", " + labels[i]);
+                    else
+                        processed.put(se, labels[i]);
+                }
+            }
+            for (Map.Entry<String, String> entry : processed.entrySet()) {
+                debugCPs.append(entry.getKey());
+                debugCPs.append(": ");
+                debugCPs.append(entry.getValue());
+                debugCPs.append("\n  ");
+            }
+            Logger.getLogger(Evaluator.class.getName()).info("'" + ttName + "' CPs for '" + project.getCodeNameBase() + "':\n" + debugCPs);
+        }*/
+        
+        StringBuilder extra = new StringBuilder();
+        if (!fullySpecified) {
+            // Old module which failed to specify all its test dependencies.
+            if (ml.getEntry("org.netbeans.libs.junit4") == null) {
+                // Old platform. For compatibility, compute a basic unit test lib classpath.
+                String[] testLibJars = {
+                    "${nb_all}/xtest/lib/insanelib.jar", // NOI18N
+                    "${nb_all}/xtest/lib/junit.jar", // NOI18N
+                    "${nb_all}/xtest/lib/nbjunit-ide.jar", // NOI18N
+                    "${nb_all}/xtest/lib/nbjunit.jar", // NOI18N
+                    "${netbeans.dest.dir}/../../xtest/lib/insanelib.jar", // NOI18N
+                    "${netbeans.dest.dir}/../../xtest/lib/junit.jar", // NOI18N
+                    "${netbeans.dest.dir}/../../xtest/lib/nbjunit.jar", // NOI18N
+                    "${netbeans.dest.dir}/ide6/modules/ext/junit-3.8.1.jar", // NOI18N
+                    "${netbeans.dest.dir}/java2/modules/ext/junit-3.8.2.jar", // NOI18N
+                    "${netbeans.dest.dir}/java2/modules/ext/junit-4.1.jar", // NOI18N
+                    "${netbeans.dest.dir}/testtools/modules/ext/insanelib.jar", // NOI18N
+                    "${netbeans.dest.dir}/testtools/modules/ext/nbjunit.jar", // NOI18N
+                    "${netbeans.dest.dir}/testtools/modules/org-netbeans-modules-nbjunit-ide.jar", // NOI18N
+                    "${netbeans.dest.dir}/testtools/modules/org-netbeans-modules-nbjunit.jar", // NOI18N
+                    "${netbeans.home}/../ide6/modules/ext/junit-3.8.1.jar", // NOI18N
+                    "${netbeans.home}/../java2/modules/ext/junit-3.8.2.jar", // NOI18N
+                    "${netbeans.home}/../java2/modules/ext/junit-4.1.jar", // NOI18N
+                    "${netbeans.home}/../testtools/modules/ext/insanelib.jar", // NOI18N
+                    "${netbeans.home}/../testtools/modules/ext/nbjunit.jar", // NOI18N
+                    "${netbeans.home}/../testtools/modules/org-netbeans-modules-nbjunit-ide.jar", // NOI18N
+                    "${netbeans.home}/../testtools/modules/org-netbeans-modules-nbjunit.jar", // NOI18N
+                    "${netbeans.user}/modules/ext/insanelib.jar", // NOI18N
+                    "${netbeans.user}/modules/ext/nbjunit.jar", // NOI18N
+                    "${netbeans.user}/modules/org-netbeans-modules-nbjunit-ide.jar", // NOI18N
+                    "${netbeans.user}/modules/org-netbeans-modules-nbjunit.jar", // NOI18N
+                };
+                for (String jar : testLibJars) {
+                    extra.append(":");
+                    extra.append(jar);
+                }
+                if (ttName.startsWith("qa-")) {
+                    extra.append(":${nb_all}/jemmy/builds/jemmy.jar:${nb_all}/jellytools/builds/jelly2-nb.jar");
+                }
+            } else {
+                // Basic dependencies many tests use:
+                for (String library : new String[] {"org.netbeans.libs.junit4", "org.netbeans.modules.nbjunit", "org.netbeans.insane"}) {
+                    compileCnbs.add(library);
+                    runtimeCnbs.add(library);
+                }
+                if (ttName.startsWith("qa-")) {
+                    // ProjectSupport moved from the old nbjunit.ide:
+                    testCompileCnbs.add("org.netbeans.modules.java.j2seproject");
+                    testRuntimeCnbs.add("org.netbeans.modules.java.j2seproject");
+                    // Common GUI testing tools:
+                    for (String library : new String[] {"org.netbeans.modules.jemmy", "org.netbeans.modules.jellytools"}) {
+                        compileCnbs.add(library);
+                        runtimeCnbs.add(library);
+                    }
                 }
             }
         }
-        TestClasspath testClasspath = new TestClasspath(mergePaths(compileCnds,false,ttName,testDistDir, ml),
-                mergePaths(runtimeCnds,false,ttName,testDistDir,ml),
-                mergePaths(testCompileCnds,true,ttName,testDistDir,ml),
-                mergePaths(testRuntimeCnds,true,ttName,testDistDir,ml));
+
+        TestClasspath testClasspath = new TestClasspath(
+                mergePaths(compileCnbs,false,ttName,testDistDir, ml) + extra,
+                mergePaths(runtimeCnbs,false,ttName,testDistDir,ml) + extra,
+                mergePaths(testCompileCnbs,true,ttName,testDistDir,ml),
+                mergePaths(testRuntimeCnbs,true,ttName,testDistDir,ml));
 
         classpaths.put(ttName,testClasspath);
     }
   
-  private void processTestEntryRecursive(TestModuleDependency td,
-                                        Set<String> compileCnds,
-                                        Set<String> runtimeCnds,
-                                        Set<String> processedRecursive,
-                                        ModuleList ml) {
+  private void processTestEntryRecursive(final TestModuleDependency td,
+                                        final Callback clb,
+                                        final ModuleList ml) {
         Set<String> unprocessed = new HashSet<String>();
-        
+
+        final String codeNameBase = project.getCodeNameBase();
         unprocessed.add(td.getModule().getCodeNameBase()); 
         while (!unprocessed.isEmpty()) { // crude breadth-first search
             Iterator<String> it = unprocessed.iterator();
             String cnb = it.next();
             it.remove();
-            if (processedRecursive.add(cnb)) {
-                ModuleEntry module = ml.getEntry(cnb);
-                if (module == null) {
-                    Util.err.log(ErrorManager.WARNING, "Warning - could not find dependent module " + cnb + " for " + FileUtil.getFileDisplayName(project.getProjectDirectory()));
-                    continue;
-                }
-                if (!cnb.equals(project.getCodeNameBase())) { // build/classes for this is special
-                    runtimeCnds.add(cnb);
-                    if (td.isCompile()) {
-                        compileCnds.add(cnb);
-                    }
-                }
-                String[] newDeps = module.getRunDependencies();
-                unprocessed.addAll(Arrays.asList(newDeps));
+
+            ModuleEntry module = ml.getEntry(cnb);
+            if (module == null) {
+                Util.err.log(ErrorManager.WARNING, "Warning - could not find dependent module " + cnb + " for " + FileUtil.getFileDisplayName(project.getProjectDirectory()));
+                continue;
             }
+            if (!cnb.equals(codeNameBase)) { // build/classes for this is special
+                clb.callback(td, cnb);
+            }
+            String[] newDeps = module.getRunDependencies();
+            unprocessed.addAll(Arrays.asList(newDeps));
         }
     }
 
+   private static final Set<String> warnedModules = Collections.synchronizedSet(new HashSet<String>());
     private String mergePaths(Set<String> cnbs, boolean test,String testtype,File testDistDir,ModuleList ml) {
         StringBuffer cps = new StringBuffer();
         for (String cnb : cnbs) {
                 ModuleEntry module = ml.getEntry(cnb);
+                if (module == null) {
+                    if (warnedModules.add(cnb)) {
+                        Logger.getLogger(Evaluator.class.getName()).warning("Cannot find test module dependency: " + cnb);
+                    }
+                    continue;
+                }
                 if (cps.length() > 0) {
                     cps.append(':');
                 }
@@ -804,10 +849,17 @@ final class Evaluator implements PropertyEvaluator, PropertyChangeListener, AntP
                         File jarFile = new File(
                                           testDistDir, testtype + s + clusterName + s + cnb.replace('.','-') + s + "tests.jar"); // NOI18N
                         cps.append(jarFile.getPath());
+                        // See ParseProjectXml:
+                        if (!testtype.equals("unit")) {
+                            cps.append(':');
+                            jarFile = new File(testDistDir, "unit" + s + clusterName + s + cnb.replace('.', '-') + s + "tests.jar"); // NOI18N
+                            cps.append(jarFile.getPath());
+                        }
                     }
                      
                 } else {
                     cps.append(module.getJarLocation().getPath());
+                    cps.append(module.getClassPathExtensions()); // #105621
                 }
         }
         return cps.toString();
