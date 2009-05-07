@@ -59,6 +59,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbJar;
+import org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException;
 import org.netbeans.modules.j2ee.dd.api.ejb.EjbJarMetadata;
 import org.netbeans.modules.j2ee.dd.api.ejb.EnterpriseBeans;
 import org.netbeans.modules.j2ee.dd.api.ejb.MessageDriven;
@@ -182,7 +183,7 @@ public abstract class SendJMSMessageUiSupport extends MessageDestinationUiSuppor
 
                     MessageDriven[] messageDrivens = eb.getMessageDriven();
                     for (MessageDriven mdb : messageDrivens) {
-                        result.put(mdb.getEjbName(), mdb.getMappedName());
+                        result.put(mdb.getEjbName(), findMsgDest(mdb));
                     }
                     return result;
                 }
@@ -193,6 +194,26 @@ public abstract class SendJMSMessageUiSupport extends MessageDestinationUiSuppor
         return mdbs;
     }
     
+    // fix for 162899
+    // not very nice solution, but the interface
+    // org.netbeans.modules.j2ee.dd.api.ejb.MessageDriven is not nice too.
+    private static String findMsgDest(MessageDriven mdb) {
+        try {
+            // try EJB 3.0 style first
+            return  mdb.getMappedName();
+        }
+        catch (VersionNotSupportedException e) {
+            try {
+                // try EJB 2.1 style
+                return mdb.getMessageDestinationLink();
+            }
+            catch (VersionNotSupportedException e2) {
+                // sorry, we don't resolve older versions than 2.1...
+                return null;
+            }
+        }
+    }
+
     /**
      * Holder for message-driven bean and its properties.
      */
@@ -285,14 +306,19 @@ public abstract class SendJMSMessageUiSupport extends MessageDestinationUiSuppor
                 MdbHolder mdbHolder = (MdbHolder) value;
                 setText(mdbHolder.getMdbEjbName());
                 // tooltip
-                String type = MessageDestination.Type.QUEUE.equals(mdbHolder.getMessageDestination().getType()) ? "LBL_Queue" : "LBL_Topic"; // NOI18N
-                StringBuilder sb = new StringBuilder(mdbHolder.getProjectName());
-                sb.append(" : "); // NOI18N
-                sb.append(mdbHolder.getMdbEjbName());
-                sb.append(" ["); // NOI18N
-                sb.append(NbBundle.getMessage(MessageDestinationUiSupport.class, type));
-                sb.append("]"); // NOI18N
-                setToolTipText(sb.toString());
+                MessageDestination messageDestination = mdbHolder.getMessageDestination();
+                if (messageDestination == null) {
+                    setToolTipText(""); // NOI18N
+                } else {
+                    String type = MessageDestination.Type.QUEUE.equals(messageDestination.getType()) ? "LBL_Queue" : "LBL_Topic"; // NOI18N
+                    StringBuilder sb = new StringBuilder(mdbHolder.getProjectName());
+                    sb.append(" : "); // NOI18N
+                    sb.append(mdbHolder.getMdbEjbName());
+                    sb.append(" ["); // NOI18N
+                    sb.append(NbBundle.getMessage(MessageDestinationUiSupport.class, type));
+                    sb.append("]"); // NOI18N
+                    setToolTipText(sb.toString());
+                }
             } else {
                 setText(value != null ? value.toString() : ""); // NOI18N
                 setToolTipText(""); // NOI18N
