@@ -71,6 +71,7 @@ import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
+import org.openide.util.Parameters;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.datatransfer.NewType;
 import org.openide.util.datatransfer.PasteType;
@@ -160,6 +161,9 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
 
     /** Lock for initialization */
     private static final Object INIT_LOCK = new Object();
+
+    /** private lock to avoid synchronize on this */
+    private static final Object LOCK = new Object();
 
     /** children representing parent node (Children or ChildrenArray),
     * for synchronization reasons must be changed only
@@ -323,45 +327,51 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
     * @param index index that will be assigned to this node
     * @exception IllegalStateException if this node already belongs to a children
     */
-    final synchronized void assignTo(Children parent, int index) {
-        Children ch = getParentChildren();
+    final void assignTo(Children parent, int index) {
+        synchronized (LOCK) {
+            Children ch = getParentChildren();
 
-        if ((ch != null) && (ch != parent)) {
-            throw new IllegalStateException(
-                "Cannot initialize " + index + "th child of node " + parent.getNode() +
-                "; it already belongs to node " + ch.getNode()
-            ); // NOI18N
-        }
+            if ((ch != null) && (ch != parent)) {
+                throw new IllegalStateException(
+                    "Cannot initialize " + index + "th child of node " + parent.getNode() +
+                    "; it already belongs to node " + ch.getNode()
+                ); // NOI18N
+            }
 
-        if (!(this.parent instanceof ChildrenArray)) {
-            this.parent = parent;
+            if (!(this.parent instanceof ChildrenArray)) {
+                this.parent = parent;
+            }
         }
     }
 
     /** Code that reassigns the reference from to parent from its
      * Children to its ChildrenArray.
      */
-    final synchronized void reassignTo(Children currentParent, ChildrenArray itsArray) {
-        if ((this.parent != currentParent) && (this.parent != itsArray)) {
-            throw new IllegalStateException(
-                "Unauthorized call to change parent: " + this.parent + " and should be: " + currentParent
-            );
-        }
+    final void reassignTo(Children currentParent, ChildrenArray itsArray) {
+        synchronized (LOCK) {
+            if ((this.parent != currentParent) && (this.parent != itsArray)) {
+                throw new IllegalStateException(
+                    "Unauthorized call to change parent: " + this.parent + " and should be: " + currentParent
+                );
+            }
 
-        this.parent = itsArray;
+            this.parent = itsArray;
+        }
     }
 
     /** Deassigns the node from a children, when it is removed from
     * a children.
     */
-    final synchronized void deassignFrom(Children parent) {
-        Children p = getParentChildren();
+    final void deassignFrom(Children parent) {
+        synchronized (LOCK) {
+            Children p = getParentChildren();
 
-        if (parent != p) {
-            throw new IllegalArgumentException("Deassign from wrong parent. Old: " + p + " Caller: " + parent); //NOI18N
+            if (parent != p) {
+                throw new IllegalArgumentException("Deassign from wrong parent. Old: " + p + " Caller: " + parent); //NOI18N
+            }
+
+            this.parent = null;
         }
-
-        this.parent = null;
     }
 
     /** Set the system name. Fires a property change event.
@@ -406,6 +416,17 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
         }
     }
 
+    /**
+     * @deprecated Has no effect. To make a node disappear, simply remove it from the
+     *             children of its parent. For example, you might call
+     *             {@link Children.Keys#setKeys(Collection)} with a smaller collection.
+     */
+    @Deprecated
+    @Override
+    public void setHidden(boolean hidden) {
+        super.setHidden(hidden);
+    }
+
     /** Find an icon for this node (in the closed state).
     * @param type constant from {@link java.beans.BeanInfo}
     * @return icon to use to represent the node
@@ -448,6 +469,7 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
      * @since 3.1
      */
     protected final void setChildren(final Children ch) {
+        Parameters.notNull("ch", ch);
         Children.MUTEX.postWriteRequest(new Runnable() { public void run() {
 
             List<Node> prevSnapshot = null;
@@ -1045,31 +1067,37 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
     *   Can be null if one should find indices from current set of nodes
     */
     final void fireSubNodesChange(boolean addAction, Node[] delta, Node[] from) {
-        if (err.isLoggable(Level.FINER)) {
-            err.finer("fireSubNodesChange() " + this); // NOI18N
-            err.finer("    added: " + addAction); // NOI18N
-            err.finer("    delta: " + Arrays.toString(delta)); // NOI18N
-            err.finer("    from: " + Arrays.toString(from)); // NOI18N
-        }
+        try {
+            // enter to readAccess to prevent firing another event before all listeners receive current event
+            Children.PR.enterReadAccess();
+            if (err.isLoggable(Level.FINER)) {
+                err.finer("fireSubNodesChange() " + this); // NOI18N
+                err.finer("    added: " + addAction); // NOI18N
+                err.finer("    delta: " + Arrays.toString(delta)); // NOI18N
+                err.finer("    from: " + Arrays.toString(from)); // NOI18N
+            }
 
-        NodeMemberEvent ev = null;
-        Object[] listeners = this.listeners.getListenerList();
+            NodeMemberEvent ev = null;
+            Object[] listeners = this.listeners.getListenerList();
 
-        // Process the listeners last to first, notifying
-        // those that are interested in this event
-        for (int i = listeners.length - 2; i >= 0; i -= 2) {
-            if (listeners[i] == NodeListener.class) {
-                // Lazily create the event:
-                if (ev == null) {
-                    ev = new NodeMemberEvent(this, addAction, delta, from);
-                }
+            // Process the listeners last to first, notifying
+            // those that are interested in this event
+            for (int i = listeners.length - 2; i >= 0; i -= 2) {
+                if (listeners[i] == NodeListener.class) {
+                    // Lazily create the event:
+                    if (ev == null) {
+                        ev = new NodeMemberEvent(this, addAction, delta, from);
+                    }
 
-                if (addAction) {
-                    ((NodeListener) listeners[i + 1]).childrenAdded(ev);
-                } else {
-                    ((NodeListener) listeners[i + 1]).childrenRemoved(ev);
+                    if (addAction) {
+                        ((NodeListener) listeners[i + 1]).childrenAdded(ev);
+                    } else {
+                        ((NodeListener) listeners[i + 1]).childrenRemoved(ev);
+                    }
                 }
             }
+        } finally {
+            Children.PR.exitReadAccess();
         }
     }
     
@@ -1258,6 +1286,14 @@ public abstract class Node extends FeatureDescriptor implements Lookup.Provider,
     * If that methods returns a non-<code>null</code> value, one can serialize it,
     * and after deserialization
     * use {@link #getNode} to obtain the original node.
+    * 
+    * <p><b>Related documentation</b>
+    * 
+    * <ul>
+    * <li><a href="http://blogs.sun.com/geertjan/entry/serializing_nodes">Serializing Nodes</a> 
+    * <li><a href="http://blogs.sun.com/geertjan/entry/multiple_nodes_serialization">Serializing Multiple Nodes</a> 
+    * </ul>
+    * 
     */
     public static interface Handle extends java.io.Serializable {
         /** @deprecated Only public by accident. */
