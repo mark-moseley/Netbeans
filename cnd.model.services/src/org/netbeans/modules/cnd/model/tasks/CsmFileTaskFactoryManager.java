@@ -68,14 +68,17 @@ public class CsmFileTaskFactoryManager {
     private Lookup.Result<CsmFileTaskFactory> factories;
 
     private CsmFileTaskFactoryManager() {
-        final RequestProcessor.Task updateTask = new RequestProcessor("CsmFileTaskFactoryManager Worker", 1).create(new Runnable() {
+        final RequestProcessor.Task updateTask = new RequestProcessor("CsmFileTaskFactoryManager Worker", 1).create(new Runnable() { //NOI18N
             public void run() {
                 update();
             }
         });
         
         factories = Lookup.getDefault().lookupResult(CsmFileTaskFactory.class);
-        Logger.getLogger(CsmFileTaskFactoryManager.class.getName()).log(Level.FINE, "CsmFileTaskFactoryManager: " + factories.allInstances().size() + " factories were found.");
+        Logger logger = Logger.getLogger(CsmFileTaskFactoryManager.class.getName());
+        if (logger.isLoggable(Level.FINE)) {
+            logger.fine("CsmFileTaskFactoryManager: " + factories.allInstances().size() + " factories were found.");
+        }
         factories.addLookupListener(new LookupListener() {
             public void resultChanged(LookupEvent ev) {
                 updateTask.schedule(0);
@@ -91,10 +94,10 @@ public class CsmFileTaskFactoryManager {
         }
     }
     
-    public static interface Accessor {
+    /*public*/ static interface Accessor {
         public abstract void fireChangeEvent(CsmFileTaskFactory f);
     }
     
-    public static Accessor ACCESSOR;
+    /*public*/ static Accessor ACCESSOR;
     
 }
