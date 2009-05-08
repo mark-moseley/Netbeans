@@ -50,6 +50,67 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         super(testName);
     }
 
+    public void testIZ151584() throws Exception {
+        // IZ#151584:
+        performTest("iz151584.cpp", 2, 10, "iz151584.cpp", 2, 5);
+        performTest("iz151584.cpp", 4, 15, "iz151584.cpp", 4, 9);
+        performTest("iz151584.cpp", 6, 20, "iz151584.cpp", 6, 13);
+    }
+
+    public void testIZ162280() throws Exception {
+        // IZ#162280: Inaccuracy tests: regression in Boost and Vlc
+        performTest("iz162280.cpp", 33, 20, "iz162280.cpp", 30, 9);
+        performTest("iz162280.cpp", 33, 30, "iz162280.cpp", 30, 9);
+        performTest("iz162280.cpp", 35, 15, "iz162280.cpp", 30, 9);
+        performTest("iz162280.cpp", 35, 25, "iz162280.cpp", 27, 9);
+    }
+
+    public void testIZ149685() throws Exception {
+        // IZ#149685: Multi-level class declarations not recognized by ide
+        performTest("iz149685.cpp", 8, 30, "iz149685.cpp", 6, 13);
+        performTest("iz149685.cpp", 19, 15, "iz149685.cpp", 6, 13);
+    }
+
+    public void testIZ155578() throws Exception {
+        // IZ155578: Overloaded functions with tpedef'ed argument types break Code Assistance
+        performTest("iz155578.cpp", 6, 20, "iz155578.cpp", 6, 5);
+        performTest("iz155578.cpp", 7, 20, "iz155578.cpp", 7, 5);
+    }
+
+    public void testIZ159307() throws Exception {
+        // IZ#159307: Wrong recognition of local constructor as global function
+        performTest("iz159307.cpp", 13, 12, "iz159307.cpp", 7, 9);
+        performTest("iz159307.cpp", 13, 30, "iz159307.cpp", 9, 9);
+        performTest("iz159307.cpp", 14, 15, "iz159307.cpp", 1, 1);
+    }
+
+    public void testIZ159156() throws Exception {
+        // IZ#159156: Wrong type resolving scope sequence in Resolver3
+        performTest("iz159156.cpp", 18, 18, "iz159156.cpp", 2, 5);
+    }
+
+    public void testIZ148223() throws Exception {
+        // IZ#148223: IDE can't recognize overloaded operator&&
+        performTest("operators_hyperlink.cpp", 65, 21, "operators_hyperlink.cpp", 6, 9); // cc in (a1 && b1).cc()
+        performTest("operators_hyperlink.cpp", 66, 21, "operators_hyperlink.cpp", 6, 9); // cc in (a1 && e1).cc()
+        performTest("operators_hyperlink.cpp", 67, 21, "operators_hyperlink.cpp", 14, 9); // c1 in (e1 && d1)->c1()
+    }
+
+    public void testIZ157837() throws Exception {
+        // IZ#157837: incorrect deref of function-type fields
+        performTest("iz157837.cc", 23, 35, "iz157837.cc", 7, 9); // me_value
+        performTest("iz157837.cc", 24, 35, "iz157837.cc", 7, 9); // me_value
+        performTest("iz157837.cc", 25, 35, "iz157837.cc", 8, 9); // me_lookup
+        performTest("iz157837.cc", 25, 55, "iz157837.cc", 12, 9);// mp_value
+        performTest("iz157837.cc", 24, 45, "iz157837.cc", 3, 9); // value
+    }
+
+    public void testClassNameCollision() throws Exception {
+        // IZ#156123: Resolve class from current namespace at first
+        performTest("iz156123.cc", 21, 20, "iz156123.cc", 12, 9); // Field in "Database::Field fld;"
+        performTest("iz156123.cc", 22, 15, "iz156123.cc", 14, 13); // name in "fld.name = 1;"
+    }
+
     public void testDerefArrayByArrow() throws Exception {
         //IZ#149783: IDE does not recognize array as pointer
         performTest("iz149783.c", 9, 10, "iz149783.c", 2, 5);
@@ -247,6 +308,11 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("templateParameters.h", 89, 43, "templateParameters.h", 85, 1);
         performTest("templateParameters.h", 89, 47, "templateParameters.h", 86, 1);
         performTest("templateParameters.h", 90, 6, "templateParameters.h", 82, 1);
+    }
+
+    public void testConstInTemplateParameters() throws Exception {
+        // IZ#156679 : Constant in template is highlighted as invalid identifier
+        performTest("templateParameters.h", 129, 9, "templateParameters.h", 125, 20);
     }
 
     public void testSameName() throws Exception {
@@ -684,10 +750,120 @@ public class ClassMembersHyperlinkTestCase extends HyperlinkBaseTestCase {
         performTest("iz151955.cc", 13, 35, "iz151955.cc", 10, 5);
     }
 
+    public void testIZ154112() throws Exception {
+        // IZ#154112: Unresolved instantiations of template
+        performTest("iz154112.cc", 17, 13, "iz154112.cc", 7, 5);
+        performTest("iz154112.cc", 18, 13, "iz154112.cc", 7, 5);
+        performTest("iz154112.cc", 19, 19, "iz154112.cc", 13, 5);
+        performTest("iz154112.cc", 20, 19, "iz154112.cc", 13, 5);
+    }
+
+    public void testIZ154594() throws Exception {
+        // IZ#154594: completion fails on expressions with keyword template
+        performTest("iz154594.cc", 15, 32, "iz154594.cc", 12, 5);
+    }
+
+    public void testIZ154775() throws Exception {
+        // IZ#154775: Unresolved inner type of instantiation
+        performTest("iz154775.cc", 14, 20, "iz154775.cc", 9, 5);
+
+        performTest("iz154775.cc", 31, 24, "iz154775.cc", 23, 5);
+        performTest("iz154775.cc", 32, 24, "iz154775.cc", 27, 5);
+    }
+
+    public void testIZ154778() throws Exception {
+        //IZ#154778: Completion fails on gt operator
+        performTest("iz154778.cc", 9, 18, "iz154778.cc", 5, 5);
+    }
+
+    public void testIZ154789() throws Exception {
+        //IZ#154789: Completion fails on macros
+        performTest("iz154789.cc", 15, 22, "iz154789.cc", 5, 5);
+    }
+
+    public void testIZ154781() throws Exception {
+        //IZ#154781: Completion fails on const
+        performTest("iz154781.cc", 14, 20, "iz154781.cc", 5, 5);
+        performTest("iz154781.cc", 15, 20, "iz154781.cc", 5, 5);
+    }
+
+    public void testIZ151592() throws Exception {
+        //IZ#151592: wrong hyperlink on derived class member
+        performTest("iz151592.cc", 9, 14, "iz151592.cc", 9, 5);
+        performTest("iz151592.cc", 10, 14, "iz151592.cc", 10, 5);
+    }
+
+    public void testIZ148035() throws Exception {
+        //IZ#148035 : Code assistance errors from instances of complex template classes
+        performTest("iz148035.cc", 20, 16, "iz148035.cc", 13, 5);
+    }
+
+    public void testIZ151591() throws Exception {
+        // IZ#151591 : Unresolved protected member of parent class in inner class of child class
+        performTest("iz151591.cc", 13, 17, "iz151591.cc", 3, 5);
+    }
+
+    public void testIZ151763() throws Exception {
+        // IZ#151763 : Unresolved usage of operator ()
+        performTest("iz151763.cc", 15, 9, "iz151763.cc", 2, 5);
+        performTest("iz151763.cc", 18, 11, "iz151763.cc", 2, 5);
+    }
+
+    public void testIZ154792() throws Exception {
+        // IZ#154792 : Completion fails on question mark
+        performTest("iz154792.cc", 10, 32, "iz154792.cc", 5, 9);
+    }
+
+    public void testIZ151765() throws Exception {
+        // IZ#151765 : Unresolved shifted pointers
+        performTest("iz151765.cc", 11, 12, "iz151765.cc", 3, 5);
+    }
+
+    public void testIZ160637() throws Exception {
+        // IZ#160637 : space between destructor and parens makes destructor unresolved
+        performTest("iz160637.cc", 9, 25, "iz160637.cc", 5, 5);
+    }
+
+    public void testIZ151043() throws Exception {
+        // IZ#151043 : Unresolved dereferencing
+        performTest("iz151043.cc", 8, 11, "iz151043.cc", 3, 5);
+        performTest("iz151043.cc", 9, 13, "iz151043.cc", 3, 5);
+        performTest("iz151043.cc", 10, 25, "iz151043.cc", 3, 5);
+    }
+
+    public void testIZ160677() throws Exception {
+        // IZ#160677 : Unresolved members of global variables in global context
+        performTest("iz160677.cc", 6, 14, "iz160677.cc", 2, 5);
+    }
+
+    public void testIZ104943() throws Exception {
+        // IZ#104943 : Hyperlink works wrong on overloaded methods with pointer
+        performTest("iz104943.cc", 3, 12, "iz104943.cc", 8, 1);
+        performTest("iz104943.cc", 4, 12, "iz104943.cc", 12, 1);
+        performTest("iz104943.cc", 5, 12, "iz104943.cc", 16, 1);
+        performTest("iz104943.cc", 8, 20, "iz104943.cc", 3, 5);
+        performTest("iz104943.cc", 12, 20, "iz104943.cc", 4, 5);
+        performTest("iz104943.cc", 16, 20, "iz104943.cc", 5, 5);
+    }
+
+    public void testIZ104945() throws Exception {
+        // IZ#104945 : Hyperlink works wrong on overloaded methods with const
+        performTest("iz104945.cc", 3, 12, "iz104945.cc", 10, 1);
+        performTest("iz104945.cc", 4, 12, "iz104945.cc", 14, 1);
+        performTest("iz104945.cc", 5, 12, "iz104945.cc", 18, 1);
+        performTest("iz104945.cc", 6, 12, "iz104945.cc", 22, 1);
+        performTest("iz104945.cc", 7, 12, "iz104945.cc", 26, 1);
+        performTest("iz104945.cc", 10, 20, "iz104945.cc", 3, 5);
+        performTest("iz104945.cc", 14, 20, "iz104945.cc", 4, 5);
+        performTest("iz104945.cc", 18, 20, "iz104945.cc", 5, 5);
+        performTest("iz104945.cc", 22, 20, "iz104945.cc", 6, 5);
+        performTest("iz104945.cc", 26, 20, "iz104945.cc", 7, 5);
+    }
+
     public static class Failed extends HyperlinkBaseTestCase {
 
         @Override
-        protected Class getTestCaseDataClass() {
+        protected Class<?> getTestCaseDataClass() {
             return ClassMembersHyperlinkTestCase.class;
         }
 
