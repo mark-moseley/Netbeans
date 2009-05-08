@@ -42,7 +42,7 @@ made subject to such option by the copyright holder.
 -->
 
 <toolchaindefinition xmlns="http://www.netbeans.org/ns/cnd-toolchain-definition/1">
-    <toolchain name="Cygwin_4.x" display="GNU Compiler Collection from Cygwin" family="GNU" qmakespec="cygwin-g++"/>
+    <toolchain name="Cygwin" display="GNU Compiler Collection from Cygwin" family="GNU" qmakespec="cygwin-g++"/>
     <platforms stringvalue="windows"/>
     <drive_letter_prefix stringvalue="/cygdrive/"/>
     <base_folders>
@@ -51,12 +51,10 @@ made subject to such option by the copyright holder.
     </base_folders>
     <c>
         <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
-        <version flags="--version" pattern=".*\\(GCC\\) 4\\.[3-9]"/>
         <system_include_paths flags="-x c -E -v" parser="GNU" remove_in_path="/bin" remove_in_output=""/>
     </c>
     <cpp>
         <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
-        <version flags="--version" pattern=".*\\(GCC\\) 4\\.[3-9]"/>
         <system_include_paths flags="-x c++ -E -v" parser="GNU" remove_in_path="/bin" remove_in_output=""/>
     </cpp>
     <fortran>
@@ -69,6 +67,6 @@ made subject to such option by the copyright holder.
     </assembler>
     <linker>
         <library_prefix stringvalue="cyg"/>
-        <dynamic_library_basic flags="-shared "/>
+        <dynamic_library_basic flags="-mno-cygwin -shared "/>
     </linker>
 </toolchaindefinition>

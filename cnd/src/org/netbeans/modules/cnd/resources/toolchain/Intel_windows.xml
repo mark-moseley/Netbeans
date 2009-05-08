@@ -42,33 +42,26 @@ made subject to such option by the copyright holder.
 -->
 
 <toolchaindefinition xmlns="http://www.netbeans.org/ns/cnd-toolchain-definition/1">
-    <toolchain name="Cygwin_4.x" display="GNU Compiler Collection from Cygwin" family="GNU" qmakespec="cygwin-g++"/>
+    <toolchain name="Intel" display="GNU Compiler Collection from Intel" family="GNU"/>
     <platforms stringvalue="windows"/>
-    <drive_letter_prefix stringvalue="/cygdrive/"/>
     <base_folders>
-        <base_folder regestry="hklm\software\cygwin\setup"  pattern="rootdir.*REG_SZ(.*)" suffix="bin" path_patern=".*[\\/]cygwin.*[\\/]bin[\\/]?$"/>
-        <base_folder regestry="hklm\software\cygnus solutions\cygwin\mounts v2\/"  pattern="native.*REG_SZ(.*)" suffix="bin" path_patern=".*[\\/]cygwin[\\/]bin[\\/]?$"/>
+        <base_folder regestry="hklm\software\INTEL\Compilers\C++"  pattern="ProductDir.*REG_SZ(.*)" suffix="Bin" path_patern=".*[\\/]Intel[\\/]Compiler[\\/]"/>
     </base_folders>
     <c>
-        <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
-        <version flags="--version" pattern=".*\\(GCC\\) 4\\.[3-9]"/>
-        <system_include_paths flags="-x c -E -v" parser="GNU" remove_in_path="/bin" remove_in_output=""/>
+        <compiler name="icl"/>
+        <recognizer pattern=".*[\\/]Intel[\\/]Compiler[\\/]"/>
+        <version flags="" pattern=".*Intel\(R\) C\+\+ Compiler"/>
     </c>
     <cpp>
-        <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
-        <version flags="--version" pattern=".*\\(GCC\\) 4\\.[3-9]"/>
-        <system_include_paths flags="-x c++ -E -v" parser="GNU" remove_in_path="/bin" remove_in_output=""/>
+        <compiler name="icl"/>
+        <recognizer pattern=".*[\\/]Intel[\\/]Compiler[\\/]"/>
+        <version flags="" pattern=".*Intel\(R\) C\+\+ Compiler"/>
     </cpp>
     <fortran>
-        <compiler name="gfortran,g95,g90,g77"/>
-        <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
+        <compiler name=""/>
+        <alternative_path/>
     </fortran>
-    <assembler>
-        <compiler name="as"/>
-        <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
-    </assembler>
-    <linker>
-        <library_prefix stringvalue="cyg"/>
-        <dynamic_library_basic flags="-shared "/>
-    </linker>
+    <debugger>
+        <tool name="idb"/>
+    </debugger>
 </toolchaindefinition>

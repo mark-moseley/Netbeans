@@ -42,33 +42,39 @@ made subject to such option by the copyright holder.
 -->
 
 <toolchaindefinition xmlns="http://www.netbeans.org/ns/cnd-toolchain-definition/1">
-    <toolchain name="Cygwin_4.x" display="GNU Compiler Collection from Cygwin" family="GNU" qmakespec="cygwin-g++"/>
+    <toolchain name="MinGW" display="GNU Compiler Collection from MinGW" family="GNU" qmakespec="win32-g++"/>
     <platforms stringvalue="windows"/>
-    <drive_letter_prefix stringvalue="/cygdrive/"/>
     <base_folders>
-        <base_folder regestry="hklm\software\cygwin\setup"  pattern="rootdir.*REG_SZ(.*)" suffix="bin" path_patern=".*[\\/]cygwin.*[\\/]bin[\\/]?$"/>
-        <base_folder regestry="hklm\software\cygnus solutions\cygwin\mounts v2\/"  pattern="native.*REG_SZ(.*)" suffix="bin" path_patern=".*[\\/]cygwin[\\/]bin[\\/]?$"/>
+        <base_folder regestry="hklm\software\microsoft\windows\currentversion\uninstall\MinGW" pattern="InstallLocation.*REG_SZ(.*)" suffix="bin" path_patern=".*[\\/]mingw[\\/]bin[\\/]?$"/>
     </base_folders>
+    <command_folders>
+        <command_folder regestry="hklm\software\microsoft\windows\currentversion\uninstall\msys-1.0_is1" pattern="Inno Setup: App Path.*REG_SZ(.*)" suffix="bin" path_patern=".*[\\/]msys[\\/]1.0[\\/]bin[\\/]?$"/>
+    </command_folders>
     <c>
-        <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
-        <version flags="--version" pattern=".*\\(GCC\\) 4\\.[3-9]"/>
-        <system_include_paths flags="-x c -E -v" parser="GNU" remove_in_path="/bin" remove_in_output=""/>
+        <recognizer pattern=".*[\\/]mingw[\\/]bin[\\/]?$"/>
+        <system_include_paths flags="-x c -E -v" parser="GNU" remove_in_path="/bin" remove_in_output="/mingw"/>
     </c>
     <cpp>
-        <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
-        <version flags="--version" pattern=".*\\(GCC\\) 4\\.[3-9]"/>
-        <system_include_paths flags="-x c++ -E -v" parser="GNU" remove_in_path="/bin" remove_in_output=""/>
+        <recognizer pattern=".*[\\/]mingw[\\/]bin[\\/]?$"/>
+        <system_include_paths flags="-x c++ -E -v" parser="GNU" remove_in_path="/bin" remove_in_output="/mingw"/>
     </cpp>
     <fortran>
         <compiler name="gfortran,g95,g90,g77"/>
-        <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
+        <recognizer pattern=".*[\\/]mingw[\\/]bin[\\/]?$"/>
     </fortran>
     <assembler>
         <compiler name="as"/>
-        <recognizer pattern=".*[\\/].*cygwin.*[\\/]bin[\\/]?$"/>
+        <recognizer pattern=".*[\\/]mingw[\\/]bin[\\/]?$"/>
     </assembler>
     <linker>
-        <library_prefix stringvalue="cyg"/>
-        <dynamic_library_basic flags="-shared "/>
+        <library_prefix stringvalue=""/>
     </linker>
+    <make>
+        <tool name="gmake,make" skip="true"/>
+        <alternative_path>
+            <path directory="$MSYS"/>
+            <path toolchain_name="*"/>
+            <path directory="$PATH"/>
+        </alternative_path>
+    </make>
 </toolchaindefinition>
