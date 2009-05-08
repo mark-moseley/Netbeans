@@ -41,32 +41,40 @@ package org.netbeans.modules.cnd.remote.sync;
 
 import java.io.File;
 import java.io.PrintWriter;
-import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
-import org.netbeans.modules.cnd.api.remote.PathMap;
 import org.netbeans.modules.cnd.api.remote.RemoteSyncWorker;
+import org.netbeans.modules.cnd.spi.remote.RemoteSyncFactory;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.openide.util.NbBundle;
 
 /**
- * A common base class for RemoteSyncWorker implementations
+ *
  * @author Vladimir Kvashin
  */
-/*package-local*/ abstract class BaseSyncWorker implements RemoteSyncWorker {
+public @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.spi.remote.RemoteSyncFactory.class, position=300)
+class ScpSyncFactory extends RemoteSyncFactory {
 
-    protected final File localDir;
-    protected final ExecutionEnvironment executionEnvironment;
-    protected final PrintWriter out;
-    protected final PrintWriter err;
-
-    public BaseSyncWorker(File localDir, ExecutionEnvironment executionEnvironment, PrintWriter out, PrintWriter err) {
-        this.localDir = localDir;
-        this.executionEnvironment = executionEnvironment;
-        this.out = out;
-        this.err = err;
+    @Override
+    public RemoteSyncWorker createNew(File localDir, ExecutionEnvironment executionEnvironment, PrintWriter out, PrintWriter err) {
+        return new ScpSyncWorker(localDir, executionEnvironment, out, err);
     }
 
-    protected boolean checkRemotePath() {
-        PathMap mapper = HostInfoProvider.getMapper(executionEnvironment);
-        return mapper.checkRemotePath(localDir.getAbsolutePath(), true);
+    @Override
+    public String getDisplayName() {
+        return NbBundle.getMessage(getClass(), "SCP_Factory_Name");
     }
 
+    @Override
+    public String getDescription() {
+        return NbBundle.getMessage(getClass(), "SCP_Factory_Description");
+    }
+
+    @Override
+    public String getID() {
+        return "scp"; //NOI18N
+    }
+
+    @Override
+    public boolean isApplicable(ExecutionEnvironment execEnv) {
+        return true;
+    }
 }
