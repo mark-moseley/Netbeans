@@ -43,10 +43,19 @@ package org.netbeans.modules.cnd.debugger.gdb.models;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.File;
 import java.util.logging.Logger;
+import javax.swing.text.Document;
+import javax.swing.text.StyledDocument;
 import org.netbeans.api.debugger.Watch;
+import org.netbeans.modules.cnd.api.model.services.CsmMacroExpansion;
+import org.netbeans.modules.cnd.debugger.gdb.CallStackFrame;
 import org.netbeans.modules.cnd.debugger.gdb.Field;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
+import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.text.NbDocument;
 
 /**
  * The variable type used in Gdb watches.
@@ -68,11 +77,15 @@ import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
  */
 public class GdbWatchVariable extends AbstractVariable implements PropertyChangeListener {
     
+    protected static boolean disableMacros = Boolean.getBoolean("gdb.macros.disable");
+
     private final Watch watch;
     private static final Logger log = Logger.getLogger("gdb.logger.watches"); // NOI18N
     
-    private boolean requestType = true;
-    private boolean requestValue = true;
+    private boolean request = true;
+    private boolean requestResolved = true;
+
+    private String resolvedType;
     
     /** Creates a new instance of GdbWatchVariable */
     public GdbWatchVariable(Watch watch) {
@@ -110,8 +123,8 @@ public class GdbWatchVariable extends AbstractVariable implements PropertyChange
                     if (pname.equals(Watch.PROP_EXPRESSION)) {
                         resetVariable();
                     }
-                    requestType = true;
-                    requestValue = true;
+                    request = true;
+                    requestResolved = true;
         } else if (ev.getPropertyName().equals(GdbDebugger.PROP_VALUE_CHANGED)) {
             super.propertyChange(ev);
         }
@@ -136,23 +149,59 @@ public class GdbWatchVariable extends AbstractVariable implements PropertyChange
     
     @Override
     public String getType() {
-        if (requestType) {
-            type = getDebugger().requestWhatis(watch.getExpression());
-            requestType = false;
-        }
+        checkValues();
         return type;
+    }
+
+    @Override
+    protected String getResolvedType() {
+        checkValues();
+        if (requestResolved) {
+            resolvedType = super.getResolvedType();
+            requestResolved = false;
+        }
+        return resolvedType;
     }
     
     @Override
     public String getValue() {
-        synchronized (this) {
-            if (requestValue) {
-                value = getDebugger().evaluate(watch.getExpression());
-                setModifiedValue(value);
-                requestValue = false;
+        checkValues();
+        return super.getValue();
+    }
+
+    private synchronized void checkValues() {
+        if (request) {
+            String expr = watch.getExpression();
+            if (!disableMacros) {
+                expr = expandMacro(getDebugger(), expr);
+            }
+            String t = getDebugger().requestWhatis(expr);
+            if (t != null && t.length() > 0) {
+                type = t;
+                value = getDebugger().evaluate(expr);
+            } else {
+                type = ""; // NOI18N
+                value = ""; // NOI18N
+                resolvedType = ""; // NOI18N
+                requestResolved = false;
+            }
+            setModifiedValue(value);
+            request = false;
+        }
+    }
+
+    public static String expandMacro(GdbDebugger debugger, String expr) {
+        CallStackFrame csf = debugger.getCurrentCallStackFrame();
+        if (csf != null) {
+            Document doc = csf.getDocument();
+            if (doc != null) {
+                int offset = csf.getOffset();
+                if (offset >= 0) {
+                    return CsmMacroExpansion.expand(doc, offset, expr);
+                }
             }
         }
-        return super.getValue();
+        return expr;
     }
     
     @Override
