@@ -49,6 +49,8 @@ import java.awt.event.KeyListener;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractButton;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
@@ -60,8 +62,12 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.TableColumn;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import org.netbeans.api.editor.EditorRegistry;
+import org.netbeans.lib.editor.util.CharSequenceUtilities;
+import org.netbeans.lib.editor.util.swing.DocumentUtilities;
 import org.netbeans.spi.options.OptionsPanelController;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -75,9 +81,9 @@ import org.openide.util.NbBundle;
  *
  * @author Jan Jancura
  */
-public class CodeTemplatesPanel extends JPanel implements 
-ActionListener, ListSelectionListener, KeyListener {
+public class CodeTemplatesPanel extends JPanel implements ActionListener, ListSelectionListener, KeyListener {
     
+    private static final Logger LOG = Logger.getLogger(CodeTemplatesPanel.class.getName());
     private CodeTemplatesModel  model;
     
     /** 
@@ -86,7 +92,6 @@ ActionListener, ListSelectionListener, KeyListener {
     public CodeTemplatesPanel () {
         initComponents ();
         
-        setName(loc("Code_Templates_Tab")); //NOI18N
         loc(lLanguage, "Language"); //NOI18N
         loc(lTemplates, "Templates"); //NOI18N
         loc(bNew, "New"); //NOI18N
@@ -158,6 +163,14 @@ ActionListener, ListSelectionListener, KeyListener {
         for(String l : languages) {
             cbLanguage.addItem(l);
         }
+        if (languages.isEmpty ()) {
+            cbLanguage.setEnabled (false);
+            bNew.setEnabled (false);
+            bRemove.setEnabled (false);
+            tTemplates.setEnabled (false);
+            tabPane.setEnabled (false);
+            cbExpandTemplateOn.setEnabled (false);
+        }
         KeyStroke expander = model.getExpander ();
         if (KeyStroke.getKeyStroke (KeyEvent.VK_SPACE, KeyEvent.SHIFT_MASK).equals (expander))
             cbExpandTemplateOn.setSelectedIndex (1);
@@ -222,9 +235,12 @@ ActionListener, ListSelectionListener, KeyListener {
     }
     
     // ActionListener ..........................................................
-    
+    private boolean languagePopupVisible = false;
+    private ActionEvent lastActionEvent;
+
     public void actionPerformed (ActionEvent e) {
-        if (e.getSource () == cbLanguage) {
+        lastActionEvent = e;
+        if (e.getSource () == cbLanguage && !languagePopupVisible) {
             saveCurrentTemplate ();
             final String language = (String) cbLanguage.getSelectedItem ();
             final CodeTemplatesModel.TM tableModel = model.getTableModel (language);
@@ -244,7 +260,7 @@ ActionListener, ListSelectionListener, KeyListener {
             c3.setMinWidth(180);
             c3.setPreferredWidth(250);
             c3.setResizable(true);
-            
+
             SwingUtilities.invokeLater (new Runnable () {
                 public void run () {
                     epDescription.setEditorKit(CloneableEditorSupport.getEditorKit("text/html")); //NOI18N
@@ -278,7 +294,7 @@ ActionListener, ListSelectionListener, KeyListener {
                     CodeTemplatesModel.TM tableModel = (CodeTemplatesModel.TM)tTemplates.getModel();
                     int i, rows = tableModel.getRowCount ();
                     for (i = 0; i < rows; i++) {
-                        String abbrev = (String) tableModel.getAbbreviation(i);
+                        String abbrev = tableModel.getAbbreviation(i);
                         if (newAbbrev.equals (abbrev)) {
                             DialogDisplayer.getDefault ().notify (
                                 new NotifyDescriptor.Message (
@@ -352,15 +368,28 @@ ActionListener, ListSelectionListener, KeyListener {
             lastIndex = -1;
             return;
         }
-        
+
         saveCurrentTemplate ();
 
         // Show details of the newly selected code tenplate
         CodeTemplatesModel.TM tableModel = (CodeTemplatesModel.TM)tTemplates.getModel();
-        epDescription.setText(tableModel.getDescription(index));
-        epExpandedText.setText(tableModel.getText(index));
+        // Don't use JEditorPane.setText(), because it goes through EditorKit.read()
+        // and performs conversion as if the text was read from a file (eg. EOL
+        // translations). See #130095 for details.
+        setDocumentText(epDescription.getDocument(), tableModel.getDescription(index));
+        setDocumentText(epExpandedText.getDocument(), tableModel.getText(index));
+
         bRemove.setEnabled(true);
         lastIndex = index;
+    }
+    
+    private static void setDocumentText(Document doc, String text) {
+        try {
+            doc.remove(0, doc.getLength());
+            doc.insertString(0, text, null);
+        } catch (BadLocationException ble) {
+            LOG.log(Level.WARNING, null, ble);
+        }
     }
     
     private int lastIndex = -1;
@@ -369,11 +398,14 @@ ActionListener, ListSelectionListener, KeyListener {
         if (lastIndex < 0) {
             return;
         }
-        
+
         CodeTemplatesModel.TM tableModel = (CodeTemplatesModel.TM)tTemplates.getModel();
-        tableModel.setDescription(lastIndex, epDescription.getText());
-        tableModel.setText(lastIndex, epExpandedText.getText());
-        
+        // Don't use JEditorPane.getText(), because it goes through EditorKit.write()
+        // and performs conversion as if the text was written to a file (eg. EOL
+        // translations). See #130095 for details.
+        tableModel.setDescription(lastIndex, CharSequenceUtilities.toString(DocumentUtilities.getText(epDescription.getDocument())));
+        tableModel.setText(lastIndex, CharSequenceUtilities.toString(DocumentUtilities.getText(epExpandedText.getDocument())));
+
         firePropertyChange(OptionsPanelController.PROP_CHANGED, null, null);
     }
 
@@ -397,7 +429,7 @@ ActionListener, ListSelectionListener, KeyListener {
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
 
         lLanguage = new javax.swing.JLabel();
@@ -419,6 +451,16 @@ ActionListener, ListSelectionListener, KeyListener {
         lLanguage.setText("Language:");
 
         cbLanguage.setNextFocusableComponent(tTemplates);
+        cbLanguage.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            public void popupMenuCanceled(javax.swing.event.PopupMenuEvent evt) {
+            }
+            public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent evt) {
+                cbLanguagePopupMenuWillBecomeInvisible(evt);
+            }
+            public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent evt) {
+                cbLanguagePopupMenuWillBecomeVisible(evt);
+            }
+        });
 
         lTemplates.setLabelFor(tTemplates);
         lTemplates.setText("Templates:");
@@ -523,6 +565,17 @@ ActionListener, ListSelectionListener, KeyListener {
                     .add(cbExpandTemplateOn, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
         );
     }// </editor-fold>//GEN-END:initComponents
+
+    private void cbLanguagePopupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent evt) {//GEN-FIRST:event_cbLanguagePopupMenuWillBecomeVisible
+        // TODO add your handling code here:
+        languagePopupVisible = true;
+    }//GEN-LAST:event_cbLanguagePopupMenuWillBecomeVisible
+
+    private void cbLanguagePopupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent evt) {//GEN-FIRST:event_cbLanguagePopupMenuWillBecomeInvisible
+        // TODO add your handling code here:
+        languagePopupVisible = false;
+        actionPerformed(lastActionEvent);
+    }//GEN-LAST:event_cbLanguagePopupMenuWillBecomeInvisible
         
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton bNew;
