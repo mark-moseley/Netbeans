@@ -45,10 +45,12 @@ import java.beans.Customizer;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.ref.WeakReference;
-import java.util.Set;
-import java.util.Vector;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
-import org.netbeans.modules.cnd.debugger.gdb.CallStackFrame;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.viewmodel.ModelEvent;
 import org.netbeans.spi.viewmodel.TreeModel;
@@ -56,28 +58,33 @@ import org.netbeans.spi.viewmodel.ModelListener;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.netbeans.modules.cnd.debugger.gdb.CallStackFrame;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
 import org.netbeans.modules.cnd.debugger.gdb.LocalVariable;
-import org.netbeans.spi.viewmodel.TreeExpansionModel;
+import org.netbeans.modules.cnd.debugger.gdb.ui.VariablesViewButtons;
+import org.openide.util.Exceptions;
+import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
-import org.openide.util.WeakSet;
 
 /*
  * LocalsTreeModel.java
  *
  * @author Nik Molchanov (copied from Jan Jancura's JPDA implementation)
  */
-public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyChangeListener {
+public class LocalsTreeModel implements TreeModel, PropertyChangeListener {
         
     private GdbDebugger debugger;
     private Listener listener;
-    private Vector listeners = new Vector();
-    private Set expandedNodes = new WeakSet();
-    private Set collapsedNodes = new WeakSet();
-    private static Logger log = Logger.getLogger("gdb.logger"); // NOI18N
+    private final List<ModelListener> listeners = new CopyOnWriteArrayList<ModelListener>();
+    private static final Logger log = Logger.getLogger("gdb.logger"); // NOI18N
+
+    private Preferences preferences = NbPreferences.forModule(VariablesViewButtons.class).node(VariablesViewButtons.PREFERENCES_NAME);
+    private VariablesPreferenceChangeListener prefListener = new VariablesPreferenceChangeListener();
         
     public LocalsTreeModel(ContextProvider lookupProvider) {
-        debugger = (GdbDebugger) lookupProvider.lookupFirst(null, GdbDebugger.class);
+        debugger = lookupProvider.lookupFirst(null, GdbDebugger.class);
+        if (debugger != null) {
+            debugger.addPropertyChangeListener(GdbDebugger.PROP_LOCALS_REFRESH, this);
+        }
+        preferences.addPreferenceChangeListener(prefListener);
     }    
     
     public Object getRoot() {
@@ -85,11 +92,11 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
     }
     
     public void propertyChange(PropertyChangeEvent evt) {
-        fireTableValueChangedChanged(evt.getSource(), null);
+        fireTableValueChanged(evt.getNewValue(), null);
     }
     
     public Object[] getChildren(Object o, int from, int to) throws UnknownTypeException {
-        Object[] ch = getChildrenImpl(o, from, to);
+        Object[] ch = getChildrenImpl(o);
         for (int i = 0; i < ch.length; i++) {
             if (ch[i] instanceof Customizer) {
                 ((Customizer) ch[i]).addPropertyChangeListener(this);
@@ -98,12 +105,16 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
         return ch;
     }
     
-    public Object[] getChildrenImpl(Object o, int from, int to) throws UnknownTypeException {
-        if (o.equals(ROOT)) {            
-            return getLocalVariables(from, to);
+    public Object[] getChildrenImpl(Object o) throws UnknownTypeException {
+        if (o.equals(ROOT)) {
+            if (VariablesViewButtons.isShowAutos()) {
+                return getAutos();
+            } else {
+                return getLocalVariables();
+            }
         } else if (o instanceof AbstractVariable) {
             AbstractVariable abstractVariable = (AbstractVariable) o;
-            return abstractVariable.getFields(from, to);
+            return abstractVariable.getFields();
         } else {
             return new Object[0];
         }
@@ -120,16 +131,9 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
      */
     public int getChildrenCount(Object node) throws UnknownTypeException {
         if (node.equals(ROOT)) {
-            CallStackFrame callStackFrame = debugger.getCurrentCallStackFrame();
-            if (callStackFrame == null) {
-                return 1;
-            } else {
-                LocalVariable[] lv = callStackFrame.getLocalVariables();
-                return lv.length;
-            }
+            return Integer.MAX_VALUE;
         } else if (node instanceof AbstractVariable) { // ThisVariable & FieldVariable
-                AbstractVariable abstractVariable = (AbstractVariable) node;
-                return abstractVariable.getFieldsCount();
+            return Integer.MAX_VALUE;
         }
         return 0;
     }
@@ -159,6 +163,8 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
             return true;
         } else if (o.equals("No current thread")) { // NOI18N
             return true;
+        } else if (o instanceof AbstractVariable.ErrorField) {
+            return true;
         }
         throw new UnknownTypeException(o);
     }
@@ -175,7 +181,7 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
     
     public void removeModelListener(ModelListener l) {
         listeners.remove(l);
-        if (listeners.size() == 0) {
+        if (listeners.isEmpty()) {
             listener.destroy();
             listener = null;
         }
@@ -183,31 +189,42 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
     
     void fireTreeChanged() {
         log.fine("LTM.fireTreeChanged:");
-        Vector v = (Vector) listeners.clone();
-        int i, k = v.size();
-        for (i = 0; i < k; i++) {
-            ((ModelListener) v.get(i)).modelChanged(new ModelEvent.TreeChanged(this));
+        for (ModelListener l : listeners) {
+            l.modelChanged(new ModelEvent.TreeChanged(this));
         }
     }
     
-    private void fireTableValueChangedChanged(Object node, String propertyName) {
-        Vector v = (Vector) listeners.clone();
-        int i, k = v.size();
-        for (i = 0; i < k; i++) {
-            ((ModelListener) v.get(i)).modelChanged(new ModelEvent.TableValueChanged(this, node, propertyName));
+    private void fireTableValueChanged(Object node, String propertyName) {
+        for (ModelListener l : listeners) {
+            l.modelChanged(new ModelEvent.TableValueChanged(this, node, propertyName));
         }
     }
     
     
     // private methods .........................................................
     
-    private Object[] getLocalVariables(int from, int to) {
+    private Object[] getLocalVariables() {
         synchronized (debugger.LOCK) {
-            CallStackFrame callStackFrame = (CallStackFrame) debugger.getCurrentCallStackFrame();
+            CallStackFrame callStackFrame = debugger.getCurrentCallStackFrame();
             if (callStackFrame == null) {
-                return new String [] {"No current thread"}; // NOI18N
+                return new Object[0];
             }
             return callStackFrame.getLocalVariables();
+        } // synchronized
+    }
+
+    private Object[] getAutos() {
+        synchronized (debugger.LOCK) {
+            CallStackFrame callStackFrame = debugger.getCurrentCallStackFrame();
+            if (callStackFrame == null) {
+                return new Object[0];
+            }
+            Object[] res = callStackFrame.getAutos();
+            if (res != null) {
+                return res;
+            } else {
+                return new Object[0];
+            }
         } // synchronized
     }
     
@@ -220,12 +237,12 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
     
     private static class Listener implements PropertyChangeListener {
         
-        private GdbDebugger debugger;
-        private WeakReference model;
+        private final GdbDebugger debugger;
+        private final WeakReference<LocalsTreeModel> model;
         
         public Listener(LocalsTreeModel tm, GdbDebugger debugger) {
             this.debugger = debugger;
-            model = new WeakReference(tm);
+            model = new WeakReference<LocalsTreeModel>(tm);
             debugger.addPropertyChangeListener(this);
         }
         
@@ -239,7 +256,7 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
         }
         
         private LocalsTreeModel getModel() {
-            LocalsTreeModel tm = (LocalsTreeModel) model.get();
+            LocalsTreeModel tm = model.get();
             if (tm == null) {
                 destroy();
             }
@@ -253,7 +270,7 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
         public void propertyChange(PropertyChangeEvent e) {
             if ((e.getPropertyName().equals(GdbDebugger.PROP_CURRENT_CALL_STACK_FRAME) ||
                     e.getPropertyName().equals(GdbDebugger.PROP_CURRENT_THREAD)) &&
-                    (debugger.getState().equals(GdbDebugger.STATE_STOPPED))) {
+                    debugger.isStopped()) {
                 // IF state has been changed to STOPPED or
                 // IF current call stack frame has been changed & state is stopped
                 log.fine("LTM.propertyChange: Change for " + e.getPropertyName());
@@ -268,13 +285,14 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
                 }
                 task = RequestProcessor.getDefault().post(new Runnable() {
                     public void run() {
-                        if (debugger.getState().equals(GdbDebugger.STATE_STOPPED)) {
+                        if (debugger.isStopped()) {
                             ltm.fireTreeChanged();
                         }
                     }
                 }, 500);
             } else if ((e.getPropertyName().equals(GdbDebugger.PROP_STATE)) &&
-                    !(debugger.getState().equals(GdbDebugger.STATE_STOPPED)) && task != null) {
+                    !debugger.isStopped() &&
+                    task != null) {
                 // debugger has been resumed
                 // =>> cancel task
                 task.cancel();
@@ -294,46 +312,24 @@ public class LocalsTreeModel implements TreeModel, TreeExpansionModel, PropertyC
             }
         }
     }
-  
-    /**
-     * Defines default state (collapsed, expanded) of given node.
-     *
-     * @param node a node
-     * @return default state (collapsed, expanded) of given node
-     */
-    public boolean isExpanded(Object node) throws UnknownTypeException {
-        synchronized (this) {
-            if (expandedNodes.contains(node)) {
-                return true;
-            }
-            if (collapsedNodes.contains(node)) {
-                return false;
+
+    private class VariablesPreferenceChangeListener implements PreferenceChangeListener {
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            String key = evt.getKey();
+            if (VariablesViewButtons.SHOW_AUTOS.equals(key)) {
+                refresh();
             }
         }
-        return false;
-    }
-    
-    /**
-     * Called when given node is expanded.
-     *
-     * @param node a expanded node
-     */
-    public void nodeExpanded(Object node) {
-        synchronized (this) {
-            expandedNodes.add(node);
-            collapsedNodes.remove(node);
+
+        private void refresh() {
+            try {
+                fireTableValueChanged(ROOT, null);
+            } catch (ThreadDeath td) {
+                throw td;
+            } catch (Throwable t) {
+                Exceptions.printStackTrace(t);
+            }
         }
-    }
-    
-    /**
-     * Called when given node is collapsed.
-     *
-     * @param node a collapsed node
-     */
-    public void nodeCollapsed(Object node) {
-        synchronized (this) {
-            collapsedNodes.add(node);
-            expandedNodes.remove(node);
-        }
+
     }
 }
