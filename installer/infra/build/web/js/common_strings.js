@@ -56,18 +56,19 @@ PLATFORM_LONG_NAMES  [5] = "Mac OS X (powerpc)";
 PLATFORM_SHORT_NAMES [5] = "Mac OS X";
 */
 
-BUNDLE_SHORT_NAMES[0] = "Web&nbsp;&amp;&nbsp;Java&nbsp;EE";
-BUNDLE_SHORT_NAMES[1] = "Mobility";
-BUNDLE_SHORT_NAMES[2] = "Java&nbsp;SE";
-BUNDLE_SHORT_NAMES[3] = "Ruby";
-BUNDLE_SHORT_NAMES[4] = "C/C++";
+BUNDLE_SHORT_NAMES[0] = "Java&nbsp;SE";
+BUNDLE_SHORT_NAMES[1] = "Java";
+BUNDLE_SHORT_NAMES[2] = "Ruby";
+BUNDLE_SHORT_NAMES[3] = "C/C++";
+BUNDLE_SHORT_NAMES[4] = "PHP";
 BUNDLE_SHORT_NAMES[5] = "";
 
-BUNDLE_LONG_NAMES[0] = "Web&nbsp;&amp;&nbsp;Java&nbsp;EE";
-BUNDLE_LONG_NAMES[1] = "Mobility";
-BUNDLE_LONG_NAMES[2] = "Java&nbsp;SE";
-BUNDLE_LONG_NAMES[3] = "Ruby";
-BUNDLE_LONG_NAMES[4] = "C/C++";
+BUNDLE_LONG_NAMES[0] = "Java&nbsp;SE";
+BUNDLE_LONG_NAMES[1] = "Java";
+BUNDLE_LONG_NAMES[2] = "Ruby";
+BUNDLE_LONG_NAMES[3] = "C/C++";
+BUNDLE_LONG_NAMES[4] = "PHP";
 BUNDLE_LONG_NAMES[5] = "All";
 
-BUILD_DISPLAY_VERSION = "{build.display.version}";
+var RELEASE_NOTES_LINK  = "http://www.netbeans.org/community/releases/67/relnotes.html";
+var INSTALL_NOTES_LINK  = "http://www.netbeans.org/community/releases/67/install.html";
