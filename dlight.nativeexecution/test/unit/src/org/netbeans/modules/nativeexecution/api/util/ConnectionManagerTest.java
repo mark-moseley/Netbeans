@@ -36,29 +36,24 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.nativeexecution.util;
 
-import java.io.IOException;
-import java.security.acl.NotOwnerException;
-import java.util.Arrays;
-import java.util.concurrent.CancellationException;
+package org.netbeans.modules.nativeexecution.api.util;
+
+import java.util.concurrent.CountDownLatch;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.netbeans.modules.nativeexecution.NativeExecutionTest;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
-import org.netbeans.modules.nativeexecution.api.ExecutionEnvironmentFactory;
-import org.netbeans.modules.nativeexecution.api.util.ConnectionManager;
-import org.netbeans.modules.nativeexecution.api.util.SolarisPrivilegesSupport;
-import org.netbeans.modules.nativeexecution.api.util.SolarisPrivilegesSupportProvider;
+import org.openide.util.Exceptions;
 
 /**
  *
  * @author ak119685
  */
-public class SolarisPrivilegesSupportTest extends NativeExecutionTest {
+public class ConnectionManagerTest extends NativeExecutionTest {
 
-    public SolarisPrivilegesSupportTest(String name) {
+    public ConnectionManagerTest(String name) {
         super(name);
     }
 
@@ -72,34 +67,76 @@ public class SolarisPrivilegesSupportTest extends NativeExecutionTest {
 
     @Override
     public void setUp() throws Exception {
-        super.setUp();
     }
 
     @Override
     public void tearDown() throws Exception {
-        super.tearDown();
     }
 
-    /**
-     * Test of getInstance method, of class SolarisPrivilegesSupportImpl.
-     */
-    @Test
-    public void test() {
-        ExecutionEnvironment execEnv = ExecutionEnvironmentFactory.createNew(System.getProperty("user.name"), "blackbox.russia.sun.com"); // NOI18N
+
+//    @Test
+    public void testGetConnectToAction() throws Exception {
+        System.out.println("getConnectToAction"); // NOI18N
+
+        ExecutionEnvironment execEnv = getTestExecutionEnvironment();
+        
         try {
             ConnectionManager.getInstance().connectTo(execEnv);
-            SolarisPrivilegesSupport sps = SolarisPrivilegesSupportProvider.getSupportFor(execEnv);
-            System.out.println(sps.getExecutionPrivileges());
-            try {
-                sps.requestPrivileges(Arrays.asList("dtrace_kernel"), true); // NOI18N
-            } catch (NotOwnerException ex) {
-                System.out.println(ex);
-            }
-            System.out.println(sps.getExecutionPrivileges());
-        } catch (IOException ex) {
-            System.out.println(ex);
-        } catch (CancellationException ex) {
-            System.out.println(ex);
+        } catch (Throwable ex) {
+            Exceptions.printStackTrace(ex);
         }
+
+        System.out.println(ConnectionManager.getInstance().isConnectedTo(execEnv));
     }
+
+    @Test
+    public void concurrentAccess() throws Exception {
+        System.out.println("Concurrent access"); // NOI18N
+
+        int threadsNum = 10;
+
+        final CountDownLatch startFlag = new CountDownLatch(1);
+        final CountDownLatch doneFlag = new CountDownLatch(threadsNum);
+        Runnable onConnect = new Runnable() {
+
+            public void run() {
+                System.out.println("Perform on connect action!"); // NOI18N
+            }
+        };
+
+        ExecutionEnvironment execEnv = getTestExecutionEnvironment();
+
+        for (int i = 0; i < threadsNum; i++) {
+            final AsynchronousAction action = ConnectionManager.getInstance().getConnectToAction(execEnv, onConnect);
+            new Thread(new Runnable() {
+
+                public void run() {
+                    try {
+                        startFlag.await();
+                        System.out.println("trying to connect..."); // NOI18N
+                        try {
+                            action.invoke();
+                        } catch (Throwable ex) {
+                            System.err.println("XXX: " + ex.toString()); // NOI18N
+                        }
+                    } catch (InterruptedException ex) {
+                        Exceptions.printStackTrace(ex);
+                    } finally {
+                        doneFlag.countDown();
+                    }
+                }
+            }).start();
+        }
+
+        startFlag.countDown();
+        
+        try {
+            doneFlag.await();
+        } catch (InterruptedException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+
+
+    }
+
 }
