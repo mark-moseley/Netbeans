@@ -42,10 +42,14 @@ package org.netbeans.modules.editor.settings.storage.spi.support;
 
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -57,6 +61,7 @@ import org.openide.util.Utilities;
 public final class StorageSupport {
 
     private static final Logger LOG = Logger.getLogger(StorageSupport.class.getName());
+    private static Map<String, Integer> names;
 
     private StorageSupport() {
 
@@ -91,7 +96,7 @@ public final class StorageSupport {
         for (Iterator<? extends KeyStroke> it = keys.iterator(); it.hasNext(); ) {
             KeyStroke keyStroke = it.next();
             if (emacsStyle) {
-                sb.append(Utilities.keyToString(keyStroke));
+                sb.append(Utilities.keyToString(keyStroke, true));
                 if (it.hasNext()) {
                     sb.append('$'); //NOI18N
                 }
@@ -176,8 +181,30 @@ public final class StorageSupport {
         KeyStroke ks = Utilities.stringToKey(keyStroke);
         if (ks != null) {
             return KeyStroke.getKeyStroke(ks.getKeyCode(), modifiers);
+        } else {// probably a VK_* key
+            Integer keyCode = getName2Keycode().get(keyStroke);
+            return keyCode != null ? KeyStroke.getKeyStroke(keyCode, modifiers) : null;
+        }
+    }
+
+    private static synchronized Map<String, Integer> getName2Keycode() {
+        if (names != null) {
+            return names;
         } else {
-            return null;
+            Field[] fields = KeyEvent.class.getDeclaredFields();
+            names = new HashMap<String, Integer>(fields.length * 4 / 3 + 5, 0.75f);
+
+            for (Field f : fields) {
+                if (Modifier.isStatic(f.getModifiers())) {
+                    try {
+                        int numb = f.getInt(null);
+                        names.put(KeyEvent.getKeyText(numb), numb);
+                    } catch (IllegalArgumentException ex) {
+                    } catch (IllegalAccessException ex) {
+                    }
+                }
+            }
+            return names;
         }
     }
 
