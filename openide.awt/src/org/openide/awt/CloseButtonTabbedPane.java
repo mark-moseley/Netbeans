@@ -52,6 +52,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import javax.swing.plaf.UIResource;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -125,21 +126,32 @@ final class CloseButtonTabbedPane extends JTabbedPane {
     private int mouseOverCloseButtonIndex = -1;
     private boolean draggedOut = false;
 
+    @Override
     public Component add (Component c) {
         Component result = super.add(c);
+        if (isNoCloseButton(c)) {
+            return result;
+        }
         // #75317 - don't try to set the title if LF (such as Substance LF)
         // is adding some custom UI components into tabbed pane
         if (!(c instanceof UIResource)) {
             String s = c.getName();
             if (s != null) {
                 s += "  ";
+                setTitleAt(getTabCount()-1, s);
             }
-            setTitleAt (getComponentCount() - 1, s);
         }
         return result;
     }
 
+    @Override
     public void setTitleAt(int idx, String title) {
+        Component c = findTabAt(idx);
+        //if NO_CLOSE_BUTTON -> just call super
+        if (isNoCloseButton(c)) {
+            super.setTitleAt(idx, title);
+        }
+
         String nue = title.indexOf("</html>") != -1 ? //NOI18N
             Utilities.replaceString(title, "</html>", "&nbsp;&nbsp;</html>") //NOI18N
             : title + "  ";
@@ -154,7 +166,33 @@ final class CloseButtonTabbedPane extends JTabbedPane {
         draggedOut = false;
     }
 
+    private Component findTabAt(int index) {
+        int componentIndex = -1;
+        for( Component c : getComponents() ) {
+            if( c instanceof UIResource )
+                continue;
+            if( ++componentIndex == index )
+                return c;
+        }
+        return null;
+    }
+
+    private boolean isNoCloseButton(Component c) {
+        if (c!=null && c instanceof JComponent) {
+            Object prop = ((JComponent) c).getClientProperty(TabbedPaneFactory.NO_CLOSE_BUTTON);
+            if (prop!=null && prop instanceof Boolean && (Boolean) prop) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Rectangle getCloseButtonBoundsAt(int i) {
+        Component c = findTabAt(i);
+        //if NO_CLOSE_BUTTON -> return null
+        if (isNoCloseButton(c)) {
+            return null;
+        }
         Rectangle b = getBoundsAt(i);
         if (b == null)
             return null;
@@ -216,6 +254,7 @@ final class CloseButtonTabbedPane extends JTabbedPane {
         return "Metal".equals( lfID ); //NOI18N
     }
     
+    @Override
     public void paint(Graphics g) {
         super.paint(g);
 
@@ -223,7 +262,6 @@ final class CloseButtonTabbedPane extends JTabbedPane {
         // http://ui.netbeans.org/docs/ui/closeButton/closeButtonUISpec.html
         // to see how the buttons are specified to be drawn.
 
-        int selectedIndex = getSelectedIndex();
         for (int i = 0, n = getTabCount(); i < n; i++) {
             Rectangle r = getCloseButtonBoundsAt(i);
             if (r == null)
@@ -243,15 +281,15 @@ final class CloseButtonTabbedPane extends JTabbedPane {
     private Image getCloseTabImage() {
         if( null == closeTabImage ) {
             if( isWindowsVistaLaF() ) {
-                closeTabImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/vista_close_enabled.png"); // NOI18N
+                closeTabImage = ImageUtilities.loadImage("org/openide/awt/resources/vista_close_enabled.png"); // NOI18N
             } else if( isWindowsXPLaF() ) {
-                closeTabImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/xp_close_enabled.png"); // NOI18N
+                closeTabImage = ImageUtilities.loadImage("org/openide/awt/resources/xp_close_enabled.png"); // NOI18N
             } else if( isWindowsLaF() ) {
-                closeTabImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/win_close_enabled.png"); // NOI18N
+                closeTabImage = ImageUtilities.loadImage("org/openide/awt/resources/win_close_enabled.png"); // NOI18N
             } else if( isAquaLaF() ) {
-                closeTabImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/mac_close_enabled.png"); // NOI18N
+                closeTabImage = ImageUtilities.loadImage("org/openide/awt/resources/mac_close_enabled.png"); // NOI18N
             } else {
-                closeTabImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/metal_close_enabled.png"); // NOI18N
+                closeTabImage = ImageUtilities.loadImage("org/openide/awt/resources/metal_close_enabled.png"); // NOI18N
             }
         }
         return closeTabImage;
@@ -260,15 +298,15 @@ final class CloseButtonTabbedPane extends JTabbedPane {
     private Image getCloseTabPressedImage() {
         if( null == closeTabPressedImage ) {
             if( isWindowsVistaLaF() ) {
-                closeTabPressedImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/vista_close_pressed.png"); // NOI18N
+                closeTabPressedImage = ImageUtilities.loadImage("org/openide/awt/resources/vista_close_pressed.png"); // NOI18N
             } else if( isWindowsXPLaF() ) {
-                closeTabPressedImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/xp_close_pressed.png"); // NOI18N
+                closeTabPressedImage = ImageUtilities.loadImage("org/openide/awt/resources/xp_close_pressed.png"); // NOI18N
             } else if( isWindowsLaF() ) {
-                closeTabPressedImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/win_close_pressed.png"); // NOI18N
+                closeTabPressedImage = ImageUtilities.loadImage("org/openide/awt/resources/win_close_pressed.png"); // NOI18N
             } else if( isAquaLaF() ) {
-                closeTabPressedImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/mac_close_pressed.png"); // NOI18N
+                closeTabPressedImage = ImageUtilities.loadImage("org/openide/awt/resources/mac_close_pressed.png"); // NOI18N
             } else {
-                closeTabPressedImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/metal_close_pressed.png"); // NOI18N
+                closeTabPressedImage = ImageUtilities.loadImage("org/openide/awt/resources/metal_close_pressed.png"); // NOI18N
             }
         }
         return closeTabPressedImage;
@@ -277,15 +315,15 @@ final class CloseButtonTabbedPane extends JTabbedPane {
     private Image getCloseTabMouseOverImage() {
         if( null == closeTabMouseOverImage ) {
             if( isWindowsVistaLaF() ) {
-                closeTabMouseOverImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/vista_close_rollover.png"); // NOI18N
+                closeTabMouseOverImage = ImageUtilities.loadImage("org/openide/awt/resources/vista_close_rollover.png"); // NOI18N
             } else if( isWindowsXPLaF() ) {
-                closeTabMouseOverImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/xp_close_rollover.png"); // NOI18N
+                closeTabMouseOverImage = ImageUtilities.loadImage("org/openide/awt/resources/xp_close_rollover.png"); // NOI18N
             } else if( isWindowsLaF() ) {
-                closeTabMouseOverImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/win_close_rollover.png"); // NOI18N
+                closeTabMouseOverImage = ImageUtilities.loadImage("org/openide/awt/resources/win_close_rollover.png"); // NOI18N
             } else if( isAquaLaF() ) {
-                closeTabMouseOverImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/mac_close_rollover.png"); // NOI18N
+                closeTabMouseOverImage = ImageUtilities.loadImage("org/openide/awt/resources/mac_close_rollover.png"); // NOI18N
             } else {
-                closeTabMouseOverImage = org.openide.util.Utilities.loadImage("org/openide/awt/resources/metal_close_rollover.png"); // NOI18N
+                closeTabMouseOverImage = ImageUtilities.loadImage("org/openide/awt/resources/metal_close_rollover.png"); // NOI18N
             }
         }
         return closeTabMouseOverImage;
@@ -298,7 +336,9 @@ final class CloseButtonTabbedPane extends JTabbedPane {
         if (pressedCloseButtonIndex >= 0
         && pressedCloseButtonIndex < getTabCount()) {
             Rectangle r = getCloseButtonBoundsAt(pressedCloseButtonIndex);
-            repaint(r.x, r.y, r.width + 2, r.height + 2);
+            if (r != null) {
+                repaint(r.x, r.y, r.width + 2, r.height + 2);
+            }
 
             JComponent c = _getJComponentAt(pressedCloseButtonIndex);
             if( c != null )
@@ -310,7 +350,9 @@ final class CloseButtonTabbedPane extends JTabbedPane {
         if (pressedCloseButtonIndex >= 0
         && pressedCloseButtonIndex < getTabCount()) {
             Rectangle r = getCloseButtonBoundsAt(pressedCloseButtonIndex);
-            repaint(r.x, r.y, r.width + 2, r.height + 2);
+            if (r != null) {
+                repaint(r.x, r.y, r.width + 2, r.height + 2);
+            }
             setMouseOverCloseButtonIndex(-1);
             setToolTipTextAt(pressedCloseButtonIndex, null);
         }
@@ -323,7 +365,9 @@ final class CloseButtonTabbedPane extends JTabbedPane {
         if (mouseOverCloseButtonIndex >= 0
         && mouseOverCloseButtonIndex < getTabCount()) {
             Rectangle r = getCloseButtonBoundsAt(mouseOverCloseButtonIndex);
-            repaint(r.x, r.y, r.width + 2, r.height + 2);
+            if (r != null) {
+                repaint(r.x, r.y, r.width + 2, r.height + 2);
+            }
             JComponent c = _getJComponentAt(mouseOverCloseButtonIndex);
             if( c != null )
                 setToolTipTextAt(mouseOverCloseButtonIndex, c.getToolTipText());
@@ -334,7 +378,9 @@ final class CloseButtonTabbedPane extends JTabbedPane {
         if (mouseOverCloseButtonIndex >= 0
         && mouseOverCloseButtonIndex < getTabCount()) {
             Rectangle r = getCloseButtonBoundsAt(mouseOverCloseButtonIndex);
-            repaint(r.x, r.y, r.width + 2, r.height + 2);
+            if (r != null) {
+                repaint(r.x, r.y, r.width + 2, r.height + 2);
+            }
             setPressedCloseButtonIndex(-1);
             setToolTipTextAt(mouseOverCloseButtonIndex, null);
         }
@@ -372,6 +418,7 @@ final class CloseButtonTabbedPane extends JTabbedPane {
     }
     
 
+    @Override
     protected void processMouseEvent (MouseEvent me) {
         try {
             super.processMouseEvent (me);
@@ -382,6 +429,19 @@ final class CloseButtonTabbedPane extends JTabbedPane {
             Exceptions.attachLocalizedMessage(aioobe,
                                               "Suppressed AIOOBE bug in BasicTabbedPaneUI"); //NOI18N
             Logger.getAnonymousLogger().log(Level.WARNING, null, aioobe);
+        }
+    }
+
+    @Override
+    protected void fireStateChanged() {
+        try {
+            super.fireStateChanged();
+        } catch( ArrayIndexOutOfBoundsException e ) {
+            if( Utilities.isMac() ) {
+                //#126651 - JTabbedPane is buggy on Mac OS
+            } else {
+                throw e;
+            }
         }
     }
 
@@ -436,7 +496,7 @@ final class CloseButtonTabbedPane extends JTabbedPane {
 
             switch(e.getID()) {
                 case MouseEvent.MOUSE_PRESSED:
-                    if (r.contains(p)) {
+                    if (r.contains(p) || e.getButton() == MouseEvent.BUTTON2) {
                         tab.setPressedCloseButtonIndex(index);
                         tab.draggedOut = false;
                         e.consume();
@@ -445,12 +505,17 @@ final class CloseButtonTabbedPane extends JTabbedPane {
                     break;
 
                 case MouseEvent.MOUSE_RELEASED:
-                    if (r.contains(p) && tab.pressedCloseButtonIndex >= 0) {
-                        Component tc =
-                            tab.getComponentAt(tab.pressedCloseButtonIndex);
+                    if ((r.contains(p) && tab.pressedCloseButtonIndex >= 0)
+                            || (e.getButton() == MouseEvent.BUTTON2 && index == tab.pressedCloseButtonIndex)) {
+                        
+                        Component tc = null;
+                        if( tab.pressedCloseButtonIndex >= 0
+                                && tab.pressedCloseButtonIndex < tab.getComponentCount() ) {
+                            tc = tab.findTabAt( tab.pressedCloseButtonIndex );
+                        }
                         tab.reset();
-
-                        tab.fireCloseRequest(tc);
+                        if( null != tc )
+                            tab.fireCloseRequest(tc);
                         e.consume();
                         return;
                     }
