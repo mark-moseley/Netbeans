@@ -56,6 +56,11 @@ import com.sun.source.util.TreePath;
 import com.sun.source.util.Trees;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.prefs.PreferenceChangeEvent;
+import java.util.prefs.PreferenceChangeListener;
+import java.util.prefs.Preferences;
 import java.util.regex.Pattern;
 
 import javax.lang.model.element.*;
@@ -65,21 +70,27 @@ import javax.swing.text.AbstractDocument;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 
+import org.netbeans.api.editor.mimelookup.MimeLookup;
+import org.netbeans.api.editor.settings.SimpleValueNames;
 import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.SourceUtils;
+import org.netbeans.api.lexer.InputAttributes;
+import org.netbeans.api.lexer.Language;
+import org.netbeans.api.lexer.LanguagePath;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
-import org.netbeans.editor.*;
-import org.netbeans.editor.ext.ExtSettingsDefaults;
-import org.netbeans.editor.ext.ExtSettingsNames;
 import org.netbeans.editor.ext.java.JavaTokenContext;
+import org.netbeans.modules.java.editor.options.CodeCompletionPanel;
+import org.openide.filesystems.FileObject;
+import org.openide.util.WeakListeners;
 
 /**
  *
  * @author Dusan Balek
+ * @author Sam Halliday
  */
-public class Utilities {
+public final class Utilities {
     
     private static final String CAPTURED_WILDCARD = "<captured wildcard>"; //NOI18N
     private static final String ERROR = "<error>"; //NOI18N
@@ -87,9 +98,52 @@ public class Utilities {
 
     private static boolean caseSensitive = true;
     private static boolean showDeprecatedMembers = true;
+    private static boolean guessMethodArguments = true;
+    private static boolean autoPopupOnJavaIdentifierPart = true;
+    private static boolean javaCompletionExcluderMethods;
+    private static String javaCompletionAutoPopupTriggers = null;
+    private static String javaCompletionSelectors = null;
+    private static String javadocCompletionAutoPopupTriggers = null;
     
-    private static SettingsChangeListener settingsListener = new SettingsListener();
-    private static boolean inited;
+    private static final AtomicBoolean inited = new AtomicBoolean(false);
+    private static Preferences preferences;
+    private static final PreferenceChangeListener preferencesTracker = new PreferenceChangeListener() {
+        public void preferenceChange(PreferenceChangeEvent evt) {
+            String settingName = evt == null ? null : evt.getKey();
+            if (settingName == null || SimpleValueNames.COMPLETION_CASE_SENSITIVE.equals(settingName)) {
+                caseSensitive = preferences.getBoolean(SimpleValueNames.COMPLETION_CASE_SENSITIVE, false);
+            }
+            if (settingName == null || SimpleValueNames.SHOW_DEPRECATED_MEMBERS.equals(settingName)) {
+                showDeprecatedMembers = preferences.getBoolean(SimpleValueNames.SHOW_DEPRECATED_MEMBERS, true);
+            }
+            if (settingName == null || CodeCompletionPanel.GUESS_METHOD_ARGUMENTS.equals(settingName)) {
+                guessMethodArguments = preferences.getBoolean(CodeCompletionPanel.GUESS_METHOD_ARGUMENTS, CodeCompletionPanel.GUESS_METHOD_ARGUMENTS_DEFAULT);
+            }
+            if (settingName == null || CodeCompletionPanel.JAVA_AUTO_POPUP_ON_IDENTIFIER_PART.equals(settingName)) {
+                autoPopupOnJavaIdentifierPart = preferences.getBoolean(CodeCompletionPanel.JAVA_AUTO_POPUP_ON_IDENTIFIER_PART, CodeCompletionPanel.JAVA_AUTO_POPUP_ON_IDENTIFIER_PART_DEFAULT);
+            }
+            if (settingName == null || CodeCompletionPanel.JAVA_AUTO_COMPLETION_TRIGGERS.equals(settingName)) {
+                javaCompletionAutoPopupTriggers = preferences.get(CodeCompletionPanel.JAVA_AUTO_COMPLETION_TRIGGERS, CodeCompletionPanel.JAVA_AUTO_COMPLETION_TRIGGERS_DEFAULT);
+            }
+            if (settingName == null || CodeCompletionPanel.JAVA_COMPLETION_SELECTORS.equals(settingName)) {
+                javaCompletionSelectors = preferences.get(CodeCompletionPanel.JAVA_COMPLETION_SELECTORS, CodeCompletionPanel.JAVA_COMPLETION_SELECTORS_DEFAULT);
+            }
+            if (settingName == null || CodeCompletionPanel.JAVADOC_AUTO_COMPLETION_TRIGGERS.equals(settingName)) {
+                javadocCompletionAutoPopupTriggers = preferences.get(CodeCompletionPanel.JAVADOC_AUTO_COMPLETION_TRIGGERS, CodeCompletionPanel.JAVADOC_AUTO_COMPLETION_TRIGGERS_DEFAULT);
+            }
+            if (settingName == null || CodeCompletionPanel.JAVA_COMPLETION_BLACKLIST.equals(settingName)) {
+                String blacklist = preferences.get(CodeCompletionPanel.JAVA_COMPLETION_BLACKLIST, CodeCompletionPanel.JAVA_COMPLETION_BLACKLIST_DEFAULT);
+                updateExcluder(excludeRef, blacklist);
+            }
+            if (settingName == null || CodeCompletionPanel.JAVA_COMPLETION_WHITELIST.equals(settingName)) {
+                String whitelist = preferences.get(CodeCompletionPanel.JAVA_COMPLETION_WHITELIST, CodeCompletionPanel.JAVA_COMPLETION_WHITELIST_DEFAULT);
+                updateExcluder(includeRef, whitelist);
+            }
+            if (settingName == null || CodeCompletionPanel.JAVA_COMPLETION_EXCLUDER_METHODS.equals(settingName)) {
+                javaCompletionExcluderMethods = preferences.getBoolean(CodeCompletionPanel.JAVA_COMPLETION_EXCLUDER_METHODS, CodeCompletionPanel.JAVA_COMPLETION_EXCLUDER_METHODS_DEFAULT);
+            }
+        }
+    };
     
     private static String cachedPrefix = null;
     private static Pattern cachedPattern = null;
@@ -100,7 +154,7 @@ public class Utilities {
         if (prefix == null || prefix.length() == 0)
             return true;
         return isCaseSensitive() ? theString.startsWith(prefix) :
-            theString.toLowerCase().startsWith(prefix.toLowerCase());
+            theString.toLowerCase(Locale.ENGLISH).startsWith(prefix.toLowerCase(Locale.ENGLISH));
     }
     
     public static boolean startsWithCamelCase(String theString, String prefix) {
@@ -150,17 +204,100 @@ public class Utilities {
         lazyInit();
         showDeprecatedMembers = b;
     }
-    
+
+    public static boolean guessMethodArguments() {
+        lazyInit();
+        return guessMethodArguments;
+    }
+
+    public static boolean autoPopupOnJavaIdentifierPart() {
+        lazyInit();
+        return autoPopupOnJavaIdentifierPart;
+    }
+
+    public static String getJavaCompletionAutoPopupTriggers() {
+        lazyInit();
+        return javaCompletionAutoPopupTriggers;
+    }
+
+    public static String getJavaCompletionSelectors() {
+        lazyInit();
+        return javaCompletionSelectors;
+    }
+
+    public static String getJavadocCompletionAutoPopupTriggers() {
+        lazyInit();
+        return javadocCompletionAutoPopupTriggers;
+    }
+
+    static private final AtomicReference<Collection<String>> excludeRef = new AtomicReference<Collection<String>>();
+    static private final AtomicReference<Collection<String>> includeRef = new AtomicReference<Collection<String>>();
+
+    private static void updateExcluder(AtomicReference<Collection<String>> existing, String updated) {
+        Collection<String> nue = new LinkedList<String>();
+        if (updated == null || updated.length() == 0) {
+            existing.set(nue);
+            return;
+        }
+        String[] entries = updated.split(","); //NOI18N
+        for (String entry : entries) {
+            if (entry.length() != 0) {
+                nue.add(entry);
+            }
+        }
+        existing.set(nue);
+    }
+
+    /**
+     * @return the user setting for whether the excluder should operate on methods
+     */
+    public static boolean isExcludeMethods(){
+        lazyInit();
+        return javaCompletionExcluderMethods;
+    }
+
+    /**
+     * @param fqn Fully Qualified Name (including method names). Packages names are expected to
+     * end in a trailing "." except the default package.
+     * @return
+     */
+    public static boolean isExcluded(final CharSequence fqn) {
+        if (fqn == null || fqn.length() == 0) {
+            return true;
+        }
+        lazyInit();
+        String s = fqn.toString();
+        Collection<String> include = includeRef.get();
+        Collection<String> exclude = excludeRef.get();
+
+        if (include != null && !include.isEmpty()) {
+            for (String entry : include) {
+                if (entry.length() > fqn.length()) {
+                    if (entry.startsWith(s)) {
+                        return false;
+                    }
+                } else if (s.startsWith(entry)) {
+                    return false;
+                }
+            }
+        }
+
+        if (exclude != null && !exclude.isEmpty()) {
+            for (String entry : exclude) {
+                if (entry.length() <= fqn.length() && s.startsWith(entry)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static void lazyInit() {
-        if (!inited) {
-            inited = true;
-            Settings.addSettingsChangeListener(settingsListener);
-            setCaseSensitive(SettingsUtil.getBoolean(JavaKit.class,
-                    ExtSettingsNames.COMPLETION_CASE_SENSITIVE,
-                    ExtSettingsDefaults.defaultCompletionCaseSensitive));
-            setShowDeprecatedMembers(SettingsUtil.getBoolean(JavaKit.class,
-                    ExtSettingsNames.SHOW_DEPRECATED_MEMBERS,
-                    ExtSettingsDefaults.defaultShowDeprecatedMembers));
+        if (inited.compareAndSet(false, true)) {
+            preferences = MimeLookup.getLookup(JavaKit.JAVA_MIME_TYPE).lookup(Preferences.class);
+            preferences.addPreferenceChangeListener(WeakListeners.create(PreferenceChangeListener.class, preferencesTracker, preferences));
+            preferencesTracker.preferenceChange(null);
         }
     }
 
@@ -210,6 +347,12 @@ public class Utilities {
             ((AbstractDocument)doc).readLock();
         }
         try {
+        if (doc.getLength() == 0 && "text/x-dialog-binding".equals(doc.getProperty("mimeType"))) { //NOI18N
+            InputAttributes attributes = (InputAttributes) doc.getProperty(InputAttributes.class);
+            LanguagePath path = LanguagePath.get(MimeLookup.getLookup("text/x-dialog-binding").lookup(Language.class)); //NOI18N
+            FileObject fo = (FileObject)attributes.getValue(path, "dialogBinding.fileObject"); //NOI18N
+            return "text/x-java".equals(fo.getMIMEType()); //NOI18N
+        }
         TokenSequence<JavaTokenId> ts = SourceUtils.getJavaTokenSequence(TokenHierarchy.get(doc), offset);
         if (ts == null)
             return false;        
@@ -315,9 +458,9 @@ public class Utilities {
             boolean isPrimitive = type.getKind().isPrimitive();
             if (prefix != null && prefix.length() > 0) {
                 if (isConst) {
-                    name = prefix.toUpperCase() + '_' + name;
+                    name = prefix.toUpperCase(Locale.ENGLISH) + '_' + name;
                 } else {
-                    name = prefix + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+                    name = prefix + name.toUpperCase(Locale.ENGLISH).charAt(0) + name.substring(1);
                 }
             }
             int cnt = 1;
@@ -336,16 +479,13 @@ public class Utilities {
         return result;
     }
 
-    public static boolean isInMethod(TreePath tp) {
-        while (tp != null) {
-            if (tp.getLeaf().getKind() == Tree.Kind.METHOD) {
-                return true;
-            }
-            
-            tp = tp.getParentPath();
-        }
-        
-        return false;
+    public static boolean inAnonymousOrLocalClass(TreePath path) {
+        if (path == null)
+            return false;
+        TreePath parentPath = path.getParentPath();
+        if (path.getLeaf().getKind() == Tree.Kind.CLASS && parentPath.getLeaf().getKind() != Tree.Kind.COMPILATION_UNIT && parentPath.getLeaf().getKind() != Tree.Kind.CLASS)                
+            return true;
+        return inAnonymousOrLocalClass(parentPath);
     }
         
     private static List<String> varNamesForType(TypeMirror type, Types types, Elements elements) {
@@ -370,11 +510,11 @@ public class Utilities {
             case SHORT:
                 return Collections.<String>singletonList(type.toString().substring(0, 1));
             case TYPEVAR:
-                return Collections.<String>singletonList(type.toString().toLowerCase());
+                return Collections.<String>singletonList(type.toString().toLowerCase(Locale.ENGLISH));
             case ERROR:
                 String tn = ((ErrorType)type).asElement().getSimpleName().toString();
-                if (tn.toUpperCase().contentEquals(tn))
-                    return Collections.<String>singletonList(tn.toLowerCase());
+                if (tn.toUpperCase(Locale.ENGLISH).contentEquals(tn))
+                    return Collections.<String>singletonList(tn.toLowerCase(Locale.ENGLISH));
                 StringBuilder sb = new StringBuilder();
                 ArrayList<String> al = new ArrayList<String>();
                 if ("Iterator".equals(tn)) //NOI18N
@@ -390,8 +530,8 @@ public class Utilities {
                 iterableTE = elements.getTypeElement("java.lang.Iterable"); //NOI18N
                 iterable = iterableTE != null ? types.getDeclaredType(iterableTE) : null;
                 tn = ((DeclaredType)type).asElement().getSimpleName().toString();
-                if (tn.toUpperCase().contentEquals(tn))
-                    return Collections.<String>singletonList(tn.toLowerCase());
+                if (tn.toUpperCase(Locale.ENGLISH).contentEquals(tn))
+                    return Collections.<String>singletonList(tn.toLowerCase(Locale.ENGLISH));
                 sb = new StringBuilder();
                 al = new ArrayList<String>();
                 if ("Iterator".equals(tn)) //NOI18N
@@ -467,21 +607,10 @@ public class Utilities {
         return false;
     }
     
-    private static class SettingsListener implements SettingsChangeListener {
-
-        public void settingsChange(SettingsChangeEvent evt) {
-            setCaseSensitive(SettingsUtil.getBoolean(JavaKit.class,
-                    ExtSettingsNames.COMPLETION_CASE_SENSITIVE,
-                    ExtSettingsDefaults.defaultCompletionCaseSensitive));
-            setShowDeprecatedMembers(SettingsUtil.getBoolean(JavaKit.class,
-                    ExtSettingsNames.SHOW_DEPRECATED_MEMBERS,
-                    ExtSettingsDefaults.defaultShowDeprecatedMembers));
-        }
-    }
-
     private static class TypeNameVisitor extends SimpleTypeVisitor6<StringBuilder,Boolean> {
         
         private boolean varArg;
+        private boolean insideCapturedWildcard = false;
         
         private TypeNameVisitor(boolean varArg) {
             super(new StringBuilder());
@@ -532,24 +661,29 @@ public class Utilities {
                     return DEFAULT_VALUE.append(name);
             }
             DEFAULT_VALUE.append("?"); //NOI18N
-            TypeMirror bound = t.getLowerBound();
-            if (bound != null && bound.getKind() != TypeKind.NULL) {
-                DEFAULT_VALUE.append(" super "); //NOI18N
-                visit(bound, p);
-            } else {
-                bound = t.getUpperBound();
+            if (!insideCapturedWildcard) {
+                insideCapturedWildcard = true;
+                TypeMirror bound = t.getLowerBound();
                 if (bound != null && bound.getKind() != TypeKind.NULL) {
-                    DEFAULT_VALUE.append(" extends "); //NOI18N
-                    if (bound.getKind() == TypeKind.TYPEVAR)
-                        bound = ((TypeVariable)bound).getLowerBound();
+                    DEFAULT_VALUE.append(" super "); //NOI18N
                     visit(bound, p);
+                } else {
+                    bound = t.getUpperBound();
+                    if (bound != null && bound.getKind() != TypeKind.NULL) {
+                        DEFAULT_VALUE.append(" extends "); //NOI18N
+                        if (bound.getKind() == TypeKind.TYPEVAR)
+                            bound = ((TypeVariable)bound).getLowerBound();
+                        visit(bound, p);
+                    }
                 }
+                insideCapturedWildcard = false;
             }
             return DEFAULT_VALUE;
         }
 
         @Override
         public StringBuilder visitWildcard(WildcardType t, Boolean p) {
+            int len = DEFAULT_VALUE.length();
             DEFAULT_VALUE.append("?"); //NOI18N
             TypeMirror bound = t.getSuperBound();
             if (bound == null) {
@@ -559,7 +693,7 @@ public class Utilities {
                     if (bound.getKind() == TypeKind.WILDCARD)
                         bound = ((WildcardType)bound).getSuperBound();
                     visit(bound, p);
-                } else {
+                } else if (len == 0) {
                     bound = SourceUtils.getBound(t);
                     if (bound != null && (bound.getKind() != TypeKind.DECLARED || !((TypeElement)((DeclaredType)bound).asElement()).getQualifiedName().contentEquals("java.lang.Object"))) { //NOI18N
                         DEFAULT_VALUE.append(" extends "); //NOI18N
@@ -573,6 +707,7 @@ public class Utilities {
             return DEFAULT_VALUE;
         }
 
+        @Override
         public StringBuilder visitError(ErrorType t, Boolean p) {
             Element e = t.asElement();
             if (e instanceof TypeElement) {
@@ -621,7 +756,8 @@ public class Utilities {
             switch (mit.getMethodSelect().getKind()) {
                 case IDENTIFIER:
                     Scope s = info.getTrees().getScope(path);
-                    on = s.getEnclosingClass().asType();
+                    TypeElement enclosingClass = s.getEnclosingClass();
+                    on = enclosingClass != null ? enclosingClass.asType() : null;
                     methodName = ((IdentifierTree) mit.getMethodSelect()).getName().toString();
                     break;
                 case MEMBER_SELECT:
@@ -681,6 +817,9 @@ public class Utilities {
         
         OUTER:
         for (ExecutableElement ee : execsIn(info, (TypeElement) on.asElement(), constr, name)) {
+            TypeMirror currType = ((TypeElement) ee.getEnclosingElement()).asType();
+            if (!info.getTypes().isSubtype(on, currType) && !on.asElement().equals(((DeclaredType)currType).asElement())) //XXX: fix for #132627, a clearer fix may exist
+                continue;
             if (ee.getParameters().size() == foundTypes.size() /*XXX: variable arg count*/) {
                 TypeMirror innerCandidate = null;
                 int innerIndex = -1;
@@ -723,6 +862,9 @@ public class Utilities {
         }
 
         return found;
+    }
+
+    private Utilities() {
     }
     
     
