@@ -40,11 +40,13 @@
  */
 package org.netbeans.jellytools;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import javax.swing.text.JTextComponent;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
+import org.netbeans.jellytools.actions.DockWindowAction;
+import org.netbeans.jellytools.actions.UndockWindowAction;
 import org.netbeans.jellytools.nodes.JavaNode;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.SourcePackagesNode;
@@ -52,7 +54,6 @@ import org.netbeans.jemmy.JemmyException;
 import org.netbeans.jemmy.Waitable;
 import org.netbeans.jemmy.Waiter;
 import org.netbeans.jemmy.operators.AbstractButtonOperator;
-import org.netbeans.junit.NbTestSuite;
 
 /**
  * Test of org.netbeans.jellytools.EditorOperator.
@@ -60,7 +61,37 @@ import org.netbeans.junit.NbTestSuite;
  * @author Jiri.Skrivanek@sun.com
  */
 public class EditorOperatorTest extends JellyTestCase {
-    
+
+    public static final String[] tests = new String[] {
+                "testTxtEditorPane",
+                "testUndockWindow",
+                "testLblRowColumn",
+                "testLblStatusBar",
+                "testLblInputMode",
+                "testDockWindow",
+                "testGetText",
+                "testContains",
+                "testSelect",
+                "testGetLineNumber",
+                "testPushHomeKey",
+                "testPushEndKey",
+                "testPushDownArrowKey",
+                "testPushUpArrowKey",
+                "testFolding",
+                "testSetCaretPositionRelative",
+                "testSetCaretPositionToLine",
+                "testSetCaretPosition",
+                "testGetToolbarButton",
+                "testReplace",
+                "testInsert",
+        // annotations have to be tested after testInsert because of parser annotations
+                "testGetAnnotations",
+                "testGetAnnotationType",
+                "testGetAnnotationShortDescription",
+                "testDelete",
+                "testPushTabKey",
+                "testCloseDiscard",
+    };
     /** Constructor required by JUnit.
      * @param testName method name to be used as testcase
      */
@@ -79,6 +110,7 @@ public class EditorOperatorTest extends JellyTestCase {
      * @return  created suite
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new EditorOperatorTest("testTxtEditorPane"));
         suite.addTest(new EditorOperatorTest("testLblRowColumn"));
@@ -107,12 +139,15 @@ public class EditorOperatorTest extends JellyTestCase {
         suite.addTest(new EditorOperatorTest("testPushTabKey"));
         suite.addTest(new EditorOperatorTest("testCloseDiscard"));
         return suite;
+         */
+        return createModuleTest(EditorOperatorTest.class, tests);
     }
 
     private static EditorOperator eo;
     
     /** Opens sample class and finds EditorOperator instance */
-    protected void setUp() {
+    protected void setUp() throws IOException {
+        openDataProjects("SampleProject");
         System.out.println("### "+getName()+" ###");
         if(eo == null) {
             Node sample1 = new Node(new SourcePackagesNode("SampleProject"), "sample1");  // NOI18N
@@ -125,11 +160,21 @@ public class EditorOperatorTest extends JellyTestCase {
     private static final String SAMPLE_CLASS_1 = "SampleClass1";
     
     /** Test of txtEditorPane method. */
-    public void testTxtEditorPane() {
+    public void testTxtEditorPane() throws IOException {
         String text = eo.txtEditorPane().getText();
         assertTrue("Wrong editor pane found.", text.indexOf(SAMPLE_CLASS_1) != -1);
     }
-    
+
+    /**
+     * More than a test this is here, because the following three tests (testLblRowColumn(),
+     * testLblInputMode() and testLblStatusBar()) fail if the editor window is docked. When docked,
+     * these three labels are a part of MainWindow.     *
+     */
+    public void testUndockWindow()
+    {
+        (new UndockWindowAction()).perform();
+    }
+
     /** Test of lblRowColumn method. */
     public void testLblRowColumn() {
         assertEquals("1:1", eo.lblRowColumn().getText());
@@ -161,6 +206,14 @@ public class EditorOperatorTest extends JellyTestCase {
             fail("Error in reflection operations: "+e.getMessage());
         }
         assertEquals("Wrong label found.", expected, eo.lblStatusBar().getText());
+    }
+
+    /**
+     * Dock after testing the previous three labels.
+     */
+    public void testDockWindow()
+    {
+        (new DockWindowAction()).perform();
     }
      
     /** Test of getText method. */
