@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,20 +42,17 @@
 package org.netbeans.modules.dbschema.jdbcimpl.wizard;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.ResourceBundle;
-import java.util.Set;
 
 import javax.swing.*;
 import javax.swing.event.*;
-import org.netbeans.api.db.explorer.ConnectionListener;
 import org.netbeans.api.db.explorer.ConnectionManager;
 import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.api.db.explorer.support.DatabaseExplorerUIs;
 
+import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -76,13 +73,13 @@ public class DBSchemaConnectionPanel extends JPanel implements ListDataListener 
         this.list = list;
         this.data = data;
 
-        putClientProperty("WizardPanel_contentSelectedIndex", new Integer(1)); //NOI18N
+        putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(1)); //NOI18N
         setName(bundle.getString("ConnectionChooser")); //NOI18N
 
         initComponents ();
         initAccessibility();
 
-        FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource("UI/Runtime"); //NOI18N
+        FileObject fo = FileUtil.getConfigFile("UI/Runtime"); //NOI18N
         DataFolder df;
         try {
             df = (DataFolder) DataObject.find(fo);
@@ -168,8 +165,8 @@ public class DBSchemaConnectionPanel extends JPanel implements ListDataListener 
 
     private final ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.dbschema.jdbcimpl.resources.Bundle"); //NOI18N
 
-    public boolean isValid() {
-        return existingConnComboBox.getSelectedItem() instanceof DatabaseConnection;
+    public boolean isInputValid() {
+        return existingConnComboBox != null && existingConnComboBox.getSelectedItem() instanceof DatabaseConnection;
     }
 
     public void intervalAdded(final javax.swing.event.ListDataEvent p1) {
