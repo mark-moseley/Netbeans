@@ -44,8 +44,12 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.event.ItemEvent;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.event.ChangeListener;
@@ -67,17 +71,22 @@ import org.netbeans.modules.cnd.api.model.CsmField;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmFunction;
 import org.netbeans.modules.cnd.api.model.CsmMacro;
-import org.netbeans.modules.cnd.api.model.CsmMember;
 import org.netbeans.modules.cnd.api.model.CsmMethod;
+import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
 import org.netbeans.modules.cnd.api.model.CsmNamedElement;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmObject;
+import org.netbeans.modules.cnd.api.model.CsmOffsetable;
+import org.netbeans.modules.cnd.api.model.CsmProject;
 import org.netbeans.modules.cnd.api.model.CsmQualifiedNamedElement;
 import org.netbeans.modules.cnd.api.model.CsmTypedef;
+import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.api.model.CsmVariable;
-import org.netbeans.modules.cnd.api.model.CsmVisibility;
+import org.netbeans.modules.cnd.api.model.services.CsmVirtualInfoQuery;
+import org.netbeans.modules.cnd.api.model.util.CsmBaseUtilities;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.modelutil.CsmDisplayUtilities;
 import org.netbeans.modules.cnd.refactoring.support.CsmRefactoringUtils;
 import org.netbeans.modules.cnd.refactoring.support.RefactoringModule;
 import org.openide.awt.Mnemonics;
@@ -90,38 +99,64 @@ import org.openide.awt.Mnemonics;
 public class WhereUsedPanel extends JPanel implements CustomRefactoringPanel {
 
     private final transient CsmObject origObject;
-    private transient CsmObject refObject;
+    private transient CsmUID<CsmObject> refObjectUID;
 
     private final transient ChangeListener parent;
     private String name;
+    private Scope defaultScope;
     /** Creates new form WhereUsedPanel */
     public WhereUsedPanel(String name, CsmObject csmObject,ChangeListener parent) {
         setName(NbBundle.getMessage(WhereUsedPanel.class, "LBL_WhereUsed")); // NOI18N
         this.origObject = csmObject;
         this.parent = parent;
         this.name = name;
+        this.defaultScope = Scope.CURRENT;
         initComponents();
     }
-    
+
     public enum Scope {
         ALL,
-        CURRENT
+        CURRENT,
+        USER_SPECIFIED
+    };
+    
+    private static final class ProjectScope {
+        JLabel label;
+        CsmProject project;
+
+        public ProjectScope(JLabel label, CsmProject project) {
+            this.label = label;
+            this.project = project;
+        }
+
+        public CsmProject getProject() {
+            return project;
+        }
+
+        public JLabel getLabel() {
+            return label;
+        }
     }
     
-    public Scope getScope() {
-        if (scope.getSelectedIndex()==1)
-            return Scope.CURRENT;
-        return Scope.ALL;
+    public CsmProject getScopeProject() {
+        if (defaultScope == Scope.ALL) {
+            return null;
+        } else if (defaultScope == Scope.CURRENT) {
+            return ((ProjectScope)scope.getItemAt(1)).getProject();
+        } else {
+            assert defaultScope == Scope.USER_SPECIFIED;
+            return ((ProjectScope)scope.getSelectedItem()).getProject();
+        }
     }
     
-    private boolean initialized = false;
+    private volatile boolean initialized = false;
     private CsmClass methodDeclaringSuperClass = null;
     private CsmClass methodDeclaringClass = null;
-    private CsmMethod baseVirtualMethod;
+    private CsmMethod baseVirtualMethod = null;
 
     /*package*/ String getBaseMethodDescription() {
         if (baseVirtualMethod != null) {
-            CsmVisibility vis = baseVirtualMethod.getVisibility();
+            //CsmVisibility vis = baseVirtualMethod.getVisibility();
             String functionDisplayName = baseVirtualMethod.getSignature().toString();
             String displayClassName = methodDeclaringSuperClass.getName().toString();
             return getString("DSC_MethodUsages", functionDisplayName, displayClassName); // NOI18N
@@ -134,6 +169,10 @@ public class WhereUsedPanel extends JPanel implements CustomRefactoringPanel {
         return isMethodFromBaseClass() ? methodDeclaringSuperClass : methodDeclaringClass;
     }
 
+    public void uninitialize() {
+        initialized = false;
+    }
+
     public void initialize() {
         // method is called to make initialization of components out of AWT
         if (initialized) {
@@ -141,39 +180,72 @@ public class WhereUsedPanel extends JPanel implements CustomRefactoringPanel {
         }
         initFields();
 
-        Project p = CsmRefactoringUtils.getContextProject(this.origObject);
-        final JLabel currentProject;
-        final JLabel allProjects;
-        if (p!=null) {
-            ProjectInformation pi = ProjectUtils.getInformation(p);
-            currentProject = new JLabel(pi.getDisplayName(), pi.getIcon(), SwingConstants.LEFT);
-            allProjects = new JLabel(NbBundle.getMessage(WhereUsedPanel.class,"LBL_AllProjects"), pi.getIcon(), SwingConstants.LEFT); // NOI18N
+        final List<ProjectScope> currentProjects;
+        final ProjectScope allProjects;
+        CsmObject refObject = getReferencedObject();
+        CsmProject refObjectPrj = null;
+        if (CsmKindUtilities.isOffsetable(refObject)) {
+            CsmFile refObjFile = ((CsmOffsetable)refObject).getContainingFile();
+            if (refObjFile != null) {
+                refObjectPrj = refObjFile.getProject();
+            }
+        }
+        if ((refObject != null) && !CsmKindUtilities.isLocalVariable(refObject)) {
+            Collection<Project> ps = CsmRefactoringUtils.getContextProjects(this.origObject);
+            if (!ps.isEmpty()) {
+                defaultScope = Scope.USER_SPECIFIED;
+                currentProjects = new ArrayList<ProjectScope>();
+                Icon icon = null;
+                for (Project p : ps) {
+                    ProjectInformation pi = ProjectUtils.getInformation(p);
+                    icon = pi.getIcon();
+                    CsmProject prj = CsmModelAccessor.getModel().getProject(p);
+                    ProjectScope prjScope = new ProjectScope(new JLabel(pi.getDisplayName(), icon, SwingConstants.LEFT), prj);
+                    currentProjects.add(prjScope);
+                }
+                allProjects = new ProjectScope(new JLabel(NbBundle.getMessage(WhereUsedPanel.class, "LBL_AllProjects"), icon, SwingConstants.LEFT), null); // NOI18N
+            } else {
+                defaultScope = Scope.ALL;
+                currentProjects = null;
+                allProjects = null;
+            }
+        } else if (CsmKindUtilities.isLocalVariable(refObject) && refObjectPrj != null) {
+            defaultScope = Scope.CURRENT;
+            ProjectScope prjScope = new ProjectScope(null, refObjectPrj);
+            currentProjects = new ArrayList<ProjectScope>();
+            currentProjects.add(prjScope);
+            allProjects = null;
         } else {
-            currentProject = null;
+            defaultScope = Scope.ALL;
+            currentProjects = null;
             allProjects = null;
         }
-        
-        
         final String labelText;
         String _isBaseClassText = null;
         boolean _needVirtualMethodPanel = false;
         boolean _needClassPanel = false;
         if (CsmKindUtilities.isMethod(refObject)) {
+            CsmMethod method = (CsmMethod) CsmBaseUtilities.getFunctionDeclaration((CsmFunction) refObject);
 //            CsmVisibility vis = ((CsmMember)refObject).getVisibility();
-            String functionDisplayName = ((CsmMethod)refObject).getSignature().toString();
-            methodDeclaringClass = ((CsmMember)refObject).getContainingClass();
+            String functionDisplayName = method.getSignature().toString();
+            methodDeclaringClass = method.getContainingClass();
             String displayClassName = methodDeclaringClass.getName().toString();
             labelText = getString("DSC_MethodUsages", functionDisplayName, displayClassName); // NOI18N
-            if (((CsmMethod)refObject).isVirtual()) {
-                baseVirtualMethod = getOriginalVirtualMethod((CsmMethod)refObject);
+            CsmVirtualInfoQuery query = CsmVirtualInfoQuery.getDefault();
+            if (query.isVirtual(method)) {
+                Collection<CsmMethod> baseMethods = query.getBaseDeclaration(method);
+                // use only the first for now
+                baseVirtualMethod = baseMethods.isEmpty() ? null : baseMethods.iterator().next();
+                assert baseVirtualMethod != null : "virtual method must have start virtual declaration";
                 methodDeclaringSuperClass = baseVirtualMethod.getContainingClass();
-                if (!refObject.equals(baseVirtualMethod)) {
+                if (!method.equals(baseVirtualMethod)) {
                     _isBaseClassText = getString("LBL_UsagesOfBaseClass", methodDeclaringSuperClass.getName().toString()); // NOI18N
                 }
                 _needVirtualMethodPanel = true;
             }
         } else if (CsmKindUtilities.isFunction(refObject)) {
             String functionFQN = ((CsmFunction)refObject).getSignature().toString();
+            functionFQN = CsmDisplayUtilities.htmlize(functionFQN);
             labelText = getString("DSC_FunctionUsages", functionFQN); // NOI18N
         } else if (CsmKindUtilities.isClass(refObject)) {
             CsmDeclaration.Kind classKind = ((CsmDeclaration)refObject).getKind();
@@ -216,7 +288,7 @@ public class WhereUsedPanel extends JPanel implements CustomRefactoringPanel {
             StringBuilder macroName = new StringBuilder(((CsmMacro)refObject).getName());
             if (((CsmMacro)refObject).getParameters() != null) {
                 macroName.append("("); // NOI18N
-                Iterator<? extends CharSequence> params = ((CsmMacro)refObject).getParameters().iterator();
+                Iterator<CharSequence> params = ((CsmMacro)refObject).getParameters().iterator();
                 if (params.hasNext()) {
                     macroName.append(params.next());
                     while (params.hasNext()) {
@@ -229,11 +301,15 @@ public class WhereUsedPanel extends JPanel implements CustomRefactoringPanel {
             labelText = getString("DSC_MacroUsages", macroName.toString()); // NOI18N
         } else if (CsmKindUtilities.isQualified(refObject)) {
             labelText = ((CsmQualifiedNamedElement)refObject).getQualifiedName().toString();
-        } else {
+        } else if (refObject != null) {
             labelText = this.name;
+        } else {
+            labelText = getString("DSC_ElNotAvail", this.name); // NOI18N
         }
 
-        this.name = labelText;
+        if (refObject != null) {
+            this.name = labelText;
+        }
         
 //        final Set<Modifier> modifiers = modif;
         final String isBaseClassText = _isBaseClassText;
@@ -244,10 +320,10 @@ public class WhereUsedPanel extends JPanel implements CustomRefactoringPanel {
             public void run() {
                 remove(classesPanel);
                 remove(methodsPanel);
+                label.setText(labelText);
                 // WARNING for now since this feature is not ready yet
-                //label.setText(labelText);
-                String combinedLabelText = "<html><font style=\"color: red\">WARNING: This feature is in development and inaccurate!</font><br><br>" + labelText + "</html>"; // NOI18N
-                label.setText(combinedLabelText);
+//                String combinedLabelText = "<html><font style=\"color: red\">WARNING: This feature is in development and inaccurate!</font><br><br>" + labelText + "</html>"; // NOI18N
+//                label.setText(combinedLabelText);
                 if (showMethodPanel) {
                     add(methodsPanel, BorderLayout.CENTER);
                     methodsPanel.setVisible(true);
@@ -298,11 +374,19 @@ public class WhereUsedPanel extends JPanel implements CustomRefactoringPanel {
 //                    c_usages.setVisible(false);
 //                    c_directOnly.setVisible(false);
                 }
-                if (currentProject!=null) {
-                    scope.setModel(new DefaultComboBoxModel(new Object[]{allProjects, currentProject }));
+                if (currentProjects != null) {
+                    Object[] model = new Object[currentProjects.size() + 1];
+                    model[0] = allProjects;
+                    for (int i = 0; i < currentProjects.size(); i++) {
+                        model[i+1] = currentProjects.get(i);
+                    }
+                    scope.setModel(new DefaultComboBoxModel(model));
                     int defaultItem = (Integer) RefactoringModule.getOption("whereUsed.scope", 0); // NOI18N
                     scope.setSelectedIndex(defaultItem);
                     scope.setRenderer(new JLabelRenderer());
+                    if (defaultScope == Scope.CURRENT) {
+                        scopePanel.setVisible(false);
+                    }
                 } else {
                     scopePanel.setVisible(false);
                 }                
@@ -318,7 +402,7 @@ public class WhereUsedPanel extends JPanel implements CustomRefactoringPanel {
     }
 
     /*package*/ CsmObject getReferencedObject() {
-        return refObject;
+        return refObjectUID == null ? null : refObjectUID.getObject();
     }
 
     /*package*/ String getDescription() {
@@ -474,6 +558,8 @@ searchInComments.addItemListener(new java.awt.event.ItemListener() {
 
     add(commentsPanel, java.awt.BorderLayout.NORTH);
 
+    scopeLabel.setDisplayedMnemonic(org.openide.util.NbBundle.getMessage(WhereUsedPanel.class, "LBL_Scope_MNEM").charAt(0));
+    scopeLabel.setLabelFor(scope);
     scopeLabel.setText(org.openide.util.NbBundle.getMessage(WhereUsedPanel.class, "LBL_Scope")); // NOI18N
 
     scope.addActionListener(new java.awt.event.ActionListener() {
@@ -490,7 +576,7 @@ searchInComments.addItemListener(new java.awt.event.ItemListener() {
             .addContainerGap()
             .add(scopeLabel)
             .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-            .add(scope, 0, 287, Short.MAX_VALUE)
+            .add(scope, 0, 283, Short.MAX_VALUE)
             .addContainerGap())
     );
     scopePanelLayout.setVerticalGroup(
@@ -584,25 +670,28 @@ searchInComments.addItemListener(new java.awt.event.ItemListener() {
     }
     
     /*package*/ boolean isVirtualMethod() {
-        return CsmKindUtilities.isMethod(refObject) && ((CsmMethod)refObject).isVirtual();
+        return baseVirtualMethod != null;
     }
     
     /*package*/ boolean isClass() {
-        return CsmKindUtilities.isClass(refObject);
+        return CsmKindUtilities.isClass(getReferencedObject());
     }
     
     private void initFields() {
-        this.refObject = getReferencedElement(origObject);
+        final CsmObject refObject = getReferencedElement(origObject);
+        this.refObjectUID = CsmRefactoringUtils.getHandler(refObject);
         this.name = getSearchElementName(refObject, this.name);
-        System.err.println("initFields: refObject=" + refObject + "\n");
+        //System.err.println("initFields: refObject=" + refObject + "\n");
     }
     
     private CsmObject getReferencedElement(CsmObject csmObject) {
+        CsmObject out;
         if (csmObject instanceof CsmReference) {
-            return getReferencedElement(((CsmReference)csmObject).getReferencedObject());
+            out = getReferencedElement(((CsmReference)csmObject).getReferencedObject());
         } else {
-            return csmObject;
+            out = csmObject;
         }
+        return CsmRefactoringUtils.convertToCsmObjectIfNeeded(out);
     }
     
     private String getSearchElementName(CsmObject csmObj, String defaultName) {
@@ -646,9 +735,9 @@ searchInComments.addItemListener(new java.awt.event.ItemListener() {
             // #89393: GTK needs name to render cell renderer "natively"
             setName("ComboBox.listRenderer"); // NOI18N
             
-            if ( value != null ) {
-                setText(((JLabel)value).getText());
-                setIcon(((JLabel)value).getIcon());
+            if ( value != null && ((ProjectScope)value).getLabel() != null ) {
+                setText(((ProjectScope)value).getLabel().getText());
+                setIcon(((ProjectScope)value).getLabel().getIcon());
             }
             
             if ( isSelected ) {
