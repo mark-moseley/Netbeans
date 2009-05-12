@@ -43,13 +43,17 @@ package org.netbeans.modules.tasklist.ui;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FontMetrics;
+import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
+import java.awt.event.FocusEvent;
+import java.awt.event.FocusListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -79,9 +83,9 @@ import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
 import javax.swing.table.TableModel;
 import org.netbeans.modules.tasklist.impl.OpenTaskAction;
-import org.netbeans.modules.tasklist.ui.Util;
 import org.netbeans.spi.tasklist.Task;
 import org.netbeans.modules.tasklist.trampoline.TaskGroup;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 
 /**
@@ -100,6 +104,7 @@ class TaskListTable extends JTable {
     
     /** Creates a new instance of TaskListTable */
     public TaskListTable() {
+        this.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         addMouseListener( new MouseAdapter() {
             @Override
             public void mousePressed( MouseEvent e ) {
@@ -132,6 +137,17 @@ class TaskListTable extends JTable {
                 if( e.getClickCount() == 2 ) {
                     defaultAction.actionPerformed( null );
                 }
+            }
+        });
+        
+        addFocusListener(new FocusListener() {
+
+            public void focusGained(FocusEvent e) {
+                repaintSelectedRow();
+            }
+
+            public void focusLost(FocusEvent e) {
+                repaintSelectedRow();
             }
         });
         setSelectionMode( ListSelectionModel.SINGLE_SELECTION );
@@ -195,7 +211,9 @@ class TaskListTable extends JTable {
     
     @Override
     protected JTableHeader createDefaultTableHeader() {
-        return new MyTableHeader( columnModel );
+        JTableHeader res = new MyTableHeader( columnModel );
+        res.setTable(this);
+        return res;
     }
     
     @Override
@@ -384,7 +402,7 @@ class TaskListTable extends JTable {
                               boolean isSelected, boolean hasFocus, int row, int column) {
             
             if( getFoldingModel().isGroupRow( row ) ) {
-                hasFocus = table.isFocusOwner() && isSelected;
+//                hasFocus = table.isFocusOwner() && isSelected;
             }
             Component res = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
             if( res instanceof JLabel ) {
@@ -447,6 +465,7 @@ class TaskListTable extends JTable {
         public MyTableHeader( TableColumnModel model ) {
             super( model );
             addMouseListener( new MouseAdapter() {
+                @Override
                 public void mouseClicked(MouseEvent e) {
                     if( e.getClickCount() != 1 )
                         return;
@@ -477,7 +496,6 @@ class TaskListTable extends JTable {
         @Override
         public void setUI(TableHeaderUI ui) {
             super.setUI(ui);
-            setDefaultRenderer( createDefaultRenderer() );
         }
     
         @Override
@@ -584,8 +602,8 @@ class TaskListTable extends JTable {
         
         @Override
         public int getPreferredWidth() {
-            int modelIndex = this.getModelIndex();
-            if( isFoldingModel() && modelIndex == TaskListModel.COL_GROUP )
+            int idx = this.getModelIndex();
+            if( isFoldingModel() && idx == TaskListModel.COL_GROUP )
                 return getWidth();
             
             int totalWidth = getParent().getWidth();
@@ -602,6 +620,7 @@ class TaskListTable extends JTable {
     }
 
     private static class LeftDotRenderer extends DefaultTableCellRenderer {
+        @Override
         public Component getTableCellRendererComponent( JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column ) {
                 
             super.getTableCellRendererComponent( table, value, isSelected, hasFocus, row, column );
@@ -637,6 +656,7 @@ class TaskListTable extends JTable {
     
 
     private static class TooltipRenderer extends DefaultTableCellRenderer {
+        @Override
         public Component getTableCellRendererComponent( JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column ) {
                 
             super.getTableCellRendererComponent( table, value, isSelected, hasFocus, row, column );
@@ -665,9 +685,16 @@ class TaskListTable extends JTable {
         
         private static final String SORT_ASC_ICON = "org/netbeans/modules/tasklist/ui/resources/columnsSortedAsc.gif"; // NOI18N
         private static final String SORT_DESC_ICON = "org/netbeans/modules/tasklist/ui/resources/columnsSortedDesc.gif"; // NOI18N
+
+        private JLabel defaultRenderer;
         
         SortingHeaderRenderer( TableCellRenderer origRenderer ) {
             this.origRenderer = origRenderer;
+            if( isGTK() ) {
+                TableCellRenderer ren = new JTableHeader().getDefaultRenderer();
+                if( ren instanceof JLabel )
+                    defaultRenderer = (JLabel) ren;
+            }
         }
 
         /** Overrides superclass method. */
@@ -679,9 +706,16 @@ class TaskListTable extends JTable {
                 TaskListModel tlm = (TaskListModel)getModel();
                 if( column == tlm.getSortingColumnn() ) {
                     label.setIcon( getProperIcon( !tlm.isAscendingSort() ) );
-                    label.setHorizontalTextPosition( SwingConstants.LEFT );
+                    label.setHorizontalTextPosition( SwingConstants.LEADING );
                 } else {
-                    label.setIcon( null );
+                    label.setIcon( NO_ICON );
+                }
+                if( isGTK() && null != defaultRenderer ) {
+                    defaultRenderer.setText(label.getText());
+                    Dimension prefSize = defaultRenderer.getPreferredSize();
+                    if( prefSize.width > 1 && prefSize.height > 1 )
+                        label.setPreferredSize(prefSize);
+                    label.setText(" " + label.getText());
                 }
             }
 
@@ -690,12 +724,26 @@ class TaskListTable extends JTable {
 
         private ImageIcon getProperIcon( boolean descending ) {
             if( descending ) {
-                return new ImageIcon( org.openide.util.Utilities.loadImage( SORT_DESC_ICON ) );
+                return ImageUtilities.loadImageIcon(SORT_DESC_ICON, false);
             } else {
-                return new ImageIcon( org.openide.util.Utilities.loadImage( SORT_ASC_ICON ) );
+                return ImageUtilities.loadImageIcon(SORT_ASC_ICON, false);
             }
         }
     }
+
+    private static final Icon NO_ICON = new Icon() {
+
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+        }
+
+        public int getIconWidth() {
+            return 1;
+        }
+
+        public int getIconHeight() {
+            return 16;
+        }
+    };
     
     private class PopupAction extends AbstractAction {
         public PopupAction() {
@@ -714,6 +762,7 @@ class TaskListTable extends JTable {
             popup.show( TaskListTable.this, p.x, p.y );
         }
         
+        @Override
         public boolean isEnabled() {
             return TaskListTable.this.isFocusOwner();
         }
@@ -734,4 +783,86 @@ class TaskListTable extends JTable {
 
         return new Point(0, rect.y + rect.height );
     }
+
+    @Override
+    public Color getSelectionBackground() {
+        if( !hasFocus() && !isNimbus() && !isGTK() )
+            return getUnfocusedSelectionBackground();
+        return UIManager.getColor("Table.selectionBackground");//NOI18N
+    }
+
+    @Override
+    public Color getSelectionForeground() {
+        if( !hasFocus() && !isNimbus() && !isGTK() )
+            return getUnfocusedSelectionForeground();
+        return UIManager.getColor("Table.selectionForeground");//NOI18N
+    }
+    
+    private void repaintSelectedRow() {
+        int selRow = getSelectedRow();
+        if( selRow < 0 )
+            return;
+        Rectangle rect = getCellRect(selRow, 0, true);
+        Rectangle rect2 = getCellRect(selRow, getColumnCount()-1, true);
+        rect.width = rect2.x + rect2.width;
+        repaint(rect);
+    }
+
+    private static Color unfocusedSelBg = null;
+    /** Get the system-wide unfocused selection background color */
+    private static Color getUnfocusedSelectionBackground() {
+        if (unfocusedSelBg == null) {
+            //allow theme/ui custom definition
+            unfocusedSelBg = UIManager.getColor("nb.explorer.unfocusedSelBg"); //NOI18N
+            
+            if (unfocusedSelBg == null) {
+                //try to get standard shadow color
+                unfocusedSelBg = UIManager.getColor("controlShadow"); //NOI18N
+                
+                if (unfocusedSelBg == null) {
+                    //Okay, the look and feel doesn't suport it, punt
+                    unfocusedSelBg = Color.lightGray;
+                }
+
+                //Lighten it a bit because disabled text will use controlShadow/
+                //gray
+                if (!Color.WHITE.equals(unfocusedSelBg.brighter())) {
+                    unfocusedSelBg = unfocusedSelBg.brighter();
+                }
+            }
+        }
+
+        return unfocusedSelBg;
+    }
+
+    private static Color unfocusedSelFg = null;
+    /** Get the system-wide unfocused selection foreground color */
+    private static Color getUnfocusedSelectionForeground() {
+        if (unfocusedSelFg == null) {
+            //allow theme/ui custom definition
+            unfocusedSelFg = UIManager.getColor("nb.explorer.unfocusedSelFg"); //NOI18N
+            
+            if (unfocusedSelFg == null) {
+                //try to get standard shadow color
+                unfocusedSelFg = UIManager.getColor("textText"); //NOI18N
+                
+                if (unfocusedSelFg == null) {
+                    //Okay, the look and feel doesn't suport it, punt
+                    unfocusedSelFg = Color.BLACK;
+                }
+            }
+        }
+
+        return unfocusedSelFg;
+    }
+    
+    private static boolean isGTK () {
+        return "GTK".equals(UIManager.getLookAndFeel().getID()); //NOI18N
+    }
+    
+    private static boolean isNimbus () {
+        return "Nimbus".equals(UIManager.getLookAndFeel().getID()); //NOI18N
+    }
 }
+
+    
