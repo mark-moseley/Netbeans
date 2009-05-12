@@ -87,7 +87,14 @@ public class APTFindUnusedBlocksWalker extends APTSelfWalker {
         handleIf(apt, val);
         return val;
     }
-    
+
+    protected @Override void onErrorNode(APT apt) {
+        super.onErrorNode(apt);
+        int startOffset = apt.getEndOffset();
+        int endOffset = this.csmFile.getText().length();
+        addBlock(startOffset, endOffset);
+    }
+
     private void handleIf(APT opener, boolean value) {
         APT closer = opener.getNextSibling();
         if (closer != null && !value) {
