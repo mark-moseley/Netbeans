@@ -41,8 +41,6 @@
 
 package org.netbeans.modules.form;
 
-import javax.swing.JEditorPane;
-
 import org.openide.*;
 import org.openide.filesystems.*;
 import org.openide.nodes.*;
@@ -167,7 +165,7 @@ class JavaCodeGenerator extends CodeGenerator {
     static final int LAYOUT_CODE_LIBRARY = 2;
 
     private static final String EVT_SECTION_PREFIX = "event_"; // NOI18N
-
+    private static final String EVT_VARIABLE_NAME = "evt"; // NOI18N
     private static final String DEFAULT_LISTENER_CLASS_NAME = "FormListener"; // NOI18N
 
     static final String CUSTOM_CODE_MARK = "\u001F"; // NOI18N
@@ -246,11 +244,28 @@ class JavaCodeGenerator extends CodeGenerator {
             }
             else canGenerate = false;
 
+            if (formEditorSupport.getGuardedSectionManager() == null) {
+                // Issue 143655 - opening of big file canceled
+                EventQueue.invokeLater(new Runnable() {
+                    public void run() {
+                        formEditorSupport.close();
+                    }
+                });
+                return;
+            }
             SimpleSection initComponentsSection = formEditorSupport.getInitComponentSection();
             SimpleSection variablesSection = formEditorSupport.getVariablesSection();
 
             if (initComponentsSection == null || variablesSection == null) {
                 System.err.println("ERROR: Cannot initialize guarded sections... code generation is disabled."); // NOI18N
+
+                formModel.setReadOnly(true);
+                NotifyDescriptor d = new NotifyDescriptor.Message(
+                        FormUtils.getBundleString("MSG_ERR_GuardesBlocks"), // NOI18N
+                        NotifyDescriptor.ERROR_MESSAGE);
+                d.setTitle(FormUtils.getBundleString("MSG_ERR_GuardesBlocksTitle")); // NOI18N
+                DialogDisplayer.getDefault().notifyLater(d);
+
                 canGenerate = false;
             }
 
@@ -272,6 +287,7 @@ class JavaCodeGenerator extends CodeGenerator {
         if (component == null) {
             propList.add(new VariablesModifierProperty());
             propList.add(new LocalVariablesProperty());
+            propList.add(new GenerateFQNProperty());
             propList.add(new GenerateMnemonicsCodeProperty());
             propList.add(new ListenerGenerationStyleProperty());
             propList.add(new LayoutCodeTargetProperty());
@@ -383,19 +399,30 @@ class JavaCodeGenerator extends CodeGenerator {
 
                 @Override
                 public PropertyEditor getExpliciteEditor() { // getPropertyEditor
-                    Boolean local = (Boolean) component.getAuxValue(AUX_VARIABLE_LOCAL);
-                    if (local == null)
-                        local = Boolean.valueOf(formModel.getSettings().getVariablesLocal());
-                    return Boolean.TRUE.equals(local) ?
-                        new ModifierEditor(Modifier.FINAL)
-                        :
-                        new ModifierEditor(Modifier.PUBLIC
-                                           | Modifier.PROTECTED
-                                           | Modifier.PRIVATE
-                                           | Modifier.STATIC
-                                           | Modifier.FINAL
-                                           | Modifier.TRANSIENT
-                                           | Modifier.VOLATILE);
+                    return new ModifierEditor() {
+                        private void updateMask() {
+                            Boolean local = (Boolean) component.getAuxValue(AUX_VARIABLE_LOCAL);
+                            if (local == null) {
+                                local = formModel.getSettings().getVariablesLocal();
+                            }
+                            int mask = Boolean.TRUE.equals(local) ? Modifier.FINAL
+                                    : Modifier.PUBLIC | Modifier.PROTECTED | Modifier.PRIVATE |
+                                      Modifier.STATIC | Modifier.FINAL | Modifier.TRANSIENT | Modifier.VOLATILE;
+                            setMask(mask);
+                        }
+
+                        @Override
+                        public void setAsText(String string) throws IllegalArgumentException {
+                            updateMask();
+                            super.setAsText(string);
+                        }
+
+                        @Override
+                        public Component getCustomEditor() {
+                            updateMask();
+                            return super.getCustomEditor();
+                        }
+                    };
                 }
             };
             modifProp.setShortDescription(bundle.getString("MSG_JC_VariableModifiersDesc")); // NOI18N
@@ -909,6 +936,51 @@ class JavaCodeGenerator extends CodeGenerator {
             + "_" + component.getName(); // NOI18N
     }
 
+    private boolean shouldExpandInitComponents(final int initComponentsOffset) {
+        if (EventQueue.isDispatchThread()) {
+            return shouldExpandInitComponentsInAWT(initComponentsOffset);
+        } else {
+            // We cannot use EQ.invokeAndWait here, see issue 131841
+            // Hence, using a simple fallback
+            return false;
+        }
+    }
+
+    private boolean shouldExpandInitComponentsInAWT(int initComponentsOffset) {
+        boolean expandInitComponents = false;
+        javax.swing.JEditorPane editorPane = formEditorSupport.getEditorPane();
+        if (editorPane != null) {
+            String foldDescription = FormUtils.getBundleString("MSG_GeneratedCode"); // NOI18N
+            FoldHierarchy foldHierarchy = FoldHierarchy.get(editorPane);
+            Fold fold = FoldUtilities.findNearestFold(foldHierarchy, initComponentsOffset);
+            expandInitComponents = (fold != null) && foldDescription.equals(fold.getDescription()) && !fold.isCollapsed();
+        }
+        return expandInitComponents;
+    }
+
+    private void expandInitComponents(final int initComponentsOffset) {
+        if (EventQueue.isDispatchThread()) {
+            expandInitComponentsInAWT(initComponentsOffset);
+        } else {
+            EventQueue.invokeLater(new Runnable() {
+                public void run() {
+                    expandInitComponentsInAWT(initComponentsOffset);
+                }
+            });
+        }
+    }
+
+    private void expandInitComponentsInAWT(int initComponentsOffset) {
+        javax.swing.JEditorPane editorPane = formEditorSupport.getEditorPane();
+        if (editorPane != null) {
+            FoldHierarchy foldHierarchy = FoldHierarchy.get(formEditorSupport.getEditorPane());
+            Fold fold = FoldUtilities.findNearestFold(foldHierarchy, initComponentsOffset);
+            if (fold != null) {
+                foldHierarchy.expand(fold);
+            }
+        }
+    }
+
     void regenerateInitComponents() {
         if (!initialized || !canGenerate)
             return;
@@ -942,15 +1014,9 @@ class JavaCodeGenerator extends CodeGenerator {
             boolean expandInitComponents = false;
             boolean foldGeneratedCode = formSettings.getFoldGeneratedCode();
             if (foldGeneratedCode) {
-                String foldDescription = FormUtils.getBundleString("MSG_GeneratedCode"); // NOI18N
-                javax.swing.JEditorPane editorPane = formEditorSupport.getEditorPane();
-                if (editorPane != null) {
-                    FoldHierarchy foldHierarchy = FoldHierarchy.get(editorPane);
-                    Fold fold = FoldUtilities.findNearestFold(foldHierarchy, initComponentsOffset);
-                    expandInitComponents = (fold != null) && foldDescription.equals(fold.getDescription()) && !fold.isCollapsed();
-                }
+                expandInitComponents = shouldExpandInitComponents(initComponentsOffset);
                 writer.write("// <editor-fold defaultstate=\"collapsed\" desc=\""); // NOI18N
-                writer.write(foldDescription);
+                writer.write(FormUtils.getBundleString("MSG_GeneratedCode")); // NOI18N
                 writer.write("\">\n"); // NOI18N
             }
 
@@ -1019,11 +1085,7 @@ class JavaCodeGenerator extends CodeGenerator {
             initComponentsSection.setText(newText);
             
             if (expandInitComponents) {
-                FoldHierarchy foldHierarchy = FoldHierarchy.get(formEditorSupport.getEditorPane());
-                Fold fold = FoldUtilities.findNearestFold(foldHierarchy, initComponentsOffset);
-                if (fold != null) {
-                    foldHierarchy.expand(fold);
-                }
+                expandInitComponents(initComponentsOffset);
             }
             clearUndo();
         }
@@ -1053,9 +1115,14 @@ class JavaCodeGenerator extends CodeGenerator {
         }
     }
 
-    private void regenerateVariables() {
+    /**
+     * Returns the set of generated variables.
+     * 
+     * @return the set of generated variables.
+     */
+    private Set<String> regenerateVariables() {
         if (!initialized || !canGenerate)
-            return;
+            return Collections.emptySet();
         
         IndentEngine indentEngine = IndentEngine.find(
                                         formEditorSupport.getDocument());
@@ -1074,12 +1141,13 @@ class JavaCodeGenerator extends CodeGenerator {
         else {
             variablesWriter = new CodeWriter(variablesBuffer, false);
         }
-	    
+
+        Set<String> variableNames = Collections.emptySet();
         try {
 	    variablesWriter.write(getVariablesHeaderComment());
             variablesWriter.write("\n"); // NOI18N
 
-            addFieldVariables(variablesWriter);
+            variableNames = addFieldVariables(variablesWriter);
             
             variablesWriter.write(getVariablesFooterComment());
             variablesWriter.write("\n"); // NOI18N
@@ -1095,6 +1163,7 @@ class JavaCodeGenerator extends CodeGenerator {
         catch (IOException e) { // should not happen
             e.printStackTrace();
         }
+        return variableNames;
     }   
     
     private void addCreateCode(RADComponent comp, CodeWriter initCodeWriter)
@@ -1662,10 +1731,7 @@ class JavaCodeGenerator extends CodeGenerator {
         if (!comp.hasHiddenState() 
                 && (genType == null || VALUE_GENERATE_CODE.equals(genType)))
         {   // not serialized
-            FormProperty[] props;
-            if (comp instanceof RADVisualComponent)
-                props = ((RADVisualComponent)comp).getAccessibilityProperties();
-            else return false;
+            FormProperty[] props = comp.getAccessibilityProperties();
 
             for (int i=0; i < props.length; i++) {
                 boolean gen = generateProperty(props[i], comp, null, initCodeWriter, codeData);
@@ -2172,6 +2238,15 @@ class JavaCodeGenerator extends CodeGenerator {
         if (properties == null) return;
 
 	CreationDescriptor.Creator creator = getPropertyCreator(propertyType, properties);
+        if (creator == null) { // Issue 136252
+            String message = "No Creator found for " + propertyType; // NOI18N
+            if (prop instanceof RADProperty) {
+                String component = ((RADProperty)prop).getRADComponent().getName();
+                message += "\nCheck " + prop.getName() + " property of " + component + " component."; // NOI18N
+            }
+            Logger.getLogger(getClass().getName()).log(Level.WARNING, message);
+            return;
+        }
 	java.util.List<FormProperty> creatorProperties = getCreatorProperties(creator, properties);
 															
 	java.util.List<FormProperty> remainingProperties = new ArrayList<FormProperty>();
@@ -2223,7 +2298,7 @@ class JavaCodeGenerator extends CodeGenerator {
     
     private CreationDescriptor.Creator getPropertyCreator(Class clazz, FormProperty[] properties) {	
 	CreationDescriptor creationDesc = CreationFactory.getDescriptor(clazz);
-	return creationDesc.findBestCreator(properties,
+	return (creationDesc == null) ? null : creationDesc.findBestCreator(properties,
 					    // XXX CHANGED_ONLY ???
 					    CreationDescriptor.CHANGED_ONLY | CreationDescriptor.PLACE_ALL);	
     }
@@ -2453,16 +2528,19 @@ class JavaCodeGenerator extends CodeGenerator {
         return metacomp;
     }
 
-    private void addFieldVariables(CodeWriter variablesWriter)
+    private Set<String> addFieldVariables(CodeWriter variablesWriter)
         throws IOException
     {
+        Set<String> variableNames = new HashSet<String>();
         Iterator<CodeVariable> it = getSortedVariables(CodeVariable.FIELD, CodeVariable.SCOPE_MASK);
 
         while (it.hasNext()) {
             CodeVariable var = it.next();
             RADComponent metacomp = codeVariableToRADComponent(var);
-            if (metacomp != null)
+            if (metacomp != null) {
                 generateComponentFieldVariable(metacomp, variablesWriter, null);
+                variableNames.add(var.getName());
+            }
             // there should not be other than component variables as fields
         }
 
@@ -2476,12 +2554,14 @@ class JavaCodeGenerator extends CodeGenerator {
                             bindingGroupClass, "bindingGroup", true); // NOI18N
                 }
                 variablesWriter.write("private " + bindingGroupClass.getName() + " " + bindingGroupVariable + ";\n"); // NOI18N
+                variableNames.add(bindingGroupVariable);
                 break;
             }
         }
         if (!anyBinding) {
             bindingGroupVariable = null;
         }
+        return variableNames;
     }
 
     private void addLocalVariables(Writer writer)
@@ -2740,9 +2820,9 @@ class JavaCodeGenerator extends CodeGenerator {
         listenersInMainClass = mainclass ? listenersToImplement : null;
 
         if (innerclass) {
-            String listenerClassName = getListenerClassName();
+            String lClassName = getListenerClassName();
             codeWriter.write("private class "); // NOI18N
-            codeWriter.write(listenerClassName);
+            codeWriter.write(lClassName);
             codeWriter.write(" implements "); // NOI18N
             for (int i=0; i < listenersToImplement.length; i++) {
                 codeWriter.write(getSourceClassName(listenersToImplement[i]));
@@ -2750,7 +2830,7 @@ class JavaCodeGenerator extends CodeGenerator {
                     codeWriter.write(", "); // NOI18N
             }
             codeWriter.write(" {\n"); // NOI18N
-            codeWriter.write(listenerClassName + "() {}\n"); // NOI18N Issue 72346 resp. 15242
+            codeWriter.write(lClassName + "() {}\n"); // NOI18N Issue 72346 resp. 15242
         }
 
         for (int i=0; i < listenersToImplement.length; i++) {
@@ -3050,7 +3130,8 @@ class JavaCodeGenerator extends CodeGenerator {
      */
     private void generateEventHandler(String handlerName,
                                       Method originalMethod,
-                                      String bodyText)
+                                      String bodyText,
+                                      String annotationText)
     {
         if (!initialized || !canGenerate)
             return;
@@ -3069,8 +3150,13 @@ class JavaCodeGenerator extends CodeGenerator {
             Writer codeWriter = engine.createWriter(formEditorSupport.getDocument(),
                                                     sec.getStartPosition().getOffset(),
                                                     buffer);
-            int i1, i2;
+            int i0, i1, i2;
 
+            if (annotationText != null) {
+                codeWriter.write(annotationText);
+                codeWriter.flush();
+            }
+            i0 = buffer.getBuffer().length();
             generateListenerMethodHeader(handlerName, originalMethod, codeWriter);
             codeWriter.flush();
             i1 = buffer.getBuffer().length();
@@ -3082,7 +3168,10 @@ class JavaCodeGenerator extends CodeGenerator {
             codeWriter.write("}\n"); // footer with new line // NOI18N
             codeWriter.flush();
 
-            sec.setHeader(buffer.getBuffer().substring(0,i1));
+            if (i0 != 0) {
+                formEditorSupport.getDocument().insertString(sec.getStartPosition().getOffset(), annotationText, null);
+            }
+            sec.setHeader(buffer.getBuffer().substring(i0,i1));
             sec.setBody(buffer.getBuffer().substring(i1,i2));
             sec.setFooter(buffer.getBuffer().substring(i2));
 
@@ -3093,6 +3182,12 @@ class JavaCodeGenerator extends CodeGenerator {
         }
         catch (java.io.IOException ioe) {
             return;
+        }
+
+        if (!formModel.getSettings().getGenerateFQN()) {
+            FQNImporter fqnImporter = new FQNImporter(formEditorSupport.getFormDataObject().getPrimaryFile());
+            fqnImporter.setHandleEventHandlers(Collections.singleton(handlerName));
+            fqnImporter.importFQNs();
         }
 
         clearUndo();
@@ -3140,43 +3235,26 @@ class JavaCodeGenerator extends CodeGenerator {
                                     String newHandlerName)
     {
         InteriorSection sec = getEventHandlerSection(oldHandlerName);
-        if (sec == null || !initialized || !canGenerate)
-            return;
-
-        String header = sec.getHeader();
-
-        // find the old handler name in the handler method header
-        int index = header.indexOf('(');
-        if (index < 0)
-            return; // should not happen unless the handler code is corrupted
-        index = header.substring(0, index).lastIndexOf(oldHandlerName);
-        if (index < 0)
-            return; // old name not found; should not happen
-
-        IndentEngine engine = IndentEngine.find(formEditorSupport.getDocument());
-        StringWriter buffer = new StringWriter();
-        Writer codeWriter = engine.createWriter(formEditorSupport.getDocument(),
-                                                sec.getStartPosition().getOffset(),
-                                                buffer);
-        try {
-            codeWriter.write(header.substring(0, index));
-            codeWriter.write(newHandlerName);
-            codeWriter.write(header.substring(index + oldHandlerName.length()));
-            codeWriter.flush();
-            int i1 = buffer.getBuffer().length();
-            codeWriter.write("}\n"); // NOI18N // footer with new line
-            codeWriter.flush();
-
-            sec.setHeader(buffer.getBuffer().substring(0, i1));
-            sec.setFooter(buffer.getBuffer().substring(i1));
-            sec.setName(getEventSectionName(newHandlerName));
-
-            codeWriter.close();
-        } 
-        catch (java.beans.PropertyVetoException e) {
+        if (sec == null || !initialized || !canGenerate) {
             return;
         }
-        catch (IOException e) {
+
+        // find the old handler name in the handler method header and replace
+        // it with the new name
+        String header = sec.getHeader();
+        int index = header.indexOf('(');
+        if (index < 0) {
+            return; // should not happen unless the handler code is corrupted
+        }
+        index = header.substring(0, index).lastIndexOf(oldHandlerName);
+        if (index < 0) {
+            return; // old name not found; should not happen
+        }
+        try {
+            sec.setHeader(header.substring(0, index) + newHandlerName + header.substring(index + oldHandlerName.length()));
+            sec.setName(getEventSectionName(newHandlerName));
+        } 
+        catch (java.beans.PropertyVetoException e) {
             return;
         }
 
@@ -3194,13 +3272,17 @@ class JavaCodeGenerator extends CodeGenerator {
     /** Gets the body (text) of event handler of given name. */
     String getEventHandlerText(String handlerName) {
         InteriorSection section = getEventHandlerSection(handlerName);
+        return (section == null) ? null : section.getBody();
+    }
+
+    private String getEventHandlerAnnotation(String handlerName, boolean removeAnnotations) {
+        String code = null;
+        InteriorSection section = getEventHandlerSection(handlerName);
         if (section != null) {
-            // XXX try to use section.getBody instead
-            String tx = section.getText();
-            tx = tx.substring(tx.indexOf("{")+1, tx.lastIndexOf("}")).trim() + "\n"; // NOI18N
-            return tx;
+            FormJavaSource fjs = FormEditor.getFormJavaSource(formModel);
+            code = fjs.getAnnotationCode(handlerName, section.getStartPosition(), section.getEndPosition(), removeAnnotations);
         }
-        return null;
+        return code;
     }
 
     // ------------------------------------------------------------------------------------------
@@ -3258,7 +3340,7 @@ class JavaCodeGenerator extends CodeGenerator {
         if (paramTypes.length == 1
             && EventObject.class.isAssignableFrom(paramTypes[0]))
         {
-            paramNames = new String[] { formSettings.getEventVariableName() };
+            paramNames = new String[] { EVT_VARIABLE_NAME };
         }
         else {
             paramNames = new String[paramTypes.length];
@@ -3358,8 +3440,18 @@ class JavaCodeGenerator extends CodeGenerator {
     void regenerateCode() {
         if (!codeUpToDate) {	    
             codeUpToDate = true;
-            regenerateVariables();
+            Set<String> variableNames = regenerateVariables();
             regenerateInitComponents();
+            if (!formModel.getSettings().getGenerateFQN()) {
+                FQNImporter fqnImporter = new FQNImporter(formEditorSupport.getFormDataObject().getPrimaryFile());
+                fqnImporter.setHandleInitComponents(true);
+                fqnImporter.setHandleVariables(variableNames);
+                if (formModel.getSettings().getListenerGenerationStyle() == CEDL_INNERCLASS && anyEvents()) {
+                    fqnImporter.setHandleFormListener(getListenerClassName());
+                }
+                fqnImporter.importFQNs();
+                clearUndo();
+            }
             ensureMainClassImplementsListeners();            
             FormModel.t("code regenerated"); // NOI18N	    
         }
@@ -3791,16 +3883,17 @@ class JavaCodeGenerator extends CodeGenerator {
                 if (ev.getChangeType() == FormModelEvent.EVENT_HANDLER_ADDED) {
                     String handlerName = ev.getEventHandler();
                     String bodyText = ev.getNewEventHandlerContent();
+                    String annotationText = ev.getNewEventHandlerAnnotation();
                     if ((ev.getCreatedDeleted() || bodyText != null) && ev.getComponent().isInModel()) {
-                        if (!ev.getCreatedDeleted())
-                            ev.setOldEventHandlerContent(
-                                getEventHandlerText(handlerName));
+                        if (!ev.getCreatedDeleted()) {
+                            ev.setOldEventHandlerContent(getEventHandlerText(handlerName));
+                        }
 
                         generateEventHandler(handlerName,
                                             (ev.getComponentEvent() == null) ?
                                                 formModel.getFormEvents().getOriginalListenerMethod(handlerName) :
                                                 ev.getComponentEvent().getListenerMethod(),
-                                             bodyText);
+                                             bodyText, annotationText);
                     }
                     if (events.length == 1 && bodyText == null)
                         gotoEventHandler(handlerName);
@@ -3808,8 +3901,8 @@ class JavaCodeGenerator extends CodeGenerator {
                 else if (ev.getChangeType() == FormModelEvent.EVENT_HANDLER_REMOVED) {
                     if (ev.getCreatedDeleted()) {
                         String handlerName = ev.getEventHandler();
-                        ev.setOldEventHandlerContent(
-                            getEventHandlerText(handlerName));
+                        ev.setOldEventHandlerContent(getEventHandlerText(handlerName));
+                        ev.setOldEventHandlerAnnotation(getEventHandlerAnnotation(handlerName, true));
                         deleteEventHandler(handlerName);
                     }
                 }
@@ -3990,7 +4083,7 @@ class JavaCodeGenerator extends CodeGenerator {
     // {{{ CodeProperty
     //
 
-    private class CodeProperty extends FormProperty {
+    class CodeProperty extends FormProperty {
         // using FormProperty to be able to disable change firing for temporary
         // changes in CodeCustomizer
         private String auxKey;
@@ -4082,7 +4175,7 @@ class JavaCodeGenerator extends CodeGenerator {
 
         @Override
         public boolean supportsCustomEditor() {
-            return true;
+            return !formModel.isReadOnly();
         }
     }
 
@@ -4323,7 +4416,7 @@ class JavaCodeGenerator extends CodeGenerator {
         
         @Override
         public PropertyEditor getPropertyEditor() {
-            return new FormLoaderSettingsBeanInfo.ListenerGenerationStyleEditor();
+            return new ListenerGenerationStyleEditor();
         }
         
     }
@@ -4378,8 +4471,107 @@ class JavaCodeGenerator extends CodeGenerator {
 
         @Override
         public PropertyEditor getPropertyEditor() {
-            return new FormLoaderSettingsBeanInfo.LayoutCodeTargetEditor(true);
+            return new LayoutCodeTargetEditor(true);
         }
 
+    }
+
+    private class GenerateFQNProperty extends PropertySupport.ReadWrite<Boolean> {
+        
+        private GenerateFQNProperty() {
+            super(FormLoaderSettings.PROP_GENERATE_FQN,
+                Boolean.class,
+                FormUtils.getBundleString("PROP_GENERATE_FQN"), // NOI18N
+                FormUtils.getBundleString("HINT_GENERATE_FQN")); // NOI18N
+        }
+
+        public void setValue(Boolean value) {
+            Boolean oldValue = getValue();
+            formModel.getSettings().setGenerateFQN(value);
+            if (!value) {
+                FQNImporter fqnImporter = new FQNImporter(formEditorSupport.getFormDataObject().getPrimaryFile());
+                String[] handlers = formModel.getFormEvents().getAllEventHandlers();
+                fqnImporter.setHandleEventHandlers(Arrays.asList(handlers));
+                fqnImporter.importFQNs();
+            }
+            formModel.fireSyntheticPropertyChanged(null, FormLoaderSettings.PROP_GENERATE_FQN, oldValue, value);
+            FormEditor.getFormEditor(formModel).getFormRootNode().firePropertyChangeHelper(
+                FormLoaderSettings.PROP_GENERATE_FQN, oldValue, value);
+        }
+
+        public Boolean getValue() {
+            return formModel.getSettings().getGenerateFQN();
+        }
+
+        @Override
+        public boolean supportsDefaultValue() {
+            return true;
+        }
+
+        @Override
+        public void restoreDefaultValue() {
+            setValue(FormLoaderSettings.getInstance().getGenerateFQN());
+        }
+
+        @Override
+        public boolean isDefaultValue() {
+            return (formModel.getSettings().getGenerateFQN() ==
+                    FormLoaderSettings.getInstance().getGenerateFQN());
+        }
+
+        @Override
+        public boolean canWrite() {
+            return JavaCodeGenerator.this.canGenerate && !JavaCodeGenerator.this.formModel.isReadOnly();
+        }
+        
+    }
+    
+    public final static class LayoutCodeTargetEditor
+                      extends org.netbeans.modules.form.editors.EnumEditor
+    {
+        public LayoutCodeTargetEditor() {
+            this(false);
+        }
+        public LayoutCodeTargetEditor(boolean specific) {
+            super(specific ?
+                new Object[] {
+                    FormUtils.getBundleString("CTL_LAYOUT_CODE_JDK6"), // NOI18N
+                    new Integer(JavaCodeGenerator.LAYOUT_CODE_JDK6),
+                    "", // NOI18N
+                    FormUtils.getBundleString("CTL_LAYOUT_CODE_LIBRARY"), // NOI18N
+                    new Integer(JavaCodeGenerator.LAYOUT_CODE_LIBRARY),
+                    "" // NOI18N
+                }
+                :
+                new Object[] {
+                    FormUtils.getBundleString("CTL_LAYOUT_CODE_AUTO"), // NOI18N
+                    new Integer(JavaCodeGenerator.LAYOUT_CODE_AUTO),
+                    "", // NOI18N
+                    FormUtils.getBundleString("CTL_LAYOUT_CODE_JDK6"), // NOI18N
+                    new Integer(JavaCodeGenerator.LAYOUT_CODE_JDK6),
+                    "", // NOI18N
+                    FormUtils.getBundleString("CTL_LAYOUT_CODE_LIBRARY"), // NOI18N
+                    new Integer(JavaCodeGenerator.LAYOUT_CODE_LIBRARY),
+                    "" // NOI18N
+                });
+        }
+    }
+    
+    public final static class ListenerGenerationStyleEditor
+                      extends org.netbeans.modules.form.editors.EnumEditor
+    {
+        public ListenerGenerationStyleEditor() {
+            super(new Object[] {
+                FormUtils.getBundleString("CTL_LISTENER_ANONYMOUS_CLASSES"), // NOI18N
+                new Integer(JavaCodeGenerator.ANONYMOUS_INNERCLASSES),
+                "", // NOI18N
+                FormUtils.getBundleString("CTL_LISTENER_CEDL_INNERCLASS"), // NOI18N
+                new Integer(JavaCodeGenerator.CEDL_INNERCLASS),
+                "", // NOI18N
+                FormUtils.getBundleString("CTL_LISTENER_CEDL_MAINCLASS"), // NOI18N
+                new Integer(JavaCodeGenerator.CEDL_MAINCLASS),
+                "" // NOI18N
+            });
+        }
     }
 }
