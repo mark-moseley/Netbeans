@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,11 +41,9 @@
 
 package org.netbeans.modules.search;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.LineNumberReader;
+import java.io.FileInputStream;
+import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -60,9 +58,10 @@ import java.util.regex.PatternSyntaxException;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.queries.FileEncodingQuery;
-import org.openide.ErrorManager;
+import org.netbeans.modules.search.TextDetail.DetailNode;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
+import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.Node;
 import org.openidex.search.SearchPattern;
 import static java.util.logging.Level.FINER;
@@ -74,6 +73,13 @@ import static java.util.logging.Level.FINEST;
  * @author  Marian Petras
  */
 final class BasicSearchCriteria {
+
+    /**
+     * maximum size of file of unrecognized file that will be searched.
+     * Files of uknown type that whose size exceed this limit will be considered
+     * binary and will not be searched.
+     */
+    private static final int MAX_UNRECOGNIZED_FILE_SIZE = 5 * (1 << 20); //5 MiB
 
     private static int instanceCounter;
     private final int instanceId = instanceCounter++;
@@ -102,6 +108,7 @@ final class BasicSearchCriteria {
     private String textPatternExpr;
     private String fileNamePatternExpr;
     private String replaceExpr;
+    private String replaceString;
     private boolean wholeWords;
     private boolean caseSensitive;
     private boolean regexp;
@@ -110,6 +117,7 @@ final class BasicSearchCriteria {
     private boolean fileNamePatternSpecified = false;
     
     private boolean textPatternValid = false;
+    private boolean replacePatternValid = false;
     private boolean fileNamePatternValid = false;
     
     private Pattern textPattern;
@@ -118,6 +126,15 @@ final class BasicSearchCriteria {
     private boolean criteriaUsable = false;
     
     private ChangeListener usabilityChangeListener;
+
+    private static Pattern patternCR = Pattern.compile("\r"); //NOI18N
+    private static Pattern patternLineSeparator = Pattern.compile("(?:\r\n|\n|\r)"); //NOI18N
+
+    /**
+     * holds {@code Charset} that was used for full-text search of the last
+     * tested file
+     */
+    private Charset lastCharset = null;
 
     /**
      * Holds information about occurences of matching strings within individual
@@ -149,7 +166,7 @@ final class BasicSearchCriteria {
         /* combo-boxes: */
         setTextPattern(template.textPatternExpr);
         setFileNamePattern(template.fileNamePatternExpr);
-        setReplaceString(template.replaceExpr);
+        setReplaceExpr(template.replaceExpr);
     }
     
     /**
@@ -170,7 +187,6 @@ final class BasicSearchCriteria {
         
         /* So now we know that the pattern is valid but not compiled. */
         if (regexp) {
-            assert false;//valid pattern for a regexp should be already compiled
             textPatternValid = compileRegexpPattern();
         } else {
             compileSimpleTextPattern();
@@ -220,6 +236,7 @@ final class BasicSearchCriteria {
                 assert (textPattern != null) || !textPatternValid;
             }
         }
+        replacePatternValid = validateReplacePattern();
         updateUsability();
     }
     
@@ -241,7 +258,12 @@ final class BasicSearchCriteria {
             if (LOG.isLoggable(FINEST)) {
                 LOG.finest(" - textPatternExpr = \"" + textPatternExpr + '"');  //NOI18N
             }
-            textPattern = Pattern.compile(textPatternExpr);
+            int flags = 0;
+            if (!caseSensitive) {
+                flags |= Pattern.CASE_INSENSITIVE;
+                flags |= Pattern.UNICODE_CASE;
+            }
+            textPattern = Pattern.compile(textPatternExpr, flags);
             return true;
         } catch (PatternSyntaxException ex) {
             LOG.finest(" - invalid regexp - setting 'textPattern' to <null>");  //NOI18N
@@ -249,7 +271,24 @@ final class BasicSearchCriteria {
             return false;
         }
     }
-    
+
+
+    private boolean validateReplacePattern(){
+        if (regexp && textPatternValid){
+            int groups = getTextPattern().matcher("").groupCount();
+            String tmpSearch = "";
+            for(int i=1; i <= groups; i++){
+                tmpSearch += "(" + i + ")";
+            }
+            try{
+                Pattern.compile(tmpSearch).matcher("123456789").replaceFirst(replaceExpr);
+            }catch(Exception e){
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * Translates the simple text pattern to a regular expression pattern
      * and compiles it. The compiled pattern is stored to field
@@ -259,12 +298,12 @@ final class BasicSearchCriteria {
         if (LOG.isLoggable(FINER)) {
             LOG.finer("#" + instanceId + ": compileRegexpPattern()");   //NOI18N
         }
-        assert !regexp;
         assert textPatternExpr != null;
         try {
             int flags = 0;
             if (!caseSensitive) {
                 flags |= Pattern.CASE_INSENSITIVE;
+                flags |= Pattern.UNICODE_CASE;
             }
             if (LOG.isLoggable(FINEST)) {
                 LOG.finest(" - textPatternExpr = \"" + textPatternExpr + '"');  //NOI18N
@@ -305,6 +344,7 @@ final class BasicSearchCriteria {
                 textPattern = null;
             }
         }
+        replacePatternValid = validateReplacePattern();
         updateUsability();
     }
     
@@ -343,9 +383,7 @@ final class BasicSearchCriteria {
         
         this.caseSensitive = caseSensitive;
         
-        if (!regexp) {
-            textPattern = null;
-        }
+        textPattern = null;
     }
 
     boolean isFullText() {
@@ -406,9 +444,9 @@ final class BasicSearchCriteria {
     }
     
     /**
-     * Translates the simple text pattern to a regular expression pattern
+     * Translates the file name pattern to a regular expression pattern
      * and compiles it. The compiled pattern is stored to field
-     * {@link #textPattern}.
+     * {@link #fileNamePattern}.
      */
     private void compileSimpleFileNamePattern() {
         assert fileNamePatternExpr != null;
@@ -450,9 +488,9 @@ final class BasicSearchCriteria {
     }
     
     /**
-     * Returns the replacement string/expression.
+     * Returns the replacement expression.
      * 
-     * @return  replace string, or {@code null} if no replace string has been
+     * @return  replace expression, or {@code null} if no replace expression has been
      *          specified
      */
     String getReplaceExpr() {
@@ -460,13 +498,40 @@ final class BasicSearchCriteria {
     }
 
     /**
+     * Returns the replacement string.
+     *
+     * @return  replace string, or {@code null} if no replace string has been
+     *          specified
+     */
+    String getReplaceString() {
+        if ((replaceString == null) && (replaceExpr != null)){
+            String[] sGroups = replaceExpr.split("\\\\\\\\", replaceExpr.length()); //NOI18N
+            String res = "";                         //NOI18N
+            for(int i=0;i<sGroups.length;i++){
+                String tmp = sGroups[i];
+                tmp = tmp.replace("\\" + "r", "\r"); //NOI18N
+                tmp = tmp.replace("\\" + "n", "\n"); //NOI18N
+                tmp = tmp.replace("\\" + "t", "\t"); //NOI18N
+                res += tmp;
+                if (i != sGroups.length - 1){
+                    res += "\\\\";                   //NOI18N
+                }
+            }
+            this.replaceString = res;
+        }
+        return replaceString;
+    }
+
+    /**
      * Sets a replacement string/expression.
      *
-     * @param  replaceString  string to replace matches with, or {@code null}
+     * @param  replaceExpr  string to replace matches with, or {@code null}
      *                        if no replacing should be performed
      */
-    void setReplaceString(String replaceString) {
-        this.replaceExpr = replaceString;
+    void setReplaceExpr(String replaceExpr) {
+        this.replaceExpr = replaceExpr;
+        this.replaceString = null;
+        this.replacePatternValid = validateReplacePattern();
     }
 
     //--------------------------------------------------------------------------
@@ -506,6 +571,10 @@ final class BasicSearchCriteria {
         return textPatternSpecified && !textPatternValid;
     }
 
+    boolean isReplacePatternInvalid() {
+        return !replacePatternValid;
+    }
+
     boolean isFileNamePatternUsable() {
         return fileNamePatternSpecified && fileNamePatternValid;
     }
@@ -525,8 +594,11 @@ final class BasicSearchCriteria {
     void onOk() {
         LOG.finer("onOk()");                                              //NOI18N
         if (textPatternValid && (textPattern == null)) {
-            assert !regexp;             //should have been already compiled
-            compileSimpleTextPattern();
+            if (regexp){
+                compileRegexpPattern();
+            }else{
+                compileSimpleTextPattern();
+            }
         }
         if (fileNamePatternValid && (fileNamePattern == null)) {
             compileSimpleFileNamePattern();
@@ -536,12 +608,28 @@ final class BasicSearchCriteria {
         assert !fileNamePatternValid || (fileNamePattern != null);
     }
     
+    /**
+     * Checks whether the given {@code DataObject} matches this criteria.
+     * If the check includes full-text search, charset used for the search
+     * is remembered. It may be later obtained using method
+     * {@link #getUsedCharset}. If the check did not include full-text search,
+     * the charset is {@code null}-ed.
+     * 
+     * @param  dataObj  {@code DataObject} to be checked
+     * @return  {@code true} if the {@code DataObject} matches the given
+     *          criteria, {@code false} otherwise
+     */
     boolean matches(DataObject dataObj) {
-        if (!dataObj.isValid()) {
+        return matches(dataObj.getPrimaryFile());
+    }
+
+    boolean matches(FileObject fileObj) {
+        lastCharset = null;
+
+        if (!fileObj.isValid()) {
             return false;
         }
         
-        FileObject fileObj = dataObj.getPrimaryFile();
         if (fileObj.isFolder() || !fileObj.isValid() || (isFullText() && !isTextFile(fileObj))) {
             return false;
         }
@@ -554,11 +642,23 @@ final class BasicSearchCriteria {
         
         /* Check the file's content: */
         if (textPatternValid
-                && !checkFileContent(fileObj, dataObj)) {
+                && !checkFileContent(fileObj)) {
             return false;
         }
         
         return true;
+    }
+
+    /**
+     * Returns {@code Charset} used for decoding of the last tested file.
+     * 
+     * @return  {@code Charset} used for decoding of the last tested file,
+     *          or {@code null} if no file has been tested since creation
+     *          of this object or if the last tested file was not full-text
+     *          searched
+     */
+    Charset getLastUsedCharset() {
+        return lastCharset;
     }
 
     /**
@@ -572,8 +672,11 @@ final class BasicSearchCriteria {
     private static boolean isTextFile(FileObject fileObj) {
         String mimeType = fileObj.getMIMEType();
         
-        if (mimeType.equals("content/unknown")                          //NOI18N
-                || mimeType.startsWith("text/")) {                      //NOI18N
+        if (mimeType.equals("content/unknown")) {                       //NOI18N
+            return fileObj.getSize() <= MAX_UNRECOGNIZED_FILE_SIZE;
+        }
+
+        if (mimeType.startsWith("text/")) {                             //NOI18N
             return true;
         }
 
@@ -594,79 +697,84 @@ final class BasicSearchCriteria {
      * Checks whether the file's content matches the text pattern.
      * 
      * @param  fileObj  file whose content is to be checked
-     * @param  dataObj  {@code DataObject} corresponding to the file
      * @return  {@code true} if the file contains at least one substring
      *          matching the pattern, {@code false} otherwise
      */
-    private boolean checkFileContent(FileObject fileObj, DataObject dataObj) {
-        boolean firstMatch = true;
-        SearchPattern searchPattern = null;
-        ArrayList<TextDetail> txtDetails = null;
-
-        LineNumberReader reader = null;
-        try {
-            reader = getFileObjectReader(fileObj);
-            
-            String line;
-            while ((line = reader.readLine()) != null) {
-                Matcher matcher = textPattern.matcher(line);
-                while (matcher.find()) {
-                    if (firstMatch) {
-                        searchPattern = createSearchPattern();
-                        txtDetails = new ArrayList<TextDetail>(5);
-                        firstMatch = false;
-                    }
-                    TextDetail det = new TextDetail(dataObj, searchPattern);
-                    det.setLine(reader.getLineNumber());
-                    det.setLineText(line);
-                    int start = matcher.start();
-                    int len = matcher.end() - start;
-                    det.setColumn(start + 1);
-                    det.setMarkLength(len);
-                    txtDetails.add(det);
-                }
-            }
-            if (txtDetails != null) {
-                txtDetails.trimToSize();
-                getDetailsMap().put(dataObj, txtDetails);
-                return true;
-            } else {
-                return false;
-            }
-        } catch (FileNotFoundException fnfe) {
+    private boolean checkFileContent(FileObject fileObj) {
+        lastCharset = FileEncodingQuery.getEncoding(fileObj);
+        DataObject dObj = null;
+        CharBuffer cb = null;
+        InputStream inputStream = null;
+        try{
+            inputStream = fileObj.getInputStream();
+            cb = Utils.getCharSequence((FileInputStream)inputStream, lastCharset);
+        }catch(Exception e){
             return false;
-        } catch (IOException ioe) {
-            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ioe);
-            return false;
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                    reader = null;
-                } catch (IOException ex) {
-                    ErrorManager.getDefault().notify(
-                            ErrorManager.INFORMATIONAL, ex);
-                }
-            }
         }
+        ArrayList<TextDetail> txtDetails = new ArrayList<TextDetail>();
+        SearchPattern searchPattern = createSearchPattern();
+
+        int lineNumber = 1;
+        int lineStartOffset = 0;
+        int prevCR = 0;
+        Matcher matcher = textPattern.matcher(cb.duplicate());
+        while(matcher.find()){
+            if (dObj == null){
+                try{
+                    dObj = DataObject.find(fileObj);
+                }catch(DataObjectNotFoundException e){
+                    return false;
+                }
+            }
+            TextDetail det = new TextDetail(dObj, searchPattern);
+            det.setMatchedText(matcher.group());
+            det.setStartOffset(matcher.start());
+            det.setEndOffset(matcher.end());
+            Matcher matcherCR = patternCR.matcher(matcher.group());
+            int countCR=0;
+            while(matcherCR.find()){
+                countCR++;
+                }
+            det.setMarkLength(matcher.end() - matcher.start() - countCR);
+
+            while((cb.position() < matcher.start()) && (cb.position() < cb.limit())){
+                char curChar = cb.get();
+                if (curChar == '\n'){
+                    lineNumber++;
+                    lineStartOffset = cb.position();
+                    prevCR = 0;
+                } else if (curChar == '\r'){
+                    prevCR++;
+                    if ((cb.position() < cb.limit()) && (cb.get(cb.position()) != '\n')){
+                        lineNumber++;
+                        lineStartOffset = cb.position();
+                        prevCR = 0;
+                    }
+                } else{
+                    prevCR = 0;
+                }
+            }
+            det.setColumn(matcher.start() - lineStartOffset + 1 - prevCR);
+            det.setLine(lineNumber);
+
+            txtDetails.add(det);
+        }
+
+        if (txtDetails.isEmpty()){
+            return false;
+        }
+        txtDetails.trimToSize();
+
+        cb.rewind();
+        String[] lines = patternLineSeparator.split(cb.duplicate(), cb.length());
+        for(int i=0; i < txtDetails.size(); i++){
+            txtDetails.get(i).setLineText(lines[txtDetails.get(i).getLine() - 1]);
+        }
+        
+        getDetailsMap().put(dObj, txtDetails);
+        return true;
     }
 
-    /**
-     * 
-     * @exception  java.io.FileNotFoundException
-     *               if file determined by the {@code FileObject} does not exist
-     */
-    private LineNumberReader getFileObjectReader(FileObject fileObj)
-                                                throws FileNotFoundException {
-        InputStream is = fileObj.getInputStream();//throws FileNotFoundException
-        Charset charset = getCharset(fileObj);
-        return new LineNumberReader(new InputStreamReader(is, charset));
-    }
-
-    static Charset getCharset(FileObject fileObj) {
-        return FileEncodingQuery.getEncoding(fileObj);
-    }
-    
     /**
      * @param  resultObject  <code>DataObject</code> to create the nodes for
      * @return  <code>DetailNode</code>s representing the matches,
