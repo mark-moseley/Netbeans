@@ -101,7 +101,14 @@ final class ExternalUtil extends Object {
         while (ex.getCause() != null) {
             ex = ex.getCause();
         }
-        ex.initCause(stack);
+        try {
+            ex.initCause(stack);
+        } catch (IllegalStateException ise) {
+            // #164760 - fallback when initCause fails (e.g. for ClassNotFoundException)
+            Exception e = new Exception(ex.getMessage(), stack);
+            e.setStackTrace(ex.getStackTrace());
+            return e;
+        }
         return orig;
     }
 
@@ -212,6 +219,9 @@ final class ExternalUtil extends Object {
                     } finally {
                         is.close();
                     }
+                }
+                for (URL generatedLayer : NbCollections.iterable(l.getResources("META-INF/generated-layer.xml"))) { // NOI18N
+                    layerUrls.add(generatedLayer);
                 }
                 layers.setXmlUrls(layerUrls.toArray(new URL[layerUrls.size()]));
                 LOG.log(Level.FINE, "Loading classpath layers: {0}", layerUrls);
