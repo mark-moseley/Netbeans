@@ -41,19 +41,34 @@
 
 package org.netbeans.modules.project.ant;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.prefs.Preferences;
+import java.util.zip.CRC32;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectManager;
+import org.netbeans.api.project.ProjectManager.Result;
 import org.netbeans.spi.project.ProjectFactory;
+import org.netbeans.spi.project.ProjectFactory2;
 import org.netbeans.spi.project.ProjectState;
 import org.netbeans.spi.project.support.ant.AntBasedProjectType;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
@@ -64,6 +79,7 @@ import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 import org.openide.xml.XMLUtil;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -75,7 +91,8 @@ import org.xml.sax.SAXException;
  * projects by delegating some functionality to registered Ant project types.
  * @author Jesse Glick
  */
-public final class AntBasedProjectFactorySingleton implements ProjectFactory {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.project.ProjectFactory.class, position=100)
+public final class AntBasedProjectFactorySingleton implements ProjectFactory2 {
     
     public static final String PROJECT_XML_PATH = "nbproject/project.xml"; // NOI18N
 
@@ -147,6 +164,47 @@ public final class AntBasedProjectFactorySingleton implements ProjectFactory {
         File projectXmlF = new File(new File(dirF, "nbproject"), "project.xml"); // NOI18N
         return projectXmlF.isFile();
     }
+
+    public Result isProject2(FileObject projectDirectory) {
+        if (FileUtil.toFile(projectDirectory) == null) {
+            return null;
+        }
+        FileObject projectFile = projectDirectory.getFileObject(PROJECT_XML_PATH);
+        //#54488: Added check for virtual
+        if (projectFile == null || !projectFile.isData() || projectFile.isVirtual()) {
+            return null;
+        }
+        File projectDiskFile = FileUtil.toFile(projectFile);
+        //#63834: if projectFile exists and projectDiskFile does not, do nothing:
+        if (projectDiskFile == null) {
+            return null;
+        }
+        try {
+            Document projectXml = loadProjectXml(projectDiskFile);
+            if (projectXml != null) {
+                Element typeEl = Util.findElement(projectXml.getDocumentElement(), "type", PROJECT_NS); // NOI18N
+                if (typeEl != null) {
+                    String type = Util.findText(typeEl);
+                    if (type != null) {
+                        AntBasedProjectType provider = findAntBasedProjectType(type);
+                        if (provider != null) {
+                            if (provider instanceof AntBasedGenericType) {
+                                return new ProjectManager.Result(((AntBasedGenericType)provider).getIcon());
+                            } else {
+                                //put special icon?
+                                return new ProjectManager.Result(null);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (IOException ex) {
+            Logger.getLogger(AntBasedProjectFactorySingleton.class.getName()).log(Level.FINE, "Failed to load the project.xml file.", ex);
+        }
+        // better have false positives than false negatives (according to the ProjectManager.isProject/isProject2 javadoc.
+        return new ProjectManager.Result(null);
+    }
+
     
     public Project loadProject(FileObject projectDirectory, ProjectState state) throws IOException {
         if (FileUtil.toFile(projectDirectory) == null) {
@@ -162,21 +220,11 @@ public final class AntBasedProjectFactorySingleton implements ProjectFactory {
         if (projectDiskFile == null) {
             return null;
         }
-        Document projectXml;
-        try {
-            projectXml = XMLUtil.parse(new InputSource(projectDiskFile.toURI().toString()), false, true, Util.defaultErrorHandler(), null);
-        } catch (SAXException e) {
-            IOException ioe = (IOException) new IOException(projectDiskFile + ": " + e.toString()).initCause(e);
-            Exceptions.attachLocalizedMessage(ioe, NbBundle.getMessage(AntBasedProjectFactorySingleton.class,
-                                                                        "AntBasedProjectFactorySingleton.parseError",
-                                                                        projectDiskFile.getAbsolutePath(), e.getMessage()));
-            throw ioe;
-        }
-        Element projectEl = projectXml.getDocumentElement();
-        if (!"project".equals(projectEl.getLocalName()) || !PROJECT_NS.equals(projectEl.getNamespaceURI())) { // NOI18N
+        Document projectXml = loadProjectXml(projectDiskFile);
+        if (projectXml == null) {
             return null;
         }
-        Element typeEl = Util.findElement(projectEl, "type", PROJECT_NS); // NOI18N
+        Element typeEl = Util.findElement(projectXml.getDocumentElement(), "type", PROJECT_NS); // NOI18N
         if (typeEl == null) {
             return null;
         }
@@ -205,10 +253,94 @@ public final class AntBasedProjectFactorySingleton implements ProjectFactory {
         return project;
     }
     
+    private Document loadProjectXml(File projectDiskFile) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        InputStream is = new FileInputStream(projectDiskFile);
+        try {
+            FileUtil.copy(is, baos);
+        } finally {
+            is.close();
+        }
+        byte[] data = baos.toByteArray();
+        InputSource src = new InputSource(new ByteArrayInputStream(data));
+        src.setSystemId(projectDiskFile.toURI().toString());
+        try {
+            Document projectXml = XMLUtil.parse(src, false, true, Util.defaultErrorHandler(), null);
+            Element projectEl = projectXml.getDocumentElement();
+            if (!"project".equals(projectEl.getLocalName()) || !PROJECT_NS.equals(projectEl.getNamespaceURI())) { // NOI18N
+                return null;
+            }
+            // #142680: try to cache CRC-32s of project.xml files known to be valid, since validation can be slow.
+            Preferences prefs = NbPreferences.forModule(AntBasedProjectFactorySingleton.class);
+            String key = "knownValidProjectXmlCRC32s"; // NOI18N
+            List<Long> knownHashes = new ArrayList<Long>();
+            String knownHashesS = prefs.get(key, null);
+            if (knownHashesS != null) {
+                for (String knownHash : knownHashesS.split(",")) { // NOI18N
+                    try {
+                        knownHashes.add(Long.valueOf(knownHash, 16));
+                    } catch (NumberFormatException x) {/* forget it */}
+                }
+            }
+            CRC32 crc = new CRC32();
+            crc.update(data);
+            long hash = crc.getValue();
+            if (!knownHashes.contains(hash)) {
+                Logger.getLogger(AntBasedProjectFactorySingleton.class.getName()).log(Level.FINE, "Validating: {0}", projectDiskFile);
+                try {
+                    ProjectXMLCatalogReader.validate(projectEl);
+                    StringBuilder newKnownHashes = new StringBuilder(Long.toString(hash, 16));
+                    for (int i = 0; i < knownHashes.size() && i < /* max size */100; i++) {
+                        newKnownHashes.append(',');
+                        newKnownHashes.append(Long.toString(knownHashes.get(i), 16));
+                    }
+                    prefs.put(key, newKnownHashes.toString());
+                } catch (SAXException x) {
+                    Element corrected = ProjectXMLCatalogReader.autocorrect(projectEl, x);
+                    if (corrected != null) {
+                        projectXml.replaceChild(corrected, projectEl);
+                        projectEl = corrected;
+                        // Try to correct on disk if possible.
+                        // (If not, any changes from the IDE will write out a corrected file anyway.)
+                        if (projectDiskFile.canWrite()) {
+                            OutputStream os = new FileOutputStream(projectDiskFile);
+                            try {
+                                XMLUtil.write(projectXml, os, "UTF-8");
+                            } finally {
+                                os.close();
+                            }
+                        }
+                    } else {
+                        throw x;
+                    }
+                }
+            }
+            return projectXml;
+        } catch (SAXException e) {
+            IOException ioe = (IOException) new IOException(projectDiskFile + ": " + e.toString()).initCause(e);
+            String msg = e.getMessage().
+                    // org/apache/xerces/impl/msg/XMLSchemaMessages.properties validation (3.X.4)
+                    replaceFirst("^cvc-[^:]+: ", ""). // NOI18N
+                    replaceAll("http://www.netbeans.org/ns/", ".../"); // NOI18N
+            Exceptions.attachLocalizedMessage(ioe, NbBundle.getMessage(AntBasedProjectFactorySingleton.class,
+                                                                        "AntBasedProjectFactorySingleton.parseError",
+                                                                        projectDiskFile.getName(), msg));
+            throw ioe;
+        }
+    }
+
     public void saveProject(Project project) throws IOException, ClassCastException {
         Reference<AntProjectHelper> helperRef = project2Helper.get(project);
         if (helperRef == null) {
-            throw new ClassCastException(project.getClass().getName());
+            StringBuffer sBuff = new StringBuffer();
+            sBuff.append(project.getClass().getName() + "\n"); // NOI18N
+            sBuff.append("argument project: " + project + " => " + project.hashCode() + "\n"); // NOI18N
+            sBuff.append("project2Helper keys: " + "\n"); // NOI18N
+            for (Iterator<Entry<Project, Reference<AntProjectHelper>>> entries = project2Helper.entrySet().iterator(); entries.hasNext(); ) {
+                Project prj = entries.next().getKey();
+                sBuff.append("    project: " + prj + " => " + prj.hashCode() + "\n"); // NOI18N
+            }
+            throw new ClassCastException(sBuff.toString());
         }
         AntProjectHelper helper = helperRef.get();
         assert helper != null : "AntProjectHelper collected for " + project;
@@ -242,7 +374,8 @@ public final class AntBasedProjectFactorySingleton implements ProjectFactory {
         Reference<AntProjectHelper> helperRef = project2Helper.get(p);
         return helperRef != null ? helperRef.get() : null;
     }
-    
+
+
     /**
      * Callback to create and access AntProjectHelper objects from outside its package.
      */
@@ -261,5 +394,10 @@ public final class AntBasedProjectFactorySingleton implements ProjectFactory {
         }
         assert HELPER_CALLBACK != null;
     }
-    
+
+    public static AntBasedProjectType create(Map map) {
+        return new AntBasedGenericType(map);
+    }
+
+
 }
