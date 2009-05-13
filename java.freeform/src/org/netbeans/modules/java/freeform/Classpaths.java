@@ -45,7 +45,6 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
@@ -61,11 +60,11 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.classpath.GlobalPathRegistry;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.platform.JavaPlatformManager;
-import org.netbeans.api.java.platform.Specification;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.ant.freeform.spi.support.Util;
@@ -86,7 +85,6 @@ import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.modules.SpecificationVersion;
 import org.openide.util.Mutex;
 import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
@@ -379,11 +377,13 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
         if (type.equals(ClassPath.SOURCE) || type.equals(ClassPath.COMPILE) ||
                 type.equals(ClassPath.EXECUTE) || type.equals(ClassPath.BOOT)) {
             List<String> packageRootNames = findPackageRootNames(compilationUnitEl);
-            Map<List<String>,MutableClassPathImplementation> mutablePathImplsByType = mutablePathImpls.get(type);
-            if (mutablePathImplsByType == null) {
-                mutablePathImplsByType = new HashMap<List<String>,MutableClassPathImplementation>();
-                mutablePathImpls.put(type, mutablePathImplsByType);
-            }
+            Map<List<String>,MutableClassPathImplementation> mutablePathImplsByType;
+            synchronized (this) {
+                mutablePathImplsByType = mutablePathImpls.get(type);
+                if (mutablePathImplsByType == null) {
+                    mutablePathImplsByType = new HashMap<List<String>,MutableClassPathImplementation>();
+                    mutablePathImpls.put(type, mutablePathImplsByType);
+                }
             MutableClassPathImplementation impl = mutablePathImplsByType.get(packageRootNames);
             if (impl == null) {
                 // XXX will it ever not be null?
@@ -397,6 +397,7 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
                 registerNewClasspath(type, cp);
             }
             return cp;
+            }
         } else {
             // Unknown.
             return null;
@@ -446,27 +447,7 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
     
     private URL createClasspathEntry(String text) {
         File entryFile = helper.resolveFile(text);
-        URL entry;
-        try {
-            entry = entryFile.toURI().toURL();
-        } catch (MalformedURLException x) {
-            throw new AssertionError(x);
-        }
-        if (FileUtil.isArchiveFile(entry)) {
-            return FileUtil.getArchiveRoot(entry);
-        } else {
-            String entryS = entry.toExternalForm();
-            if (!entryS.endsWith("/")) { // NOI18N
-                // A nonexistent dir. Have to add trailing slash ourselves.
-                try {
-                    return new URL(entryS + '/');
-                } catch (MalformedURLException x) {
-                    throw new AssertionError(x);
-                }
-            } else {
-                return entry;
-            }
-        }
+        return FileUtil.urlForArchiveOrDir(entryFile);
     }
     
     private List<URL> createExecuteClasspath(List<String> packageRoots, Element compilationUnitEl) {
@@ -505,37 +486,14 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
                 return createClasspath(e);
             }
         }
-        // None specified; try to find a matching Java platform.
+        // None specified;
         // First check whether user has configured a specific JDK.
         JavaPlatform platform = new JdkConfiguration(null, helper, evaluator).getSelectedPlatform();
         if (platform == null) {
-            // Nope; so look for some platform of reasonable source level instead.
+            // Nope; Use default one
             JavaPlatformManager jpm = JavaPlatformManager.getDefault();
             platform = jpm.getDefaultPlatform(); // fallback
-            for (Element e : Util.findSubElements(compilationUnitEl)) {
-                if (e.getLocalName().equals("source-level")) { // NOI18N
-                    String level = Util.findText(e);
-                    Specification spec = new Specification("j2se", new SpecificationVersion(level)); // NOI18N
-                    JavaPlatform[] matchingPlatforms = jpm.getPlatforms(null, spec);
-                    if (matchingPlatforms.length > 0) {
-                        // Pick one. Prefer one with sources if there is a choice, else with Javadoc.
-                        platform = matchingPlatforms[0];
-                        for (JavaPlatform matchingPlatform : matchingPlatforms) {
-                            if (!matchingPlatform.getJavadocFolders().isEmpty()) {
-                                platform = matchingPlatform;
-                                break;
-                            }
-                        }
-                        for (JavaPlatform matchingPlatform : matchingPlatforms) {
-                            if (matchingPlatform.getSourceFolders().getRoots().length > 0) {
-                                platform = matchingPlatform;
-                                break;
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
+            // #126216: source level guessing logic removed
         }
         if (platform != null) {
             // XXX this is not ideal; should try to reuse the ClassPath as is?
@@ -567,11 +525,10 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
     private void pathsChanged() {
         synchronized (this) {
             classpaths.clear();
-        }
-        //System.err.println("pathsChanged: " + mutablePathImpls);
-        for (Map<List<String>,MutableClassPathImplementation> m : mutablePathImpls.values()) {
-            for (MutableClassPathImplementation impl : m.values()) {
-                impl.change();
+            for (Map<List<String>,MutableClassPathImplementation> m : mutablePathImpls.values()) {
+                for (MutableClassPathImplementation impl : m.values()) {
+                    impl.change();
+                }
             }
         }
     }
@@ -637,14 +594,16 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
             if (!roots.equals(oldRoots)) {
                 resources = new ArrayList<PathResourceImplementation>(roots.size());
                 for (URL root : roots) {
-                    assert root.toExternalForm().endsWith("/") : "Had bogus roots " + roots + " for type " + type + " in " + helper.getProjectDirectory();
-                    PathResourceImplementation pri;
-                    if (type.equals(ClassPath.SOURCE)) {
-                        pri = new SourcePRI(root);
-                    } else {
-                        pri = ClassPathSupport.createResource(root);
+                    if (root != null) {
+                        assert root.toExternalForm().endsWith("/") : "Had bogus roots " + roots + " for type " + type + " in " + helper.getProjectDirectory();
+                        PathResourceImplementation pri;
+                        if (type.equals(ClassPath.SOURCE)) {
+                            pri = new SourcePRI(root);
+                        } else {
+                            pri = ClassPathSupport.createResource(root);
+                        }
+                        resources.add(pri);
                     }
-                    resources.add(pri);
                 }
                 return true;
             } else {
@@ -653,6 +612,7 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
         }
 
         public List<PathResourceImplementation> getResources() {
+            assert resources != null;
             return resources;
         }
 
@@ -690,11 +650,18 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
             computeMatcher();
         }
         private boolean computeMatcher() {
-            String includes = null;
-            String excludes = null;
+            String incl = null;
+            String excl = null;
+            URI rootURI = URI.create(root.toExternalForm());
             // Annoying to duplicate logic from FreeformSources.
             // But using SourceGroup.contains is not an option since that requires FileObject creation.
-            File rootFolder = new File(URI.create(root.toExternalForm()));
+            File rootFolder;
+            try {
+                rootFolder = new File(rootURI);
+            } catch (IllegalArgumentException x) {
+                Logger.getLogger(Classpaths.class.getName()).warning("Illegal source root: " + rootURI);
+                rootFolder = null;
+            }
             Element genldata = Util.getPrimaryConfigurationData(helper);
             Element foldersE = Util.findElement(genldata, "folders", Util.NAMESPACE); // NOI18N
             if (foldersE != null) {
@@ -709,15 +676,15 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
                                 if (location != null && helper.resolveFile(location).equals(rootFolder)) {
                                     Element includesE = Util.findElement(folderE, "includes", Util.NAMESPACE); // NOI18N
                                     if (includesE != null) {
-                                        includes = evaluator.evaluate(Util.findText(includesE));
-                                        if (includes != null && includes.matches("\\$\\{[^}]+\\}")) { // NOI18N
+                                        incl = evaluator.evaluate(Util.findText(includesE));
+                                        if (incl != null && incl.matches("\\$\\{[^}]+\\}")) { // NOI18N
                                             // Clearly intended to mean "include everything".
-                                            includes = null;
+                                            incl = null;
                                         }
                                     }
                                     Element excludesE = Util.findElement(folderE, "excludes", Util.NAMESPACE); // NOI18N
                                     if (excludesE != null) {
-                                        excludes = evaluator.evaluate(Util.findText(excludesE));
+                                        excl = evaluator.evaluate(Util.findText(excludesE));
                                     }
                                 }
                             }
@@ -725,14 +692,14 @@ final class Classpaths implements ClassPathProvider, AntProjectListener, Propert
                     }
                 }
             }
-            if (!Utilities.compareObjects(includes, this.includes) || !Utilities.compareObjects(excludes, this.excludes)) {
-                this.includes = includes;
-                this.excludes = excludes;
-                matcher = new PathMatcher(includes, excludes, rootFolder);
+            if (!Utilities.compareObjects(incl, includes) || !Utilities.compareObjects(excl, excludes)) {
+                includes = incl;
+                excludes = excl;
+                matcher = new PathMatcher(incl, excl, rootFolder);
                 return true;
             } else {
                 if (matcher == null) {
-                    matcher = new PathMatcher(includes, excludes, rootFolder);
+                    matcher = new PathMatcher(incl, excl, rootFolder);
                 }
                 return false;
             }
