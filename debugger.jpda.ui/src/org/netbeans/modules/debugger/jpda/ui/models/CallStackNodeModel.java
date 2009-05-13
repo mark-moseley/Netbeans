@@ -53,11 +53,13 @@ import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.api.debugger.Session;
 import org.netbeans.api.debugger.jpda.CallStackFrame;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
+import org.netbeans.api.debugger.jpda.This;
 import org.netbeans.spi.viewmodel.ModelEvent;
 import org.netbeans.spi.viewmodel.NodeModel;
 import org.netbeans.spi.viewmodel.TreeModel;
 import org.netbeans.spi.viewmodel.ModelListener;
 import org.netbeans.spi.viewmodel.UnknownTypeException;
+import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 
@@ -77,10 +79,8 @@ public class CallStackNodeModel implements NodeModel {
     
     
     public CallStackNodeModel (ContextProvider lookupProvider) {
-        debugger = (JPDADebugger) lookupProvider.
-            lookupFirst (null, JPDADebugger.class);
-        session = (Session) lookupProvider.
-            lookupFirst (null, Session.class);
+        debugger = lookupProvider.lookupFirst(null, JPDADebugger.class);
+        session = lookupProvider.lookupFirst(null, Session.class);
         new Listener (this, debugger);
     }
     
@@ -91,17 +91,25 @@ public class CallStackNodeModel implements NodeModel {
         } else
         if (o instanceof CallStackFrame) {
             CallStackFrame sf = (CallStackFrame) o;
-            CallStackFrame ccsf = debugger.getCurrentCallStackFrame ();
-            if ( (ccsf != null) && 
-                 (ccsf.equals (sf)) 
-            ) 
+            boolean isCurrent;
+            try {
+                isCurrent = (Boolean) sf.getClass().getMethod("isCurrent").invoke(sf);
+            } catch (Exception ex) {
+                Exceptions.printStackTrace(ex);
+                isCurrent = false;
+            }
+            // Do not call JDI in AWT
+            //CallStackFrame ccsf = debugger.getCurrentCallStackFrame ();
+            if (isCurrent) {
                 return BoldVariablesTableModelFilterFirst.toHTML (
                     getCSFName (session, sf, false),
                     true,
                     false,
                     null
                 );
-            return getCSFName (session, sf, false);
+            } else {
+                return getCSFName (session, sf, false);
+            }
         } else if ("No current thread" == o) {
             return NbBundle.getMessage(CallStackNodeModel.class, "NoCurrentThread");
         } else if ("Thread is running" == o) {
@@ -186,7 +194,23 @@ public class CallStackNodeModel implements NodeModel {
             return fileName;
         return fileName + ":" + ln;
     }
-            
+
+    public static String getCSFToolTipText(CallStackFrame stackFrame) {
+        StringBuffer buf = new StringBuffer();
+        buf.append("<html>"); // NOI18N
+        String csfName = getCSFName(null, stackFrame, true);
+        buf.append(NbBundle.getMessage(CallStackNodeModel.class, "CTL_CallStackFrame", csfName)); // NOI18N
+        This thisVariable = stackFrame.getThisVariable();
+        if (thisVariable != null && thisVariable.getClassType() != null) {
+            String thisName = thisVariable.getClassType().getName();
+            if (thisName != null && ! thisName.equals(stackFrame.getClassName())) {
+                buf.append("<br>"); // NOI18N
+                buf.append(NbBundle.getMessage(CallStackNodeModel.class, "CTL_RunType", thisName)); // NOI18N
+            }
+        }
+        buf.append("</html>"); // NOI18N
+        return buf.toString();
+    }
     
     // innerclasses ............................................................
     
