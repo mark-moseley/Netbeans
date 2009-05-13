@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,57 +31,48 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb.breakpoints;
+package org.netbeans.modules.cnd.gizmo;
 
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
+import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
+import org.netbeans.modules.cnd.api.remote.PathMap;
+import org.netbeans.modules.dlight.management.spi.PathMapper;
+import org.netbeans.modules.dlight.management.spi.PathMapperProvider;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.openide.util.lookup.ServiceProvider;
 
 /**
-* Implementation of breakpoint on method.
-*
-* @author   Gordon Prieur (copied from Jan Jancura's JPDA implementation)
-*/
-public class LineBreakpointImpl extends BreakpointImpl {
+ *
+ * @author mt154047
+ */
+@ServiceProvider(service = org.netbeans.modules.dlight.management.spi.PathMapperProvider.class)
+public class CndPathMapperProvider implements PathMapperProvider{
 
-    private String lastPath;
-    
-    public LineBreakpointImpl(LineBreakpoint breakpoint, GdbDebugger debugger) {
-        super(breakpoint, debugger);
-	lastPath = null;
-        set();
+    public PathMapper getPathMapper(ExecutionEnvironment env) {
+         PathMap mapper = HostInfoProvider.getMapper(env);
+         return new PathMapperImpl(mapper);
     }
 
-    @Override
-    protected String getBreakpointCommand() {
-        int lineNumber = getBreakpoint().getLineNumber();
-	String bppath = getBreakpoint().getPath();
-	String path = null;
+    private class PathMapperImpl implements PathMapper{
+        private final PathMap pathMap;
 
-	if (lastPath == null && bppath.indexOf(' ') == -1) {
-	    path = debugger.getPathMap().getRemotePath(bppath,true);
-	} else if (lastPath == null) {
-	    path = debugger.getBestPath(bppath);
-	} else if (lastPath.length() > 0) {
-	    if (lastPath.equals(bppath)) {
-		path = debugger.getBestPath(bppath);
-	    } else {
-		int pos = lastPath.lastIndexOf('/');
-		if (pos >= 0) {
-		    path = lastPath.substring(pos + 1);
-		}
-	    }
-	}
-        lastPath = path;
-	if (path == null) {
-	    return null;
-	} else {
-	    return path + ':' + lineNumber;
-	}
+        public PathMapperImpl(PathMap pathMap) {
+            this.pathMap = pathMap;
+        }
+
+        public String getRemotePath(String localPath) {
+            return pathMap.getRemotePath(localPath,true);
+        }
+
+        public String getLocalPath(String remotePath) {
+            return pathMap.getLocalPath(remotePath,true);
+        }
+
     }
 
-    @Override
-    protected boolean alternateSourceRootAvailable() {
-	return err != null && err.startsWith("No source file named ") && lastPath != null && lastPath.length() > 0; // NOI18N
-    }
 }

@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,57 +31,34 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb.breakpoints;
-
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
+package org.netbeans.modules.cnd.api.remote;
 
 /**
-* Implementation of breakpoint on method.
-*
-* @author   Gordon Prieur (copied from Jan Jancura's JPDA implementation)
-*/
-public class LineBreakpointImpl extends BreakpointImpl {
+ * Interface for a path mapping utility which will be implemented in another module.
+ * 
+ * @author gordonp
+ */
+public abstract class PathMap {
 
-    private String lastPath;
-    
-    public LineBreakpointImpl(LineBreakpoint breakpoint, GdbDebugger debugger) {
-        super(breakpoint, debugger);
-	lastPath = null;
-        set();
+    public abstract boolean checkRemotePath(String path, boolean fixMissingPath);
+
+    public String getLocalPath(String rpath) {
+        return getLocalPath(rpath, false);
     }
 
-    @Override
-    protected String getBreakpointCommand() {
-        int lineNumber = getBreakpoint().getLineNumber();
-	String bppath = getBreakpoint().getPath();
-	String path = null;
+    //TODO: deprecate and remote
+    public abstract String getLocalPath(String rpath, boolean useDefault);
 
-	if (lastPath == null && bppath.indexOf(' ') == -1) {
-	    path = debugger.getPathMap().getRemotePath(bppath,true);
-	} else if (lastPath == null) {
-	    path = debugger.getBestPath(bppath);
-	} else if (lastPath.length() > 0) {
-	    if (lastPath.equals(bppath)) {
-		path = debugger.getBestPath(bppath);
-	    } else {
-		int pos = lastPath.lastIndexOf('/');
-		if (pos >= 0) {
-		    path = lastPath.substring(pos + 1);
-		}
-	    }
-	}
-        lastPath = path;
-	if (path == null) {
-	    return null;
-	} else {
-	    return path + ':' + lineNumber;
-	}
+    public String getRemotePath(String lpath) {
+        return getRemotePath(lpath, false);
     }
 
-    @Override
-    protected boolean alternateSourceRootAvailable() {
-	return err != null && err.startsWith("No source file named ") && lastPath != null && lastPath.length() > 0; // NOI18N
-    }
+    //TODO: deprecate and remote
+    public abstract String getRemotePath(String lpath, boolean useDefault);
 }
