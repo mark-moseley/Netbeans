@@ -144,7 +144,7 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
     public void closeSessionOnExit(DLightSession session) {
         SessionState currentSessionState = session.getState();
         if (currentSessionState != SessionState.ANALYZE) {
-            session.closeOnRun();
+            session.closeOnExit();
         } else {
             session.close();
         }
@@ -173,7 +173,7 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
         if (sessions.isEmpty()) {
             setActiveSession(null);
         } else {
-            setActiveSession(sessions.get(0));
+            setActiveSession(sessions.get(sessions.size() - 1));//last one will be active
         }
     }
 
@@ -337,13 +337,14 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
                 } else {
                     // Found! Can craete visualizer with this id for this dataProvider
                     visualizer = VisualizerProvider.getInstance().createVisualizer(configuration, dataProvider);
-                    if (visualizer instanceof SessionStateListener) {
-                        dlightSession.addSessionStateListener((SessionStateListener) visualizer);
-                        ((SessionStateListener) visualizer).sessionStateChanged(dlightSession, null, dlightSession.getState());
-
-                    }
+//                    if (visualizer instanceof SessionStateListener) {
+//                        dlightSession.addSessionStateListener((SessionStateListener) visualizer);
+//                        ((SessionStateListener) visualizer).sessionStateChanged(dlightSession, null, dlightSession.getState());
+//
+//                    }
                     //  visualizer = Visualiz.newVisualizerInstance(visualizerID, activeSession, dataProvider, configuration);
                     dataProvider.attachTo(storage);
+                    activeSession.addDataFilterListener(dataProvider);
                     break;
                 }
             }
@@ -487,6 +488,8 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
 
     public void mouseClickedOnIndicator(Indicator source) {
         DLightSession session = findIndicatorOwner(source);
+        //set active session
+        setActiveSession(session);
         List<VisualizerConfiguration> list = IndicatorAccessor.getDefault().getVisualizerConfigurations(source);
         boolean found = false;
         if (list != null) {
