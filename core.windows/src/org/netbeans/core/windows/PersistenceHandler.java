@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -57,8 +57,7 @@ import java.util.logging.Logger;
 import org.netbeans.core.windows.persistence.*;
 import org.openide.awt.ToolbarPool;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.Utilities;
 import org.openide.windows.*;
@@ -104,8 +103,8 @@ final public class PersistenceHandler implements PersistenceObserver {
     }
     
     // XXX helper method
-    public boolean isTopComponentPersistentWhenClosed(TopComponent tc) {
-        return PersistenceManager.getDefault().isTopComponentPersistentWhenClosed(tc);
+    public static boolean isTopComponentPersistentWhenClosed(TopComponent tc) {
+        return PersistenceManager.isTopComponentPersistentWhenClosed(tc);
     }
     
     public void load() {
@@ -121,8 +120,7 @@ final public class PersistenceHandler implements PersistenceObserver {
             Exceptions.attachLocalizedMessage(exc, "Cannot load window system persistent data, user directory content is broken. Resetting to default layout..."); //NOI18N
             Logger.getLogger(PersistenceHandler.class.getName()).log(Level.WARNING, null, exc); // NOI18N
             // try to delete local winsys data and try once more
-            FileSystem fs = Repository.getDefault().getDefaultFileSystem();
-            FileObject rootFolder = fs.getRoot().getFileObject(PersistenceManager.ROOT_LOCAL_FOLDER);
+            FileObject rootFolder = FileUtil.getConfigFile(PersistenceManager.ROOT_LOCAL_FOLDER);
             if (null != rootFolder) {
                 try {
                     rootFolder.delete();
@@ -137,7 +135,7 @@ final public class PersistenceHandler implements PersistenceObserver {
                 wmc = ConfigFactory.createDefaultConfig();
             }
         }
-
+        
         ToolbarPool.getDefault().setPreferredIconSize(wmc.preferredToolbarIconSize);
         
         WindowManagerImpl wm = WindowManagerImpl.getInstance();
@@ -202,7 +200,7 @@ final public class PersistenceHandler implements PersistenceObserver {
         for(Iterator it = mode2config.keySet().iterator(); it.hasNext(); ) {
             ModeImpl mode = (ModeImpl)it.next();
             ModeConfig mc = (ModeConfig)mode2config.get(mode);
-            initModeFromConfig(mode, mc);
+            initModeFromConfig(mode, mc, false);
             initPreviousModes(mode, mc, mode2config);
             
             // Set selected TopComponent.
@@ -214,7 +212,7 @@ final public class PersistenceHandler implements PersistenceObserver {
             }
             //some TopComponents want to be always active when the window system starts (e.g. welcome screen)
             for( TopComponent tc : mode.getOpenedTopComponents() ) {
-                Object val = tc.getClientProperty( "activateAtStartup" ); //NOI18N
+                Object val = tc.getClientProperty( Constants.ACTIVATE_AT_STARTUP );
                 if( null != val && val instanceof Boolean && ((Boolean)val).booleanValue() ) {
                     activeTopComponentOverride = tc;
                     break;
@@ -303,6 +301,7 @@ final public class PersistenceHandler implements PersistenceObserver {
             debugLog("## PersistenceHandler.save"); // NOI18N
         }
         
+        ToolbarPool.getDefault().waitFinished();
         WindowManagerConfig wmc = getConfig();
         PersistenceManager.getDefault().saveWindowSystem(wmc);
     }
@@ -322,7 +321,7 @@ final public class PersistenceHandler implements PersistenceObserver {
     private ModeImpl createModeFromConfig(ModeConfig mc) {
         if(DEBUG) {
             debugLog(""); // NOI18N
-            debugLog("Creating mode name=\"" + mc.name + "\""); // NOI8N
+            debugLog("Creating mode name=\"" + mc.name + "\""); // NOI18N
         }
         
         ModeImpl mode;
@@ -343,7 +342,7 @@ final public class PersistenceHandler implements PersistenceObserver {
      */
     private void initPreviousModes(ModeImpl mode, ModeConfig mc, Map modes) {
         for (int j = 0; j < mc.tcRefConfigs.length; j++) {
-            TCRefConfig tcRefConfig = (TCRefConfig) mc.tcRefConfigs[j];
+            TCRefConfig tcRefConfig = mc.tcRefConfigs[j];
             if(DEBUG) {
                 debugLog("\tTopComponent[" + j + "] id=\"" // NOI18N
                     + tcRefConfig.tc_id + "\", \topened=" + tcRefConfig.opened); // NOI18N
@@ -362,7 +361,7 @@ final public class PersistenceHandler implements PersistenceObserver {
                 if (previous != null) {
                     WindowManagerImpl.getInstance().setPreviousModeForTopComponent(tcRefConfig.tc_id, mode, previous, tcRefConfig.previousIndex);
                 } else {
-                    Logger.getLogger(PersistenceHandler.class.getName()).log(Level.WARNING, null,
+                    Logger.getLogger(PersistenceHandler.class.getName()).log(Level.INFO, null,
                                       new java.lang.NullPointerException("Cannot find previous mode named \'" +
                                                                          tcRefConfig.previousMode +
                                                                          "\'")); 
@@ -371,11 +370,44 @@ final public class PersistenceHandler implements PersistenceObserver {
             }
         }
     }
+
+    /**
+     * find the the previous mode for tc if exists and set it in the model..
+     */
+    private void initPreviousMode (ModeImpl mode, TCRefConfig tcRefConfig) {
+        if(DEBUG) {
+            debugLog("\tTopComponent id=\"" // NOI18N
+                + tcRefConfig.tc_id + "\", \topened=" + tcRefConfig.opened); // NOI18N
+        }
+        if (tcRefConfig.previousMode == null) {
+            return;
+        }
+        Set<? extends ModeImpl> modes = WindowManagerImpl.getInstance().getModes();
+        Iterator it = modes.iterator();
+        ModeImpl previous = null;
+        while (it.hasNext()) {
+            ModeImpl md = (ModeImpl) it.next();
+
+            if (tcRefConfig.previousMode.equals(md.getName())) {
+                previous = md;
+                break;
+            }
+        }
+        if (previous != null) {
+            WindowManagerImpl.getInstance().setPreviousModeForTopComponent
+            (tcRefConfig.tc_id, mode, previous, tcRefConfig.previousIndex);
+        } else {
+            Logger.getLogger(PersistenceHandler.class.getName()).log(Level.INFO, null,
+                              new java.lang.NullPointerException("Cannot find previous mode named \'" +
+                                                                 tcRefConfig.previousMode +
+                                                                 "\'"));
+        }
+    }
     
-    private ModeImpl initModeFromConfig(ModeImpl mode, ModeConfig mc) {
+    private ModeImpl initModeFromConfig(ModeImpl mode, ModeConfig mc, boolean initPrevModes) {
         WindowManagerImpl wm = WindowManagerImpl.getInstance();
         for (int j = 0; j < mc.tcRefConfigs.length; j++) {
-            TCRefConfig tcRefConfig = (TCRefConfig) mc.tcRefConfigs[j];
+            TCRefConfig tcRefConfig = mc.tcRefConfigs[j];
             if(DEBUG) {
                 debugLog("\tTopComponent[" + j + "] id=\"" // NOI18N
                     + tcRefConfig.tc_id + "\", \topened=" + tcRefConfig.opened); // NOI18N
@@ -393,6 +425,9 @@ final public class PersistenceHandler implements PersistenceObserver {
             wm.setTopComponentDockedInMaximizedMode( tcRefConfig.tc_id, tcRefConfig.dockedInMaximizedMode );
             wm.setTopComponentSlidedInDefaultMode( tcRefConfig.tc_id, !tcRefConfig.dockedInDefaultMode );
             wm.setTopComponentMaximizedWhenSlidedIn( tcRefConfig.tc_id, tcRefConfig.slidedInMaximized );
+            if (initPrevModes) {
+                initPreviousMode(mode, tcRefConfig);
+            }
         }
 
         // PENDING Refine the unneded computing.
@@ -469,7 +504,7 @@ final public class PersistenceHandler implements PersistenceObserver {
     
     private WindowManagerConfig getConfig() {
         WindowManagerConfig wmc = new WindowManagerConfig();
-        
+
         wmc.preferredToolbarIconSize = ToolbarPool.getDefault().getPreferredIconSize();
         
         WindowManagerImpl wmi = WindowManagerImpl.getInstance();
@@ -491,7 +526,12 @@ final public class PersistenceHandler implements PersistenceObserver {
         wmc.widthSeparated  = separatedBounds.width;
         wmc.heightSeparated = separatedBounds.height;
         
-        wmc.mainWindowFrameStateJoined = wmi.getMainWindowFrameStateJoined();
+        if( Utilities.isMac() ) {
+            //125881 - mac doesn't fire events when maximized window is resized by user
+            wmc.mainWindowFrameStateJoined = wmi.getMainWindow().getExtendedState();
+        } else {
+            wmc.mainWindowFrameStateJoined = wmi.getMainWindowFrameStateJoined();
+        }
         if (wmc.mainWindowFrameStateJoined == Frame.ICONIFIED) {
             // #46646 - don't save iconified state
             //mkleint - actually shoudn't we ignore the maximized states as well?
@@ -563,7 +603,7 @@ final public class PersistenceHandler implements PersistenceObserver {
             ModeImpl modeImpl = (ModeImpl)it.next();
             //Do not save empty non permanent mode
             ModeConfig mc = getConfigFromMode(modeImpl);
-            if ((mc.tcRefConfigs.length == 0) && (!mc.permanent)) {
+            if ((mc.tcRefConfigs.length == 0) && (!mc.permanent) && wmi.getCentral().doCheckSlidingModes(modeImpl)) {
                 continue;
             }
             modeConfigs.add(mc);
@@ -762,7 +802,7 @@ final public class PersistenceHandler implements PersistenceObserver {
             debugLog("WMI.modeConfigAdded mo:" + modeConfig.name); // NOI18N
         }
         ModeImpl mode = getModeFromConfig(modeConfig);
-        initModeFromConfig(mode, modeConfig);
+        initModeFromConfig(mode, modeConfig, true);
     }
     
     /** Handles removing mode from model.
@@ -794,17 +834,20 @@ final public class PersistenceHandler implements PersistenceObserver {
         if(DEBUG) {
             debugLog("WMI.topComponentRefConfigAdded mo:" + modeName + " tcRef:" + tcRefConfig.tc_id); // NOI18N
         }
-        
+
         WindowManagerImpl wm = WindowManagerImpl.getInstance();
         wm.setTopComponentDockedInMaximizedMode( tcRefConfig.tc_id, tcRefConfig.dockedInMaximizedMode );
         wm.setTopComponentSlidedInDefaultMode( tcRefConfig.tc_id, !tcRefConfig.dockedInDefaultMode );
         wm.setTopComponentMaximizedWhenSlidedIn( tcRefConfig.tc_id, tcRefConfig.slidedInMaximized );
+        ModeImpl mode = (ModeImpl) name2mode.get(modeName);
+        if (mode != null) {
+            initPreviousMode(mode, tcRefConfig);
+        }
         
         TopComponent tc = getTopComponentForID(tcRefConfig.tc_id,true);
-        if(tc != null) {
-            ModeImpl mode = (ModeImpl)name2mode.get(modeName);
-            if(mode != null) {
-                if(tcRefConfig.opened) {
+        if (tc != null) {
+            if (mode != null) {
+                if (tcRefConfig.opened) {
                     mode.addOpenedTopComponent(tc);
                 } else {
                     mode.addClosedTopComponent(tc);
@@ -952,12 +995,21 @@ final public class PersistenceHandler implements PersistenceObserver {
             buffer.append("\n-- -- state: " + mc.state + " "
             + ((mc.state == Constants.MODE_STATE_JOINED) ? "joined" : "separated"));
             if (mc.constraints != null) {
+                buffer.append("\n-- -- constraints.sz: " + mc.constraints.length);
                 for (int j = 0; j < mc.constraints.length; j++) {
                     buffer.append("\n-- -- co[" + j + "]: " + mc.constraints[j]);
                 }
             }
-            buffer.append("\n-- -- kind: " + mc.kind + " "
-            + ((mc.kind == Constants.MODE_KIND_EDITOR) ? "editor" : "view"));
+            buffer.append("\n-- -- kind: " + mc.kind + " ");
+            if (mc.kind == Constants.MODE_KIND_EDITOR) {
+                buffer.append("editor");
+            } else if (mc.kind == Constants.MODE_KIND_VIEW) {
+                buffer.append("view");
+            } else if (mc.kind == Constants.MODE_KIND_SLIDING) {
+                buffer.append("sliding");
+            } else {
+                buffer.append("unknown");
+            }
             buffer.append("\n-- --         bounds: " + mc.bounds);
             buffer.append("\n-- -- relativeBounds: " + mc.relativeBounds);
             buffer.append("\n-- --          state: " + mc.frameState);
