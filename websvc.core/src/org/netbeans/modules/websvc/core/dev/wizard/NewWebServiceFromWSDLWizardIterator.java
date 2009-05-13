@@ -51,9 +51,11 @@ import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.Sources;
+import org.netbeans.modules.websvc.api.support.ServiceCreator;
 import org.netbeans.modules.websvc.core.CreatorProvider;
-import org.netbeans.modules.websvc.core.ServiceCreator;
 
 import org.openide.WizardDescriptor;
 
@@ -108,9 +110,11 @@ public class NewWebServiceFromWSDLWizardIterator implements TemplateWizard.Itera
         SourceGroup[] sourceGroups = SourceGroups.getJavaSourceGroups(project);
         bottomPanel = new WebServiceFromWSDL(wiz, project);
         WizardDescriptor.Panel<WizardDescriptor> firstPanel; //special case: use Java Chooser
-        if (sourceGroups.length == 0)
-            firstPanel = new FinishableProxyWizardPanel(Templates.createSimpleTargetChooser(project, sourceGroups, bottomPanel));
-        else
+        if (sourceGroups.length == 0) {
+            SourceGroup[] genericSourceGroups = ProjectUtils.getSources(project).getSourceGroups(Sources.TYPE_GENERIC);
+            firstPanel = new FinishableProxyWizardPanel(Templates.createSimpleTargetChooser(project, genericSourceGroups, bottomPanel), sourceGroups, true);
+
+        } else
             firstPanel = new FinishableProxyWizardPanel(JavaTemplates.createPackageChooser(project, sourceGroups, bottomPanel, true));
 
         JComponent comp = (JComponent) firstPanel.getComponent();
@@ -122,7 +126,7 @@ public class NewWebServiceFromWSDLWizardIterator implements TemplateWizard.Itera
         };
         
         // Creating steps.
-        Object prop = this.wiz.getProperty("WizardPanel_contentData"); // NOI18N
+        Object prop = this.wiz.getProperty(WizardDescriptor.PROP_CONTENT_DATA); // NOI18N
         String[] beforeSteps = null;
         if (prop != null && prop instanceof String[]) {
             beforeSteps = (String[]) prop;
@@ -135,9 +139,9 @@ public class NewWebServiceFromWSDLWizardIterator implements TemplateWizard.Itera
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent) c;
                 // Step #.
-                jc.putClientProperty("WizardPanel_contentSelectedIndex", Integer.valueOf(i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, Integer.valueOf(i)); // NOI18N
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }
     }

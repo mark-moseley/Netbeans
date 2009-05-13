@@ -38,9 +38,9 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.websvc.core.dev.wizard;
 
+import org.netbeans.api.project.Sources;
 import org.netbeans.modules.websvc.core.ProjectInfo;
 import java.io.IOException;
 import java.util.Collections;
@@ -64,6 +64,7 @@ import org.netbeans.modules.j2ee.common.Util;
 import org.netbeans.modules.websvc.api.client.WebServicesClientSupport;
 import org.netbeans.modules.websvc.api.support.SourceGroups;
 import org.netbeans.modules.websvc.api.webservices.WebServicesSupport;
+import org.netbeans.modules.websvc.core.WSStackUtils;
 import org.openide.filesystems.FileObject;
 
 public class MessageHandlerWizard implements WizardDescriptor.InstantiatingIterator {
@@ -87,11 +88,16 @@ public class MessageHandlerWizard implements WizardDescriptor.InstantiatingItera
         SourceGroup[] sourceGroups = SourceGroups.getJavaSourceGroups(project);
 
         //create the Java Project chooser
-        firstPanel = JavaTemplates.createPackageChooser(project, sourceGroups, new BottomPanel());
+        if (sourceGroups.length == 0) {
+            SourceGroup[] genericSourceGroups = ProjectUtils.getSources(project).getSourceGroups(Sources.TYPE_GENERIC);
+            firstPanel = new FinishableProxyWizardPanel(Templates.createSimpleTargetChooser(project, genericSourceGroups, new BottomPanel()), sourceGroups, false);
+        } else {
+            firstPanel = new FinishableProxyWizardPanel(JavaTemplates.createPackageChooser(project, sourceGroups, new BottomPanel(), true));
+        }
         JComponent c = (JComponent) firstPanel.getComponent();
         Util.changeLabelInComponent(c, NbBundle.getMessage(MessageHandlerWizard.class, "LBL_JavaTargetChooserPanelGUI_ClassName_Label"), NbBundle.getMessage(MessageHandlerWizard.class, "LBL_Handler_Name")); //NOI18N
-        c.putClientProperty("WizardPanel_contentData", HANDLER_STEPS);
-        c.putClientProperty("WizardPanel_contentSelectedIndex", Integer.valueOf(0));
+        c.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, HANDLER_STEPS);
+        c.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, Integer.valueOf(0));
         c.getAccessibleContext().setAccessibleDescription(HANDLER_STEPS[0]);
         wizardPanels = new WizardDescriptor.Panel[]{firstPanel};
     }
@@ -148,7 +154,7 @@ public class MessageHandlerWizard implements WizardDescriptor.InstantiatingItera
         return currentPanel;
     }
 
-/** Dummy implementation of WizardDescriptor.Panel required in order to provide Help Button
+    /** Dummy implementation of WizardDescriptor.Panel required in order to provide Help Button
      */
     private class BottomPanel implements WizardDescriptor.Panel<WizardDescriptor> {
 
@@ -168,55 +174,31 @@ public class MessageHandlerWizard implements WizardDescriptor.InstantiatingItera
         public void removeChangeListener(ChangeListener l) {
         }
 
-        private boolean isValidInJavaProject(Project javaProject) {
-
-            SourceGroup[] sgs = ProjectUtils.getSources(javaProject).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
-            ClassPath classPath;
-            FileObject wsimportFO = null;
-            FileObject wscompileFO = null;
-            if (sgs.length > 0) {
-                classPath = ClassPath.getClassPath(sgs[0].getRootFolder(), ClassPath.COMPILE);
-                if (classPath != null) {
-                    wsimportFO = classPath.findResource("com/sun/tools/ws/ant/WsImport.class"); //NOI18N
-                    wscompileFO = classPath.findResource("com/sun/xml/rpc/tools/ant/Wscompile.class"); //NOI18N
-                }
-            }
-
-            if (wsimportFO == null && wscompileFO == null) {
-                wiz.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(MessageHandlerWizard.class, "ERR_HandlerNeedProperLibraries")); // NOI18N
-                return false;
-            }
-            return true;
-        }
-
         public boolean isValid() {
             ProjectInfo creator = new ProjectInfo(project);
             int projectType = creator.getProjectType();
 
             //test for conditions in JSE
             if (projectType == ProjectInfo.JSE_PROJECT_TYPE) {
-                return isValidInJavaProject(project);
+                return isValidInJavaProject(project, wiz);
             }
 
-            if (!Util.isJavaEE5orHigher(project) && ((WebServicesSupport.getWebServicesSupport(project.getProjectDirectory()) == null)
-                    && (WebServicesClientSupport.getWebServicesClientSupport(project.getProjectDirectory()) == null))) {
+            if (!Util.isJavaEE5orHigher(project) && ((WebServicesSupport.getWebServicesSupport(project.getProjectDirectory()) == null) && (WebServicesClientSupport.getWebServicesClientSupport(project.getProjectDirectory()) == null))) {
                 // check if jaxrpc plugin installed
-                wiz.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(MessageHandlerWizard.class, "ERR_NoJaxrpcPluginFoundHandler")); // NOI18N
+                wiz.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(MessageHandlerWizard.class, "ERR_NoJaxrpcPluginFoundHandler")); // NOI18N
                 return false;
             }
-
-
-
             //if platform is Tomcat, source level must be jdk 1.5 and jaxws library must be in classpath
-            if (!Util.isJavaEE5orHigher(project) && projectType == ProjectInfo.WEB_PROJECT_TYPE && !PlatformUtil.isJsr109Supported(project) && !PlatformUtil.isJsr109OldSupported(project)) {
+            WSStackUtils wsStackUtils = new WSStackUtils(project);
+            if (!Util.isJavaEE5orHigher(project) && projectType == ProjectInfo.WEB_PROJECT_TYPE && !wsStackUtils.isJsr109Supported() && !wsStackUtils.isJsr109OldSupported()) {
                 //has to be at least jdk 1.5
                 if (Util.isSourceLevel14orLower(project)) {
-                    wiz.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(MessageHandlerWizard.class, "ERR_HandlerNeedProperSourceLevel")); // NOI18N
+                    wiz.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(MessageHandlerWizard.class, "ERR_HandlerNeedProperSourceLevel")); // NOI18N
                     return false;
                 }
-                if (!PlatformUtil.hasJAXWSLibrary(project)) {
+                if (!wsStackUtils.hasJAXWSLibrary()) {
                     //must have jaxws library
-                    wiz.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(BottomPanel.class, "LBL_LogicalHandlerWarning")); // NOI18N
+                    wiz.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(BottomPanel.class, "LBL_LogicalHandlerWarning")); // NOI18N
                     return false;
                 } else {
                     return true;
@@ -228,5 +210,30 @@ public class MessageHandlerWizard implements WizardDescriptor.InstantiatingItera
         public HelpCtx getHelp() {
             return new HelpCtx(MessageHandlerWizard.class);
         }
+    }
+
+    public static boolean isValidInJavaProject(Project javaProject, WizardDescriptor wiz) {
+
+        SourceGroup[] sgs = ProjectUtils.getSources(javaProject).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
+        ClassPath classPath;
+        FileObject handlerFO = null;
+        if (sgs.length > 0) {
+            classPath = ClassPath.getClassPath(sgs[0].getRootFolder(), ClassPath.BOOT);
+            if (classPath != null) {
+                handlerFO = classPath.findResource("javax/xml/ws/handler/Handler.class");  //NOI18N
+            }
+            if(handlerFO == null){
+                classPath = ClassPath.getClassPath(sgs[0].getRootFolder(), ClassPath.COMPILE);
+                if(classPath != null){
+                    handlerFO = classPath.findResource("javax/xml/ws/handler/Handler.class");  //NOI18N
+                }
+            }
+        }
+
+        if (handlerFO == null) {
+            wiz.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(MessageHandlerWizard.class, "ERR_HandlerNeedProperLibraries")); // NOI18N
+            return false;
+        }
+        return true;
     }
 }
