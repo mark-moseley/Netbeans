@@ -27,6 +27,7 @@
  */
 package org.netbeans.modules.java.hints.introduce;
 
+import java.beans.PropertyChangeEvent;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -44,25 +45,54 @@ import org.openide.util.NbBundle;
 public final class IntroduceAction extends HintAction {
     
     private IntroduceKind type;
+    private static String INTRODUCE_CONSTANT = "introduce-constant";//NOI18N
+    private static String INTRODUCE_VARIABLE = "introduce-variable";//NOI18N
+    private static String INTRODUCE_METHOD = "introduce-method";//NOI18N
+    private static String INTRODUCE_FIELD = "introduce-field";//NOI18N
+
+    /** Property identifier for menu text, neccessary for display in menu */
+    private static final String MENU_TEXT = "menuText"; //NOI18N
+    /** Property identifier for popup textm, neccessary for display popup */
+    private static final String POPUP_TEXT = "popupText"; //NOI18N
+    
 
     private IntroduceAction(IntroduceKind type) {
         this.type = type;
         switch (type) {
             case CREATE_CONSTANT:
-                putValue(NAME, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceConstantAction"));
+                putValue(NAME, INTRODUCE_CONSTANT);
+                putValue(SHORT_DESCRIPTION, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceConstantAction"));
+                putValue(MENU_TEXT, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceConstantAction"));
+                putValue(POPUP_TEXT, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceConstantAction"));
                 break;
             case CREATE_VARIABLE:
-                putValue(NAME, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceVariableAction"));
+                putValue(NAME, INTRODUCE_VARIABLE);
+                putValue(SHORT_DESCRIPTION, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceVariableAction"));
+                putValue(MENU_TEXT, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceVariableAction"));
+                putValue(POPUP_TEXT, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceVariableAction"));
                 break;
             case CREATE_FIELD:
-                putValue(NAME, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceFieldAction"));
+                putValue(NAME, INTRODUCE_FIELD);
+                putValue(SHORT_DESCRIPTION, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceFieldAction"));
+                putValue(MENU_TEXT, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceFieldAction"));
+                putValue(POPUP_TEXT, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceFieldAction"));
                 break;
             case CREATE_METHOD:
-                putValue(NAME, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceMethodAction"));
+                putValue(NAME, INTRODUCE_METHOD);
+                putValue(SHORT_DESCRIPTION, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceMethodAction"));
+                putValue(MENU_TEXT, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceMethodAction"));
+                putValue(POPUP_TEXT, NbBundle.getMessage(IntroduceAction.class, "CTL_IntroduceMethodAction"));
                 break;
         }
-        
+
+        setEnabled(true);
     }
+
+    @Override
+    public void propertyChange(PropertyChangeEvent evt) {
+    }
+
+
     
     protected void perform(JavaSource js, int[] selection) {
         String error = doPerformAction(js, selection);
