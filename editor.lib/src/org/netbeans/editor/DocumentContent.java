@@ -49,6 +49,7 @@ import javax.swing.undo.AbstractUndoableEdit;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.UndoableEdit;
+import org.netbeans.lib.editor.util.AbstractCharSequence;
 
 /**
  * Content of the document.
@@ -347,39 +348,27 @@ final class DocumentContent implements AbstractDocument.Content, CharSeq, GapSta
 	}
     }
     
-    private final class CharSequenceImpl implements CharSequence {
+    private final class CharSequenceImpl extends AbstractCharSequence.StringLike {
 
         public char charAt(int index) {
             return DocumentContent.this.charAt(index);
         }
 
         public int length() {
-            // to comply to AbstractDocument.getText() do not include ending '\n'
-            return DocumentContent.this.length() - 1;
+            // this is slightly different from AbstractDocument.getText(), which does not include ending '\n'
+            // see #159502; in general various highliging code needs accessing the artifical
+            // '\n' at the end of a document, because it is the only way how to define
+            // line highlights (ie. highligh that expands beyond EOL) for the last line in the document.
+            return DocumentContent.this.length();
         }
-    
-        public CharSequence subSequence(int start, int end) {
-            if (start < 0) {
-                throw new IndexOutOfBoundsException("start=" + start + " < 0");
-            }
-            if (end < start) {
-                throw new IndexOutOfBoundsException("end=" + end + " < start=" + start);
-            }
-            // Allow retrieval of extra '\n' to comply with AbstractDocument.getText()
-            if (end > DocumentContent.this.length()) {
-                throw new IndexOutOfBoundsException("end=" + end
-                        + " > length()=" + DocumentContent.this.length());
-            }
-            return DocumentContent.this.getText(start, end - start);
-        }
-        
+
         @Override
         public String toString() {
             return DocumentContent.this.getText(0, length());
         }
-        
-    }
-    
+
+    } // End of CharSequenceImpl class
+
     class Edit extends AbstractUndoableEdit {
         
         /** Constructor used for insert.
@@ -418,7 +407,7 @@ final class DocumentContent implements AbstractDocument.Content, CharSeq, GapSta
         
         private MarkVector.Undo markVectorUndo;
         
-        public void undo() throws CannotUndoException {
+        public @Override void undo() throws CannotUndoException {
             super.undo();
 
             if (debugUndo) {
@@ -427,7 +416,7 @@ final class DocumentContent implements AbstractDocument.Content, CharSeq, GapSta
             undoOrRedo(-length, true);
         }
         
-        public void redo() throws CannotRedoException {
+        public @Override void redo() throws CannotRedoException {
             super.redo();
 
             if (debugUndo) {
