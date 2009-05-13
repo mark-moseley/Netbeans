@@ -55,10 +55,13 @@ import org.netbeans.modules.cnd.api.model.CsmProject;
 import org.netbeans.modules.cnd.api.project.NativeFileItem.Language;
 import org.netbeans.modules.cnd.discovery.api.Configuration;
 import org.netbeans.modules.cnd.discovery.api.DiscoveryProvider;
-import org.netbeans.modules.cnd.discovery.api.ItemProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
-import org.netbeans.modules.cnd.discovery.api.ProjectUtil;
+import org.netbeans.modules.cnd.discovery.api.DiscoveryUtils;
+import org.netbeans.modules.cnd.discovery.api.PkgConfigManager;
+import org.netbeans.modules.cnd.discovery.api.PkgConfigManager.PkgConfig;
+import org.netbeans.modules.cnd.discovery.api.Progress;
+import org.netbeans.modules.cnd.discovery.api.ProjectImpl;
 import org.netbeans.modules.cnd.discovery.api.ProviderProperty;
 import org.netbeans.modules.cnd.discovery.api.SourceFileProperties;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
@@ -67,7 +70,7 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ItemConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfigurationDescriptor;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -75,9 +78,11 @@ import org.openide.util.Utilities;
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.discovery.api.DiscoveryProvider.class)
 public class AnalyzeModel implements DiscoveryProvider {
     private Map<String,ProviderProperty> myProperties = new HashMap<String,ProviderProperty>();
     public static final String MODEL_FOLDER_KEY = "folder"; // NOI18N
+    public static final String PREFER_LOCAL_FILES = "prefer-local"; // NOI18N
     protected boolean isStoped = false;
     
     
@@ -107,6 +112,26 @@ public class AnalyzeModel implements DiscoveryProvider {
                 return ProviderProperty.PropertyKind.Folder;
             }
         });
+        myProperties.put(PREFER_LOCAL_FILES, new ProviderProperty(){
+            private Boolean myValue = Boolean.FALSE;
+            public String getName() {
+                return i18n("Prefer_Local_Files"); // NOI18N
+            }
+            public String getDescription() {
+                return i18n("Prefer_Local_Files_Description"); // NOI18N
+            }
+            public Object getValue() {
+                return myValue;
+            }
+            public void setValue(Object value) {
+                if (value instanceof Boolean){
+                    myValue = (Boolean)value;
+                }
+            }
+            public ProviderProperty.PropertyKind getKind() {
+                return ProviderProperty.PropertyKind.Boolean;
+            }
+        });
     }
     
     public String getID() {
@@ -133,9 +158,9 @@ public class AnalyzeModel implements DiscoveryProvider {
         isStoped = true;
     }
     
-    public List<Configuration> analyze(ProjectProxy project) {
+    public List<Configuration> analyze(ProjectProxy project, Progress progress) {
         isStoped = false;
-        MyConfiguration conf = new MyConfiguration(project);
+        MyConfiguration conf = new MyConfiguration(project, progress);
         List<Configuration> confs = new ArrayList<Configuration>();
         confs.add(conf);
         return confs;
@@ -159,7 +184,7 @@ public class AnalyzeModel implements DiscoveryProvider {
                 break;
             }
             File d = new File((String)it.next());
-            if (d.isDirectory()){
+            if (d.exists() && d.isDirectory() && d.canRead()){
                 File[] ff = d.listFiles();
                 for (int i = 0; i < ff.length; i++) {
                     if (ff[i].isFile()) {
@@ -184,8 +209,8 @@ public class AnalyzeModel implements DiscoveryProvider {
         if (isStoped) {
             return;
         }
-        if (d.isDirectory()){
-            if (ProjectUtil.ignoreFolder(d)){
+        if (d.exists() && d.isDirectory() && d.canRead()){
+            if (DiscoveryUtils.ignoreFolder(d)){
                 return;
             }
             String path = d.getAbsolutePath();
@@ -209,9 +234,12 @@ public class AnalyzeModel implements DiscoveryProvider {
     public boolean isApplicable(ProjectProxy project) {
         if (project.getProject() != null){
             Project makeProject = project.getProject();
-            CsmProject langProject = CsmModelAccessor.getModel().getProject(makeProject);
-            if (langProject != null/* && langProject.isStable(null)*/){
-                return true;
+            ConfigurationDescriptorProvider pdp = makeProject.getLookup().lookup(ConfigurationDescriptorProvider.class);
+            if (pdp.gotDescriptor()) {
+                CsmProject langProject = CsmModelAccessor.getModel().getProject(makeProject);
+                if (langProject != null/* && langProject.isStable(null)*/){
+                    return true;
+                }
             }
         }
         return false;
@@ -226,47 +254,20 @@ public class AnalyzeModel implements DiscoveryProvider {
         private List<String> myIncludedFiles;
         private MakeConfigurationDescriptor makeConfigurationDescriptor;
         private CsmProject langProject;
+        private Progress progress;
         
-        private MyConfiguration(ProjectProxy project){
+        private MyConfiguration(ProjectProxy project, Progress progress){
             Project makeProject = project.getProject();
+            this.progress = progress;
             langProject = CsmModelAccessor.getModel().getProject(makeProject);
             ConfigurationDescriptorProvider pdp = makeProject.getLookup().lookup(ConfigurationDescriptorProvider.class);
             makeConfigurationDescriptor = (MakeConfigurationDescriptor)pdp.getConfigurationDescriptor();
         }
         
         public List<ProjectProperties> getProjectConfiguration() {
-            return divideByLanguage(getSourcesConfiguration());
+            return ProjectImpl.divideByLanguage(getSourcesConfiguration());
         }
-        
-        protected List<ProjectProperties> divideByLanguage(List<SourceFileProperties> sources){
-            ModelProject cProp = null;
-            ModelProject cppProp = null;
-            for (SourceFileProperties source : sources) {
-                ItemProperties.LanguageKind lang = source.getLanguageKind();
-                ModelProject current = null;
-                if (lang == ItemProperties.LanguageKind.C){
-                    if (cProp == null) {
-                        cProp = new ModelProject(lang);
-                    }
-                    current = cProp;
-                } else {
-                    if (cppProp == null) {
-                        cppProp = new ModelProject(lang);
-                    }
-                    current = cppProp;
-                }
-                current.update(source);
-            }
-            List<ProjectProperties> languages = new ArrayList<ProjectProperties>();
-            if (cProp != null) {
-                languages.add(cProp);
-            }
-            if (cppProp != null) {
-                languages.add(cppProp);
-            }
-            return languages;
-        }
-        
+       
         public List<Configuration> getDependencies() {
             return null;
         }
@@ -284,21 +285,21 @@ public class AnalyzeModel implements DiscoveryProvider {
         private List<SourceFileProperties> getSourceFileProperties(String root){
             List<SourceFileProperties> res = new ArrayList<SourceFileProperties>();
             Map<String,List<String>> searchBase = search(root);
+            PkgConfig pkgConfig = PkgConfigManager.getDefault().getPkgConfig(null);
+            boolean preferLocal = ((Boolean)getProperty(PREFER_LOCAL_FILES).getValue()).booleanValue();
             Item[] items = makeConfigurationDescriptor.getProjectItems();
             for (int i = 0; i < items.length; i++){
                 if (isStoped) {
                     break;
                 }
                 Item item = items[i];
-                if (isExcluded(item)) {
-                    continue;
-                }
-                Language lang = item.getLanguage();
-                if (lang == Language.C || lang == Language.CPP){
-                    String path = item.getFile().getAbsolutePath();
-                    CsmFile langFile = langProject.findFile(path);
-                    SourceFileProperties source = new ModelSource(item, langFile, searchBase);
-                    res.add(source);
+                if (!isExcluded(item)) {
+                    Language lang = item.getLanguage();
+                    if (lang == Language.C || lang == Language.CPP){
+                        CsmFile langFile = langProject.findFile(item);
+                        SourceFileProperties source = new ModelSource(item, langFile, searchBase, pkgConfig, preferLocal);
+                        res.add(source);
+                    }
                 }
             }
             return res;
@@ -315,6 +316,9 @@ public class AnalyzeModel implements DiscoveryProvider {
             if (myIncludedFiles == null) {
                 HashSet<String> unique = new HashSet<String>();
                 Item[] items = makeConfigurationDescriptor.getProjectItems();
+                if (progress != null){
+                    progress.start(items.length);
+                }
                 for (int i = 0; i < items.length; i++){
                     if (isStoped) {
                         break;
@@ -325,8 +329,8 @@ public class AnalyzeModel implements DiscoveryProvider {
                     }
                     String path = item.getAbsPath();
                     File file = new File(path);
-                    if (file.exists()) {
-                        unique.add(FileUtil.normalizeFile(file).getAbsolutePath());
+                    if (CndFileUtils.exists(file)) {
+                        unique.add(CndFileUtils.normalizePath(file.getAbsolutePath()));
                     }
                 }
                 HashSet<String> unUnique = new HashSet<String>();
@@ -334,14 +338,20 @@ public class AnalyzeModel implements DiscoveryProvider {
                     if (source instanceof ModelSource){
                         unUnique.addAll( ((ModelSource)source).getIncludedFiles() );
                     }
+                    if (progress != null){
+                        progress.increment();
+                    }
                 }
                 for(String path : unUnique){
                     File file = new File(path);
-                    if (file.exists()) {
-                        unique.add(FileUtil.normalizeFile(file).getAbsolutePath());
+                    if (CndFileUtils.exists(file)) {
+                        unique.add(CndFileUtils.normalizePath(file.getAbsolutePath()));
                     }
                 }
                 myIncludedFiles = new ArrayList<String>(unique);
+                if (progress != null){
+                    progress.done();
+                }
             }
             return myIncludedFiles;
         }

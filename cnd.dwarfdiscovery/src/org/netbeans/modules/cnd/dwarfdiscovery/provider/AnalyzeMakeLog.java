@@ -46,17 +46,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.netbeans.modules.cnd.discovery.api.Configuration;
+import org.netbeans.modules.cnd.discovery.api.Progress;
+import org.netbeans.modules.cnd.discovery.api.ProjectImpl;
 import org.netbeans.modules.cnd.discovery.api.ProjectProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
 import org.netbeans.modules.cnd.discovery.api.ProviderProperty;
 import org.netbeans.modules.cnd.discovery.api.SourceFileProperties;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.openide.util.NbBundle;
 
 /**
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.discovery.api.DiscoveryProvider.class)
 public class AnalyzeMakeLog extends BaseDwarfProvider {
     private Map<String,ProviderProperty> myProperties = new LinkedHashMap<String,ProviderProperty>();
     public static final String MAKE_LOG_KEY = "make-log-file"; // NOI18N
@@ -151,11 +154,10 @@ public class AnalyzeMakeLog extends BaseDwarfProvider {
 
     @Override
     public boolean isApplicable(ProjectProxy project) {
-        if (detectMakeLog(project) != null){
-            Object o = getProperty(RESTRICT_COMPILE_ROOT).getValue();
-            if (o == null || "".equals(o.toString())){ // NOI18N
-                getProperty(RESTRICT_COMPILE_ROOT).setValue(project.getSourceRoot());
-            }
+//        if (detectMakeLog(project) != null){
+        Object o = getProperty(RESTRICT_COMPILE_ROOT).getValue();
+        if (o == null || "".equals(o.toString())){ // NOI18N
+            getProperty(RESTRICT_COMPILE_ROOT).setValue(project.getSourceRoot());
             return true;
         }
         return false;
@@ -164,23 +166,26 @@ public class AnalyzeMakeLog extends BaseDwarfProvider {
     private String detectMakeLog(ProjectProxy project){
         String root = project.getSourceRoot();
         int i = root.indexOf("/usr/src/"); // NOI18N
-        if (i < 0 && root.endsWith("/usr/src")){
+        if (i < 0 && root.endsWith("/usr/src")){ // NOI18N
             i = root.indexOf("/usr/src"); // NOI18N
         }
         if (i > 0) {
             String latest = null;
             String logfolder = root.substring(0, i) + "/log"; // NOI18N
             File log = new File(logfolder);
-            if (log.exists() && log.isDirectory()) {
+            if (log.exists() && log.isDirectory() && log.canRead()) {
                 for (File when : log.listFiles()) {
-                    if (when.isDirectory()) {
+                    if (when.exists() && when.isDirectory() && when.canRead()) {
                         for (File l : when.listFiles()) {
-                            if (l.getAbsolutePath().endsWith("/nightly.log")) { // NOI18N
-                                if (latest == null){
-                                    latest = l.getAbsolutePath();
+                            String current = l.getAbsolutePath();
+                            if (current.endsWith("/nightly.log")) { // NOI18N
+                                if (latest == null) {
+                                    latest = current;
                                 } else {
-                                    if (latest.compareTo(l.getAbsolutePath())<0) {
-                                        latest = l.getAbsolutePath();
+                                    String folder1 = latest.substring(0, latest.lastIndexOf("/nightly.log")); // NOI18N
+                                    String folder2 = current.substring(0, current.lastIndexOf("/nightly.log")); // NOI18N
+                                    if (folder1.compareTo(folder2) < 0) {
+                                        latest = current;
                                     }
                                 }
                                 break;
@@ -198,23 +203,47 @@ public class AnalyzeMakeLog extends BaseDwarfProvider {
         String set = (String)getProperty(MAKE_LOG_KEY).getValue();
         if (set == null || set.length() == 0) {
             set = detectMakeLog(project);
+            if (set != null && set.length() > 0){
+                getProperty(MAKE_LOG_KEY).setValue(set);
+            }
         }
         if (set == null || set.length() == 0) {
             return 0;
         }
         return 80;
     }
+
+    @Override
+    protected List<SourceFileProperties> getSourceFileProperties(String objFileName, Map<String,SourceFileProperties> map){
+        ProviderProperty p = getProperty(RESTRICT_COMPILE_ROOT);
+        String root = "";
+        if (p != null) {
+            root = (String)p.getValue();
+        }
+        List<SourceFileProperties> res = runLogReader(objFileName, root, progress);
+        progress = null;
+        return res;
+
+    }
     
-    public List<Configuration> analyze(final ProjectProxy project) {
+    /* package-local */ static List<SourceFileProperties> runLogReader(String objFileName, String root, Progress progress){
+        LogReader clrf = new LogReader(objFileName, root);
+        List<SourceFileProperties> list = clrf.getResults(progress);
+        return list;
+    }
+    
+    private Progress progress;
+    public List<Configuration> analyze(final ProjectProxy project, Progress progress) {
         isStoped = false;
         List<Configuration> confs = new ArrayList<Configuration>();
         setCommpilerSettings(project);
+        this.progress = progress;
         if (!isStoped){
             Configuration conf = new Configuration(){
                 private List<SourceFileProperties> myFileProperties;
                 private List<String> myIncludedFiles;
                 public List<ProjectProperties> getProjectConfiguration() {
-                    return divideByLanguage(getSourcesConfiguration());
+                    return ProjectImpl.divideByLanguage(getSourcesConfiguration());
                 }
                 
                 public List<Configuration> getDependencies() {
@@ -228,7 +257,7 @@ public class AnalyzeMakeLog extends BaseDwarfProvider {
                             set = detectMakeLog(project);
                         }
                         if (set != null && set.length() > 0) {
-                            myFileProperties = getSourceFileProperties(new String[]{set});
+                            myFileProperties = getSourceFileProperties(new String[]{set},null);
                         }
                     }
                     return myFileProperties;
@@ -252,8 +281,8 @@ public class AnalyzeMakeLog extends BaseDwarfProvider {
                                 break;
                             }
                             File file = new File(path);
-                            if (file.exists()) {
-                                unique.add(FileUtil.normalizeFile(file).getAbsolutePath());
+                            if (CndFileUtils.exists(file)) {
+                                unique.add(CndFileUtils.normalizeFile(file).getAbsolutePath());
                             }
                         }
                         myIncludedFiles = new ArrayList<String>(unique);

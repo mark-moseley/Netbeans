@@ -46,8 +46,16 @@ import java.io.DataOutput;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.Charset;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.queries.FileEncodingQuery;
+import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.netbeans.modules.cnd.utils.cache.FilePathCache;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 
 /**
  *
@@ -57,13 +65,17 @@ public abstract class AbstractFileBuffer implements FileBuffer {
     private final CharSequence absPath;
     
     protected AbstractFileBuffer(File file) {
-        this.absPath = FilePathCache.getString(file.getAbsolutePath());
+        this.absPath = FilePathCache.getManager().getString(file.getAbsolutePath());
     }
 
     public void addChangeListener(ChangeListener listener) {
     }
 
     public void removeChangeListener(ChangeListener listener) {
+    }
+
+    public CharSequence getAbsolutePath() {
+        return absPath;
     }
 
     public File getFile() {
@@ -73,6 +85,22 @@ public abstract class AbstractFileBuffer implements FileBuffer {
     public abstract int getLength();
     public abstract String getText(int start, int end) throws IOException;
     public abstract String getText() throws IOException;
+    
+    public final Reader getReader() throws IOException {
+        File file = getFile();
+        // file must be normalized
+        FileObject fo = FileUtil.toFileObject(file);
+        Charset encoding;
+        if (fo != null) {
+            encoding = FileEncodingQuery.getEncoding(fo);
+        } else {
+            encoding = FileEncodingQuery.getDefaultEncoding();
+        }
+        InputStream is = getInputStream();
+        Reader reader = new InputStreamReader(is, encoding);
+        return reader;
+    }
+    
     public abstract InputStream getInputStream() throws IOException;
     public abstract boolean isFileBased();
     public abstract long lastModified();
@@ -82,11 +110,11 @@ public abstract class AbstractFileBuffer implements FileBuffer {
     
     protected void write(DataOutput output) throws IOException {
         assert this.absPath != null;
-        output.writeUTF(this.absPath.toString());
+        PersistentUtils.writeUTF(absPath, output);
     }  
     
     protected AbstractFileBuffer(DataInput input) throws IOException {
-        this.absPath = FilePathCache.getString(input.readUTF());
+        this.absPath = PersistentUtils.readUTF(input, FilePathCache.getManager());
         assert this.absPath != null;
     }    
 }

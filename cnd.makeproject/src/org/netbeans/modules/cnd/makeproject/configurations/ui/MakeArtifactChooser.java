@@ -54,6 +54,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.cnd.makeproject.api.MakeArtifact;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.netbeans.spi.project.ui.support.ProjectChooser;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
@@ -173,7 +174,7 @@ public class MakeArtifactChooser extends JPanel implements PropertyChangeListene
         }
         
         try {            
-            File normProjectDir = FileUtil.normalizeFile(projectDir);
+            File normProjectDir = CndFileUtils.normalizeFile(projectDir);
             FileObject fo = FileUtil.toFileObject(normProjectDir);
             if (fo != null) {
                 return ProjectManager.getDefault().findProject(fo);
@@ -210,7 +211,9 @@ public class MakeArtifactChooser extends JPanel implements PropertyChangeListene
                             artifacts[i].getOutput().endsWith(".lib") || // NOI18N
                             artifacts[i].getOutput().endsWith(".dll")) || // NOI18N
                         artifacts[i].getConfigurationType() == MakeArtifact.TYPE_DYNAMIC_LIB ||
-                        artifacts[i].getConfigurationType() == MakeArtifact.TYPE_STATIC_LIB) {
+                        artifacts[i].getConfigurationType() == MakeArtifact.TYPE_STATIC_LIB ||
+                        artifacts[i].getConfigurationType() == MakeArtifact.TYPE_QT_DYNAMIC_LIB ||
+                        artifacts[i].getConfigurationType() == MakeArtifact.TYPE_QT_STATIC_LIB) {
                         model.addElement(artifacts[i]);
                     }
                 }
@@ -257,7 +260,7 @@ public class MakeArtifactChooser extends JPanel implements PropertyChangeListene
         if ( option == JFileChooser.APPROVE_OPTION ) {
 
             File dir = chooser.getSelectedFile();
-            dir = FileUtil.normalizeFile (dir);
+            dir = CndFileUtils.normalizeFile (dir);
             Project selectedProject = accessory.getProject( dir );
 
             if ( selectedProject == null ) {

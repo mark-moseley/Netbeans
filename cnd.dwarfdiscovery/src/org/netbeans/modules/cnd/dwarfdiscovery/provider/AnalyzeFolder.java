@@ -52,10 +52,12 @@ import java.util.Set;
 import org.netbeans.modules.cnd.discovery.api.Configuration;
 import org.netbeans.modules.cnd.discovery.api.ProjectProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
-import org.netbeans.modules.cnd.discovery.api.ProjectUtil;
+import org.netbeans.modules.cnd.discovery.api.DiscoveryUtils;
+import org.netbeans.modules.cnd.discovery.api.Progress;
+import org.netbeans.modules.cnd.discovery.api.ProjectImpl;
 import org.netbeans.modules.cnd.discovery.api.ProviderProperty;
 import org.netbeans.modules.cnd.discovery.api.SourceFileProperties;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -63,6 +65,7 @@ import org.openide.util.Utilities;
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.discovery.api.DiscoveryProvider.class)
 public class AnalyzeFolder extends BaseDwarfProvider {
     private Map<String,ProviderProperty> myProperties = new HashMap<String,ProviderProperty>();
     public static final String FOLDER_KEY = "folder"; // NOI18N
@@ -177,7 +180,7 @@ public class AnalyzeFolder extends BaseDwarfProvider {
         return 0;
     }
     
-    public List<Configuration> analyze(ProjectProxy project) {
+    public List<Configuration> analyze(ProjectProxy project, final Progress progress) {
         isStoped = false;
         List<Configuration> confs = new ArrayList<Configuration>();
         setCommpilerSettings(project);
@@ -186,7 +189,7 @@ public class AnalyzeFolder extends BaseDwarfProvider {
                 private List<SourceFileProperties> myFileProperties;
                 private List<String> myIncludedFiles;
                 public List<ProjectProperties> getProjectConfiguration() {
-                    return divideByLanguage(getSourcesConfiguration());
+                    return ProjectImpl.divideByLanguage(getSourcesConfiguration());
                 }
                 
                 public List<Configuration> getDependencies() {
@@ -196,10 +199,16 @@ public class AnalyzeFolder extends BaseDwarfProvider {
                 public List<SourceFileProperties> getSourcesConfiguration() {
                     if (myFileProperties == null){
                         Set<String> set = getObjectFiles((String)getProperty(FOLDER_KEY).getValue());
+                        if (progress != null) {
+                            progress.start(set.size());
+                        }
                         if (set.size() > 0) {
-                            myFileProperties = getSourceFileProperties(set.toArray(new String[set.size()]));
+                            myFileProperties = getSourceFileProperties(set.toArray(new String[set.size()]), progress);
                         } else {
                             myFileProperties = new ArrayList<SourceFileProperties>();
+                        }
+                        if (progress != null) {
+                            progress.done();
                         }
                     }
                     return myFileProperties;
@@ -221,8 +230,8 @@ public class AnalyzeFolder extends BaseDwarfProvider {
                                 break;
                             }
                             File file = new File(path);
-                            if (file.exists()) {
-                                unique.add(FileUtil.normalizeFile(file).getAbsolutePath());
+                            if (CndFileUtils.exists(file)) {
+                                unique.add(CndFileUtils.normalizeFile(file).getAbsolutePath());
                             }
                         }
                         myIncludedFiles = new ArrayList<String>(unique);
@@ -244,7 +253,7 @@ public class AnalyzeFolder extends BaseDwarfProvider {
                 break;
             }
             File d = new File((String)it.next());
-            if (d.isDirectory()){
+            if (d.exists() && d.isDirectory() && d.canRead()){
                 File[] ff = d.listFiles();
                 for (int i = 0; i < ff.length; i++) {
                     if (ff[i].isFile()) {
@@ -287,8 +296,8 @@ public class AnalyzeFolder extends BaseDwarfProvider {
         if (isStoped) {
             return;
         }
-        if (d.isDirectory()){
-            if (ProjectUtil.ignoreFolder(d)){
+        if (d.exists() && d.isDirectory() && d.canRead()){
+            if (DiscoveryUtils.ignoreFolder(d)){
                 return;
             }
             String path = d.getAbsolutePath();

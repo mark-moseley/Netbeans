@@ -48,25 +48,45 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.modelimpl.textcache.DefaultCache;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
+import org.netbeans.modules.cnd.utils.cache.FilePathCache;
 
 /**
  *
  * @author Alexander Simon
  */
 public class SourceRootContainer {
-    private Map<String,Integer> projectRoots = new ConcurrentHashMap<String,Integer>();
+    private Map<CharSequence,Integer> projectRoots = new ConcurrentHashMap<CharSequence,Integer>();
     
     public SourceRootContainer() {
     }
     
     public boolean isMySource(String includePath){
-        return projectRoots.containsKey(includePath);
+        if (projectRoots.containsKey(DefaultCache.getManager().getString(includePath))){
+            return true;
+        }
+        while (true){
+            int i = includePath.lastIndexOf('\\');
+            if (i <= 0) {
+                i = includePath.lastIndexOf('/');
+            }
+            if (i <= 0) {
+                return false;
+            }
+            includePath = includePath.substring(0,i);
+            Integer val = projectRoots.get(DefaultCache.getManager().getString(includePath));
+            if (val != null) {
+                if (val > Integer.MAX_VALUE/4) {
+                    return true;
+                }
+            }
+        }
     }
     
     public void fixFolder(String path){
         if (path != null) {
-            projectRoots.put(path,new Integer(Integer.MAX_VALUE/2));
+            projectRoots.put(FilePathCache.getManager().getString(path), Integer.MAX_VALUE / 2);
         }
     }
     
@@ -76,8 +96,8 @@ public class SourceRootContainer {
         }
     }
     
-    public void addFile(File file){
-        File parentFile = FileUtil.normalizeFile(file).getParentFile();
+    private void addFile(File file){
+        File parentFile = CndFileUtils.normalizeFile(file).getParentFile();
         String path = parentFile.getAbsolutePath();
         addPath(path);
         String canonicalPath;
@@ -92,29 +112,30 @@ public class SourceRootContainer {
     }
     
     private void addPath(final String path) {
-        Integer integer = projectRoots.get(path);
-        if (integer == null){
-            projectRoots.put(path,new Integer(1));
+        CharSequence added = FilePathCache.getManager().getString(path);
+        Integer integer = projectRoots.get(added);
+        if (integer == null) {
+            projectRoots.put(added, 1);
         } else {
-            projectRoots.put(path, new Integer(integer.intValue()+1));
+            projectRoots.put(added, integer + 1);
         }
     }
     
-    public void removeSources(List<NativeFileItem> items){
-        for( NativeFileItem nativeFileItem : items ) {
-            removeFile(nativeFileItem.getFile());
-        }
-    }
-    
-    public void removeFile(File file){
-        String path = FileUtil.normalizeFile(file).getParent();
-        Integer integer = projectRoots.get(path);
-        if (integer != null){
-            if (integer.intValue()>1) {
-                projectRoots.put(path, new Integer(integer.intValue()-1));
-            } else {
-                projectRoots.remove(path);
-            }
-        }
-    }
+//    public void removeSources(List<NativeFileItem> items){
+//        for( NativeFileItem nativeFileItem : items ) {
+//            removeFile(nativeFileItem.getFile());
+//        }
+//    }
+//
+//    private void removeFile(File file){
+//        String path = FileUtil.normalizeFile(file).getParent();
+//        Integer integer = projectRoots.get(path);
+//        if (integer != null) {
+//            if (integer.intValue() > 1) {
+//                projectRoots.put(path, integer - 1);
+//            } else {
+//                projectRoots.remove(path);
+//            }
+//        }
+//    }
 }

@@ -45,21 +45,23 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import org.netbeans.modules.cnd.discovery.api.DiscoveryProvider;
-import org.netbeans.modules.cnd.discovery.api.ItemProperties;
-import org.netbeans.modules.cnd.discovery.api.ProjectProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
-import org.netbeans.modules.cnd.discovery.api.ProjectUtil;
+import org.netbeans.modules.cnd.discovery.api.DiscoveryUtils;
+import org.netbeans.modules.cnd.discovery.api.Progress;
 import org.netbeans.modules.cnd.discovery.api.ProviderProperty;
 import org.netbeans.modules.cnd.discovery.api.SourceFileProperties;
 import org.netbeans.modules.cnd.dwarfdump.CompilationUnit;
 import org.netbeans.modules.cnd.dwarfdump.Dwarf;
 import org.netbeans.modules.cnd.dwarfdump.dwarfconsts.LANG;
 import org.netbeans.modules.cnd.dwarfdump.exception.WrongFileFormatException;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
+import org.openide.util.Exceptions;
+import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 
 /**
@@ -84,82 +86,97 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
     public void stop() {
         isStoped = true;
     }
-    
-    protected List<ProjectProperties> divideByLanguage(List<SourceFileProperties> sources){
-        DwarfProject cProp = null;
-        DwarfProject cppProp = null;
-        for (SourceFileProperties source : sources) {
-            ItemProperties.LanguageKind lang = source.getLanguageKind();
-            DwarfProject current = null;
-            if (lang == ItemProperties.LanguageKind.C){
-                if (cProp == null) {
-                    cProp = new DwarfProject(lang);
-                }
-                current = cProp;
-            } else {
-                if (cppProp == null) {
-                    cppProp = new DwarfProject(lang);
-                }
-                current = cppProp;
-            }
-            current.update(source);
-        }
-        List<ProjectProperties> languages = new ArrayList<ProjectProperties>();
-        if (cProp != null) {
-            languages.add(cProp);
-        }
-        if (cppProp != null) {
-            languages.add(cppProp);
-        }
-        return languages;
+
+    private int getNumberThreads(){
+        int threadCount = Integer.getInteger("cnd.modelimpl.parser.threads", // NOI18N
+                Runtime.getRuntime().availableProcessors()).intValue(); // NOI18N
+        threadCount = Math.min(threadCount, 4);
+        return Math.max(threadCount, 1);
     }
-    
-    protected List<SourceFileProperties> getSourceFileProperties(String[] objFileName){
+
+    protected List<SourceFileProperties> getSourceFileProperties(String[] objFileName, Progress progress){
+        CountDownLatch countDownLatch = new CountDownLatch(objFileName.length);
+        RequestProcessor rp = new RequestProcessor("Parallel analyzing", getNumberThreads()); // NOI18N
         try{
-            HashMap<String,SourceFileProperties> map = new HashMap<String,SourceFileProperties>();
+            Map<String,SourceFileProperties> map = new ConcurrentHashMap<String,SourceFileProperties>();
             for (String file : objFileName) {
-                if (isStoped) {
-                    break;
-                }
-                for(SourceFileProperties f : getSourceFileProperties(file, map)){
-                    if (isStoped) {
-                        break;
-                    }
-                    ProviderProperty p = getProperty(RESTRICT_SOURCE_ROOT);
-                    if (p != null) {
-                        String s = (String)p.getValue();
-                        if (!f.getItemPath().startsWith(s)){
-                            continue;
-                        }
-                    }
-                    p = getProperty(RESTRICT_COMPILE_ROOT);
-                    if (p != null) {
-                        String s = (String)p.getValue();
-                        if (!f.getCompilePath().startsWith(s)){
-                            continue;
-                        }
-                    }
-                    
-                    String name = f.getItemPath();
-                    if (new File(name).exists()){
-                        SourceFileProperties existed = map.get(name);
-                        if (existed == null) {
-                            map.put(name,f);
-                        } else {
-                            // Duplicated
-                            if (existed.getUserInludePaths().size() < f.getUserInludePaths().size()){
-                                map.put(name,f);
-                            }
-                        }
-                    }
-                }
+                MyRunnable r = new MyRunnable(countDownLatch, file, map, progress);
+                rp.post(r);
+            }
+            try {
+                countDownLatch.await();
+            } catch (InterruptedException ex) {
+                Exceptions.printStackTrace(ex);
             }
             List<SourceFileProperties> list = new ArrayList<SourceFileProperties>();
             list.addAll(map.values());
             return list;
         } finally {
             PathCache.dispose();
+            grepBase.clear();
         }
+    }
+
+    private boolean processObjectFile(String file, Map<String, SourceFileProperties> map, Progress progress) {
+        if (isStoped) {
+            return true;
+        }
+        String restrictSourceRoot = null;
+        ProviderProperty p = getProperty(RESTRICT_SOURCE_ROOT);
+        if (p != null) {
+            String s = (String) p.getValue();
+            if (s.length() > 0) {
+                restrictSourceRoot = CndFileUtils.normalizeFile(new File(s)).getAbsolutePath();
+            }
+        }
+        String restrictCompileRoot = null;
+        p = getProperty(RESTRICT_COMPILE_ROOT);
+        if (p != null) {
+            String s = (String) p.getValue();
+            if (s.length() > 0) {
+                restrictCompileRoot = CndFileUtils.normalizeFile(new File(s)).getAbsolutePath();
+            }
+        }
+        for (SourceFileProperties f : getSourceFileProperties(file, map)) {
+            if (isStoped) {
+                break;
+            }
+            String name = f.getItemPath();
+            if (name == null) {
+                continue;
+            }
+            if (restrictSourceRoot != null) {
+                if (!name.startsWith(restrictSourceRoot)) {
+                    continue;
+                }
+            }
+            if (restrictCompileRoot != null) {
+                if (f.getCompilePath() != null && !f.getCompilePath().startsWith(restrictCompileRoot)) {
+                    continue;
+                }
+            }
+            if (new File(name).exists()) {
+                SourceFileProperties existed = map.get(name);
+                if (existed == null) {
+                    map.put(name, f);
+                } else {
+                    // Duplicated
+                    if (existed.getUserInludePaths().size() < f.getUserInludePaths().size()) {
+                        map.put(name, f);
+                    }
+                }
+            } else {
+                if (FULL_TRACE) {
+                    System.out.println("Not Exist " + name); // NOI18N
+                } //NOI18N
+            }
+        }
+        if (progress != null) {
+            synchronized(progress) {
+                progress.increment();
+            }
+        }
+        return false;
     }
     
     protected int sizeComilationUnit(String objFileName){
@@ -202,11 +219,11 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         return res;
     }
     
-    private List<SourceFileProperties> getSourceFileProperties(String objFileName, HashMap<String,SourceFileProperties> map){
+    protected List<SourceFileProperties> getSourceFileProperties(String objFileName, Map<String,SourceFileProperties> map){
         List<SourceFileProperties> list = new ArrayList<SourceFileProperties>();
         Dwarf dump = null;
         try{
-            if (FULL_TRACE) System.out.println("Process file "+objFileName);  // NOI18N
+            if (FULL_TRACE) {System.out.println("Process file "+objFileName);}  // NOI18N
             dump = new Dwarf(objFileName);
             List <CompilationUnit> units = dump.getCompilationUnits();
             if (units != null && units.size() > 0) {
@@ -215,12 +232,12 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
                         break;
                     }
                     if (cu.getRoot() == null || cu.getSourceFileName() == null) {
-                        if (TRACE_READ_EXCEPTIONS) System.out.println("Compilation unit has broken name in file "+objFileName);  // NOI18N
+                        if (TRACE_READ_EXCEPTIONS) {System.out.println("Compilation unit has broken name in file "+objFileName);}  // NOI18N
                         continue;
                     }
                     String lang = cu.getSourceLanguage();
                     if (lang == null) {
-                        if (TRACE_READ_EXCEPTIONS) System.out.println("Compilation unit has unresolved language in file "+objFileName);  // NOI18N
+                        if (TRACE_READ_EXCEPTIONS) {System.out.println("Compilation unit has unresolved language in file "+objFileName+ "for "+cu.getSourceFileName());}  // NOI18N
                         continue;
                     }
                     DwarfSource source = null;
@@ -231,35 +248,40 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
                     } else if (LANG.DW_LANG_C_plus_plus.toString().equals(lang)) {
                         source = new DwarfSource(cu,true,getCommpilerSettings(), grepBase);
                     } else {
-                        if (FULL_TRACE) System.out.println("Unknown language: "+lang);  // NOI18N
+                        if (FULL_TRACE) {System.out.println("Unknown language: "+lang);}  // NOI18N
                         // Ignore other languages
                     }
                     if (source != null) {
                         String name = source.getItemPath();
                         SourceFileProperties old = map.get(name);
                         if (old != null && old.getUserInludePaths().size() > 0) {
-                            if (FULL_TRACE) System.out.println("Compilation unit already exist. Skip "+name);  // NOI18N
+                            if (FULL_TRACE) {System.out.println("Compilation unit already exist. Skip "+name);}  // NOI18N
                             // do not process processed item
                             continue;
                         }
                         source.process(cu);
+                        if (source.getCompilePath() == null){
+                            if (TRACE_READ_EXCEPTIONS) {System.out.println("Compilation unit has NULL compile path in file "+objFileName);}  // NOI18N
+                            continue;
+                        }
                         list.add(source);
                     }
                 }
             } else {
-                if (TRACE_READ_EXCEPTIONS) System.out.println("There are no compilation units in file "+objFileName);  // NOI18N
+                if (TRACE_READ_EXCEPTIONS) {System.out.println("There are no compilation units in file "+objFileName);}  // NOI18N
             }
         } catch (FileNotFoundException ex) {
             // Skip Exception
-            if (TRACE_READ_EXCEPTIONS) System.out.println("File not found "+objFileName+": "+ex.getMessage());  // NOI18N
+            if (TRACE_READ_EXCEPTIONS) {System.out.println("File not found "+objFileName+": "+ex.getMessage());}  // NOI18N
         } catch (WrongFileFormatException ex) {
-            if (TRACE_READ_EXCEPTIONS) System.out.println("Unsuported format of file "+objFileName+": "+ex.getMessage());  // NOI18N
-            ProviderProperty p = getProperty(RESTRICT_COMPILE_ROOT);
-            String root = "";
-            if (p != null) {
-                root = (String)p.getValue();
-            }
-            list = new LogReader(objFileName, root).getResults();
+            if (TRACE_READ_EXCEPTIONS) {System.out.println("Unsuported format of file "+objFileName+": "+ex.getMessage());}  // NOI18N
+            // XXX: OpenSolaris trick not needed due to opening AnalyzeMakeLog to public
+//            ProviderProperty p = getProperty(RESTRICT_COMPILE_ROOT);
+//            String root = "";
+//            if (p != null) {
+//                root = (String)p.getValue();
+//            }
+//            list = AnalyzeMakeLog.runLogReader(objFileName, root);
         } catch (IOException ex) {
             if (TRACE_READ_EXCEPTIONS){
                 System.err.println("Exception in file "+objFileName);  // NOI18N
@@ -278,7 +300,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         return list;
     }
 
-    private Map<String,List<String>> grepBase = new HashMap<String,List<String>>();
+    private Map<String,List<String>> grepBase = new ConcurrentHashMap<String, List<String>>();
     
     public CompilerSettings getCommpilerSettings(){
         return myCommpilerSettings;
@@ -294,17 +316,17 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         private List<String> systemIncludePathsCpp;
         private Map<String,String> systemMacroDefinitionsC;
         private Map<String,String> systemMacroDefinitionsCpp;
-        private Map<String,String> normalizedPaths = new HashMap<String,String>();
+        private Map<String,String> normalizedPaths = new ConcurrentHashMap<String, String>();
         private String compileFlavor;
-        private String compileDirectory;
+        private String cygwinDriveDirectory;
         
         public CompilerSettings(ProjectProxy project){
-            systemIncludePathsCpp = ProjectUtil.getSystemIncludePaths(project, true);
-            systemIncludePathsC = ProjectUtil.getSystemIncludePaths(project,false);
-            systemMacroDefinitionsCpp = ProjectUtil.getSystemMacroDefinitions(project, true);
-            systemMacroDefinitionsC = ProjectUtil.getSystemMacroDefinitions(project,false);
-            compileFlavor = ProjectUtil.getCompilerFlavor(project);
-            compileDirectory = ProjectUtil.getCompilerDirectory(project);
+            systemIncludePathsCpp = DiscoveryUtils.getSystemIncludePaths(project, true);
+            systemIncludePathsC = DiscoveryUtils.getSystemIncludePaths(project,false);
+            systemMacroDefinitionsCpp = DiscoveryUtils.getSystemMacroDefinitions(project, true);
+            systemMacroDefinitionsC = DiscoveryUtils.getSystemMacroDefinitions(project,false);
+            compileFlavor = DiscoveryUtils.getCompilerFlavor(project);
+            cygwinDriveDirectory = DiscoveryUtils.getCygwinDrive(project);
         }
         
         public List<String> getSystemIncludePaths(boolean isCPP) {
@@ -333,7 +355,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         }
 
         private String normalizePath(String path){
-            path = FileUtil.normalizeFile(new File(path)).getAbsolutePath();
+            path = CndFileUtils.normalizeFile(new File(path)).getAbsolutePath();
             if (Utilities.isWindows()) {
                 path = path.replace('\\', '/');
             }
@@ -344,8 +366,32 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
             return compileFlavor;
         }
 
-        public String getCompileDirectory() {
-            return compileDirectory;
+        public String getCygwinDrive() {
+            return cygwinDriveDirectory;
+        }
+    }
+
+    private class MyRunnable implements Runnable {
+        private String file;
+        private Map<String, SourceFileProperties> map;
+        private Progress progress;
+        private CountDownLatch countDownLatch;
+
+        private MyRunnable(CountDownLatch countDownLatch, String file, Map<String, SourceFileProperties> map, Progress progress){
+            this.file = file;
+            this.map = map;
+            this.progress = progress;
+            this.countDownLatch = countDownLatch;
+        }
+        public void run() {
+            try {
+                if (!isStoped) {
+                    Thread.currentThread().setName("Parallel analyzing "+file); // NOI18N
+                    processObjectFile(file, map, progress);
+                }
+            } finally {
+                countDownLatch.countDown();
+            }
         }
     }
 }
