@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.apisupport.project.universe;
 
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
@@ -48,7 +49,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.text.MessageFormat;
 import java.util.ArrayList;
@@ -56,7 +56,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -65,9 +64,11 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
+import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.apisupport.project.ManifestManager;
 import org.netbeans.modules.apisupport.project.Util;
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.openide.ErrorManager;
@@ -85,22 +86,22 @@ import org.openide.util.NbBundle;
  *
  * @author Jesse Glick
  */
-public final class NbPlatform {
+public final class NbPlatform implements SourceRootsProvider, JavadocRootsProvider {
     
     private static final String PLATFORM_PREFIX = "nbplatform."; // NOI18N
     private static final String PLATFORM_DEST_DIR_SUFFIX = ".netbeans.dest.dir"; // NOI18N
     private static final String PLATFORM_LABEL_SUFFIX = ".label"; // NOI18N
-    private static final String PLATFORM_SOURCES_SUFFIX = ".sources"; // NOI18N
-    private static final String PLATFORM_JAVADOC_SUFFIX = ".javadoc"; // NOI18N
+    public static final String PLATFORM_SOURCES_SUFFIX = ".sources"; // NOI18N
+    public static final String PLATFORM_JAVADOC_SUFFIX = ".javadoc"; // NOI18N
     private static final String PLATFORM_HARNESS_DIR_SUFFIX = ".harness.dir"; // NOI18N
     public static final String PLATFORM_ID_DEFAULT = "default"; // NOI18N
     
-    public static final String PROP_SOURCE_ROOTS = "sourceRoots"; // NOI18N
-    
     private static Set<NbPlatform> platforms;
     
-    private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
-    
+    private final PropertyChangeSupport pcs;
+    private final SourceRootsSupport srs;
+    private final JavadocRootsSupport jrs;
+
     // should proceed in chronological order so we can do compatibility tests with >=
     /** Unknown version - platform might be invalid, or just predate any 5.0 release version. */
     public static final int HARNESS_VERSION_UNKNOWN = 0;
@@ -114,6 +115,10 @@ public final class NbPlatform {
     public static final int HARNESS_VERSION_60 = 4;
     /** Harness version found in 6.1. */
     public static final int HARNESS_VERSION_61 = 5;
+    /** Harness version found in 6.5. */
+    public static final int HARNESS_VERSION_65 = 6;
+    /** Harness version found in 6.7. */
+    public static final int HARNESS_VERSION_67 = 7;
     
     /**
      * Reset cached info so unit tests can start from scratch.
@@ -153,7 +158,7 @@ public final class NbPlatform {
                     } else {
                         harness = findHarness(destdirF);
                     }
-                    platforms.add(new NbPlatform(id, label, destdirF, harness, findURLs(sources), findURLs(javadoc)));
+                    platforms.add(new NbPlatform(id, label, destdirF, harness, Util.findURLs(sources), Util.findURLs(javadoc)));
                     foundDefault |= id.equals(PLATFORM_ID_DEFAULT);
                 }
             }
@@ -215,32 +220,6 @@ public final class NbPlatform {
     }
     
     /**
-     * Get any sources which should by default be associated with the default platform.
-     */
-    private static URL[] defaultPlatformSources(File loc) {
-        if (loc.getName().equals("netbeans") && loc.getParentFile().getName().equals("nbbuild")) { // NOI18N
-            try {
-                return new URL[] {loc.getParentFile().getParentFile().toURI().toURL()};
-            } catch (MalformedURLException e) {
-                assert false : e;
-            }
-        }
-        return new URL[0];
-    }
-    
-    /**
-     * Get any Javadoc which should by default be associated with the default platform.
-     */
-    private static URL[] defaultPlatformJavadoc() {
-        File apidocsZip = InstalledFileLocator.getDefault().locate("docs/NetBeansAPIs.zip", "org.netbeans.modules.apisupport.apidocs", true); // NOI18N
-        if (apidocsZip != null) {
-            return new URL[] {Util.urlForJar(apidocsZip)};
-        } else {
-            return new URL[0];
-        }
-    }
-    
-    /**
      * Find a platform by its ID.
      * @param id an ID (as in {@link #getID})
      * @return the platform with that ID, or null
@@ -265,6 +244,9 @@ public final class NbPlatform {
      */
     public static synchronized NbPlatform getPlatformByDestDir(File destDir) {
         for (NbPlatform p : getPlatformsInternal()) {
+            // DEBUG only
+            int dif = p.getDestDir().compareTo(destDir);
+           
             if (p.getDestDir().equals(destDir)) {
                 return p;
             }
@@ -275,7 +257,7 @@ public final class NbPlatform {
             if (parent != null && parent.getName().equals("nbbuild")) { // NOI18N
                 File superparent = parent.getParentFile();
                 if (superparent != null && ModuleList.isNetBeansOrg(superparent)) {
-                    sources = new URL[] {Util.urlForDir(superparent)};
+                    sources = new URL[] {FileUtil.urlForArchiveOrDir(superparent)};
                 }
             }
         }
@@ -367,7 +349,7 @@ public final class NbPlatform {
             throw (IOException) e.getException();
         }
         NbPlatform plaf = new NbPlatform(id, label, FileUtil.normalizeFile(destdir), harness,
-                findURLs(null), findURLs(null));
+                Util.findURLs(null), Util.findURLs(null));
         synchronized (NbPlatform.class) {
             getPlatformsInternal().add(plaf);
         }
@@ -383,7 +365,7 @@ public final class NbPlatform {
             // Common case.
             String plafDestDir = PLATFORM_PREFIX + id + PLATFORM_DEST_DIR_SUFFIX;
             props.setProperty(harnessDirKey, "${" + plafDestDir + "}/" + harness.getName()); // NOI18N
-        } else if (harness.equals(getDefaultPlatform().getHarnessLocation())) {
+        } else if (getDefaultPlatform() != null && harness.equals(getDefaultPlatform().getHarnessLocation())) {
             // Also common.
             props.setProperty(harnessDirKey, "${" + PLATFORM_PREFIX + PLATFORM_ID_DEFAULT + PLATFORM_HARNESS_DIR_SUFFIX + "}"); // NOI18N
         } else {
@@ -421,9 +403,7 @@ public final class NbPlatform {
     private String label;
     private File nbdestdir;
     private File harness;
-    private URL[] sourceRoots;
     private URL[] javadocRoots;
-    private List<ModuleList> listsForSources;
     private int harnessVersion = -1;
     
     private NbPlatform(String id, String label, File nbdestdir, File harness, URL[] sources, URL[] javadoc) {
@@ -431,21 +411,22 @@ public final class NbPlatform {
         this.label = label;
         this.nbdestdir = nbdestdir;
         this.harness = harness;
-        this.sourceRoots = sources;
         this.javadocRoots = javadoc;
-    }
-    
-    static URL[] findURLs(final String path) {
-        if (path == null) {
-            return new URL[0];
-        }
-        String[] pieces = PropertyUtils.tokenizePath(path);
-        URL[] urls = new URL[pieces.length];
-        for (int i = 0; i < pieces.length; i++) {
-            // XXX perhaps also support http: URLs somehow?
-            urls[i] = Util.urlForDirOrJar(FileUtil.normalizeFile(new File(pieces[i])));
-        }
-        return urls;
+        pcs = new PropertyChangeSupport(this);
+        srs = new SourceRootsSupport(sources, this);
+        srs.addPropertyChangeListener(new PropertyChangeListener() {
+            public void propertyChange(PropertyChangeEvent evt) {
+                // re-fire
+                pcs.firePropertyChange(evt);
+            }
+        });
+        jrs = new JavadocRootsSupport(javadoc, this);
+        jrs.addPropertyChangeListener(new PropertyChangeListener() {
+            public void propertyChange(PropertyChangeEvent evt) {
+                // re-fire
+                pcs.firePropertyChange(evt);
+            }
+        });
     }
     
     /**
@@ -457,7 +438,7 @@ public final class NbPlatform {
     public String getID() {
         return id;
     }
-    
+
     /**
      * Check if this is the default platform.
      * @return true for the one default platform
@@ -502,25 +483,78 @@ public final class NbPlatform {
         this.nbdestdir = destdir;
         // XXX write build.properties too
     }
-    
+
+    /**
+     * Get javadoc which should by default be associated with the default platform.
+     */
+    public URL[] getDefaultJavadocRoots() {
+        if (! isDefault())
+            return null;
+        // javadoc can be built in the meantime, don't cache
+        File apidocsZip = InstalledFileLocator.getDefault().locate("docs/NetBeansAPIs.zip", "org.netbeans.modules.apisupport.apidocs", true); // NOI18N
+        if (apidocsZip != null) {
+            return new URL[] {FileUtil.urlForArchiveOrDir(apidocsZip)};
+        }
+        return new URL[0];
+    }
+
+    public void addJavadocRoot(URL root) throws IOException {
+        jrs.addJavadocRoot(root);
+    }
+
+    public URL[] getJavadocRoots() {
+        return jrs.getJavadocRoots();
+    }
+
+    public void moveJavadocRootDown(int indexToDown) throws IOException {
+        jrs.moveJavadocRootDown(indexToDown);
+    }
+
+    public void moveJavadocRootUp(int indexToUp) throws IOException {
+        jrs.moveJavadocRootUp(indexToUp);
+    }
+
+    public void removeJavadocRoots(URL[] urlsToRemove) throws IOException {
+        jrs.removeJavadocRoots(urlsToRemove);
+    }
+
+    public void setJavadocRoots(URL[] roots) throws IOException {
+        putGlobalProperty(
+                PLATFORM_PREFIX + getID() + PLATFORM_JAVADOC_SUFFIX,
+                Util.urlsToAntPath(roots));
+        jrs.setJavadocRoots(roots);
+    }
+
+    private URL[] defaultSourceRoots;
+
+    /**
+     * Get any sources which should by default be associated with the default platform.
+     */
+    public URL[] getDefaultSourceRoots() {
+        if (! isDefault())
+            return null;
+        // location of platform won't change, safe to cache
+        if (defaultSourceRoots != null)
+            return defaultSourceRoots;
+        File loc = getDestDir();
+        if (loc.getName().equals("netbeans") && loc.getParentFile().getName().equals("nbbuild")) { // NOI18N
+            try {
+                defaultSourceRoots = new URL[] {loc.getParentFile().getParentFile().toURI().toURL()};
+            } catch (MalformedURLException e) {
+                assert false : e;
+            }
+        }
+        defaultSourceRoots = new URL[0];
+        return defaultSourceRoots;
+    }
+
     /**
      * Get associated source roots for this platform.
      * Each root could be a netbeans.org source checkout or a module suite project directory.
      * @return a list of source root URLs (may be empty but not null)
      */
     public URL[] getSourceRoots() {
-        if (sourceRoots.length == 0 && isDefault()) {
-            return defaultPlatformSources(getDestDir());
-        } else {
-            return sourceRoots;
-        }
-    }
-    
-    private void maybeUpdateDefaultPlatformSources() {
-        if (sourceRoots.length == 0 && isDefault()) {
-            sourceRoots = defaultPlatformSources(getDestDir());
-            pcs.firePropertyChange(PROP_SOURCE_ROOTS, null, null);
-        }
+        return srs.getSourceRoots();
     }
     
     /**
@@ -529,11 +563,7 @@ public final class NbPlatform {
      * PropertyUtils#putGlobalProperties})
      */
     public void addSourceRoot(URL root) throws IOException {
-        maybeUpdateDefaultPlatformSources();
-        URL[] newSourceRoots = new URL[sourceRoots.length + 1];
-        System.arraycopy(sourceRoots, 0, newSourceRoots, 0, sourceRoots.length);
-        newSourceRoots[sourceRoots.length] = root;
-        setSourceRoots(newSourceRoots);
+        srs.addSourceRoot(root);
     }
     
     /**
@@ -542,122 +572,22 @@ public final class NbPlatform {
      * PropertyUtils#putGlobalProperties})
      */
     public void removeSourceRoots(URL[] urlsToRemove) throws IOException {
-        maybeUpdateDefaultPlatformSources();
-        Collection<URL> newSources = new ArrayList<URL>(Arrays.asList(sourceRoots));
-        newSources.removeAll(Arrays.asList(urlsToRemove));
-        URL[] sources = new URL[newSources.size()];
-        setSourceRoots(newSources.toArray(sources));
+        srs.removeSourceRoots(urlsToRemove);
     }
     
     public void moveSourceRootUp(int indexToUp) throws IOException {
-        maybeUpdateDefaultPlatformSources();
-        if (indexToUp <= 0) {
-            return; // nothing needs to be done
-        }
-        URL[] newSourceRoots = new URL[sourceRoots.length];
-        System.arraycopy(sourceRoots, 0, newSourceRoots, 0, sourceRoots.length);
-        newSourceRoots[indexToUp - 1] = sourceRoots[indexToUp];
-        newSourceRoots[indexToUp] = sourceRoots[indexToUp - 1];
-        setSourceRoots(newSourceRoots);
+        srs.moveSourceRootUp(indexToUp);
     }
     
     public void moveSourceRootDown(int indexToDown) throws IOException {
-        maybeUpdateDefaultPlatformSources();
-        if (indexToDown >= (sourceRoots.length - 1)) {
-            return; // nothing needs to be done
-        }
-        URL[] newSourceRoots = new URL[sourceRoots.length];
-        System.arraycopy(sourceRoots, 0, newSourceRoots, 0, sourceRoots.length);
-        newSourceRoots[indexToDown + 1] = sourceRoots[indexToDown];
-        newSourceRoots[indexToDown] = sourceRoots[indexToDown + 1];
-        setSourceRoots(newSourceRoots);
+        srs.moveSourceRootDown(indexToDown);
     }
     
     public void setSourceRoots(URL[] roots) throws IOException {
         putGlobalProperty(
                 PLATFORM_PREFIX + getID() + PLATFORM_SOURCES_SUFFIX,
-                urlsToAntPath(roots));
-        sourceRoots = roots;
-        pcs.firePropertyChange(PROP_SOURCE_ROOTS, null, null);
-        listsForSources = null;
-    }
-    
-    /**
-     * Get associated Javadoc roots for this platform.
-     * Each root may contain some Javadoc sets in the usual format as subdirectories,
-     * where the subdirectory is named acc. to the code name base of the module it
-     * is documenting (using '-' in place of '.').
-     * @return a list of Javadoc root URLs (may be empty but not null)
-     */
-    public URL[] getJavadocRoots() {
-        if (javadocRoots.length == 0 && isDefault()) {
-            return defaultPlatformJavadoc();
-        } else {
-            return javadocRoots;
-        }
-    }
-    
-    private void maybeUpdateDefaultPlatformJavadoc() {
-        if (javadocRoots.length == 0 && isDefault()) {
-            javadocRoots = defaultPlatformJavadoc();
-        }
-    }
-    
-    /**
-     * Add given javadoc root to the current javadoc root list and save the
-     * result into the global properties in the <em>userdir</em> (see {@link
-     * PropertyUtils#putGlobalProperties})
-     */
-    public void addJavadocRoot(URL root) throws IOException {
-        maybeUpdateDefaultPlatformJavadoc();
-        URL[] newJavadocRoots = new URL[javadocRoots.length + 1];
-        System.arraycopy(javadocRoots, 0, newJavadocRoots, 0, javadocRoots.length);
-        newJavadocRoots[javadocRoots.length] = root;
-        setJavadocRoots(newJavadocRoots);
-    }
-    
-    /**
-     * Remove given javadoc roots from the current javadoc root list and save
-     * the result into the global properties in the <em>userdir</em> (see
-     * {@link PropertyUtils#putGlobalProperties})
-     */
-    public void removeJavadocRoots(URL[] urlsToRemove) throws IOException {
-        maybeUpdateDefaultPlatformJavadoc();
-        Collection<URL> newJavadocs = new ArrayList<URL>(Arrays.asList(javadocRoots));
-        newJavadocs.removeAll(Arrays.asList(urlsToRemove));
-        URL[] javadocs = new URL[newJavadocs.size()];
-        setJavadocRoots(newJavadocs.toArray(javadocs));
-    }
-    
-    public void moveJavadocRootUp(int indexToUp) throws IOException {
-        maybeUpdateDefaultPlatformJavadoc();
-        if (indexToUp <= 0) {
-            return; // nothing needs to be done
-        }
-        URL[] newJavadocRoots = new URL[javadocRoots.length];
-        System.arraycopy(javadocRoots, 0, newJavadocRoots, 0, javadocRoots.length);
-        newJavadocRoots[indexToUp - 1] = javadocRoots[indexToUp];
-        newJavadocRoots[indexToUp] = javadocRoots[indexToUp - 1];
-        setJavadocRoots(newJavadocRoots);
-    }
-    
-    public void moveJavadocRootDown(int indexToDown) throws IOException {
-        maybeUpdateDefaultPlatformJavadoc();
-        if (indexToDown >= (javadocRoots.length - 1)) {
-            return; // nothing needs to be done
-        }
-        URL[] newJavadocRoots = new URL[javadocRoots.length];
-        System.arraycopy(javadocRoots, 0, newJavadocRoots, 0, javadocRoots.length);
-        newJavadocRoots[indexToDown + 1] = javadocRoots[indexToDown];
-        newJavadocRoots[indexToDown] = javadocRoots[indexToDown + 1];
-        setJavadocRoots(newJavadocRoots);
-    }
-    
-    public void setJavadocRoots(URL[] roots) throws IOException {
-        putGlobalProperty(
-                PLATFORM_PREFIX + getID() + PLATFORM_JAVADOC_SUFFIX,
-                urlsToAntPath(roots));
-        javadocRoots = roots;
+                Util.urlsToAntPath(roots));
+        srs.setSourceRoots(roots);
     }
     
     /**
@@ -666,25 +596,6 @@ public final class NbPlatform {
      */
     public boolean isValid() {
         return NbPlatform.isPlatformDirectory(getDestDir());
-    }
-    
-    static String urlsToAntPath(final URL[] urls) {
-        StringBuffer path = new StringBuffer();
-        for (int i = 0; i < urls.length; i++) {
-            if (urls[i].getProtocol().equals("jar")) { // NOI18N
-                path.append(urlToAntPath(FileUtil.getArchiveFile(urls[i])));
-            } else {
-                path.append(urlToAntPath(urls[i]));
-            }
-            if (i != urls.length - 1) {
-                path.append(':'); // NOI18N
-            }
-        }
-        return path.toString();
-    }
-    
-    private static String urlToAntPath(final URL url) {
-        return new File(URI.create(url.toExternalForm())).getAbsolutePath();
     }
     
     private void putGlobalProperty(final String key, final String value) throws IOException {
@@ -712,68 +623,39 @@ public final class NbPlatform {
      * @return the directory of sources for this module (a project directory), or null
      */
     public File getSourceLocationOfModule(File jar) {
-        if (listsForSources == null) {
-            listsForSources = new ArrayList<ModuleList>();
-            for (URL u : getSourceRoots()) {
-                if (!u.getProtocol().equals("file")) { // NOI18N
-                    continue;
-                }
-                File dir = new File(URI.create(u.toExternalForm()));
-                if (dir.isDirectory()) {
-                    try {
-                        if (ModuleList.isNetBeansOrg(dir)) {
-                            listsForSources.add(ModuleList.findOrCreateModuleListFromNetBeansOrgSources(dir));
-                        } else {
-                            listsForSources.add(ModuleList.findOrCreateModuleListFromSuiteWithoutBinaries(dir));
-                        }
-                    } catch (IOException e) {
-                        Util.err.notify(ErrorManager.INFORMATIONAL, e);
-                    }
-                }
-            }
-        }
-        for (ModuleList l : listsForSources) {
-            for (ModuleEntry entry : l.getAllEntriesSoft()) {
-                // XXX should be more strict (e.g. compare also clusters)
-                if (!entry.getJarLocation().getName().equals(jar.getName())) {
-                    continue;
-                }
-                File src = entry.getSourceLocation();
-                if (src != null && src.isDirectory()) {
-                    return src;
-                }
-            }
-            for (ModuleEntry entry : l.getAllEntries()) {
-                if (!entry.getJarLocation().getName().equals(jar.getName())) {
-                    continue;
-                }
-                File src = entry.getSourceLocation();
-                if (src != null && src.isDirectory()) {
-                    return src;
-                }
-            }
-        }
-        return null;
+        return srs.getSourceLocationOfModule(jar);
     }
     
     /**
      * Returns (naturally sorted) array of all module entries pertaining to
      * <code>this</code> NetBeans platform. This is just a convenient delegate
      * to the {@link ModuleList#findOrCreateModuleListFromBinaries}.
+     *
+     * This may be a time-consuming method, consider using much faster
+     * ModuleList#getModules instead, which doesn't sort the modules. Do not call
+     * from AWT thread (not checked so that it may be used in tests).
      */
-    public ModuleEntry[] getModules() {
+    public ModuleEntry[] getSortedModules() {
+        SortedSet<ModuleEntry> set = new TreeSet<ModuleEntry>(getModules());
+        ModuleEntry[] entries = new ModuleEntry[set.size()];
+        set.toArray(entries);
+        return entries;
+    }
+
+    /**
+     * Returns a set of all module entries pertaining to
+     * <code>this</code> NetBeans platform. This is just a convenient delegate
+     * to the {@link ModuleList#findOrCreateModuleListFromBinaries}.
+     */
+    public Set<ModuleEntry> getModules() {
         try {
-            SortedSet<ModuleEntry> set = new TreeSet<ModuleEntry>(
-                    ModuleList.findOrCreateModuleListFromBinaries(getDestDir()).getAllEntriesSoft());
-            ModuleEntry[] entries = new ModuleEntry[set.size()];
-            set.toArray(entries);
-            return entries;
+            return ModuleList.findOrCreateModuleListFromBinaries(getDestDir()).getAllEntriesSoft();
         } catch (IOException e) {
             Util.err.notify(e);
-            return new ModuleEntry[0];
+            return Collections.emptySet();
         }
     }
-    
+
     /**
      * Gets a module from the platform by name.
      */
@@ -845,7 +727,10 @@ public final class NbPlatform {
             if (currVer == null) {
                 throw new IOException(coreJar.getAbsolutePath());
             }
-            implVers = jf.getManifest().getMainAttributes().getValue("OpenIDE-Module-Implementation-Version"); // NOI18N
+            implVers = jf.getManifest().getMainAttributes().getValue("OpenIDE-Module-Build-Version"); // NOI18N
+            if (implVers == null) {
+                implVers = jf.getManifest().getMainAttributes().getValue("OpenIDE-Module-Implementation-Version"); // NOI18N
+            }
             if (implVers == null) {
                 throw new IOException(coreJar.getAbsolutePath());
             }
@@ -960,7 +845,11 @@ public final class NbPlatform {
                     String spec = jf.getManifest().getMainAttributes().getValue(ManifestManager.OPENIDE_MODULE_SPECIFICATION_VERSION);
                     if (spec != null) {
                         SpecificationVersion v = new SpecificationVersion(spec);
-                        if (v.compareTo(new SpecificationVersion("1.11")) >= 0) { // NOI18N
+                        if (v.compareTo(new SpecificationVersion("1.14")) >= 0) { // NOI18N
+                            return harnessVersion = HARNESS_VERSION_67;
+                        } else if (v.compareTo(new SpecificationVersion("1.12")) >= 0) { // NOI18N
+                            return harnessVersion = HARNESS_VERSION_65;
+                        } else if (v.compareTo(new SpecificationVersion("1.11")) >= 0) { // NOI18N
                             return harnessVersion = HARNESS_VERSION_61;
                         } else if (v.compareTo(new SpecificationVersion("1.10")) >= 0) { // NOI18N
                             return harnessVersion = HARNESS_VERSION_60;
@@ -1038,6 +927,10 @@ public final class NbPlatform {
                 return NbBundle.getMessage(NbPlatform.class, "LBL_harness_version_6.0");
             case HARNESS_VERSION_61:
                 return NbBundle.getMessage(NbPlatform.class, "LBL_harness_version_6.1");
+            case HARNESS_VERSION_65:
+                return NbBundle.getMessage(NbPlatform.class, "LBL_harness_version_6.5");
+            case HARNESS_VERSION_67:
+                return NbBundle.getMessage(NbPlatform.class, "LBL_harness_version_6.7");
             default:
                 assert version == HARNESS_VERSION_UNKNOWN;
                 return NbBundle.getMessage(NbPlatform.class, "LBL_harness_version_unknown");
