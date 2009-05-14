@@ -41,15 +41,10 @@
 package org.openide.explorer.view;
 
 import org.openide.nodes.Node;
-import org.openide.util.WeakSet;
 
-import java.awt.Cursor;
 import java.awt.datatransfer.Transferable;
-import java.awt.dnd.DnDConstants; // TEMP
+import java.awt.dnd.DnDConstants;
 
-import java.util.Iterator;
-
-import javax.swing.JScrollPane;
 
 
 /**
@@ -69,7 +64,6 @@ final class ExplorerDnDManager {
     private Transferable draggedTransForCopy;
     private boolean isDnDActive = false;
     private int nodeAllowed = 0;
-    private Cursor cursor = null;
     private boolean maybeExternalDnD = false;
 
     /** Creates a new instance of <code>WindowsDnDManager</code>. */
@@ -116,7 +110,7 @@ final class ExplorerDnDManager {
 
     final int getNodeAllowedActions() {
         if( !isDnDActive && maybeExternalDnD )
-            return DnDConstants.ACTION_COPY;
+            return DnDConstants.ACTION_COPY_OR_MOVE;
         
         return nodeAllowed;
     }
@@ -145,13 +139,5 @@ final class ExplorerDnDManager {
 
     void setMaybeExternalDragAndDrop( boolean maybeExternalDnD ) {
         this.maybeExternalDnD = maybeExternalDnD;
-    }
-
-    void prepareCursor(Cursor c) {
-        this.cursor = c;
-    }
-
-    Cursor getCursor() {
-        return this.cursor;
     }
 }
