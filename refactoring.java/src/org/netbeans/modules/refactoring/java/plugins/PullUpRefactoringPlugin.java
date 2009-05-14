@@ -63,7 +63,6 @@ import org.netbeans.modules.refactoring.java.spi.JavaRefactoringPlugin;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.openide.filesystems.FileObject;
 import org.openide.util.NbBundle;
-import org.openide.util.NbBundle;
 
 
 /** Plugin that implements the core functionality of Pull Up refactoring.
@@ -102,25 +101,31 @@ public final class PullUpRefactoringPlugin extends JavaRefactoringPlugin {
                 // fatal error -> don't continue with further checks
                 return problem;
             }
-            if (!RetoucheUtils.isElementInOpenProject(treePathHandle.getFileObject())) {
-                return new Problem(true, NbBundle.getMessage(PullUpRefactoringPlugin.class, "ERR_ProjectNotOpened"));
-            }
-
 
             // increase progress (step 1)
             fireProgressListenerStep();
-            TypeElement e  = (TypeElement) treePathHandle.resolveElement(cc);
+            final Element elm = treePathHandle.resolveElement(cc);
+            problem = JavaPluginUtils.isSourceElement(elm, cc);
+            if (problem != null) {
+                return problem;
+            }
+            if (!(elm instanceof TypeElement)) {
+                return new Problem(true, NbBundle.getMessage(PushDownRefactoringPlugin.class, "ERR_PushDown_InvalidSource", treePathHandle, elm)); // NOI18N
+            }
+            TypeElement e  = (TypeElement) elm;
             if (RetoucheUtils.getSuperTypes(e, cc, true).isEmpty()) {
                 return new Problem(true, NbBundle.getMessage(PullUpRefactoringPlugin.class, "ERR_PullUp_NoSuperTypes")); // NOI18N
             }
             // increase progress (step 2)
             fireProgressListenerStep();
             // #2 - check if there are any members to pull up
-            Element el = treePathHandle.resolveElement(cc);
-            for (Element element : el.getEnclosedElements()) {
+            for (Element element : e.getEnclosedElements()) {
                 if (element.getKind() != ElementKind.CONSTRUCTOR) {
                     return null;
                 }
+            }
+            if (!e.getInterfaces().isEmpty()) {
+                return null;
             }
             problem = new Problem(true, NbBundle.getMessage(PullUpRefactoringPlugin.class, "ERR_PullUp_NoMembers")); // NOI18N
             // increase progress (step 3)
@@ -260,9 +265,9 @@ public final class PullUpRefactoringPlugin extends JavaRefactoringPlugin {
         a.add(RetoucheUtils.getFileObject(treePathHandle));
         fireProgressListenerStart(ProgressEvent.START, a.size());
         TransformTask task = new TransformTask(new PullUpTransformer(refactoring), treePathHandle);
-        createAndAddElements(a, task, refactoringElements, refactoring, cpInfo);
+        Problem problem = createAndAddElements(a, task, refactoringElements, refactoring, cpInfo);
         fireProgressListenerStop();
-        return null;
+        return problem;
     }
 
     protected FileObject getFileObject() {

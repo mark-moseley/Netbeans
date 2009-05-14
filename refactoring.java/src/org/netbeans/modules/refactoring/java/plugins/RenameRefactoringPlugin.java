@@ -58,7 +58,6 @@ import org.netbeans.modules.refactoring.java.RetoucheUtils;
 import org.netbeans.modules.refactoring.java.spi.JavaRefactoringPlugin;
 import org.openide.filesystems.FileObject;
 import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -95,7 +94,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
                         CompilationUnitTree cut = co.getCompilationUnit();
                         for (Tree t: cut.getTypeDecls()) {
                             Element e = co.getTrees().getElement(TreePath.getPath(cut, t));
-                            if (e.getSimpleName().toString().equals(co.getFileObject().getName())) {
+                            if (e!=null && e.getSimpleName().toString().equals(co.getFileObject().getName())) {
                                 treePathHandle = TreePathHandle.create(TreePath.getPath(cut, t), co);
                                 refactoring.getContext().add(co);
                                 break;
@@ -141,14 +140,9 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
         if (preCheckProblem != null) {
             return preCheckProblem;
         }
-        FileObject file = SourceUtils.getFile(el, info.getClasspathInfo());
-        if (file!=null && FileUtil.getArchiveFile(file)!= null) { //NOI18N
-            preCheckProblem = createProblem(preCheckProblem, true, getCannotRename(file));
-            return preCheckProblem;
-        }
-        
-        if (file==null || !RetoucheUtils.isElementInOpenProject(file)) {
-            preCheckProblem = new Problem(true, NbBundle.getMessage(RenameRefactoringPlugin.class, "ERR_ProjectNotOpened"));
+
+        preCheckProblem = JavaPluginUtils.isSourceElement(el, info);
+        if (preCheckProblem != null) {
             return preCheckProblem;
         }
         
@@ -163,7 +157,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
             }
             if (!overriddenByMethods.isEmpty()) {
                 String msg = new MessageFormat(getString("ERR_IsOverridden")).format(
-                        new Object[] {SourceUtils.getEnclosingTypeElement(el).getSimpleName().toString()});
+                        new Object[] {info.getElementUtilities().enclosingTypeElement(el).getSimpleName().toString()});
                 preCheckProblem = createProblem(preCheckProblem, false, msg);
             }
             for (ExecutableElement e : overriddenByMethods) {
@@ -198,7 +192,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
             fireProgressListenerStep();
             if (hiddenField != null) {
                 String msg = new MessageFormat(getString("ERR_Hides")).format(
-                        new Object[] {SourceUtils.getEnclosingTypeElement(hiddenField)}
+                        new Object[] {info.getElementUtilities().enclosingTypeElement(hiddenField)}
                 );
                 preCheckProblem = createProblem(preCheckProblem, false, msg);
             }
@@ -223,10 +217,6 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
         return preCheckProblem;
     }
     
-    private static final String getCannotRename(FileObject r) {
-        return new MessageFormat(NbBundle.getMessage(RenameRefactoringPlugin.class, "ERR_CannotRenameFile")).format(new Object[] {r.getNameExt()});
-    }
-    
     @Override
     protected Problem fastCheckParameters(CompilationController info) throws IOException {
         Problem fastCheckProblem = null;
@@ -242,7 +232,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
             boolean nameNotChanged = true;
             if (kind.isClass()) {
                 if (!((TypeElement) element).getNestingKind().isNested()) {
-                    nameNotChanged = info.getFileObject().getName().equals(element);
+                    nameNotChanged = info.getFileObject().getName().contentEquals(((TypeElement) element).getSimpleName());
                 }
             }
             if (nameNotChanged) {
@@ -283,19 +273,28 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
                     fastCheckProblem = createProblem(fastCheckProblem, true, msg);
                     return fastCheckProblem;
                 }
+                FileObject parentFolder = fo.getParent();
+                Enumeration enumeration = parentFolder.getFolders(false);
+                while (enumeration.hasMoreElements()) {
+                    FileObject subfolder = (FileObject) enumeration.nextElement();
+                    if (subfolder.getName().equals(newName)) {
+                        String msg = new MessageFormat(getString("ERR_ClassPackageClash")).format(
+                            new Object[] {newName, pkgname}
+                        );
+                        fastCheckProblem = createProblem(fastCheckProblem, true, msg);
+                        return fastCheckProblem;
+                    }
+                }
             }
             FileObject primFile = treePathHandle.getFileObject();
             FileObject folder = primFile.getParent();
-            FileObject[] children = folder.getChildren();
-            for (int x = 0; x < children.length; x++) {
-                if (children[x] != primFile && !children[x].isVirtual() && children[x].getName().equals(newName) && "java".equals(children[x].getExt())) { //NOI18N
-                    String msg = new MessageFormat(getString("ERR_ClassClash")).format(
-                            new Object[] {newName, folder.getPath()}
-                    );
-                    fastCheckProblem = createProblem(fastCheckProblem, true, msg);
-                    break;
-                }
-            } // for
+            FileObject existing = folder.getFileObject(newName, primFile.getExt());
+            if (existing != null && primFile != existing) {
+                // primFile != existing is check for case insensitive filesystems; #136434
+                String msg = NbBundle.getMessage(RenameRefactoringPlugin.class,
+                        "ERR_ClassClash", newName, folder.getPath());
+                fastCheckProblem = createProblem(fastCheckProblem, true, msg);
+            }
         } else if (kind == ElementKind.LOCAL_VARIABLE || kind == ElementKind.PARAMETER) {
             String msg = variableClashes(newName,treePath, info);
             if (msg != null) {
@@ -343,7 +342,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
             fireProgressListenerStep();
             if (hiddenField != null) {
                 msg = new MessageFormat(getString("ERR_WillHide")).format(
-                        new Object[] {SourceUtils.getEnclosingTypeElement(hiddenField).toString()}
+                        new Object[] {info.getElementUtilities().enclosingTypeElement(hiddenField).toString()}
                 );
                 checkProblem = createProblem(checkProblem, false, msg);
             }
@@ -384,7 +383,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
                     if (el instanceof TypeElement) {
                          enclosingType = ElementHandle.create((TypeElement)el);
                     } else {
-                         enclosingType = ElementHandle.create(SourceUtils.getEnclosingTypeElement(el));
+                         enclosingType = ElementHandle.create(info.getElementUtilities().enclosingTypeElement(el));
                     }
                     set.add(SourceUtils.getFile(el, info.getClasspathInfo()));
                     if (el.getModifiers().contains(Modifier.PRIVATE)) {
@@ -425,7 +424,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
     
     private void addMethods(ExecutableElement e, Set set, CompilationInfo info, ClassIndex idx) {
         set.add(SourceUtils.getFile(e, info.getClasspathInfo()));
-        ElementHandle<TypeElement> encl = ElementHandle.create(SourceUtils.getEnclosingTypeElement(e));
+        ElementHandle<TypeElement> encl = ElementHandle.create(info.getElementUtilities().enclosingTypeElement(e));
         set.addAll(idx.getResources(encl, EnumSet.of(ClassIndex.SearchKind.METHOD_REFERENCES),EnumSet.of(ClassIndex.SearchScope.SOURCE)));
         allMethods.add(ElementHandle.create(e));
     }
@@ -437,9 +436,9 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
         Set<FileObject> a = getRelevantFiles();
         fireProgressListenerStart(ProgressEvent.START, a.size());
         TransformTask transform = new TransformTask(new RenameTransformer(refactoring.getNewName(), allMethods, refactoring.isSearchInComments()), treePathHandle);
-        createAndAddElements(a, transform, elements, refactoring);
+        Problem problem = createAndAddElements(a, transform, elements, refactoring);
         fireProgressListenerStop();
-        return null;
+        return problem;
     }
 
     private static int getAccessLevel(Element e) {
@@ -513,9 +512,9 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
         }
     }
     private Element hides(Element field, String name, CompilationInfo info) {
-        TypeElement jc = SourceUtils.getEnclosingTypeElement(field);
         Elements elements = info.getElements();
         ElementUtilities utils = info.getElementUtilities();
+        TypeElement jc = utils.enclosingTypeElement(field);
         for (Element el:elements.getAllMembers(jc)) {
 //TODO:
 //            if (utils.willHide(el, field, name)) {
@@ -548,7 +547,7 @@ public class RenameRefactoringPlugin extends JavaRefactoringPlugin {
             );
         
         TreePath temp = tp;
-        while (temp.getLeaf().getKind() != Tree.Kind.METHOD) {
+        while (temp != null && temp.getLeaf().getKind() != Tree.Kind.METHOD) {
             Scope scope = info.getTrees().getScope(temp);
             for (Element el:scope.getLocalElements()) {
                 if (el.getSimpleName().toString().equals(newName)) {

@@ -95,14 +95,18 @@ public final class PushDownRefactoringPlugin extends JavaRefactoringPlugin {
                 // fatal error -> don't continue with further checks
                 return precheckProblem;
             }
-            if (!RetoucheUtils.isElementInOpenProject(treePathHandle.getFileObject())) {
-                return new Problem(true, NbBundle.getMessage(PushDownRefactoringPlugin.class, "ERR_ProjectNotOpened"));
-            }
-
 
             // increase progress (step 1)
             fireProgressListenerStep();
-            ElementHandle<TypeElement> eh = ElementHandle.create((TypeElement) treePathHandle.resolveElement(cc));
+            final Element el = treePathHandle.resolveElement(cc);
+            precheckProblem = JavaPluginUtils.isSourceElement(el, cc);
+            if (precheckProblem != null) {
+                return precheckProblem;
+            }
+            if (!(el instanceof TypeElement)) {
+                return new Problem(true, NbBundle.getMessage(PushDownRefactoringPlugin.class, "ERR_PushDown_InvalidSource", treePathHandle, el)); // NOI18N
+            }
+            ElementHandle<TypeElement> eh = ElementHandle.create((TypeElement) el);
             Set<FileObject> resources = cc.getClasspathInfo().getClassIndex().getResources(eh, EnumSet.of(ClassIndex.SearchKind.IMPLEMENTORS), EnumSet.of(ClassIndex.SearchScope.SOURCE));
             if (resources.isEmpty()) {
                 return new Problem(true, NbBundle.getMessage(PushDownRefactoringPlugin.class, "ERR_PushDOwn_NoSubtype")); // NOI18N
@@ -110,7 +114,6 @@ public final class PushDownRefactoringPlugin extends JavaRefactoringPlugin {
             // increase progress (step 2)
             fireProgressListenerStep();
             // #2 - check if there are any members to pull up
-            Element el = treePathHandle.resolveElement(cc);
             for (Element element : el.getEnclosedElements()) {
                 if (element.getKind() != ElementKind.CONSTRUCTOR) {
                     return null;
@@ -154,9 +157,9 @@ public final class PushDownRefactoringPlugin extends JavaRefactoringPlugin {
         fireProgressListenerStart(ProgressEvent.START, a.size());
         PushDownTransformer pdt = new PushDownTransformer(refactoring.getMembers()); 
         TransformTask task = new TransformTask(pdt, treePathHandle);
-        createAndAddElements(a, task, refactoringElements, refactoring);
+        Problem prob = createAndAddElements(a, task, refactoringElements, refactoring);
         fireProgressListenerStop();
-        return pdt.getProblem();    
+        return prob != null ? prob : pdt.getProblem();
     }
 
     protected FileObject getFileObject() {

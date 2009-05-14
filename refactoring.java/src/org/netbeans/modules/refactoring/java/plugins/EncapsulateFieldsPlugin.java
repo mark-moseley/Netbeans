@@ -64,6 +64,9 @@ import org.netbeans.modules.refactoring.java.api.EncapsulateFieldRefactoring;
 import org.netbeans.modules.refactoring.java.plugins.EncapsulateFieldRefactoringPlugin.EncapsulateDesc;
 import org.netbeans.modules.refactoring.java.plugins.EncapsulateFieldRefactoringPlugin.Encapsulator;
 import org.netbeans.modules.refactoring.java.spi.JavaRefactoringPlugin;
+import org.netbeans.modules.refactoring.java.ui.EncapsulateFieldPanel.InsertPoint;
+import org.netbeans.modules.refactoring.java.ui.EncapsulateFieldPanel.Javadoc;
+import org.netbeans.modules.refactoring.java.ui.EncapsulateFieldPanel.SortBy;
 import org.netbeans.modules.refactoring.java.ui.EncapsulateFieldsRefactoring;
 import org.netbeans.modules.refactoring.java.ui.EncapsulateFieldsRefactoring.EncapsulateFieldInfo;
 import org.openide.filesystems.FileObject;
@@ -127,6 +130,11 @@ public final class EncapsulateFieldsPlugin extends JavaRefactoringPlugin {
     @Override
     protected Problem preCheck(CompilationController javac) throws IOException {
         javac.toPhase(JavaSource.Phase.RESOLVED);
+        Problem preCheckProblem;
+        preCheckProblem = isElementAvail(refactoring.getSelectedObject(), javac);
+        if (preCheckProblem != null) {
+            return preCheckProblem;
+        }
         TreePath selectedField = refactoring.getSelectedObject().resolve(javac);
         if (selectedField == null) {
             return new Problem(true, NbBundle.getMessage(EncapsulateFieldsPlugin.class, "DSC_ElNotAvail"));
@@ -134,6 +142,10 @@ public final class EncapsulateFieldsPlugin extends JavaRefactoringPlugin {
 
         Element elm = javac.getTrees().getElement(selectedField);
         if (elm != null && ElementKind.FIELD == elm.getKind()) {
+            preCheckProblem = JavaPluginUtils.isSourceElement(elm, javac);
+            if (preCheckProblem != null) {
+                return preCheckProblem;
+            }
             TreePath source = javac.getTrees().getPath(elm);
             if (source == null) {
                 // missing sources with field declaration
@@ -150,6 +162,10 @@ public final class EncapsulateFieldsPlugin extends JavaRefactoringPlugin {
 
         TreePath clazz = RetoucheUtils.findEnclosingClass(javac, selectedField, true, false, true, false, false);
         TypeElement clazzElm = (TypeElement) javac.getTrees().getElement(clazz);
+        preCheckProblem = JavaPluginUtils.isSourceElement(clazzElm, javac);
+        if (preCheckProblem != null) {
+            return preCheckProblem;
+        }
         if (elm != clazzElm || clazzElm == null) {
             return new Problem(true, NbBundle.getMessage(EncapsulateFieldsPlugin.class, "ERR_EncapsulateWrongType"));
         }
@@ -171,6 +187,7 @@ public final class EncapsulateFieldsPlugin extends JavaRefactoringPlugin {
         Problem problem = null;
         Set<FileObject> references = new HashSet<FileObject>();
         List<EncapsulateDesc> descs = new ArrayList<EncapsulateDesc>(refactorings.size());
+        fireProgressListenerStart(ProgressEvent.START, refactorings.size() + 1);
         for (EncapsulateFieldRefactoringPlugin ref : refactorings) {
             if (cancelRequest) {
                 return null;
@@ -184,12 +201,18 @@ public final class EncapsulateFieldsPlugin extends JavaRefactoringPlugin {
             }
             descs.add(desc);
             references.addAll(desc.refs);
+            fireProgressListenerStep();
         }
 
-        Encapsulator encapsulator = new Encapsulator(descs, problem);
-        createAndAddElements(references, new TransformTask(encapsulator, descs.get(0).fieldHandle), elements, refactoring);
+        Encapsulator encapsulator = new Encapsulator(descs, problem,
+                refactoring.getContext().lookup(InsertPoint.class),
+                refactoring.getContext().lookup(SortBy.class),
+                refactoring.getContext().lookup(Javadoc.class)
+                );
+        Problem prob = createAndAddElements(references, new TransformTask(encapsulator, descs.get(0).fieldHandle), elements, refactoring);
+        fireProgressListenerStop();
         problem = encapsulator.getProblem();
-        return problem;
+        return prob != null ? prob : problem;
     }
     
     private void initRefactorings(Collection<EncapsulateFieldInfo> refactorFields, Set<Modifier> methodModifier, Set<Modifier> fieldModifier, boolean alwaysUseAccessors) {
