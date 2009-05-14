@@ -40,13 +40,13 @@
 package org.netbeans.modules.cnd.remote.sync;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
 import org.netbeans.modules.cnd.api.remote.RemoteSyncWorker;
 import org.netbeans.modules.cnd.remote.mapper.RemotePathMap;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
@@ -59,9 +59,11 @@ import org.netbeans.modules.nativeexecution.api.util.CommonTasksSupport;
 /*package-local*/ class ScpSyncWorker extends BaseSyncWorker implements RemoteSyncWorker {
 
     private Logger logger = Logger.getLogger("cnd.remote.logger"); // NOI18N
+    private FileFilter sharabilityFilter;
 
     public ScpSyncWorker(File localDir, ExecutionEnvironment executionEnvironment, PrintWriter out, PrintWriter err) {
         super(localDir, executionEnvironment, out, err);
+        sharabilityFilter = new SharabilityFilter();
     }
 
     protected String getRemoteSyncRoot() {
@@ -109,9 +111,10 @@ import org.netbeans.modules.nativeexecution.api.util.CommonTasksSupport;
         return false;
     }
 
-    /*package-local*/ void synchronizeImpl(String remoteDir) throws InterruptedException, ExecutionException, IOException {
+    /*package-local (for testing purposes, otherwise would be private) */
+    void synchronizeImpl(String remoteDir) throws InterruptedException, ExecutionException, IOException {
         CommonTasksSupport.mkDir(executionEnvironment, remoteDir, err);
-        for (File file : localDir.listFiles()) {
+        for (File file : localDir.listFiles(sharabilityFilter)) {
             synchronizeImpl(file, remoteDir);
         }
     }
@@ -126,7 +129,7 @@ import org.netbeans.modules.nativeexecution.api.util.CommonTasksSupport;
                 throw new IOException("creating directory " + remoteDir + " on " + executionEnvironment + // NOI18N
                         " finished with error code " + rc); // NOI18N
             }
-            for (File child : file.listFiles()) {
+            for (File child : file.listFiles(sharabilityFilter)) {
                 synchronizeImpl(child, remoteDir);
             }
         } else {
