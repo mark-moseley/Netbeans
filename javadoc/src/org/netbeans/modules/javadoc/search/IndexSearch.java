@@ -53,11 +53,13 @@ import javax.swing.ComboBoxModel;
 import javax.swing.DefaultListModel;
 import javax.swing.ImageIcon;
 import javax.swing.JSplitPane;
+import javax.swing.SwingUtilities;
 import org.netbeans.api.java.source.ElementHandle;
-import org.netbeans.api.java.source.UiUtils;
+import org.netbeans.api.java.source.ui.ElementOpen;
 import org.netbeans.api.javahelp.Help;
 import org.netbeans.modules.javadoc.settings.DocumentationSettings;
 import org.openide.awt.HtmlBrowser;
+import org.openide.util.ImageUtilities;
 import org.openide.windows.TopComponent;
 import org.openide.util.RequestProcessor;
 import org.openide.NotifyDescriptor;
@@ -103,8 +105,6 @@ public final class IndexSearch
     /* Hand made components */
     private javax.swing.JScrollPane resultsScrollPane;
     private javax.swing.JList resultsList;
-    //private HtmlBrowser.BrowserComponent quickBrowser;
-    private HtmlBrowser quickBrowser;
     private JSplitPane splitPanel;
 
     /** List models for different sorts */
@@ -186,13 +186,7 @@ public final class IndexSearch
 
         splitPanel.setTopComponent(resultsScrollPane);
 
-        // Quick browser component
-        quickBrowser = new HtmlBrowser( true, false );//.BrowserComponent( true, false );
-        quickBrowser.setEnableLocation( false );
-        quickBrowser.setEnableHome( false );
-        //browser buttons without border are too top
-        quickBrowser.setBorder(new javax.swing.border.EmptyBorder(new java.awt.Insets(8, 0, 0, 0)));
-        splitPanel.setBottomComponent(quickBrowser);
+        splitPanel.setBottomComponent(createBrowser());
 
         DefaultListModel listModel = new DefaultListModel(); // PENDING: Change to SortedArrayList
         resultsList.setModel( listModel );
@@ -204,7 +198,7 @@ public final class IndexSearch
             new javax.swing.event.ListSelectionListener() {
                 public void valueChanged( javax.swing.event.ListSelectionEvent evt ) {
                     if (!evt.getValueIsAdjusting()) {
-                        showHelp( true );
+                        showHelp();
                     }
                 }
             });
@@ -212,12 +206,12 @@ public final class IndexSearch
 
 
         
-        sourceButton.setIcon(new ImageIcon(Utilities.loadImage("org/netbeans/modules/javadoc/resources/showSource.gif"))); // NOI18N
-        byReferenceButton.setIcon(new ImageIcon(Utilities.loadImage("org/netbeans/modules/javadoc/resources/refSort.gif"))); // NOI18N
-        byTypeButton.setIcon(new ImageIcon(Utilities.loadImage("org/netbeans/modules/javadoc/resources/typeSort.gif"))); // NOI18N
-        byNameButton.setIcon(new ImageIcon(Utilities.loadImage("org/netbeans/modules/javadoc/resources/alphaSort.gif"))); // NOI18N
-        quickViewButton.setIcon(new ImageIcon(Utilities.loadImage("org/netbeans/modules/javadoc/resources/list_only.gif"))); // NOI18N
-        quickViewButton.setSelectedIcon(new ImageIcon(Utilities.loadImage("org/netbeans/modules/javadoc/resources/list_html.gif"))); // NOI18N
+        sourceButton.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/javadoc/resources/showSource.gif", false)); // NOI18N
+        byReferenceButton.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/javadoc/resources/refSort.gif", false)); // NOI18N
+        byTypeButton.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/javadoc/resources/typeSort.gif", false)); // NOI18N
+        byNameButton.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/javadoc/resources/alphaSort.gif", false)); // NOI18N
+        quickViewButton.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/javadoc/resources/list_only.gif", false)); // NOI18N
+        quickViewButton.setSelectedIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/javadoc/resources/list_html.gif", false)); // NOI18N
 
         javax.swing.ButtonGroup bg = new javax.swing.ButtonGroup();
         bg.add( byReferenceButton );
@@ -234,7 +228,6 @@ public final class IndexSearch
         sourceButton.setToolTipText(b.getString( "CTL_SEARCH_showSource_ToolTip" ));   //NOI18N
         searchComboBox.setToolTipText(b.getString( "ACS_SEARCH_SearchComboBoxA11yDesc" ));   //NOI18N
         resultsList.setToolTipText(b.getString( "ACS_SEARCH_ResultsListA11yDesc" ));   //NOI18N
-        quickBrowser.setToolTipText(b.getString( "ACS_SEARCH_QuickBrowserA11yDesc" ));   //NOI18N
         
         // Adding mnemonics
         if (!Utilities.isMac()) {
@@ -271,8 +264,6 @@ public final class IndexSearch
         searchComboBox.getAccessibleContext().setAccessibleDescription(b.getString("ACS_SEARCH_SearchComboBoxA11yDesc")); // NOI18N
         resultsList.getAccessibleContext().setAccessibleName(b.getString("ACS_SEARCH_ResultsListA11yName"));  // NOI18N
         resultsList.getAccessibleContext().setAccessibleDescription(b.getString("ACS_SEARCH_ResultsListA11yDesc")); // NOI18N
-        quickBrowser.getAccessibleContext().setAccessibleName(b.getString("ACS_SEARCH_QuickBrowserA11yName"));  // NOI18N
-        quickBrowser.getAccessibleContext().setAccessibleDescription(b.getString("ACS_SEARCH_QuickBrowserA11yDesc"));  // NOI18N
     }
     
     /** This method is called from within the constructor to
@@ -432,7 +423,7 @@ public final class IndexSearch
             splitPanel.setDividerLocation( oldSplit == 100 ? 0.5 : oldSplit / 100.0 );
             ds.setIdxSearchSplit( oldSplit == 100 ? 50 : oldSplit );
             ds.setIdxSearchNoHtml( false );
-            showHelp( true );
+            showHelp();
         }
         else {
             oldSplit = (int) (splitPanel.getDividerLocation() / splitPanel.getSize().getHeight() * 100);
@@ -453,7 +444,7 @@ public final class IndexSearch
         }
             else
             */
-            showHelp();
+            showHelpExternal();
         }
     }//GEN-LAST:event_resultsListKeyPressed
 
@@ -465,25 +456,80 @@ public final class IndexSearch
                 evt.consume();
             }
             else
-                showHelp();
+                showHelpExternal();
         }
     }//GEN-LAST:event_resultsListMouseClicked
 
-    private void showHelp(  ) {
-        showHelp( false );
+    private Object loadingToken;
+    private RequestProcessor.Task task=null;
+    /** Invokes the browser with help */
+    private void showHelp() {
+
+        loadingToken = new Object();
+        if( null != task ) {
+            task.cancel();
+        }
+        task = RequestProcessor.getDefault().create( new Runnable() {
+            public void run() {
+                SwingUtilities.invokeLater( new Runnable() {
+                    public void run() {
+                        doShowHelp( loadingToken );
+                    }
+                });
+            }
+        });
+        task.schedule(150);
     }
 
-    RequestProcessor.Task task=null;    
-    /** Invokes the browser with help */
-    private void showHelp( boolean quick ) {
-
-        if (quick && splitPanel.getDividerLocation() == 100 )
+    private final Object LOCK = new Object();
+    private void doShowHelp( Object token ) {
+        if( token != loadingToken )
             return;
+
+        synchronized( LOCK ) {
+            if (splitPanel.getDividerLocation() == 100 )
+                return;
+
+            if (  resultsList.getMinSelectionIndex() < 0 )
+                return;
+
+
+            DocIndexItem  dii = (DocIndexItem)resultsList.getModel().getElementAt( resultsList.getMinSelectionIndex() );
+
+            try {
+                URL url = dii.getURL();
+
+                if ( url == null )
+                    return;
+
+                // Workaround for bug in FileSystems
+                String strUrl = url.toString();
+
+                if ( strUrl.startsWith( "nbfs:" ) && strUrl.charAt( 5 ) != '/' ){ // NOI18N
+                    url = new URL( "nbfs:/" + strUrl.substring( 5 ) ); // NOI18N
+                }
+
+                HtmlBrowser browser = createBrowser();
+                browser.setURL(url);
+                int splitPosition = splitPanel.getDividerLocation();
+                if( token != loadingToken )
+                    return;
+                splitPanel.setBottomComponent(browser);
+                splitPanel.setDividerLocation(splitPosition);
+            }
+            catch ( java.net.MalformedURLException ex ) {
+                // Do nothing if the URL isn't O.K.
+            }
+        }
+    }
+
+        /** Invokes the browser with help */
+    private void showHelpExternal() {
 
         if (  resultsList.getMinSelectionIndex() < 0 )
             return;
 
-        
+
         DocIndexItem  dii = (DocIndexItem)resultsList.getModel().getElementAt( resultsList.getMinSelectionIndex() );
 
         try {
@@ -498,19 +544,8 @@ public final class IndexSearch
             if ( strUrl.startsWith( "nbfs:" ) && strUrl.charAt( 5 ) != '/' ){ // NOI18N
                 url = new URL( "nbfs:/" + strUrl.substring( 5 ) ); // NOI18N
             }
-            
-            if ( quick ){
-                final URL furl = url;
-                if( task != null )
-                    task.cancel();
-                task = RequestProcessor.getDefault().post( new Runnable(){
-                    public void run(){
-                        quickBrowser.setURL( furl );
-                    }
-                }, 650 );      
-            }
-            else
-                HtmlBrowser.URLDisplayer.getDefault().showURL( url );
+
+            HtmlBrowser.URLDisplayer.getDefault().showURL( url );
         }
         catch ( java.net.MalformedURLException ex ) {
             // Do nothing if the URL isn't O.K.
@@ -537,7 +572,7 @@ public final class IndexSearch
             if ( e != null ) {
                 FileObject toOpen = (FileObject) e[0];
                 ElementHandle eh = (ElementHandle) e[1];
-                UiUtils.open(toOpen, eh);
+                ElementOpen.open(toOpen, eh);
             }
             else {
                 NotifyDescriptor.Message nd = new NotifyDescriptor.Message( NbBundle.getMessage(IndexSearch.class, "MSG_SEARCH_SrcNotFound" ) );   //NOI18N
@@ -656,7 +691,7 @@ public final class IndexSearch
             refIndexSearch = new SoftReference(indexSearch);
 
             indexSearch.setName( NbBundle.getMessage(IndexSearch.class, "CTL_SEARCH_WindowTitle") );   //NOI18N
-            indexSearch.setIcon(Utilities.loadImage("org/netbeans/modules/javadoc/resources/searchDoc.gif")); // NOI18N
+            indexSearch.setIcon(ImageUtilities.loadImage("org/netbeans/modules/javadoc/resources/searchDoc.gif")); // NOI18N
         }
         return indexSearch;
     }
@@ -795,5 +830,19 @@ public final class IndexSearch
         resultsList.invalidate();
         resultsList.revalidate();
         resultsList.repaint();
+    }
+
+    private HtmlBrowser createBrowser() {
+        // Quick browser component
+        HtmlBrowser quickBrowser = new HtmlBrowser( true, false );//.BrowserComponent( true, false );
+        quickBrowser.setEnableLocation( false );
+        quickBrowser.setEnableHome( false );
+        //browser buttons without border are too top
+        quickBrowser.setBorder(new javax.swing.border.EmptyBorder(new java.awt.Insets(8, 0, 0, 0)));
+        quickBrowser.setToolTipText(NbBundle.getMessage(IndexSearch.class, "ACS_SEARCH_QuickBrowserA11yDesc" ));   //NOI18N
+        quickBrowser.getAccessibleContext().setAccessibleName(NbBundle.getMessage(IndexSearch.class, "ACS_SEARCH_QuickBrowserA11yName"));  // NOI18N
+        quickBrowser.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(IndexSearch.class, "ACS_SEARCH_QuickBrowserA11yDesc"));  // NOI18N
+
+        return quickBrowser;
     }
 }
