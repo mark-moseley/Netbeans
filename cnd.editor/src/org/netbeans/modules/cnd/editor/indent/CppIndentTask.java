@@ -40,6 +40,7 @@ package org.netbeans.modules.cnd.editor.indent;
 
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
+import org.netbeans.api.lexer.Token;
 import org.netbeans.cnd.api.lexer.CndLexerUtilities;
 import org.netbeans.cnd.api.lexer.CppTokenId;
 import org.netbeans.modules.cnd.editor.api.CodeStyle;
@@ -107,8 +108,32 @@ public class CppIndentTask extends IndentSupport implements IndentTask {
             // leave untouched for now, (bug#22570)
             return -1;
         }
+        //if ((dotPos >= 1 && DocumentUtilities.getText(doc).charAt(dotPos-1) != '\\')
+        //    || (dotPos >= 2 && DocumentUtilities.getText(doc).charAt(dotPos-2) == '\\')) {
+        if (token.getTokenID() == CppTokenId.STRING_LITERAL || token.getTokenID() == CppTokenId.CHAR_LITERAL) {
+            int start = token.getTokenSequence().offset();
+            Token<CppTokenId> tok = token.getTokenSequence().token();
+            if (start < caretOffset && caretOffset < start + tok.length()) {
+                // if insede literal
+                if (caretOffset >= start + 2 && tok.text().charAt(caretOffset - start - 2) == '\\') {
+                    if (!(caretOffset > start + 2 && tok.text().charAt(caretOffset - start - 3) == '\\')) {
+                        return -1;
+                    }
+                }
+            }
+        }
+        if (token.getTokenID() == CppTokenId.NEW_LINE) {
+            TokenItem prev = token.getPrevious();
+            if (prev != null && prev.getTokenID() == CppTokenId.ESCAPED_LINE) {
+                return -1;
+            }
+        }
+
         if (token.getTokenID() == CppTokenId.BLOCK_COMMENT || token.getTokenID() == CppTokenId.DOXYGEN_COMMENT){
             if (isMultiLineComment(token)) {
+                if (caretOffset == token.getTokenSequence().offset()){
+                    return findIndent(token);
+                }
                 // Indent the inner lines of the multi-line comment by one
                 if (!getFormatLeadingStarInComment()) {
                     return findIndent(token) + 1;
@@ -331,12 +356,19 @@ public class CppIndentTask extends IndentSupport implements IndentTask {
                                 case PROTECTED:
                                     indent = getTokenIndent(tt) + getShiftWidth();
                                     break;
+                                case FOR:
+                                    if (alignMultilineFor()) {
+                                        TokenItem lparen = getLeftParen(t, tt);
+                                        if (lparen != null){
+                                            return getTokenColumn(lparen)+1;
+                                        }
+                                    }
+                                    indent = getTokenIndent(tt) + getFormatStatementContinuationIndent();
+                                    break;
                                 default:
                                     indent = getTokenIndent(tt);
                                     break;
                             }
-                        } else {
-                            indent = getTokenIndent(tt);
                         }
                         break;
 
@@ -446,6 +478,9 @@ public class CppIndentTask extends IndentSupport implements IndentTask {
                         if (isEnumComma(t)) {
                             indent = getTokenIndent(t);
                             break;
+                        } else if (isFieldComma(t)) {
+                            indent = getTokenIndent(t);
+                            break;
                         }
                         indent = computeStatementIndent(t);
                         break;
@@ -502,6 +537,15 @@ public class CppIndentTask extends IndentSupport implements IndentTask {
                         }
                     }
                 }
+            } else if ( (stmtStart.getTokenID() == CppTokenId.IF && alignMultilineIf()) ||
+                        (stmtStart.getTokenID() == CppTokenId.WHILE && alignMultilineWhile()) ||
+                        (stmtStart.getTokenID() == CppTokenId.FOR && alignMultilineFor())) {
+                if (t != null){
+                    TokenItem lparen = getLeftParen(t, stmtStart);
+                    if (lparen != null){
+                        return getTokenColumn(lparen)+1;
+                    }
+                }
             } else if (!isStatement(stmtStart)){
                 return indent;
             }
@@ -510,9 +554,32 @@ public class CppIndentTask extends IndentSupport implements IndentTask {
         return indent;
     }
 
-    // for testing
+    // for services
     public CppIndentTask(Document doc) {
         this.doc = doc;
+    }
+
+    /**
+     * returns indentation for line containing given offset
+     * @param offset offset on line
+     * @return indentation of line containing offset
+     */
+    public int getLineIndentation(int caretOffset) {
+        if (codeStyle == null) {
+            codeStyle = CodeStyle.getDefault(doc);
+        }
+        int lineOffset;
+        try {
+            lineOffset = IndentUtils.lineStartOffset(doc, caretOffset);
+        } catch (BadLocationException ex) {
+            return 0;
+        }
+        ts = CndLexerUtilities.getCppTokenSequence(doc, lineOffset, false, false);
+        if (ts == null) {
+            return 0;
+        }
+        int indent = indentLine(new TokenItem(ts, true), caretOffset);
+        return indent;
     }
 
     // for testing
