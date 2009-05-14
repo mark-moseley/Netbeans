@@ -42,6 +42,7 @@
 package org.netbeans.modules.autoupdate.updateprovider;
 
 import java.io.BufferedInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -52,6 +53,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,9 +89,34 @@ public class AutoupdateCatalogParser extends DefaultHandler {
     private AutoupdateCatalogParser (Map<String, UpdateItem> items, AutoupdateCatalogProvider provider, URI base) {
         this.items = items;
         this.provider = provider;
-        this.entityResolver = org.netbeans.updater.XMLUtil.createAUResolver ();
+        this.entityResolver = newEntityResolver();
         this.baseUri = base;
     }
+
+    private EntityResolver newEntityResolver () {
+        try {
+            Class.forName("org.netbeans.updater.XMLUtil");
+        } catch (ClassNotFoundException e) {
+            final File netbeansHomeFile = new File(System.getProperty("netbeans.home"));
+            final File userdir = new File(System.getProperty("netbeans.user"));
+
+            final String updaterPath = "modules/ext/updater.jar";
+
+            final File updaterPlatform = new File(netbeansHomeFile, updaterPath);
+            final File updaterUserdir  = new File(userdir, updaterPath);
+
+            String message =
+                    "    org.netbeans.updater.XMLUtil is not accessible\n" +
+                    "    platform dir = " + netbeansHomeFile.getAbsolutePath() + "\n" +
+                    "    userdir  dir = " + userdir.getAbsolutePath() + "\n" +
+                    "    updater in platform exist = " + updaterPlatform.exists() + (updaterPlatform.exists() ? (", length = " + updaterPlatform.length() + " bytes") : "") + "\n" +
+                    "    updater in userdir  exist = " + updaterUserdir.exists() + (updaterUserdir.exists() ? (", length = " + updaterUserdir.length() + " bytes") : "") + "\n";
+
+            ERR.log(Level.WARNING, message);
+        }
+        return org.netbeans.updater.XMLUtil.createAUResolver ();
+    }
+
     
     private static final Logger ERR = Logger.getLogger (AutoupdateCatalogParser.class.getName ());
     
@@ -118,6 +145,7 @@ public class AutoupdateCatalogParser extends DefaultHandler {
     private static final String MODULE_ATTR_EAGER = "eager"; // NOI18N
     private static final String MODULE_ATTR_AUTOLOAD = "autoload"; // NOI18N
     private static final String MODULE_ATTR_LICENSE = "license"; // NOI18N
+    private static final String LICENSE_ATTR_URL = "url"; // NOI18N
     
     private static final String MANIFEST_ATTR_SPECIFICATION_VERSION = "OpenIDE-Module-Specification-Version"; // NOI18N
     
@@ -170,18 +198,35 @@ public class AutoupdateCatalogParser extends DefaultHandler {
     }
     
     private static InputSource getInputSource(URL toParse, AutoupdateCatalogProvider p, URI base) {
-        try {
-            InputStream is;
+        InputStream is = null;
+        try {            
+            is = toParse.openStream ();
             if (isGzip (p)) {
-                is = new BufferedInputStream (new GZIPInputStream (toParse.openStream ()));
-            } else {
-                is = new BufferedInputStream (toParse.openStream ());
+                try {
+                    is = new GZIPInputStream(is);
+                } catch (IOException e) {
+                    ERR.log (Level.INFO,
+                            "The file at " + toParse +
+                            ", corresponding to the catalog at " + p.getUpdateCenterURL() +
+                            ", does not look like the gzip file, trying to parse it as the pure xml" , e);
+                    //#150034
+                    // Sometimes the .xml.gz file is downloaded as the pure .xml file due to the strange content-encoding processing
+                    is.close();
+                    is = null;
+                    is = toParse.openStream();
+                }
             }
-            InputSource src = new InputSource(is);
+            InputSource src = new InputSource(new BufferedInputStream (is));
             src.setSystemId(base.toString());
             return src;
         } catch (IOException ex) {
-            ERR.log (Level.SEVERE, null, ex);
+            if(is != null) {
+                try {
+                    is.close();
+                } catch (IOException e) {
+                }
+            }
+            ERR.log (Level.SEVERE, "Cannot estabilish input stream for " + toParse , ex);
             return new InputSource();
         }
     }
@@ -189,7 +234,7 @@ public class AutoupdateCatalogParser extends DefaultHandler {
     private Stack<String> currentGroup = new Stack<String> ();
     private String catalogDate;
     private Stack<ModuleDescriptor> currentModule = new Stack<ModuleDescriptor> ();
-    private Stack<String> currentLicense = new Stack<String> ();
+    private Stack<Map <String,String>> currentLicense = new Stack<Map <String,String>> ();
     private Stack<String> currentNotificationUrl = new Stack<String> ();
     private Map<String, UpdateLicenseImpl> name2license = new HashMap<String, UpdateLicenseImpl> ();
     private List<String> lines = new ArrayList<String> ();
@@ -255,23 +300,24 @@ public class AutoupdateCatalogParser extends DefaultHandler {
                 break;
             case license :
                 assert ! currentLicense.empty () : "Premature end of license " + qName;
-                
-                if (! lines.isEmpty ()) {
-
-                    // find and fill UpdateLicenseImpl
-                    StringBuffer sb = new StringBuffer (bufferInitSize);
-                    for (String line : lines) {
-                        sb.append (line);
+                Map <String, String> curLic = currentLicense.peek ();
+                String licenseName = curLic.keySet().iterator().next();
+                Collection<String> values = curLic.values();
+                String licenseUrl = (values.size() > 0) ? values.iterator().next() : null;
+                UpdateLicenseImpl updateLicenseImpl = this.name2license.get (licenseName);
+                if (updateLicenseImpl == null) {
+                    ERR.info("Unpaired license " + licenseName + " without any module.");
+                } else {
+                    if (!lines.isEmpty()) {
+                        // find and fill UpdateLicenseImpl
+                        StringBuffer sb = new StringBuffer(bufferInitSize);
+                        for (String line : lines) {
+                            sb.append(line);
+                        }
+                        updateLicenseImpl.setAgreement(sb.toString());
+                    } else if (licenseUrl != null) {
+                        updateLicenseImpl.setUrl(getDistribution(licenseUrl, baseUri));
                     }
-                    UpdateLicenseImpl updateLicenseImpl = this.name2license.get (currentLicense.peek ());
-                    // in invalid catalog might be a un-paired license
-                    // assert updateLicenseImpl != null : "UpdateLicenseImpl found in map for key " + currentLicense.peek ();
-                    if (updateLicenseImpl != null) {
-                        updateLicenseImpl.setAgreement (sb.toString ());
-                    } else {
-                        ERR.info ("Unpaired license " + currentLicense.peek () + " without any module.");
-                    }
-
                 }
                 
                 currentLicense.pop ();
@@ -358,7 +404,9 @@ public class AutoupdateCatalogParser extends DefaultHandler {
                 ERR.info ("Not supported yet.");
                 break;
             case license :
-                currentLicense.push (attributes.getValue (LICENSE_ATTR_NAME));
+                Map <String, String> map = new HashMap<String,String> ();
+                map.put(attributes.getValue (LICENSE_ATTR_NAME), attributes.getValue (LICENSE_ATTR_URL));
+                currentLicense.push (map);
                 break;
             default:
                 ERR.warning ("Unknown element " + qName);
