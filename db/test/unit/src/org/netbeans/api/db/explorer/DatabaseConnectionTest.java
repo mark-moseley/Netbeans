@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,18 +41,20 @@
 
 package org.netbeans.api.db.explorer;
 
-import org.netbeans.modules.db.test.TestBase;
+import java.sql.Connection;
+import java.sql.SQLException;
 import org.netbeans.modules.db.test.Util;
+import org.netbeans.modules.db.test.DBTestBase;
 
 /**
  *
  * @author Andrei Badea
  */
-public class DatabaseConnectionTest extends TestBase {
-    
+public class DatabaseConnectionTest extends DBTestBase {
+    @Override
     protected void setUp() throws Exception {
         super.setUp();
-        Util.deleteConnectionFiles();
+        Util.clearConnections();
     }
     
     public DatabaseConnectionTest(String testName) {
@@ -60,24 +62,148 @@ public class DatabaseConnectionTest extends TestBase {
     }
     
     public void testConnectionsRemovedWhenFilesDeleted() throws Exception{
-        JDBCDriver driver = JDBCDriverManager.getDefault().getDrivers("sun.jdbc.odbc.JdbcOdbcDriver")[0];
+        Util.clearConnections();
+        Util.deleteDriverFiles();
+
+        JDBCDriver driver = Util.createDummyDriver();
+        assertEquals(1, JDBCDriverManager.getDefault().getDrivers().length);
+
         DatabaseConnection dbconn = DatabaseConnection.create(driver, "database", "user", "schema", "password", true);
         ConnectionManager.getDefault().addConnection(dbconn);
-        
+
         assertTrue(ConnectionManager.getDefault().getConnections().length > 0);
-        
-        Util.deleteConnectionFiles();
-        
+
+        Util.clearConnections();
+
         assertTrue(ConnectionManager.getDefault().getConnections().length == 0);
     }
 
+    public void testGetJDDCDriver() throws Exception{
+        Util.clearConnections();
+        Util.deleteDriverFiles();
+
+        JDBCDriver driver = Util.createDummyDriver();
+        assertEquals(1, JDBCDriverManager.getDefault().getDrivers().length);
+
+        DatabaseConnection dbconn = DatabaseConnection.create(driver, "database", "user", "schema", "password", true);
+        assertEquals ("Returns the correct driver", driver, dbconn.getJDBCDriver ());
+    }
+
+    public void testGetJDDCDriverWhenAddOtherDriver() throws Exception{
+        Util.clearConnections();
+        Util.deleteDriverFiles();
+
+        JDBCDriver driver1 = Util.createDummyDriver();
+        assertEquals(1, JDBCDriverManager.getDefault().getDrivers().length);
+        DatabaseConnection dbconn1 = DatabaseConnection.create(driver1, "database", "user", "schema", "password", true);
+        assertEquals ("Returns the correct driver", driver1, dbconn1.getJDBCDriver ());
+
+        JDBCDriver driver2 = Util.createDummyDriverWithOtherJar ();
+        assertEquals(2, JDBCDriverManager.getDefault().getDrivers().length);
+        DatabaseConnection dbconn2 = DatabaseConnection.create(driver2, "database", "user", "schema", "password", true);
+        assertEquals ("Returns the correct driver", driver1, dbconn1.getJDBCDriver ());
+        assertEquals ("Returns the correct driver", driver2, dbconn2.getJDBCDriver ());
+    }
+
     public void testSameDatabaseConnectionReturned() throws Exception {
+        Util.clearConnections();
+        Util.deleteDriverFiles();
         assertEquals(0, ConnectionManager.getDefault().getConnections().length);
         
-        JDBCDriver driver = JDBCDriverManager.getDefault().getDrivers("sun.jdbc.odbc.JdbcOdbcDriver")[0];
+        JDBCDriver driver = Util.createDummyDriver();
+        assertEquals(1, JDBCDriverManager.getDefault().getDrivers().length);
+
         DatabaseConnection dbconn = DatabaseConnection.create(driver, "database", "user", "schema", "password", true);
         ConnectionManager.getDefault().addConnection(dbconn);
+        assertTrue(ConnectionManager.getDefault().getConnections().length == 1);
         
         assertEquals(dbconn, ConnectionManager.getDefault().getConnections()[0]);
+    }
+
+    public void testSyncConnection() throws Exception {
+        DatabaseConnection dbconn = getDatabaseConnection(false);
+        ConnectionManager.getDefault().disconnect(dbconn);
+        assertNull(dbconn.getJDBCConnection());
+        
+        ConnectionManager.getDefault().connect(dbconn);
+        Connection conn = dbconn.getJDBCConnection();
+        assertTrue(connectionIsValid(conn));
+        
+        ConnectionManager.getDefault().connect(dbconn);
+        assertSame(conn, dbconn.getJDBCConnection());
+        assertTrue(connectionIsValid(dbconn.getJDBCConnection()));
+    }
+
+    public void testDeleteConnection() throws Exception {
+        Util.clearConnections();
+        Util.deleteDriverFiles();
+        
+        assertEquals(0, ConnectionManager.getDefault().getConnections().length);
+        assertEquals(0, JDBCDriverManager.getDefault().getDrivers().length);
+        
+        JDBCDriver driver = Util.createDummyDriver();
+        
+        DatabaseConnection dbconn = DatabaseConnection.create(
+                    driver, "jdbc:bar:localhost", 
+                    "user", "schema", "password", true);
+        ConnectionManager.getDefault().addConnection(dbconn);
+        
+        assertEquals(1, ConnectionManager.getDefault().getConnections().length);
+        
+        ConnectionManager.getDefault().removeConnection(dbconn);
+        assertEquals(0, ConnectionManager.getDefault().getConnections().length);
+    }
+
+    public void testDisconnect() throws Exception {
+        DatabaseConnection conn = getDatabaseConnection(true);
+        assertTrue(connectionIsValid(conn.getJDBCConnection()));
+
+        ConnectionManager.getDefault().disconnect(conn);
+        assertFalse(connectionIsValid(conn.getJDBCConnection()));
+
+        ConnectionManager.getDefault().connect(conn);
+        assertTrue(connectionIsValid(conn.getJDBCConnection()));
+
+    }
+
+    public void testGetJDBCConnectionWithTest() throws Exception {
+        DatabaseConnection dbconn = getDatabaseConnection(false);
+        ConnectionManager.getDefault().disconnect(dbconn);
+        assertNull(dbconn.getJDBCConnection(true));
+        assertFalse(connectionIsValid(dbconn.getJDBCConnection()));
+
+        ConnectionManager.getDefault().connect(dbconn);
+        assertNotNull(dbconn.getJDBCConnection(true));
+        assertTrue(connectionIsValid(dbconn.getJDBCConnection(true)));
+        assertNotNull(dbconn.getJDBCConnection(false));
+
+        dbconn.getJDBCConnection(true).close();
+        assertNotNull(dbconn.getJDBCConnection(false));
+        assertNull(dbconn.getJDBCConnection(true));
+        assertNull(dbconn.getJDBCConnection(false));
+
+        ConnectionManager.getDefault().connect(dbconn);
+        assertNotNull(dbconn.getJDBCConnection(true));
+        assertTrue(connectionIsValid(dbconn.getJDBCConnection(true)));
+        assertNotNull(dbconn.getJDBCConnection(false));
+
+        if (isDerby()) {
+            shutdownDerby();
+            assertNull(dbconn.getJDBCConnection(true));
+        }
+    }
+
+    private static boolean connectionIsValid(Connection conn) throws Exception {
+        if (conn == null || conn.isClosed()) {
+            return false;
+        }
+
+        try {
+            // Send a command to the server, if it fails we know the connection is invalid.
+            conn.getMetaData().getTables(null, null, " ", new String[] { "TABLE" }).close();
+        } catch (SQLException e) {
+            return false;
+        }
+        return true;
     }
 }
