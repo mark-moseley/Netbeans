@@ -53,8 +53,6 @@ import java.awt.event.HierarchyEvent;
 import java.awt.event.HierarchyListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -63,16 +61,13 @@ import java.util.logging.Logger;
 import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
-import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
-import javax.swing.JRootPane;
 import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -104,7 +99,6 @@ import static org.jdesktop.layout.LayoutStyle.UNRELATED;
  * @author  Marian Petras
  */
 final class BasicSearchForm extends JPanel implements ChangeListener,
-                                                      KeyListener,
                                                       ItemListener {
     
     private final BasicSearchCriteria searchCriteria;
@@ -129,12 +123,12 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
         initHistory();
         initInteraction();
 
-        if (searchAndReplace) {
+        if (searchAndReplace && (searchCriteria.getReplaceExpr() == null)) {
             /* We must set the initial replace string, otherwise it might not
              * be initialized at all if the user keeps the field "Replace With:"
              * empty. One of the side-effects would be that method
              * BasicSearchCriteria.isSearchAndReplace() would return 'false'. */
-            searchCriteria.setReplaceString("");                        //NOI18N
+            searchCriteria.setReplaceExpr("");                        //NOI18N
         }
 
         /*
@@ -147,6 +141,10 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
             initPreviousValues();
         } else {
             initValuesFromHistory();
+        }
+        updateTextPatternColor();
+        if (searchAndReplace){
+            updateReplacePatternColor();
         }
     }
 
@@ -167,17 +165,14 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
         lblHintTextToFind.setMinimumSize(new Dimension(0, 0));
         
         JLabel lblReplacement;
-        JLabel lblDummyReplacement;
 	if (searchAndReplace) {
             lblReplacement = new JLabel();
             cboxReplacement = new JComboBox();
             cboxReplacement.getAccessibleContext().setAccessibleDescription(getText("BasicSearchForm.cbox.Replacement.AccessibleDescription"));
             lblReplacement.setLabelFor(cboxReplacement);
-            lblDummyReplacement = new JLabel();
 	} else {
             lblReplacement = null;
             cboxReplacement = null;
-            lblDummyReplacement = null;
         }
         
         JLabel lblFileNamePattern = new JLabel();
@@ -201,9 +196,6 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
             Mnemonics.setLocalizedText(
                     lblReplacement,
                     getText("BasicSearchForm.lblReplacement.text"));        //NOI18N
-            lblDummyReplacement.setText("dummy");                           //NOI18N
-            lblDummyReplacement.setForeground(SystemColor.textInactiveText);
-            lblDummyReplacement.setVisible(false);
             cboxReplacement.setEditable(true);
         }
 
@@ -263,7 +255,6 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
                         .addPreferredGap(RELATED)
                         .add(createParallelGroup(criteriaPanelLayout, LEADING,
                                                  lblHintFileNamePattern,
-                                                 lblDummyReplacement,
                                                  lblHintTextToFind,
                                                  cboxTextToFind,
                                                  cboxReplacement,
@@ -288,8 +279,7 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
                         .add(cboxReplacement, PREFERRED_SIZE,
                                               DEFAULT_SIZE,
                                               PREFERRED_SIZE))
-                    .addPreferredGap(RELATED)
-                    .add(lblDummyReplacement);
+                    .addPreferredGap(RELATED);
         }
         seqGroup.addPreferredGap(UNRELATED)
                 .add(criteriaPanelLayout.createParallelGroup(BASELINE)
@@ -335,7 +325,7 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
      *      .add(component<i>n</i>)</code></pre></blockquote>
      * except that {@code null} components are skipped and {@code JComboBox}
      * components are automatically added with size constraints
-     * {@code (0, DEFAULT_SIZE, Short.MAX_VALUE)}.
+     * {@code (0, 300, Short.MAX_VALUE)}.
      */
     private static ParallelGroup createParallelGroup(GroupLayout groupLayout,
                                                      int alignment,
@@ -347,7 +337,7 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
             }
 
             if (c.getClass() == JComboBox.class) {
-                group.add(c, 0, DEFAULT_SIZE, Short.MAX_VALUE);
+                group.add(c, 0, 300, Short.MAX_VALUE);
             } else {
                 group.add(c);
             }
@@ -368,18 +358,10 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
      * search criteria.
      */
     private void initPreviousValues() {
-        String textPattern = searchCriteria.getTextPatternExpr();
-        cboxTextToFind.setSelectedItem(textPattern);
-        textToFindEditor.setText(textPattern);
-
-        String fileNamePattern = searchCriteria.getFileNamePatternExpr();
-        cboxFileNamePattern.setSelectedItem(fileNamePattern);
-        fileNamePatternEditor.setText(fileNamePattern);
-
+        cboxTextToFind.setSelectedItem(searchCriteria.getTextPatternExpr());
+        cboxFileNamePattern.setSelectedItem(searchCriteria.getFileNamePatternExpr());
         if (cboxReplacement != null) {
-            String replacementExpr = searchCriteria.getReplaceExpr();
-            cboxReplacement.setSelectedItem(replacementExpr);
-            replacementPatternEditor.setText(replacementExpr);
+            cboxReplacement.setSelectedItem(searchCriteria.getReplaceExpr());
         }
 
         chkWholeWords.setSelected(searchCriteria.isWholeWords());
@@ -425,11 +407,17 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
                 if (sourceComboBox == cboxTextToFind) {
                     searchCriteria.setTextPattern(text);
                     updateTextPatternColor();
+                    if (cboxReplacement != null){
+                        updateReplacePatternColor();
+                    }
                 } else if (sourceComboBox == cboxFileNamePattern) {
                     searchCriteria.setFileNamePattern(text);
                 } else {
                     assert sourceComboBox == cboxReplacement;
-                    searchCriteria.setReplaceString(text);
+                    searchCriteria.setReplaceExpr(text);
+                    if (cboxReplacement != null){
+                        updateReplacePatternColor();
+                    }
                 }
             }
         }
@@ -453,18 +441,11 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
                     new PatternChangeListener(cboxReplacement));
         }
         
-        textToFindEditor.addKeyListener(this);
-        fileNamePatternEditor.addKeyListener(this);
-        if (replacementPatternEditor != null) {
-            replacementPatternEditor.addKeyListener(this);
-        }
-
         chkRegexp.addItemListener(this);
         chkCaseSensitive.addItemListener(this);
         chkWholeWords.addItemListener(this);
 
         boolean regexp = chkRegexp.isSelected();
-        chkCaseSensitive.setEnabled(!regexp);
         chkWholeWords.setEnabled(!regexp);
 
         searchCriteria.setUsabilityChangeListener(this);
@@ -512,19 +493,13 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
         if (memory.isTextPatternSpecified()
                 && (cboxTextToFind.getItemCount() != 0)) {
             cboxTextToFind.setSelectedIndex(0);
-            textToFindEditor.setText(
-                    cboxTextToFind.getSelectedItem().toString());
         }
         if (memory.isFileNamePatternSpecified()
                 && cboxFileNamePattern.getItemCount() != 0) {
             cboxFileNamePattern.setSelectedIndex(0);
-            fileNamePatternEditor.setText(
-                    cboxFileNamePattern.getSelectedItem().toString());
         }
         if (cboxReplacement != null && cboxReplacement.getItemCount() != 0) {
             cboxReplacement.setSelectedIndex(0);
-            replacementPatternEditor.setText(
-                    cboxReplacement.getSelectedItem().toString());
         }
 
         chkWholeWords.setSelected(memory.isWholeWords());
@@ -565,6 +540,44 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
                                        : defaultTextColor);
         }
     }
+
+    /**
+     * Sets proper color of replace pattern.
+     */
+    private void updateReplacePatternColor() {
+        boolean wasInvalid = invalidReplacePattern;
+        invalidReplacePattern = searchCriteria.isReplacePatternInvalid();
+        if (invalidReplacePattern != wasInvalid) {
+            if (defaultTextColor == null) {
+                assert !wasInvalid;
+                defaultTextColor = textToFindEditor.getForeground();
+            }
+            replacementPatternEditor.setForeground(
+                    invalidReplacePattern ? getErrorTextColor()
+                                       : defaultTextColor);
+        }
+    }
+
+    private static boolean isBackrefSyntaxUsed(String text) {
+        final int len = text.length();
+        if (len < 2) {
+            return false;
+        }
+        String textToSearch = text.substring(0, len - 1);
+        int startIndex = 0;
+        int index;
+        while ((index = textToSearch.indexOf('\\', startIndex)) != -1) {
+            char c = text.charAt(index + 1);
+            if (c == '\\') {
+                startIndex = index + 1;
+            } else if ((c >= '0') && (c <= '9')) {
+                return true;
+            } else {
+                startIndex = index + 2;
+            }
+        }
+        return false;
+    }
     
     private Color getErrorTextColor() {
         if (errorTextColor == null) {
@@ -598,7 +611,9 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
         if (toggle == chkRegexp) {
             searchCriteria.setRegexp(selected);
             updateTextPatternColor();
-            chkCaseSensitive.setEnabled(!selected);
+            if (cboxReplacement != null){
+                updateReplacePatternColor();
+            }
             chkWholeWords.setEnabled(!selected);
             lblHintTextToFind.setVisible(!selected);
         } else if (toggle == chkCaseSensitive) {
@@ -610,29 +625,6 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
         }
     }
 
-    /**
-     * If the pressed key was Enter, activates the default button (if enabled).
-     * It also consumes the event so that the default
-     * {@code JTextField}'s handling mechanism is bypassed.
-     */
-    public void keyPressed(KeyEvent e) {
-        if ((e.getKeyCode() == KeyEvent.VK_ENTER) && (e.getModifiersEx() == 0)){
-            
-            JRootPane rootPane = SwingUtilities.getRootPane(this);
-            if (rootPane != null) {
-                JButton button = rootPane.getDefaultButton();
-                if ((button != null) && button.isEnabled()) {
-                    e.consume();
-                    button.doClick();
-                }
-            }
-        }
-    }
-    
-    public void keyReleased(KeyEvent e) { }
-    
-    public void keyTyped(KeyEvent e) { }
-    
     /**
      */
     private AbstractButton[] createSearchScopeButtons() {
@@ -985,6 +977,7 @@ final class BasicSearchForm extends JPanel implements ChangeListener,
     
     private Color errorTextColor, defaultTextColor;
     private boolean invalidTextPattern = false;
+    private boolean invalidReplacePattern = false;
     
     /**
      * When set to {@link true}, changes of file name pattern are ignored.
