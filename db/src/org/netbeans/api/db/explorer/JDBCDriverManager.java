@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,11 +44,12 @@ package org.netbeans.api.db.explorer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import javax.swing.SwingUtilities;
-import org.netbeans.modules.db.explorer.actions.AddDriverAction;
+import org.netbeans.modules.db.explorer.action.AddDriverAction;
 import org.netbeans.modules.db.explorer.driver.JDBCDriverConvertor;
 import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
@@ -65,12 +66,12 @@ public final class JDBCDriverManager {
      */
     private static JDBCDriverManager DEFAULT = null;
     
-    private Lookup.Result result = getLookupResult();
+    private Lookup.Result<JDBCDriver> result = getLookupResult();
     
     /**
      * The list of listeners.
      */
-    private List/*<JDBCDriverListener>*/ listeners = new ArrayList(1);
+    private Set<JDBCDriverListener> listeners = new HashSet<JDBCDriverListener> ();
     
     /**
      * 
@@ -108,8 +109,8 @@ public final class JDBCDriverManager {
      * @return a non-null array of JDBCDriver instances.
      */
     public JDBCDriver[] getDrivers() {
-        Collection drivers = result.allInstances();
-        return (JDBCDriver[])drivers.toArray(new JDBCDriver[drivers.size()]);
+        Collection<? extends JDBCDriver> drivers = result.allInstances();
+        return drivers.toArray (new JDBCDriver[drivers.size ()]);
     }
     
     /**
@@ -125,14 +126,14 @@ public final class JDBCDriverManager {
         if (drvClass == null) {
             throw new NullPointerException();
         }
-        LinkedList result = new LinkedList();
+        LinkedList<JDBCDriver> res = new LinkedList<JDBCDriver>();
         JDBCDriver[] drvs = getDrivers();
         for (int i = 0; i < drvs.length; i++) {
             if (drvClass.equals(drvs[i].getClassName())) {
-                result.add(drvs[i]);
+                res.add(drvs[i]);
             }
         }
-        return (JDBCDriver[])result.toArray(new JDBCDriver[result.size()]);
+        return res.toArray (new JDBCDriver[res.size ()]);
     }
 
     /**
@@ -184,6 +185,26 @@ public final class JDBCDriverManager {
             new AddDriverAction.AddDriverDialogDisplayer().showDialog();
         }
     }
+
+    /**
+     * Shows the Add Driver dialog synchronously.  Must be run from the
+     * AWT event thread; an IllegalStateException will be thrown if this
+     * method is called from any other thread.
+     *
+     * @return the new driver that was added, or null if the driver was
+     *         not successfully created.
+     *
+     * @throws IllegalStateException if the calling thread is not the event
+     *         dispatching thread.
+     *
+     * @since 1.27
+     */
+    public JDBCDriver showAddDriverDialogFromEventThread() {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            throw new IllegalStateException("The current thread is not the event dispatching thread."); // NOI18N
+        }
+        return new AddDriverAction.AddDriverDialogDisplayer().showDialog();        
+    }
     
     /**
      * Registers a JDBCDriverListener.
@@ -204,19 +225,18 @@ public final class JDBCDriverManager {
     }
     
     private void fireListeners() {
-        List/*<JDBCDriverListener>*/ listenersCopy;
+        List<JDBCDriverListener> listenersCopy;
         
         synchronized (listeners) {
-            listenersCopy = new ArrayList(listeners);
+            listenersCopy = new ArrayList<JDBCDriverListener>(listeners);
         }
         
-        for (Iterator i= listenersCopy.iterator(); i.hasNext();) {
-            JDBCDriverListener listener = (JDBCDriverListener)i.next();
+        for (JDBCDriverListener listener : listenersCopy) {
             listener.driversChanged();
         }
     }
     
-    private synchronized Lookup.Result getLookupResult() {
+    private synchronized Lookup.Result<JDBCDriver> getLookupResult() {
         return Lookups.forPath(JDBCDriverConvertor.DRIVERS_PATH).lookupResult(JDBCDriver.class);
     }
 }
