@@ -78,9 +78,9 @@ public class SVR4Packager implements PackagerDescriptor {
 
     public List<PackagerInfoElement> getDefaultInfoList(MakeConfiguration makeConfiguration, PackagingConfiguration packagingConfiguration) {
         String defArch;
-        if (makeConfiguration.getPlatform().getValue() == Platform.PLATFORM_SOLARIS_INTEL) {
+        if (makeConfiguration.getDevelopmentHost().getBuildPlatform() == Platform.PLATFORM_SOLARIS_INTEL) {
             defArch = "i386"; // NOI18N
-        } else if (makeConfiguration.getPlatform().getValue() == Platform.PLATFORM_SOLARIS_SPARC) {
+        } else if (makeConfiguration.getDevelopmentHost().getBuildPlatform() == Platform.PLATFORM_SOLARIS_SPARC) {
             defArch = "sparc"; // NOI18N
         } else {
             // Anything else ?
@@ -163,7 +163,7 @@ public class SVR4Packager implements PackagerDescriptor {
         return new ScriptWriter();
     }
 
-    public class ScriptWriter implements ShellSciptWriter {
+    public static class ScriptWriter implements ShellSciptWriter {
 
         public void writeShellScript(BufferedWriter bw, MakeConfiguration makeConfiguration, PackagingConfiguration packagingConfiguration) throws IOException {
             writePackagingScriptBodySVR4(bw, makeConfiguration);
@@ -225,6 +225,10 @@ public class SVR4Packager implements PackagerDescriptor {
             bw.write("cd \"${TOP}\"\n"); // NOI18N
             bw.write("echo \"i pkginfo=pkginfo\" >> $PROTOTYPEFILE\n"); // NOI18N
             bw.write("\n"); // NOI18N     
+            for (String addInfo : packagingConfiguration.getAdditionalInfo().getValue()) {
+                bw.write("echo \"i " + addInfo + "\" >> $PROTOTYPEFILE\n"); // NOI18N
+            }
+            bw.write("\n"); // NOI18N
             List<String> dirList = findUndefinedDirectories(packagingConfiguration);
             for (String dir : dirList) {
                 bw.write("echo \"");// NOI18N
@@ -286,6 +290,6 @@ public class SVR4Packager implements PackagerDescriptor {
 
     /** Look up i18n strings here */
     private static String getString(String s) {
-        return NbBundle.getMessage(PackagingConfiguration.class, s); // FIXUP: Using Bundl in .../api.configurations. Too latet to move bundles around
+        return NbBundle.getMessage(SVR4Packager.class, s); // FIXUP: Using Bundl in .../api.configurations. Too latet to move bundles around
     }
 }

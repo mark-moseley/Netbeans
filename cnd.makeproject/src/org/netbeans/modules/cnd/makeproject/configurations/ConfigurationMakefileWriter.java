@@ -48,7 +48,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.net.URL;
+import java.util.Collection;
 import org.netbeans.modules.cnd.makeproject.api.MakeArtifact;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ArchiverConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BasicCompilerConfiguration;
@@ -66,14 +68,16 @@ import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.Tool;
-import org.netbeans.modules.cnd.api.remote.PathMap;
 import org.netbeans.modules.cnd.makeproject.MakeOptions;
+import org.netbeans.modules.cnd.makeproject.api.configurations.DefaultMakefileWriter;
+import org.netbeans.modules.cnd.makeproject.spi.configurations.MakefileWriter;
 import org.netbeans.modules.cnd.makeproject.api.PackagerDescriptor;
 import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
 import org.netbeans.modules.cnd.makeproject.api.configurations.PackagingConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.PackagerManager;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.packaging.DummyPackager;
+import org.openide.util.Lookup;
 
 public class ConfigurationMakefileWriter {
 
@@ -176,12 +180,36 @@ public class ConfigurationMakefileWriter {
         } catch (Exception e) {
             // FIXUP
         }
+
+        // Find MakefileWriter in toolchain.
+        MakefileWriter makefileWriter = null;
+        CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
+        if (compilerSet != null) {
+            String makefileWriterClassName = compilerSet.getCompilerFlavor().getToolchainDescriptor().getMakefileWriter();
+            if (makefileWriterClassName != null) {
+                Collection<? extends MakefileWriter> mwc = Lookup.getDefault().lookupAll(MakefileWriter.class);
+                for(MakefileWriter instance: mwc){
+                   if (makefileWriterClassName.equals(instance.getClass().getName())){
+                       makefileWriter = instance;
+                       break;
+                   }
+                }
+                if (makefileWriter == null) {
+                    System.err.println("ERROR: class" + makefileWriterClassName + " is not found or is not instance of MakefileWriter"); // NOI18N
+                }
+            }
+        }
+        // Use default MakefileWriter if none is found.
+        if (makefileWriter == null) {
+            makefileWriter = new DefaultMakefileWriter();
+        }
+
         BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os));
         try {
-            writePrelude(conf, bw);
-            writeBuildTarget(conf, bw);
-            writeCleanTarget(conf, bw);
-            writeDependencyChecking(conf, bw);
+            makefileWriter.writePrelude(projectDescriptor, conf, bw);
+            writeBuildTargets(makefileWriter, projectDescriptor, conf, bw);
+            makefileWriter.writeCleanTarget(projectDescriptor, conf, bw);
+            makefileWriter.writeDependencyChecking(projectDescriptor, conf, bw);
             bw.flush();
             bw.close();
             if (conf.isQmakeConfiguration()) {
@@ -222,7 +250,7 @@ public class ConfigurationMakefileWriter {
         return ""; // NOI18N
     }
 
-    protected void writePrelude(MakeConfiguration conf, BufferedWriter bw) throws IOException {
+    public static void writePrelude(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
         CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
         if (compilerSet == null) {
             return;
@@ -258,6 +286,8 @@ public class ConfigurationMakefileWriter {
 
         bw.write("# Macros\n"); // NOI18N
         bw.write("CND_PLATFORM=" + conf.getVariant() + "\n"); // NOI18N
+        bw.write("CND_CONF=" + conf.getName() + "\n"); // NOI18N
+        bw.write("CND_DISTDIR=" + MakeConfiguration.DIST_FOLDER + "\n"); // NOI18N
         bw.write("\n"); // NOI18N
 
         bw.write("# Include project Makefile\n"); // NOI18N
@@ -295,18 +325,20 @@ public class ConfigurationMakefileWriter {
         bw.write("\n"); // NOI18N
 
         if (conf.isQmakeConfiguration()) {
-            String qmakespec = compilerSet.getQmakeSpec(conf.getPlatform().getValue());
-            if (qmakespec == null) {
-                qmakespec = ""; // NOI18N
-            } else {
-                qmakespec = "-spec " + qmakespec + " "; // NOI18N
+            String qmakeSpec = conf.getQmakeConfiguration().getQmakeSpec().getValue();
+            if (qmakeSpec.length() == 0 && conf.getDevelopmentHost().getBuildPlatform() == Platform.PLATFORM_MACOSX) {
+                // on Mac we force spec to macx-g++, otherwise qmake generates xcode project
+                qmakeSpec = compilerSet.getQmakeSpec(conf.getDevelopmentHost().getBuildPlatform());
+            }
+            if (0 < qmakeSpec.length()) {
+                qmakeSpec = "-spec " + qmakeSpec + " "; // NOI18N
             }
             bw.write("nbproject/qt-${CONF}.mk: nbproject/qt-${CONF}.pro FORCE\n"); // NOI18N
             // It is important to generate makefile in current directory, and then move it to nbproject/.
             // Otherwise qmake will complain that sources are not found.
-            bw.write("\tqmake VPATH=. " + qmakespec + "-o qttmp-${CONF}.mk nbproject/qt-${CONF}.pro\n"); // NOI18N
+            bw.write("\tqmake VPATH=. " + qmakeSpec + "-o qttmp-${CONF}.mk nbproject/qt-${CONF}.pro\n"); // NOI18N
             bw.write("\tmv -f qttmp-${CONF}.mk nbproject/qt-${CONF}.mk\n"); // NOI18N
-            if (conf.getPlatform().getValue() == Platform.PLATFORM_WINDOWS) {
+            if (conf.getDevelopmentHost().getBuildPlatform() == Platform.PLATFORM_WINDOWS) {
                 // qmake uses backslashes on Windows, this code corrects them to forward slashes
                 bw.write("\t@sed -e 's:\\\\\\(.\\):/\\1:g' nbproject/qt-${CONF}.mk >nbproject/qt-${CONF}.tmp\n"); // NOI18N
                 bw.write("\t@mv -f nbproject/qt-${CONF}.tmp nbproject/qt-${CONF}.mk\n"); // NOI18N
@@ -316,7 +348,7 @@ public class ConfigurationMakefileWriter {
         }
     }
 
-    protected void writeBuildTarget(MakeConfiguration conf, BufferedWriter bw) throws IOException {
+    protected void writeBuildTargets(MakefileWriter makefileWriter, MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, BufferedWriter bw) throws IOException {
         CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
         if (compilerSet == null) {
             bw.write(".build-conf:\n"); // NOI18N
@@ -325,35 +357,46 @@ public class ConfigurationMakefileWriter {
             bw.write("\t@exit 1\n\n"); // NOI18N
             return;
         }
-        String output = getOutput(conf);
-        output = compilerSet.normalizeDriveLetter(output);
-        bw.write("# Build Targets\n"); // NOI18N
         if (conf.isCompileConfiguration()) {
-            bw.write(".build-conf: ${BUILD_SUBPROJECTS}\n"); // NOI18N
-            bw.write("\t${MAKE} " + MakeOptions.getInstance().getMakeOptions() // NOI18N
-                    + " -f nbproject/Makefile-" + conf.getName() + ".mk " // NOI18N
-                    + output + "\n\n"); // NOI18N
+            makefileWriter.writeBuildTarget(projectDescriptor, conf, bw);
             if (conf.isLinkerConfiguration()) {
-                writeLinkTarget(conf, bw, output);
+                makefileWriter.writeLinkTarget(projectDescriptor, conf, bw);
             }
             if (conf.isArchiverConfiguration()) {
-                writeArchiveTarget(conf, bw, output);
+                makefileWriter.writeArchiveTarget(projectDescriptor, conf, bw);
             }
             if (conf.isCompileConfiguration()) {
-                writeCompileTargets(conf, bw);
+                makefileWriter.writeCompileTargets(projectDescriptor, conf, bw);
             }
         } else if (conf.isMakefileConfiguration()) {
-            bw.write(".build-conf: ${BUILD_SUBPROJECTS}\n"); // NOI18N
-            writeMakefileTargets(conf, bw);
+            makefileWriter.writeMakefileTarget(projectDescriptor, conf, bw);
         } else if (conf.isQmakeConfiguration()) {
-            bw.write(".build-conf: ${BUILD_SUBPROJECTS} nbproject/qt-${CONF}.mk\n"); // NOI18N
-            bw.write("\t${MAKE} -f nbproject/qt-${CONF}.mk " + output + "\n"); // NOI18N
+            makefileWriter.writeQTTarget(projectDescriptor, conf, bw);
         }
-        writeSubProjectBuildTargets(conf, bw);
-        bw.write("\n"); // NOI18N
+        makefileWriter.writeSubProjectBuildTargets(projectDescriptor, conf, bw);
     }
 
-    protected void writeLinkTarget(MakeConfiguration conf, BufferedWriter bw, String output) throws IOException {
+    public static void writeQTTarget(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
+        CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
+        String output = compilerSet.normalizeDriveLetter(getOutput(conf));
+        bw.write("# Build Targets\n"); // NOI18N
+        bw.write(".build-conf: ${BUILD_SUBPROJECTS} nbproject/qt-${CONF}.mk\n"); // NOI18N
+        bw.write("\t${MAKE} -f nbproject/qt-${CONF}.mk " + output + "\n"); // NOI18N
+    }
+
+    public static void writeBuildTarget(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
+        CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
+        String output = compilerSet.normalizeDriveLetter(getOutput(conf));
+        bw.write("# Build Targets\n"); // NOI18N
+        bw.write(".build-conf: ${BUILD_SUBPROJECTS}\n"); // NOI18N
+        bw.write("\t${MAKE} " + MakeOptions.getInstance().getMakeOptions() // NOI18N
+                + " -f nbproject/Makefile-" + conf.getName() + ".mk " // NOI18N
+                + output + "\n\n"); // NOI18N
+    }
+
+    public static void writeLinkTarget(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
+        CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
+        String output = compilerSet.normalizeDriveLetter(getOutput(conf));
         LinkerConfiguration linkerConfiguration = conf.getLinkerConfiguration();
         CompilerSet cs = conf.getCompilerSet().getCompilerSet();
         output = cs.normalizeDriveLetter(output);
@@ -390,7 +433,9 @@ public class ConfigurationMakefileWriter {
         bw.write("\t" + command + "\n"); // NOI18N
     }
 
-    private void writeArchiveTarget(MakeConfiguration conf, BufferedWriter bw, String output) throws IOException {
+    public static void writeArchiveTarget(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
+        CompilerSet compilerSet = conf.getCompilerSet().getCompilerSet();
+        String output = compilerSet.normalizeDriveLetter(getOutput(conf));
         ArchiverConfiguration archiverConfiguration = conf.getArchiverConfiguration();
         String command = "${AR}" + " "; // NOI18N
         command += archiverConfiguration.getOptions() + " "; // NOI18N
@@ -407,7 +452,7 @@ public class ConfigurationMakefileWriter {
         }
     }
 
-    protected void writeCompileTargets(MakeConfiguration conf, BufferedWriter bw) throws IOException {
+    public static void writeCompileTargets(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
         Item[] items = projectDescriptor.getProjectItems();
         if (conf.isCompileConfiguration()) {
             String target = null;
@@ -473,10 +518,11 @@ public class ConfigurationMakefileWriter {
                 }
                 folders = IpeUtils.getDirName(target);
                 bw.write("\n"); // NOI18N
+                // See IZ #151465 for explanation why Makefile is listed as dependency.
                 if (additionalDep != null) {
-                    bw.write(target + ": " + file + " " + additionalDep + "\n"); // NOI18N
+                    bw.write(target + ": nbproject/Makefile-${CND_CONF}.mk " + file + " " + additionalDep + "\n"); // NOI18N
                 } else {
-                    bw.write(target + ": " + file + "\n"); // NOI18N
+                    bw.write(target + ": nbproject/Makefile-${CND_CONF}.mk " + file + "\n"); // NOI18N
                 }
                 if (folders != null) {
                     bw.write("\t${MKDIR} -p " + folders + "\n"); // NOI18N
@@ -489,16 +535,18 @@ public class ConfigurationMakefileWriter {
         }
     }
 
-    private void writeMakefileTargets(MakeConfiguration conf, BufferedWriter bw) throws IOException {
+    public static void writeMakefileTarget(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
         MakefileConfiguration makefileConfiguration = conf.getMakefileConfiguration();
         String target = makefileConfiguration.getOutput().getValue();
         String cwd = makefileConfiguration.getBuildCommandWorkingDirValue();
         String command = makefileConfiguration.getBuildCommand().getValue();
+        bw.write("# Build Targets\n"); // NOI18N
+        bw.write(".build-conf: ${BUILD_SUBPROJECTS}\n"); // NOI18N
         //bw.write(target + ":" + "\n"); // NOI18N
         bw.write("\tcd " + IpeUtils.escapeOddCharacters(FilePathAdaptor.normalize(cwd)) + " && " + command + "\n"); // NOI18N
     }
 
-    private void writeSubProjectBuildTargets(MakeConfiguration conf, BufferedWriter bw) throws IOException {
+    public static void writeSubProjectBuildTargets(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
         bw.write("\n"); // NOI18N
         bw.write("# Subprojects\n"); // NOI18N
         bw.write(".build-subprojects:" + "\n"); // NOI18N
@@ -527,9 +575,10 @@ public class ConfigurationMakefileWriter {
             }
             bw.write("\tcd " + IpeUtils.escapeOddCharacters(FilePathAdaptor.normalize(location)) + " && " + makeArtifact.getBuildCommand() + "\n"); // NOI18N
         }
+        bw.write("\n"); // NOI18N
     }
 
-    private void writeSubProjectCleanTargets(MakeConfiguration conf, BufferedWriter bw) throws IOException {
+    private static void writeSubProjectCleanTargets(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
         bw.write("\n"); // NOI18N
         bw.write("# Subprojects\n"); // NOI18N
         bw.write(".clean-subprojects:" + "\n"); // NOI18N
@@ -560,7 +609,7 @@ public class ConfigurationMakefileWriter {
         }
     }
 
-    private void writeCleanTarget(MakeConfiguration conf, BufferedWriter bw) throws IOException {
+    public static void writeCleanTarget(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
         bw.write("# Clean Targets\n"); // NOI18N
         if (hasSubprojects(conf)) {
             bw.write(".clean-conf: ${CLEAN_SUBPROJECTS}"); // NOI18N
@@ -605,10 +654,10 @@ public class ConfigurationMakefileWriter {
             bw.write("\t$(MAKE) -f nbproject/qt-" + conf.getName() + ".mk distclean\n"); // NOI18N
         }
 
-        writeSubProjectCleanTargets(conf, bw);
+        writeSubProjectCleanTargets(projectDescriptor, conf, bw);
     }
 
-    private void writeDependencyChecking(MakeConfiguration conf, BufferedWriter bw) throws IOException {
+    public static void writeDependencyChecking(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf, Writer bw) throws IOException {
         if (conf.getDependencyChecking().getValue() && !conf.isMakefileConfiguration() && !conf.isQmakeConfiguration()) {
             bw.write("\n"); // NOI18N
             bw.write("# Enable dependency checking\n"); // NOI18N
@@ -618,25 +667,34 @@ public class ConfigurationMakefileWriter {
         }
     }
 
-    private String getOutput(MakeConfiguration conf) {
+    private static String getOutput(MakeConfiguration conf) {
         String output = conf.getOutputValue();
-        switch (conf.getConfigurationType().getValue()) {
-            case MakeConfiguration.TYPE_APPLICATION:
-            case MakeConfiguration.TYPE_QT_APPLICATION:
-                if (conf.getPlatform().getValue() == Platform.PLATFORM_WINDOWS &&
-                        !output.endsWith(".exe")) { // NOI18N
-                    output += ".exe"; // NOI18N
+        switch (conf.getDevelopmentHost().getBuildPlatform()) {
+            case Platform.PLATFORM_WINDOWS:
+                switch (conf.getConfigurationType().getValue()) {
+                    case MakeConfiguration.TYPE_APPLICATION:
+                    case MakeConfiguration.TYPE_QT_APPLICATION:
+                        output = mangleAppnameWin(output);
+                        break;
                 }
                 break;
         }
         return conf.expandMacros(output);
     }
 
-    public static String getObjectDir(MakeConfiguration conf) {
-        return MakeConfiguration.BUILD_FOLDER + '/' + conf.getName() + '/' + "${CND_PLATFORM}"; // UNIX path // NOI18N
+    private static String mangleAppnameWin(String original) {
+        if (original.endsWith(".exe")) { // NOI18N
+            return original;
+        } else {
+            return original + ".exe"; // NOI18N
+        }
     }
 
-    private String getObjectFiles(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf) {
+    public static String getObjectDir(MakeConfiguration conf) {
+        return MakeConfiguration.BUILD_FOLDER + '/' + "${CND_CONF}" + '/' + "${CND_PLATFORM}"; // UNIX path // NOI18N
+    }
+
+    private static String getObjectFiles(MakeConfigurationDescriptor projectDescriptor, MakeConfiguration conf) {
         Item[] items = projectDescriptor.getProjectItems();
         StringBuilder linkObjects = new StringBuilder();
         if (conf.isCompileConfiguration()) {
@@ -660,7 +718,7 @@ public class ConfigurationMakefileWriter {
         return linkObjects.toString();
     }
 
-    private boolean hasSubprojects(MakeConfiguration conf) {
+    private static boolean hasSubprojects(MakeConfiguration conf) {
         LibrariesConfiguration librariesConfiguration = conf.getLinkerConfiguration().getLibrariesConfiguration();
         for (LibraryItem item : librariesConfiguration.getValue()) {
             if (item instanceof LibraryItem.ProjectItem) {
@@ -697,8 +755,8 @@ public class ConfigurationMakefileWriter {
         bw.write("# NOCDDL\n"); // NOI18N
         bw.write("#\n"); // NOI18N
         bw.write("CND_BASEDIR=`pwd`\n"); // NOI18N
-        bw.write("CND_BUILDDIR=build\n"); // NOI18N
-        bw.write("CND_DISTDIR=dist\n"); // NOI18N
+        bw.write("CND_BUILDDIR=" + MakeConfiguration.BUILD_FOLDER + "\n"); // NOI18N
+        bw.write("CND_DISTDIR=" + MakeConfiguration.DIST_FOLDER + "\n"); // NOI18N
 
         Configuration[] confs = projectDescriptor.getConfs().getConfs();
         for (int i = 0; i < confs.length; i++) {
@@ -707,6 +765,7 @@ public class ConfigurationMakefileWriter {
             bw.write("\n"); // NOI18N // NOI18N
             bw.write("CND_PLATFORM_" + makeConf.getName() + "=" + makeConf.getVariant()); // NOI18N
             bw.write("\n"); // NOI18N // NOI18N
+            // output artifact
             String outputPath = makeConf.expandMacros(makeConf.getOutputValue());
             String outputDir = IpeUtils.getDirName(outputPath);
             if (outputDir == null) {
@@ -718,6 +777,26 @@ public class ConfigurationMakefileWriter {
             bw.write("CND_ARTIFACT_NAME_" + makeConf.getName() + "=" + outputName); // NOI18N
             bw.write("\n"); // NOI18N
             bw.write("CND_ARTIFACT_PATH_" + makeConf.getName() + "=" + outputPath); // NOI18N
+            bw.write("\n"); // NOI18N
+            // packaging artifact
+            PackagerDescriptor packager = PackagerManager.getDefault().getPackager(makeConf.getPackagingConfiguration().getType().getValue());
+            outputPath = makeConf.expandMacros(makeConf.getPackagingConfiguration().getOutputValue());
+            if (!packager.isOutputAFolder()) {
+                outputDir = IpeUtils.getDirName(outputPath);
+                if (outputDir == null) {
+                    outputDir = ""; // NOI18N
+                }
+                outputName = IpeUtils.getBaseName(outputPath);
+            } else {
+                outputDir = outputPath;
+                outputPath = ""; // NOI18N
+                outputName = ""; // NOI18N
+            }
+            bw.write("CND_PACKAGE_DIR_" + makeConf.getName() + "=" + outputDir); // NOI18N
+            bw.write("\n"); // NOI18N
+            bw.write("CND_PACKAGE_NAME_" + makeConf.getName() + "=" + outputName); // NOI18N
+            bw.write("\n"); // NOI18N
+            bw.write("CND_PACKAGE_PATH_" + makeConf.getName() + "=" + outputPath); // NOI18N
             bw.write("\n"); // NOI18N
         }
     }
@@ -772,6 +851,8 @@ public class ConfigurationMakefileWriter {
         bw.write("# Macros\n"); // NOI18N
         bw.write("TOP=" + "`pwd`" + "\n"); // NOI18N
         bw.write("CND_PLATFORM=" + conf.getVariant() + "\n"); // NOI18N
+        bw.write("CND_CONF=" + conf.getName() + "\n"); // NOI18N
+        bw.write("CND_DISTDIR=" + MakeConfiguration.DIST_FOLDER + "\n"); // NOI18N
         bw.write("TMPDIR=" + tmpdir + "\n"); // NOI18N
         bw.write("TMPDIRNAME=" + tmpDirName + "\n"); // NOI18N
         String projectOutput = conf.getOutputValue();
