@@ -21,7 +21,7 @@ to extend the choice of license to its licensees as provided above.
 However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
--->
+--> 
 <html>
     <head>
         <meta content="text/html; charset=UTF-8" http-equiv="Content-Type">
@@ -35,9 +35,9 @@ made subject to such option by the copyright holder.
                 color: blue;
             }
             .change-bar {
-                border-left: thin;
-                border-left-style: solid;
                 border-color: black;
+                border-left-style: solid;
+                border-left: thin;
                 padding-left: 6px;
             }
             .deleted {
@@ -45,63 +45,26 @@ made subject to such option by the copyright holder.
             }
             -->
         </style>
-        <title>Customizing the Project Settings: Run Configuration</title>
+        <title>Customizing the Project Settings: Source Files Location</title>
     </head>
     <body>
         <h1>
-            Customizing the Project Settings: Run Configuration
+            Customizing the Project Settings: Source Files Location
         </h1>
         <p>
             <small><a href="#seealso">See Also</a></small>
         </p>
-        <p>
-            Run configurations accommodate the most commonly used PHP development use cases. A run
-            configuration is a stored setting for running a PHP project. You can define several
-            configurations for one project and switch between them back and forth. Run configurations
-            apply to both running and debugging.
-        </p>
-        <p>
-            During the project creation, the default run configuration is defined. The available options
-            are:
-        </p>
-        <ul>
-            <li>
-                Local Web Site
-            </li>
-            <li>
-                Remote Web Site (FTP/SFTP)
-            </li>
-            <li>
-                Script
-            </li>
-        </ul>
-        <p>
-            On the Run Configuration panel, modify the default run configuration and/or define new run
-            configurations, if necessary.
-        </p>
         <ol>
             <li>
-                To modify the default settings, <a href="new-project-run-configuration.html">update the</a>
-                <a href="new-project-run-configuration.html">fields as during the project creation</a>.
+                The Web Root field shows the root folder of your application site. By default, the field
+                shows the Sources folder. To change the web root, click Browse and select another folder.
             </li>
             <li>
-                To define a new run configuration, click New next to the Configuration dropdown list. The
-                Create New Configuration dialog box opens.
+                Select the Copy files from Sources Folder to another location, if necessary, and specify
+                the path to the storage folder.
             </li>
             <li>
-                In the Configuration Name field, enter the name of the new run configuration and click OK.
-                You return to the Run Configuration panel.
-            </li>
-            <li>
-                Define the run configuration settings in the same way as you defined the <a href=
-                                                                                            "new-project-run-configuration.html">default run configuration</a> during the project
-                creation and click OK. The new configuration is added to the Configuration dropdown list.
-            </li>
-            <li>If you are using Remote Debugging or Symbolic Links, click Advanced and set up
-                path mapping. See <a href="new-project-run-configuration.html#pathmapping">Path Mapping</a>.</li>
-            <li>
-                To remove a configuration, select it from the Configuration dropdown list and click
-                Delete.<br>
+                Change the encoding, if necessary<br>
             </li>
         </ol>
         <dl>
@@ -118,7 +81,7 @@ made subject to such option by the copyright holder.
             </dd>
             <dd>
                 <a href="new-project-configure_no_sources.html" title=
-                   "Configuring a New PHP Project without Previously Developed Sources">New PHP Project
+                   "Configurinag a New PHP Project without Previously Developed Sources">New PHP Project
                     without Previously Developed Sources</a>
             </dd>
             <dd>
@@ -129,11 +92,6 @@ made subject to such option by the copyright holder.
             <dd>
                 <a href="new-project-run-configuration.html" title="Run Configurations">Run
                     Configuration</a>
-            </dd>
-            <dd>
-                <a href="customize-project-sources.html" title=
-                   "Customizing the Project Settings: Source Files Location">Customizing the Project Settings:
-                    Source Files Location</a>
             </dd>
         </dl>
         <hr>

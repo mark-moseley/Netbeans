@@ -35,9 +35,9 @@ made subject to such option by the copyright holder.
                 color: blue;
             }
             .change-bar {
-                border-left: thin;
-                border-left-style: solid;
                 border-color: black;
+                border-left-style: solid;
+                border-left: thin;
                 padding-left: 6px;
             }
             .deleted {
@@ -45,63 +45,32 @@ made subject to such option by the copyright holder.
             }
             -->
         </style>
-        <title>Customizing the Project Settings: Run Configuration</title>
+        <title>Customizing the Project Settings: Include Path</title>
     </head>
     <body>
         <h1>
-            Customizing the Project Settings: Run Configuration
+            Customizing the Project Settings: Include Path
         </h1>
         <p>
             <small><a href="#seealso">See Also</a></small>
         </p>
         <p>
-            Run configurations accommodate the most commonly used PHP development use cases. A run
-            configuration is a stored setting for running a PHP project. You can define several
-            configurations for one project and switch between them back and forth. Run configurations
-            apply to both running and debugging.
-        </p>
-        <p>
-            During the project creation, the default run configuration is defined. The available options
-            are:
-        </p>
-        <ul>
-            <li>
-                Local Web Site
-            </li>
-            <li>
-                Remote Web Site (FTP/SFTP)
-            </li>
-            <li>
-                Script
-            </li>
-        </ul>
-        <p>
-            On the Run Configuration panel, modify the default run configuration and/or define new run
-            configurations, if necessary.
+            On the Include Path panel, specify the location of the files that you need to use in the
+            project but do not need to locate together with the source files.
         </p>
         <ol>
             <li>
-                To modify the default settings, <a href="new-project-run-configuration.html">update the</a>
-                <a href="new-project-run-configuration.html">fields as during the project creation</a>.
+                To add a folder, click Add Folder. The Select Folder(s) dialog box opens.
             </li>
             <li>
-                To define a new run configuration, click New next to the Configuration dropdown list. The
-                Create New Configuration dialog box opens.
+                Select the relevant folders and click Open. You return to the PHP Include Path panel. The
+                new folder is added to the list.
             </li>
             <li>
-                In the Configuration Name field, enter the name of the new run configuration and click OK.
-                You return to the Run Configuration panel.
+                To navigate through the list, use the buttons Move Up and Move Down.
             </li>
             <li>
-                Define the run configuration settings in the same way as you defined the <a href=
-                                                                                            "new-project-run-configuration.html">default run configuration</a> during the project
-                creation and click OK. The new configuration is added to the Configuration dropdown list.
-            </li>
-            <li>If you are using Remote Debugging or Symbolic Links, click Advanced and set up
-                path mapping. See <a href="new-project-run-configuration.html#pathmapping">Path Mapping</a>.</li>
-            <li>
-                To remove a configuration, select it from the Configuration dropdown list and click
-                Delete.<br>
+                To remove a folder from the list of included folder, select the folder and click Remove.
             </li>
         </ol>
         <dl>
@@ -115,10 +84,12 @@ made subject to such option by the copyright holder.
                     <param name="textFontSize" value="medium">
                     <param name="textColor" value="blue">
                 </object>
+
             </dd>
             <dd>
+
                 <a href="new-project-configure_no_sources.html" title=
-                   "Configuring a New PHP Project without Previously Developed Sources">New PHP Project
+                   "Configurinag a New PHP Project without Previously Developed Sources">New PHP Project
                     without Previously Developed Sources</a>
             </dd>
             <dd>
@@ -134,6 +105,11 @@ made subject to such option by the copyright holder.
                 <a href="customize-project-sources.html" title=
                    "Customizing the Project Settings: Source Files Location">Customizing the Project Settings:
                     Source Files Location</a>
+            </dd>
+            <dd>
+                <a href="customize-project-run-configuration.html" title=
+                   "Customizing the Project Settings: Run Configuration">Customizing the Project Settings: Run
+                    Configuration</a>
             </dd>
         </dl>
         <hr>
