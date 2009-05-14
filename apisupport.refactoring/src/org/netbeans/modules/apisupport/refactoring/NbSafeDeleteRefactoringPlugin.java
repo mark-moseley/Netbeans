@@ -41,13 +41,12 @@
 
 package org.netbeans.modules.apisupport.refactoring;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.StringTokenizer;
-import java.util.regex.Pattern;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
@@ -62,7 +61,6 @@ import org.netbeans.modules.refactoring.spi.RefactoringElementsBag;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -75,7 +73,9 @@ public class NbSafeDeleteRefactoringPlugin extends AbstractRefactoringPlugin {
     
     /** This one is important creature - makes sure that cycles between plugins won't appear */
     private static ThreadLocal semafor = new ThreadLocal();
-    
+
+    private Logger LOG = Logger.getLogger(NbSafeDeleteRefactoringPlugin.class.getName());
+
     /**
      * Creates a new instance of NbRenameRefactoringPlugin
      */
@@ -117,7 +117,6 @@ public class NbSafeDeleteRefactoringPlugin extends AbstractRefactoringPlugin {
             
             if (infoholder.isClass) {
                 checkManifest(project, infoholder.fullName, refactoringElements);
-                checkMetaInfServices(project, infoholder.fullName, refactoringElements);
                 checkLayer(project, infoholder.fullName, refactoringElements);
             }
             if (infoholder.isMethod) {
@@ -126,8 +125,7 @@ public class NbSafeDeleteRefactoringPlugin extends AbstractRefactoringPlugin {
             if (infoholder.isConstructor) {
                 checkConstructorLayer(infoholder, handle.getFileObject(), refactoringElements);
             }
-            
-            err.log("Gonna return problem: " + problem);
+            LOG.log(Level.INFO, "Gonna return problem: " + problem);    // NOI18N
             return problem;
         } catch (IOException ex) {
             Exceptions.printStackTrace(ex);
@@ -147,10 +145,6 @@ public class NbSafeDeleteRefactoringPlugin extends AbstractRefactoringPlugin {
                 attributeKey, section);
     }
     
-    protected RefactoringElementImplementation createMetaInfServicesRefactoring(String clazz, FileObject serviceFile, int line) {
-        return new ServicesSafeDeleteRefactoringElement(clazz, serviceFile);
-    }
-
     protected RefactoringElementImplementation createConstructorLayerRefactoring(String constructor, String fqname,
             LayerUtils.LayerHandle handle,
             FileObject layerFileObject,
@@ -224,23 +218,27 @@ public class NbSafeDeleteRefactoringPlugin extends AbstractRefactoringPlugin {
                 manifest.write(stream);
             } catch (FileNotFoundException ex) {
                 //TODO
-                err.notify(ex);
+                LOG.log(Level.WARNING, "Exception during refactoring", ex);    // NOI18N
             } catch (IOException exc) {
                 //TODO
-                err.notify(exc);
+                LOG.log(Level.WARNING, "Exception during refactoring", exc);    // NOI18N
+            } catch (IllegalArgumentException exc) {
+                // #161903: thrown from removeSection/Attribute means entry is probably already deleted,
+                // just log here
+                LOG.log(Level.INFO, "IllegalArgumentException thrown from removeSection/Attribute, entry probably already deleted");    // NOI18N
             } finally {
                 if (instream != null) {
                     try {
                         instream.close();
                     } catch (IOException ex) {
-                        err.notify(ex);
+                        LOG.log(Level.WARNING, "Exception during refactoring", ex);    // NOI18N
                     }
                 }
                 if (stream != null) {
                     try {
                         stream.close();
                     } catch (IOException ex) {
-                        err.notify(ex);
+                        LOG.log(Level.WARNING, "Exception during refactoring", ex);    // NOI18N
                     }
                 }
                 if (lock != null) {
@@ -255,76 +253,6 @@ public class NbSafeDeleteRefactoringPlugin extends AbstractRefactoringPlugin {
             }
         }
         
-    }
-    
-    public final class ServicesSafeDeleteRefactoringElement extends AbstractRefactoringElement  {
-        
-        private String oldName;
-        private String oldContent;
-        private File parent;
-        /**
-         * Creates a new instance of ServicesRenameRefactoringElement
-         */
-        public ServicesSafeDeleteRefactoringElement(String fqname, FileObject file) {
-            this.name = fqname.substring(fqname.lastIndexOf('.'));
-            parentFile = file;
-            oldName = fqname;
-            // read old content here. in the unprobable case when 2 classes are to be removed
-            // and both are placed in same services file, we need the true original content
-            oldContent = Utility.readFileIntoString(parentFile);
-            parent = FileUtil.toFile(parentFile);
-        }
-        
-        /** Returns text describing the refactoring formatted for display (using HTML tags).
-         * @return Formatted text.
-         */
-        public String getDisplayText() {
-            return NbBundle.getMessage(NbSafeDeleteRefactoringPlugin.class, "TXT_ServicesDelete", this.name);
-        }
-        
-        public void performChange() {
-            String content = Utility.readFileIntoString(parentFile);
-            if (content != null) {
-                String longName = oldName;
-                longName = longName.replaceAll("[.]", "\\."); //NOI18N
-                content = content.replaceAll("^" + longName + "[ \\\n]?", ""); //NOI18N
-                // now check if there's more entries in the file..
-                boolean hasMoreThanComments = false;
-                StringTokenizer tok = new StringTokenizer(content, "\n"); //NOI18N
-                while (tok.hasMoreTokens()) {
-                    String token = tok.nextToken().trim();
-                    if (token.length() > 0 && (! Pattern.matches("^[#].*", token))) { //NOI18N
-                        hasMoreThanComments = true;
-                        break;
-                    }
-                }
-                if (hasMoreThanComments) {
-                    Utility.writeFileFromString(parentFile, content);
-                } else {
-                    try {
-                        parentFile.delete();
-                    } catch (IOException exc) {
-                        err.notify(exc);
-                    }
-                }
-            }
-        }
-        
-        public void undoChange() {
-            try {
-                if (oldContent != null) {
-                    if (!parent.exists()) {
-                        FileObject fo = FileUtil.toFileObject(parent.getParentFile());
-                        if (fo != null) {
-                            parentFile = fo.createData(parent.getName());
-                        }
-                    }
-                    Utility.writeFileFromString(parentFile, oldContent);
-                }
-            } catch (IOException exc) {
-                err.notify(exc);
-            }
-        }
     }
     
     public final class LayerSafeDeleteRefactoringElement extends AbstractRefactoringElement  {
