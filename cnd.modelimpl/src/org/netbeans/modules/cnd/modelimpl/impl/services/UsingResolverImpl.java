@@ -43,25 +43,38 @@ package org.netbeans.modules.cnd.modelimpl.impl.services;
 
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
+import java.util.Set;
 import org.netbeans.modules.cnd.api.model.CsmDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
+import org.netbeans.modules.cnd.api.model.CsmListeners;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmNamespaceAlias;
+import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmProgressListener;
 import org.netbeans.modules.cnd.api.model.CsmProject;
+import org.netbeans.modules.cnd.api.model.CsmUsingDeclaration;
+import org.netbeans.modules.cnd.api.model.CsmUsingDirective;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect;
 import org.netbeans.modules.cnd.api.model.services.CsmUsingResolver;
 
 /**
  * implementation of using directives and using declarations resolver
  * @author Vladimir Voskresensky
  */
-public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressListener {
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.api.model.services.CsmUsingResolver.class)
+public final class UsingResolverImpl extends CsmUsingResolver implements CsmProgressListener {
     
     public UsingResolverImpl() {
         if (cache) {
-            CsmModelAccessor.getModel().addProgressListener(this);
+            CsmListeners.getDefault().addProgressListener(this);
         }
     }
     
@@ -69,18 +82,204 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
         return getCollector(file, offset, onlyInProject).getUsedDeclarations();
     }
     
-    public Collection<CsmNamespace> findVisibleNamespaces(CsmFile file, int offset, CsmProject onlyInProject) {
-        return getCollector(file, offset, onlyInProject).getVisibleNamespaces();
+    public Collection<CsmDeclaration> findUsedDeclarations(CsmNamespace namespace) {
+        List<CsmUsingDeclaration> res = new ArrayList<CsmUsingDeclaration>();
+        Iterator<CsmOffsetableDeclaration> udecls = CsmSelect.getDeclarations(
+                    namespace, CsmSelect.getFilterBuilder().createKindFilter(CsmDeclaration.Kind.USING_DECLARATION));
+        while (udecls.hasNext()) {
+            res.add((CsmUsingDeclaration) udecls.next());
+        }
+        // Let's also look for similarly named namespace in libraries,
+        // like it's done in CsmProjectContentResolver.getNamespaceMembers()
+        if (!namespace.isGlobal()) {
+            for(CsmProject lib : namespace.getProject().getLibraries()){
+                CsmNamespace ns = lib.findNamespace(namespace.getQualifiedName());
+                if (ns != null) {
+                    Iterator<CsmOffsetableDeclaration> it = CsmSelect.getDeclarations(
+                            ns, CsmSelect.getFilterBuilder().createKindFilter(CsmDeclaration.Kind.USING_DECLARATION));
+                    while (it.hasNext()) {
+                        res.add((CsmUsingDeclaration) it.next());
+                    }
+                }
+            }
+        }
+        return extractDeclarations(res);
     }
     
+    public Collection<CsmNamespace> findVisibleNamespaces(CsmFile file, int offset, CsmProject onlyInProject) {
+        Set<CsmNamespace> seen = new LinkedHashSet<CsmNamespace>();
+        Queue<CsmNamespace> queue = new LinkedList<CsmNamespace>(
+                getCollector(file, offset, onlyInProject).getVisibleNamespaces());
+        findVisibleNamespacesBfs(seen, queue, onlyInProject, file.getProject());
+        return seen;
+    }
+
+    private void findVisibleNamespacesBfs(Set<CsmNamespace> seen, Queue<CsmNamespace> queue, CsmProject onlyInProject, CsmProject startProject) {
+        // breadth-first search in namespace inclusion graph
+        while (!queue.isEmpty()) {
+            CsmNamespace namespace = queue.poll();
+            for (CsmNamespace used : findVisibleNamespaces(namespace, startProject)) {
+                if (!seen.contains(used) && !queue.contains(used) &&
+                        (onlyInProject == null || onlyInProject == used.getProject())) {
+                    queue.add(used);
+                }
+            }
+            seen.add(namespace);
+        }
+    }
+
+//    public Collection<CsmNamespaceDefinition> findDirectVisibleNamespaceDefinitions(CsmFile file, int offset, CsmProject onlyInProject) {
+//        return getCollector(file, offset, onlyInProject).getDirectVisibleNamespaceDefinitions();
+//    }
+    
+    public Collection<CsmUsingDirective> findUsingDirectives(CsmNamespace namespace) {
+        List<CsmUsingDirective> res = new ArrayList<CsmUsingDirective>();
+        Iterator<CsmOffsetableDeclaration> udirs = CsmSelect.getDeclarations(
+                    namespace, CsmSelect.getFilterBuilder().createKindFilter(CsmDeclaration.Kind.USING_DIRECTIVE));
+        while (udirs.hasNext()) {
+            res.add((CsmUsingDirective)udirs.next());
+        }
+        return res;
+    }
+
     public Collection<CsmNamespaceAlias> findNamespaceAliases(CsmFile file, int offset, CsmProject onlyInProject) {
         return getCollector(file, offset, onlyInProject).getNamespaceAliases();
     }
-    
+
+    public Collection<CsmNamespaceAlias> findNamespaceAliases(CsmNamespace namespace) {
+        List<CsmNamespaceAlias> res = new ArrayList<CsmNamespaceAlias>();
+        Iterator<CsmOffsetableDeclaration> udirs = CsmSelect.getDeclarations(
+                    namespace, CsmSelect.getFilterBuilder().createKindFilter(CsmDeclaration.Kind.NAMESPACE_ALIAS));
+        while (udirs.hasNext()) {
+            res.add((CsmNamespaceAlias)udirs.next());
+        }
+        return res;
+    }
+
+    /**
+     * converts collection of using declarations into ordered list of namespaces
+     * each namespace occurs only once according it's first using directive in 'decls' list
+     */
+    public static Collection<CsmNamespace> extractNamespaces(Collection<CsmUsingDirective> decls, CsmProject startPrj) {
+        // TODO check the correctness of order
+        Collection<Pair> namespaces = new LinkedHashSet<Pair>();
+        for (CsmUsingDirective decl : decls) {
+            CsmNamespace ref = decl.getReferencedNamespace();
+            if (ref != null) {
+                CsmFile file = decl.getContainingFile();
+                if (file != null) {
+                    CsmProject proj = file.getProject();
+                    if (proj != null) {
+                        Pair p = new Pair(ref, proj);
+                        namespaces.remove(p);
+                        namespaces.add(p);
+                    }
+                }
+            }
+        }
+        Collection<CsmNamespace> out = new LinkedHashSet<CsmNamespace>();
+        Collection<CsmProject> libraries = startPrj.getLibraries();
+        for (Pair p : namespaces) {
+            for (CsmNamespace ns : findNamespacesInProject(p.proj, p.fqn, libraries)) {
+                out.remove(ns);
+                out.add(ns);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Finds all namespaces visible in given namespace through "using" directives.
+     *
+     * @param namespace  namespace of interest
+     * @return unmodifiable collection of namespaces visible in given namespace though "using" directives
+     */
+    public Collection<CsmNamespace> findVisibleNamespaces(CsmNamespace namespace, CsmProject startPrj) {
+        List<CsmNamespace> res = new ArrayList<CsmNamespace>();
+        if (!namespace.isGlobal()) {
+            for (CsmNamespace ns : namespace.getNestedNamespaces()) {
+                if (ns.getName().length() == 0) {
+                    res.add(ns);
+                }
+            }
+        }
+        res.addAll(extractNamespaces(findUsingDirectives(namespace), startPrj));
+        return res;
+    }
+
+    /**
+     * Finds namespace in project and it's libraries
+     *
+     * @param project - project
+     * @param namespaceQualifiedName - namespace name
+     * @return collection of namespaces
+     */
+    private static Collection<CsmNamespace> findNamespacesInProject(CsmProject project, CharSequence namespaceQualifiedName, Collection<CsmProject> libs) {
+        HashSet<CsmProject> scannedProjects = new HashSet<CsmProject>();
+        Collection<CsmNamespace> out = new ArrayList<CsmNamespace>();
+        CsmNamespace namespace = project.findNamespace(namespaceQualifiedName);
+        if (namespace != null) {
+            out.add(namespace);
+        }
+        scannedProjects.add(project);
+        out.addAll(findNamespacesInProjects(libs, namespaceQualifiedName, scannedProjects));
+        return out;
+    }
+
+    /**
+     * Finds namespace in projects and libraries
+     *
+     * @param project - project
+     * @param namespaceQualifiedName - namespace name
+     * @param scannedProjects - set of already scanned projects
+     * @return collection of namespaces
+     */
+    private static Collection<CsmNamespace> findNamespacesInProjects(Collection<CsmProject> projects, CharSequence namespaceQualifiedName, HashSet<CsmProject> scannedProjects) {
+        Collection<CsmNamespace> out = new ArrayList<CsmNamespace>();
+        for (CsmProject proj : projects) {
+            if (!scannedProjects.contains(proj)) {
+                CsmNamespace namespace = proj.findNamespace(namespaceQualifiedName);
+                if (namespace != null) {
+                    out.add(namespace);
+                }
+                scannedProjects.add(proj);
+                Collection<CsmProject> libs = proj.getLibraries();
+                if (!libs.isEmpty()) {
+                    out.addAll(findNamespacesInProjects(libs, namespaceQualifiedName, scannedProjects));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static class Pair {
+
+        private final CharSequence fqn;
+        private CsmProject proj;
+
+        private Pair(CsmNamespace ref, CsmProject proj) {
+            this.fqn = ref.getQualifiedName();
+            this.proj = proj;
+        }
+
+        @Override
+        public int hashCode() {
+            return fqn.hashCode() + proj.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof Pair) {
+                Pair p = (Pair) obj;
+                return fqn.equals(p.fqn) && proj.equals(p.proj);
+            }
+            return false;
+        }
+    }
     ////////////////////////////////////////////////////////////////////////////
     // try to cache a little the last request
     
-    private Object lock = new Object();
+    private final Object lock = new Object();
     private Reference<SearchInfo> lastSearch = new SoftReference<SearchInfo>(null);
     
     private final boolean cache = true;
@@ -93,7 +292,10 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
                 if (search == null || !search.valid(file, offset, onlyInProject)) {
                     FileElementsCollector collector = new FileElementsCollector(file, offset, onlyInProject);
                     search = new SearchInfo(file, offset, onlyInProject, collector);
-                    lastSearch = new SoftReference(search);
+                    lastSearch = new SoftReference<SearchInfo>(search);
+                } else {
+                    search.offset = offset;
+                    search.collector.incrementOffset(offset);
                 }
                 assert search != null;
                 assert search.collector != null;
@@ -104,7 +306,7 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
     
     private static final class SearchInfo {
         public final CsmFile file;
-        public final int offset;
+        public int offset;
         public final FileElementsCollector collector;
         public final CsmProject onlyInProject;
         public SearchInfo(CsmFile file, int offset, CsmProject onlyInProject, FileElementsCollector collector) {
@@ -115,7 +317,7 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
         }
         
         private boolean valid(CsmFile file, int offset, CsmProject onlyInProject) {
-            return this.file.equals(file) && this.offset == offset && this.onlyInProject == onlyInProject;
+            return this.file.equals(file) && this.offset <= offset && this.onlyInProject == onlyInProject;
         }
     }
     
@@ -126,6 +328,7 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
     }
     
     public void projectParsingFinished(CsmProject project) {
+        cleanCache();
     }
     
     public void projectParsingCancelled(CsmProject project) {
@@ -133,7 +336,10 @@ public class UsingResolverImpl extends CsmUsingResolver implements CsmProgressLi
     
     public void fileInvalidated(CsmFile file) {
     }
-    
+
+    public void fileAddedToParse(CsmFile file) {
+    }
+
     public void fileParsingStarted(CsmFile file) {
     }
     

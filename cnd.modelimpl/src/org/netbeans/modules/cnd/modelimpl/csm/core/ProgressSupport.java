@@ -38,128 +38,155 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
-import java.util.Iterator;
+import java.util.Collection;
 import org.netbeans.modules.cnd.api.model.CsmProgressListener;
-import org.netbeans.modules.cnd.api.model.util.WeakList;
+import org.netbeans.modules.cnd.modelimpl.util.WeakList;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.openide.util.Lookup;
 
 /**
  *
  * @author Alexander Simon
  */
 public class ProgressSupport {
+
     private static ProgressSupport instance = new ProgressSupport();
     private WeakList<CsmProgressListener> progressListeners = new WeakList<CsmProgressListener>();
-    
     /** Creates a new instance of ProgressSupport */
     private ProgressSupport() {
     }
-    
+
     /*package-local*/ static ProgressSupport instance() {
         return instance;
     }
-    
+
     /*package-local*/ void addProgressListener(CsmProgressListener listener) {
         progressListeners.add(listener);
     }
-    
+
     /*package-local*/ void removeProgressListener(CsmProgressListener listener) {
         progressListeners.remove(listener);
     }
-    
-    /*package-local*/ Iterator<CsmProgressListener> getProgressListeners() {
-        return progressListeners.iterator();
+
+    private Iterable<? extends CsmProgressListener> getProgressListeners() {
+        Collection<? extends CsmProgressListener> services = Lookup.getDefault().lookupAll(CsmProgressListener.class);
+        return (services.isEmpty()) ? progressListeners : progressListeners.join(services);
     }
-   
-    
+
     /*package-local*/ void fireFileInvalidated(FileImpl file) {
-        if( TraceFlags.TRACE_PARSER_QUEUE ) System.err.println("ParserQueue: fireFileInvalidated " + file.getAbsolutePath());
-        for( CsmProgressListener listener : progressListeners ) {
-	    try { // have to do this to not allow a listener to crush code model threads
-		listener.fileInvalidated(file);
-	    }
-	    catch(Exception e) {
-		DiagnosticExceptoins.register(e);
-	    }
+        if (TraceFlags.TRACE_PARSER_QUEUE || TraceFlags.TRACE_PARSER_PROGRESS) {
+            System.err.println("fireFileInvalidated " + file.getAbsolutePath());
+        }
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.fileInvalidated(file);
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
         }
     }
-    
+
+    /*package-local*/ void fireFileAddedToParse(FileImpl file) {
+        if (TraceFlags.TRACE_PARSER_QUEUE || TraceFlags.TRACE_PARSER_PROGRESS) {
+            System.err.println("fireFileAddedToParse " + file.getAbsolutePath());
+        }
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.fileAddedToParse(file);
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
+        }
+    }
+
     /*package-local*/ void fireFileParsingStarted(FileImpl file) {
-        if( TraceFlags.TRACE_PARSER_QUEUE ) System.err.println("ParserQueue: fireFileParsingStarted " + file.getAbsolutePath());
-        for( CsmProgressListener listener : progressListeners ) {
-	    try { // have to do this to not allow a listener to crush code model threads
-		listener.fileParsingStarted(file);
-	    } catch(Exception e) {
-		DiagnosticExceptoins.register(e);
-	    }
+        if (TraceFlags.TRACE_PARSER_QUEUE || TraceFlags.TRACE_PARSER_PROGRESS) {
+            System.err.println("fireFileParsingStarted " + file.getAbsolutePath());
+        }
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.fileParsingStarted(file);
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
         }
     }
-    
-    
+
     /*package-local*/ void fireFileParsingFinished(FileImpl file) {
-        if( TraceFlags.TRACE_PARSER_QUEUE ) System.err.println("ParserQueue: fireFileParsingFinished " + file.getAbsolutePath());
-        for( CsmProgressListener listener : progressListeners ) {
-	    try { // have to do this to not allow a listener to crush code model threads
-		listener.fileParsingFinished(file);
-	    } catch(Exception e) {
-		DiagnosticExceptoins.register(e);
-	    }
+        if (TraceFlags.TRACE_PARSER_QUEUE || TraceFlags.TRACE_PARSER_PROGRESS) {
+            System.err.println("fireFileParsingFinished " + file.getAbsolutePath());
+        }
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.fileParsingFinished(file);
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
         }
     }
-    
+
     /*package-local*/ void fireProjectParsingStarted(ProjectBase project) {
-        if( TraceFlags.TRACE_PARSER_QUEUE ) System.err.println("ParserQueue: fireProjectParsingStarted " + project.getName());
-        for( CsmProgressListener listener : progressListeners ) {
-	    try { // have to do this to not allow a listener to crush code model threads
-		listener.projectParsingStarted(project);
-	    } catch(Exception e) {
-		DiagnosticExceptoins.register(e);
-	    }
+        if (TraceFlags.TRACE_PARSER_QUEUE || TraceFlags.TRACE_PARSER_PROGRESS) {
+            System.err.println("fireProjectParsingStarted " + project.getName());
+        }
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.projectParsingStarted(project);
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
         }
     }
-    
+
     /*package-local*/ void fireProjectParsingFinished(ProjectBase project) {
-        for( CsmProgressListener listener : progressListeners ) {
-	    try { // have to do this to not allow a listener to crush code model threads
-		listener.projectParsingFinished(project);
-	    } catch(Exception e) {
-		DiagnosticExceptoins.register(e);
-	    }
+        if (TraceFlags.TRACE_PARSER_QUEUE || TraceFlags.TRACE_PARSER_PROGRESS) {
+            System.err.println("fireProjectParsingFinished " + project.getName());
+        }
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.projectParsingFinished(project);
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
         }
     }
-    
+
     /*package-local*/ void fireProjectLoaded(ProjectBase project) {
-        for( CsmProgressListener listener : progressListeners ) {
-	    try { // have to do this to not allow a listener to crush code model threads
-		listener.projectLoaded(project);
-	    } catch(Exception e) {
-		DiagnosticExceptoins.register(e);
-	    }
+        if (TraceFlags.TRACE_PARSER_QUEUE || TraceFlags.TRACE_PARSER_PROGRESS) {
+            System.err.println("fireProjectLoaded " + project.getName());
+        }
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.projectLoaded(project);
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
         }
     }
-    
-   /*package-local*/ void fireIdle() {
-        for( CsmProgressListener listener : progressListeners ) {
-	    try { // have to do this to not allow a listener to crush code model threads
-		listener.parserIdle();
-	    } catch(Exception e) {
-		DiagnosticExceptoins.register(e);
-	    }
+
+    /*package-local*/ void fireIdle() {
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.parserIdle();
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
         }
     }
-    
-    /*package-local*/ void fireProjectFilesCounted(ProjectBase project, int cnt){
-        if( TraceFlags.TRACE_PARSER_QUEUE ) System.err.println("ParserQueue: fireProjectFilesCounted " + project.getName() + ' ' + cnt);
-        for( CsmProgressListener listener : progressListeners ) {
-	    try { // have to do this to not allow a listener to crush code model threads
-		listener.projectFilesCounted(project, cnt);
-	    } catch(Exception e) {
-		DiagnosticExceptoins.register(e);
-	    }
+
+    /*package-local*/ void fireProjectFilesCounted(ProjectBase project, int cnt) {
+        if (TraceFlags.TRACE_PARSER_QUEUE || TraceFlags.TRACE_PARSER_PROGRESS) {
+            System.err.println("fireProjectFilesCounted " + project.getName() + ' ' + cnt);
+        }
+        for (CsmProgressListener listener : getProgressListeners()) {
+            try { // have to do this to not allow a listener to crush code model threads
+                listener.projectFilesCounted(project, cnt);
+            } catch (Throwable e) {
+                DiagnosticExceptoins.register(e);
+            }
         }
     }
 }
