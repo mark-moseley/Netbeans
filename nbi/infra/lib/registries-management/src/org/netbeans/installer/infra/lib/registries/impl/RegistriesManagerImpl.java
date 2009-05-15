@@ -37,10 +37,10 @@
 package org.netbeans.installer.infra.lib.registries.impl;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -71,6 +71,7 @@ import org.netbeans.installer.utils.helper.Status;
 import org.netbeans.installer.utils.helper.Version;
 import org.netbeans.installer.infra.lib.registries.ManagerException;
 import org.netbeans.installer.infra.lib.registries.RegistriesManager;
+import org.netbeans.installer.utils.helper.Pair;
 import org.netbeans.installer.utils.progress.Progress;
 
 /**
@@ -636,64 +637,36 @@ public class RegistriesManagerImpl implements RegistriesManager {
             lock.unlock();
         }
     }
-    
     public String generateComponentsJs(
             final File root) throws ManagerException {
-        return generateComponentsJs(root, null);
+        return generateComponentsJs(root, null, null);
+    }
+    public String generateComponentsJs(
+            final File root, final File bundlesList) throws ManagerException {
+        return generateComponentsJs(root, bundlesList, null);
     }
     
     public String generateComponentsJs(
-            final File root, final String localeString) throws ManagerException {
-        final List<String> java = Arrays.asList(
-                "nb-platform",
-                "nb-base",
-                "nb-javase");
-        final List<String> javaee = Arrays.asList(
-                "nb-platform",
-                "nb-base",
-                "nb-javase",
-                "nb-javaee",
-                "glassfish",
-                "tomcat",
-                "sjsas");
-        final List<String> javame = Arrays.asList(
-                "nb-platform",
-                "nb-base",
-                "nb-javase",
-                "nb-javame");
-        final List<String> ruby = Arrays.asList(
-                "nb-platform",
-                "nb-base",
-                "nb-ruby");
+            final File root, File bundlesList, final String localeString) throws ManagerException {
         
-        final List<String> cnd = Arrays.asList(
-                "nb-platform",
-                "nb-base",
-                "nb-cnd");
+        Properties props = new Properties();
+        try {
+            if (bundlesList != null) {
+                FileInputStream is = new FileInputStream(bundlesList);
+                props.load(is);
+                is.close();
+            }            
+        } catch (IOException e){
+            throw new ManagerException(e);
+        }
         
-        final List<String> full = Arrays.asList(
-                "nb-platform",
-                "nb-base",
-                "nb-javase",
-                "nb-javaee",
-                "nb-javame",
-                "nb-cnd",
-                "nb-soa",
-                "nb-uml",
-                "nb-ruby",
-                "nb-php",
-                "glassfish",
-                "openesb",
-                "sjsam",
-                "tomcat",
-                "sjsas");
+        final List <Pair <List<String>, String>> bundles = new LinkedList<Pair<List<String>, String>> ();
+        for(Object key : props.keySet()) {
+             Object value = props.get(key);
+             List <String> list = StringUtils.asList(value.toString());
+             bundles.add(new Pair(list,  key.toString()));
+        }
         
-        final List<String> hidden = Arrays.asList(
-                "nb-platform",
-                //"nb-base",
-                "openesb",
-                "sjsam",
-                "jdk");
         final Map<String, String> notes = new HashMap<String, String>();
         //notes.put("nb-javase", "for Java SE, includes GUI Builder, Profiler");
         
@@ -714,7 +687,7 @@ public class RegistriesManagerImpl implements RegistriesManager {
             final Registry registry = loadRegistry(
                     root,
                     tempUserDir,
-                    Platform.WINDOWS);
+                    Platform.GENERIC);
             
             final List<Product> products =
                     getProducts(registry.getRegistryRoot());
@@ -784,84 +757,31 @@ public class RegistriesManagerImpl implements RegistriesManager {
                 }
                 
                 String properties = "PROPERTY_NONE";
-                if (java.contains(product.getUid())) {
-                    properties += " | PROPERTY_JAVA";
-                }
-                if (javaee.contains(product.getUid())) {
-                    properties += " | PROPERTY_JAVAEE";
-                }
-                if (javame.contains(product.getUid())) {
-                    properties += " | PROPERTY_JAVAME";
-                }
-                if (ruby.contains(product.getUid())) {
-                    properties += " | PROPERTY_RUBY";
-                }
-                if (cnd.contains(product.getUid())) {
-                    properties += " | PROPERTY_CND";
-                }
-                if (full.contains(product.getUid())) {
-                    properties += " | PROPERTY_FULL";
-                }
-                if (hidden.contains(product.getUid())) {
-                    properties += " | PROPERTY_HIDDEN";
-                }
+                for(Pair <List<String>,String> pair : bundles) {
+                    if(pair.getFirst().contains(product.getUid())) {
+                        properties += " | PROPERTY_" + pair.getSecond();
+                    }
+                }                
                 productProperties.add(properties);
                 
                 productMapping.put(i, productUids.size() - 1);
             }
-            
-            out.append("product_uids = new Array();").append("\n");
-            for (int i = 0; i < productUids.size(); i++) {
-                out.append("    product_uids[" + i + "] = \"" + productUids.get(i) + "\";").append("\n");
-            }
-            out.append("\n");
-            
-            out.append("product_versions = new Array();").append("\n");
-            for (int i = 0; i < productVersions.size(); i++) {
-                out.append("    product_versions[" + i + "] = \"" + productVersions.get(i) + "\";").append("\n");
-            }
-            out.append("\n");
-            
-            out.append("product_display_names = new Array();").append("\n");
-            for (int i = 0; i < productDisplayNames.size(); i++) {
-                out.append("    product_display_names[" + i + "] = \"" + productDisplayNames.get(i) + "\";").append("\n");
-            }
-            out.append("\n");
-            
-            out.append("product_notes = new Array();").append("\n");
-            for (int i = 0; i < productNotes.size(); i++) {
-                out.append("    product_notes[" + i + "] = \"" + productNotes.get(i) + "\";").append("\n");
-            }
-            out.append("\n");
-            
-            out.append("product_descriptions = new Array();").append("\n");
-            for (int i = 0; i < productDescriptions.size(); i++) {
-                out.append("    product_descriptions[" + i + "] = \"" + productDescriptions.get(i) + "\";").append("\n");
-            }
-            out.append("\n");
-            
-            out.append("product_download_sizes = new Array();").append("\n");
-            for (int i = 0; i < productDownloadSizes.size(); i++) {
-                out.append("    product_download_sizes[" + i + "] = " + productDownloadSizes.get(i) + ";").append("\n");
-            }
-            out.append("\n");
 
-            
-            out.append("product_platforms = new Array();").append("\n");
-            for (int i = 0; i < productPlatforms.size(); i++) {
-                out.append("    product_platforms[" + i + "] = new Array();").append("\n");
-                for (int j = 0; j < productPlatforms.get(i).size(); j++) {
-                    out.append("        product_platforms[" + i + "][" + j + "] = \"" + productPlatforms.get(i).get(j) + "\";").append("\n");
-                }
+            for(int i = 0; i < productUids.size(); i++) {
+                out.append("add_product_info(\n");
+                out.append("                 \""+ productUids.get(i) + "\",\n");
+                out.append("                 \"" + productVersions.get(i) + "\",\n");
+                out.append("                 \"" + productDisplayNames.get(i) + "\",\n");
+                out.append("                 \"" + productNotes.get(i) + "\",\n");
+                out.append("                 \"" + productDescriptions.get(i) + "\",\n");
+                out.append("                 " + productDownloadSizes.get(i) + ",\n");
+                //out.append("                 " + productProperties.get(i) + "),\n");
+                out.append("                 \"" + StringUtils.asString(productPlatforms.get(i)) + "\");\n");
+                out.append("\n");
             }
-            out.append("\n");
             
-            out.append("product_properties = new Array();").append("\n");
-            for (int i = 0; i < productProperties.size(); i++) {
-                out.append("    product_properties[" + i + "] = " + productProperties.get(i) + ";").append("\n");
-            }
-            out.append("\n");
             
+            // groups
             for (int i = 0; i < productUids.size(); i++) {
                 defaultGroupProducts.add(Integer.valueOf(i));
             }
@@ -889,26 +809,25 @@ public class RegistriesManagerImpl implements RegistriesManager {
                 groupDescriptions.add(0, "");
             }
             
-            out.append("group_products = new Array();").append("\n");
+            out.append("\n");
             for (int i = 0; i < groupProducts.size(); i++) {
-                out.append("    group_products[" + i + "] = new Array();").append("\n");
-                for (int j = 0; j < groupProducts.get(i).size(); j++) {
-                    out.append("        group_products[" + i + "][" + j + "] = " + groupProducts.get(i).get(j) + ";").append("\n");
+                List <String> uids = new LinkedList<String>();
+                for(int j=0;j<groupProducts.get(i).size();j++) {
+                    uids.add(productUids.get(groupProducts.get(i).get(j)));
                 }
+                out.append("add_group_info(\n");
+                out.append("               \"" + StringUtils.asString(uids) + "\",\n");
+                out.append("               \"" + groupDisplayNames.get(i) + "\",\n");
+                out.append("               \"" + groupDescriptions.get(i) + "\");\n");
+                out.append("\n");
             }
             out.append("\n");
-            
-            out.append("group_display_names = new Array();").append("\n");
-            for (int i = 0; i < groupDisplayNames.size(); i++) {
-                out.append("    group_display_names[" + i + "] = \"" + groupDisplayNames.get(i) + "\";").append("\n");
-            }
-            out.append("\n");
-            
-            out.append("group_descriptions = new Array();").append("\n");
-            for (int i = 0; i < groupDescriptions.size(); i++) {
-                out.append("    group_descriptions[" + i + "] = \"" + groupDescriptions.get(i) + "\";").append("\n");
-            }
-            out.append("\n");
+
+            for(Pair <List<String>,String> pair : bundles) {
+                List <String> uids = pair.getFirst();
+                String bundleId = pair.getSecond();
+                out.append("add_bundle_info(\"" + bundleId + "\", \"" + StringUtils.asString(uids) + "\");\n");
+             }
             
             return out.toString();
         } catch (IOException e) {
@@ -1020,9 +939,10 @@ public class RegistriesManagerImpl implements RegistriesManager {
             
             FileUtils.deleteFile(tempStatefile);
             FileUtils.deleteFile(tempPropertiesFile);
+            FileUtils.deleteFile(tempBundlePropertiesFile);
             FileUtils.deleteFile(tempUserDir, true);
             
-            if (platform == Platform.WINDOWS) {
+            if (platform.isCompatibleWith(Platform.WINDOWS)) {
                 bundle = new File(
                         bundle.getAbsolutePath().replaceFirst("\\.jar$", ".exe"));
             } else if (platform.isCompatibleWith(Platform.MACOSX)) {
