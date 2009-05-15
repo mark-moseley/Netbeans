@@ -67,13 +67,15 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.queries.SharabilityQuery;
 import org.netbeans.modules.project.ant.AntBasedProjectFactorySingleton;
-import org.netbeans.modules.project.ant.FileChangeSupport;
-import org.netbeans.modules.project.ant.FileChangeSupportEvent;
-import org.netbeans.modules.project.ant.FileChangeSupportListener;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.ChangeSupport;
+import org.openide.util.Parameters;
 import org.openide.util.WeakListeners;
 
 // XXX should perhaps be legal to call add* methods at any time (should update things)
@@ -98,9 +100,9 @@ public final class SourcesHelper {
             if (val == null) {
                 return null;
             }
-            return project.resolveFile(val);
+            return aph.resolveFile(val);
         }
-        public Collection<FileObject> getIncludeRoots() {
+        public Collection<FileObject> getIncludeRoots(boolean minimalSubfolders) {
             File loc = getActualLocation();
             if (loc != null) {
                 FileObject fo = FileUtil.toFileObject(loc);
@@ -109,6 +111,10 @@ public final class SourcesHelper {
                 }
             }
             return Collections.emptySet();
+        }
+        @Override
+        public String toString() {
+            return "Root[" + location + "]";
         }
     }
     
@@ -119,7 +125,6 @@ public final class SourcesHelper {
         private final Icon openedIcon;
         private final String includes;
         private final String excludes;
-        private PathMatcher matcher;
 
         public SourceRoot(String location, String includes, String excludes, String displayName, Icon icon, Icon openedIcon) {
             super(location);
@@ -178,8 +183,7 @@ public final class SourcesHelper {
                 if (file.isFolder()) {
                     path += "/"; // NOI18N
                 }
-                computeIncludeExcludePatterns();
-                if (!matcher.matches(path, true)) {
+                if (!computeIncludeExcludePatterns().matches(path, true)) {
                     return false;
                 }
                 Project p = getProject();
@@ -193,11 +197,11 @@ public final class SourcesHelper {
                     if (owner != null && owner != p) {
                         return false;
                     }
+                    File f = FileUtil.toFile(file);
+                    if (f != null && SharabilityQuery.getSharability(f) == SharabilityQuery.NOT_SHARABLE) {
+                        return false;
+                    } // else MIXED, UNKNOWN, or SHARABLE; or not a disk file
                 }
-                File f = FileUtil.toFile(file);
-                if (f != null && SharabilityQuery.getSharability(f) == SharabilityQuery.NOT_SHARABLE) {
-                    return false;
-                } // else MIXED, UNKNOWN, or SHARABLE; or not a disk file
                 return true;
             }
 
@@ -220,7 +224,7 @@ public final class SourcesHelper {
                 if (prop == null ||
                         (includes != null && includes.contains("${" + prop + "}")) || // NOI18N
                         (excludes != null && excludes.contains("${" + prop + "}"))) { // NOI18N
-                    matcher = null;
+                    resetIncludeExcludePatterns();
                     pcs.firePropertyChange(PROP_CONTAINERSHIP, null, null);
                 }
                 // XXX should perhaps react to ProjectInformation changes? but nothing to fire currently
@@ -243,23 +247,34 @@ public final class SourcesHelper {
             return patterns;
         }
 
-        private void computeIncludeExcludePatterns() {
-            if (matcher != null) {
-                return;
+        private PathMatcher matcher;
+        private PathMatcher computeIncludeExcludePatterns() {
+            synchronized (this) {
+                if (matcher != null) {
+                    return matcher;
+                }
             }
             String includesPattern = evalForMatcher(includes);
             String excludesPattern = evalForMatcher(excludes);
-            matcher = new PathMatcher(includesPattern, excludesPattern, getActualLocation());
+            PathMatcher _matcher = new PathMatcher(includesPattern, excludesPattern, getActualLocation());
+            synchronized (this) {
+                matcher = _matcher;
+            }
+            return _matcher;
+        }
+        private synchronized void resetIncludeExcludePatterns() {
+            matcher = null;
         }
 
-
         @Override
-        public Collection<FileObject> getIncludeRoots() {
-            Collection<FileObject> supe = super.getIncludeRoots();
-            computeIncludeExcludePatterns();
-            if (supe.size() == 1) {
+        public Collection<FileObject> getIncludeRoots(boolean minimalSubfolders) {
+            Collection<FileObject> supe = super.getIncludeRoots(minimalSubfolders);
+            if (!minimalSubfolders) {
+                return supe;
+            }
+            else if (supe.size() == 1) {
                 Set<FileObject> roots = new HashSet<FileObject>();
-                for (File r : matcher.findIncludedRoots()) {
+                for (File r : computeIncludeExcludePatterns().findIncludedRoots()) {
                     FileObject subroot = FileUtil.toFileObject(r);
                     if (subroot != null) {
                         roots.add(subroot);
@@ -285,13 +300,15 @@ public final class SourcesHelper {
         }
     }
     
-    private final AntProjectHelper project;
+    private final AntProjectHelper aph;
+    private final Project project;
     private final PropertyEvaluator evaluator;
     private final List<SourceRoot> principalSourceRoots = new ArrayList<SourceRoot>();
     private final List<Root> nonSourceRoots = new ArrayList<Root>();
     private final List<Root> ownedFiles = new ArrayList<Root>();
     private final List<TypedSourceRoot> typedSourceRoots = new ArrayList<TypedSourceRoot>();
     private int registeredRootAlgorithm;
+    private boolean minimalSubfolders;
     /**
      * If not null, external roots that we registered the last time.
      * Used when a property change is encountered, to see if the set of external
@@ -304,11 +321,29 @@ public final class SourcesHelper {
     /**
      * Create the helper object, initially configured to recognize only sources
      * contained inside the project directory.
-     * @param project an Ant project helper
+     * @param aph an Ant project helper
      * @param evaluator a way to evaluate Ant properties used to define source locations
+     * @deprecated Rather use {@link #SourcesHelper(Project, AntProjectHelper, PropertyEvaluator)}.
      */
-    public SourcesHelper(AntProjectHelper project, PropertyEvaluator evaluator) {
+    @Deprecated
+    public SourcesHelper(AntProjectHelper aph, PropertyEvaluator evaluator) {
+        this.project = null;
+        this.aph = aph;
+        this.evaluator = evaluator;
+    }
+    
+    /**
+     * Create the helper object, initially configured to recognize only sources
+     * contained inside the project directory.
+     * @param project the project object (need not yet be registered in {@link ProjectManager})
+     * @param aph an Ant project helper
+     * @param evaluator a way to evaluate Ant properties used to define source locations
+     * @since org.netbeans.modules.project.ant/1 1.31
+     */
+    public SourcesHelper(Project project, AntProjectHelper aph, PropertyEvaluator evaluator) {
+        Parameters.notNull("project", project);
         this.project = project;
+        this.aph = aph;
         this.evaluator = evaluator;
     }
     
@@ -462,7 +497,7 @@ public final class SourcesHelper {
     }
     
     private Project getProject() {
-        return AntBasedProjectFactorySingleton.getProjectFor(project);
+        return project != null ? project : AntBasedProjectFactorySingleton.getProjectFor(aph);
     }
     
     /**
@@ -496,11 +531,14 @@ public final class SourcesHelper {
      * {@link FileOwnerQuery#EXTERNAL_ALGORITHM_TRANSIENT}.
      * </p>
      * <p>
-     * You may <em>not</em> call this method inside the project's constructor, as
-     * it requires the actual project to exist and be registered in {@link ProjectManager}.
-     * Typically you would use {@link org.openide.util.Mutex#postWriteRequest} to run it
+     * If you used the old constructor form
+     * {@link #SourcesHelper(AntProjectHelper, PropertyEvaluator)}
+     * then you may <em>not</em> call this method inside the project's constructor, as
+     * it requires the actual project to exist and be registered in {@link ProjectManager};
+     * in this case you could still use {@link org.openide.util.Mutex#postWriteRequest} to run it
      * later, if you were creating the helper in your constructor, since the project construction
      * normally occurs in read access.
+     * Better to use {@link #SourcesHelper(Project, AntProjectHelper, PropertyEvaluator)}.
      * </p>
      * @param algorithm an external root registration algorithm as per
      *                  {@link FileOwnerQuery#markExternalOwner}
@@ -509,10 +547,65 @@ public final class SourcesHelper {
      *                               given <code>SourcesHelper</code> object
      */
     public void registerExternalRoots(int algorithm) throws IllegalArgumentException, IllegalStateException {
+        registerExternalRoots(algorithm, true);
+    }
+    
+    /**
+     * Register all external source or non-source roots using {@link FileOwnerQuery#markExternalOwner}.
+     * <p>
+     * Only roots added by {@link #addPrincipalSourceRoot} and {@link #addNonSourceRoot}
+     * are considered. They are registered if (and only if) they in fact fall
+     * outside of the project directory, and of course only if the folders really
+     * exist on disk. Currently it is not defined when this file existence check
+     * is done (e.g. when this method is first called, or periodically) or whether
+     * folders which are created subsequently will be registered, so project type
+     * providers are encouraged to create all desired external roots before calling
+     * this method.
+     * </p>
+     * <p>
+     * If the actual value of the location changes (due to changes being
+     * fired from the property evaluator), roots which were previously internal
+     * and are now external will be registered, and roots which were previously
+     * external and are now internal will be unregistered. The (un-)registration
+     * will be done using the same algorithm as was used initially.
+     * </p>
+     * <p>
+     * If a minimalSubfolders is true and an explicit include list is configured 
+     * for a principal source root, only those subfolders which are included 
+     * (or folders directly containing included files)
+     * will be registered, otherwise the whole source root is registered.
+     * Note that the source root, or an included subfolder, will
+     * be registered even if it contains excluded files or folders beneath it.
+     * </p>
+     * <p>
+     * Calling this method causes the helper object to hold strong references to the
+     * current external roots, which helps a project satisfy the requirements of
+     * {@link FileOwnerQuery#EXTERNAL_ALGORITHM_TRANSIENT}.
+     * </p>
+     * <p>
+     * You may <em>not</em> call this method inside the project's constructor, as
+     * it requires the actual project to exist and be registered in {@link ProjectManager}.
+     * Typically you would use {@link org.openide.util.Mutex#postWriteRequest} to run it
+     * later, if you were creating the helper in your constructor, since the project construction
+     * normally occurs in read access.
+     * </p>
+     * @param algorithm an external root registration algorithm as per
+     *                  {@link FileOwnerQuery#markExternalOwner}
+     * @param minimalSubfolders controls how the roots having an explicit include list 
+     * are registered. When true only those subfolders which are included 
+     * (or folders directly containing included files) will be registered,
+     * otherwise the whole source root is registered.
+     * @throws IllegalArgumentException if the algorithm is unrecognized
+     * @throws IllegalStateException if this method is called more than once on a
+     *                               given <code>SourcesHelper</code> object
+     * @since 1.26
+     */
+    public void registerExternalRoots (int algorithm, boolean minimalSubfolders) throws IllegalArgumentException, IllegalStateException {
         if (lastRegisteredRoots != null) {
             throw new IllegalStateException("registerExternalRoots was already called before"); // NOI18N
         }
         registeredRootAlgorithm = algorithm;
+        this.minimalSubfolders = minimalSubfolders;
         remarkExternalRoots();
     }
     
@@ -521,7 +614,7 @@ public final class SourcesHelper {
         allRoots.addAll(nonSourceRoots);
         allRoots.addAll(ownedFiles);
         Project p = getProject();
-        FileObject pdir = project.getProjectDirectory();
+        FileObject pdir = aph.getProjectDirectory();
         // First time: register roots and add to lastRegisteredRoots.
         // Subsequent times: add to newRootsToRegister and maybe add them later.
         if (lastRegisteredRoots == null) {
@@ -535,7 +628,7 @@ public final class SourcesHelper {
         // that was last computed, and just check if that has changed... otherwise we wind
         // up calling APH.resolveFileObject repeatedly (for each property change)
         for (Root r : allRoots) {
-            for (FileObject loc : r.getIncludeRoots()) {
+            for (FileObject loc : r.getIncludeRoots(minimalSubfolders)) {
                 if (FileUtil.getRelativePath(pdir, loc) != null) {
                     // Inside projdir already. Skip it.
                     continue;
@@ -613,7 +706,7 @@ public final class SourcesHelper {
         return new SourcesImpl();
     }
     
-    private final class SourcesImpl implements Sources, PropertyChangeListener, FileChangeSupportListener {
+    private final class SourcesImpl implements Sources, PropertyChangeListener, FileChangeListener {
         
         private final ChangeSupport cs = new ChangeSupport(this);
         private boolean haveAttachedListeners;
@@ -706,7 +799,7 @@ public final class SourcesHelper {
         private synchronized void listen(File rootLocation) {
             // #40845. Need to fire changes if a source root is added or removed.
             if (rootsListenedTo.add(rootLocation) && /* be lazy */ haveAttachedListeners) {
-                FileChangeSupport.DEFAULT.addListener(this, rootLocation);
+                FileUtil.addFileChangeListener(this, rootLocation);
             }
         }
         
@@ -714,7 +807,7 @@ public final class SourcesHelper {
             if (!haveAttachedListeners) {
                 haveAttachedListeners = true;
                 for (File rootLocation : rootsListenedTo) {
-                    FileChangeSupport.DEFAULT.addListener(this, rootLocation);
+                    FileUtil.addFileChangeListener(this, rootLocation);
                 }
             }
             cs.addChangeListener(listener);
@@ -742,25 +835,36 @@ public final class SourcesHelper {
             }
         }
 
-        public void fileCreated(FileChangeSupportEvent event) {
+        public void fileFolderCreated(FileEvent fe) {
             // Root might have been created on disk.
             maybeFireChange();
         }
 
-        public void fileDeleted(FileChangeSupportEvent event) {
+        public void fileDataCreated(FileEvent fe) {
+            maybeFireChange();
+        }
+
+        public void fileDeleted(FileEvent fe) {
             // Root might have been deleted.
             maybeFireChange();
         }
 
-        public void fileModified(FileChangeSupportEvent event) {
+        public void fileChanged(FileEvent fe) {
             // ignore; generally should not happen (listening to dirs)
         }
-        
+
+        public void fileRenamed(FileRenameEvent fe) {
+            maybeFireChange();
+        }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) {
+            // #164930 - ignore
+        }
+
         public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
             // Properties may have changed so as cause external roots to move etc.
             maybeFireChange();
         }
-
     }
     
     private final class PropChangeL implements PropertyChangeListener {
@@ -770,7 +874,7 @@ public final class SourcesHelper {
         public void propertyChange(PropertyChangeEvent evt) {
             // Some properties changed; external roots might have changed, so check them.
             for (SourceRoot r : principalSourceRoots) {
-                r.matcher = null;
+                r.resetIncludeExcludePatterns();
             }
             remarkExternalRoots();
         }
