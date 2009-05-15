@@ -52,6 +52,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -72,6 +73,7 @@ import org.netbeans.modules.gsf.testrunner.api.TestSuite;
 import org.netbeans.modules.gsf.testrunner.api.Testcase;
 import org.netbeans.modules.gsf.testrunner.api.Trouble;
 import org.netbeans.modules.gsf.testrunner.api.OutputLine;
+import org.netbeans.modules.gsf.testrunner.api.Status;
 import org.netbeans.modules.junit.output.antutils.AntProject;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
@@ -125,8 +127,6 @@ final class JUnitOutputReader {
     /** */
     private final Manager manager = Manager.getInstance();
     /** */
-    private String classpath;
-    /** */
     private ClassPath platformSources;
     
     private TestSession testSession;
@@ -137,6 +137,8 @@ final class JUnitOutputReader {
 
     private JUnitTestcase testcase;
 
+    private Report report;
+
     enum State {DEFAULT, SUITE_STARTED, TESTCASE_STARTED, SUITE_FINISHED, TESTCASE_ISSUE};
 
     private State state = State.DEFAULT;
@@ -144,7 +146,8 @@ final class JUnitOutputReader {
     /** Creates a new instance of JUnitOutputReader */
     JUnitOutputReader(final AntSession session,
                       final AntSessionInfo sessionInfo,
-                      final Project project) {
+                      final Project project,
+                      final Properties props) {
         this.project = project;
         this.sessionType = sessionInfo.getSessionType();
         this.antScript = FileUtil.normalizeFile(session.getOriginatingScript());
@@ -153,8 +156,8 @@ final class JUnitOutputReader {
             FileObject fileObj = FileUtil.toFileObject(antScript);
             this.project = FileOwnerQuery.getOwner(fileObj);
         }
-        this.testSession = new JUnitTestSession("", this.project, sessionType, new JUnitTestRunnerNodeFactory());
-        testSession.setRerunHandler(new JUnitExecutionManager(session));
+        this.testSession = new JUnitTestSession("", this.project, sessionType, new JUnitTestRunnerNodeFactory()); //NOI18N
+        testSession.setRerunHandler(new JUnitExecutionManager(session, testSession, props));
     }
 
     Project getProject() {
@@ -258,18 +261,7 @@ final class JUnitOutputReader {
             case SUITE_FINISHED:
             case TESTCASE_ISSUE:
             {
-                /* Look for classpaths: */
-
-                /* Code copied from JavaAntLogger */
-
-                Matcher matcher;
-
-                matcher = RegexpUtils.CLASSPATH_ARGS.matcher(msg);
-                if (matcher.find()) {
-                    this.classpath = matcher.group(1);
-                }
-                // XXX should also probably clear classpath when taskFinished called
-                matcher = RegexpUtils.JAVA_EXECUTABLE.matcher(msg);
+                Matcher matcher = RegexpUtils.JAVA_EXECUTABLE.matcher(msg);
                 if (matcher.find()) {
                     String executable = matcher.group(1);
                     ClassPath platformSrcs = findPlatformSources(executable);
@@ -541,7 +533,6 @@ final class JUnitOutputReader {
     /**
      */
     void testTaskFinished() {
-        closePereviousReport();
     }
 
     private void closePereviousReport(){
@@ -551,23 +542,41 @@ final class JUnitOutputReader {
             if (resultsDir != null) {
                 File reportFile = findReportFile();
                 if ((reportFile != null) && isValidReportFile(reportFile)) {
-                    TestSuite reportSuite = parseReportFile(reportFile);
+                    JUnitTestSuite reportSuite = parseReportFile(reportFile);
                     if ((reportSuite != null) && (reportSuite.getName().equals(currentSuite.getName()))) {
+                        lastSuiteTime = reportSuite.getElapsedTime();
                         for(Testcase tc: currentSuite.getTestcases()){
                             if (!tc.getOutput().isEmpty()){
                                 List<String> output = new ArrayList();
                                 for(OutputLine l: tc.getOutput()){
                                     output.add(l.getLine());
                                 }
-                                findTest(reportSuite, tc.getName()).addOutputLines(output);
+                                Testcase rtc = findTest(reportSuite, tc.getName());
+
+                                if (rtc != null)
+                                    rtc.addOutputLines(output);
                             }
                         }
-                        currentSuite.getTestcases().clear();
-                        currentSuite.getTestcases().addAll(reportSuite.getTestcases());
+                        if (!reportSuite.getTestcases().isEmpty()){
+                            currentSuite.getTestcases().clear();
+                            currentSuite.getTestcases().addAll(reportSuite.getTestcases());
+                        }
                     }
                 }
             }
-            manager.displayReport(testSession, testSession.getReport(lastSuiteTime));
+            if (report == null){
+                report = testSession.getReport(lastSuiteTime);
+            }else{
+                report.update(testSession.getReport(lastSuiteTime));
+            }
+            switch(state){
+                case SUITE_STARTED:
+                case TESTCASE_STARTED:
+                    report.setAborted(true);
+                default:
+                    manager.displayReport(testSession, report, true);
+            }
+            report = null;
             lastSuiteTime = 0;
         }
 
@@ -576,6 +585,7 @@ final class JUnitOutputReader {
     /**
      */
     void buildFinished(final AntEvent event) {
+        closePereviousReport();
         manager.sessionFinished(testSession);
     }
 
@@ -590,23 +600,40 @@ final class JUnitOutputReader {
     private void suiteStarted(final String suiteName) {
         closePereviousReport();
         TestSuite suite = new JUnitTestSuite(suiteName, testSession);
-        if (classpath != null){
-//            suite.setClassPath(classpath, platformSources);
-        }
         testSession.addSuite(suite);
         manager.displaySuiteRunning(testSession, suiteName);
         state = State.SUITE_STARTED;
-        classpath = null;
         platformSources = null;
     }
     
     private void suiteFinished(int total, int failures, int errors ,long time) {
-        while (testSession.getCurrentSuite().getTestcases().size() < (total - errors - failures)){
-            JUnitTestcase tc = new JUnitTestcase("Unknown", "Unknown", testSession);
-            testSession.addTestCase(tc); //NOI18N
+        int addFail = failures;
+        int addError = errors;
+        int addPass = total - failures - errors;
+        for(Testcase tc: testSession.getCurrentSuite().getTestcases()){
+            switch(tc.getStatus()){
+                case ERROR: addError--;break;
+                case FAILED: addFail--;break;
+                default: addPass--;
+            }
         }
+        for(int i=0; i<addPass; i++){
+            JUnitTestcase tc = new JUnitTestcase("Unknown", "Unknown", testSession); //NOI18N
+            tc.setStatus(Status.PASSED);
+            testSession.addTestCase(tc);
+        }
+        for(int i=0; i<addFail; i++){
+            JUnitTestcase tc = new JUnitTestcase("Unknown", "Unknown", testSession); //NOI18N
+            tc.setStatus(Status.FAILED);
+            testSession.addTestCase(tc);
+        }
+        for(int i=0; i<addError; i++){
+            JUnitTestcase tc = new JUnitTestcase("Unknown", "Unknown", testSession); //NOI18N
+            tc.setStatus(Status.ERROR);
+            testSession.addTestCase(tc);
+        }
+
         lastSuiteTime = time;
-//        manager.displayReport(testSession, testSession.getReport(time));
         state = State.SUITE_FINISHED;
     }
 
@@ -617,6 +644,12 @@ final class JUnitOutputReader {
     }
 
     private void testCaseFinished(){
+        if (report == null){
+            report = testSession.getReport(0);
+        }else{
+            report.update(testSession.getReport(0));
+        }
+        manager.displayReport(testSession, report, false);
         state = State.SUITE_STARTED;
     }
 
@@ -626,11 +659,13 @@ final class JUnitOutputReader {
      */
     private void displayOutput(final String text, final boolean error) {
         manager.displayOutput(testSession,text, error);
-        List<String> addedLines = new ArrayList<String>();
-        addedLines.add(text);
-        Testcase tc = testSession.getCurrentTestCase();
-        if (tc != null){
-            tc.addOutputLines(addedLines);
+        if (state == State.TESTCASE_STARTED){
+            List<String> addedLines = new ArrayList<String>();
+            addedLines.add(text);
+            Testcase tc = testSession.getCurrentTestCase();
+            if (tc != null){
+                tc.addOutputLines(addedLines);
+            }
         }
     }
     
@@ -734,13 +769,13 @@ final class JUnitOutputReader {
         
     }
 
-    private TestSuite parseReportFile(File reportFile) {
+    private JUnitTestSuite parseReportFile(File reportFile) {
         final long fileSize = reportFile.length();
         if ((fileSize < 0l) || (fileSize > MAX_REPORT_FILE_SIZE)) {
             return null;
         }
 
-        TestSuite suite = null;
+        JUnitTestSuite suite = null;
         try {
             suite = XmlOutputParser.parseXmlOutput(
                     new InputStreamReader(
