@@ -41,9 +41,14 @@
 
 package org.netbeans.modules.autoupdate.ui;
 
+import org.netbeans.api.autoupdate.OperationContainer;
+import org.netbeans.api.autoupdate.OperationSupport;
+import org.netbeans.modules.autoupdate.ui.wizards.UninstallUnitWizard;
+import org.netbeans.modules.autoupdate.ui.wizards.InstallUnitWizard;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -66,6 +71,7 @@ import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import java.util.prefs.Preferences;
 import javax.swing.AbstractAction;
+import javax.swing.AbstractButton;
 import javax.swing.Action;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -92,8 +98,11 @@ import org.netbeans.api.autoupdate.OperationContainer.OperationInfo;
 import org.netbeans.api.autoupdate.UpdateManager;
 import org.netbeans.api.autoupdate.UpdateUnit;
 import org.netbeans.api.autoupdate.UpdateUnitProvider.CATEGORY;
+import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.modules.autoupdate.ui.wizards.OperationWizardModel.OperationType;
 import org.openide.awt.Mnemonics;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
@@ -115,17 +124,17 @@ public class UnitTab extends javax.swing.JPanel {
     private String filter = "";
     private PluginManagerUI manager = null;
     private PopupActionSupport popupActionsSupport;
-    private RowTabAction activateAction;
-    private RowTabAction deactivateAction;
+    private TabAction activateAction;
+    private TabAction deactivateAction;
     private TabAction reloadAction;
     private RowTabAction moreAction;
     private RowTabAction lessAction;
     private RowTabAction removeLocallyDownloaded;
-
+    
     private static Boolean isWaitingForExternal = false;
     
-    private static final RequestProcessor RP = new RequestProcessor ();
-    private final RequestProcessor.Task searchTask = RP.create (new Runnable (){
+    private static final RequestProcessor SEARCH_PROCESSOR = new RequestProcessor ("search-processor");
+    private final RequestProcessor.Task searchTask = SEARCH_PROCESSOR.create (new Runnable (){
         public void run () {
             if (filter != null) {
                 int row = getSelectedRow();
@@ -145,6 +154,8 @@ public class UnitTab extends javax.swing.JPanel {
             }
         }
     });
+    private static final RequestProcessor DOWNLOAD_SIZE_PROCESSOR = new RequestProcessor ("download-size-processor", 1, true);
+    private Task getDownloadSizeTask = null;
     
     /** Creates new form UnitTab */
     public UnitTab (UnitTable table, UnitDetails details, PluginManagerUI manager) {
@@ -156,6 +167,7 @@ public class UnitTab extends javax.swing.JPanel {
         this.model = (UnitCategoryTableModel) m;
         table.getSelectionModel ().setSelectionMode (ListSelectionModel.SINGLE_SELECTION);
         initComponents ();
+        lWarning.setVisible(false);//#164953
         //TODO: for WINDOWS - don't paint background and let visible the native look
         /*
         if (UIManager.getLookAndFeel().getName().toLowerCase().startsWith("windows")) {//NOI18N
@@ -190,6 +202,13 @@ public class UnitTab extends javax.swing.JPanel {
                 refreshState();
             }
         });
+        table.getInputMap ().put (
+                KeyStroke.getKeyStroke (KeyEvent.VK_F10, KeyEvent.SHIFT_DOWN_MASK),
+                "org.netbeans.modules.autoupdate.ui.UnitTab.PopupActionSupport"); // NOI18N
+        table.getActionMap ().put (
+                "org.netbeans.modules.autoupdate.ui.UnitTab.PopupActionSupport", // NOI18N
+                popupActionsSupport.popupOnF10);
+
     }
     
     void focusTable () {
@@ -216,9 +235,10 @@ public class UnitTab extends javax.swing.JPanel {
         boolean enabled = !waitingState;
         Component[] all = getComponents ();
         for (Component component : all) {
-            if (component == bTabAction) {
+            if (component == bTabAction || component == bTabAction1 || component == bTabAction2) {
                 if (enabled) {
-                    component.setEnabled (model.getMarkedUnits ().size () > 0);
+                    TabAction a = (TabAction) ((AbstractButton)component).getAction();
+                    component.setEnabled (a == null ? false : a.isEnabled());
                 } else {
                     component.setEnabled (enabled);
                 }
@@ -300,21 +320,54 @@ public class UnitTab extends javax.swing.JPanel {
             tfSearch.removeFocusListener(flForSearch);
         }
         flForSearch = null;
-        
+        Preferences p = NbPreferences.root().node("/org/netbeans/modules/autoupdate");//NOI18N
+        if (preferenceChangeListener != null) {
+            p.removePreferenceChangeListener (preferenceChangeListener);
+            preferenceChangeListener = null;
+        }
     }
     
+    private Collection<Unit> oldUnits = Collections.emptySet ();
     
     public void refreshState () {
-        Collection<Unit> units = model.getMarkedUnits ();
-        int downloadSize = model.getDownloadSize ();
+        detailView.setVisible(this.model.supportsTwoViews());
+        final Collection<Unit> units = model.getMarkedUnits ();
+        if (oldUnits.equals (units)) {
+            return ;
+        }
+        oldUnits = units;
         popupActionsSupport.tableDataChanged ();
         
         if (units.size () == 0) {
             cleanSelectionInfo ();
         } else {
-            setSelectionInfo (Utilities.getDownloadSizeAsString (downloadSize), units.size ());
+            setSelectionInfo (null, units.size ());
         }
-        getDefaultAction ().setEnabled (units.size () > 0);
+        getDefaultAction ().tableDataChanged(units);
+        boolean alreadyScheduled = false;
+        if (getDownloadSizeTask != null) {
+            if (getDownloadSizeTask.getDelay () > 0) {
+                getDownloadSizeTask.schedule (1000);
+                alreadyScheduled = true;
+            } else if (! getDownloadSizeTask.isFinished ()) {
+                getDownloadSizeTask.cancel ();
+            }
+        }
+        if (units.size () > 0 && ! alreadyScheduled) {
+            getDownloadSizeTask = DOWNLOAD_SIZE_PROCESSOR.post (new Runnable () {
+                public void run () {
+                    int downloadSize = model.getDownloadSize ();
+                    if (Thread.interrupted ()) {
+                        return ;
+                    }
+                    if (model.getMarkedUnits ().size () == 0) {
+                        cleanSelectionInfo ();
+                    } else {
+                        setSelectionInfo (Utilities.getDownloadSizeAsString (downloadSize), model.getMarkedUnits ().size ());
+                    }
+                }
+            }, 150);
+        }
     }
     
     private TabAction getDefaultAction () {
@@ -335,18 +388,23 @@ public class UnitTab extends javax.swing.JPanel {
             
             activateAction = new ActivateAction ();
             deactivateAction = new DeactivateAction ();
+            UninstallAction uninstall = new UninstallAction();
             
             forPopup = new TabAction[] {
                 activateAction, deactivateAction,activateCategoryAction,deactivateCategoryAction,
                 checkCategoryAction, uncheckCategoryAction,
-                checkAllAction, uncheckAllAction, new CheckAction ()
+                checkAllAction, uncheckAllAction, new CheckAction (), uninstall
             };
+            bTabAction1.setVisible(true);
+            bTabAction2.setVisible(true);
+            bTabAction.setAction(activateAction);
+            bTabAction1.setAction(deactivateAction);
+            bTabAction2.setAction (uninstall);
+            prepareTopButton (reloadAction = new ReloadAction ());
+            table.setEnableRenderer (new EnableRenderer ());
+            initReloadTooltip();
+            break;
         }
-        bTabAction.setAction (new UninstallAction ());
-        prepareTopButton (reloadAction = new ReloadAction ());
-        table.setEnableRenderer (new EnableRenderer ());
-         initReloadTooltip();
-        break;
         case UPDATE :
         {
             RowTabAction selectCategoryAction = new CheckCategoryAction ();
@@ -363,6 +421,8 @@ public class UnitTab extends javax.swing.JPanel {
             };
         }
         bTabAction.setAction (new UpdateAction ());
+        bTabAction1.setVisible(false);
+        bTabAction2.setVisible(false);
         prepareTopButton (reloadAction = new ReloadAction ());
          initReloadTooltip();
         break;
@@ -382,6 +442,8 @@ public class UnitTab extends javax.swing.JPanel {
             };
         }
         bTabAction.setAction (new AvailableAction ());
+        bTabAction1.setVisible(false);
+        bTabAction2.setVisible(false);
         prepareTopButton (reloadAction = new ReloadAction ());
         table.setEnableRenderer (new SourceCategoryRenderer ());
          initReloadTooltip();
@@ -394,6 +456,8 @@ public class UnitTab extends javax.swing.JPanel {
                 };
             }
             bTabAction.setAction (new LocalUpdateAction ());
+            bTabAction1.setVisible(false);
+            bTabAction2.setVisible(false);
             prepareTopButton (new AddLocallyDownloadedAction ());
             break;
         }
@@ -433,12 +497,15 @@ public class UnitTab extends javax.swing.JPanel {
         if (UnitCategoryTableModel.Type.INSTALLED == model.getType () || UnitCategoryTableModel.Type.LOCAL == model.getType ()) {
             lSelectionInfo.setText ((NbBundle.getMessage (UnitTab.class, key, count)));
         } else {
-            lSelectionInfo.setText (NbBundle.getMessage (UnitTab.class, "UnitTab_lHowManySelected_TextFormatWithSize",
-                    NbBundle.getMessage (UnitTab.class, key, count), downloadSize));
+            if (downloadSize == null) {
+                lSelectionInfo.setText ((NbBundle.getMessage (UnitTab.class, key, count)));
+            } else {
+                lSelectionInfo.setText (NbBundle.getMessage (UnitTab.class, "UnitTab_lHowManySelected_TextFormatWithSize",
+                        NbBundle.getMessage (UnitTab.class, key, count), downloadSize));
+            }
         }
         if (model.needsRestart ()) {
-            Icon warningIcon = new ImageIcon (org.openide.util.Utilities.loadImage (
-                    "org/netbeans/modules/autoupdate/ui/resources/warning.gif")); // NOI18N
+            Icon warningIcon = ImageUtilities.loadImageIcon("org/netbeans/modules/autoupdate/ui/resources/warning.gif", false); // NOI18N
             lWarning.setIcon (warningIcon);
             lWarning.setText (NbBundle.getMessage (UnitTab.class, "UnitTab_lWarning_Text", NbBundle.getMessage (UnitTab.class, operationNameKey))); // NOI18N
         }
@@ -478,9 +545,9 @@ public class UnitTab extends javax.swing.JPanel {
                     //selectedRow is selected
                     Action action = null;
                     if (activateAction != null && activateAction.isEnabled ()) {
-                        action = activateAction;
+                        //action = activateAction;
                     } else if (deactivateAction != null && deactivateAction.isEnabled ()) {
-                        action = deactivateAction;
+                        //action = deactivateAction;
                     } else if (removeLocallyDownloaded != null && removeLocallyDownloaded.isEnabled ()) {
                         action = removeLocallyDownloaded;
                     }
@@ -538,16 +605,27 @@ public class UnitTab extends javax.swing.JPanel {
         spTab = new javax.swing.JSplitPane();
         topButton = new javax.swing.JButton();
         lWarning = new javax.swing.JLabel();
+        detailView = new javax.swing.JCheckBox();
+        bTabAction1 = new javax.swing.JButton();
+        bTabAction2 = new javax.swing.JButton();
 
         lSearch.setLabelFor(tfSearch);
         org.openide.awt.Mnemonics.setLocalizedText(lSearch, org.openide.util.NbBundle.getMessage(UnitTab.class, "lSearch1.text")); // NOI18N
 
         spTab.setBorder(null);
-        spTab.setDividerLocation(370);
+        spTab.setDividerLocation(Integer.parseInt(NbBundle.getMessage (UnitTab.class, "UnitTab_Splitter_DefaultDividerLocation")));
         spTab.setResizeWeight(0.5);
         spTab.setOneTouchExpandable(true);
 
         org.openide.awt.Mnemonics.setLocalizedText(topButton, "jButton1");
+
+        detailViewInit();
+        org.openide.awt.Mnemonics.setLocalizedText(detailView, org.openide.util.NbBundle.getBundle(UnitTab.class).getString("UnitTab.detailView.text")); // NOI18N
+        detailView.addItemListener(new java.awt.event.ItemListener() {
+            public void itemStateChanged(java.awt.event.ItemEvent evt) {
+                detailViewItemStateChanged(evt);
+            }
+        });
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -558,18 +636,24 @@ public class UnitTab extends javax.swing.JPanel {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
                         .add(topButton)
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 456, Short.MAX_VALUE)
+                        .add(18, 18, 18)
+                        .add(detailView)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED, 375, Short.MAX_VALUE)
                         .add(lSearch)
                         .add(4, 4, 4)
                         .add(tfSearch, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 114, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                    .add(spTab, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 689, Short.MAX_VALUE)
+                    .add(spTab, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 712, Short.MAX_VALUE)
                     .add(layout.createSequentialGroup()
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(bTabAction)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(bTabAction1)
+                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                        .add(bTabAction2)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                         .add(lSelectionInfo)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
-                        .add(lWarning, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 653, Short.MAX_VALUE)))
+                        .add(lWarning, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 482, Short.MAX_VALUE)
+                        .add(99, 99, 99)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -579,14 +663,17 @@ public class UnitTab extends javax.swing.JPanel {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.CENTER)
                     .add(tfSearch, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                     .add(lSearch)
-                    .add(topButton))
+                    .add(topButton)
+                    .add(detailView))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(spTab, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 46, Short.MAX_VALUE)
+                .add(spTab, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 73, Short.MAX_VALUE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.CENTER, false)
                     .add(bTabAction)
                     .add(lSelectionInfo, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .add(lWarning))
+                    .add(lWarning)
+                    .add(bTabAction1)
+                    .add(bTabAction2))
                 .addContainerGap())
         );
 
@@ -596,7 +683,21 @@ public class UnitTab extends javax.swing.JPanel {
         topButton.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(UnitTab.class, "ACN_Reload")); // NOI18N
         topButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(UnitTab.class, "ACD_Reload")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
-    
+
+    private void detailViewItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_detailViewItemStateChanged
+        if (this.model.supportsTwoViews()) {
+            manager.setDetailView(detailView.isSelected());
+            manager.updateUnitsChanged();
+            System.setProperty(PluginManagerUI.DETAIL_VIEW_SELECTED_PROP, "" + detailView.isSelected());
+        }
+}//GEN-LAST:event_detailViewItemStateChanged
+
+    private void detailViewInit() {
+        detailView.setVisible(this.model.supportsTwoViews());
+        if (this.model.supportsTwoViews()) {            
+            detailView.setSelected(Boolean.getBoolean(PluginManagerUI.DETAIL_VIEW_SELECTED_PROP));
+        }
+    }
     
     private LocalDownloadSupport getLocalDownloadSupport () {
         return (model instanceof LocallyDownloadedTableModel) ? ((LocallyDownloadedTableModel)model).getLocalDownloadSupport () : null;
@@ -605,16 +706,29 @@ public class UnitTab extends javax.swing.JPanel {
     private Task reloadTask (final boolean force) {
         final Runnable checkUpdates = new Runnable (){
             public void run () {
+                ProgressHandle handle = ProgressHandleFactory.createHandle (NbBundle.getMessage (UnitTab.class,  ("UnitTab_ReloadAction")));
+                JComponent progressComp = ProgressHandleFactory.createProgressComponent (handle);
+                JLabel detailLabel = new JLabel (NbBundle.getMessage (UnitTab.class, "UnitTab_PrepareReloadAction"));
+                manager.setProgressComponent (detailLabel, progressComp);
+                handle.setInitialDelay (0);
+                handle.start ();
                 manager.initTask.waitFinished ();
                 setWaitingState (true);
+                if (getDownloadSizeTask != null && ! getDownloadSizeTask.isFinished ()) {
+                    if (getDownloadSizeTask.getDelay () > 0) {
+                        getDownloadSizeTask.cancel ();
+                    } else {
+                        getDownloadSizeTask.waitFinished ();
+                    }
+                }
                 final int row = getSelectedRow ();
                 final Map<String, Boolean> state = UnitCategoryTableModel.captureState (model.getUnits ());
                 if (model instanceof LocallyDownloadedTableModel) {
                     ((LocallyDownloadedTableModel) model).removeInstalledUnits ();
                     ((LocallyDownloadedTableModel) model).setUnits (null);
                 }
+                manager.unsetProgressComponent (detailLabel, progressComp);
                 Utilities.presentRefreshProviders (manager, force);
-                final List<UpdateUnit> units = UpdateManager.getDefault ().getUpdateUnits (Utilities.getUnitTypes ());
                 SwingUtilities.invokeLater (new Runnable () {
                     public void run () {
                         fireUpdataUnitChange ();
@@ -629,7 +743,7 @@ public class UnitTab extends javax.swing.JPanel {
         return Utilities.startAsWorkerThread (checkUpdates);
     }
     
-    private class PopupActionSupport extends MouseAdapter {
+    class PopupActionSupport extends MouseAdapter implements Runnable {
         private final TabAction[] actions;
         
         PopupActionSupport (TabAction[] actions) {
@@ -729,16 +843,53 @@ public class UnitTab extends javax.swing.JPanel {
             }
             return false;
         }
+
+        public void run () {
+            Point p = getPositionForPopup();
+
+            if (p != null) {
+                showPopup (p, table);
+            }
+        }
+        
+        private Point getPositionForPopup () {
+            int r = table.getSelectedRow ();
+            int c = table.getSelectedColumn ();
+
+            if (r < 0 || c < 0) {
+                return null;
+            }
+
+            Rectangle rect = table.getCellRect (r, c, false);
+
+            if (rect == null) {
+                return null;
+            }
+
+            return SwingUtilities.convertPoint (table, rect.x, rect.y, table);
+        }
+
+        public final Action popupOnF10 = new AbstractAction () {
+
+            public void actionPerformed (ActionEvent evt) {
+                popupActionsSupport.run ();
+            }
+
+            @Override
+            public boolean isEnabled () {
+                return table.isFocusOwner ();
+            }
+        };
+
     }
-    
     
     private void showPopup (Point e, Component invoker) {
         int row = UnitTab.this.table.rowAtPoint (e);
         if (row >= 0) {
             table.getSelectionModel ().setSelectionInterval (row, row);
-            final JPopupMenu popup = popupActionsSupport.createPopup ();
-            if (popup != null && popup.getComponentCount () > 0) {
-                popup.show (invoker,e.x, e.y);
+            final JPopupMenu finalPopup = popupActionsSupport.createPopup ();
+            if (finalPopup != null && finalPopup.getComponentCount () > 0) {
+                finalPopup.show (invoker,e.x, e.y);
                 
             }
         }
@@ -895,7 +1046,7 @@ public class UnitTab extends javax.swing.JPanel {
         }
         
         
-        public abstract void performerImpl ();        
+        public abstract void performerImpl ();
     }
     
     private abstract class RowTabAction extends TabAction {
@@ -1063,7 +1214,9 @@ public class UnitTab extends javax.swing.JPanel {
             try {
                 wizardFinished = new InstallUnitWizard ().invokeWizard (OperationType.INSTALL, manager);
             } finally {
-                fireUpdataUnitChange ();
+                if (manager != null) {
+                    fireUpdataUnitChange ();
+                }
                 if (!wizardFinished) {
                     UnitCategoryTableModel.restoreState (model.getUnits (), state, model.isMarkedAsDefault ());
                 }
@@ -1137,14 +1290,67 @@ public class UnitTab extends javax.swing.JPanel {
                 
         @Override
         protected boolean isVisible (Unit u) {
-              return super.isVisible (u);
+            if (u.getRelevantElement().getUpdateUnit().getType() == UpdateManager.TYPE.FEATURE) {
+                return false;
+            }
+            return super.isVisible (u);
         }
     }
     
-    private class ActivateAction extends RowTabAction {
+    private class ActivateAction extends TabAction {
         public ActivateAction () {
             super ("UnitTab_ActivateAction", /*KeyStroke.getKeyStroke (KeyEvent.VK_E, KeyEvent.CTRL_DOWN_MASK),*/ "EnableDisable");
         }
+
+        @Override
+        public void tableDataChanged(Collection<Unit> units) {
+            if (units.isEmpty()) {
+                setEnabled(false);
+                return;
+            }
+            for (Unit u : units) {
+                if (!isEnabled(u)) {
+                    setEnabled(false);
+                    return;
+                }
+            }
+            setEnabled(true);
+        }
+
+        @Override
+        public void performerImpl() {
+            final int row = getSelectedRow ();
+            final Map<String, Boolean> state = UnitCategoryTableModel.captureState (model.getUnits ());
+            OperationContainer<OperationSupport> c = Containers.forEnable();
+            for (Unit u : model.getUnits()) {
+                if (u.isMarked()) {
+                    c.add(u.updateUnit, u.getRelevantElement());
+                }
+            }
+            UninstallUnitWizard wizard = new UninstallUnitWizard ();
+            wizard.invokeWizard (true);
+            Containers.forEnable ().removeAll ();
+            restoreSelectedRow(row);
+            refreshState ();
+            focusTable ();
+        }
+        /*
+        public void performerImpl (Unit u) {
+            Unit.Installed unit = (Unit.Installed)u;
+            final int row = getSelectedRow();
+
+            if (!unit.getRelevantElement ().isEnabled ()) {
+                OperationInfo info = Containers.forEnable ().add (unit.updateUnit, unit.getRelevantElement ());
+                assert info != null;
+                UninstallUnitWizard wizard = new UninstallUnitWizard ();
+                wizard.invokeWizard (true);
+                Containers.forEnable ().removeAll ();
+            }
+            fireUpdataUnitChange ();
+            restoreSelectedRow(row);
+            focusTable();
+        }
+         */
         
         protected boolean isEnabled (Unit u) {
             boolean retval = false;
@@ -1161,27 +1367,6 @@ public class UnitTab extends javax.swing.JPanel {
                 return getActionName ()+ " " + u.getDisplayName ();
             }*/
             return getActionName ();
-        }
-        public void performerImpl (Unit u) {
-            Unit.Installed unit = (Unit.Installed)u;
-            final int row = getSelectedRow();
-            
-            if (!unit.getRelevantElement ().isEnabled ()) {
-                OperationInfo info = Containers.forEnable ().add (unit.updateUnit, unit.getRelevantElement ());
-                assert info != null;
-                UninstallUnitWizard wizard = new UninstallUnitWizard ();
-                wizard.invokeWizard (true);
-                Containers.forEnable ().removeAll ();
-            }
-            fireUpdataUnitChange ();
-            restoreSelectedRow(row);
-            focusTable();
-        }
-        
-        
-        @Override
-        protected boolean isVisible (Unit u) {
-            return  false;
         }
     }
     
@@ -1241,16 +1426,70 @@ public class UnitTab extends javax.swing.JPanel {
                 
         @Override
         protected boolean isVisible (Unit u) {
+            if (u.getRelevantElement().getUpdateUnit().getType() == UpdateManager.TYPE.FEATURE) {
+                return false;
+            }
             return isEnabled();
         }
     }
     
     
-    private class DeactivateAction extends RowTabAction {
+    private class DeactivateAction extends TabAction {
         public DeactivateAction () {
             super ("UnitTab_DeactivateAction", /*KeyStroke.getKeyStroke (KeyEvent.VK_D, KeyEvent.CTRL_DOWN_MASK),*/ "EnableDisable");
         }
         
+        @Override
+        public void tableDataChanged(Collection<Unit> units) {
+            if (units.isEmpty()) {
+                setEnabled(false);
+                return;
+            }
+
+            for (Unit u : units) {
+                if (!isEnabled(u)) {
+                    setEnabled(false);
+                    return;
+                }
+            }
+            setEnabled(true);
+        }
+
+        @Override
+        public void performerImpl() {
+            final int row = getSelectedRow ();
+            OperationContainer<OperationSupport> c = Containers.forDisable();
+            for (Unit u : model.getUnits()) {
+                if (u.isMarked()) {
+                    c.add(u.updateUnit, u.getRelevantElement());
+                }
+            }
+            UninstallUnitWizard wizard = new UninstallUnitWizard ();
+            if (wizard.invokeWizard (false)) {
+                Containers.forUninstall().removeAll();
+            }
+            Containers.forDisable().removeAll();
+            restoreSelectedRow(row);
+            refreshState ();
+            focusTable ();
+        }
+        /*
+            Unit.Installed unit = (Unit.Installed)u;
+            final int row = getSelectedRow();
+
+            if (unit.getRelevantElement ().isEnabled ()) {
+                OperationInfo info = Containers.forDisable ().add (unit.updateUnit, unit.getRelevantElement ());
+                assert info != null;
+                UninstallUnitWizard wizard = new UninstallUnitWizard ();
+                if (wizard.invokeWizard (false)) {
+                    Containers.forUninstall ().remove (unit.getRelevantElement ());
+                }
+                Containers.forDisable ().removeAll ();
+            }
+            fireUpdataUnitChange ();
+            restoreSelectedRow(row);
+            focusTable ();
+        */
         protected boolean isEnabled (Unit u) {
             boolean retval = false;
             if ((u != null) && (u instanceof Unit.Installed)) {
@@ -1266,29 +1505,6 @@ public class UnitTab extends javax.swing.JPanel {
                 return getActionName ()+ " " + u.getDisplayName ();
             }*/
             return getActionName ();
-        }
-        public void performerImpl (Unit u) {
-            Unit.Installed unit = (Unit.Installed)u;
-            final int row = getSelectedRow();
-            
-            if (unit.getRelevantElement ().isEnabled ()) {
-                OperationInfo info = Containers.forDisable ().add (unit.updateUnit, unit.getRelevantElement ());
-                assert info != null;
-                UninstallUnitWizard wizard = new UninstallUnitWizard ();
-                if (wizard.invokeWizard (false)) {
-                    Containers.forUninstall ().remove (unit.getRelevantElement ());
-                }
-                Containers.forDisable ().removeAll ();
-            }
-            fireUpdataUnitChange ();
-            restoreSelectedRow(row);
-            focusTable ();
-        }
-        
-        
-        @Override
-        protected boolean isVisible (Unit u) {
-            return  false;
         }
     }
     
@@ -1347,6 +1563,9 @@ public class UnitTab extends javax.swing.JPanel {
         }
         @Override
         protected boolean isVisible (Unit u) {
+            if (u.getRelevantElement().getUpdateUnit().getType() == UpdateManager.TYPE.FEATURE) {
+                return false;
+            }
             return isEnabled();
         }
     }
@@ -1389,6 +1608,9 @@ public class UnitTab extends javax.swing.JPanel {
         
         @Override
         protected boolean isVisible (Unit u) {
+            if (u.getRelevantElement().getUpdateUnit().getType() == UpdateManager.TYPE.FEATURE) {
+                return false;
+            }
             return super.isVisible(u);
         }
         
@@ -1553,6 +1775,8 @@ public class UnitTab extends javax.swing.JPanel {
     private class AddLocallyDownloadedAction extends TabAction {
         public AddLocallyDownloadedAction () {
             super ("UnitTab_bAddLocallyDownloads_Name", null);
+            topButton.getAccessibleContext ().setAccessibleName (NbBundle.getMessage(UnitTab.class, "UnitTab_bAddLocallyDownloads_ACN")); // NOI18N
+            topButton.getAccessibleContext ().setAccessibleDescription (NbBundle.getMessage(UnitTab.class, "UnitTab_bAddLocallyDownloads_ACD")); // NOI18N
             String tooltip = NbBundle.getMessage (UnitTab.class, "UnitTab_Tooltip_AddAction_LOCAL");//NOI18N
             putValue (TOOL_TIP_TEXT_KEY, tooltip);
         }
@@ -1659,13 +1883,13 @@ public class UnitTab extends javax.swing.JPanel {
             if (value instanceof Boolean) {
                 Unit u = model.getUnitAtRow (row);
                 if (u != null && u.getRelevantElement ().getUpdateUnit ().isPending ()) {
-                    renderComponent.setIcon (new javax.swing.ImageIcon (getClass ().getResource ("/org/netbeans/modules/autoupdate/ui/resources/restart.png"))); // NOI18N
+                    renderComponent.setIcon (ImageUtilities.loadImageIcon("org/netbeans/modules/autoupdate/ui/resources/restart.png", false)); // NOI18N
                 } else {
                     Boolean state = (Boolean)value;
                     if (state.booleanValue()) {
-                        renderComponent.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/autoupdate/ui/resources/active.png"))); // NOI18N
+                        renderComponent.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/autoupdate/ui/resources/active.png", false)); // NOI18N
                     } else {
-                        renderComponent.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/autoupdate/ui/resources/inactive.png"))); // NOI18N
+                        renderComponent.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/autoupdate/ui/resources/inactive.png", false)); // NOI18N
                     }
                 }
                 renderComponent.setText ("");
@@ -1701,6 +1925,9 @@ public class UnitTab extends javax.swing.JPanel {
     }    
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton bTabAction;
+    private javax.swing.JButton bTabAction1;
+    private javax.swing.JButton bTabAction2;
+    private javax.swing.JCheckBox detailView;
     private javax.swing.JLabel lSearch;
     private javax.swing.JLabel lSelectionInfo;
     private javax.swing.JLabel lWarning;
