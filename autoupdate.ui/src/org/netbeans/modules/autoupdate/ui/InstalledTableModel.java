@@ -66,11 +66,13 @@ public class InstalledTableModel extends UnitCategoryTableModel {
     private OperationContainer<OperationSupport> enableContainer = Containers.forEnable();
     private OperationContainer<OperationSupport> disableContainer = Containers.forDisable();
     private OperationContainer<OperationSupport> uninstallContainer = Containers.forUninstall();
+    private OperationContainer<OperationSupport> containerCustom = Containers.forCustomUninstall ();
     
     private final Logger err = Logger.getLogger ("org.netbeans.modules.autoupdate.ui.InstalledTableModel");
     
     private static String col0, col1, col2, col3;
-    
+    private boolean twoViews = true;
+
     /** Creates a new instance of InstalledTableModel
      * @param units 
      */
@@ -80,6 +82,21 @@ public class InstalledTableModel extends UnitCategoryTableModel {
 
     public final void setUnits (List<UpdateUnit> units) {    
         setData(Utilities.makeInstalledCategories (units));
+    }
+
+    final void setUnits(List<UpdateUnit> units, List<UpdateUnit> features) {
+        if (features.isEmpty()) {
+            setUnits(units);
+            twoViews = false;
+        } else {
+            setUnits(features);
+            twoViews = true;
+        }
+    }
+
+    @Override
+    boolean supportsTwoViews() {
+        return twoViews;
     }
 
     @Override
@@ -229,13 +246,14 @@ public class InstalledTableModel extends UnitCategoryTableModel {
     
     
     public int getPreferredWidth(JTableHeader header, int col) {
+        final int minWidth = super.getMinWidth(header, col);
         switch (col) {
         case 1:
-            return super.getMinWidth(header, col)*4;
+            return minWidth*5;
         case 2:
-            return super.getMinWidth(header, col)*2;
+            return minWidth*3;
         }
-        return super.getMinWidth(header, col);
+        return minWidth;
     }
     
     
