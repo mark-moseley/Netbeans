@@ -52,6 +52,7 @@ import org.openide.util.Lookup;
  *
  * @author pzajac
  */
+@org.openide.util.lookup.ServiceProvider(service=org.apache.tools.ant.module.spi.AntLogger.class)
 public class TestAntLogger extends AntLogger {
     boolean bEnabled;
 
@@ -95,7 +96,7 @@ public class TestAntLogger extends AntLogger {
                  new int[0];
     }
 
-    static TestAntLogger getDefault() {
+    public static TestAntLogger getDefault() {
         // XXX would be clearer to remove M-I/s reg and use MockLookup instead
         return (TestAntLogger) Lookup.getDefault().lookupItem(
                 new Lookup.Template<AntLogger>(AntLogger.class,
