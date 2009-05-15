@@ -41,14 +41,15 @@
 
 package org.openide.util;
 
+import org.netbeans.modules.openide.util.ActiveQueue;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dialog;
 import java.awt.Dimension;
+import java.awt.Event;
 import java.awt.Frame;
-import java.awt.Graphics;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsEnvironment;
 import java.awt.Image;
@@ -61,7 +62,6 @@ import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
-import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -99,8 +99,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.Action;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
-import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.JSeparator;
@@ -109,6 +107,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import org.netbeans.modules.openide.util.AWTBridge;
 import org.openide.util.actions.Presenter;
+import org.openide.util.lookup.Lookups;
 
 /** Otherwise uncategorized useful static methods.
 *
@@ -177,25 +176,41 @@ public final class Utilities {
      * @since 4.50
      */
     public static final int OS_FREEBSD = OS_OTHER << 1;
+    
+    /** Operating system is Windows Vista.
+     * @since 7.17
+     */
+    public static final int OS_WINVISTA = OS_FREEBSD << 1;
 
-    /** A mask for Windows platforms. */
-    public static final int OS_WINDOWS_MASK = OS_WINNT | OS_WIN95 | OS_WIN98 | OS_WIN2000 | OS_WIN_OTHER;
+    /** Operating system is one of the Unix variants but we don't know which
+     * one it is.
+     * @since 7.18
+     */
+    public static final int OS_UNIX_OTHER = OS_WINVISTA << 1;
 
-    /** A mask for Unix platforms. */
+    /** Operating system is OpenBSD.
+     * @since 7.18
+     */
+    public static final int OS_OPENBSD = OS_UNIX_OTHER << 1;
+
+    /** A mask for Windows platforms.
+     * @deprecated Use {@link #isWindows()} instead.
+     */
+    @Deprecated
+    public static final int OS_WINDOWS_MASK = OS_WINNT | OS_WIN95 | OS_WIN98 | OS_WIN2000 | OS_WINVISTA | OS_WIN_OTHER;
+
+    /** A mask for Unix platforms.
+     * @deprecated Use {@link #isUnix()} instead.
+     */
+    @Deprecated
     public static final int OS_UNIX_MASK = OS_SOLARIS | OS_LINUX | OS_HP | OS_AIX | OS_IRIX | OS_SUNOS | OS_TRU64 |
-        OS_MAC | OS_FREEBSD;
+        OS_MAC | OS_FREEBSD | OS_OPENBSD | OS_UNIX_OTHER;
 
     /** A height of the windows's taskbar */
     public static final int TYPICAL_WINDOWS_TASKBAR_HEIGHT = 27;
 
     /** A height of the Mac OS X's menu */
     private static final int TYPICAL_MACOSX_MENU_HEIGHT = 24;
-
-    private static ActiveQueue activeReferenceQueue;
-
-    /** reference to map that maps allowed key names to their values (String, Integer)
-    and reference to map for mapping of values to their names */
-    private static Reference<Object> namesAndValues;
 
     /** The operating system on which NetBeans runs*/
     private static int operatingSystem = -1;
@@ -231,9 +246,6 @@ public final class Utilities {
     // Support for work with actions
     //
 
-    /** type of Class or of an Exception thrown */
-    private static Object actionClassForPopupMenu;
-
     /** the found actionsGlobalContext */
     private static Lookup global;
 
@@ -258,7 +270,7 @@ public final class Utilities {
      * class MyReference extends WeakReference<Thing> implements Runnable {
      *     private final OtherInfo dataToCleanUp;
      *     public MyReference(Thing ref, OtherInfo data) {
-     *         super(ref, Utilities.activeReferenceQueue());
+     *         super(ref, Utilities.queue());
      *         dataToCleanUp = data;
      *     }
      *     public void run() {
@@ -280,14 +292,8 @@ public final class Utilities {
      * Do not attempt to cache the return value.
      * @since 3.11
      */
-    public static synchronized ReferenceQueue<Object> activeReferenceQueue() {
-        if (activeReferenceQueue == null) {
-            activeReferenceQueue = new ActiveQueue(false);
-        }
-
-        activeReferenceQueue.ping();
-
-        return activeReferenceQueue;
+    public static ReferenceQueue<Object> activeReferenceQueue() {
+        return ActiveQueue.queue();
     }
 
     /** Get the operating system on which NetBeans is running.
@@ -305,6 +311,8 @@ public final class Utilities {
                 operatingSystem = OS_WIN98;
             } else if ("Windows 2000".equals(osName)) { // NOI18N
                 operatingSystem = OS_WIN2000;
+            } else if ("Windows Vista".equals(osName)) { // NOI18N
+                operatingSystem = OS_WINVISTA;
             } else if (osName.startsWith("Windows ")) { // NOI18N
                 operatingSystem = OS_WIN_OTHER;
             } else if ("Solaris".equals(osName)) { // NOI18N
@@ -335,6 +343,10 @@ public final class Utilities {
                 operatingSystem = OS_MAC;
             } else if (osName.toLowerCase(Locale.US).startsWith("freebsd")) { // NOI18N 
                 operatingSystem = OS_FREEBSD;
+            } else if ("OpenBSD".equals(osName)) { // NOI18N
+                operatingSystem = OS_OPENBSD;
+            } else if (File.pathSeparatorChar == ':') { // NOI18N
+                operatingSystem = OS_UNIX_OTHER;
             } else {
                 operatingSystem = OS_OTHER;
             }
@@ -1565,40 +1577,40 @@ widthcheck:  {
     // Key conversions
     //
 
-    /** Initialization of the names and values
-    * @return array of two hashmaps first maps
-    *   allowed key names to their values (String, Integer)
-    *  and second
-    * hashtable for mapping of values to their names (Integer, String)
-    */
-    private static synchronized HashMap[] initNameAndValues() {
-        if (namesAndValues != null) {
-            HashMap[] arr = (HashMap[]) namesAndValues.get();
+    private static final class NamesAndValues {
+        final Map<Integer,String> keyToString;
+        final Map<String,Integer> stringToKey;
+        NamesAndValues(Map<Integer,String> keyToString, Map<String,Integer> stringToKey) {
+            this.keyToString = keyToString;
+            this.stringToKey = stringToKey;
+        }
+    }
 
-            if (arr != null) {
-                return arr;
+    private static Reference<NamesAndValues> namesAndValues;
+
+    private static synchronized NamesAndValues initNameAndValues() {
+        if (namesAndValues != null) {
+            NamesAndValues nav = namesAndValues.get();
+            if (nav != null) {
+                return nav;
             }
         }
 
         Field[] fields = KeyEvent.class.getDeclaredFields();
 
-        HashMap<String,Integer> names = new HashMap<String,Integer>(((fields.length * 4) / 3) + 5, 0.75f);
-        HashMap<Integer,String> values = new HashMap<Integer,String>(((fields.length * 4) / 3) + 5, 0.75f);
+        Map<String,Integer> names = new HashMap<String,Integer>(fields.length * 4 / 3 + 5, 0.75f);
+        Map<Integer,String> values = new HashMap<Integer,String>(fields.length * 4 / 3 + 5, 0.75f);
 
-        for (int i = 0; i < fields.length; i++) {
-            if (Modifier.isStatic(fields[i].getModifiers())) {
-                String name = fields[i].getName();
-
+        for (Field f : fields) {
+            if (Modifier.isStatic(f.getModifiers())) {
+                String name = f.getName();
                 if (name.startsWith("VK_")) { // NOI18N
-
                     // exclude VK
                     name = name.substring(3);
-
                     try {
-                        int numb = fields[i].getInt(null);
-                        Integer value = new Integer(numb);
-                        names.put(name, value);
-                        values.put(value, name);
+                        int numb = f.getInt(null);
+                        names.put(name, numb);
+                        values.put(numb, name);
                     } catch (IllegalArgumentException ex) {
                     } catch (IllegalAccessException ex) {
                     }
@@ -1607,21 +1619,15 @@ widthcheck:  {
         }
 
         if (names.get("CONTEXT_MENU") == null) { // NOI18N
-
-            Integer n = new Integer(0x20C);
-            names.put("CONTEXT_MENU", n); // NOI18N
-            values.put(n, "CONTEXT_MENU"); // NOI18N
-
-            n = new Integer(0x20D);
-            names.put("WINDOWS", n); // NOI18N
-            values.put(n, "WINDOWS"); // NOI18N
+            names.put("CONTEXT_MENU", 0x20C); // NOI18N
+            values.put(0x20C, "CONTEXT_MENU"); // NOI18N
+            names.put("WINDOWS", 0x20D); // NOI18N
+            values.put(0x20D, "WINDOWS"); // NOI18N
         }
 
-        HashMap[] arr = { names, values };
-
-        namesAndValues = new SoftReference<Object>(arr);
-
-        return arr;
+        NamesAndValues nav = new NamesAndValues(values, names);
+        namesAndValues = new SoftReference<NamesAndValues>(nav);
+        return nav;
     }
 
     /** Converts a Swing key stroke descriptor to a familiar Emacs-like name.
@@ -1637,17 +1643,40 @@ widthcheck:  {
             sb.append('-');
         }
 
-        HashMap[] namesAndValues = initNameAndValues();
+        appendRest(sb, stroke);
+        return sb.toString();
+    }
 
-        String c = (String) namesAndValues[1].get(Integer.valueOf(stroke.getKeyCode()));
+    private static void appendRest(StringBuilder sb, KeyStroke stroke) {
+        String c = initNameAndValues().keyToString.get(Integer.valueOf(stroke.getKeyCode()));
 
         if (c == null) {
             sb.append(stroke.getKeyChar());
         } else {
             sb.append(c);
         }
+    }
 
-        return sb.toString();
+    /**
+     * Converts a Swing key stroke descriptor to a familiar Emacs-like name,
+     * but in a portable way, ie. <code>Meta-C</code> on Mac => <code>D-C</code>
+     * @param stroke key description
+     * @return name of the key (e.g. <code>CS-F1</code> for control-shift-function key one)
+     * @see #stringToKey
+     */
+    public static String keyToString(KeyStroke stroke, boolean portable) {
+        if (portable) {
+            StringBuilder sb = new StringBuilder();
+
+            // add modifiers that must be pressed
+            if (addModifiersPortable(sb, stroke.getModifiers())) {
+                sb.append('-');
+            }
+
+            appendRest(sb, stroke);
+            return sb.toString();
+        }
+        return keyToString(stroke);
     }
 
     /** Construct a new key description from a given universal string
@@ -1694,7 +1723,7 @@ widthcheck:  {
 
         int needed = 0;
 
-        HashMap names = initNameAndValues()[0];
+        Map<String,Integer> names = initNameAndValues().stringToKey;
 
         int lastModif = -1;
 
@@ -1719,7 +1748,7 @@ widthcheck:  {
                     lastModif = readModifiers(el);
                 } else {
                     // last text must be the key code
-                    Integer i = (Integer) names.get(el);
+                    Integer i = names.get(el);
                     boolean wildcard = (needed & CTRL_WILDCARD_MASK) != 0;
 
                     //Strip out the explicit mask - KeyStroke won't know
@@ -1732,11 +1761,11 @@ widthcheck:  {
                     if (i != null) {
                         //#26854 - Default accelerator should be Command on mac
                         if (wildcard) {
-                            needed |= Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
+                            needed |= getMenuShortcutKeyMask();
 
                             if (isMac()) {
-                                if (!usableKeyOnMac(i.intValue(), needed)) {
-                                    needed &= ~Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
+                                if (!usableKeyOnMac(i, needed)) {
+                                    needed &= ~getMenuShortcutKeyMask();
                                     needed |= KeyEvent.CTRL_MASK;
                                 }
                             }
@@ -1750,7 +1779,7 @@ widthcheck:  {
                             }
                         }
 
-                        return KeyStroke.getKeyStroke(i.intValue(), needed);
+                        return KeyStroke.getKeyStroke(i, needed);
                     } else {
                         return null;
                     }
@@ -1782,6 +1811,14 @@ widthcheck:  {
         } else {
             return true;
         }
+    }
+
+    private static final int getMenuShortcutKeyMask() {
+        // #152050 - work in headless environment too
+        if (GraphicsEnvironment.isHeadless()) {
+            return Event.CTRL_MASK;
+        }
+        return Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
     }
 
     /** Convert a space-separated list of user-friendly key binding names to a list of Swing key strokes.
@@ -1843,6 +1880,32 @@ widthcheck:  {
 
         if ((modif & ALT_WILDCARD_MASK) != 0) {
             buf.append("O");
+            b = true;
+        }
+
+        return b;
+    }
+
+    private static boolean addModifiersPortable(StringBuilder buf, int modifiers) {
+        boolean b = false;
+
+        if ((modifiers & KeyEvent.SHIFT_MASK) != 0) {
+            buf.append('S');
+            b = true;
+        }
+
+        if (Utilities.isMac() && ((modifiers & KeyEvent.META_MASK) != 0) || !Utilities.isMac() && ((modifiers & KeyEvent.CTRL_MASK) != 0)) {
+            buf.append('D');
+            b = true;
+        }
+
+        if (Utilities.isMac() && ((modifiers & KeyEvent.CTRL_MASK) != 0) || !Utilities.isMac() && ((modifiers & KeyEvent.ALT_MASK) != 0)) {
+            buf.append('O');
+            b = true;
+        }
+        // mac alt fallback
+        if (Utilities.isMac() && ((modifiers & KeyEvent.ALT_MASK) != 0)) {
+            buf.append('A');
             b = true;
         }
 
@@ -2051,6 +2114,7 @@ widthcheck:  {
      * @param parent
      * @param approveButtonText
      * @deprecated Not needed in JDK 1.4.
+     * @see <a href="@org-openide-filesystems@/org/openide/filesystems/FileChooserBuilder.html"><code>FileChooserBuilder</code></a>
      */
     @Deprecated
     public static final int showJFileChooser(
@@ -2098,11 +2162,11 @@ widthcheck:  {
 
         chooser.rescanCurrentDirectory();
 
-        final int[] retValue = new int[] { javax.swing.JFileChooser.CANCEL_OPTION };
+        final int[] retValue = {javax.swing.JFileChooser.CANCEL_OPTION};
 
         java.awt.event.ActionListener l = new java.awt.event.ActionListener() {
                 public void actionPerformed(java.awt.event.ActionEvent ev) {
-                    if (ev.getActionCommand() == javax.swing.JFileChooser.APPROVE_SELECTION) {
+                    if (javax.swing.JFileChooser.APPROVE_SELECTION.equals(ev.getActionCommand())) {
                         retValue[0] = javax.swing.JFileChooser.APPROVE_OPTION;
                     }
 
@@ -2381,6 +2445,9 @@ widthcheck:  {
      * # rename of whole package
      * org.someoldpackage=org.my.new.package.structure
      *
+     * # class was removed without replacement
+     * org.mypackage.OldClass=
+     *
      * </PRE>
      * Btw. one can use spaces instead of <code>=</code> sign.
      * For a real world example
@@ -2588,33 +2655,28 @@ widthcheck:  {
      * over the first one with its top-left corner at x, y. Images need not be of the same size.
      * New image will have a size of max(second image size + top-left corner, first image size).
      * Method is used mostly when second image contains transparent pixels (e.g. for badging).
-     * If both images are <code>null</code>, it makes default transparent 16x16 image.
      * @param image1 underlying image
      * @param image2 second image
      * @param x x position of top-left corner
      * @param y y position of top-left corner
      * @return new merged image
+     * @deprecated Use {@link ImageUtilities#mergeImages}.
      */
+    @Deprecated
     public static final Image mergeImages(Image image1, Image image2, int x, int y) {
-        if (image1 == null) {
-            throw new NullPointerException();
-        }
-
-        if (image2 == null) {
-            throw new NullPointerException();
-        }
-
-        return IconManager.mergeImages(image1, image2, x, y);
+        return ImageUtilities.mergeImages(image1, image2, x, y);
     }
-
+    
     /**
      * Loads an image from the specified resource ID. The image is loaded using the "system" classloader registered in
      * Lookup.
      * @param resourceID resource path of the icon (no initial slash)
      * @return icon's Image, or null, if the icon cannot be loaded.
+     * @deprecated Use {@link ImageUtilities#loadImage(java.lang.String)}.
      */
+    @Deprecated
     public static final Image loadImage(String resourceID) {
-        return IconManager.getIcon(resourceID, false);
+        return ImageUtilities.loadImage(resourceID);
     }
 
     /**
@@ -2622,17 +2684,11 @@ widthcheck:  {
      *
      * @param icon {@link javax.swing.Icon} to be converted.
      * @since 7.3
+     * @deprecated Use {@link ImageUtilities#icon2Image}.
      */
+    @Deprecated
     public static final Image icon2Image(Icon icon) {
-        if (icon instanceof ImageIcon) {
-            return ((ImageIcon) icon).getImage();
-        } else {
-            BufferedImage bImage = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
-            Graphics g = bImage.getGraphics();
-            icon.paintIcon(new JLabel(), g, 0, 0);
-            g.dispose();
-            return bImage;
-        }
+        return ImageUtilities.icon2Image(icon);
     }
 
     /** Builds a popup menu from actions for provided context specified by
@@ -2755,11 +2811,39 @@ widthcheck:  {
     }
 
     /**
+     * Load a menu sequence from a lookup path.
+     * Any {@link Action} instances are returned as is;
+     * any {@link JSeparator} instances are translated to nulls.
+     * Warnings are logged for any other instances.
+     * @param path a path as given to {@link Lookups#forPath}, generally a layer folder name
+     * @return a list of actions interspersed with null separators
+     * @since org.openide.util 7.14
+     */
+    public static List<? extends Action> actionsForPath(String path) {
+        List<Action> actions = new ArrayList<Action>();
+        for (Lookup.Item<Object> item : Lookups.forPath(path).lookupResult(Object.class).allItems()) {
+            if (Action.class.isAssignableFrom(item.getType())) {
+                Object instance = item.getInstance();
+                if (instance != null) {
+                    actions.add((Action) instance);
+                }
+            } else if (JSeparator.class.isAssignableFrom(item.getType())) {
+                actions.add(null);
+            } else {
+                Logger.getLogger(Utilities.class.getName()).warning("Unrecognized object of " + item.getType() + " found in actions path " + path);
+            }
+        }
+        return actions;
+    }
+
+    /**
      * Global context for actions. Toolbar, menu or any other "global"
      * action presenters shall operate in this context.
      * Presenters for context menu items should <em>not</em> use
      * this method; instead see {@link ContextAwareAction}.
      * @see ContextGlobalProvider
+     * @see ContextAwareAction
+     * @see <a href="http://wiki.netbeans.org/DevFaqActionContextSensitive">NetBeans FAQ</a>
      * @return the context for actions
      * @since 4.10
      */
@@ -2796,9 +2880,11 @@ widthcheck:  {
      * <p>Caching of loaded images can be used internally to improve performance.
      * 
      * @since 3.24
+     * @deprecated Use {@link ImageUtilities#loadImage(java.lang.String, boolean)}.
      */
+    @Deprecated
     public static final Image loadImage(String resource, boolean localized) {
-        return IconManager.getIcon(resource, localized);
+        return ImageUtilities.loadImage(resource, localized);
     }
 
     /**
@@ -2823,7 +2909,8 @@ widthcheck:  {
      *
      *  <p>This implementation provides one cursor for all Mac systems, one for all
      *  Unix systems (regardless of window manager), and one for all other systems
-     *  including Windows.
+     *  including Windows. Note: The cursor does not have to look native in some
+     *  cases on some platforms!
      *
      *  @param   component the non-null component that will use the progress cursor
      *  @return  a progress cursor (Unix, Windows or Mac)
@@ -2840,13 +2927,13 @@ widthcheck:  {
 
         // First check for Mac because its part of the Unix_Mask
         if (isMac()) {
-            image = loadImage("org/openide/util/progress-cursor-mac.gif"); //NOI18N
+            image = ImageUtilities.loadImage("org/openide/util/progress-cursor-mac.gif"); //NOI18N
         } else if (isUnix()) {
-            image = loadImage("org/openide/util/progress-cursor-motif.gif"); //NOI18N
+            image = ImageUtilities.loadImage("org/openide/util/progress-cursor-motif.gif"); //NOI18N
         }
         // All other OS, including Windows, use Windows cursor
         else {
-            image = loadImage("org/openide/util/progress-cursor-win.gif"); //NOI18N
+            image = ImageUtilities.loadImage("org/openide/util/progress-cursor-win.gif"); //NOI18N
         }
 
         return createCustomCursor(component, image, "PROGRESS_CURSOR"); //NOI18N
@@ -2865,8 +2952,8 @@ widthcheck:  {
             }
 
             // need to resize the icon
-            Image empty = IconManager.createBufferedImage(d.width, d.height);
-            i = Utilities.mergeImages(icon, empty, 0, 0);
+            Image empty = ImageUtilities.createBufferedImage(d.width, d.height);
+            i = ImageUtilities.mergeImages(icon, empty, 0, 0);
         }
 
         return t.createCustomCursor(i, new Point(1, 1), name);
@@ -3022,104 +3109,5 @@ widthcheck:  {
         public Map getDeps() {
             return deps;
         }
-    }
-
-    /** Implementation of the active queue.
-     */
-    private static final class ActiveQueue extends ReferenceQueue<Object> implements Runnable {
-
-        private static final Logger LOGGER = Logger.getLogger(ActiveQueue.class.getName().replace('$', '.'));
-
-        /** number of known outstanding references */
-        private int count;
-        private boolean deprecated;
-
-        public ActiveQueue(boolean deprecated) {
-            this.deprecated = deprecated;
-        }
-
-        public Reference<Object> poll() {
-            throw new UnsupportedOperationException();
-        }
-
-        public Reference<Object> remove(long timeout) throws IllegalArgumentException, InterruptedException {
-            throw new InterruptedException();
-        }
-
-        public Reference<Object> remove() throws InterruptedException {
-            throw new InterruptedException();
-        }
-
-        public void run() {
-            while (true) {
-                try {
-                    Reference<?> ref = super.remove(0);
-                    LOGGER.finer("dequeued reference");
-
-                    if (!(ref instanceof Runnable)) {
-                        LOGGER.warning(
-                            "A reference not implementing runnable has been added to the Utilities.activeReferenceQueue(): " +
-                            ref.getClass() // NOI18N
-                        );
-
-                        continue;
-                    }
-
-                    if (deprecated) {
-                        LOGGER.warning(
-                            "Utilities.ACTIVE_REFERENCE_QUEUE has been deprecated for " + ref.getClass() +
-                            " use Utilities.activeReferenceQueue" // NOI18N
-                        );
-                    }
-
-                    // do the cleanup
-                    try {
-                        ((Runnable) ref).run();
-                    } catch (ThreadDeath td) {
-                        throw td;
-                    } catch (Throwable t) {
-                        // Should not happen.
-                        // If it happens, it is a bug in client code, notify!
-                        LOGGER.log(Level.WARNING, null, t);
-                    } finally {
-                        // to allow GC
-                        ref = null;
-                    }
-                } catch (InterruptedException ex) {
-                    LOGGER.log(Level.WARNING, null, ex);
-                }
-
-                synchronized (this) {
-                    assert count > 0;
-                    count--;
-                    if (count == 0) {
-                        // We have processed all we have to process (for now at least).
-                        // Could be restarted later if ping() called again.
-                        // This could also happen in case someone called activeReferenceQueue() once and tried
-                        // to use it for several references; in that case run() might never be called on
-                        // the later ones to be collected. Can't really protect against that situation.
-                        // See issue #86625 for details.
-                        LOGGER.fine("stopping thread");
-                        break;
-                    }
-                }
-            }
-        }
-
-        synchronized void ping() {
-            if (count == 0) {
-                Thread t = new Thread(this, "Active Reference Queue Daemon"); // NOI18N
-                t.setPriority(Thread.MIN_PRIORITY);
-                t.setDaemon(true); // to not prevent exit of VM
-                t.start();
-                // Note that this will not be printed during IDE startup because
-                // it happens before logging is even initialized.
-                LOGGER.fine("starting thread");
-            } else {
-                LOGGER.finer("enqueuing reference");
-            }
-            count++;
-        }
-
     }
 }
