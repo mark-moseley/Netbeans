@@ -39,14 +39,19 @@
 
 package org.netbeans.modules.php.editor.model.impl;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.netbeans.modules.gsf.api.OffsetRange;
+import org.netbeans.modules.csl.api.OffsetRange;
 import org.netbeans.modules.php.editor.CodeUtils;
+import org.netbeans.modules.php.editor.PredefinedSymbols;
 import org.netbeans.modules.php.editor.index.IndexedVariable;
+import org.netbeans.modules.php.editor.model.IndexScope;
 import org.netbeans.modules.php.editor.model.MethodScope;
+import org.netbeans.modules.php.editor.model.ModelElement;
 import org.netbeans.modules.php.editor.model.PhpKind;
+import org.netbeans.modules.php.editor.model.Scope;
 import org.netbeans.modules.php.editor.model.TypeScope;
 import org.netbeans.modules.php.editor.model.VariableName;
 import org.netbeans.modules.php.editor.parser.astnodes.ArrayAccess;
@@ -62,21 +67,21 @@ import org.openide.util.Union2;
  */
 class VariableNameImpl extends ScopeImpl implements VariableName {
     private boolean globallyVisible;
-    VariableNameImpl(IndexScopeImpl inScope, IndexedVariable indexedVariable) {
+    VariableNameImpl(IndexScope inScope, IndexedVariable indexedVariable) {
         this(inScope, indexedVariable.getName(),
                 Union2.<String/*url*/, FileObject>createFirst(indexedVariable.getFilenameUrl()),
                 new OffsetRange(indexedVariable.getOffset(),indexedVariable.getOffset()+indexedVariable.getName().length()), true);
     }
-    VarAssignmentImpl createElement(ScopeImpl scope, Variable varNode, Assignment assignment, Map<String, VariableNameImpl> allAssignments) {
-        VarAssignmentImpl retval = new VarAssignmentImpl(this, scope, varNode,assignment, allAssignments);
+    VarAssignmentImpl createElement(Scope scope, OffsetRange blockRange, OffsetRange nameRange, Assignment assignment, Map<String, AssignmentImpl> allAssignments) {
+        VarAssignmentImpl retval = new VarAssignmentImpl(this, scope, blockRange, nameRange,assignment, allAssignments);
         addElement(retval);
         return retval;
     }
 
-    VariableNameImpl(ScopeImpl inScope, Program program, Variable variable, boolean globallyVisible) {
+    VariableNameImpl(Scope inScope, Program program, Variable variable, boolean globallyVisible) {
         this(inScope, toName(variable), inScope.getFile(), toOffsetRange(variable), globallyVisible);
     }
-    private VariableNameImpl(ScopeImpl inScope, String name, Union2<String/*url*/, FileObject> file, OffsetRange offsetRange, boolean globallyVisible) {
+    VariableNameImpl(Scope inScope, String name, Union2<String/*url*/, FileObject> file, OffsetRange offsetRange, boolean globallyVisible) {
         super(inScope, name, file, offsetRange, PhpKind.VARIABLE);
         this.globallyVisible = globallyVisible;
     }
@@ -102,23 +107,21 @@ class VariableNameImpl extends ScopeImpl implements VariableName {
     }
 
     public List<? extends VarAssignmentImpl> getAssignments() {
-        return filter(getElements(), new ElementFilter() {
-            public boolean isAccepted(ModelElementImpl element) {
-                return true;
-            }
-        });
+        return (List<? extends VarAssignmentImpl>) getElements();
     }
 
-    public VarAssignment findAssignment(int offset) {
+    public AssignmentImpl findAssignment(int offset) {
         VarAssignmentImpl retval = null;
-        List<? extends VarAssignmentImpl> assignments = getAssignments();
+        Collection<? extends VarAssignmentImpl> assignments = getAssignments();
         if (assignments.size() == 1) {
-            retval = assignments.get(0);
+            retval = assignments.iterator().next();
         } else {
             for (VarAssignmentImpl varAssignmentImpl : assignments) {
-                if (varAssignmentImpl.getOffset() <= offset) {
+                if (varAssignmentImpl.getBlockRange().containsInclusive(offset)) {
                     if (retval == null || retval.getOffset() <= varAssignmentImpl.getOffset()) {
-                        retval = varAssignmentImpl;
+                         if (varAssignmentImpl.getOffset() < offset) {
+                            retval = varAssignmentImpl;
+                         }
                     }
                 }
             }
@@ -128,21 +131,31 @@ class VariableNameImpl extends ScopeImpl implements VariableName {
 
     @Override
     public String getNormalizedName() {
-        ScopeImpl inScope = getInScope();
-        if (inScope instanceof MethodScope && representsThis()) {
+        Scope inScope = getInScope();
+        if (inScope instanceof MethodScope ) {
+            String methodName = representsThis() ? "" : inScope.getName();//NOI18N
             inScope = inScope.getInScope();
+            return (inScope != null && !isGloballyVisible()) ? inScope.getName()+methodName+getName() : getName();
         }
         return (inScope != null && !isGloballyVisible()) ? inScope.getName()+getName() : getName();
     }
 
-    public List<? extends TypeScope> getTypes(int offset) {
+    public Collection<? extends TypeScope> getTypes(int offset) {
         List<? extends TypeScope> empty = Collections.emptyList();
-        VarAssignment assignment = findAssignment(offset);
+        if (representsThis()) {
+            MethodScope methodScope = (MethodScope) getInScope();
+            return Collections.singletonList(methodScope.getTypeScope());
+        }
+        AssignmentImpl assignment = findAssignment(offset);
         return (assignment != null) ? assignment.getTypes() : empty;
     }
 
     public boolean isGloballyVisible() {
-        return globallyVisible;
+        String name = getName();
+        if (name.startsWith("$")) {
+            name = name.substring(1);
+        }
+        return globallyVisible || PredefinedSymbols.SUPERGLOBALS.contains(name);
     }
 
     /**
@@ -153,7 +166,7 @@ class VariableNameImpl extends ScopeImpl implements VariableName {
     }
 
     public boolean representsThis() {
-        ScopeImpl inScope = getInScope();
+        Scope inScope = getInScope();
         if (inScope instanceof MethodScope && getName().equals("$this")) {//NOI18N
             return true;
         }
