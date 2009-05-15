@@ -42,44 +42,31 @@
 package org.netbeans.modules.cnd.apt.support;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
+import org.netbeans.modules.cnd.utils.cache.FilePathCache;
 
 /**
  *
  * @author Vladimir Voskresensky
  */
 public final class APTIncludePathStorage {
-    private final Map<String, List<String>> allIncludes = new HashMap<String, List<String>>();
-    private static String baseNewName = "#INCLUDES# "; // NOI18N
+    private final Map<CharSequence, List<CharSequence>> allIncludes = new HashMap<CharSequence, List<CharSequence>>();
     
     public APTIncludePathStorage() {
     }
 
-    public List<String> get(List<String> includeList) {
+    public List<CharSequence> get(CharSequence configID, List<? extends CharSequence> sysIncludes) {
+        CharSequence key = CharSequenceKey.create(configID);
         synchronized (allIncludes) {
-            // look for equal list in values
-            for (Iterator<List<String>> it = allIncludes.values().iterator(); it.hasNext();) {
-                List<String> list = it.next();
-                if (list.equals(includeList)) {
-                    return list;
-                }
-            }
-            // not found => add new labled one
-            return get(baseNewName+allIncludes.size(), includeList);
-        }
-    }
-
-    public List<String> get(String configID, List<String> sysIncludes) {
-        synchronized (allIncludes) {
-            List<String> list = allIncludes.get(configID);
+            List<CharSequence> list = allIncludes.get(key);
             if (list == null) {
-                // create new one and put in map
-                list = sysIncludes;            
-                allIncludes.put(configID, list);
+                // create new one with light char sequences and put in map
+                list = FilePathCache.asList(sysIncludes);
+                allIncludes.put(key, list);
             }
-            return sysIncludes;
+            return list;
         }
     }
     
