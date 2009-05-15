@@ -3,6 +3,7 @@ TEXT:<?xml version="1.0" encoding="UTF-8"?>
 
 SYMBOL:<
 TAG:jsp:root
+EOL:
 
 ATTRIBUTE:version
 SYMBOL:=
@@ -75,9 +76,25 @@ TEXT:
 SYMBOL:<
 TAG:jsp:scriptlet
 SYMBOL:>
-TEXT:
-        String var = "str";
-        var.getBytes();
+WHITESPACE:
+        
+IDENTIFIER:String
+WHITESPACE: 
+IDENTIFIER:var
+WHITESPACE: 
+EQ:=
+WHITESPACE: 
+TEXT:str
+SEMICOLON:;
+WHITESPACE:
+        
+IDENTIFIER:var
+DOT:.
+IDENTIFIER:getBytes
+LPAREN:(
+RPAREN:)
+SEMICOLON:;
+WHITESPACE:
     
 SYMBOL:</
 ENDTAG:jsp:scriptlet
@@ -85,41 +102,41 @@ SYMBOL:>
 TEXT:
     
     
-TAG_OPEN_SYMBOL:<
-TAG_OPEN:c:out
-WS: 
-ARGUMENT:value
-OPERATOR:=
-VALUE:"Hello"
-TAG_CLOSE_SYMBOL:/>
+SYMBOL:<
+TAG:c:out
+WHITESPACE: 
+ATTRIBUTE:value
+SYMBOL:=
+ATTR_VALUE:"Hello"
+SYMBOL:/>
 TEXT:
     
     
-TAG_OPEN_SYMBOL:<
-TAG_OPEN:tag:testSelect
-WS: 
-ARGUMENT:name
-OPERATOR:=
-VALUE:"select"
-WS: 
-ARGUMENT:items
-OPERATOR:=
-VALUE:"h1,h2,h3,h4"
-WS: 
-ARGUMENT:size
-OPERATOR:=
-VALUE:"2"
-TAG_CLOSE_SYMBOL:/>
+SYMBOL:<
+TAG:tag:testSelect
+WHITESPACE: 
+ATTRIBUTE:name
+SYMBOL:=
+ATTR_VALUE:"select"
+WHITESPACE: 
+ATTRIBUTE:items
+SYMBOL:=
+ATTR_VALUE:"h1,h2,h3,h4"
+WHITESPACE: 
+ATTRIBUTE:size
+SYMBOL:=
+ATTR_VALUE:"2"
+SYMBOL:/>
 TEXT:
     
     
-TAG_OPEN_SYMBOL:<
-TAG_OPEN:tld:EchoTagHandler
-WS: 
-ARGUMENT:message
-OPERATOR:=
-VALUE:""
-TAG_CLOSE_SYMBOL:/>
+SYMBOL:<
+TAG:tld:EchoTagHandler
+WHITESPACE: 
+ATTRIBUTE:message
+SYMBOL:=
+ATTR_VALUE:""
+SYMBOL:/>
 TEXT:
 
 
@@ -131,5 +148,6 @@ TEXT:
 
 BLOCK_COMMENT:<!-- comment -->
 TEXT:
+
 
 
