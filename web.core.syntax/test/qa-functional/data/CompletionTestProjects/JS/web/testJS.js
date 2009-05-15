@@ -5,29 +5,36 @@ function myfunction(){
 
 var myvariable="variable";
 
-
+x = "foo";
+y = x;
 
 /**CC
-c|
-keyword const
-const
+y.cha
+String charCodeAt ( index ) : Number
+y.charCodeAt(index)
 */
 
 /**CC
-v|
-keyword var
+de|
+debugger
+debugger
+*/
+
+/**CC
+va|
+var
 var
 */
 
 /**CC
-S|
-JS Core String
+St|
+Core JS String
 String
 */
 
 /**CC #99811
 my|
-testJS.js myfunction()
+testJS.js myfunction () : void
 myfunction()
 */
 
@@ -37,10 +44,9 @@ testJS.js myvariable
 myvariable
 */
 
-
 /**CC
-|
-JS Core RangeError
+Ra|
+Core JS RangeError
 RangeError
 */
 
