@@ -70,6 +70,7 @@ import org.openide.ErrorManager;
 import org.openide.awt.Actions;
 import org.openide.explorer.view.TreeView;
 import org.openide.nodes.Node;
+import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 import org.openide.util.datatransfer.PasteType;
 import org.openide.windows.TopComponent;
@@ -548,6 +549,7 @@ public final class Models {
             this.multiselectionType = multiselectionType;
         }
         
+        @Override
         public boolean isEnabled () {
             boolean any = multiselectionType == MULTISELECTION_TYPE_ANY;
             Node[] ns = TopComponent.getRegistry ().getActivatedNodes ();
@@ -577,6 +579,7 @@ public final class Models {
         }
 
         public void actionPerformed (ActionEvent e) {
+            System.err.println("Models.ActionSupport.actionPerformed("+e+")");
             Node[] ns = TopComponent.getRegistry ().getActivatedNodes ();
             int i, k = ns.length;
             IdentityHashMap<Action, ArrayList<Object>> h = new IdentityHashMap<Action, ArrayList<Object>>();
@@ -594,12 +597,15 @@ public final class Models {
                         l.add (node);
                     }
             }
+            System.err.println("  k = "+k);
             if (k == 0) {
                 performer.perform(new Object[]{});
             } else {
+                System.err.println("  h = "+h);
                 Iterator<Action> it = h.keySet ().iterator ();
                 while (it.hasNext ()) {
                     ActionSupport a = (ActionSupport) it.next ();
+                    System.err.println("  "+a.performer+".perform("+((ArrayList) h.get (a)));
                     a.performer.perform (
                         ((ArrayList) h.get (a)).toArray ()
                     );
@@ -607,10 +613,12 @@ public final class Models {
             }
         }
         
+        @Override
         public int hashCode () {
             return displayName.hashCode ();
         }
         
+        @Override
         public boolean equals (Object o) {
             return (o instanceof ActionSupport) && 
                 displayName.equals (((ActionSupport) o).displayName);
@@ -656,7 +664,7 @@ public final class Models {
         private TreeModel model;
         private TreeModelFilter filter;
         
-        private Collection<ModelListener> modelListeners = new HashSet<ModelListener>();
+        private final Collection<ModelListener> modelListeners = new HashSet<ModelListener>();
 
         
         /**
@@ -761,6 +769,7 @@ public final class Models {
             }
         }
         
+        @Override
         public String toString () {
             return super.toString () + "\n" + toString ("    ");
         }
@@ -799,13 +808,15 @@ public final class Models {
      * 
      * @author   Jan Jancura
      */
-    private final static class CompoundNodeModel implements ExtendedNodeModel, ModelListener {
+    private final static class CompoundNodeModel implements ExtendedNodeModel, CheckNodeModel, ModelListener {
 
 
         private ExtendedNodeModel model;
         private NodeModelFilter filter;
+        private CheckNodeModel cmodel;
+        private CheckNodeModelFilter cfilter;
 
-        private Collection<ModelListener> modelListeners = new HashSet<ModelListener>();
+        private final Collection<ModelListener> modelListeners = new HashSet<ModelListener>();
 
 
         /**
@@ -815,6 +826,12 @@ public final class Models {
         CompoundNodeModel (ExtendedNodeModel model, NodeModelFilter filter) {
             this.model = model;
             this.filter = filter;
+            if (model instanceof CheckNodeModel) {
+                this.cmodel = (CheckNodeModel) model;
+            }
+            if (filter instanceof CheckNodeModelFilter) {
+                this.cfilter = (CheckNodeModelFilter) filter;
+            }
         }
     
         /**
@@ -895,6 +912,7 @@ public final class Models {
             }
         }
         
+        @Override
         public String toString () {
             return super.toString () + "\n" + toString ("    ");
         }
@@ -1009,6 +1027,47 @@ public final class Models {
                 return base;
             }
         }
+
+        public boolean isCheckable(Object node) throws UnknownTypeException {
+            if (cfilter != null) {
+                return cfilter.isCheckable(model, node);
+            } else if (cmodel != null) {
+                return cmodel.isCheckable(node);
+            } else {
+                return false;
+            }
+        }
+
+        public boolean isCheckEnabled(Object node) throws UnknownTypeException {
+            if (cfilter != null) {
+                return cfilter.isCheckEnabled(model, node);
+            } else if (cmodel != null) {
+                return cmodel.isCheckEnabled(node);
+            } else {
+                return true;
+            }
+        }
+
+        public Boolean isSelected(Object node) throws UnknownTypeException {
+            if (cfilter != null) {
+                return cfilter.isSelected(model, node);
+            } else if (cmodel != null) {
+                return cmodel.isSelected(node);
+            } else {
+                return false;
+            }
+        }
+
+        public void setSelected(Object node, Boolean selected) throws UnknownTypeException {
+            if (cfilter != null) {
+                cfilter.setSelected(model, node, selected);
+            } else if (cmodel != null) {
+                cmodel.setSelected(node, selected);
+            } else {
+                Exceptions.printStackTrace(new IllegalStateException("Can not set selected state to model "+this));
+            }
+        }
+
     }
     
     /**
@@ -1023,7 +1082,7 @@ public final class Models {
         private TableModel model;
         private TableModelFilter filter;
 
-        private Collection<ModelListener> modelListeners = new HashSet<ModelListener>();
+        private final Collection<ModelListener> modelListeners = new HashSet<ModelListener>();
 
 
         /**
@@ -1129,6 +1188,7 @@ public final class Models {
             }
         }
         
+        @Override
         public String toString () {
             return super.toString () + "\n" + toString ("    ");
         }
@@ -1308,6 +1368,7 @@ public final class Models {
                 models [i].removeModelListener (l);
         }
 
+        @Override
         public String toString () {
             return super.toString () + "\n" + toString ("    ");
         }
@@ -1380,6 +1441,7 @@ public final class Models {
             return filter.getActions (model, node);
         }
 
+        @Override
         public String toString () {
             return super.toString () + "\n" + toString ("    ");
         }
@@ -1401,7 +1463,7 @@ public final class Models {
         private TreeExpansionModel expansionModel;
         private TreeExpansionModelFilter expansionFilter;
         
-        private Collection<ModelListener> modelListeners = new HashSet<ModelListener>();
+        private final Collection<ModelListener> modelListeners = new HashSet<ModelListener>();
         
         CompoundTreeExpansionModel(TreeExpansionModel expansionModel, TreeExpansionModelFilter expansionFilter) {
             this.expansionModel = expansionModel;
@@ -1630,6 +1692,7 @@ public final class Models {
                 models [i].removeModelListener (l);
         }
 
+        @Override
         public String toString () {
             return super.toString () + "\n" + toString ("    ");
         }
@@ -1741,6 +1804,7 @@ public final class Models {
             }
         }    
 
+        @Override
         public String toString () {
             return super.toString () + "\n" + toString ("    ");
         }
@@ -1828,7 +1892,7 @@ public final class Models {
      *
      * @author   Jan Jancura
      */
-    private static final class DelegatingNodeModel implements ExtendedNodeModel {
+    private static final class DelegatingNodeModel implements ExtendedNodeModel, CheckNodeModel {
 
         private NodeModel[] models;
         private HashMap<String, NodeModel> classNameToModel = new HashMap<String, NodeModel>();
@@ -1977,6 +2041,7 @@ public final class Models {
                 models [i].removeModelListener (l);
         }
 
+        @Override
         public String toString () {
             return toString ("    ");
         }
@@ -2457,6 +2522,103 @@ public final class Models {
             }
             
         }
+
+        public boolean isCheckable(Object node) throws UnknownTypeException {
+            UnknownTypeException uex = null;
+            int i, k = models.length;
+            boolean isChecked = false;
+            for (i = 0; i < k; i++) {
+                if (models[i] instanceof CheckNodeModel) {
+                    try {
+                        Boolean checkable = ((CheckNodeModel) models [i]).isCheckable(node);
+                        return checkable;
+                    } catch (UnknownTypeException e) {
+                        uex = e;
+                    }
+                    isChecked = true;
+                }
+            }
+            if (!isChecked) {
+                return false;
+            }
+            if (uex != null) {
+                throw uex;
+            } else {
+                throw new UnknownTypeException (node);
+            }
+        }
+
+        public boolean isCheckEnabled(Object node) throws UnknownTypeException {
+            UnknownTypeException uex = null;
+            int i, k = models.length;
+            for (i = 0; i < k; i++) {
+                if (models[i] instanceof CheckNodeModel) {
+                    try {
+                        boolean checkEnabled = ((CheckNodeModel) models [i]).isCheckEnabled(node);
+                        return checkEnabled;
+                    } catch (UnknownTypeException e) {
+                        uex = e;
+                    }
+                }
+            }
+            if (uex != null) {
+                throw uex;
+            } else {
+                return true;
+            }
+        }
+
+        public Boolean isSelected(Object node) throws UnknownTypeException {
+            UnknownTypeException uex = null;
+            int i, k = models.length;
+            boolean isChecked = false;
+            for (i = 0; i < k; i++) {
+                if (models[i] instanceof CheckNodeModel) {
+                    try {
+                        Boolean selected = ((CheckNodeModel) models [i]).isSelected(node);
+                        return selected;
+                    } catch (UnknownTypeException e) {
+                        uex = e;
+                    }
+                    isChecked = true;
+                }
+            }
+            if (!isChecked) {
+                return false;
+            }
+            if (uex != null) {
+                throw uex;
+            } else {
+                throw new UnknownTypeException (node);
+            }
+        }
+
+        public void setSelected(Object node, Boolean selected) throws UnknownTypeException {
+            UnknownTypeException uex = null;
+            int i, k = models.length;
+            boolean isChecked = false;
+            for (i = 0; i < k; i++) {
+                if (models[i] instanceof CheckNodeModel) {
+                    try {
+                        ((CheckNodeModel) models [i]).setSelected (node, selected);
+                        return ;
+                    } catch (UnknownTypeException e) {
+                        uex = e;
+                    }
+                    isChecked = true;
+                }
+            }
+            if (!isChecked) {
+                Exceptions.printStackTrace(new IllegalStateException("Can not set selected state to model "+this));
+                return ;
+            }
+            if (uex != null) {
+                throw uex;
+            } else {
+                throw new UnknownTypeException (node);
+            }
+        }
+
     }
 
     /**
@@ -2797,6 +2959,7 @@ public final class Models {
             throw new UnknownTypeException (node);
         }
 
+        @Override
         public String toString () {
             return super.toString () + "\n" + toString ("    ");
         }
@@ -2899,10 +3062,11 @@ public final class Models {
      * @author   Jan Jancura
      */
     public static final class CompoundModel implements TreeModel, 
-    ExtendedNodeModel, NodeActionsProvider, TableModel, TreeExpansionModel {
+    ExtendedNodeModel, CheckNodeModel, NodeActionsProvider, TableModel, TreeExpansionModel {
 
         private TreeModel       treeModel;
         private ExtendedNodeModel nodeModel;
+        private CheckNodeModel cnodeModel;
         private NodeActionsProvider nodeActionsProvider;
         private ColumnModel[]   columnModels;
         private TableModel      tableModel;
@@ -2944,6 +3108,9 @@ public final class Models {
             this.treeModel = treeModel;
             this.treeExpansionModel = treeExpansionModel;
             this.nodeModel = nodeModel;
+            if (nodeModel instanceof CheckNodeModel) {
+                this.cnodeModel = (CheckNodeModel) nodeModel;
+            }
             this.tableModel = tableModel;
             this.nodeActionsProvider = nodeActionsProvider;
             this.columnModels = columnModels.toArray (
@@ -3214,6 +3381,7 @@ public final class Models {
             }
         }
 
+        @Override
         public String toString () {
             return super.toString () + 
                    "\n  TreeModel = " + treeModel +
@@ -3272,5 +3440,38 @@ public final class Models {
         public String getIconBaseWithExtension(Object node) throws UnknownTypeException {
             return nodeModel.getIconBaseWithExtension(node);
         }
+
+        public boolean isCheckable(Object node) throws UnknownTypeException {
+            if (cnodeModel != null) {
+                return cnodeModel.isCheckable(node);
+            } else {
+                return false;
+            }
+        }
+
+        public boolean isCheckEnabled(Object node) throws UnknownTypeException {
+            if (cnodeModel != null) {
+                return cnodeModel.isCheckEnabled(node);
+            } else {
+                return true;
+            }
+        }
+
+        public Boolean isSelected(Object node) throws UnknownTypeException {
+            if (cnodeModel != null) {
+                return cnodeModel.isSelected(node);
+            } else {
+                return false;
+            }
+        }
+
+        public void setSelected(Object node, Boolean selected) throws UnknownTypeException {
+            if (cnodeModel != null) {
+                cnodeModel.setSelected(node, selected);
+            } else {
+                Exceptions.printStackTrace(new IllegalStateException("Can not set selected state to model "+nodeModel));
+            }
+        }
+
     }
 }
