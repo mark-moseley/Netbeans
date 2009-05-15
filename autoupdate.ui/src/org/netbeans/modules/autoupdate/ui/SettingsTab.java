@@ -66,6 +66,7 @@ import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.event.TableModelEvent;
@@ -81,6 +82,7 @@ import org.netbeans.modules.autoupdate.ui.actions.AutoupdateSettings;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 
@@ -236,7 +238,7 @@ public class SettingsTab extends javax.swing.JPanel {
         org.openide.awt.Mnemonics.setLocalizedText(lUpdateCenters, org.openide.util.NbBundle.getMessage(SettingsTab.class, "SettingsTab.lUpdateCenters.text")); // NOI18N
 
         spTab.setBorder(null);
-        spTab.setDividerLocation(370);
+        spTab.setDividerLocation(Integer.parseInt(NbBundle.getMessage (SettingsTab.class, "SettingsTab_Splitter_DefaultDividerLocation")));
         spTab.setResizeWeight(0.5);
         spTab.setOneTouchExpandable(true);
 
@@ -283,7 +285,7 @@ public class SettingsTab extends javax.swing.JPanel {
                     .add(layout.createSequentialGroup()
                         .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
                             .add(addButton)
-                            .add(spTab, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 785, Short.MAX_VALUE))
+                            .add(spTab, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 789, Short.MAX_VALUE))
                         .add(1, 1, 1))
                     .add(layout.createSequentialGroup()
                         .add(12, 12, 12)
@@ -295,11 +297,11 @@ public class SettingsTab extends javax.swing.JPanel {
                     .add(layout.createSequentialGroup()
                         .add(lGeneral)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(jSeparatorAdvanced, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 734, Short.MAX_VALUE))
+                        .add(jSeparatorAdvanced, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 738, Short.MAX_VALUE))
                     .add(layout.createSequentialGroup()
                         .add(lConnection)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(jSeparatorConnection, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 626, Short.MAX_VALUE))
+                        .add(jSeparatorConnection, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 630, Short.MAX_VALUE))
                     .add(lUpdateCenters))
                 .addContainerGap())
         );
@@ -625,7 +627,12 @@ private class Listener implements ListSelectionListener,  TableModelListener {
         @Override
         public void addNotify() {
             super.addNotify();
-            getParent().setBackground(getBackground());            
+            //#154148
+            if(UIManager.getLookAndFeel().getID().equals("Nimbus")) {
+                getParent().setBackground(new Color(getBackground().getRGB(), false));
+            } else {
+                getParent().setBackground(getBackground());
+            }
         }
         
         
@@ -695,11 +702,11 @@ private class Listener implements ListSelectionListener,  TableModelListener {
                 UpdateUnitProvider u = (UpdateUnitProvider) value;
                 CATEGORY state = u.getCategory();
                 if (CATEGORY.BETA.equals(state)) {
-                    renderComponent.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/autoupdate/ui/resources/icon-beta.png"))); // NOI18N
+                    renderComponent.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/autoupdate/ui/resources/icon-beta.png", false)); // NOI18N
                 } else if (CATEGORY.COMMUNITY.equals(state)) {
-                    renderComponent.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/autoupdate/ui/resources/icon-community.png"))); // NOI18N
+                    renderComponent.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/autoupdate/ui/resources/icon-community.png", false)); // NOI18N
                 } else if (CATEGORY.STANDARD.equals(state)) {
-                    renderComponent.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/autoupdate/ui/resources/icon-standard.png"))); // NOI18N
+                    renderComponent.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/autoupdate/ui/resources/icon-standard.png", false)); // NOI18N
                 }
                 renderComponent.setText (u.getDisplayName());
                 renderComponent.setHorizontalAlignment(SwingConstants.LEFT);
