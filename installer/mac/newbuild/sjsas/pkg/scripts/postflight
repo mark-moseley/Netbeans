@@ -32,7 +32,7 @@ JAVA_HOME=`"$script_dir"/get_current_jdk.sh`
 
 cd "$2"
 
-echo Configuring GlassFish in `pwd`
+echo Configuring SJSAS in `pwd`
 
 ant_bin=./lib/ant/bin/ant
 
@@ -60,14 +60,15 @@ then
   fi
 
   admin_port=`getPort 4848`
-  instance_port=`getPort 8080`
-  orb_port=`getPort 3700`
-  imq_port=`getPort 7676`
+  instance_port=`getPort 8080` 
   https_port=`getPort 8181`
-  host_name=`getHost`
+  host_name=`getHostName`
 
-  $ant_bin --noconfig -v -f setup.xml -Dinstall.home="$2" -Dsource="$SERVICE_TAG_SOURCE" -Dadmin.port=$admin_port -Dinstance.port=$instance_port -Dorb.port=$orb_port -Dimq.port=$imq_port -Dhttps.port=$https_port
-#TODO replase admin.host=localhost to admin.host=$host_name in ./samples/common.properties file
+
+###############Setup SJSAS############################################### 
+
+  $ant_bin --noconfig -v -f "$script_dir"/setup.xml -Dinstall.home="$2" -Dadmin.port=$admin_port -Dinstance.port=$instance_port -Dhttps.port=$https_port -Dhost.name=$host_name
+##################################################################
 
 else
   echo No ant found: $ant_bin
@@ -75,8 +76,8 @@ fi
 
 "$script_dir"/perm.sh
 
-if [ -d "/Library/Receipts/glassfish.pkg" ] ; then
-    rm -rf "/Library/Receipts/glassfish.pkg"
+if [ -d "/Library/Receipts/sjsas.pkg" ] ; then
+    rm -rf "/Library/Receipts/sjsas.pkg"
 fi
 
 #Fix for 132115
@@ -86,14 +87,15 @@ sed -i '' "s/never/TUE/" $2/updatecenter/config/config.xml
 #First, get ownership info for current user home directory
 #Second, execute "chown user:group" against .asadminpass and .asadmintruststore
 ownership=`ls -nlda ~ | awk ' { print $3 ":" $4 } ' 2>/dev/null`
-echo "Updating glassfish security files permissions to $ownership"
+echo "Updating sjsas security files permissions to $ownership"
 [ -f ~/.asadminpass ]       && chown "$ownership" ~/.asadminpass
 [ -f ~/.asadmintruststore ] && chown "$ownership" ~/.asadmintruststore
 
 #add Product ID
-"$script_dir"/addproduct_id.sh "GLASSFISH"
+"$script_dir"/addproduct_id.sh "SJSAS"
 
 #create ST for NB
-"$script_dir"/servicetag.sh "gf-v2" "$2"
+#//TODO
+"$script_dir"/servicetag.sh "gf-v2.1" "$2"
 
 
