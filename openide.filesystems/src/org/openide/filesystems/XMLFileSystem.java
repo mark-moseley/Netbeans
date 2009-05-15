@@ -51,7 +51,6 @@ import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
@@ -89,7 +88,7 @@ import org.xml.sax.helpers.DefaultHandler;
  * Mandatory attributes:
  *         -for filesystem    version=... (e.g. "1.0")
  *         -for file,folder,attr name=....  (e.g.: &lt;folder name="Config"&gt;)
- *         -for attr is mandatory one of bytevalue,shortvalue,intvalue,longvalue,floatvalue,doublevalue,boolvalue,charvalue,stringvalue,methodvalue,serialvalue,urlvalue
+ *         -for attr is mandatory one of bytevalue,shortvalue,intvalue,longvalue,floatvalue,doublevalue,boolvalue,charvalue,stringvalue,methodvalue,serialvalue,urlvalue,bundlevalue
  *
  * Allowed atributes:
  *         -for file:        url=.... (e.g.: &lt;file name="sample.xml" url="file:/c:/sample.xml"&gt;)
@@ -109,7 +108,8 @@ import org.xml.sax.helpers.DefaultHandler;
  *
  * This class implements virtual FileSystem. It is special case of FileSystem in XML format.
  *
- * Description of this format best ilustrate DTD file that is showed in next lines:
+ * Description of this format best ilustrate <a href="http://www.netbeans.org/dtds/filesystem-1_2.dtd">DTD file</a>
+ * that is showed in the following few lines:
  * &lt; !ELEMENT filesystem (file | folder)*&gt;
  * &lt; !ATTLIST filesystem version CDATA #REQUIRED&gt; //version not checkked yet
  * &lt; !ELEMENT folder (file |folder | attr)*&gt;
@@ -131,6 +131,7 @@ import org.xml.sax.helpers.DefaultHandler;
  * &lt; !ATTLIST attr methodvalue CDATA #IMPLIED&gt;
  * &lt; !ATTLIST attr serialvalue CDATA #IMPLIED&gt;
  * &lt; !ATTLIST attr urlvalue CDATA #IMPLIED&gt;
+ * &lt; !ATTLIST attr bundlevalue CDATA #IMPLIED&gt; &lt;!-- since version 7.10 --&gt;
  * </PRE>
  *
  * <p>
@@ -148,7 +149,16 @@ import org.xml.sax.helpers.DefaultHandler;
  * </pre>
  * where <code>Value</code> can be any java type.
  *
- *
+ * <p>
+ * If you are interested just in the Class of an attribute, but
+ * without creating its instance, use <code>fileObject.getAttribute("class:attrName")</code>.
+ * This instructs the XMLFileSystem to scan its XML files for definition of <code>attrName</code>
+ * attribute and <i>guess</i> its class. The <i>guessing</i> is usually easy,
+ * just for <code>methodvalue</code> types, the system needs to use
+ * some kind of heuristic: it locates the appropriate factory method and returns
+ * its return type. This may not be the actual type of the returned object at the end,
+ * but it seems as the best guess without instantiating it.
+
  * @author Radek Matous
  */
 public final class XMLFileSystem extends AbstractFileSystem {
@@ -162,6 +172,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
     static {
         DTD_MAP.put("-//NetBeans//DTD Filesystem 1.0//EN", "org/openide/filesystems/filesystem.dtd"); //NOI18N
         DTD_MAP.put("-//NetBeans//DTD Filesystem 1.1//EN", "org/openide/filesystems/filesystem1_1.dtd"); //NOI18N        
+        DTD_MAP.put("-//NetBeans//DTD Filesystem 1.2//EN", "org/openide/filesystems/filesystem1_2.dtd"); //NOI18N        
     }
 
     /**  Url location of XML document    */
@@ -297,15 +308,19 @@ public final class XMLFileSystem extends AbstractFileSystem {
 
     private synchronized void setXmlUrls(URL[] urls, boolean validate)
     throws IOException, PropertyVetoException {
-        if ((urls == null) || Arrays.asList(urls).contains(null)) {
-            throw new NullPointerException("Null URL list or member"); // NOI18N
+        if (urls == null) {
+            throw new NullPointerException("Null URL list"); // NOI18N
+        }
+        Collection<URL> asList = Arrays.asList(urls);
+        if (asList.contains(null)) {
+            throw new NullPointerException("Null URL list member: " + asList); // NOI18N
         }
 
         ResourceElem rootElem;
         String oldDisplayName = getDisplayName();
 
         if (urls.length == 0) {
-            urlsToXml = new URL[] {  };
+            urlsToXml = urls;
             refreshChildrenInAtomicAction((AbstractFolder) getRoot(), rootElem = new ResourceElem(true, urls, null)); // NOI18N
             rootElem = null;
 
@@ -314,13 +329,9 @@ public final class XMLFileSystem extends AbstractFileSystem {
 
         Handler handler = new Handler(DTD_MAP, rootElem = new ResourceElem(true, urls, null), validate); // NOI18N        
 
-        URL[] origUrls = urlsToXml;
-        urlsToXml = new URL[urls.length];
-
         try {
             _setSystemName("XML_" + urls[0].toExternalForm().replace('/','-')); // NOI18N
         } catch (PropertyVetoException pvx) {
-            urlsToXml = origUrls;
             rootElem = null;
             throw pvx;
         }
@@ -335,17 +346,15 @@ public final class XMLFileSystem extends AbstractFileSystem {
 
             for (int index = 0; index < urls.length; index++) {
                 act = urls[index];
-                urlsToXml[index] = act;
                 handler.urlContext = act;
 
                 String systemId = act.toExternalForm();
 
                 xp.parse(systemId);
             }
-
+            urlsToXml = urls.clone();
             refreshChildrenInAtomicAction((AbstractFolder) getRoot(), rootElem);
         } catch (IOException iox) {
-            urlsToXml = origUrls;
             Exceptions.attachMessage(iox, Arrays.toString(urls));
             throw iox;
         } catch (Exception e) {
@@ -360,6 +369,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
     /**
     * @return if value of lastModified should be cached
     */
+    @Override
     boolean isLastModifiedCacheEnabled() {
         return false;
     }
@@ -464,14 +474,13 @@ public final class XMLFileSystem extends AbstractFileSystem {
         if (urls == null) {
             urls = new URL[1];
             urls[0] = (URL) fields.get("uriId", null); // NOI18N
+            if (urls[0] == null) {
+                throw new IOException("missing uriId"); // NOI18N
+            }
         }
 
         try {
-            if (urlsToXml.length != 1) {
-                setXmlUrls(urlsToXml);
-            } else {
-                setXmlUrl(urlsToXml[0]);
-            }
+            setXmlUrls(urls);
         } catch (PropertyVetoException ex) {
             IOException x = new IOException(ex.getMessage());
             ExternalUtil.copyAnnotation(x, ex);
@@ -482,6 +491,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
     /** Notifies this filesystem that it has been added to the repository.
      * Various initialization tasks should go here. Default implementation is noop.
      */
+    @Override
     public void addNotify() {
     }
 
@@ -489,9 +499,11 @@ public final class XMLFileSystem extends AbstractFileSystem {
      * Concrete filesystem implementations should perform clean-up here.
      * Default implementation is noop.
      */
+    @Override
     public void removeNotify() {
     }
 
+    @Override
     protected <T extends FileObject> Reference<T> createReference(T fo) {
         return new FileObjRef<T>(fo);
     }
@@ -616,6 +628,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
             if (!isFolder) {
                 throw new IllegalArgumentException("not a folder"); // NOI18N
             }
+            assert name != null && name.indexOf("/") == -1:(child.isFolder ? "<folder name=":"<file name=")+name+" ...";//NOI18N
 
             ResourceElem retVal = child;
             int idx = names.indexOf(name);
@@ -1021,6 +1034,10 @@ public final class XMLFileSystem extends AbstractFileSystem {
         }
 
         private static final Set<String> NETWORK_PROTOCOLS = new HashSet<String>(Arrays.asList("http", "https", "ftp")); // NOI18N
+        /** One item cache to eliminate File.lastModified queries (see #160390). */
+        private static File lastFile = null;
+        private static Date lastFileDate = null;
+
         public Date lastModified(String name) {
             URL url = null;
             Date retval = null;
@@ -1047,7 +1064,11 @@ public final class XMLFileSystem extends AbstractFileSystem {
                 if ("file".equals(protocol)) { //NOI18N
                     try {
                         File f = new File(URI.create(url.toExternalForm()));
-                        retval = (f.exists()) ? new Date(f.lastModified()) : null;
+                        if (!f.equals(lastFile)) {
+                            lastFile = f;
+                            lastFileDate = new Date(f.lastModified());
+                        }
+                        retval = lastFileDate;
                     } catch (IllegalArgumentException x) {
                         Logger.getLogger(XMLFileSystem.class.getName()).log(Level.FINE, "#121777: " + url, x);
                     }
@@ -1061,53 +1082,6 @@ public final class XMLFileSystem extends AbstractFileSystem {
             }
             
             return retval;
-        }
-
-        /** can return null*/
-        private static String getLocalResource(URL url) {
-            if (url == null) {
-                return null;
-            }
-
-            if (url.getProtocol().equals("jar")) { // NOI18N
-
-                URL testURL = null;
-
-                try {
-                    testURL = new URL(url.getFile());
-
-                    if (testURL.getProtocol().equals("file")) { // NOI18N
-
-                        return testURL.getFile();
-                    }
-                } catch (MalformedURLException mfx) {
-                    return null;
-                }
-            }
-
-            if (url.getProtocol().equals("file")) { // NOI18N
-
-                return url.getFile();
-            }
-
-            return null;
-        }
-
-        /** can return null*/
-        private static File getFileFromResourceString(String localResource) {
-            if (localResource == null) {
-                return null;
-            }
-
-            int idx = localResource.indexOf('!');
-            String fileName = (idx != -1) ? localResource.substring(0, idx) : localResource;
-            File f = new File(fileName);
-
-            if (f.exists()) {
-                return f;
-            }
-
-            return null;
         }
 
         private java.util.Date timeFromDateHeaderField(URL url) {
@@ -1149,21 +1123,25 @@ public final class XMLFileSystem extends AbstractFileSystem {
             this.validate = validate;
         }
 
+        @Override
         public void error(SAXParseException exception)
         throws SAXException {
             throw exception;
         }
 
+        @Override
         public void warning(SAXParseException exception)
         throws SAXException {
             throw exception;
         }
 
+        @Override
         public void fatalError(SAXParseException exception)
         throws SAXException {
             throw exception;
         }
 
+        @Override
         public void startElement(String xmluri, String lname, String name, Attributes amap)
         throws SAXException {
             int controlCode = name.hashCode();
@@ -1234,6 +1212,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
             }
         }
 
+        @Override
         public void endElement(String uri, String lname, String name) throws SAXException {
             if ((elementStack.peek().hashCode() == FILE_CODE) && !topRE.isFolder()) {
                 String string = pcdata.toString().trim();
@@ -1257,6 +1236,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
             }
         }
 
+        @Override
         public void characters(char[] ch, int start, int length)
         throws SAXException {
             if (elementStack.peek().hashCode() != FILE_CODE) {
@@ -1270,6 +1250,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
             pcdata.append(new String(ch, start, length));
         }
 
+        @Override
         public InputSource resolveEntity(String pid, String sid)
         throws SAXException {
             String publicURL = (String) dtdMap.get(pid);
@@ -1287,6 +1268,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
             return new InputSource(sid);
         }
 
+        @Override
         public void startDocument() throws SAXException {
             super.startDocument();
             resElemStack = new Stack<ResourceElem>();
@@ -1297,6 +1279,7 @@ public final class XMLFileSystem extends AbstractFileSystem {
             elementStack.push("<root>"); // NOI18N
         }
 
+        @Override
         public void endDocument() throws SAXException {
             super.endDocument();
             resElemStack.pop();

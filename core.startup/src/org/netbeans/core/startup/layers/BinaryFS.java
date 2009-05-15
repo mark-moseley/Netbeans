@@ -48,7 +48,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
@@ -56,8 +55,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -71,7 +68,6 @@ import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.Stamps;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
@@ -79,6 +75,7 @@ import org.openide.filesystems.FileSystem;
 import org.openide.util.Enumerations;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 import org.openide.util.SharedClassObject;
 import org.openide.util.Union2;
 import org.openide.util.actions.SystemAction;
@@ -91,7 +88,7 @@ import org.openide.util.io.NbObjectInputStream;
  *
  * @author Petr Nejedly
  */
-public class BinaryFS extends FileSystem {
+final class BinaryFS extends FileSystem {
     /* Format:
      *     MAGIC
      *  4B length of the full image
@@ -100,7 +97,7 @@ public class BinaryFS extends FileSystem {
      *     FS data
      */
 
-    static final byte[] MAGIC = "org.netbeans.core.projects.cache.BinaryV3".getBytes(); // NOI18N
+    static final byte[] MAGIC = "org.netbeans.core.projects.cache.BinaryV4".getBytes(); // NOI18N
 
     /** An empty array of SystemActions. */
     static final SystemAction[] NO_ACTIONS = new SystemAction[0];
@@ -115,7 +112,7 @@ public class BinaryFS extends FileSystem {
 
     private FileObject root;
     /** list of URLs or time of their modification */
-    private List<Union2<String,Long>> modifications;
+    private final List<Union2<String,Long>> modifications;
     private final Date lastModified = new Date();
 
     @SuppressWarnings("deprecation")
@@ -130,6 +127,9 @@ public class BinaryFS extends FileSystem {
         } catch (PropertyVetoException ex) {
             throw (IOException)new IOException().initCause(ex);
         }
+        
+        LayerCacheManager.err.fine("Reading " + binaryFile + " buffer: " + buff.limit());
+        
         this.binaryFile = binaryFile;
 
         // verify the magic in header and expected image length
@@ -142,6 +142,7 @@ public class BinaryFS extends FileSystem {
         if (buff.limit() != storedLen) {
             throw new IOException("Corrupted image, correct length=" + storedLen); // NOI18N
         }
+        LayerCacheManager.err.log(Level.FINER, "Stored Len OK: {0}", storedLen);
 
 
         // fill the modifications array
@@ -154,7 +155,9 @@ public class BinaryFS extends FileSystem {
 
         // prepare the content buffer and root
         content = buff.slice().order(ByteOrder.LITTLE_ENDIAN);
+        LayerCacheManager.err.log(Level.FINER, "Reading root");
         root = new BFSFolder("", null, 0);
+        LayerCacheManager.err.log(Level.FINER, "Root ready: {0}", root);
     }
 
     /** Finds a file given its full resource path.
@@ -262,6 +265,7 @@ public class BinaryFS extends FileSystem {
             this.offset = offset;
         }
 
+        @Override
         public final boolean equals(Object o) {
             if (!(o instanceof BFSBase)) return false;
             if (o == this) return true;
@@ -275,6 +279,7 @@ public class BinaryFS extends FileSystem {
             return attrs.equals(base.attrs);
         }
 
+        @Override
         public final int hashCode() {
             return getPath().hashCode();
         }
@@ -351,6 +356,7 @@ public class BinaryFS extends FileSystem {
         }
 
         /** Getter for name and extension of a file object. */
+        @Override
         public String getNameExt () {
             return name;
         }
@@ -361,6 +367,11 @@ public class BinaryFS extends FileSystem {
         public Object getAttribute(String attrName) {
             initialize();
             AttrImpl attr = attrs.get(attrName);
+            if (attr == null && attrName.startsWith("class:")) {
+                attr = attrs.get(attrName.substring(6));
+                return attr == null ? null : attr.getType(this);
+            }
+
             return (attr != null) ? attr.getValue(this, attrName) : null;
         }
         
@@ -374,7 +385,7 @@ public class BinaryFS extends FileSystem {
 
                 ThreadLocal<?> attrAskedFileObject = ThreadLocal.class.cast(field.get(null));
                 topFO = (FileObject)attrAskedFileObject.get();
-                attrAskedFileObject.set(null);
+                //attrAskedFileObject.set(null);
             } catch (Exception e) {
                 Exceptions.printStackTrace(e);
             }
@@ -437,6 +448,7 @@ public class BinaryFS extends FileSystem {
             value = textValue;
         }
 
+        @Override
         public boolean equals(Object o) {
             if (o instanceof AttrImpl) {
                 AttrImpl impl = (AttrImpl)o;
@@ -445,6 +457,7 @@ public class BinaryFS extends FileSystem {
             return false;
         }
 
+        @Override
         public int hashCode() {
             return 2343 + index + value.hashCode();
         }
@@ -474,7 +487,7 @@ public class BinaryFS extends FileSystem {
                     case 9: // urlvalue
                         return new URL(value);
                     case 10: // methodvalue
-                        return methodValue (value,foProvider,attrName);
+                        return methodValue(value, foProvider, attrName).invoke();
                     case 11: // newvalue
                         Class<?> cls =  findClass (value);
                         // special support for singletons
@@ -486,6 +499,39 @@ public class BinaryFS extends FileSystem {
 
                     case 12: // serialvalue
                         return decodeValue(value);
+                    case 13: // bundle value
+                        String[] arr = value.split("#", 2); // NOI18N
+                        return NbBundle.getBundle(arr[0]).getObject(arr[1]);
+                    default:
+                        throw new IllegalStateException("Bad index: " + index); // NOI18N
+                }
+            } catch (Exception exc) {
+                Logger.getLogger(BinaryFS.class.getName()).log(Level.WARNING, "value = " + value + " from " + foProvider.getPath(), exc); // NOI18N
+            }
+            return null; // problem getting the value...
+        }
+
+        public Class<?> getType( BFSBase foProvider) {
+            try {
+                switch(index) {
+                    case 0: return Byte.class;
+                    case 1: return Short.class;
+                    case 2: return Integer.class;
+                    case 3: return Long.class;
+                    case 4: return Float.class;
+                    case 5: return Double.class;
+                    case 6: return Boolean.class;
+                    case 7: return Character.class;
+                    case 8: return String.class;
+                    case 9: return URL.class;
+                    case 10: // methodvalue
+                        return methodValue(value, foProvider, null).getMethod().getReturnType();
+                    case 11: // newvalue
+                        return findClass (value);
+                    case 12: // serialvalue
+                        return null;
+                    case 13: // bundle value
+                        return String.class;
                     default:
                         throw new IllegalStateException("Bad index: " + index); // NOI18N
                 }
@@ -496,90 +542,63 @@ public class BinaryFS extends FileSystem {
             return null; // problem getting the value...
         }
 
-        /** Constructs new attribute as Object. Used for dynamic creation: methodvalue. */
-        private Object methodValue(String method, BFSBase foProvider, String attr) throws Exception {
-            String className,methodName;
+        /** Used to store Method and its parameters. */
+        private static class MethodAndParams {
+            private Method method;
+            private Object[] params;
+
+            MethodAndParams(Method method, Object[] params) {
+                this.method = method;
+                this.params = params;
+            }
+
+            public Object invoke() throws Exception {
+                method.setAccessible(true); //otherwise cannot invoke private
+                return method.invoke(null, params);
+            }
+            
+            public Method getMethod() {
+                return method;
+            }
+        }
+
+        /** Constructs new attribute as Object. Used for dynamic creation: methodvalue. 
+         * @return MethodAndParams object or throws InstantiationException if method is not found
+         */
+        private MethodAndParams methodValue(String method, BFSBase foProvider, String attr) throws Exception {
             int i = method.lastIndexOf('.');
             if (i != -1) {
-                methodName = value.substring(i+1);
-                className = value.substring(0,i);
-                Class cls = findClass (className);
-
-                Object objArray[][] = {null,null,null};
-                Method methArray[] = {null,null,null};
-
-                FileObject fo = null;
-
-                Method[] allMethods = cls.getDeclaredMethods();
-                Class<?>[] paramClss;
-
-                for (int j=0; j < allMethods.length; j++) {
-                    if (!allMethods[j].getName().equals(methodName))  continue;
-
-                    paramClss = allMethods[j].getParameterTypes();
-                    if (paramClss.length == 0) {
-                        if (methArray[0] == null) {
-                            methArray[0] = allMethods[j];
-                            objArray[0] = new Object[] {};
-                            continue;
-                        }
+                // Cf. XMLMapAttr.Attr.methodValue:
+                Class<?> cls = findClass(method.substring(0, i));
+                String methodName = method.substring(i + 1);
+                Class[][] paramArray = {
+                    {FileObject.class, String.class}, {String.class, FileObject.class},
+                    {FileObject.class}, {String.class}, {},
+                    {Map.class, String.class}, {Map.class},
+                };
+                for (Class[] paramTypes : paramArray) {
+                    Method m;
+                    try {
+                        m = cls.getDeclaredMethod(methodName, paramTypes);
+                    } catch (NoSuchMethodException x) {
                         continue;
                     }
-
-                    if (paramClss.length == 2  && methArray[2] == null)  {
-                        if (paramClss[0].isAssignableFrom(FileObject.class) && paramClss[1].isAssignableFrom(String.class)) {
-                            methArray[2] = allMethods[j];
-                            if (fo == null) fo = foProvider.getFileObjectForAttr();
-                            objArray[2] = new Object[] {fo,attr};
-                            break;
+                    Object[] values = new Object[paramTypes.length];
+                    for (int j = 0; j < paramTypes.length; j++) {
+                        if (paramTypes[j] == FileObject.class) {
+                            values[j] = foProvider.getFileObjectForAttr();
+                        } else if (paramTypes[j] == String.class) {
+                            values[j] = attr;
+                        } else {
+                            assert paramTypes[j] == Map.class;
+                            values[j] = wrapToMap(foProvider.getFileObjectForAttr());
                         }
-                        if (paramClss[0].isAssignableFrom(Map.class) && paramClss[1].isAssignableFrom(String.class)) {
-                            methArray[2] = allMethods[j];
-                            if (fo == null) fo = foProvider.getFileObjectForAttr();
-                            objArray[2] = new Object[]{wrapToMap(fo),attr};
-                        }
-
-                        if (paramClss[0].isAssignableFrom(String.class) && paramClss[1].isAssignableFrom(FileObject.class)) {
-                            methArray[2] = allMethods[j];
-                            if (fo == null) fo = foProvider.getFileObjectForAttr();
-                            objArray[2] = new Object[] {attr,fo};
-                            break;
-                        }
-                        continue;
                     }
-
-                    if (paramClss.length == 1 && methArray[1] == null)  {
-                        if (paramClss[0].isAssignableFrom(FileObject.class)) {
-                            methArray[1] = allMethods[j];
-                            if (fo == null) fo = foProvider.getFileObjectForAttr();
-                            objArray[1] = new Object[] {fo};
-                            continue;
-                        }
-                        if (paramClss[0].isAssignableFrom(Map.class)) {
-                            methArray[2] = allMethods[j];
-                            if (fo == null) fo = foProvider.getFileObjectForAttr();
-                            objArray[2] = new Object[]{wrapToMap(fo)};
-                        }
-
-                        if (paramClss[0].isAssignableFrom(String.class)) {
-                            methArray[1] = allMethods[j];
-                            objArray[1] = new Object[] {attr};
-                            continue;
-                        }
-                        continue;
-                    }
-                }
-
-                for (int k = 2; k >= 0; k-- ) {//clsArray.length
-                    if (methArray[k] != null)  {
-                        //Method meth = cls.getDeclaredMethod(methodName,clsArray[k]);
-                        methArray[k].setAccessible(true); //otherwise cannot invoke private
-                        return methArray[k].invoke(null,objArray[k]);
-                    }
+                    return new MethodAndParams(m, values);
                 }
             }
             // Some message to logFile
-            throw new InstantiationException (value);
+            throw new InstantiationException(method);
         }
 
         private Object decodeValue(String value) throws Exception {
@@ -627,6 +646,7 @@ public class BinaryFS extends FileSystem {
      */
     final class BFSFile extends BFSBase {
         private int len;
+        private int size = -1;
         private int contentOffset;
         private String uri;
         private long lastModified = -1;
@@ -679,9 +699,14 @@ public class BinaryFS extends FileSystem {
         public long getSize() {
             initialize();
             try {
-                return len == -1 ?          // URI or not
-                    new URL(uri).openConnection().getContentLength() : // len from URI
-                    len;  // len from dump
+                if (len == -1) { // URI or not
+                    if (size == -1) { // #141110: cache it; otherwise FileObject.getSize() on SFS wastes resources
+                        size = new URL(uri).openConnection().getContentLength(); // len from URI
+                    }
+                    return size;
+                } else {
+                    return len; // len from dump
+                }
             } catch (Exception e) {
                 System.err.println("exception in getSize() on " + name + ": " + e);
                 return 0;
@@ -734,6 +759,7 @@ public class BinaryFS extends FileSystem {
             }
         }
 
+        @Override
         public Date lastModified() {
             initialize();
             synchronized (modifications) {
@@ -754,9 +780,11 @@ public class BinaryFS extends FileSystem {
                         conn = new URL(obj.first()).openConnection();
                     }
 
+                    /*
                     if (conn instanceof java.net.JarURLConnection) {
                         conn = ((java.net.JarURLConnection)conn).getJarFileURL ().openConnection ();
                     }
+                     */
 
                     if (conn != null) {
                         long date = conn.getLastModified ();
@@ -808,7 +836,13 @@ public class BinaryFS extends FileSystem {
         /** Get all children of this folder (files and subfolders). */
         public FileObject[] getChildren() {
             initialize();
-            return childrenMap.values().toArray(NO_CHILDREN);
+            // 145775 - workaround of JDK 1.5 bug 6377302 (toArray is not thread safe)
+            // When JDK 1.6 is only supported, use just "return childrenMap.values().toArray(NO_CHILDREN);" instead
+            List<FileObject> list = new ArrayList<FileObject>(childrenMap.values().size());
+            for (FileObject fo : childrenMap.values()) {
+                list.add(fo);
+            }
+            return list.toArray(NO_CHILDREN);
         }
 
         /** Retrieve file or folder contained in this folder by name. */
@@ -837,6 +871,9 @@ public class BinaryFS extends FileSystem {
                     childrenMap.put(nm, isFolder == 0 ?
                         new BFSFile(nm, this, off) :
                         new BFSFolder(nm, this, off));
+                }
+                if (LayerCacheManager.err.isLoggable(Level.FINEST)) {
+                    LayerCacheManager.err.log(Level.FINEST, "  children for " + getPath() + " are: " + childrenMap.keySet());
                 }
             }
         }
@@ -868,14 +905,17 @@ public class BinaryFS extends FileSystem {
             return new AttrFileSet(fo);
         }
 
-        public Object get(String key) {
-            return fo.getAttribute(key);
+        @Override
+        public Object get(Object key) {
+            return key instanceof String ? fo.getAttribute((String)key) : null;
         }
 
+        @Override
         public Object remove(Object key) {
             throw new UnsupportedOperationException();
         }
 
+        @Override
         public Object put(String key, Object value) {
             throw new UnsupportedOperationException();
         }
@@ -918,6 +958,7 @@ public class BinaryFS extends FileSystem {
             return cnt;
         }
 
+        @Override
         public boolean remove(Object o) {
             throw new UnsupportedOperationException();
         }
