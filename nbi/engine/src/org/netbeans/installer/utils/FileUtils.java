@@ -59,9 +59,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.JarFile;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Pack200;
+import java.util.jar.Pack200.Unpacker;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.CRC32;
+import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -70,7 +74,6 @@ import org.netbeans.installer.utils.exceptions.XMLException;
 import org.netbeans.installer.utils.helper.ExecutionResults;
 import org.netbeans.installer.utils.helper.FilesList;
 import org.netbeans.installer.utils.helper.FileEntry;
-import org.netbeans.installer.utils.helper.Pair;
 import org.netbeans.installer.utils.progress.CompositeProgress;
 import org.netbeans.installer.utils.progress.Progress;
 import org.netbeans.installer.utils.system.NativeUtils;
@@ -82,8 +85,31 @@ import org.netbeans.installer.utils.system.NativeUtils;
 public final class FileUtils {
     /////////////////////////////////////////////////////////////////////////////////
     // Static
-    
+    private final static Unpacker unpacker = Pack200.newUnpacker();
+
     // file/stream read/write ///////////////////////////////////////////////////////
+    public static String readFile(
+            final File file, String charset) throws IOException {
+        FileInputStream fis   = new FileInputStream(file);
+        InputStreamReader isr = new InputStreamReader(fis, charset);            
+        final Reader reader = new BufferedReader(isr);
+        try {
+            final char[] buffer = new char[BUFFER_SIZE];
+            final StringBuilder stringBuilder = new StringBuilder();
+            int readLength;
+            while ((readLength = reader.read(buffer)) != -1) {
+                stringBuilder.append(buffer, 0, readLength);
+            }
+            return stringBuilder.toString();
+        } finally {
+            try {
+                reader.close();
+                isr.close();
+                fis.close();
+            } catch(IOException ignord) {            
+            }
+        }
+    }    
     public static String readFile(
             final File file) throws IOException {
         final Reader reader = new BufferedReader(new FileReader(file));
@@ -207,7 +233,14 @@ public final class FileUtils {
             } catch (IOException ignord) {}
         }
     }
-    
+    public static List<String> readStringList(
+            final File file, String charset) throws IOException {
+        final List<String> list = new LinkedList<String>();
+        for (String line: StringUtils.splitByLines((readFile(file,charset)))) {
+            list.add(line);
+        }
+        return list;
+    }
     public static List<String> readStringList(
             final File file) throws IOException {
         final List<String> list = new LinkedList<String>();
@@ -297,6 +330,32 @@ public final class FileUtils {
         return size;
     }
     
+    public static FilesList listFiles(
+            final File file) throws IOException {
+        final FilesList list = new FilesList();
+
+        if (file != null && exists(file)) {
+            try {
+                list.add(file);
+                if (file.isDirectory()) {
+                    File[] files = file.listFiles();
+                    if (files != null) {
+                        for (File f : files) {
+                            list.add(listFiles(f));
+                        }
+                    }
+                } 
+            } catch (SecurityException e) {
+                ErrorManager.notifyError(
+                        ResourceUtils.getString(FileUtils.class,
+                        ERROR_FILE_SECURITY_EXCEPTION_KEY, file),
+                        e);
+            }
+        }
+
+        return list;
+    }
+    
     public static long getFreeSpace(
             final File file) {
         long freeSpace = 0;
@@ -339,6 +398,10 @@ public final class FileUtils {
             final File file) throws IOException {
         return StringUtils.asHexString(getMd5Bytes(file));
     }
+    public static String getMd5(
+            final InputStream input) throws IOException {
+        return StringUtils.asHexString(getMd5Bytes(input));
+    }
     
     public static byte[] getMd5Bytes(
             final File file) throws IOException {
@@ -351,7 +414,17 @@ public final class FileUtils {
         
         return null;
     }
-    
+    public static byte[] getMd5Bytes(
+            final InputStream input) throws IOException {
+        try {
+            return getDigestBytes(input, MD5_DIGEST_NAME);
+        } catch (NoSuchAlgorithmException e) {
+            ErrorManager.notifyCritical(ResourceUtils.getString(
+                    FileUtils.class, ERROR_MD5_NOT_SUPPORTED_KEY), e);
+        }
+        
+        return null;
+    }
     public static String getSha1(
             final File file) throws IOException {
         return StringUtils.asHexString(getSha1Bytes(file));
@@ -371,29 +444,37 @@ public final class FileUtils {
     
     public static byte[] getDigestBytes(
             final File file,
-            final String algorithm) throws IOException, NoSuchAlgorithmException {
-        MessageDigest md = MessageDigest.getInstance(algorithm);
-        md.reset();
-        
+            final String algorithm) throws IOException, NoSuchAlgorithmException {        
         InputStream input = null;
         try {
             input = new FileInputStream(file);
-            final byte[] buffer = new byte[BUFFER_SIZE];//todo: here was 10240?? discus
-            int readLength;
-            while ((readLength = input.read(buffer)) != -1) {
-                md.update(buffer, 0, readLength);
-            }
+            return getDigestBytes(input, algorithm);
         } finally {
             if (input != null) {
                 try {
                     input.close();
-                } catch (IOException ignord) {}
+                } catch (IOException ex) {
+                    LogManager.log(ex);
+                }
             }
         }
-        
-        return md.digest();
     }
     
+    public static byte[] getDigestBytes(
+            final InputStream input,
+            final String algorithm) throws IOException, NoSuchAlgorithmException {
+        MessageDigest md = MessageDigest.getInstance(algorithm);
+        md.reset();
+
+        final byte[] buffer = new byte[BUFFER_SIZE];//todo: here was 10240?? discus
+        int readLength;
+        while ((readLength = input.read(buffer)) != -1) {
+            md.update(buffer, 0, readLength);
+        }
+
+        return md.digest();
+    }
+
     public static boolean isEmpty(
             final File file) {
         if (!exists(file)) {
@@ -521,7 +602,7 @@ public final class FileUtils {
             LogManager.log("... cannot get canonical file for " + file);
         }
         for (File root: roots) {
-            if (isParent(root, file)) {
+            if (isParent(root, file) || root.equals(file)) {
                 if(result == null ||
                         (result.getAbsolutePath().length() <
                         root.getAbsolutePath().length())) {
@@ -1058,7 +1139,7 @@ public final class FileUtils {
         final String name = source.getName();
         final File target = new File(source.getParentFile(),
                 name.substring(0, name.length() - PACK_GZ_SUFFIX.length()));
-        
+
         if(SystemUtils.isWindows() && source.getAbsolutePath().length() > 255) {
             /*
              * WORKAROUND for two issues (and 6612389 in BugTrack):
@@ -1087,15 +1168,21 @@ public final class FileUtils {
                     deleteFile(tmpTarget);
                 }
             }
+        } else if(System.getProperty("os.name").equals("AIX") && System.getProperty("java.version").startsWith("1.6")) {
+            //workaround the bug when unpack200 command from Java6 on AIX corrupts the jar
+            //by using inverting zip magic numbers
+            unpack200Internal(source, target);
         } else {
             ExecutionResults er = SystemUtils.executeCommand(
                     SystemUtils.getUnpacker().getAbsolutePath(),
                     source.getAbsolutePath(),
                     target.getAbsolutePath());
-            if (er.getErrorCode() != 0) {
-                if(er.getErrorCode() == -1073741801) {
+            int errorCode = er.getErrorCode();
+            if (errorCode != 0) {
+                if(errorCode == -1073741801 || errorCode == -1073741502) {
                     // Workaround for the issue in lvprcsrv.exe process
                     // http://www.netbeans.org/issues/show_bug.cgi?id=117334
+                    // http://www.netbeans.org/issues/show_bug.cgi?id=165319
                     LogManager.log("\n\n");
                     LogManager.log("Attention!");
                     LogManager.log("You have run into the Issue 117334");
@@ -1106,28 +1193,48 @@ public final class FileUtils {
                 } else {
                     throw new IOException(ResourceUtils.getString(FileUtils.class,
                             ERROR_UNPACK200_FAILED_KEY,
-                            er.getErrorCode(), er.getStdOut(),er.getStdErr()));
+                            errorCode, er.getStdOut(),er.getStdErr()));
                 }
             }
         }
         return target;
+    }
+
+    private static void unpack200Internal (File source, File target) throws IOException {
+        InputStream is = null;
+        JarOutputStream os = null;
+        try {
+            //Unpacker has memory leaks so use with care
+            LogManager.log("unpacking " + source);
+            is = new GZIPInputStream(new FileInputStream(source));
+            os = new JarOutputStream(new FileOutputStream(target));
+            unpacker.unpack(is, os);
+        } finally {
+            if(is!=null) {
+                is.close();
+            }
+            if(os!=null) {
+                os.close();
+            }
+        }
     }
     
     // miscellaneous ////////////////////////////////////////////////////////////////
     public static FilesList mkdirs(
             final File file) throws IOException {
         FilesList list = new FilesList();
-        
-        if (!exists(file.getParentFile())) {
-            list.add(mkdirs(file.getParentFile()));
-        }
-        
-        if (exists(file) && file.isFile()) {
-            throw new IOException(ResourceUtils.getString(FileUtils.class,
-                    ERROR_CANT_CREATE_DIR_EXIST_FILE_KEY, file));
-        }
-        
-        if (!exists(file)) {
+
+        if (exists(file)) {
+            if (file.isFile()) {
+                throw new IOException(ResourceUtils.getString(FileUtils.class,
+                        ERROR_CANT_CREATE_DIR_EXIST_FILE_KEY, file));
+            }
+        } else {
+            final File parent = file.getParentFile();
+            if (parent != null && !exists(parent)) {
+                list.add(mkdirs(parent));
+            }
+
             if (file.mkdir()) {
                 list.add(file);
             } else {
@@ -1135,7 +1242,7 @@ public final class FileUtils {
                         ERROR_CANT_CREATE_DIR_KEY, file));
             }
         }
-        
+
         return list;
     }
     
