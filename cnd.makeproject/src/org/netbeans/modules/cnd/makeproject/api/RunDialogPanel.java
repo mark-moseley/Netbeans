@@ -68,10 +68,7 @@ import org.openide.util.Utilities;
 
 public class RunDialogPanel extends javax.swing.JPanel {
     private DocumentListener modifiedValidateDocumentListener = null;
-    private DocumentListener modifiedRunDirectoryListener = null;
     private Project[] projectChoices = null;
-    //private Profiles currentProfiles = null;
-    private String currentProfilesDialogTitle = null;
     private boolean executableReadOnly = true;
     private JButton actionButton;
     
@@ -81,6 +78,7 @@ public class RunDialogPanel extends javax.swing.JPanel {
     private static DefaultPicklistModel picklist = null;
     private static String picklistHomeDir = null;
     private static final String picklistName = "executables"; // NOI18N
+    private boolean isValidating = false;
     
     public RunDialogPanel() {
         initialize(null, false);
@@ -345,16 +343,19 @@ public class RunDialogPanel extends javax.swing.JPanel {
     private void projectComboBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_projectComboBoxActionPerformed
         int selectedIndex = projectComboBox.getSelectedIndex();
         if (selectedIndex == 0) {
-            if (new File(executableTextField.getText()).getParentFile() != null)
+            if (new File(executableTextField.getText()).getParentFile() != null) {
                 runDirectoryTextField.setText(new File(executableTextField.getText()).getParentFile().getPath());
-            else
-                executableTextField.setText(""); // NOI18N
+            } else {
+                if (!isValidating) {
+                    executableTextField.setText(""); // NOI18N
+                }
+            }
             argumentTextField.setText(""); // NOI18N
             environmentTextField.setText(""); // NOI18N
         }
         else {
             Project project = projectChoices[projectComboBox.getSelectedIndex()-1];
-            ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider)project.getLookup().lookup(ConfigurationDescriptorProvider.class);
+            ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class);
             if (pdp == null)
                 return;
             MakeConfigurationDescriptor projectDescriptor = (MakeConfigurationDescriptor)pdp.getConfigurationDescriptor();
@@ -501,14 +502,19 @@ public class RunDialogPanel extends javax.swing.JPanel {
     }
     
     private void validateFields(javax.swing.event.DocumentEvent documentEvent) {
-        clearError();
-        if (documentEvent.getDocument() == executableTextField.getDocument()) {
-            projectComboBox.setSelectedIndex(0);
-            if (!validateExecutable())
-                return;
-            runDirectoryTextField.setText(new File(executableTextField.getText()).getParentFile().getPath());
+        isValidating = true;
+        try {
+            clearError();
+            if (documentEvent.getDocument() == executableTextField.getDocument()) {
+                projectComboBox.setSelectedIndex(0);
+                if (!validateExecutable())
+                    return;
+                runDirectoryTextField.setText(new File(executableTextField.getText()).getParentFile().getPath());
+            }
+            validateRunDirectory();
+        } finally {
+            isValidating = false;
         }
-        validateRunDirectory();
     }
     
     // ModifiedDocumentListener
@@ -532,7 +538,7 @@ public class RunDialogPanel extends javax.swing.JPanel {
         if (projectComboBox.getSelectedIndex() > 0) {
             lastSelectedProject = projectChoices[projectComboBox.getSelectedIndex()-1];
             project = lastSelectedProject;
-            ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider)project.getLookup().lookup(ConfigurationDescriptorProvider.class);
+            ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class);
             MakeConfigurationDescriptor projectDescriptor = (MakeConfigurationDescriptor)pdp.getConfigurationDescriptor();
             MakeConfiguration conf = (MakeConfiguration)projectDescriptor.getConfs().getActive();
             updateRunProfile(conf.getBaseDir(), conf.getProfile());
