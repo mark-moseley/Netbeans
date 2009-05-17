@@ -41,11 +41,15 @@
 
 package org.netbeans.modules.cnd.makeproject.ui.wizards;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.URL;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -54,13 +58,15 @@ import java.util.StringTokenizer;
 import java.util.Vector;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-//import javax.swing.text.html.parser.Element;
+import org.netbeans.modules.cnd.api.compilers.CompilerSet;
+import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
-import org.openide.util.Utilities;
 import org.openide.xml.XMLUtil;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
@@ -80,19 +86,19 @@ public class MakeSampleProjectGenerator {
     
     private MakeSampleProjectGenerator() {}
     
-    public static Set createProjectFromTemplate(final FileObject template, File projectLocation, final String name) throws IOException {
+    public static Set<DataObject> createProjectFromTemplate(final FileObject template, File projectLocation, final String name) throws IOException {
         String mainProject = (String)template.getAttribute("mainProjectLocation"); // NOI18N
         String subProjects = (String)template.getAttribute("subProjectLocations"); // NOI18N
         if (mainProject != null) {
             File mainProjectLocation = new File(projectLocation.getPath() + File.separator + mainProject);
             File[] subProjectLocations = null;
             if (subProjects != null) {
-                Vector subProjectsFiles = new Vector();
+                Vector<File> subProjectsFiles = new Vector<File>();
                 StringTokenizer st = new StringTokenizer(subProjects, ","); // NOI18N
                 while (st.hasMoreTokens()) {
                     subProjectsFiles.add(new File(projectLocation.getPath() + File.separator + st.nextToken()));
                 }
-                subProjectLocations = (File[])subProjectsFiles.toArray(new File[subProjectsFiles.size()]);
+                subProjectLocations = subProjectsFiles.toArray(new File[subProjectsFiles.size()]);
             }
             return createProjectFromTemplate(template.getInputStream(), projectLocation, mainProjectLocation, subProjectLocations, name);
         } else {
@@ -100,7 +106,7 @@ public class MakeSampleProjectGenerator {
         }
     }
     
-    public static Set createProjectFromTemplate(final URL template, File projectLocation, final String name) throws IOException {
+    public static Set<DataObject> createProjectFromTemplate(final URL template, File projectLocation, final String name) throws IOException {
         return createProjectFromTemplate(template.openStream(), projectLocation, name);
     }
     
@@ -126,33 +132,50 @@ public class MakeSampleProjectGenerator {
             //changeXmlFileByTagName(doc, "executablePath", workingDir, "X-PROJECTDIR-X"); // NOI18N
             //changeXmlFileByTagName(doc, "folderPath", workingDir, "X-PROJECTDIR-X"); // NOI18N
             changeXmlFileByTagName(doc, "defaultConf", systemOs, "X-DEFAULTCONF-X"); // NOI18N
-            if (Utilities.isWindows()) {
+            CompilerSetManager compilerSetManager = CompilerSetManager.getDefault(CompilerSetManager.getDefaultExecutionEnvironment());
+            int platform = compilerSetManager.getPlatform();
+            CompilerSet compilerSet = compilerSetManager.getDefaultCompilerSet();
+            String variant = null;
+            if (compilerSet != null) {
+                variant = MakeConfiguration.getVariant(compilerSet, platform);
+            }
+            if (platform == Platform.PLATFORM_WINDOWS) { // Utilities.isWindows()) {
                 changeXmlFileByTagName(doc, "output", "lib", "X-LIBPREFIX-X"); // NOI18N
                 changeXmlFileByTagName(doc, "output", "dll", "X-LIBSUFFIX-X"); // NOI18N
                 changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", "lib", "X-LIBPREFIX-X"); // NOI18N
                 changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", "dll", "X-LIBSUFFIX-X"); // NOI18N
+                if (variant != null) {
+                    changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", variant, "X-PLATFORM-X"); // NOI18N
+                }
             }
-            if (Utilities.getOperatingSystem() == Utilities.OS_MAC) {
+            if (platform == Platform.PLATFORM_MACOSX) { //Utilities.getOperatingSystem() == Utilities.OS_MAC) {
                 changeXmlFileByTagName(doc, "output", "lib", "X-LIBPREFIX-X"); // NOI18N
                 changeXmlFileByTagName(doc, "output", "dylib", "X-LIBSUFFIX-X"); // NOI18N
                 changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", "lib", "X-LIBPREFIX-X"); // NOI18N
                 changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", "dylib", "X-LIBSUFFIX-X"); // NOI18N
-            }
-            else {
+                if (variant != null) {
+                    changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", variant, "X-PLATFORM-X"); // NOI18N
+                }
+            } else {
                 changeXmlFileByTagName(doc, "output", "lib", "X-LIBPREFIX-X"); // NOI18N
                 changeXmlFileByTagName(doc, "output", "so", "X-LIBSUFFIX-X"); // NOI18N
                 changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", "lib", "X-LIBPREFIX-X"); // NOI18N
                 changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", "so", "X-LIBSUFFIX-X"); // NOI18N
+                if (variant != null) {
+                    changeXmlFileByTagAttrName(doc, "makeArtifact", "OP", variant, "X-PLATFORM-X"); // NOI18N
+                }
             }
             //saveXml(doc, prjLoc, "nbproject/projectDescriptor.xml"); // NOI18N
             saveXml(doc, prjLoc, PROJECT_CONFIGURATION_FILE);
             
         } catch (Exception e) {
-            throw new IOException(e.toString());
+            IOException ex = new IOException();
+            ex.initCause(e);
+            throw ex;
         }
     }
     
-    public static Set createProjectFromTemplate(InputStream inputStream, File projectLocation, final String name) throws IOException {
+    public static Set<DataObject> createProjectFromTemplate(InputStream inputStream, File projectLocation, final String name) throws IOException {
         FileObject prjLoc;
         unzip(inputStream, projectLocation);
         prjLoc = FileUtil.toFileObject(projectLocation);
@@ -164,7 +187,7 @@ public class MakeSampleProjectGenerator {
         return Collections.singleton(DataObject.find(prjLoc));
     }
     
-    private static void addToSet(Vector set, File projectFile) throws IOException {
+    private static void addToSet(Vector<DataObject> set, File projectFile) throws IOException {
         try {
             FileObject prjLoc = null;
             prjLoc = FileUtil.toFileObject(projectFile);
@@ -172,19 +195,21 @@ public class MakeSampleProjectGenerator {
             prjLoc.refresh(false);
             set.add(DataObject.find(prjLoc));
         } catch (Exception e) {
-            throw new IOException(e.toString());
+            IOException ex = new IOException();
+            ex.initCause(e);
+            throw ex;
         }
     }
     
-    public static Set createProjectFromTemplate(InputStream inputStream, File projectLocation, File mainProjectLocation, File[] subProjectLocations, String name) throws IOException {
-        Vector set = new Vector();
+    public static Set<DataObject> createProjectFromTemplate(InputStream inputStream, File projectLocation, File mainProjectLocation, File[] subProjectLocations, String name) throws IOException {
+        Vector<DataObject> set = new Vector<DataObject>();
         unzip(inputStream, projectLocation);
         addToSet(set, mainProjectLocation);
         if (subProjectLocations != null) {
             for (int i = 0; i < subProjectLocations.length; i++)
                 addToSet(set, subProjectLocations[i]);
         }
-        return new LinkedHashSet(set);
+        return new LinkedHashSet<DataObject>(set);
     }
     
     private static void changeXmlFileByNameNS(Document doc, String tagNameNS, String tagName, String newText, String regex) throws IOException {
@@ -242,7 +267,7 @@ public class MakeSampleProjectGenerator {
                     FileUtil.createFolder(f.getParentFile()); //f.getParentFile().mkdirs();
                     FileOutputStream out = new FileOutputStream(f);
                     try {
-                        FileUtil.copy(zip, out);
+                        copy(zip, out);
                     } finally {
                         out.close();
                     }
@@ -251,6 +276,27 @@ public class MakeSampleProjectGenerator {
         } finally {
             zip.close();
         }
+    }
+
+    /**
+     * Replacement for FileUtil.copy(). The problem with FU.c is that on Windows it terminates lines with
+     * <CRLF> rather than <LF>. Now that we do remote development, this means that if a remote project is
+     * created on Windows to be built by Sun Studio's dmake, then the <CRLF> breaks the build (this is
+     * probably true with Solaris "make" as well).
+     *
+     * @param is The InputStream
+     * @param os The Output Stream
+     * @throws java.io.IOException
+     */
+    private static void copy(InputStream is, OutputStream os) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(is));
+        BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(os));
+        String line;
+
+        while ((line = br.readLine()) != null) {
+            bw.write(line + "\n"); // NOI18N
+        }
+        bw.flush();
     }
     
     private static void replaceText(Element parent, String name, String regex) {
