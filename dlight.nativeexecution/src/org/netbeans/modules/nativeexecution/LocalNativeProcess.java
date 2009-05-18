@@ -44,37 +44,19 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.ConnectException;
-import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
-import org.netbeans.modules.nativeexecution.api.util.HostInfoUtils;
+import org.netbeans.modules.nativeexecution.api.HostInfo.OSFamily;
+import org.netbeans.modules.nativeexecution.api.util.CommandLineHelper;
 import org.netbeans.modules.nativeexecution.support.EnvWriter;
 import org.netbeans.modules.nativeexecution.support.MacroMap;
 import org.netbeans.modules.nativeexecution.support.UnbufferSupport;
-import org.netbeans.modules.nativeexecution.support.WindowsSupport;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 public final class LocalNativeProcess extends AbstractNativeProcess {
 
-    private final static String shell;
-    private final static boolean isWindows;
     private Process process = null;
     private InputStream processOutput = null;
     private OutputStream processInput = null;
     private InputStream processError = null;
-
-    static {
-        String sh = null;
-
-        try {
-            sh = HostInfoUtils.getShell(new ExecutionEnvironment());
-        } catch (ConnectException ex) {
-        }
-
-        shell = sh;
-
-        isWindows = Utilities.isWindows();
-    }
 
     public LocalNativeProcess(NativeProcessInfo info) {
         super(info);
@@ -82,8 +64,10 @@ public final class LocalNativeProcess extends AbstractNativeProcess {
 
     protected void create() throws Throwable {
         try {
-            if (Utilities.isWindows() && shell == null) {
-                throw new IOException(loc("LocalNativeProcess.shellNotFound.text")); // NOI18N
+            boolean isWindows = hostInfo.getOSFamily() == OSFamily.WINDOWS;
+
+            if (isWindows && hostInfo.getShell() == null) {
+                throw new IOException(loc("NativeProcess.shellNotFound.text")); // NOI18N
             }
 
             // Get working directory ....
@@ -91,22 +75,17 @@ public final class LocalNativeProcess extends AbstractNativeProcess {
 
             if (workingDirectory != null) {
                 workingDirectory = new File(workingDirectory).getAbsolutePath();
-                if (isWindows) {
-                    workingDirectory = WindowsSupport.getInstance().normalizePath(workingDirectory);
-                }
+                workingDirectory = CommandLineHelper.getInstance(info.getExecutionEnvironment()).toShellPath(workingDirectory);
             }
 
             final MacroMap env = info.getEnvVariables();
 
             UnbufferSupport.initUnbuffer(info, env);
 
-            // On windows add /bin to PATH in case cygwin is not in
-            // the Path environment variable ...
-            if (isWindows) {
-                env.put("PATH", "/bin:$PATH"); // NOI18N
-            }
+            // Always prepend /bin and /usr/bin to PATH
+            env.put("PATH", "/bin:/usr/bin:$PATH"); // NOI18N
 
-            final ProcessBuilder pb = new ProcessBuilder(shell, "-s"); // NOI18N
+            final ProcessBuilder pb = new ProcessBuilder(hostInfo.getShell(), "-s"); // NOI18N
 
             if (isInterrupted()) {
                 throw new InterruptedException();
@@ -118,21 +97,17 @@ public final class LocalNativeProcess extends AbstractNativeProcess {
             processError = process.getErrorStream();
             processOutput = process.getInputStream();
 
-            processInput.write("/bin/echo $$\n".getBytes()); // NOI18N
+            processInput.write("echo $$\n".getBytes()); // NOI18N
             processInput.flush();
 
             EnvWriter ew = new EnvWriter(processInput);
             ew.write(env);
 
             if (workingDirectory != null) {
-                processInput.write(("cd \"" + workingDirectory + "\"\n").getBytes()); // NOI18N
+                processInput.write(("cd " + workingDirectory + "\n").getBytes()); // NOI18N
             }
 
-            String cmd = "exec " + info.getCommandLine() + "\n"; // NOI18N
-
-            if (isWindows) {
-                cmd = cmd.replaceAll("\\\\", "/"); // NOI18N
-            }
+            String cmd = "exec " + info.getCommandLineForShell() + "\n"; // NOI18N
 
             processInput.write(cmd.getBytes());
             processInput.flush();

@@ -44,11 +44,15 @@ import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.CancellationException;
+import java.util.logging.Level;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.modules.nativeexecution.api.HostInfo;
 import org.netbeans.modules.nativeexecution.api.NativeProcess;
 import org.netbeans.modules.nativeexecution.api.NativeProcess.State;
 import org.netbeans.modules.nativeexecution.api.NativeProcessChangeEvent;
+import org.netbeans.modules.nativeexecution.api.util.HostInfoUtils;
 import org.netbeans.modules.nativeexecution.support.Logger;
 import org.openide.util.NbBundle;
 
@@ -59,6 +63,7 @@ public abstract class AbstractNativeProcess extends NativeProcess {
             Integer.valueOf(System.getProperty(
             "dlight.nativeexecutor.pidtimeout", "70")); // NOI18N
     protected final NativeProcessInfo info;
+    protected final HostInfo hostInfo;
     private final String id;
     // Immutable listeners list.
     private final Collection<ChangeListener> listeners;
@@ -73,8 +78,16 @@ public abstract class AbstractNativeProcess extends NativeProcess {
         this.info = info;
         isInterrupted = false;
         state = State.INITIAL;
-        id = info.getCommandLine();
+        id = info.getCommandLineForShell();
         stateLock = new String("StateLock: " + id); // NOI18N
+
+        HostInfo hinfo = null;
+        try {
+            hinfo = HostInfoUtils.getHostInfo(info.getExecutionEnvironment());
+        } catch (IOException ex) {
+        } catch (CancellationException ex) {
+        }
+        hostInfo = hinfo;
 
         Collection<ChangeListener> ll = info.getListeners();
         listeners = (ll == null || ll.isEmpty()) ? null
@@ -84,12 +97,17 @@ public abstract class AbstractNativeProcess extends NativeProcess {
 
     public NativeProcess createAndStart() {
         try {
+            if (hostInfo == null) {
+                throw new IllegalStateException("Unable to create process - no HostInfo available"); // NOI18N
+            }
+
             setState(State.STARTING);
             create();
             setState(State.RUNNING);
         } catch (Throwable ex) {
             String msg = ex.getMessage() == null ? ex.toString() : ex.getMessage();
-            log.info(loc("NativeProcess.exceptionOccured.text", msg)); // NOI18N
+            //log.info(loc("NativeProcess.exceptionOccured.text", msg)); // NOI18N
+            log.log(Level.INFO, loc("NativeProcess.exceptionOccured.text"), ex);
             setState(State.ERROR);
             interrupt();
         }
