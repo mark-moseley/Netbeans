@@ -43,6 +43,8 @@ package org.netbeans.modules.java.source;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.InstanceNotFoundException;
 import javax.management.MBeanRegistrationException;
@@ -53,21 +55,21 @@ import javax.management.ObjectName;
 import org.netbeans.modules.java.source.usages.ClassIndexManager;
 import org.netbeans.modules.java.source.usages.LuceneIndexMBean;
 import org.netbeans.modules.java.source.usages.LuceneIndexMBeanImpl;
-import org.netbeans.modules.java.source.usages.RepositoryUpdater;
 import org.netbeans.modules.java.source.util.LowMemoryNotifierMBean;
 import org.netbeans.modules.java.source.util.LowMemoryNotifierMBeanImpl;
 import org.openide.ErrorManager;
 import org.openide.modules.ModuleInstall;
 import org.openide.util.Exceptions;
-import org.openide.windows.WindowManager;
 
 /**
  *
  * @author Petr Hrebejk
+ * @author Tomas Zezula
  */
 public class JBrowseModule extends ModuleInstall {
     
     private static final boolean ENABLE_MBEANS = Boolean.getBoolean("org.netbeans.modules.java.source.enableMBeans");  //NOI18N
+    private static Logger log = Logger.getLogger(JBrowseModule.class.getName());
     
     /** Creates a new instance of JBrowseModule */
     public JBrowseModule() {
@@ -76,20 +78,20 @@ public class JBrowseModule extends ModuleInstall {
     public @Override void restored() {
         super.restored();
         JavaSourceTaskFactoryManager.register();
-        WindowManager.getDefault().invokeWhenUIReady(new Runnable() {
-            public void run () {
-                RepositoryUpdater.getDefault();
-                ActivatedDocumentListener.register();
-            }
-        });
         if (ENABLE_MBEANS) {
             registerMBeans();
         }
+
+        //XXX:
+        //#143234: javac caches content of all jar files in a static map, which leads to memory leaks affecting the IDE
+        //when "internal" execution of javac is used
+        //the property below disables the caches
+        //java.project might be a better place (currently does not have a ModuleInstall)
+        System.setProperty("useJavaUtilZip", "true");
     }   
     
-    public @Override boolean closing () {
-        final boolean ret = super.closing();
-        RepositoryUpdater.getDefault().close();
+    public @Override void close () {
+        super.close();
         try {
             ClassIndexManager.getDefault().writeLock(new ClassIndexManager.ExceptionAction<Void>() {
                  public Void run() throws IOException {
@@ -106,7 +108,6 @@ public class JBrowseModule extends ModuleInstall {
         if (ENABLE_MBEANS) {
             unregisterMBeans();
         }
-        return ret;
     }
     
     private static void registerMBeans() {
@@ -115,16 +116,20 @@ public class JBrowseModule extends ModuleInstall {
             mgs.registerMBean (new LowMemoryNotifierMBeanImpl(), new ObjectName (LowMemoryNotifierMBean.OBJECT_NAME));
             mgs.registerMBean( LuceneIndexMBeanImpl.getDefault(), new ObjectName (LuceneIndexMBean.OBJECT_NAME));
         } catch (NotCompliantMBeanException e) {
-            ErrorManager.getDefault ().notify (e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
         }
         catch (MalformedObjectNameException e) {
-            ErrorManager.getDefault ().notify (e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
         }
         catch (InstanceAlreadyExistsException e) {
-            ErrorManager.getDefault ().notify (e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
         }
         catch (MBeanRegistrationException e) {
-            ErrorManager.getDefault ().notify (e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
         }
     }
     
@@ -134,13 +139,16 @@ public class JBrowseModule extends ModuleInstall {
             mgs.unregisterMBean (new ObjectName (LowMemoryNotifierMBean.OBJECT_NAME));
             mgs.unregisterMBean (new ObjectName (LuceneIndexMBean.OBJECT_NAME));
         } catch (MalformedObjectNameException e) {
-            ErrorManager.getDefault ().notify (e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
         }
         catch (InstanceNotFoundException e) {
-            ErrorManager.getDefault ().notify (e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
         }
         catch (MBeanRegistrationException e) {
-            ErrorManager.getDefault ().notify (e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
         }
     }
 }

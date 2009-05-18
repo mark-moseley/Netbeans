@@ -48,6 +48,8 @@ import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 import javax.tools.JavaFileManager;
 import javax.tools.JavaFileManager.Location;
 import javax.tools.JavaFileObject;
@@ -65,6 +67,7 @@ public class SourceFileManager implements JavaFileManager {
     
     private final ClassPath sourceRoots;
     private final boolean ignoreExcludes;
+    private static Logger log = Logger.getLogger(SourceFileManager.class.getName());
     
     /** Creates a new instance of SourceFileManager */
     public SourceFileManager (final ClassPath sourceRoots, final boolean ignoreExcludes) {
@@ -94,7 +97,7 @@ public class SourceFileManager implements JavaFileManager {
                                 if (FileObjects.JAVA.equalsIgnoreCase(ext)) {
                                     kind = JavaFileObject.Kind.SOURCE;
                                 }
-                                else if (FileObjects.CLASS.equalsIgnoreCase(ext) || "sig".equalsIgnoreCase(ext)) {
+                                else if (FileObjects.CLASS.equalsIgnoreCase(ext) || FileObjects.SIG.equalsIgnoreCase(ext)) {
                                     kind = JavaFileObject.Kind.CLASS;
                                 }
                                 else if (FileObjects.HTML.equalsIgnoreCase(ext)) {
@@ -136,7 +139,7 @@ public class SourceFileManager implements JavaFileManager {
         if (namePair == null) {
             return null;
         }
-        String ext = kind == JavaFileObject.Kind.CLASS ? "sig" : kind.extension.substring(1);   //Skeep the .
+        String ext = kind == JavaFileObject.Kind.CLASS ? FileObjects.SIG : kind.extension.substring(1);   //tzezula: Clearly wrong in compile on save, but "class" is also wrong
         for (ClassPath.Entry entry : this.sourceRoots.entries()) {
             FileObject root = entry.getRoot();
             if (root != null) {
@@ -189,7 +192,13 @@ public class SourceFileManager implements JavaFileManager {
     }
     
     public String inferBinaryName (final Location l, final JavaFileObject jfo) {        
-        try {            
+        try {                        
+            if (jfo instanceof FileObjects.InferableJavaFileObject) {
+                final String result = ((FileObjects.InferableJavaFileObject)jfo).inferBinaryName();
+                if (result != null) {
+                    return result;
+                }
+            }
             FileObject fo;
             FileObject root = null;
             if (jfo instanceof SourceFileObject) {
@@ -217,7 +226,8 @@ public class SourceFileManager implements JavaFileManager {
                 return result;
             }
         } catch (MalformedURLException e) {
-            ErrorManager.getDefault().notify(e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
         }        
         return null;
     }

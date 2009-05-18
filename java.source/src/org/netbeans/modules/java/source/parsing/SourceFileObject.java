@@ -54,6 +54,8 @@ import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.nio.CharBuffer;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.NestingKind;
 import javax.swing.text.BadLocationException;
@@ -69,6 +71,7 @@ import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.JarFileSystem;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -78,7 +81,7 @@ import org.openide.text.NbDocument;
  *
  * @author Tomas Zezula
  */
-public class SourceFileObject implements JavaFileObject, DocumentProvider {    
+public class SourceFileObject implements DocumentProvider, FileObjects.InferableJavaFileObject {    
     
     final FileObject file;
     final FileObject root;
@@ -87,29 +90,67 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
     private String text;
     private TokenHierarchy<?> tokens;
     private final JavaFileFilterImplementation filter;
+    private static Logger log = Logger.getLogger(SourceFileObject.class.getName());
     
     public static SourceFileObject create (final FileObject file, final FileObject root) {        
         try {
             return new SourceFileObject (file, root, null, false);
         } catch (IOException ioe) {
-            ErrorManager.getDefault().notify(ioe);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, ioe.getMessage(), ioe);
             return null;
         }        
     }
     
+    public SourceFileObject (final FileObject file, final FileObject root, final JavaFileFilterImplementation filter, final CharSequence content) throws IOException {
+        this (file, root, filter);
+        update(content);
+    }
+    
+    //where
+    private String toString (final CharSequence c) {
+        if (c instanceof String) {
+            return (String) c;
+        }
+        else {
+            return c.toString();
+        }
+    }
+    
     /** Creates a new instance of SourceFileObject */
     public SourceFileObject (final FileObject file, final FileObject root, final JavaFileFilterImplementation filter, final boolean renderNow) throws IOException {
+        this (file, root, filter);
+        if (renderNow && this.kind != Kind.CLASS) {
+            getCharContentImpl(true);
+        }
+    }
+    
+    private SourceFileObject (final FileObject file, final FileObject root, final JavaFileFilterImplementation filter) {
         assert file != null;
         this.file = file;
         this.root = root;
         this.filter = filter;
         String ext = this.file.getExt();        
-        this.kind = FileObjects.getKind(ext);        
-        if (renderNow && this.kind != Kind.CLASS) {
+        this.kind = filter == null ? FileObjects.getKind(ext) : Kind.SOURCE; //#141411
+    }
+
+    
+    public void update () throws IOException {
+        if (this.kind != Kind.CLASS) {
             getCharContentImpl(true);
         }
     }
-
+    
+    public void update (final CharSequence content) throws IOException {
+        if (content == null) {
+            update();
+        }
+        else {            
+            final CharBuffer charBuffer = CharBuffer.wrap (content);
+            this.text = toString(content);
+            tokens = TokenHierarchy.create(charBuffer, false, JavaTokenId.language(), null, null);
+        }
+    }
     
 
     public boolean isNameCompatible (String simplename, JavaFileObject.Kind kind) {
@@ -166,8 +207,9 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
                       try {
                             builder.append(doc.getText(0, doc.getLength()));
                         } catch (BadLocationException e) {
-                            ErrorManager.getDefault().notify(e);
-                        }  
+                          if (log.isLoggable(Level.SEVERE))
+                              log.log(Level.SEVERE, e.getMessage(), e);
+                      }  
                     }
                 });
                 return new StringReader (builder.toString());
@@ -205,8 +247,9 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
                       try {
                             builder.append(doc.getText(0, doc.getLength()));
                         } catch (BadLocationException e) {
-                            ErrorManager.getDefault().notify(e);
-                        }  
+                          if (log.isLoggable(Level.SEVERE))
+                              log.log(Level.SEVERE, e.getMessage(), e);
+                      }  
                     }
                 });
                 return new ByteArrayInputStream (builder.toString().getBytes());
@@ -253,7 +296,8 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
             try {            
                 this.uri = URI.create(this.file.getURL().toExternalForm());
             } catch (FileStateInvalidException e) {
-                ErrorManager.getDefault().notify(e);                
+                if (log.isLoggable(Level.SEVERE))
+                    log.log(Level.SEVERE, e.getMessage(), e);
             }
         }
         return this.uri;
@@ -287,6 +331,18 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
 
     public Modifier getAccessLevel() {
         return null;
+    }
+    
+    public String inferBinaryName () {
+        if (root == null) {
+            return null;
+        }
+        final String relativePath = FileUtil.getRelativePath(root,file);
+        assert relativePath != null : "root=" + FileUtil.getFileDisplayName(root) + ", file=" + FileUtil.getFileDisplayName(file);
+        final int index = relativePath.lastIndexOf('.');
+        assert index > 0;
+        final String result = relativePath.substring(0,index).replace('/','.');
+        return result;
     }
     
     public @Override String toString () {
@@ -382,7 +438,8 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
                     try {
                         _text[0] = doc.getText(0, doc.getLength());
                     } catch (BadLocationException e) {
-                        ErrorManager.getDefault().notify(e);
+                        if (log.isLoggable(Level.SEVERE))
+                            log.log(Level.SEVERE, e.getMessage(), e);
                     }
                 }
             });
@@ -506,11 +563,13 @@ public class SourceFileObject implements JavaFileObject, DocumentProvider {
                                 //todo: use new String(data,0,pos,FileEncodingQuery.getEncoding(file)) on JDK 6.0
                                 doc.insertString(0,new String(data,0,pos,FileEncodingQuery.getEncoding(file).name()),null);
                             } catch (BadLocationException e) {
-                                ErrorManager.getDefault().notify(e);
+                                if (log.isLoggable(Level.SEVERE))
+                                    log.log(Level.SEVERE, e.getMessage(), e);
                             }
                             catch (UnsupportedEncodingException ee) {
-                                ErrorManager.getDefault().notify (ee);
-                        }
+                                if (log.isLoggable(Level.SEVERE))
+                                    log.log(Level.SEVERE, ee.getMessage(), ee);
+                            }
                         }
                     });
             } finally {

@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.netbeans.api.annotations.common.NonNull;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.JavaSource.Priority;
 import org.netbeans.modules.java.source.parsing.FileObjects;
@@ -56,7 +57,9 @@ import org.openide.filesystems.FileObject;
 import org.netbeans.api.java.source.support.EditorAwareJavaSourceTaskFactory;
 import org.netbeans.api.java.source.support.CaretAwareJavaSourceTaskFactory;
 import org.netbeans.api.java.source.support.LookupBasedJavaSourceTaskFactory;
+import org.netbeans.modules.java.source.JavaSourceAccessor;
 import org.netbeans.modules.java.source.JavaSourceTaskFactoryManager;
+import org.netbeans.modules.parsing.api.Source;
 import org.openide.ErrorManager;
 import org.openide.util.RequestProcessor;
 
@@ -66,8 +69,7 @@ import org.openide.util.RequestProcessor;
  * Please note that there is usually no need to implement this class directly,
  * as there are support classes for common {@link JavaSourceTaskFactory} implementations.
  *
- * This factory should be registered in the global lookup by listing its fully qualified
- * name in file <code>META-INF/services/org.netbeans.api.java.source.JavaSourceTaskFactory</code>.
+ * This factory should be registered in the global lookup using {@link org.openide.util.lookup.ServiceProvider}.
  * 
  * @see EditorAwareJavaSourceTaskFactory
  * @see CaretAwareJavaSourceTaskFactory
@@ -89,7 +91,7 @@ public abstract class JavaSourceTaskFactory {
      * @param phase phase to use for tasks created by {@link #createTask}
      * @param priority priority to use for tasks created by {@link #createTask}
      */
-    protected JavaSourceTaskFactory(Phase phase, Priority priority) {
+    protected JavaSourceTaskFactory(@NonNull Phase phase, @NonNull Priority priority) {
         this.phase = phase;
         this.priority = priority;
         this.file2Task = new HashMap<FileObject, CancellableTask<CompilationInfo>>();
@@ -104,7 +106,7 @@ public abstract class JavaSourceTaskFactory {
      * @param file for which file the task should be created.
      * @return created {@link CancellableTask}  for a given file.
      */
-    protected abstract CancellableTask<CompilationInfo> createTask(FileObject file);
+    protected abstract @NonNull CancellableTask<CompilationInfo> createTask(FileObject file);
 
     /**Specifies on which files should be registered tasks created by this factory.
      * On {@link JavaSource}'s corresponding to {@link FileObject}s returned from
@@ -121,7 +123,7 @@ public abstract class JavaSourceTaskFactory {
      * @see EditorAwareJavaSourceTaskFactory
      * @see CaretAwareJavaSourceTaskFactory
      */
-    protected abstract Collection<FileObject> getFileObjects();
+    protected abstract @NonNull Collection<FileObject> getFileObjects();
 
     /**Notify the infrastructure that the collection of fileobjects has been changed.
      * The infrastructure calls {@link #getFileObjects()} to get a new collection files.
@@ -180,6 +182,10 @@ public abstract class JavaSourceTaskFactory {
                 
                 if (js != null) {
                     CancellableTask<CompilationInfo> task = createTask(a);
+
+                    if (task == null) {
+                        throw new IllegalStateException("createTask(FileObject) returned null for factory: " + getClass().getName());
+                    }
                     
                     toAdd.put(js, task);
                     
@@ -201,7 +207,8 @@ public abstract class JavaSourceTaskFactory {
             } catch (FileObjects.InvalidFileException ie) {
                 LOG.info("JavaSource.addPhaseCompletionTask called on deleted file");       //NOI18N
             } catch (IOException ex) {
-                ErrorManager.getDefault().notify(ex);
+                if (LOG.isLoggable(Level.SEVERE))
+                    LOG.log(Level.SEVERE, ex.getMessage(), ex);
             }
         }
     }
@@ -242,15 +249,15 @@ public abstract class JavaSourceTaskFactory {
         };
         ACCESSOR2 = new Accessor2() {
             public void addPhaseCompletionTask(JavaSource js, CancellableTask<CompilationInfo> task, Phase phase, Priority priority) throws IOException {
-                js.addPhaseCompletionTask(task, phase, priority);
+                JavaSourceAccessor.getINSTANCE().addPhaseCompletionTask (js, task, phase, priority);                
             }
 
             public void removePhaseCompletionTask(JavaSource js, CancellableTask<CompilationInfo> task) {
-                js.removePhaseCompletionTask(task);
+                JavaSourceAccessor.getINSTANCE().removePhaseCompletionTask(js,task);
             }
 
             public void rescheduleTask(JavaSource js, CancellableTask<CompilationInfo> task) {
-                js.rescheduleTask(task);
+                JavaSourceAccessor.getINSTANCE().rescheduleTask(js, task);
             }
         };
     }

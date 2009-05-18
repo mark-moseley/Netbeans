@@ -45,40 +45,65 @@ import javax.tools.JavaFileManager;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.modules.java.preprocessorbridge.spi.JavaFileFilterImplementation;
+import org.netbeans.modules.java.source.parsing.FileObjects.InferableJavaFileObject;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
+
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 /**
  *
  * @author Tomas Zezula
  */
 public abstract class ClasspathInfoAccessor {
-
+    private static Logger log = Logger.getLogger(ClasspathInfoAccessor.class.getName());
     public static synchronized ClasspathInfoAccessor getINSTANCE() {
         if (INSTANCE == null) {
             try {
                 Class.forName(ClasspathInfo.class.getName(), true, ClasspathInfo.class.getClassLoader());
             } catch (ClassNotFoundException cnfe) {
-                ErrorManager.getDefault().notify(cnfe);
+                if (log.isLoggable(Level.SEVERE))
+                    log.log(Level.SEVERE, cnfe.getMessage(), cnfe);
             }
         }
         
         return INSTANCE;
     }
 
-    public static synchronized void setINSTANCE(ClasspathInfoAccessor aINSTANCE) {
+    public static void setINSTANCE(ClasspathInfoAccessor aINSTANCE) {
         INSTANCE = aINSTANCE;
     }
 
-    private static ClasspathInfoAccessor INSTANCE;
+    private static volatile ClasspathInfoAccessor INSTANCE;
        
     public abstract JavaFileManager getFileManager(ClasspathInfo cpInfo);
     
     public abstract ClassPath getCachedClassPath (ClasspathInfo cpInfo, ClasspathInfo.PathKind kind);
     
-    public abstract ClasspathInfo create (FileObject fo, JavaFileFilterImplementation filter, boolean backgroundCompilation, boolean ignoreExcludes);
+    public abstract ClasspathInfo create (FileObject fo, JavaFileFilterImplementation filter, boolean backgroundCompilation, boolean ignoreExcludes, boolean hasMemoryFileManager);
     
     public abstract ClasspathInfo create (ClassPath bootPath, ClassPath compilePath, ClassPath sourcePath, JavaFileFilterImplementation filter,
-                                          boolean backgroundCompilation, boolean ignoreExcludes);   
+                                          boolean backgroundCompilation, boolean ignoreExcludes, boolean hasMemoryFileManager);
+    
+    /**
+     * Registers virtual java source into the memory {@link JavacFileManager}
+     * @param cpInfo {@link ClasspathInfo}
+     * @param fqn under which the source will be bind
+     * @param content of the source
+     * @return true when the binding replaced already bound virtual source
+     * @throws java.lang.UnsupportedOperationException when the {@link ClasspathInfo} doesn't support memory {@link JavacFileManager}
+     */
+    public abstract boolean registerVirtualSource (ClasspathInfo cpInfo, InferableJavaFileObject jfo) throws UnsupportedOperationException;
+    
+    /**
+     * Unregisters virtual java source from memory {@link JavacFileManager}
+     * @param cpInfo {@link ClasspathInfo}
+     * @param fqn which should be unbind
+     * @return true when the binding was removed
+     * @throws java.lang.UnsupportedOperationException when the {@link ClasspathInfo} doesn't support memory {@link JavacFileManager}
+     */
+    public abstract boolean unregisterVirtualSource (ClasspathInfo cpnfo, String fqn) throws UnsupportedOperationException;
+    
     
 }
