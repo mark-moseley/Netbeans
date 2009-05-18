@@ -42,11 +42,15 @@ package org.netbeans.modules.java.hints.errors;
 
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.Scope;
 import com.sun.source.tree.Tree;
+import com.sun.source.tree.Tree.Kind;
 import com.sun.source.util.TreePath;
 import java.io.IOException;
 import java.util.EnumSet;
@@ -56,9 +60,11 @@ import java.util.Set;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.WildcardType;
@@ -68,7 +74,6 @@ import javax.swing.text.Position;
 import org.netbeans.api.java.source.Comment;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.ElementUtilities.ElementAcceptor;
-import org.netbeans.api.java.source.GeneratorUtilities;
 import org.netbeans.api.java.source.ModificationResult;
 import org.netbeans.api.java.source.ModificationResult.Difference;
 import org.netbeans.api.java.source.SourceUtils;
@@ -87,15 +92,22 @@ import org.openide.util.Exceptions;
  * @author Jan Lahoda
  */
 public class Utilities {
+    private static final String DEFAULT_NAME = "name";
 
     public Utilities() {
     }
 
     public static String guessName(CompilationInfo info, TreePath tp) {
-        String name = getName((ExpressionTree) tp.getLeaf());
+        ExpressionTree et = (ExpressionTree) tp.getLeaf();
+        String name = getName(et);
         
         if (name == null) {
-            return "name";
+            if(et instanceof LiteralTree) {
+                Object guess = ((LiteralTree) et).getValue();
+                if (guess != null && guess instanceof String)
+                    return guessLiteralName((String) guess);
+            } 
+            return DEFAULT_NAME;
         }
         
         Scope s = info.getTrees().getScope(tp);
@@ -119,7 +131,84 @@ public class Utilities {
         
         return proposedName;
     }
+
+    private static String guessLiteralName(String str) {
+        StringBuffer sb = new StringBuffer();
+        if(str.length() == 0)
+            return DEFAULT_NAME;
+        char first = str.charAt(0);
+        if(Character.isJavaIdentifierStart(str.charAt(0)))
+            sb.append(first);
+
+        for (int i = 1; i < str.length(); i++) {
+            char ch = str.charAt(i);
+            if(ch == ' ') {
+                sb.append('_');
+                continue;
+            }
+            if (Character.isJavaIdentifierPart(ch))
+                sb.append(ch);
+            if (i > 40)
+                break;
+        }
+        if (sb.length() == 0)
+            return DEFAULT_NAME;
+        else
+            return sb.toString();
+    }
     
+    /**
+     * @param tp tested {@link TreePath}
+     * @return true if <code>tp</code> is an IDENTIFIER in a VARIABLE in an ENHANCED_FOR_LOOP
+     */
+    public static boolean isEnhancedForLoopIdentifier(TreePath tp) {
+        if (tp == null || tp.getLeaf().getKind() != Kind.IDENTIFIER)
+            return false;
+        TreePath parent = tp.getParentPath();
+        if (parent == null || parent.getLeaf().getKind() != Kind.VARIABLE)
+            return false;
+        TreePath context = parent.getParentPath();
+        if (context == null || context.getLeaf().getKind() != Kind.ENHANCED_FOR_LOOP)
+            return false;
+        return true;
+    }
+
+    /**
+     *
+     * @param info context {@link CompilationInfo}
+     * @param iterable tested {@link TreePath}
+     * @return generic type of an {@link Iterable} or {@link ArrayType} at a TreePath
+     */
+    public static TypeMirror getIterableGenericType(CompilationInfo info, TreePath iterable) {
+        TypeElement iterableElement = info.getElements().getTypeElement("java.lang.Iterable"); //NOI18N
+        if (iterableElement == null) {
+            return null;
+        }
+        TypeMirror iterableType = info.getTrees().getTypeMirror(iterable);
+        if (iterableType == null) {
+            return null;
+        }
+        TypeMirror designedType = null;
+        if (iterableType.getKind() == TypeKind.DECLARED) {
+            DeclaredType declaredType = (DeclaredType) iterableType;
+            if (!info.getTypes().isSubtype(info.getTypes().erasure(declaredType), info.getTypes().erasure(iterableElement.asType()))) {
+                return null;
+            }
+            ExecutableElement iteratorMethod = (ExecutableElement) iterableElement.getEnclosedElements().get(0);
+            ExecutableType iteratorMethodType = (ExecutableType) info.getTypes().asMemberOf(declaredType, iteratorMethod);
+            List<? extends TypeMirror> typeArguments = ((DeclaredType) iteratorMethodType.getReturnType()).getTypeArguments();
+            if (!typeArguments.isEmpty()) {
+                designedType = typeArguments.get(0);
+            }
+        } else if (iterableType.getKind() == TypeKind.ARRAY) {
+            designedType = ((ArrayType) iterableType).getComponentType();
+        }
+        if (designedType == null) {
+            return null;
+        }
+        return resolveCapturedType(info, designedType);
+    }
+
     public static String getName(TypeMirror tm) {
         if (tm.getKind().isPrimitive()) {
             return "" + Character.toLowerCase(tm.getKind().name().charAt(0));
@@ -132,18 +221,22 @@ public class Utilities {
             case ARRAY:
                 return getName(((ArrayType) tm).getComponentType());
             default:
-                return null;
+                return DEFAULT_NAME;
         }
     }
     
     public static String getName(ExpressionTree et) {
+        return getName((Tree) et);
+    }
+    
+    public static String getName(Tree et) {
         return adjustName(getNameRaw(et));
     }
     
-    private static String getNameRaw(ExpressionTree et) {
+    private static String getNameRaw(Tree et) {
         if (et == null)
             return null;
-        
+
         switch (et.getKind()) {
         case IDENTIFIER:
             return ((IdentifierTree) et).getName().toString();
@@ -151,6 +244,10 @@ public class Utilities {
             return getName(((MethodInvocationTree) et).getMethodSelect());
         case MEMBER_SELECT:
             return ((MemberSelectTree) et).getIdentifier().toString();
+        case NEW_CLASS:
+            return firstToLower(getName(((NewClassTree) et).getIdentifier()));
+        case PARAMETERIZED_TYPE:
+            return firstToLower(getName(((ParameterizedTypeTree) et).getType()));
         default:
             return null;
         }
@@ -203,10 +300,21 @@ public class Utilities {
         }
         
     }
-    
-    public static ChangeInfo commitAndComputeChangeInfo(FileObject target, ModificationResult diff) throws IOException {
+
+    /**
+     * Commits changes and provides selection bounds
+     *
+     * @param target target FileObject
+     * @param diff set of changes made by ModificationTask
+     * @param tag mark used for selection of generated text
+     * @return set of changes made by hint
+     * @throws java.io.IOException
+     */
+    public static ChangeInfo commitAndComputeChangeInfo(FileObject target, final ModificationResult diff, final Object tag) throws IOException {
         List<? extends Difference> differences = diff.getDifferences(target);
         ChangeInfo result = null;
+        
+        diff.commit();
         
         try {
             if (differences != null) {
@@ -219,14 +327,20 @@ public class Utilities {
                             doc = start.getCloneableEditorSupport().openDocument();
                         }
                         
-                        final Position[] pos = new Position[1];
+                        final Position[] pos = new Position[2];
                         final Document fdoc = doc;
                         
                         doc.render(new Runnable() {
-
                             public void run() {
                                 try {
-                                    pos[0] = NbDocument.createPosition(fdoc, start.getOffset(), Position.Bias.Backward);
+                                    int[] span = diff.getSpan(tag);
+                                    if(span != null) {
+                                        pos[0] = fdoc.createPosition(span[0]);
+                                        pos[1] = fdoc.createPosition(span[1]);
+                                    } else {
+                                        pos[0] = NbDocument.createPosition(fdoc, start.getOffset(), Position.Bias.Backward);
+                                        pos[1] = pos[0];
+                                    }
                                 } catch (BadLocationException ex) {
                                     Exceptions.printStackTrace(ex);
                                 }
@@ -234,7 +348,7 @@ public class Utilities {
                         });
                         
                         if (pos[0] != null) {
-                            result = new ChangeInfo(target, pos[0], pos[0]);
+                            result = new ChangeInfo(target, pos[0], pos[1]);
                         }
                         
                         break;
@@ -244,8 +358,6 @@ public class Utilities {
         } catch (IOException e) {
             Exceptions.printStackTrace(e);
         }
-        
-        diff.commit();
         
         return result;
     }
@@ -273,7 +385,13 @@ public class Utilities {
         TypeMirror type = resolveCapturedTypeInt(info, tm);
         
         if (type.getKind() == TypeKind.WILDCARD) {
-            return ((WildcardType) type).getExtendsBound();
+            TypeMirror tmirr = ((WildcardType) type).getExtendsBound();
+            if (tmirr != null)
+                return tmirr;
+            else { //no extends, just '?'
+                return info.getElements().getTypeElement("java.lang.Object").asType(); // NOI18N
+            }
+                
         }
         
         return type;
@@ -296,6 +414,12 @@ public class Utilities {
             
             return info.getTypes().getDeclaredType((TypeElement) dt.asElement(), typeArguments.toArray(new TypeMirror[0]));
         }
+
+        if (tm.getKind() == TypeKind.ARRAY) {
+            ArrayType at = (ArrayType) tm;
+
+            return info.getTypes().getArrayType(resolveCapturedTypeInt(info, at.getComponentType()));
+        }
         
         return tm;
     }
@@ -303,8 +427,6 @@ public class Utilities {
     public static <T extends Tree> T copyComments(WorkingCopy wc, Tree from, T to) {
         TreeMaker make = wc.getTreeMaker();
         
-        GeneratorUtilities.get(wc).importComments(from, wc.getCompilationUnit());
-
         for (Comment c : wc.getTreeUtilities().getComments(from, true)) {
             make.addComment(to, c, true);
         }
@@ -314,5 +436,27 @@ public class Utilities {
         }
         
         return to;
+    }
+
+    /**
+     * Convert typemirror of an anonymous class to supertype/iface
+     * 
+     * @return typemirror of supertype/iface, initial tm if not anonymous
+     */
+    public static TypeMirror convertIfAnonymous(TypeMirror tm) {
+        //anonymous class?
+        Set<ElementKind> fm = EnumSet.of(ElementKind.METHOD, ElementKind.FIELD);
+        if (tm instanceof DeclaredType) {
+            Element el = ((DeclaredType) tm).asElement();
+            if (el.getSimpleName().length() == 0 || fm.contains(el.getEnclosingElement().getKind())) {
+                List<? extends TypeMirror> interfaces = ((TypeElement) el).getInterfaces();
+                if (interfaces.isEmpty()) {
+                    tm = ((TypeElement) el).getSuperclass();
+                } else {
+                    tm = interfaces.get(0);
+                }
+            }
+        }
+        return tm;
     }
 }
