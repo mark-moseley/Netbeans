@@ -138,11 +138,7 @@ public final class AddModulePanel extends JPanel {
                 ModuleDependency[] deps = getSelectedDependencies();
                 if (deps.length == 1) {
                     NbPlatform platform = props.getActivePlatform();
-                    if (platform == null) { // NetBeans.org module
-                        currectJavadoc = Util.findJavadocForNetBeansOrgModules(deps[0]);
-                    } else {
-                        currectJavadoc = Util.findJavadoc(deps[0], platform);
-                    }
+                    currectJavadoc = deps[0].getModuleEntry().getJavadoc(platform);
                 }
                 showJavadocButton.setEnabled(currectJavadoc != null);
             }
@@ -210,6 +206,7 @@ public final class AddModulePanel extends JPanel {
         final boolean nonApiDeps = showNonAPIModules.isSelected();
         ModuleProperties.RP.post(new Runnable() {
             public void run() {
+                props.resetUniverseDependencies();  // #165300 refresh in case of added friends/public packages
                 final Set<ModuleDependency> universeDeps = props.getUniverseDependencies(true, !nonApiDeps);
                 EventQueue.invokeLater(new Runnable() {
                     public void run() {

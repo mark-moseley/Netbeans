@@ -111,7 +111,7 @@ public final class SingleModuleProperties extends ModuleProperties {
     // property keys for project.properties
     public static final String BUILD_COMPILER_DEBUG = "build.compiler.debug"; // NOI18N
     public static final String BUILD_COMPILER_DEPRECATION = "build.compiler.deprecation"; // NOI18N
-    public static final String CLUSTER_DIR = "cluster.dir"; // NOI18N
+// XXX unused   public static final String CLUSTER_DIR = "cluster.dir"; // NOI18N
     public static final String IS_AUTOLOAD = "is.autoload"; // NOI18N
     public static final String IS_EAGER = "is.eager"; // NOI18N
     public static final String JAVAC_SOURCE = "javac.source"; // NOI18N
@@ -124,7 +124,7 @@ public final class SingleModuleProperties extends ModuleProperties {
     /** @see "#66278" */
     public static final String JAVAC_COMPILERARGS = "javac.compilerargs"; // NOI18N
     
-    static final String[] SOURCE_LEVELS = {"1.4", "1.5"}; // NOI18N
+    static final String[] SOURCE_LEVELS = {"1.4", "1.5", "1.6"}; // NOI18N
     
     private final static Map<String, String> DEFAULTS;
     
@@ -134,8 +134,6 @@ public final class SingleModuleProperties extends ModuleProperties {
     private boolean providedTokensChanged;
     private boolean autoUpdateShowInClientChanged;
 
-    private boolean moduleListRefreshNeeded;
-    
     static {
         // setup defaults
         Map<String, String> map = new HashMap<String, String>();
@@ -224,7 +222,9 @@ public final class SingleModuleProperties extends ModuleProperties {
         projectXMLManager = null;
         if (isSuiteComponent()) {
             assert getSuiteDirectory() != null;
-            ModuleList.refreshSuiteModuleList(getSuiteDirectory());
+            ModuleList.refreshModuleListForRoot(getSuiteDirectory());
+        } else if (isStandalone()) {
+            ModuleList.refreshModuleListForRoot(getProjectDirectoryFile());
         }
         ManifestManager manifestManager = ManifestManager.getInstance(getManifestFile(), false);
         majorReleaseVersion = manifestManager.getReleaseVersion();
@@ -234,8 +234,14 @@ public final class SingleModuleProperties extends ModuleProperties {
         autoUpdateShowInClient = manifestManager.getAutoUpdateShowInClient();
         String nbDestDirS = getEvaluator().getProperty("netbeans.dest.dir"); // NOI18N
         if (nbDestDirS != null) {
-            originalPlatform = activePlatform = NbPlatform.getPlatformByDestDir(
-                    getHelper().resolveFile(nbDestDirS));
+            NbPlatform plaf = NbPlatform.getPlatformByDestDir(getHelper().resolveFile(nbDestDirS));
+            if (!plaf.isValid()) { // #134492
+                NbPlatform def = NbPlatform.getDefaultPlatform();
+                if (def != null) {
+                    plaf = def;
+                }
+            }
+            originalPlatform = activePlatform = plaf;
         }
         String activeJdk = getEvaluator().getProperty("nbjdk.active"); // NOI18N
         if (activeJdk != null) {
@@ -258,9 +264,12 @@ public final class SingleModuleProperties extends ModuleProperties {
         }
         firePropertiesRefreshed();
     }
-    
-    void libraryWrapperAdded() {
-        // presuambly we do not need to reset anything else
+
+    /**
+     * Forces set of module deps returned from {@link #getUiverseDependencies(boolean)}
+     * to be recomputed next time it is queried.
+     */
+    void resetUniverseDependencies() {
         universeDependencies = null;
     }
     
@@ -418,14 +427,6 @@ public final class SingleModuleProperties extends ModuleProperties {
         return moduleType == NbModuleProvider.SUITE_COMPONENT;
     }
 
-    public void setModuleListRefreshNeeded(boolean moduleListRefreshNeeded) {
-        this.moduleListRefreshNeeded = moduleListRefreshNeeded;
-    }
-    
-    boolean isModuleListRefreshNeeded() {
-        return moduleListRefreshNeeded;
-    }
-    
     boolean dependingOnImplDependency() {
         DependencyListModel depsModel = getDependenciesListModel();
         if (depsModel == CustomizerComponentFactory.INVALID_DEP_LIST_MODEL) {
@@ -522,11 +523,11 @@ public final class SingleModuleProperties extends ModuleProperties {
                         Message.WARNING_MESSAGE));
                 return Collections.emptySet();
             }
-            String[] disableModules = SuiteProperties.getArrayProperty(
+            String[] disabledModules = SuiteProperties.getArrayProperty(
                     suite.getEvaluator(), SuiteProperties.DISABLED_MODULES_PROPERTY);
-            String[] enableClusters = SuiteProperties.getArrayProperty(
+            String[] enabledClusters = SuiteProperties.getArrayProperty(
                     suite.getEvaluator(), SuiteProperties.ENABLED_CLUSTERS_PROPERTY);
-            String[] disableClusters = SuiteProperties.getArrayProperty(
+            String[] disabledClusters = SuiteProperties.getArrayProperty(
                     suite.getEvaluator(), SuiteProperties.DISABLED_CLUSTERS_PROPERTY);
             String suiteClusterProp = getEvaluator().getProperty("cluster"); // NOI18N
             File suiteClusterDir = suiteClusterProp != null ? getHelper().resolveFile(suiteClusterProp) : null;
@@ -537,7 +538,7 @@ public final class SingleModuleProperties extends ModuleProperties {
                     // #72124: do not filter other modules in the same suite.
                     continue;
                 }
-                if (isExcluded(me, disableModules, enableClusters, disableClusters)) {
+                if (isExcluded(me, Arrays.asList(disabledModules), Arrays.asList(enabledClusters), Arrays.asList(disabledClusters))) {
                     it.remove();
                 }
             }
@@ -562,18 +563,31 @@ public final class SingleModuleProperties extends ModuleProperties {
         return getUniverseDependencies(filterExcludedModules, false);
     }
     
-    private static boolean isExcluded(final ModuleEntry me,
-            final String[] disableModules, final String[] enableClusters, final String[] disableClusters) {
-        if (Arrays.binarySearch(disableModules, me.getCodeNameBase()) >= 0) {
+    public static boolean isExcluded(ModuleEntry me, Collection<String> disabledModules, Collection<String> enabledClusters, Collection<String> disabledClusters) {
+        if (disabledModules.contains(me.getCodeNameBase())) {
             return true;
         }
-        if (enableClusters.length != 0 && Arrays.binarySearch(enableClusters, me.getClusterDirectory().getName()) < 0) {
+        String clusterName = me.getClusterDirectory().getName();
+        if (!enabledClusters.isEmpty() && !clusterMatch(enabledClusters, clusterName)) {
             return true;
         }
-        if (enableClusters.length == 0 && Arrays.binarySearch(disableClusters, me.getClusterDirectory().getName()) >= 0) {
+        if (enabledClusters.isEmpty() && disabledClusters.contains(clusterName)) {
             return true;
         }
         return false;
+    }
+    static boolean clusterMatch(Collection<String> enabledClusters, String clusterName) { // #73706
+        String baseName = clusterBaseName(clusterName);
+        for (String c : enabledClusters) {
+            if (clusterBaseName(c).equals(baseName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    static String clusterBaseName(String clusterName) {
+        // when changing, change also org.netbeans.nbbuild.ModuleSelector
+        return clusterName.replaceFirst("[0-9.]+$", ""); // NOI18N
     }
     
     /**
@@ -696,32 +710,21 @@ public final class SingleModuleProperties extends ModuleProperties {
         DependencyListModel dependencyModel = getDependenciesListModel();
         if (dependencyModel.isChanged()) {
             Set<ModuleDependency> depsToSave = new TreeSet<ModuleDependency>(dependencyModel.getDependencies());
-            
-            // process removed modules
-            depsToSave.removeAll(dependencyModel.getRemovedDependencies());
-            
-            // process added modules
-            depsToSave.addAll(dependencyModel.getAddedDependencies());
-            
-            // process edited modules
-            for (Map.Entry<ModuleDependency,ModuleDependency> entry : dependencyModel.getEditedDependencies().entrySet()) {
-                depsToSave.remove(entry.getKey());
-                depsToSave.add(entry.getValue());
-            }
-            
+
             logNetBeansAPIUsage("DEPENDENCIES", dependencyModel.getDependencies()); // NOI18N
             
             getProjectXMLManager().replaceDependencies(depsToSave);
         }
         String[] friends = getFriendListModel().getFriends();
         String[] publicPkgs = getPublicPackagesModel().getSelectedPackages();
+        boolean refreshModuleList = false;
         if (getPublicPackagesModel().isChanged() || getFriendListModel().isChanged()) {
             if (friends.length > 0) { // store friends packages
                 getProjectXMLManager().replaceFriends(friends, publicPkgs);
             } else { // store public packages
                 getProjectXMLManager().replacePublicPackages(publicPkgs);
             }
-            setModuleListRefreshNeeded(true);
+            refreshModuleList = true;
         }
         
         if (isStandalone()) {
@@ -729,8 +732,18 @@ public final class SingleModuleProperties extends ModuleProperties {
             if (javaPlatformChanged) {
                 ModuleProperties.storeJavaPlatform(getHelper(), getEvaluator(), getActiveJavaPlatform(), false);
             }
-        } else if (isNetBeansOrg() && javaPlatformChanged) {
-            ModuleProperties.storeJavaPlatform(getHelper(), getEvaluator(), getActiveJavaPlatform(), true);
+            if (refreshModuleList) {
+                ModuleList.refreshModuleListForRoot(getProjectDirectoryFile());
+            }
+        } else if (isSuiteComponent() && refreshModuleList) {
+            ModuleList.refreshModuleListForRoot(getSuiteDirectory());
+        } else if (isNetBeansOrg()) {
+            if (javaPlatformChanged) {
+                ModuleProperties.storeJavaPlatform(getHelper(), getEvaluator(), getActiveJavaPlatform(), true);
+            }
+            if (refreshModuleList) {
+                ModuleList.refreshModuleListForRoot(ModuleList.findNetBeansOrg(getProjectDirectoryFile()));
+            }
         }
     }
     
@@ -843,11 +856,11 @@ public final class SingleModuleProperties extends ModuleProperties {
      * really slow. The {@link AssertionError} will be thrown if you try to do
      * so.
      */
-    SortedSet getModuleCategories() {
+    SortedSet<String> getModuleCategories() {
         assert !SwingUtilities.isEventDispatchThread() :
             "SingleModuleProperties.getModuleCategories() cannot be called from EDT"; // NOI18N
         if (modCategories == null && !reloadModuleListInfo()) {
-            return new TreeSet();
+            return new TreeSet<String>();
         }
         return modCategories;
     }
@@ -894,7 +907,8 @@ public final class SingleModuleProperties extends ModuleProperties {
             } catch (IOException x) {
                 // #69029: maybe invalidated platform? Try the default platform instead.
                 Logger.getLogger(SingleModuleProperties.class.getName()).log(Level.FINE, null, x);
-                return ModuleList.getModuleList(getProjectDirectoryFile(), NbPlatform.getDefaultPlatform().getDestDir());
+                NbPlatform p = NbPlatform.getDefaultPlatform();
+                return ModuleList.getModuleList(getProjectDirectoryFile(), p != null ? p.getDestDir() : null);
             }
         } else {
             return ModuleList.getModuleList(getProjectDirectoryFile());
