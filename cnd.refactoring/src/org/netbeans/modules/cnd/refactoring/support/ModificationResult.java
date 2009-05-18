@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.refactoring.support;
 
 import java.io.*;
@@ -48,9 +47,7 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmProject;
-import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -69,14 +66,13 @@ public final class ModificationResult {
 
     private final CsmProject project;
     Map<FileObject, List<Difference>> diffs = new HashMap<FileObject, List<Difference>>();
-    
+
     /** Creates a new instance of ModificationResult */
     public ModificationResult(CsmProject project) {
         this.project = project;
     }
 
     // API of the class --------------------------------------------------------
-    
     public void addDifference(FileObject fo, Difference diff) {
         List<Difference> foDiffs = diffs.get(fo);
         if (foDiffs == null) {
@@ -85,15 +81,15 @@ public final class ModificationResult {
         }
         foDiffs.add(diff);
     }
-    
+
     public Set<? extends FileObject> getModifiedFileObjects() {
         return diffs.keySet();
     }
-    
+
     public List<? extends Difference> getDifferences(FileObject fo) {
         return diffs.get(fo);
     }
-    
+
     /**
      * Once all of the changes have been collected, this method can be used
      * to commit the changes to the source files
@@ -110,7 +106,7 @@ public final class ModificationResult {
             }
         }
     }
-    
+
     private void commit(final FileObject fo, final List<Difference> differences, Writer out) throws IOException {
         DataObject dObj = DataObject.find(fo);
         EditorCookie ec = dObj != null ? dObj.getCookie(org.openide.cookies.EditorCookie.class) : null;
@@ -118,42 +114,53 @@ public final class ModificationResult {
         // writer where he wants to see changes, commit the changes to 
         // found document.
         if (ec != null && out == null) {
-            Document doc = ec.getDocument();
+            final Document doc = ec.getDocument();
             if (doc != null) {
-                if (doc instanceof BaseDocument)
-                    ((BaseDocument)doc).atomicLock();
-                try {
-                    for (Difference diff : differences) {
-                        if (diff.isExcluded())
-                            continue;
-                        try {
-                            switch (diff.getKind()) {
-                                case INSERT:
-                                    doc.insertString(diff.getStartPosition().getOffset(), diff.getNewText(), null);
-                                    break;
-                                case REMOVE:
-                                    doc.remove(diff.getStartPosition().getOffset(), diff.getEndPosition().getOffset() - diff.getStartPosition().getOffset());
-                                    break;
-                                case CHANGE:
-                                    doc.remove(diff.getStartPosition().getOffset(), diff.getEndPosition().getOffset() - diff.getStartPosition().getOffset());
-                                    doc.insertString(diff.getStartPosition().getOffset(), diff.getNewText(), null);
-                                    break;
+                final IOException ioe[] = new IOException[]{null};
+                Runnable runnable = new Runnable() {
+
+                    public void run() {
+                        for (Difference diff : differences) {
+                            if (diff.isExcluded()) {
+                                continue;
+
                             }
-                        } catch (BadLocationException ex) {
-                            IOException ioe = new IOException();
-                            ioe.initCause(ex);
-                            throw ioe;
+                            try {
+                                switch (diff.getKind()) {
+                                    case INSERT:
+                                        doc.insertString(diff.getStartPosition().getOffset(), diff.getNewText(), null);
+                                        break;
+                                    case REMOVE:
+                                        doc.remove(diff.getStartPosition().getOffset(), diff.getEndPosition().getOffset() - diff.getStartPosition().getOffset());
+                                        break;
+                                    case CHANGE:
+                                        doc.remove(diff.getStartPosition().getOffset(), diff.getEndPosition().getOffset() - diff.getStartPosition().getOffset());
+                                        doc.insertString(diff.getStartPosition().getOffset(), diff.getNewText(), null);
+                                        break;
+                                }
+                            } catch (BadLocationException ex) {
+                                IOException ioex = new IOException();
+                                ioex.initCause(ex);
+                                ioe[0] = ioex;
+                            }
                         }
                     }
-                } finally {
-                    if (doc instanceof BaseDocument)
-                        ((BaseDocument)doc).atomicUnlock();
+                };
+                if (doc instanceof BaseDocument) {
+                    doc.putProperty("cnd.refactoring.modification.event", Boolean.TRUE); // NOI18N
+                    ((BaseDocument) doc).runAtomic(runnable);
+                    doc.putProperty("cnd.refactoring.modification.event", Boolean.FALSE); // NOI18N
+                } else {
+                    runnable.run();
+                }
+                if (ioe[0] != null) {
+                    throw ioe[0];
                 }
                 return;
             }
         }
         InputStream ins = null;
-        ByteArrayOutputStream baos = null;           
+        ByteArrayOutputStream baos = null;
         Reader in = null;
         try {
             Charset encoding = FileEncodingQuery.getEncoding(fo);
@@ -173,18 +180,19 @@ public final class ModificationResult {
             if (out == null) {
                 out = new OutputStreamWriter(fo.getOutputStream(), encoding);
             }
-            int offset = 0;                
+            int offset = 0;
             for (Difference diff : differences) {
-                if (diff.isExcluded())
+                if (diff.isExcluded()) {
                     continue;
+                }
                 int pos = diff.getStartPosition().getOffset();
                 int toread = pos - offset;
                 char[] buff = new char[toread];
                 int n;
                 int rc = 0;
-                while ((n = in.read(buff,0, toread - rc)) > 0 && rc < toread) {
+                while ((n = in.read(buff, 0, toread - rc)) > 0 && rc < toread) {
                     out.write(buff, 0, n);
-                    rc+=n;
+                    rc += n;
                     offset += n;
                 }
                 switch (diff.getKind()) {
@@ -203,23 +211,28 @@ public final class ModificationResult {
                         out.write(diff.getNewText());
                         break;
                 }
-            }                    
+            }
             char[] buff = new char[1024];
             int n;
-            while ((n = in.read(buff)) > 0)
+            while ((n = in.read(buff)) > 0) {
                 out.write(buff, 0, n);
+            }
         } finally {
-            if (ins != null)
+            if (ins != null) {
                 ins.close();
-            if (baos != null)
+            }
+            if (baos != null) {
                 baos.close();
-            if (in != null)
+            }
+            if (in != null) {
                 in.close();
-            if (out != null)
+            }
+            if (out != null) {
                 out.close();
-        }            
+            }
+        }
     }
-    
+
     private int convertToLF(byte[] buff) {
         int j = 0;
         for (int i = 0; i < buff.length; i++) {
@@ -229,7 +242,7 @@ public final class ModificationResult {
         }
         return j;
     }
-    
+
     /**
      * Returned string represents preview of resulting source. No difference
      * really is applied. Respects {@code isExcluded()} flag of difference.
@@ -242,14 +255,14 @@ public final class ModificationResult {
         assert fileObject != null : "Provided fileObject is null";
         StringWriter writer = new StringWriter();
         commit(fileObject, diffs.get(fileObject), writer);
-        
+
         return writer.toString();
     }
-    
+
     public Set<File> getNewFiles() {
         Set<File> newFiles = new HashSet<File>();
-        for (List<Difference> ds:diffs.values()) {
-            for (Difference d: ds) {
+        for (List<Difference> ds : diffs.values()) {
+            for (Difference d : ds) {
                 if (d.getKind() == Difference.Kind.CREATE) {
                     //newFiles.add(new File(((CreateChange) d).getFileObject().toUri()));
                 }
@@ -257,18 +270,18 @@ public final class ModificationResult {
         }
         return newFiles;
     }
-    
+
     public static final class Difference {
-        Kind kind;
-        PositionRef startPos;
-        PositionRef endPos;
-        String oldText;
-        String newText;
-        String description;
+
+        final Kind kind;
+        final PositionRef startPos;
+        final PositionRef endPos;
+        final String oldText;
+        final String newText;
+        final String description;
         private boolean excluded;
-        private final CsmUID<CsmObject> thisObject;
-        
-        public Difference(Kind kind, CsmObject ref, PositionRef startPos, PositionRef endPos, String oldText, String newText, String description) {
+
+        public Difference(Kind kind, PositionRef startPos, PositionRef endPos, String oldText, String newText, String description) {
             this.kind = kind;
             this.startPos = startPos;
             this.endPos = endPos;
@@ -276,37 +289,32 @@ public final class ModificationResult {
             this.newText = newText;
             this.description = description;
             this.excluded = false;
-            this.thisObject = CsmRefactoringUtils.getHandler(ref);
         }
-        
-        public CsmObject getReferenceObject() {
-            return thisObject.getObject();
-        }
-        
+
         public Kind getKind() {
             return kind;
         }
-        
+
         public PositionRef getStartPosition() {
             return startPos;
         }
-        
+
         public PositionRef getEndPosition() {
             return endPos;
         }
-        
+
         public String getOldText() {
             return oldText;
         }
-        
+
         public String getNewText() {
             return newText;
         }
-        
+
         public boolean isExcluded() {
             return excluded;
         }
-        
+
         public void exclude(boolean b) {
             excluded = b;
         }
@@ -315,11 +323,13 @@ public final class ModificationResult {
         public String toString() {
             return kind + "<" + startPos.getOffset() + ", " + endPos.getOffset() + ">: " + oldText + " -> " + newText; // NOI18N
         }
+
         public String getDescription() {
             return description;
         }
-        
+
         public static enum Kind {
+
             INSERT,
             REMOVE,
             CHANGE,
