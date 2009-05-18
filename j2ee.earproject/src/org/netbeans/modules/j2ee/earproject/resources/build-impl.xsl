@@ -48,7 +48,8 @@ made subject to such option by the copyright holder.
                 xmlns:ear2="http://www.netbeans.org/ns/j2ee-earproject/2"
                 xmlns:projdeps="http://www.netbeans.org/ns/ant-project-references/1"
                 xmlns:projdeps2="http://www.netbeans.org/ns/ant-project-references/2"
-                exclude-result-prefixes="xalan p ear projdeps projdeps2">
+                xmlns:libs="http://www.netbeans.org/ns/ant-project-libraries/1"
+                exclude-result-prefixes="xalan p ear projdeps projdeps2 libs">
     <xsl:output method="xml" indent="yes" encoding="UTF-8" xalan:indent-amount="4"/>
     <xsl:template match="/">
 
@@ -74,6 +75,15 @@ is divided into following sections:
             <xsl:attribute name="default">default</xsl:attribute>
             <xsl:attribute name="basedir">..</xsl:attribute>
             <import file="ant-deploy.xml" />
+
+            <fail message="Please build using Ant 1.7.1 or higher.">
+                <condition>
+                    <not>
+                        <antversion atleast="1.7.1"/>
+                    </not>
+                </condition>
+            </fail>
+
             <target name="default">
                 <xsl:attribute name="depends">dist</xsl:attribute>
                 <xsl:attribute name="description">Build whole project.</xsl:attribute>
@@ -93,23 +103,50 @@ is divided into following sections:
                 <property file="nbproject/private/private.properties"/>
             </target>
 
+            <xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">
+                <target name="-init-libraries" depends="pre-init,init-private">
+                    <xsl:for-each select="/p:project/p:configuration/libs:libraries/libs:definitions">
+                        <property name="libraries.{position()}.path" location="{.}"/>
+                        <dirname property="libraries.{position()}.dir.nativedirsep" file="${{libraries.{position()}.path}}"/>
+                        <!-- Do not want \ on Windows, since it would act as an escape char: -->
+                        <pathconvert property="libraries.{position()}.dir" dirsep="/">
+                            <path path="${{libraries.{position()}.dir.nativedirsep}}"/>
+                        </pathconvert>
+                        <basename property="libraries.{position()}.basename" file="${{libraries.{position()}.path}}" suffix=".properties"/>
+                        <touch file="${{libraries.{position()}.dir}}/${{libraries.{position()}.basename}}-private.properties"/> <!-- has to exist, yuck -->
+                        <loadproperties srcfile="${{libraries.{position()}.dir}}/${{libraries.{position()}.basename}}-private.properties" encoding="ISO-8859-1">
+                            <filterchain>
+                                <replacestring from="$${{base}}" to="${{libraries.{position()}.dir}}"/>
+                                <escapeunicode/>
+                            </filterchain>
+                        </loadproperties>
+                        <loadproperties srcfile="${{libraries.{position()}.path}}" encoding="ISO-8859-1">
+                            <filterchain>
+                                <replacestring from="$${{base}}" to="${{libraries.{position()}.dir}}"/>
+                                <escapeunicode/>
+                            </filterchain>
+                        </loadproperties>
+                    </xsl:for-each>
+                </target>
+            </xsl:if>
+
             <target name="init-userdir">
-                <xsl:attribute name="depends">pre-init,init-private</xsl:attribute>
+                <xsl:attribute name="depends">pre-init,init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if></xsl:attribute>
                 <property name="user.properties.file" location="${{netbeans.user}}/build.properties"/>
             </target>
 
             <target name="init-user">
-                <xsl:attribute name="depends">pre-init,init-private,init-userdir</xsl:attribute>
+                <xsl:attribute name="depends">pre-init,init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if>,init-userdir</xsl:attribute>
                 <property file="${{user.properties.file}}"/>
             </target>
 
             <target name="init-project">
-                <xsl:attribute name="depends">pre-init,init-private,init-userdir,init-user</xsl:attribute>
+                <xsl:attribute name="depends">pre-init,init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if>,init-userdir,init-user</xsl:attribute>
                 <property file="nbproject/project.properties"/>
             </target>
 
             <target name="do-init">
-                <xsl:attribute name="depends">pre-init,init-private,init-userdir,init-user,init-project</xsl:attribute>
+                <xsl:attribute name="depends">pre-init,init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if>,init-userdir,init-user,init-project</xsl:attribute>
                 <xsl:if test="/p:project/p:configuration/ear2:data/ear2:explicit-platform">
                     <!--Setting java and javac default location -->
                     <property name="platforms.${{platform.active}}.javac" value="${{platform.home}}/bin/javac"/>
@@ -151,6 +188,29 @@ is divided into following sections:
                     </and>
                 </condition>
                 <available property="has.custom.manifest" file="${{meta.inf}}/MANIFEST.MF"/>
+                
+                <xsl:comment>
+                    Variables needed to support directory deployment.
+                </xsl:comment>
+                <condition property="do.package.with.custom.manifest.not.directory.deploy">
+                    <and>
+                        <isset property="has.custom.manifest"/>
+                        <isfalse value="${{directory.deployment.supported}}"/>
+                    </and>
+                </condition>
+                <condition property="do.package.without.custom.manifest.not.directory.deploy">
+                    <and>
+                        <not>
+                            <isset property="has.custom.manifest"/>
+                        </not>
+                        <isfalse value="${{directory.deployment.supported}}"/>
+                    </and>
+                </condition>
+                <condition property="do.package.not.directory.deploy">
+                    <isfalse value="${{directory.deployment.supported}}"/>
+                </condition>
+                <xsl:comment>End Variables needed to support directory deployment.</xsl:comment>
+
                 <condition property="j2ee.appclient.mainclass.tool.param" value="-mainclass ${{main.class}}" else="">
                     <and>
                         <isset property="main.class"/>
@@ -183,13 +243,27 @@ is divided into following sections:
                 </condition>
             </target>
 
+            <!-- COS feature - used in run-deploy -->
+            <target name="-init-cos">
+                <xsl:attribute name="depends">init</xsl:attribute>
+                <condition>
+                    <!--
+                    Default value is stored to differentiate the case
+                    when this hasn't been called at all.
+                    -->
+                    <xsl:attribute name="property">build.deploy.on.save</xsl:attribute>
+                    <xsl:attribute name="else">false</xsl:attribute>
+                    <istrue value="${{j2ee.deploy.on.save}}"/>
+                </condition>         
+            </target>
+            
             <target name="post-init">
                 <xsl:comment> Empty placeholder for easier customization. </xsl:comment>
                 <xsl:comment> You can override this target in the ../build.xml file. </xsl:comment>
             </target>
 
             <target name="init-check">
-                <xsl:attribute name="depends">pre-init,init-private,init-userdir,init-user,init-project,do-init</xsl:attribute>
+                <xsl:attribute name="depends">pre-init,init-private<xsl:if test="/p:project/p:configuration/libs:libraries/libs:definitions">,-init-libraries</xsl:if>,init-userdir,init-user,init-project,do-init</xsl:attribute>
                 <!-- XXX XSLT 2.0 would make it possible to use a for-each here -->
                 <!-- Note that if the properties were defined in project.xml that would be easy -->
                 <!-- But required props should be defined by the AntBasedProjectType, not stored in each project -->
@@ -198,10 +272,25 @@ is divided into following sections:
                 <fail unless="dist.dir">Must set dist.dir</fail>
                 <fail unless="build.classes.excludes">Must set build.classes.excludes</fail>
                 <fail unless="dist.jar">Must set dist.jar</fail>
+                <!-- No j2ee.platform.classpath here as it is used only for app client runtime -->
+            </target>
+
+            <target name="-init-taskdefs">
+                <fail unless="libs.CopyLibs.classpath">
+The libs.CopyLibs.classpath property is not set up.
+This property must point to 
+org-netbeans-modules-java-j2seproject-copylibstask.jar file which is part
+of NetBeans IDE installation and is usually located at 
+&lt;netbeans_installation&gt;/java&lt;version&gt;/ant/extra folder.
+Either open the project in the IDE and make sure CopyLibs library
+exists or setup the property manually. For example like this:
+ ant -Dlibs.CopyLibs.classpath=a/path/to/org-netbeans-modules-java-j2seproject-copylibstask.jar
+                </fail>
+                <taskdef resource="org/netbeans/modules/java/j2seproject/copylibstask/antlib.xml" classpath="${{libs.CopyLibs.classpath}}"/>
             </target>
 
             <target name="init">
-                <xsl:attribute name="depends">pre-init,init-private,init-userdir,init-user,init-project,do-init,post-init,init-check</xsl:attribute>
+                <xsl:attribute name="depends">pre-init,init-private,init-userdir,init-user,init-project,do-init,post-init,init-check,-init-taskdefs</xsl:attribute>
             </target>
 
             <xsl:comment>
@@ -233,46 +322,26 @@ is divided into following sections:
             </target>
 
             <target name="do-compile">
-                <xsl:attribute name="depends">init,deps-jar,pre-pre-compile,pre-compile</xsl:attribute>
+                <xsl:attribute name="depends">init,deps-jar,pre-pre-compile,pre-compile,-do-compile-deps</xsl:attribute>
                 
                 <copy todir="${{build.dir}}/META-INF">
                   <fileset dir="${{meta.inf}}"/>
                 </copy>
-                
+            </target>
+
+            <target name="-do-compile-deps">
+                <xsl:attribute name="depends">init,deps-jar,pre-pre-compile,pre-compile</xsl:attribute>
+                <xsl:attribute name="if">do.package.not.directory.deploy</xsl:attribute>
+
                 <xsl:for-each select="/p:project/p:configuration/ear2:data/ear2:web-module-additional-libraries/ear2:library[ear2:path-in-war]">
                     <xsl:variable name="copyto" select=" ear2:path-in-war"/>
-                    <xsl:if test="//ear2:web-module-additional-libraries/ear2:library[@files]">
-                      <xsl:if test="(@files &gt; 1) or (@files &gt; 0 and (@dirs &gt; 0))">
-                        <xsl:call-template name="copyIterateFiles">
-                            <xsl:with-param name="files" select="@files"/>
-                            <xsl:with-param name="target" select="concat('${build.dir}/',$copyto)"/>
-                            <xsl:with-param name="libfile" select="ear2:file"/>
-                        </xsl:call-template>
-                      </xsl:if>
-                      <xsl:if test="@files = 1 and (@dirs = 0 or not(@dirs))">
-                            <xsl:variable name="target" select="concat('${build.dir}/',$copyto)"/>
-                            <xsl:variable name="libfile" select="ear2:file"/>
-                            <copy file="{$libfile}" todir="{$target}"/>
-                      </xsl:if>
-                    </xsl:if>
-                    <xsl:if test="//ear2:web-module-additional-libraries/ear2:library[@dirs]">
-                      <xsl:if test="(@dirs &gt; 1) or (@files &gt; 0 and (@dirs &gt; 0))">
-                        <xsl:call-template name="copyIterateDirs">
-                            <xsl:with-param name="files" select="@dirs"/>
-                            <xsl:with-param name="target" select="concat('${build.dir}/',$copyto)"/>
-                            <xsl:with-param name="libfile" select="ear2:file"/>
-                        </xsl:call-template>
-                      </xsl:if>
-                      <xsl:if test="@dirs = 1 and (@files = 0 or not(@files))">
-                            <xsl:variable name="target" select="concat('${build.dir}/',$copyto)"/>
-                            <xsl:variable name="libfile" select="ear2:file"/>
-                            <copy todir="{$target}">
-                                <fileset dir="{$libfile}" includes="**/*"/>
-                            </copy>
-                      </xsl:if>
-                    </xsl:if>
+                    <xsl:variable name="file" select=" ear2:file"/>
+                    <copyfiles todir="${{build.dir}}/META-INF/lib">
+                       <xsl:attribute name="todir"><xsl:value-of select="concat('${build.dir}/',$copyto)"/></xsl:attribute>
+                       <xsl:attribute name="files"><xsl:value-of select="$file"/></xsl:attribute>
+                    </copyfiles>
                 </xsl:for-each>
-                
+
             </target>
 
             <target name="post-compile">
@@ -286,8 +355,8 @@ is divided into following sections:
             </target>
 
             <xsl:comment>
-    DIST BUILDING SECTION
-    </xsl:comment>
+                DIST BUILDING SECTION
+            </xsl:comment>
 
             <target name="pre-dist">
                 <xsl:comment> Empty placeholder for easier customization. </xsl:comment>
@@ -313,6 +382,39 @@ is divided into following sections:
                     <fileset dir="${{build.dir}}"/>
                 </jar>
             </target>
+
+            <xsl:comment>
+                TARGETS NEEDED TO SUPPORT DIRECTORY DEPLOYMENT
+            </xsl:comment>
+
+            <target name="-do-tmp-dist-without-manifest">
+                <xsl:attribute name="depends">init,compile,pre-dist</xsl:attribute>
+                <xsl:attribute name="if">do.package.without.custom.manifest.not.directory.deploy</xsl:attribute>
+                <dirname property="dist.jar.dir" file="${{dist.jar}}"/>
+                <mkdir dir="${{dist.jar.dir}}"/>
+                <jar jarfile="${{dist.jar}}" compress="${{jar.compress}}">
+                    <fileset dir="${{build.dir}}"/>
+                </jar>
+            </target>
+
+            <target name="-do-tmp-dist-with-manifest">
+                <xsl:attribute name="depends">init,compile,pre-dist</xsl:attribute>
+                <xsl:attribute name="if">do.package.with.custom.manifest.not.directory.deploy</xsl:attribute>
+                <dirname property="dist.jar.dir" file="${{dist.jar}}"/>
+                <mkdir dir="${{dist.jar.dir}}"/>
+                <jar jarfile="${{dist.jar}}" compress="${{jar.compress}}" manifest="${{meta.inf}}/MANIFEST.MF">
+                    <fileset dir="${{build.dir}}"/>
+                </jar>
+            </target>
+
+            <target name="-do-dist-directory-deploy" depends="init,compile,pre-dist,-do-tmp-dist-without-manifest,-do-tmp-dist-with-manifest"/>
+            <target name="dist-directory-deploy">
+                <xsl:attribute name="depends">init,compile,pre-dist,-do-dist-directory-deploy,post-dist</xsl:attribute>
+                <xsl:attribute name="description">Build distribution (JAR) - if directory deployment is not supported.</xsl:attribute>
+            </target>
+            <xsl:comment>
+                END TARGETS NEEDED TO SUPPORT DIRECTORY DEPLOYMENT
+            </xsl:comment>
             
             <target name="post-dist">
                 <xsl:comment> Empty placeholder for easier customization. </xsl:comment>
@@ -360,7 +462,7 @@ is divided into following sections:
     </target>
             
     <target name="run-deploy">
-        <xsl:attribute name="depends">dist,pre-run-deploy,-pre-nbmodule-run-deploy,-run-deploy-nb,-init-deploy-ant,-deploy-ant,-run-deploy-am,-post-nbmodule-run-deploy,post-run-deploy</xsl:attribute>
+        <xsl:attribute name="depends">-init-cos,dist-directory-deploy,pre-run-deploy,-pre-nbmodule-run-deploy,-run-deploy-nb,-init-deploy-ant,-deploy-ant,-run-deploy-am,-post-nbmodule-run-deploy,post-run-deploy</xsl:attribute>
     </target>
 
     <target name="-run-deploy-nb" if="netbeans.home">
@@ -521,13 +623,20 @@ is divided into following sections:
                 <delete dir="${{build.dir}}"/>
             </target>
 
+            <target name="undeploy-clean">
+                <xsl:attribute name="depends">init</xsl:attribute>
+                <xsl:attribute name="if">netbeans.home</xsl:attribute>
+                
+                <nbundeploy failOnError="false" startServer="false"/>
+            </target>
+            
             <target name="post-clean">
                 <xsl:comment> Empty placeholder for easier customization. </xsl:comment>
                 <xsl:comment> You can override this target in the ../build.xml file. </xsl:comment>
             </target>
 
             <target name="clean">
-                <xsl:attribute name="depends">init,deps-clean,do-clean,post-clean</xsl:attribute>
+                <xsl:attribute name="depends">init,undeploy-clean,deps-clean,do-clean,post-clean</xsl:attribute>
                 <xsl:attribute name="description">Clean build products.</xsl:attribute>
             </target>
         </project>
@@ -579,8 +688,25 @@ to simulate
                     </xsl:choose>
                 </xsl:variable>
                 <xsl:variable name="script" select="projdeps:script"/>
-                <ant target="{$subtarget}" inheritall="false" antfile="${{project.{$subproj}}}/{$script}">
+                <!--
+                If build.deploy.on.save is not set init-cos hasn't
+                been called so we are running the old style build.
+                -->
+                <condition>
+                    <xsl:attribute name="property">build.deploy.on.save</xsl:attribute>
+                    <xsl:attribute name="value">false</xsl:attribute>
+                    <not><isset property="build.deploy.on.save"/></not>
+                </condition>
+                <ant target="{$subtarget}" inheritall="false" antfile="${{project.{$subproj}}}/{$script}">                   
                     <property name="dist.ear.dir" location="${{build.dir}}"/>
+                    <xsl:choose>
+                        <xsl:when test="$subtarget = 'jar'">
+                            <property name="deploy.on.save" value="false"/>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <property name="deploy.on.save" value="${{build.deploy.on.save}}"/>
+                        </xsl:otherwise>
+                    </xsl:choose>
                 </ant>
             </xsl:for-each>
             <xsl:variable name="references2" select="/p:project/p:configuration/projdeps2:references"/>
@@ -596,10 +722,27 @@ to simulate
                     </xsl:choose>
                 </xsl:variable>
                 <xsl:variable name="script" select="projdeps2:script"/>
+                <!--
+                If build.deploy.on.save is not set init-cos hasn't
+                been called so we are running the old style build.
+                -->
+                <condition>
+                    <xsl:attribute name="property">build.deploy.on.save</xsl:attribute>
+                    <xsl:attribute name="value">false</xsl:attribute>
+                    <not><isset property="build.deploy.on.save"/></not>
+                </condition>
                 <ant target="{$subtarget}" inheritall="false" antfile="{$script}">
                     <property name="dist.ear.dir" location="${{build.dir}}"/>
                     <xsl:for-each select="projdeps2:properties/projdeps2:property">
                         <property name="{@name}" value="{.}"/>
+                        <xsl:choose>
+                            <xsl:when test="$subtarget = 'jar'">
+                                <property name="deploy.on.save" value="false"/>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <property name="deploy.on.save" value="${{build.deploy.on.save}}"/>
+                            </xsl:otherwise>
+                        </xsl:choose>
                     </xsl:for-each>
                 </ant>
             </xsl:for-each>
@@ -795,40 +938,6 @@ to simulate
                 <ear2:debug-appclient mainclass="${{main.class}}" args="${{application.args.param}}" classpath="${{jar.content.additional}}"/>
             </target>
         </xsl:for-each>
-    </xsl:template>
-    
-    <xsl:template name="copyIterateFiles" >
-        <xsl:param name="files" />
-        <xsl:param name="target"/>
-        <xsl:param name="libfile"/>
-        <xsl:if test="$files &gt; 0">
-            <xsl:variable name="fileNo" select="$files+(-1)"/>
-            <xsl:variable name="lib" select="concat(substring-before($libfile,'}'),'.libfile.',$files,'}')"/>
-            <copy file="{$lib}" todir="{$target}"/>
-            <xsl:call-template name="copyIterateFiles">
-                <xsl:with-param name="files" select="$fileNo"/>
-                <xsl:with-param name="target" select="$target"/>
-                <xsl:with-param name="libfile" select="$libfile"/>
-            </xsl:call-template>
-        </xsl:if>
-    </xsl:template>
-
-    <xsl:template name="copyIterateDirs" >
-        <xsl:param name="files" />
-        <xsl:param name="target"/>
-        <xsl:param name="libfile"/>
-        <xsl:if test="$files &gt; 0">
-            <xsl:variable name="fileNo" select="$files+(-1)"/>
-            <xsl:variable name="lib" select="concat(substring-before($libfile,'}'),'.libdir.',$files,'}')"/>
-            <copy todir="{$target}">
-                <fileset dir="{$lib}" includes="**/*"/>
-            </copy>
-            <xsl:call-template name="copyIterateDirs">
-                <xsl:with-param name="files" select="$fileNo"/>
-                <xsl:with-param name="target" select="$target"/>
-                <xsl:with-param name="libfile" select="$libfile"/>
-            </xsl:call-template>
-        </xsl:if>
     </xsl:template>
     
     <!---
