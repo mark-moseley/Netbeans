@@ -39,6 +39,8 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -48,8 +50,6 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.swing.JComponent;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.Document;
 import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.JavaSource;
@@ -63,7 +63,6 @@ import org.netbeans.spi.editor.hints.ErrorDescription;
 import org.netbeans.spi.editor.hints.ErrorDescriptionFactory;
 import org.netbeans.spi.editor.hints.Fix;
 import org.openide.filesystems.FileObject;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 /**
@@ -75,7 +74,7 @@ public class StaticAccess extends AbstractHint {
     private static final String SUPPRESS_WARNINGS_KEY = "static-access";
     
     private transient volatile boolean stop;
-    /** Creates a new instance of AddOverrideAnnotation */
+    /** Creates a new instance of StaticAccess */
     public StaticAccess() {
         super( true, true, AbstractHint.HintSeverity.WARNING, SUPPRESS_WARNINGS_KEY);
     }
@@ -84,7 +83,7 @@ public class StaticAccess extends AbstractHint {
         return EnumSet.of(Kind.MEMBER_SELECT);
     }
 
-    protected List<Fix> computeFixes(CompilationInfo info, TreePath treePath, Document doc, int[] bounds, int[] kind, String[] simpleName) {
+    protected List<Fix> computeFixes(CompilationInfo info, TreePath treePath, int[] bounds, int[] kind, String[] simpleName) {
         if (treePath.getLeaf().getKind() != Kind.MEMBER_SELECT) {
             return null;
         }
@@ -165,7 +164,7 @@ public class StaticAccess extends AbstractHint {
             TreePathHandle.create(type, info),
             info.getFileObject()
         ));
-        fixes.add(FixFactory.createSuppressWarnings(info, treePath, SUPPRESS_WARNINGS_KEY));
+        fixes.addAll(FixFactory.createSuppressWarnings(info, treePath, SUPPRESS_WARNINGS_KEY));
 
 
         bounds[0] = span[0];
@@ -190,38 +189,24 @@ public class StaticAccess extends AbstractHint {
     public List<ErrorDescription> run(CompilationInfo compilationInfo,
                                       TreePath treePath) {
         stop = false;
-        try {
-            Document doc = compilationInfo.getDocument();
-            
-            if (doc == null) {
-                return null;
-            }
-        
-            int[] span = new int[2];
-            int[] kind = new int[1];
-            String[] simpleName = new String[1];
-            List<Fix> fixes = computeFixes(compilationInfo, treePath, doc, span, kind, simpleName);
-            if (fixes == null) {
-                return null;
-            }
-
-            ErrorDescription ed = ErrorDescriptionFactory.createErrorDescription(
-                getSeverity().toEditorSeverity(),
-                NbBundle.getMessage(StaticAccess.class, "MSG_StaticAccess", kind[0], simpleName[0]), // NOI18N
-                fixes,
-                doc,
-                doc.createPosition(span[0]),
-                doc.createPosition(span[1]) // NOI18N
-            );
-
-            return Collections.singletonList(ed);
-        } catch (BadLocationException e) {
-            Exceptions.printStackTrace(e);
-        } catch (IOException e) {
-            Exceptions.printStackTrace(e);
+        int[] span = new int[2];
+        int[] kind = new int[1];
+        String[] simpleName = new String[1];
+        List<Fix> fixes = computeFixes(compilationInfo, treePath, span, kind, simpleName);
+        if (fixes == null) {
+            return null;
         }
-        
-        return null;
+
+        ErrorDescription ed = ErrorDescriptionFactory.createErrorDescription(
+            getSeverity().toEditorSeverity(),
+            NbBundle.getMessage(StaticAccess.class, "MSG_StaticAccess", kind[0], simpleName[0]), // NOI18N
+            fixes,
+            compilationInfo.getFileObject(),
+            span[0],
+            span[1] // NOI18N
+        );
+
+        return Collections.singletonList(ed);
     }
 
     public String getId() {
@@ -278,6 +263,12 @@ public class StaticAccess extends AbstractHint {
         public void run(WorkingCopy copy) throws Exception {
             copy.toPhase(JavaSource.Phase.RESOLVED);
             TreePath path = expr.resolve(copy);
+
+            if (path == null) {
+                Logger.getLogger("org.netbeans.modules.java.hints").log(Level.INFO, "Cannot resolve target.");
+                return;
+            }
+
             Element element = type.resolveElement(copy);
             ExpressionTree idt = copy.getTreeMaker().QualIdent(element);
             copy.rewrite(path.getLeaf(), idt);
