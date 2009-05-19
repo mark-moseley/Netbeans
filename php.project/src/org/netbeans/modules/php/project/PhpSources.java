@@ -29,22 +29,18 @@ package org.netbeans.modules.php.project;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map.Entry;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
-import org.netbeans.spi.project.support.ant.AntProjectEvent;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
-import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.SourcesHelper;
+import org.openide.util.ChangeSupport;
 import org.openide.util.Mutex;
-import org.openide.util.NbBundle;
 
 /**
  * Php Sources class.
@@ -56,35 +52,51 @@ import org.openide.util.NbBundle;
  */
 public class PhpSources implements Sources, ChangeListener, PropertyChangeListener {
 
-    private final AntProjectHelper myHelper;
-    private PropertyEvaluator myEvaluator;
+    public static final String SOURCES_TYPE_PHP = "PHPSOURCE"; // NOI18N
 
-    private SourcesHelper sourcesHelper;
+    private final Project project;
+    private final AntProjectHelper helper;
+    private final PropertyEvaluator evaluator;
+    private final SourceRoots sourceRoots;
+    private final SourceRoots testRoots;
+    private final SourceRoots seleniumRoots;
+
+    private boolean dirty;
     private Sources delegate;
-    /**
-     * Flag to forbid multiple invocation of {@link SourcesHelper#registerExternalRoots}
-     **/
-    private boolean externalRootsRegistered;
-    private final List<ChangeListener> listeners = new ArrayList<ChangeListener>();
+    private final ChangeSupport changeSupport = new ChangeSupport(this);
 
-    public PhpSources(AntProjectHelper helper, PropertyEvaluator evaluator) {
-        this.myHelper = helper;
-        this.myEvaluator = evaluator;
+    public PhpSources(Project project, AntProjectHelper helper, PropertyEvaluator evaluator, final SourceRoots sourceRoots, final SourceRoots testRoots, final SourceRoots seleniumRoots) {
+        assert project != null;
+        assert helper != null;
+        assert evaluator != null;
+        assert sourceRoots != null;
+        assert testRoots != null;
+        assert seleniumRoots != null;
 
-        myEvaluator.addPropertyChangeListener(this);
-        
-        initSources(); // have to register external build roots eagerly
+        this.project = project;
+        this.helper = helper;
+        this.evaluator = evaluator;
+        this.sourceRoots = sourceRoots;
+        this.testRoots = testRoots;
+        this.seleniumRoots = seleniumRoots;
+
+        this.evaluator.addPropertyChangeListener(this);
+        this.sourceRoots.addPropertyChangeListener(this);
+        this.testRoots.addPropertyChangeListener(this);
+        this.seleniumRoots.addPropertyChangeListener(this);
+        delegate = initSources(); // have to register external build roots eagerly
     }
 
     public SourceGroup[] getSourceGroups(final String type) {
         return ProjectManager.mutex().readAccess(new Mutex.Action<SourceGroup[]>() {
-
             public SourceGroup[] run() {
                 Sources _delegate;
                 synchronized (PhpSources.this) {
-                    if (delegate == null) {
+                    if (dirty) {
+                        delegate.removeChangeListener(PhpSources.this);
                         delegate = initSources();
                         delegate.addChangeListener(PhpSources.this);
+                        dirty = false;
                     }
                     _delegate = delegate;
                 }
@@ -94,118 +106,49 @@ public class PhpSources implements Sources, ChangeListener, PropertyChangeListen
     }
 
     public void addChangeListener(ChangeListener changeListener) {
-        synchronized (listeners) {
-            listeners.add(changeListener);
-        }
+        changeSupport.addChangeListener(changeListener);
     }
 
     public void removeChangeListener(ChangeListener changeListener) {
-        synchronized (listeners) {
-            listeners.remove(changeListener);
-        }
+        changeSupport.removeChangeListener(changeListener);
     }
 
     private Sources initSources() {
-        this.sourcesHelper = new SourcesHelper(myHelper, myEvaluator);
-        /*
-         * Main source root config.
-         */
-        String label = NbBundle.getMessage(PhpProject.class, PhpProject.SOURCE_LBL);
-        sourcesHelper.addPrincipalSourceRoot(PhpProject.SRC_DIR, label, null, null);
-
-        List<String> labels = new ArrayList<String>();
-        List<String> roots = new ArrayList<String>();
-        readSources(labels, roots);
-        for (int i = 0; i < labels.size(); i++) {
-            sourcesHelper.addPrincipalSourceRoot(roots.get(i), labels.get(i), null, null);
-            sourcesHelper.addTypedSourceRoot(roots.get(i), PhpProject.SOURCES_TYPE_PHP, labels.get(i), null, null);
-        }
-
-
-
-        externalRootsRegistered = false;
-        ProjectManager.mutex().postWriteRequest(new Runnable() {
-
-            public void run() {
-                if (!externalRootsRegistered) {
-                    sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
-                    externalRootsRegistered = true;
-                }
-            }
-        });
-        return this.sourcesHelper.createSources();
+        SourcesHelper sourcesHelper = new SourcesHelper(project, helper, evaluator);   //Safe to pass APH
+        register(sourcesHelper, sourceRoots);
+        register(sourcesHelper, testRoots);
+        register(sourcesHelper, seleniumRoots);
+        sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
+        return sourcesHelper.createSources();
     }
 
-    private void readSources(final List<String> labels, final List<String> roots) {
-        ProjectManager.mutex().readAccess(new Mutex.Action<Object>() {
-
-            public Object run() {
-                EditableProperties props = myHelper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-                for (Entry<String, String> entry : props.entrySet()) {
-                    String key = entry.getKey();
-                    String value = entry.getValue();
-                    if (key.equals(PhpProject.SRC_DIR)) {
-                        continue;
-                    }
-                    if (key.startsWith(PhpProject.SRC_) && key.endsWith(PhpProject._DIR)) {
-                        String lbl = key.substring(PhpProject.SRC_.length()).substring(0, PhpProject._DIR.length());
-                        labels.add(lbl);
-                        roots.add(value);
-                    }
-                    continue;
-                }
-                return null;
-            }
-        });
-    }
-
-    /*
-     * implementation of AntProjectListener.
-     * Is not used now because we do not store data in  project xml file
-     * (e.g. customizer doesn't update this file)
-     */
-    public void configurationXmlChanged(AntProjectEvent ev) {
-        // PhpSources is not interested in xml changes
-    }
-
-    /** impl of PropertyChangeListener.
-     * Is used to listen updates in project properties file
-     * (e.g. if customizer updates this file)
-     */
-    public void propertyChange(PropertyChangeEvent evt) {
-        String property = evt.getPropertyName();
-        if (property.startsWith(PhpProject.SRC_) && property.endsWith(PhpProject._DIR)) {
-           this.fireChange();
-        }
-    }
-
-    /*
-     * implementation of ChangetListener.
-     * Is used to listen for changes in the real Sources object,
-     * wrapped by this one.
-     */
-    public void stateChanged(ChangeEvent e) {
-        this.fireChange();
-    }
+    private void register(SourcesHelper sourcesHelper, SourceRoots roots) {
+        String[] propNames = roots.getRootProperties();
+        String[] rootNames = roots.getRootNames();
+        for (int i = 0; i < propNames.length; i++) {
+            String prop = propNames[i];
+            String displayName = roots.getRootDisplayName(rootNames[i], prop);
+            String loc = "${" + prop + "}"; // NOI18N
+            sourcesHelper.addPrincipalSourceRoot(loc, displayName, null, null); // NOI18N
+            sourcesHelper.addTypedSourceRoot(loc, SOURCES_TYPE_PHP, displayName, null, null);
+         }
+     }
 
     private void fireChange() {
-        ChangeListener[] _listeners;
         synchronized (this) {
-            if (delegate != null) {
-                delegate.removeChangeListener(this);
-                delegate = null;
-            }
+            dirty = true;
         }
-        synchronized (listeners) {
-            if (listeners.isEmpty()) {
-                return;
-            }
-            _listeners = listeners.toArray(new ChangeListener[listeners.size()]);
-        }
-        ChangeEvent ev = new ChangeEvent(this);
-        for (ChangeListener l : _listeners) {
-            l.stateChanged(ev);
+        changeSupport.fireChange();
+    }
+
+    public void propertyChange(PropertyChangeEvent evt) {
+        String propName = evt.getPropertyName();
+        if (SourceRoots.PROP_ROOTS.equals(propName)) {
+            fireChange();
         }
     }
 
+    public void stateChanged(ChangeEvent event) {
+        fireChange();
+    }
 }

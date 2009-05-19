@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,27 +43,20 @@ package org.netbeans.modules.ruby.rubyproject;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.ruby.rubyproject.ui.customizer.RubyProjectProperties;
-import org.openide.filesystems.FileUtil;
-import org.openide.util.NbBundle;
 import org.openide.util.Mutex;
-import org.openide.util.RequestProcessor;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
 import org.netbeans.modules.ruby.spi.project.support.rake.SourcesHelper;
 import org.netbeans.modules.ruby.spi.project.support.rake.RakeProjectHelper;
 import org.netbeans.modules.ruby.spi.project.support.rake.PropertyEvaluator;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.w3c.dom.Text;
 
 
 /**
@@ -74,20 +67,18 @@ public class RubySources implements Sources, PropertyChangeListener, ChangeListe
     private static final String BUILD_DIR_PROP = "${" + RubyProjectProperties.BUILD_DIR + "}";    //NOI18N
     private static final String DIST_DIR_PROP = "${" + RubyProjectProperties.DIST_DIR + "}";    //NOI18N
 
+    private final Project project;
     private final RakeProjectHelper helper;
     private final PropertyEvaluator evaluator;
     private final SourceRoots sourceRoots;
     private final SourceRoots testRoots;
-    private SourcesHelper sourcesHelper;
+    private boolean dirty;
     private Sources delegate;
-    /**
-     * Flag to forbid multiple invocation of {@link SourcesHelper#registerExternalRoots} 
-     **/
-    private boolean externalRootsRegistered;    
     private final List<ChangeListener> listeners = new ArrayList<ChangeListener>();
 
-    RubySources(RakeProjectHelper helper, PropertyEvaluator evaluator,
+    RubySources(Project project, RakeProjectHelper helper, PropertyEvaluator evaluator,
                 SourceRoots sourceRoots, SourceRoots testRoots) {
+        this.project = project;
         this.helper = helper;
         this.evaluator = evaluator;
         this.sourceRoots = sourceRoots;
@@ -95,7 +86,7 @@ public class RubySources implements Sources, PropertyChangeListener, ChangeListe
         this.sourceRoots.addPropertyChangeListener(this);
         this.testRoots.addPropertyChangeListener(this);        
         this.evaluator.addPropertyChangeListener(this);
-        initSources(); // have to register external build roots eagerly
+        delegate = initSources(); // have to register external build roots eagerly
     }
 
     /**
@@ -110,9 +101,11 @@ public class RubySources implements Sources, PropertyChangeListener, ChangeListe
             public SourceGroup[] run() {
                 Sources _delegate;
                 synchronized (RubySources.this) {
-                    if (delegate == null) {                    
+                    if (dirty) {
+                        delegate.removeChangeListener(RubySources.this);
                         delegate = initSources();
                         delegate.addChangeListener(RubySources.this);
+                        dirty = false;
                     }
                     _delegate = delegate;
                 }
@@ -122,15 +115,15 @@ public class RubySources implements Sources, PropertyChangeListener, ChangeListe
     }
 
     private Sources initSources() {        
-        this.sourcesHelper = new SourcesHelper(helper, evaluator);   //Safe to pass APH        
+        SourcesHelper sourcesHelper = new SourcesHelper(project, helper, evaluator);   //Safe to pass APH
         String[] propNames = sourceRoots.getRootProperties();
         String[] rootNames = sourceRoots.getRootNames();
         for (int i = 0; i < propNames.length; i++) {
             String displayName = rootNames[i];
             displayName = sourceRoots.getRootDisplayName(displayName, propNames[i]);
             String prop = "${" + propNames[i] + "}";            
-            this.sourcesHelper.addPrincipalSourceRoot(prop, displayName, /*XXX*/null, null);
-            this.sourcesHelper.addTypedSourceRoot(prop,  RubyProject.SOURCES_TYPE_RUBY, displayName, /*XXX*/null, null);
+            sourcesHelper.addPrincipalSourceRoot(prop, displayName, /*XXX*/null, null);
+            sourcesHelper.addTypedSourceRoot(prop,  RubyProject.SOURCES_TYPE_RUBY, displayName, /*XXX*/null, null);
         }
         propNames = testRoots.getRootProperties();
         rootNames = testRoots.getRootNames();
@@ -138,21 +131,13 @@ public class RubySources implements Sources, PropertyChangeListener, ChangeListe
             String displayName = rootNames[i];            
             displayName = testRoots.getRootDisplayName(displayName, propNames[i]);
             String prop = "${" + propNames[i] + "}";
-            this.sourcesHelper.addPrincipalSourceRoot(prop, displayName, /*XXX*/null, null);
-            this.sourcesHelper.addTypedSourceRoot(prop,  RubyProject.SOURCES_TYPE_RUBY, displayName, /*XXX*/null, null);
+            sourcesHelper.addPrincipalSourceRoot(prop, displayName, /*XXX*/null, null);
+            sourcesHelper.addTypedSourceRoot(prop,  RubyProject.SOURCES_TYPE_RUBY, displayName, /*XXX*/null, null);
         }        
-        this.sourcesHelper.addNonSourceRoot (BUILD_DIR_PROP);
-        this.sourcesHelper.addNonSourceRoot(DIST_DIR_PROP);
-        externalRootsRegistered = false;
-        ProjectManager.mutex().postWriteRequest(new Runnable() {
-            public void run() {                
-                if (!externalRootsRegistered) {
-                    sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
-                    externalRootsRegistered = true;
-                }
-            }
-        });
-        return this.sourcesHelper.createSources();
+        sourcesHelper.addNonSourceRoot (BUILD_DIR_PROP);
+        sourcesHelper.addNonSourceRoot(DIST_DIR_PROP);
+        sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
+        return sourcesHelper.createSources();
     }
 
     public void addChangeListener(ChangeListener changeListener) {
@@ -170,10 +155,7 @@ public class RubySources implements Sources, PropertyChangeListener, ChangeListe
     private void fireChange() {
         ChangeListener[] _listeners;
         synchronized (this) {
-            if (delegate != null) {
-                delegate.removeChangeListener(this);
-                delegate = null;
-            }
+            dirty = true;
         }
         synchronized (listeners) {
             if (listeners.isEmpty()) {

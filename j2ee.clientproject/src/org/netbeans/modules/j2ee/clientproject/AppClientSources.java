@@ -43,20 +43,21 @@ package org.netbeans.modules.j2ee.clientproject;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.j2ee.clientproject.ui.customizer.AppClientProjectProperties;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.Mutex;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.clientproject.ui.AppClientLogicalViewProvider;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.spi.project.support.ant.SourcesHelper;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
@@ -70,20 +71,18 @@ public class AppClientSources implements Sources, PropertyChangeListener, Change
     private static final String BUILD_DIR_PROP = "${" + AppClientProjectProperties.BUILD_DIR + "}";    //NOI18N
     private static final String DIST_DIR_PROP = "${" + AppClientProjectProperties.DIST_DIR + "}";    //NOI18N
 
+    private final Project project;
     private final AntProjectHelper helper;
     private final PropertyEvaluator evaluator;
     private final SourceRoots sourceRoots;
     private final SourceRoots testRoots;
-    private SourcesHelper sourcesHelper;
+    private boolean dirty;
     private Sources delegate;
-    /**
-     * Flag to forbid multiple invocation of {@link SourcesHelper#registerExternalRoots} 
-     **/
-    private boolean externalRootsRegistered;    
     private final List<ChangeListener> listeners = new ArrayList<ChangeListener>();
 
-    AppClientSources(AntProjectHelper helper, PropertyEvaluator evaluator,
+    AppClientSources(Project project, AntProjectHelper helper, PropertyEvaluator evaluator,
                 SourceRoots sourceRoots, SourceRoots testRoots) {
+        this.project = project;
         this.helper = helper;
         this.evaluator = evaluator;
         this.sourceRoots = sourceRoots;
@@ -91,7 +90,7 @@ public class AppClientSources implements Sources, PropertyChangeListener, Change
         this.sourceRoots.addPropertyChangeListener(this);
         this.testRoots.addPropertyChangeListener(this);        
         this.evaluator.addPropertyChangeListener(this);
-        initSources(); // have to register external build roots eagerly
+        delegate = initSources(); // have to register external build roots eagerly
     }
 
     /**
@@ -106,9 +105,11 @@ public class AppClientSources implements Sources, PropertyChangeListener, Change
             public SourceGroup[] run() {
                 Sources _delegate;
                 synchronized (AppClientSources.this) {
-                    if (delegate == null) {                    
+                    if (dirty) {
+                        delegate.removeChangeListener(AppClientSources.this);
                         delegate = initSources();
                         delegate.addChangeListener(AppClientSources.this);
+                        dirty = false;
                     }
                     _delegate = delegate;
                 }
@@ -118,72 +119,9 @@ public class AppClientSources implements Sources, PropertyChangeListener, Change
     }
 
     private Sources initSources() {        
-        sourcesHelper = new SourcesHelper(helper, evaluator);
-        File projectDir = FileUtil.toFile(this.helper.getProjectDirectory());
-        String[] propNames = sourceRoots.getRootProperties();
-        String[] rootNames = sourceRoots.getRootNames();
-        for (int i = 0; i < propNames.length; i++) {
-            String displayName = rootNames[i];
-            String prop = "${" + propNames[i] + "}"; // NOI18N
-            if (displayName.length() ==0) {
-                //If the prop is src.dir use the default name
-                if ("src.dir".equals(propNames[i])) {   //NOI18N
-                    displayName = SourceRoots.DEFAULT_SOURCE_LABEL;
-                }
-                else {
-                    //If the name is not given, it should be either a relative path in the project dir
-                    //or absolute path when the root is not under the project dir
-                    File sourceRoot = helper.resolveFile(evaluator.evaluate(prop));
-                    if (sourceRoot != null) {
-                        String srPath = sourceRoot.getAbsolutePath();
-                        String pdPath = projectDir.getAbsolutePath() + File.separatorChar;
-                        if (srPath.startsWith(pdPath)) {
-                            displayName = srPath.substring(pdPath.length());
-                        }
-                        else {
-                            displayName = sourceRoot.getAbsolutePath();
-                        }
-                    }
-                    else {
-                        displayName = SourceRoots.DEFAULT_SOURCE_LABEL;
-                    }
-                }
-            }
-            sourcesHelper.addPrincipalSourceRoot(prop, displayName, /*XXX*/null, null);
-            sourcesHelper.addTypedSourceRoot(prop, JavaProjectConstants.SOURCES_TYPE_JAVA, displayName, /*XXX*/null, null);
-        }
-        propNames = testRoots.getRootProperties();
-        rootNames = testRoots.getRootNames();
-        for (int i = 0; i < propNames.length; i++) {
-            String displayName = rootNames[i];
-            String prop = "${" + propNames[i] + "}"; // NOI18N
-            if (displayName.length() ==0) {
-                //If the prop is test.src.dir use the default name
-                if ("test.src.dir".equals(propNames[i])) {   //NOI18N
-                    displayName = SourceRoots.DEFAULT_TEST_LABEL;
-                }
-                else {
-                    //If the name is not given, it should be either a relative path in the project dir
-                    //or absolute path when the root is not under the project dir
-                    File sourceRoot = helper.resolveFile(evaluator.evaluate(prop));
-                    if (sourceRoot != null) {
-                        String srPath = sourceRoot.getAbsolutePath();
-                        String pdPath = projectDir.getAbsolutePath() + File.separatorChar;
-                        if (srPath.startsWith(pdPath)) {
-                            displayName = srPath.substring(pdPath.length());
-                        }
-                        else {
-                            displayName = sourceRoot.getAbsolutePath();
-                        }
-                    }
-                    else {
-                        displayName = SourceRoots.DEFAULT_TEST_LABEL;
-                    }
-                }
-            }
-            sourcesHelper.addPrincipalSourceRoot(prop, displayName, /*XXX*/null, null);
-            sourcesHelper.addTypedSourceRoot(prop, JavaProjectConstants.SOURCES_TYPE_JAVA, displayName, /*XXX*/null, null);
-        }
+        SourcesHelper sourcesHelper = new SourcesHelper(project, helper, evaluator);
+        register(sourcesHelper, sourceRoots);
+        register(sourcesHelper, testRoots);
         
         // Configuration Files
         String configFilesLabel = org.openide.util.NbBundle.getMessage(AppClientLogicalViewProvider.class, "LBL_Node_ConfFiles"); //NOI18N
@@ -192,18 +130,24 @@ public class AppClientSources implements Sources, PropertyChangeListener, Change
         sourcesHelper.addNonSourceRoot(BUILD_DIR_PROP);
         sourcesHelper.addNonSourceRoot(DIST_DIR_PROP);
         
-        externalRootsRegistered = false;
-        ProjectManager.mutex().postWriteRequest(new Runnable() {
-            public void run() {
-                if (!externalRootsRegistered) {
-                    sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
-                    externalRootsRegistered = true;
-                }
-            }
-        });
+        sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
         return sourcesHelper.createSources();
     }
 
+    private void register(SourcesHelper sourcesHelper, SourceRoots roots) {
+        String[] propNames = roots.getRootProperties();
+        String[] rootNames = roots.getRootNames();
+        for (int i = 0; i < propNames.length; i++) {
+            String prop = propNames[i];
+            String displayName = roots.getRootDisplayName(rootNames[i], prop);
+            String loc = "${" + prop + "}"; // NOI18N
+            String includes = "${" + ProjectProperties.INCLUDES + "}"; // NOI18N
+            String excludes = "${" + ProjectProperties.EXCLUDES + "}"; // NOI18N
+            sourcesHelper.addPrincipalSourceRoot(loc, includes, excludes, displayName, null, null); // NOI18N
+            sourcesHelper.addTypedSourceRoot(loc, includes, excludes, JavaProjectConstants.SOURCES_TYPE_JAVA, displayName, null, null); // NOI18N
+        }
+     }
+    
     public void addChangeListener(ChangeListener changeListener) {
         synchronized (listeners) {
             listeners.add(changeListener);
@@ -219,10 +163,7 @@ public class AppClientSources implements Sources, PropertyChangeListener, Change
     private void fireChange() {
         ChangeListener[] _listeners;
         synchronized (this) {
-            if (delegate != null) {
-                delegate.removeChangeListener(this);
-                delegate = null;
-            }
+            dirty = true;
         }
         synchronized (listeners) {
             if (listeners.isEmpty()) {
