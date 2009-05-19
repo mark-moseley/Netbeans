@@ -42,6 +42,143 @@ made subject to such option by the copyright holder.
 --><?xml-stylesheet type="text/xml" href="http://openide.netbeans.org/fs/filesystem.xsl"?>
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
 <filesystem>
+    <folder name="Projects">
+        <folder name="org-netbeans-modules-mobility-project">
+            <folder name="Actions">
+                <folder name="Root">
+                    <file name="NewFile.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.newFileAction"/>
+                        <attr name="position" intvalue="100"/>
+                    </file>
+                    <file name="sep1.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="200"/>
+                    </file>
+                    <file name="Build.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createBuildAction"/>
+                        <attr name="position" intvalue="300"/>
+                    </file>
+                    <file name="Rebuild.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createRebuildAction"/>
+                        <attr name="position" intvalue="400"/>
+                    </file>
+                    <file name="Clean.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createCleanAction"/>
+                        <attr name="position" intvalue="500"/>
+                    </file>
+                    <file name="Javadoc.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createJavadocAction"/>
+                        <attr name="position" intvalue="600"/>
+                    </file>
+                    <file name="Deploy.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createDeployAction"/>
+                        <attr name="position" intvalue="700"/>
+                    </file>
+                    <file name="sep2.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="800"/>
+                    </file>
+                    <file name="BuildAll.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createBuildAllAction"/>
+                        <attr name="position" intvalue="900"/>
+                    </file>
+                    <file name="RebuildAll.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createRebuildAllAction"/>
+                        <attr name="position" intvalue="1000"/>
+                    </file>
+                    <file name="CleanAll.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createCleanAllAction"/>
+                        <attr name="position" intvalue="1100"/>
+                    </file>
+                    <file name="DeployAll.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createDeployAllAction"/>
+                        <attr name="position" intvalue="1200"/>
+                    </file>
+                    <file name="sep3a.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="1300"/>
+                    </file>
+                    <file name="Run.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createRunAction"/>
+                        <attr name="position" intvalue="1400"/>
+                    </file>
+                    <file name="RunWith.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createRunWithAction"/>
+                        <attr name="position" intvalue="1500"/>
+                    </file>
+                    <file name="Debug.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createDebugAction"/>
+                        <attr name="position" intvalue="1600"/>
+                    </file>
+                    <file name="sep3.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="1700"/>
+                    </file>
+                    <file name="Main.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.setAsMainProjectAction"/>
+                        <attr name="position" intvalue="1800"/>
+                    </file>
+                    <file name="Subprojects.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.openSubprojectsAction"/>
+                        <attr name="position" intvalue="1900"/>
+                    </file>
+                    <file name="Close.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.closeProjectAction"/>
+                        <attr name="position" intvalue="2000"/>
+                    </file>
+                    <file name="sep4.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="2100"/>
+                    </file>
+                    <file name="Rename.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.renameProjectAction"/>
+                        <attr name="position" intvalue="2200"/>
+                    </file>
+                    <file name="Move.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.moveProjectAction"/>
+                        <attr name="position" intvalue="2300"/>
+                    </file>
+                    <file name="Copy.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.copyProjectAction"/>
+                        <attr name="position" intvalue="2400"/>
+                    </file>
+                    <file name="Delete.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.deleteProjectAction"/>
+                        <attr name="position" intvalue="2500"/>
+                    </file>
+                    <file name="sep5.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="2600"/>
+                    </file>
+                    <file name="Find.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createFindAction"/>
+                        <attr name="position" intvalue="2700"/>
+                    </file>
+                    <file name="sep6.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="2800"/>
+                    </file>
+                    <file name="Refresh.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.modules.mobility.project.ui.actions.Actions.createRefreshPackagesAction"/>
+                        <attr name="position" intvalue="2900"/>
+                    </file>
+                    <file name="sep7.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="3000"/>
+                    </file>
+                    <!-- Utilities.actionsForPath("Projects/Actions") inserted here -->
+                    <file name="sep8.instance">
+                        <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
+                        <attr name="position" intvalue="3100"/>
+                    </file>
+                    <file name="Customize.instance">
+                        <attr name="instanceCreate" methodvalue="org.netbeans.spi.project.ui.support.CommonProjectActions.customizeProjectAction"/>
+                        <attr name="position" intvalue="3200"/>
+                    </file>
+                </folder>
+            </folder>
+            </folder>
+    </folder>
 
     <folder name="Navigator">
         <folder name="Panels">
@@ -70,10 +207,6 @@ made subject to such option by the copyright holder.
         <file name="org-netbeans-modules-mobility-project-security-KeyStoreRepository.settings" url="/org/netbeans/modules/mobility/project/ui/resources/KeyStoreRepository.settings">
             <attr boolvalue="true" name="hidden"/>
         </file>
-    </folder>
-
-    <folder name="WarmUp">
-        <file name="org-netbeans-modules-mobility-project-security-KeyStoreRepositoryWarmUp.instance"/>
     </folder>
 
     <folder name="Templates">
@@ -129,7 +262,7 @@ made subject to such option by the copyright holder.
         <folder name="MIDP">
             <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.mobility.project.ui.wizard.Bundle"/>
             <attr name="position" intvalue="300"/>
-            <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/mobility/project/ui/resources/descriptions/MIDP/MIDP.html"/>
+            <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/netbeans/modules/mobility/project/ui/resources/descriptions/MIDP/MIDPInfo.html"/>
             <attr name="MIDP" boolvalue="true"/>
             <attr name="templateCategory" stringvalue="MIDP"/>
 
@@ -181,6 +314,14 @@ made subject to such option by the copyright holder.
     </folder>
         
     <folder name="Buildsystem">
+        <folder name="ApplicationDescriptor">
+            <folder name="Attributes"/>
+            <folder name="Permissions">
+                <file name="basepermissions" url="basepermissions.txt">
+                    <attr name="position" intvalue="0"/>
+                </file>
+            </folder>
+        </folder>
         <folder name="org.netbeans.modules.kjava.j2meproject">
             <file name="build.xml" url="/org/netbeans/modules/mobility/project/resources/build.xsl"/>
             <folder name="nbproject">
@@ -202,6 +343,11 @@ made subject to such option by the copyright holder.
                         <file name="cldc-init" url="buildscript/cldc-init">
                             <attr name="position" intvalue="300"/>
                         </file>
+                        <!-- Java ME SDK beginning -->
+                        <file name="cdc-hi-init" url="buildscript/cdc-hi-init">
+                            <attr name="position" intvalue="1000"/>
+                        </file>
+                        <!-- Java ME SDK end -->
                     </folder>
                     <file name="init" url="buildscript/init">
                         <attr name="position" intvalue="400"/>
@@ -230,8 +376,16 @@ made subject to such option by the copyright holder.
                     <file name="obfuscate" url="buildscript/obfuscate">
                         <attr name="position" intvalue="1000"/>
                     </file>
+                    <!-- Java ME SDK beginning -->
+                    <folder name="preverify-subtargets">
+                        <attr name="position" intvalue="1110"/>
+                        <file name="lwuit-build" url="buildscript/lwuit-build">
+                            <attr name="position" intvalue="100"/>
+                        </file>
+                    </folder>
+                    <!-- Java ME SDK end -->
                     <file name="preverify" url="buildscript/preverify">
-                        <attr name="position" intvalue="1100"/>
+                        <attr name="position" intvalue="1150"/>
                     </file>
                     <folder name="jar-subtargets">
                         <attr name="position" intvalue="1200"/>
@@ -247,6 +401,11 @@ made subject to such option by the copyright holder.
                         <file name="do-extra-libs" url="buildscript/do-extra-libs">
                             <attr name="position" intvalue="400"/>
                         </file>
+                        <!-- Java ME SDK beginning -->
+                        <file name="jad-jsr211-properties" url="buildscript/jad-jsr211-properties">
+                            <attr name="position" intvalue="550"/>
+                        </file>
+                        <!-- Java ME SDK end -->
                         <file name="do-jar" url="buildscript/do-jar">
                             <attr name="position" intvalue="700"/>
                         </file>                        
@@ -283,6 +442,17 @@ made subject to such option by the copyright holder.
                         <file name="cldc-run" url="buildscript/cldc-run">
                             <attr name="position" intvalue="100"/>
                         </file>
+                        <!-- Java ME SDK beginning -->
+                        <file name="open-netmon" url="buildscript/open-netmon">
+                            <attr name="position" intvalue="0"/>
+                        </file>
+                        <file name="cdc-hi-run" url="buildscript/cdc-hi-run">
+                            <attr name="position" intvalue="1000"/>
+                        </file>
+                        <file name="open-profiler" url="buildscript/open-profiler">
+                            <attr name="position" intvalue="1200"/>
+                        </file>
+                        <!-- Java ME SDK end -->
                     </folder>
                     <file name="run" url="buildscript/run">
                         <attr name="position" intvalue="1800"/>
@@ -299,6 +469,11 @@ made subject to such option by the copyright holder.
                     <file name="debug" url="buildscript/debug">
                         <attr name="position" intvalue="2100"/>
                     </file>
+                    <!-- Java ME SDK beginning -->
+                    <file name="debug-run-base" url="buildscript/debug-run-base">
+                        <attr name="position" intvalue="2150"/>
+                    </file>
+                    <!-- Java ME SDK end -->
                     <file name="javadoc" url="buildscript/javadoc">
                         <attr name="position" intvalue="2200"/>
                     </file>
@@ -526,6 +701,14 @@ made subject to such option by the copyright holder.
                 <attr name="PriviledgedTemplates" stringvalue="Templates/Classes/Class.java,Templates/Classes/Package,Templates/Classes/Interface.java"/>
                 <attr name="position" intvalue="400"/>
             </file>
+        </folder>
+    </folder>
+    <folder name="ProjectXMLCatalog">
+        <!-- XXX unlike everyone else, does not use /1 versioning suffix -->
+        <file name="j2me-project.xsd" url="../../resources/j2me-project.xsd"/>
+        <file name="j2me-project-private.xsd" url="../../resources/j2me-project-private.xsd"/>
+        <folder name="project-configurations">
+            <file name="1.xsd" url="../../../../project/support/resources/project-configurations.xsd"/>
         </folder>
     </folder>
 </filesystem>
