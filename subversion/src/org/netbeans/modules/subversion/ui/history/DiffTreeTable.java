@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,7 +40,9 @@
  */
 package org.netbeans.modules.subversion.ui.history;
 
-import org.openide.explorer.view.TreeTableView;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Graphics;
 import org.openide.explorer.ExplorerManager;
 import org.openide.nodes.Node;
 import org.openide.nodes.PropertySupport;
@@ -50,19 +52,20 @@ import org.openide.util.NbBundle;
 import org.openide.util.lookup.Lookups;
 
 import javax.swing.*;
-import javax.swing.tree.DefaultTreeCellRenderer;
 import java.util.*;
 import java.beans.PropertyVetoException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.logging.Level;
 import org.netbeans.modules.subversion.Subversion;
+import org.netbeans.swing.outline.RenderDataProvider;
+import org.openide.explorer.view.OutlineView;
 
 /**
  * Treetable to show results of Search History action.
  * 
  * @author Maros Sandor
  */
-class DiffTreeTable extends TreeTableView {
+class DiffTreeTable extends OutlineView {
     
     private RevisionsRootNode rootNode;
     private List results;
@@ -70,28 +73,22 @@ class DiffTreeTable extends TreeTableView {
 
     public DiffTreeTable(SearchHistoryPanel master) {
         this.master = master;
-        treeTable.setShowHorizontalLines(true);
-        treeTable.setShowVerticalLines(false);
-        setRootVisible(false);
+        getOutline().setShowHorizontalLines(true);
+        getOutline().setShowVerticalLines(false);
+        getOutline().setRootVisible(false);
         setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         setupColumns();
 
-        DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer();
-        renderer.setOpenIcon(null);
-        renderer.setClosedIcon(null);
-        renderer.setLeafIcon(null);
-        tree.setCellRenderer(renderer);
+        getOutline().setRenderDataProvider( new NoLeafIconRenderDataProvider( getOutline().getRenderDataProvider() ) );
     }
     
     private void setupColumns() {
-        Node.Property [] columns = new Node.Property[4];
+        Node.Property [] columns = new Node.Property[3];
         ResourceBundle loc = NbBundle.getBundle(DiffTreeTable.class);
-        columns[0] = new ColumnDescriptor(RevisionNode.COLUMN_NAME_NAME, String.class, "", "");  // NOI18N
-        columns[0].setValue("TreeColumnTTV", Boolean.TRUE); // NOI18N
-        columns[1] = new ColumnDescriptor(RevisionNode.COLUMN_NAME_DATE, String.class, loc.getString("LBL_DiffTree_Column_Time"), loc.getString("LBL_DiffTree_Column_Time_Desc"));
-        columns[2] = new ColumnDescriptor(RevisionNode.COLUMN_NAME_USERNAME, String.class, loc.getString("LBL_DiffTree_Column_Username"), loc.getString("LBL_DiffTree_Column_Username_Desc"));
-        columns[3] = new ColumnDescriptor(RevisionNode.COLUMN_NAME_MESSAGE, String.class, loc.getString("LBL_DiffTree_Column_Message"), loc.getString("LBL_DiffTree_Column_Message_Desc"));
+        columns[0] = new ColumnDescriptor(RevisionNode.COLUMN_NAME_DATE, String.class, loc.getString("LBL_DiffTree_Column_Time"), loc.getString("LBL_DiffTree_Column_Time_Desc"));
+        columns[1] = new ColumnDescriptor(RevisionNode.COLUMN_NAME_USERNAME, String.class, loc.getString("LBL_DiffTree_Column_Username"), loc.getString("LBL_DiffTree_Column_Username_Desc"));
+        columns[2] = new ColumnDescriptor(RevisionNode.COLUMN_NAME_MESSAGE, String.class, loc.getString("LBL_DiffTree_Column_Message"), loc.getString("LBL_DiffTree_Column_Message_Desc"));
         setProperties(columns);
     }
     
@@ -99,18 +96,18 @@ class DiffTreeTable extends TreeTableView {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 int width = getWidth();
-                treeTable.getColumnModel().getColumn(0).setPreferredWidth(width * 25 / 100);
-                treeTable.getColumnModel().getColumn(1).setPreferredWidth(width * 15 / 100);
-                treeTable.getColumnModel().getColumn(2).setPreferredWidth(width * 10 / 100);
-                treeTable.getColumnModel().getColumn(3).setPreferredWidth(width * 50 / 100);
+                getOutline().getColumnModel().getColumn(0).setPreferredWidth(width * 25 / 100);
+                getOutline().getColumnModel().getColumn(1).setPreferredWidth(width * 15 / 100);
+                getOutline().getColumnModel().getColumn(2).setPreferredWidth(width * 10 / 100);
+                getOutline().getColumnModel().getColumn(3).setPreferredWidth(width * 50 / 100);
             }
         });
     }
 
     void setSelection(int idx) {
-        treeTable.getSelectionModel().setValueIsAdjusting(false);
-        treeTable.scrollRectToVisible(treeTable.getCellRect(idx, 1, true));
-        treeTable.getSelectionModel().setSelectionInterval(idx, idx);
+        getOutline().getSelectionModel().setValueIsAdjusting(false);
+        getOutline().scrollRectToVisible(getOutline().getCellRect(idx, 1, true));
+        getOutline().getSelectionModel().setSelectionInterval(idx, idx);
     }
 
     void setSelection(RepositoryRevision container) {
@@ -148,11 +145,11 @@ class DiffTreeTable extends TreeTableView {
     }
 
     public int [] getSelection() {
-        return treeTable.getSelectedRows();
+        return getOutline().getSelectedRows();
     }
 
     public int getRowCount() {
-        return treeTable.getRowCount();
+        return getOutline().getRowCount();
     }
 
     private static class ColumnDescriptor<T> extends PropertySupport.ReadOnly<T> {
@@ -226,6 +223,55 @@ class DiffTreeTable extends TreeTableView {
                 node = new RevisionNode(((RepositoryRevision.Event) key), master);
             }
             return new Node[] { node };
+        }
+    }
+
+    private class NoLeafIconRenderDataProvider implements RenderDataProvider {
+        private RenderDataProvider delegate;
+        public NoLeafIconRenderDataProvider( RenderDataProvider delegate ) {
+            this.delegate = delegate;
+        }
+
+        public String getDisplayName(Object o) {
+            return delegate.getDisplayName(o);
+        }
+
+        public boolean isHtmlDisplayName(Object o) {
+            return delegate.isHtmlDisplayName(o);
+        }
+
+        public Color getBackground(Object o) {
+            return delegate.getBackground(o);
+        }
+
+        public Color getForeground(Object o) {
+            return delegate.getForeground(o);
+        }
+
+        public String getTooltipText(Object o) {
+            return delegate.getTooltipText(o);
+        }
+
+        public Icon getIcon(Object o) {
+            if( getOutline().getOutlineModel().isLeaf(o) )
+                return NO_ICON;
+            return null;
+        }
+
+    }
+    private static final Icon NO_ICON = new NoIcon();
+    private static class NoIcon implements Icon {
+
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+
+        }
+
+        public int getIconWidth() {
+            return 0;
+        }
+
+        public int getIconHeight() {
+            return 0;
         }
     }
 }
