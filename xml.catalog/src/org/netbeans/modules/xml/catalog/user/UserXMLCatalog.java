@@ -47,8 +47,8 @@ import org.netbeans.modules.xml.catalog.spi.CatalogDescriptor;
 import org.netbeans.modules.xml.catalog.spi.CatalogListener;
 import org.netbeans.modules.xml.catalog.spi.CatalogReader;
 import org.netbeans.modules.xml.catalog.spi.CatalogWriter;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.filesystems.*;
 import org.xml.sax.*;
 import java.util.*;
@@ -77,28 +77,28 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
     }
 
     public String resolveURI(String name) {
-        return (String)publicIds.get(URI_PREFIX+name);
+        return (String)getPublicIdMap().get(URI_PREFIX+name);
     }
 
     public String resolvePublic(String publicId) {
-        return (String)publicIds.get(PUBLIC_PREFIX+publicId);
+        return (String)getPublicIdMap().get(PUBLIC_PREFIX+publicId);
     }
 
     public InputSource resolveEntity(String publicId, String systemId) throws SAXException, java.io.IOException {
         getPublicIdMap();
         String url = null;
         if (publicId!=null) {
-            url = (String)publicIds.get(PUBLIC_PREFIX+publicId);
-            if (url == null) url = (String)publicIds.get(URI_PREFIX+publicId);
+            url = (String)getPublicIdMap().get(PUBLIC_PREFIX+publicId);
+            if (url == null) url = (String)getPublicIdMap().get(URI_PREFIX+publicId);
         } else if (systemId!=null) {
-            url = (String)publicIds.get(SYSTEM_PREFIX+systemId);
+            url = (String)getPublicIdMap().get(SYSTEM_PREFIX+systemId);
         }
         if (url!=null) return new InputSource(url);
         else return null;
     }
     
     public String getSystemID(String publicId) {
-        return (String)publicIds.get(publicId);
+        return (String)getPublicIdMap().get(publicId);
     }
 
     public void removePropertyChangeListener(PropertyChangeListener l) {}
@@ -138,7 +138,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
     }
 
     public Image getIcon(int type) {
-        return Utilities.loadImage("org/netbeans/modules/xml/catalog/impl/xmlCatalog.gif", true); //NOI18N
+        return ImageUtilities.loadImage("org/netbeans/modules/xml/catalog/impl/xmlCatalog.gif", true); //NOI18N
     }
 
     public void refresh() {
@@ -147,9 +147,11 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
             CatalogListener listener = (CatalogListener)it.next();
             listener.notifyInvalidate();
         }
-        FileObject userCatalog = Repository.getDefault().getDefaultFileSystem().findResource(catalogResource);
+        FileObject userCatalog = FileUtil.getConfigFile(catalogResource);
         userCatalog.refresh();
-        publicIds=null;
+        synchronized (this) {
+            publicIds=null;
+        }
     }
 
     public String getShortDescription() {
@@ -164,10 +166,10 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
         return NbBundle.getMessage(UserXMLCatalog.class, "LBL_userCatalog");
     }
     
-    private Map getPublicIdMap() {
+    private synchronized Map getPublicIdMap() {
         if (publicIds==null) {
             try {
-                FileObject userCatalog = Repository.getDefault().getDefaultFileSystem().findResource(catalogResource);
+                FileObject userCatalog = FileUtil.getConfigFile(catalogResource);
                 publicIds = parse(userCatalog);
             } catch (java.io.IOException ex) {
                 publicIds = new HashMap();
@@ -181,7 +183,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
     }
     
     private void addEntry (int entryType, String key, String value) throws IOException {
-        FileObject userCatalog = Repository.getDefault().getDefaultFileSystem().findResource(catalogResource);
+        FileObject userCatalog = FileUtil.getConfigFile(catalogResource);
         String tempBuffer = createCatalogBuffer(userCatalog);
         BufferedReader reader = new BufferedReader(new StringReader(tempBuffer));
         FileLock lock = userCatalog.lock();
@@ -194,19 +196,19 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                         switch (entryType) {
                             case TYPE_PUBLIC : {
                                 writer.println("  <public publicId=\""+key+"\" uri=\""+value+"\"/>"); //NOI18N
-                                publicIds.put(PUBLIC_PREFIX+key, value);
+                                getPublicIdMap().put(PUBLIC_PREFIX+key, value);
                                 fireEntryAdded(PUBLIC_PREFIX+key);
                                 break;
                             }
                             case TYPE_SYSTEM : {
                                 writer.println("  <system systemId=\""+key+"\" uri=\""+value+"\"/>"); //NOI18N
-                                publicIds.put(SYSTEM_PREFIX+key, value);
+                                getPublicIdMap().put(SYSTEM_PREFIX+key, value);
                                 fireEntryAdded(SYSTEM_PREFIX+key);
                                 break;
                             }
                             case TYPE_URI : {
                                 writer.println("  <uri name=\""+key+"\" uri=\""+value+"\"/>"); //NOI18N
-                                publicIds.put(URI_PREFIX+key, value);
+                                getPublicIdMap().put(URI_PREFIX+key, value);
                                 fireEntryAdded(URI_PREFIX+key);
                                 break;
                             }
@@ -223,7 +225,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
     }
     
     private void removeEntry (int entryType, String key) throws IOException {
-        FileObject userCatalog = Repository.getDefault().getDefaultFileSystem().findResource(catalogResource);
+        FileObject userCatalog = FileUtil.getConfigFile(catalogResource);
         String tempBuffer = createCatalogBuffer(userCatalog);
         BufferedReader reader = new BufferedReader(new StringReader(tempBuffer));
         FileLock lock = userCatalog.lock();
@@ -235,7 +237,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                     switch (entryType) {
                         case TYPE_PUBLIC : {
                             if (line.indexOf("<public publicId=\""+key+"\"")>0) { //NOI18N
-                                publicIds.remove(PUBLIC_PREFIX+key);
+                                getPublicIdMap().remove(PUBLIC_PREFIX+key);
                                 fireEntryRemoved(PUBLIC_PREFIX+key);
                             } else {
                                 writer.println(line);
@@ -244,7 +246,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                         }
                         case TYPE_SYSTEM : {
                             if (line.indexOf("<system systemId=\""+key+"\"")>0) { //NOI18N
-                                publicIds.remove(SYSTEM_PREFIX+key);
+                                getPublicIdMap().remove(SYSTEM_PREFIX+key);
                                 fireEntryRemoved(SYSTEM_PREFIX+key);
                             } else {
                                 writer.println(line);
@@ -253,7 +255,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                         }
                         case TYPE_URI : {
                             if (line.indexOf("<uri name=\""+key+"\"")>0) { //NOI18N
-                                publicIds.remove(URI_PREFIX+key);
+                                getPublicIdMap().remove(URI_PREFIX+key);
                                 fireEntryRemoved(URI_PREFIX+key);
                             } else {
                                 writer.println(line);
@@ -272,7 +274,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
     }
     
     private void updateEntry (int entryType, String key, String value) throws IOException {
-        FileObject userCatalog = Repository.getDefault().getDefaultFileSystem().findResource(catalogResource);
+        FileObject userCatalog = FileUtil.getConfigFile(catalogResource);
         String tempBuffer = createCatalogBuffer(userCatalog);
         BufferedReader reader = new BufferedReader(new StringReader(tempBuffer));
         FileLock lock = userCatalog.lock();
@@ -285,7 +287,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                         case TYPE_PUBLIC : {
                             if (line.indexOf("<public publicId=\""+key+"\"")>0) { //NOI18N
                                 writer.println("  <public publicId=\""+key+"\" uri=\""+value+"\"/>"); //NOI18N
-                                publicIds.put(PUBLIC_PREFIX+key, value);
+                                getPublicIdMap().put(PUBLIC_PREFIX+key, value);
                                 fireEntryUpdated(PUBLIC_PREFIX+key);
                             } else {
                                 writer.println(line);
@@ -295,7 +297,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                         case TYPE_SYSTEM : {
                             if (line.indexOf("<system systemId=\""+key+"\"")>0) { //NOI18N
                                 writer.println("  <system systemId=\""+key+"\" uri=\""+value+"\"/>"); //NOI18N
-                                publicIds.put(SYSTEM_PREFIX+key,value);
+                                getPublicIdMap().put(SYSTEM_PREFIX+key,value);
                                 fireEntryUpdated(SYSTEM_PREFIX+key);
                             } else {
                                 writer.println(line);
@@ -305,7 +307,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                         case TYPE_URI : {
                             if (line.indexOf("<uri name=\""+key+"\"")>0) { //NOI18N
                                 writer.println("  <uri name=\""+key+"\" uri=\""+value+"\"/>"); //NOI18N
-                                publicIds.put(URI_PREFIX+key, value);
+                                getPublicIdMap().put(URI_PREFIX+key, value);
                                 fireEntryUpdated(URI_PREFIX+key);
                             } else {
                                 writer.println(line);
@@ -361,7 +363,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
         try {
             if (key.startsWith(PUBLIC_PREFIX)) {
                 if (value!=null) {
-                    if (publicIds.get(key)!=null) {
+                    if (getPublicIdMap().get(key)!=null) {
                         if (requestUpdate(key.substring(PUBLIC_PREFIX.length())))
                             updateEntry(TYPE_PUBLIC, key.substring(PUBLIC_PREFIX.length()), value);
                     } else
@@ -370,7 +372,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                       removeEntry(TYPE_PUBLIC, key.substring(PUBLIC_PREFIX.length()));
             } else if (key.startsWith(SYSTEM_PREFIX)) {
                 if (value!=null) {
-                    if (publicIds.get(key)!=null) {
+                    if (getPublicIdMap().get(key)!=null) {
                         if (requestUpdate(key.substring(SYSTEM_PREFIX.length())))
                             updateEntry(TYPE_SYSTEM, key.substring(SYSTEM_PREFIX.length()), value);
                     } else
@@ -379,7 +381,7 @@ public class UserXMLCatalog implements CatalogReader, CatalogWriter, CatalogDesc
                       removeEntry(TYPE_SYSTEM, key.substring(SYSTEM_PREFIX.length()));
             } else if (key.startsWith(URI_PREFIX)) {
                 if (value!=null) {
-                    if (publicIds.get(key)!=null) {
+                    if (getPublicIdMap().get(key)!=null) {
                         if (requestUpdate(key.substring(URI_PREFIX.length()))) updateEntry(TYPE_URI, key.substring(URI_PREFIX.length()), value);
                     } else
                         addEntry(TYPE_URI, key.substring(URI_PREFIX.length()), value);
