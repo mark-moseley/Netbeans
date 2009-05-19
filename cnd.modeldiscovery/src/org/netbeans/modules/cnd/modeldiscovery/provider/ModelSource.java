@@ -49,16 +49,20 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmInclude;
 import org.netbeans.modules.cnd.api.project.NativeFileItem.Language;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.discovery.api.ItemProperties;
 import org.netbeans.modules.cnd.discovery.api.ItemProperties.LanguageKind;
+import org.netbeans.modules.cnd.discovery.api.PkgConfigManager.PackageConfiguration;
+import org.netbeans.modules.cnd.discovery.api.PkgConfigManager.PkgConfig;
+import org.netbeans.modules.cnd.discovery.api.PkgConfigManager.ResolvedPath;
 import org.netbeans.modules.cnd.discovery.api.SourceFileProperties;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.Utilities;
 
 /**
@@ -67,17 +71,27 @@ import org.openide.util.Utilities;
  */
 public class ModelSource implements SourceFileProperties {
     private static final boolean TRACE_AMBIGUOUS = Boolean.getBoolean("cnd.modeldiscovery.trace.ambiguous"); // NOI18N
+    private static Logger logger = Logger.getLogger("org.netbeans.modules.cnd.modeldiscovery.provider.SourceFileProperties"); // NOI18N
+    {
+        if (TRACE_AMBIGUOUS){logger.setLevel(Level.ALL);}
+    }
+
     private Item item;
     private CsmFile file;
     private Map<String,List<String>> searchBase;
+    private PkgConfig pkgConfig;
     private String itemPath;
     private List<String> userIncludePaths;
     private Set<String> includedFiles = new HashSet<String>();
+    private Map<String,String> userMacros;
+    private boolean preferLocal;
     
-    public ModelSource(Item item, CsmFile file, Map<String,List<String>> searchBase){
+    public ModelSource(Item item, CsmFile file, Map<String,List<String>> searchBase, PkgConfig pkgConfig, boolean preferLocal){
         this.item = item;
         this.file = file;
         this.searchBase = searchBase;
+        this.pkgConfig = pkgConfig;
+        this.preferLocal = preferLocal;
     }
 
     public Set<String> getIncludedFiles() {
@@ -101,29 +115,6 @@ public class ModelSource implements SourceFileProperties {
             }
         }
         return itemPath;
-    }
-    
-    /**
-     * Path is include path like:
-     * .
-     * ../
-     * include
-     * Returns path in unix style
-     */
-    public static String convertRelativePathToAbsolute(SourceFileProperties source, String path){
-        if ( !( path.startsWith("/") || (path.length()>1 && path.charAt(1)==':') ) ) { // NOI18N
-            if (path.equals(".")) { // NOI18N
-                path = source.getCompilePath();
-            } else {
-                path = source.getCompilePath()+File.separator+path;
-            }
-            File file = new File(path);
-            path = FileUtil.normalizeFile(file).getAbsolutePath();
-        }
-        if (Utilities.isWindows()) {
-            path = path.replace('\\', '/');
-        }
-        return path;
     }
     
     private static final String PATTERN = "/../"; // NOI18N
@@ -173,7 +164,6 @@ public class ModelSource implements SourceFileProperties {
             path = path.replace('/', File.separatorChar);
         }
         path = IpeUtils.toRelativePath(getCompilePath(), path);
-        path = FilePathAdaptor.mapToRemote(path);
         path = FilePathAdaptor.normalize(path);
         return path;
     }
@@ -194,10 +184,63 @@ public class ModelSource implements SourceFileProperties {
                     if (level < 5 && resolved != null) {
                         analyzeUnresolved(res, resolved, level+1);
                     }
+                } else {
+                    if (pkgConfig != null) {
+                        ResolvedPath rp = pkgConfig.getResolvedPath(include.getIncludeName().toString());
+                        if (rp != null) {
+                            res.add(rp.getIncludePath());
+                            for(PackageConfiguration pc : rp.getPackages()){
+                                for(String p : pc.getIncludePaths()){
+                                    if (!getSystemInludePaths().contains(p)){
+                                        res.add(p);
+                                    }
+                                }
+                                for(String p : pc.getMacros()){
+                                    int i = p.indexOf("="); // NOI18N
+                                    String macro;
+                                    String value = null;
+                                    if (i > 0){
+                                        macro = p.substring(0, i);
+                                        value = p.substring(i+1);
+                                    } else {
+                                        macro = p;
+                                    }
+                                    if (!getUserMacros().containsKey(macro)){
+                                        getUserMacros().put(macro, value);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
-                includedFiles.add(resolved.getAbsolutePath().toString());
-                if (level < 5) {
+                boolean reResolve = false;
+                if (preferLocal) {
+                    boolean isSystem = false;
+                    String resolvedPath = resolved.getAbsolutePath().toString();
+                    for (String path : getSystemInludePaths()){
+                        if (resolvedPath.startsWith(path)) {
+                            isSystem = true;
+                            break;
+                        }
+                    }
+                    if (isSystem) {
+                        String path = guessPath(include);
+                        if (path != null && !resolvedPath.startsWith(path)){
+                            if (TRACE_AMBIGUOUS) {
+                                logger.fine("Directive resolved in project on path: "+path+" instead "+resolvedPath); // NOI18N
+                            }
+                            resolved = file.getProject().findFile(path+File.separatorChar+include.getIncludeName());
+                            path = getRelativepath(path);
+                            res.add(path);
+                            reResolve = true;
+                        }
+                    }
+                }
+                if (!reResolve) {
+                    includedFiles.add(resolved.getAbsolutePath().toString());
+                }
+                if (level < 5 && resolved != null) {
                     analyzeUnresolved(res, resolved, level+1);
                 }
             }
@@ -208,14 +251,14 @@ public class ModelSource implements SourceFileProperties {
         String name = include.getIncludeName().toString();
         String found = name.replace('\\','/');
         String prefix = null;
-        String back = null;
+        //String back = null;
         int i = found.lastIndexOf('/');
         if(i >= 0){
             prefix = found.substring(0,i+1);
             found = found.substring(i+1);
             i = prefix.lastIndexOf("./"); // NOI18N
             if (i >= 0) {
-                back = prefix.substring(0,i+2);
+                //back = prefix.substring(0,i+2);
                 prefix = prefix.substring(i+2);
                 if (prefix.length()==0) {
                     prefix = null;
@@ -233,9 +276,9 @@ public class ModelSource implements SourceFileProperties {
                 if (result.get(j).endsWith(name)){
                     if (pos >= 0) {
                         if (TRACE_AMBIGUOUS) {
-                            System.out.println("Ambiguous name for item: "+getItemPath()); // NOI18N
-                            System.out.println("  name1: "+result.get(pos)); // NOI18N
-                            System.out.println("  name2: "+result.get(j)); // NOI18N
+                            logger.fine("Ambiguous name for item: "+getItemPath()); // NOI18N
+                            logger.fine("  name1: "+result.get(pos)); // NOI18N
+                            logger.fine("  name2: "+result.get(j)); // NOI18N
                         }
                     } else {
                         pos = j;
@@ -249,12 +292,12 @@ public class ModelSource implements SourceFileProperties {
             }
         }
         if (TRACE_AMBIGUOUS) {
-            System.out.println("Unresolved name for item: "+getItemPath()); // NOI18N
-            System.out.println("  from: "+include.getContainingFile().getAbsolutePath()); // NOI18N
-            System.out.println("  name: "+include.getIncludeName()); // NOI18N
+            logger.fine("Unresolved name for item: "+getItemPath()); // NOI18N
+            logger.fine("  from: "+include.getContainingFile().getAbsolutePath()); // NOI18N
+            logger.fine("  name: "+include.getIncludeName()); // NOI18N
             if (result != null && result.size()>0){
                 for(int j = 0; j < result.size(); j++){
-                    System.out.println("  candidate: "+result.get(j)); // NOI18N
+                    logger.fine("  candidate: "+result.get(j)); // NOI18N
                 }
             }
         }
@@ -262,28 +305,23 @@ public class ModelSource implements SourceFileProperties {
     }
     
     public List<String> getSystemInludePaths() {
-        List includePaths = item.getSystemIncludePaths();
-        List<String> res = new ArrayList<String>();
-        for(Object o : includePaths){
-            String path = (String)o;
-            res.add(path);
-        }
-        return res;
+        return item.getSystemIncludePaths();
     }
     
     public Map<String, String> getUserMacros() {
-        List macros = item.getUserMacroDefinitions();
-        Map<String, String> res = new HashMap<String,String>();
-        for(Object o : macros){
-            String macro = (String)o;
-            int i = macro.indexOf('=');
-            if (i>0){
-                res.put(macro.substring(0,i).trim(),macro.substring(i+1).trim());
-            } else {
-                res.put(macro,null);
+        if (userMacros == null){
+            userMacros = new HashMap<String,String>();
+            List<String> macros = item.getUserMacroDefinitions();
+            for(String macro : macros){
+                int i = macro.indexOf('=');
+                if (i>0){
+                    userMacros.put(macro.substring(0,i).trim(),macro.substring(i+1).trim());
+                } else {
+                    userMacros.put(macro,null);
+                }
             }
         }
-        return res;
+        return userMacros;
     }
     
     public Map<String, String> getSystemMacros() {

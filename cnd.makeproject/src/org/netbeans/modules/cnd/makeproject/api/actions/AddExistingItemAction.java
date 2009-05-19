@@ -62,6 +62,7 @@ import org.netbeans.modules.cnd.api.utils.FileChooser;
 import org.netbeans.modules.cnd.api.utils.FortranSourceFileFilter;
 import org.netbeans.modules.cnd.api.utils.HeaderSourceFileFilter;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.api.utils.QtFileFilter;
 import org.netbeans.modules.cnd.api.utils.ResourceFileFilter;
 import org.netbeans.modules.cnd.makeproject.ui.MakeLogicalViewProvider;
 import org.openide.DialogDisplayer;
@@ -74,17 +75,18 @@ import org.openide.util.actions.NodeAction;
 public class AddExistingItemAction extends NodeAction {
 
     protected boolean enable(Node[] activatedNodes)  {
-	if (activatedNodes.length != 1)
-	    return false;
-        Object o = activatedNodes[0].getValue("Folder"); // NOI18N
-        if (!(o instanceof Folder))
+        if (activatedNodes.length != 1) {
             return false;
-	Folder folder = (Folder)o;
-	if (folder == null)
-	    return false;
-	if (!folder.isProjectFiles())
-	    return false;
-	return true;
+        }
+        Object o = activatedNodes[0].getValue("Folder"); // NOI18N
+        if (!(o instanceof Folder)) {
+            return false;
+        }
+        Folder folder = (Folder) o;
+        if (!folder.isProjectFiles()) {
+            return false;
+        }
+        return true;
     }
 
     public String getName() {
@@ -99,9 +101,12 @@ public class AddExistingItemAction extends NodeAction {
 	Folder folder = (Folder)n.getValue("Folder"); // NOI18N
 	assert folder != null;
 
-	ConfigurationDescriptorProvider pdp = (ConfigurationDescriptorProvider)project.getLookup().lookup(ConfigurationDescriptorProvider.class );
+	ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class );
 	ConfigurationDescriptor projectDescriptor = pdp.getConfigurationDescriptor();
 
+        if (!((MakeConfigurationDescriptor)projectDescriptor).okToChange()) {
+            return;
+        }
 	String seed = null;
 	if (FileChooser.getCurrectChooserFile() != null) {
 	    seed = FileChooser.getCurrectChooserFile().getPath();
@@ -118,6 +123,7 @@ public class AddExistingItemAction extends NodeAction {
         fileChooser.addChoosableFileFilter(HeaderSourceFileFilter.getInstance());
         fileChooser.addChoosableFileFilter(FortranSourceFileFilter.getInstance());
         fileChooser.addChoosableFileFilter(ResourceFileFilter.getInstance());
+        fileChooser.addChoosableFileFilter(QtFileFilter.getInstance());
         fileChooser.addChoosableFileFilter(AllSourceFileFilter.getInstance());
         fileChooser.addChoosableFileFilter(AllFileFilter.getInstance());
         fileChooser.setFileFilter(fileChooser.getAcceptAllFileFilter());
@@ -135,7 +141,6 @@ public class AddExistingItemAction extends NodeAction {
 		itemPath = IpeUtils.toRelativePath(projectDescriptor.getBaseDir(), files[i].getPath());
 	    else
 		itemPath = files[i].getPath();
-	    itemPath = FilePathAdaptor.mapToRemote(itemPath);
 	    itemPath = FilePathAdaptor.normalize(itemPath);
 	    if (((MakeConfigurationDescriptor)projectDescriptor).findProjectItemByPath(itemPath) != null) {
 		String errormsg = getString("AlreadyInProjectError", itemPath); // NOI18N

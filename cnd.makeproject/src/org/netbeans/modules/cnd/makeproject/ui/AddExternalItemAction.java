@@ -71,6 +71,9 @@ public class AddExternalItemAction extends AbstractAction {
 	ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class );
 	ConfigurationDescriptor projectDescriptor = pdp.getConfigurationDescriptor();
 	MakeConfigurationDescriptor makeProjectDescriptor = (MakeConfigurationDescriptor)projectDescriptor;
+        if (!makeProjectDescriptor.okToChange()) {
+            return;
+        }
 
 	String seed = null;
 	if (FileChooser.getCurrectChooserFile() != null) {
@@ -102,7 +105,6 @@ public class AddExternalItemAction extends AbstractAction {
 		itemPath = IpeUtils.toRelativePath(makeProjectDescriptor.getBaseDir(), files[i].getPath());
 	    else
 		itemPath = files[i].getPath();
-	    itemPath = FilePathAdaptor.mapToRemote(itemPath);
 	    itemPath = FilePathAdaptor.normalize(itemPath);
             Item item = makeProjectDescriptor.getExternalItemFolder().findItemByPath(itemPath);
 	    if (item != null) {

@@ -41,13 +41,13 @@
 
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
+import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
 import org.netbeans.spi.project.ProjectConfiguration;
 import org.openide.util.NbBundle;
@@ -56,21 +56,22 @@ public abstract class Configuration implements ProjectConfiguration {
     private String baseDir;
     private String name;
     private boolean defaultConfiguration;
-    
+
     private PropertyChangeSupport pcs = null;
-    
-    private Map<String, ConfigurationAuxObject> auxObjectsMap = Collections.synchronizedSortedMap(new TreeMap<String, ConfigurationAuxObject>());
-    
+
+    private final Map<String, ConfigurationAuxObject> auxObjectsMap =
+            Collections.synchronizedSortedMap(new TreeMap<String, ConfigurationAuxObject>());
+
     private Configuration cloneOf;
-    
-    public Configuration(String baseDir, String name) {
+
+    protected Configuration(String baseDir, String name) {
         this.baseDir = baseDir;
         this.name = name;
         defaultConfiguration = false;
-        
+
         // For change support
         pcs = new PropertyChangeSupport(this);
-        
+
         // Create and initialize auxiliary objects
         ConfigurationAuxObjectProvider[] auxObjectProviders = ConfigurationDescriptorProvider.getAuxObjectProviders();
         for (int i = 0; i < auxObjectProviders.length; i++) {
@@ -83,53 +84,55 @@ public abstract class Configuration implements ProjectConfiguration {
             }
             auxObjectsMap.put(id,pao);
         }
-        
+
     }
-    
+
     public void setCloneOf(Configuration profile) {
         this.cloneOf = profile;
     }
-    
+
     public Configuration getCloneOf() {
         return cloneOf;
     }
-    
+
     public String getName() {
         return name;
     }
-    
+
     public void setName(String name) {
         this.name = name;
     }
-    
+
     public String getBaseDir() {
         // this dir is possibly local directory (in remote mode)
-        return FilePathAdaptor.mapToRemote(baseDir);
+        return baseDir;
     }
-    
+
     public void setBaseDir(String baseDir) {
         this.baseDir = baseDir;
     }
-    
+
     public String getDisplayName() {
             return getName();
     }
-    
+
     public boolean isDefault() {
         return defaultConfiguration;
     }
-    
+
     public void setDefault(boolean b) {
         defaultConfiguration = b;
     }
-    
+
+    @Override
     public String toString() {
-        if (isDefault())
+        if (isDefault()) {
             return getDisplayName() + " " + getString("ActiveTxt"); // NOI18N
-        else
-        return getDisplayName();
+        } else {
+            return getDisplayName();
+        }
     }
-    
+
     public void addAuxObject(ConfigurationAuxObject pao) {
         String id = pao.getId();
         if (auxObjectsMap.containsKey(id)) {
@@ -137,29 +140,29 @@ public abstract class Configuration implements ProjectConfiguration {
         }
         auxObjectsMap.put(id,pao);
     }
-    
-    
-    public void removeAuxObject(ConfigurationAuxObject pao) {
-        auxObjectsMap.remove(pao.getId());
+
+
+    public ConfigurationAuxObject removeAuxObject(ConfigurationAuxObject pao) {
+        return auxObjectsMap.remove(pao.getId());
     }
-    
-    
-    public void removeAuxObject(String id) {
-        auxObjectsMap.remove(id);
+
+
+    public ConfigurationAuxObject removeAuxObject(String id) {
+        return auxObjectsMap.remove(id);
     }
-    
+
     public ConfigurationAuxObject getAuxObject(String id) {
         return auxObjectsMap.get(id);
     }
-    
+
     public ConfigurationAuxObject[] getAuxObjects() {
         List<ConfigurationAuxObject> list;
         synchronized (auxObjectsMap){
             list = new ArrayList<ConfigurationAuxObject>(auxObjectsMap.values());
         }
-        return (ConfigurationAuxObject[]) list.toArray(new ConfigurationAuxObject[list.size()]);
+        return list.toArray(new ConfigurationAuxObject[list.size()]);
     }
-    
+
     public void setAuxObjects(List<ConfigurationAuxObject> v) {
         synchronized (auxObjectsMap) {
             auxObjectsMap.clear();
@@ -168,22 +171,38 @@ public abstract class Configuration implements ProjectConfiguration {
             }
         }
     }
-    
+
     public abstract Configuration cloneConf();
-    
+
     public abstract void assign(Configuration conf);
-    
+
     public abstract Configuration copy();
-    
+
     public void cloneConf(Configuration clone) {
         // name is already cloned
         clone.setDefault(isDefault());
     }
-    
+
+    /**
+     *  Adds property change listener.
+     *  @param l new listener.
+     */
+    public void addPropertyChangeListener(PropertyChangeListener l) {
+        pcs.addPropertyChangeListener(l);
+    }
+
+    /**
+     *  Removes property change listener.
+     *  @param l removed listener.
+     */
+    public void removePropertyChangeListener(PropertyChangeListener l) {
+        pcs.removePropertyChangeListener(l);
+    }
+
     public RunProfile getProfile() {
         return (RunProfile)getAuxObject(RunProfile.PROFILE_ID);
     }
-    
+
     /** Look up i18n strings here */
     private static String getString(String s) {
         return NbBundle.getMessage(Configuration.class, s);
