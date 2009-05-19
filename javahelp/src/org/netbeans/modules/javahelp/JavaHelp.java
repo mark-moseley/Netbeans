@@ -43,6 +43,8 @@ package org.netbeans.modules.javahelp;
 
 import java.awt.AWTEvent;
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.Frame;
@@ -70,16 +72,21 @@ import java.util.logging.LogRecord;
 import javax.help.HelpSet;
 import javax.help.HelpSetException;
 import javax.help.JHelp;
+import javax.help.NavigatorView;
+import javax.help.search.MergingSearchEngine;
+import javax.help.search.SearchEngine;
 import javax.swing.BorderFactory;
 import javax.swing.BoundedRangeModel;
 import javax.swing.DefaultBoundedRangeModel;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.JEditorPane;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Task;
@@ -114,7 +121,7 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
      */
     private HelpSet master = null;
     /** map from help sets to (soft refs to) components showing them */
-    private Map<HelpSet,Reference<JHelp>> availableJHelps = new HashMap<HelpSet,Reference<JHelp>>();
+    private final Map<HelpSet,Reference<JHelp>> availableJHelps = new HashMap<HelpSet,Reference<JHelp>>();
     /** viewer (may be invisible) showing help normally; null until first used; if invisible, is empty */
     private JFrame frameViewer = null;
     /** viewer showing help parented to current modal dialog; initially null */
@@ -177,12 +184,48 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
         return master;
     }
     
+    /**
+     * 
+     * @return SearchEngine for QuickSearch
+     */
+    synchronized SearchEngine createSearchEngine() {
+        //this is not very nice but i didn't any better way to create search engine
+        MergingSearchEngine result = null;
+        Collection<? extends HelpSet> sets = getHelpSets();
+        for (HelpSet hs: sets) {
+            if (shouldMerge(hs)) {
+                NavigatorView nv = findNavigatorView(hs);
+                if( null == nv )
+                    continue;
+                if( null == result ) {
+                    result = new MergingSearchEngine( nv );
+                } else {
+                    result.merge( nv );
+                }
+            }
+        }
+        return result;
+    }
+    
+    /**
+     * @param hs
+     * @return 'Search' NavigatorView from the given HelpSet
+     */
+    private static NavigatorView findNavigatorView( HelpSet hs ) {
+        for( NavigatorView nv : hs.getNavigatorViews() ) {
+            if( null != nv.getParameters() && nv.getParameters().get("engine") != null) { //NOI18N
+                return nv;
+            }
+        }
+        return null;
+    }
+    
     /** Called when set of helpsets changes.
      * Here, clear the master helpset, since it may
      * need to have different contents (or a different
      * order of contents) when next viewed.
      */    
-    protected void helpSetsChanged() {
+    protected @Override void helpSetsChanged() {
         synchronized (this) {
             // XXX might be better to incrementally add/remove helpsets?
             // Unfortunately the JavaHelp API does not provide a way to
@@ -216,7 +259,7 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
         if (frameViewer == null) {
             Installer.log.fine("\tcreating new");
             frameViewer = new JFrame();
-            frameViewer.setIconImage(Utilities.loadImage("org/netbeans/modules/javahelp/resources/help.gif")); // NOI18N
+            frameViewer.setIconImage(ImageUtilities.loadImage("org/netbeans/modules/javahelp/resources/help.gif")); // NOI18N
             frameViewer.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(JavaHelp.class, "ACSD_JavaHelp_viewer"));
             
             if (isModalExcludedSupported()) {
@@ -387,6 +430,14 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
         r.setLoggerName(Installer.UI.getName());
         Installer.log.log(r);
         Installer.UI.log(r);
+        
+        LogRecord rUsg = new LogRecord(Level.INFO, "USG_HELP_SHOW"); // NOI18N
+        rUsg.setParameters(new Object[] { ctx2.getHelpID() } );
+        rUsg.setResourceBundleName("org.netbeans.modules.javahelp.Bundle"); // NOI18N
+        rUsg.setResourceBundle(NbBundle.getBundle(JavaHelp.class));
+        rUsg.setLoggerName(Installer.USG.getName());
+        Installer.USG.log(rUsg);
+                
         final HelpSet[] hs_ = new HelpSet[1];
         Runnable run = new Runnable() {
             public void run() {
@@ -423,9 +474,30 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
             // Interrupted dialog?
             return;
         }
-        JHelp jh = createJHelp(hs);
+        JHelp jh = createAndDisplayJHelp(hs);
         if (jh == null) {
             return;
+        }
+        displayInJHelp(jh, ctx2.getHelpID(), ctx2.getHelp());
+    }
+    
+    /**
+     * Display help topic from QuickSearch
+     * @param url Help URL
+     */
+    void showHelp( URL url ) {
+        JHelp jh = createAndDisplayJHelp(getMaster());
+        if (jh == null) {
+            return;
+        }
+
+        displayInJHelp(jh, null, url);
+    }
+    
+    private JHelp createAndDisplayJHelp( HelpSet hs ) {
+        JHelp jh = createJHelp(hs);
+        if (jh == null) {
+            return null;
         }
 
         if (isModalExcludedSupported()) {
@@ -439,7 +511,7 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
                 displayHelpInDialog(jh);
             }
         }
-        displayInJHelp(jh, ctx2.getHelpID(), ctx2.getHelp());
+        return jh;
     }
 
     /** Handle modal dialogs opening and closing. Note reparentToFrameLater state = rTFL.
@@ -713,7 +785,7 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
             Dimension me = getSize();
             setLocation((screen.width - me.width) / 2, (screen.height - me.height) / 2);
         }
-        public void setVisible(boolean show) {
+        public @Override void setVisible(boolean show) {
             if (show && run != null) {
                 Installer.log.fine("posting request from progress dialog...");
                 getHelpLoader().post(run).addTaskListener(this);
@@ -844,6 +916,7 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
         try {
             title = hs.getTitle();
             jh = new JHelp(hs);
+            adjust(jh);
         } catch (RuntimeException e) {
             Installer.log.log(Level.WARNING, "While trying to display: " + title, e); // NOI18N
             return null;
@@ -860,6 +933,56 @@ public final class JavaHelp extends AbstractHelp implements AWTEventListener {
             Installer.log.log(Level.WARNING, null, e);
         }
         return jh;
+    }
+
+    private void adjust(JHelp jh) {
+        JEditorPane contentViewer = (JEditorPane) getContentViewer(jh);
+        adjustFontSize(contentViewer);
+        HyperlinkEventProcessor.addTo(contentViewer); // Issue #57005
+    }
+
+    private void adjustFontSize(JEditorPane contentViewer) {
+        if(contentViewer != null) {
+            contentViewer.putClientProperty(
+                    JEditorPane.W3C_LENGTH_UNITS, Boolean.TRUE);
+            contentViewer.putClientProperty(
+                    JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        }
+    }
+
+    /**
+     * Gets an instance of the the JavaHelp Content Viewer from the component
+     * hierarchy specified by its root component.
+     * @param c the root component of the JavaHelp component hierarchy, e.g.
+     * an instance of the javax.help.JHelp class.
+     * @return a instance of the JavaHelp Content Viewer component if it
+     * possible, otherwise <code>null</code>.
+     */
+     Component getContentViewer(Component c) {
+        // this method has the package private visibility for testing purposes.
+        if(isContentViewer(c)) {
+            return c;
+        }
+        if(c instanceof Container) {
+            Component[] cs = ((Container)c).getComponents();
+            for (int i = 0; i < cs.length; i++) {
+                c = getContentViewer(cs[i]);
+                if(isContentViewer(c)) {
+                    return c;
+                }
+            }
+        }
+        return null; // The component hierarchy doesn't contain
+                     // expected JH Content Viewer
+    }
+
+    static boolean isContentViewer(Component c) {
+        // TODO: need to find a criterion to recognize the JH Content Viewer,
+        // i.e. an instance of
+        // javax.help.plaf.basic.BasicContentViewerUI$JHEditorPane .
+        // The following test won't work if component hierarchy of the Java Help
+        // contains more then one JEditorPane.
+        return c instanceof JEditorPane;
     }
 
     // XXX(ttran) see JDK bug 5092094 for details
