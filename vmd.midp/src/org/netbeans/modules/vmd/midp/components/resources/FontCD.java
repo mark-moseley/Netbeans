@@ -51,6 +51,8 @@ import org.netbeans.modules.vmd.midp.propertyeditors.MidpPropertiesCategories;
 import org.netbeans.modules.vmd.midp.propertyeditors.PropertyEditorComboBox;
 
 import java.util.*;
+import org.netbeans.modules.vmd.api.model.presenters.actions.DeletePresenter;
+import org.netbeans.modules.vmd.midp.propertyeditors.PropertyEditorComboBoxNoUserCode;
 import org.openide.util.NbBundle;
 
 /**
@@ -131,9 +133,7 @@ public final class FontCD extends ComponentDescriptor {
         return new DefaultPropertiesPresenter()
                 .addPropertiesCategory(MidpPropertiesCategories.CATEGORY_PROPERTIES)
                     .addProperty(NbBundle.getMessage(FontCD.class, "DISP_Font_Kind"), // NOI18N
-                        PropertyEditorComboBox.createInstance(getKindTypes(), TYPEID,
-                            NbBundle.getMessage(FontCD.class, "DISP_Font_Kind_RB_LABEL"), // NOI18N
-                            NbBundle.getMessage(FontCD.class, "DISP_Font_Kind_UCLABEL")), PROP_FONT_KIND) // NOI18N
+                        PropertyEditorComboBoxNoUserCode.createInstance(getKindTypes(), TYPEID), PROP_FONT_KIND)
                     .addProperty(NbBundle.getMessage(FontCD.class, "DISP_Font_Face"), // NOI18N
                         PropertyEditorComboBox.createInstance(getFaceTypes(), TYPEID, TYPEID,
                             NbBundle.getMessage(FontCD.class, "DISP_Font_Face_RB_LABEL"), // NOI18N
@@ -158,12 +158,14 @@ public final class FontCD extends ComponentDescriptor {
             // properties
             createPropertiesPresenter(),
             // code
-            createSetterPresenter()
+            createSetterPresenter(),
+            // delete
+            DeletePresenter.createRemoveComponentReferences()
         );
     }
 
     public static Map<String, PropertyValue> getKindTypes() {
-        if (kindTypes == null) {
+        if (kindTypes == null || kindTypes.isEmpty()) {
             kindTypes = new TreeMap<String, PropertyValue>();
             kindTypes.put(LABEL_KIND_DEFAULT, MidpTypes.createIntegerValue(VALUE_KIND_DEFAULT)); // NOI18N
             kindTypes.put(LABEL_KIND_CUSTOM, MidpTypes.createIntegerValue(VALUE_KIND_CUSTOM)); // NOI18N
@@ -174,7 +176,7 @@ public final class FontCD extends ComponentDescriptor {
     }
     
     public static Map<String, PropertyValue> getFaceTypes() {
-        if (faceTypes == null) {
+        if (faceTypes == null || kindTypes.isEmpty()) {
             faceTypes = new TreeMap<String, PropertyValue>();
             faceTypes.put(LABEL_FACE_SYSTEM, MidpTypes.createIntegerValue(VALUE_FACE_SYSTEM));
             faceTypes.put(LABEL_FACE_MONOSPACE, MidpTypes.createIntegerValue(VALUE_FACE_MONOSPACE));
@@ -184,7 +186,7 @@ public final class FontCD extends ComponentDescriptor {
     }
 
     public static Map<String, PropertyValue>  getSizeTypes() {
-        if (sizeTypes == null) {
+        if (sizeTypes == null || kindTypes.isEmpty()) {
             sizeTypes = new TreeMap<String, PropertyValue>();
             sizeTypes.put(LABEL_SIZE_MEDIUM, MidpTypes.createIntegerValue(VALUE_SIZE_MEDIUM));
             sizeTypes.put(LABEL_SIZE_SMALL, MidpTypes.createIntegerValue(VALUE_SIZE_SMALL));
@@ -194,7 +196,7 @@ public final class FontCD extends ComponentDescriptor {
     }
 
     public static Map<String, PropertyValue>  getStyleTypes() {
-        if (styleTypes == null) {
+        if (styleTypes == null || styleTypes.isEmpty()) {
             styleTypes = new TreeMap<String, PropertyValue>();
             styleTypes.put(LABEL_STYLE_PLAIN, MidpTypes.createIntegerValue(VALUE_STYLE_PLAIN));
             styleTypes.put(LABEL_STYLE_BOLD, MidpTypes.createIntegerValue(VALUE_STYLE_BOLD));
