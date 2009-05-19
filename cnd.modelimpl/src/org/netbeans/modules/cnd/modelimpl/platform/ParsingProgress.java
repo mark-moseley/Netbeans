@@ -45,7 +45,6 @@ import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.api.model.CsmProject;
-import org.netbeans.modules.cnd.api.project.NativeProject;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.openide.util.NbBundle;
 
@@ -55,24 +54,22 @@ import org.openide.util.NbBundle;
  */
 final class ParsingProgress {
     
-    private ProgressHandle handle;
+    private final ProgressHandle handle;
     private int curWorkedUnits = 0;
-    private int maxWorkUnits = 0; // for testing only
+    private int maxWorkUnits = 0;
+    private int addedAfterStartParsing = 0;
+    private int allWork = 0; // in procent points.
+    private static final double ALL_WORK_DOUBLE = 10000.0;
+    private static final int ALL_WORK_INT = 10000;
     private boolean started = false;
+    private boolean determinate = false;
+    private static final boolean TRACE = true;
     
     /**  
      * Delay amount of miliseconds 
      * that shall pass before the progress appears in status bar
      */
     private static final int INITIAL_DELAY = 1000; // ms
-    
-    /**
-     * Constructs progress information for native project
-     */
-    public ParsingProgress(NativeProject project) {
-        String msg=NbBundle.getMessage(ModelSupport.class, "MSG_ParsingProgress", project.getProjectDisplayName());
-        handle = ProgressHandleFactory.createHandle(msg);
-    }
     
     /**
      * Constructs progress information for project
@@ -109,18 +106,37 @@ final class ParsingProgress {
     }
 
     /**
+     * inform about adding header to reparse
+     */
+    public void addedToParse(CsmFile file) {
+        addedAfterStartParsing++;
+    }
+
+    /**
      * inform about starting handling next file item
      */
     public void nextCsmFile(CsmFile file) {
         synchronized (handle) {
-            if( ! started ) {
+            if( ! started || !determinate) {
                 return;
             }
-            if( curWorkedUnits >= maxWorkUnits ) {
-                return;
+            if( curWorkedUnits < maxWorkUnits + addedAfterStartParsing) {
+                curWorkedUnits++;
+                double ratio = 1.0;
+                if (maxWorkUnits + addedAfterStartParsing > 0) {
+                    ratio = ALL_WORK_DOUBLE / (maxWorkUnits + addedAfterStartParsing);
+                }
+                int work = (int)(ratio * curWorkedUnits);
+                if (allWork <= work && work < ALL_WORK_INT) {
+                    allWork = work;
+                }
             }
             try {
-                handle.progress(file.getName().toString(), curWorkedUnits++);
+                if (TRACE) {
+                    handle.progress(file.getName().toString()+" ("+curWorkedUnits+" of "+(maxWorkUnits + addedAfterStartParsing)+")", allWork); // NOI18N
+                } else  {
+                    handle.progress(file.getName().toString(), allWork);
+                }
                 //assert(curWorkedUnits <= maxWorkUnits);
             } catch (NullPointerException ex) {
                 // very strange... but do not interrupt process
@@ -140,7 +156,9 @@ final class ParsingProgress {
                 return;
             }
             this.maxWorkUnits = maxWorkUnits;
-            handle.switchToDeterminate(maxWorkUnits);
+            addedAfterStartParsing = 0;
+            handle.switchToDeterminate(ALL_WORK_INT);
+            determinate = true;
         }
     }
 }   
