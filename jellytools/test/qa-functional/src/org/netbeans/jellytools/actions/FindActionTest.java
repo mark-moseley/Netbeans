@@ -40,40 +40,46 @@
  */
 package org.netbeans.jellytools.actions;
 
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
-import org.netbeans.jellytools.HelpOperator;
+import org.netbeans.jellytools.FindInFilesOperator;
+import org.netbeans.jellytools.JavaProjectsTabOperator;
 import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.OptionsOperator;
-import org.netbeans.jellytools.properties.PropertySheetOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.nodes.Node;
+import org.netbeans.jellytools.nodes.SourcePackagesNode;
 
-/** Test org.netbeans.jellytools.actions.HelpAction
+/** Test org.netbeans.jellytools.actions.FindAction
  *
  * @author <a href="mailto:adam.sotona@sun.com">Adam Sotona</a>
  * @author Jiri.Skrivanek@sun.com
  */
-public class HelpActionTest extends JellyTestCase {
-    
+public class FindActionTest extends JellyTestCase {
+
+    private static final String[] tests = new String[] {
+        "testPerformPopup",
+        "testPerformMenu",
+        "testPerformAPI",
+        "testPerformShortcut"
+    };
+
     /** constructor required by JUnit
      * @param testName method name to be used as testcase
      */
-    public HelpActionTest(String testName) {
+    public FindActionTest(String testName) {
         super(testName);
     }
     
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
-        /*
-        TestSuite suite = new NbTestSuite();
-        suite.addTest(new HelpActionTest("testPerformMenu"));
-        suite.addTest(new HelpActionTest("testPerformShortcut"));
-        suite.addTest(new HelpActionTest("testPerformPopupOnPropertySheet"));
-        return suite;
-         */
-        return createModuleTest(HelpActionTest.class);
+        
+        return createModuleTest(FindActionTest.class, tests);
+    }
+
+    @Override
+    protected void setUp() throws IOException {
+        openDataProjects("SampleProject");
     }
     
     /** Use for internal test execution inside IDE
@@ -83,29 +89,34 @@ public class HelpActionTest extends JellyTestCase {
         TestRunner.run(suite());
     }
     
-    /** Test performMenu */
-    public void testPerformMenu() {
-        new HelpAction().performMenu();
-        new HelpOperator().close();
+    /** Test performPopup */
+    public void testPerformPopup() {
+        Node node = new JavaProjectsTabOperator().getProjectRootNode("SampleProject"); // NOI18N
+        new FindAction().performPopup(node);
+        new FindInFilesOperator().close();
     }
     
+    /** Test performMenu */
+    public void testPerformMenu() {
+        Node node = new Node(new SourcePackagesNode("SampleProject"), "sample1"); // NOI18N
+        new FindAction().performMenu(node);
+        new FindInFilesOperator().close();
+    }
+    
+    /** Test performAPI */
+    public void testPerformAPI() {
+        new FindAction().performAPI();
+        new FindInFilesOperator().close();
+    }
     
     /** Test performShortcut */
     public void testPerformShortcut() {
-        new HelpAction().performShortcut();
-        new HelpOperator().close();
+        new FindAction().performShortcut();
+        new FindInFilesOperator().close();
+        // On some linux it may happen autorepeat is activated and it 
+        // opens dialog multiple times. So, we need to close all modal dialogs.
+        // See issue http://www.netbeans.org/issues/show_bug.cgi?id=56672.
+        closeAllModal();
     }
     
-    /** Test Help popup menu item on a property sheet. */
-    public void testPerformPopupOnPropertySheet() {
-        OptionsOperator oo = OptionsOperator.invoke();        
-        // select root
-        PropertySheetOperator pso = oo.getPropertySheet("");
-        try {
-            new HelpAction().performPopup(pso);
-            new HelpOperator().close();
-        } finally {
-            oo.close();
-        }
-    }
 }
