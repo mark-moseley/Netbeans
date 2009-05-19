@@ -84,7 +84,7 @@ public class MergeAction extends ContextAction {
     }
     
     protected boolean enable(Node[] nodes) {
-        return nodes != null && nodes.length == 1 &&  getContext(nodes).getRoots().size() > 0;
+        return nodes != null && nodes.length == 1 &&  getCachedContext(nodes).getRoots().size() > 0;
     }   
     
     protected void performContextAction(final Node[] nodes) {
@@ -94,31 +94,51 @@ public class MergeAction extends ContextAction {
         }
         
         Context ctx = getContext(nodes);        
-        final File root = ctx.getRootFiles()[0];
+        final File[] roots = SvnUtils.getActionRoots(ctx);
+        if(roots == null || roots.length == 0) return;
+
+        File interestingFile;
+        if(roots.length == 1) {
+            interestingFile = roots[0];
+        } else {
+            interestingFile = SvnUtils.getPrimaryFile(roots[0]);
+        }
+
         SVNUrl rootUrl;
         SVNUrl url;
         try {            
-            rootUrl = SvnUtils.getRepositoryRootUrl(root);
-            url = SvnUtils.getRepositoryRootUrl(root);
+            rootUrl = SvnUtils.getRepositoryRootUrl(interestingFile);
+            url = SvnUtils.getRepositoryRootUrl(interestingFile);
         } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, true, true);
             return;
         }           
         final RepositoryFile repositoryRoot = new RepositoryFile(rootUrl, url, SVNRevision.HEAD);
-     
-        final Merge merge = new Merge(repositoryRoot, root);           
+
+        final Merge merge = new Merge(repositoryRoot, interestingFile);
         if(merge.showDialog()) {
             ContextAction.ProgressSupport support = new ContextAction.ProgressSupport(this, nodes) {
                 public void perform() {
-                    performMerge(merge, repositoryRoot, root, this);
+                    for (File root : roots) {
+                        performMerge(merge, repositoryRoot, root, this, roots.length > 1);
+                    }
                 }
             };
             support.start(createRequestProcessor(nodes));
         }        
     }
 
-    private void performMerge(Merge merge,  RepositoryFile repositoryRoot, File root, SvnProgressSupport support) {
-        File[][] split = Utils.splitFlatOthers(new File[] {root} );
+    /**
+     * Merges changes from the remote url(s) and revisions given bet the Merge controller with
+     * the given file
+     * @param merge
+     * @param repositoryRoot
+     * @param file
+     * @param support
+     * @param partOfMultiFile 
+     */
+    private void performMerge(Merge merge, RepositoryFile repositoryRoot, File file, SvnProgressSupport support, boolean partOfMultiFile) {
+        File[][] split = Utils.splitFlatOthers(new File[] {file} );
         boolean recursive;
         // there can be only 1 root file
         if(split[0].length > 0) {
@@ -140,10 +160,17 @@ public class MergeAction extends ContextAction {
                 return;
             }
             
-            SVNUrl endUrl = merge.getMergeEndUrl();
+            SVNUrl endUrl = merge.getMergeEndRepositoryFile().getFileUrl();
             SVNRevision endRevision = merge.getMergeEndRevision();
-                        
-            SVNUrl startUrl = merge.getMergeStartUrl();
+
+            final RepositoryFile mergeStartRepositoryFile = merge.getMergeStartRepositoryFile();
+            SVNUrl startUrl = mergeStartRepositoryFile != null ? mergeStartRepositoryFile.getFileUrl() : null;
+            if (file.isFile() && partOfMultiFile) {
+                // change the filename ONLY for multi-file data objects, not for folders
+                endUrl = merge.getMergeEndRepositoryFile().replaceLastSegment(file.getName(), 0).getFileUrl();
+                startUrl = mergeStartRepositoryFile != null ? mergeStartRepositoryFile.replaceLastSegment(file.getName(), 0).getFileUrl() : null;
+            }
+            
             SVNRevision startRevision;
             if(startUrl != null) {                
                 startRevision = merge.getMergeStartRevision();
@@ -161,7 +188,7 @@ public class MergeAction extends ContextAction {
                          startRevision,
                          endUrl,
                          endRevision,
-                         root,
+                         file,
                          false,
                          recursive);                              
 
