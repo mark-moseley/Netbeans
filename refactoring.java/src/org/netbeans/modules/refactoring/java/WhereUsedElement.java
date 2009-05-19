@@ -43,23 +43,25 @@ package org.netbeans.modules.refactoring.java;
 import com.sun.source.tree.*;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
-import java.io.IOException;
+import com.sun.source.util.Trees;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.swing.text.Position.Bias;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.TreeUtilities;
 import org.netbeans.modules.refactoring.java.plugins.JavaWhereUsedQueryPlugin;
+import org.netbeans.modules.refactoring.java.ui.UIUtilities;
 import org.netbeans.modules.refactoring.spi.SimpleRefactoringElementImplementation;
 import org.netbeans.modules.refactoring.java.ui.tree.ElementGripFactory;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.text.PositionBounds;
-import org.openide.util.Lookup;
-import static org.netbeans.modules.refactoring.java.RetoucheUtils.*;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.text.PositionRef;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 import org.openide.util.lookup.Lookups;
 
 public class WhereUsedElement extends SimpleRefactoringElementImplementation {
@@ -102,22 +104,31 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
     
     public static WhereUsedElement create(CompilationInfo compiler, TreePath tree) {
         CompilationUnitTree unit = tree.getCompilationUnit();
-        CharSequence content = null;
-        try {
-            content = unit.getSourceFile().getCharContent(true);
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
+        CharSequence content = compiler.getSnapshot().getText();
         SourcePositions sp = compiler.getTrees().getSourcePositions();
         Tree t= tree.getLeaf();
         int start;
         int end;
+        boolean anonClassNameBug128074 = false;
         TreeUtilities treeUtils = compiler.getTreeUtilities();
+
+        if (t.getKind() == Tree.Kind.IDENTIFIER
+                && "super".contentEquals(((IdentifierTree) t).getName()) // NOI18N
+                && treeUtils.isSynthetic(tree)) {
+            // in case of synthetic constructor call find real constructor or class declaration
+            tree = getEnclosingTree(tree);
+            if (treeUtils.isSynthetic(tree)) {
+                tree = getEnclosingTree(tree.getParentPath());
+            }
+            t = tree.getLeaf();
+        }
+
         if (t.getKind() == Tree.Kind.CLASS) {
             int[] pos = treeUtils.findNameSpan((ClassTree)t);
             if (pos == null) {
                 //#121084 hotfix
                 //happens for anonymous innerclasses
+                anonClassNameBug128074 = true;
                 start = end = (int) sp.getStartPosition(unit, t);
             } else {
                 start = pos[0];
@@ -144,8 +155,23 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
                     end = pos[1];
                 }
             } else {
-                start = (int) sp.getStartPosition(unit, ident);
-                end = (int) sp.getEndPosition(unit, ident);
+                TreePath varTreePath = tree.getParentPath();
+                Tree varTree = varTreePath.getLeaf();
+                Trees trees = compiler.getTrees();
+                Element element = trees.getElement(varTreePath);
+                if (varTree.getKind() == Tree.Kind.VARIABLE && element.getKind() == ElementKind.ENUM_CONSTANT) {
+                    int[] pos = treeUtils.findNameSpan((VariableTree)varTree);
+                    if (pos == null) {
+                        //#121084 hotfix
+                        start = end = (int) sp.getStartPosition(unit, varTree);
+                    } else {
+                        start = pos[0];
+                        end = pos[1];
+                    }
+                } else {
+                    start = (int) sp.getStartPosition(unit, ident);
+                    end = (int) sp.getEndPosition(unit, ident);
+                }
             }
         } else if (t.getKind() == Tree.Kind.MEMBER_SELECT) {
             int[] pos = treeUtils.findNameSpan((MemberSelectTree) t);
@@ -171,13 +197,15 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         long line = lm.getLineNumber(start);
         long endLine = lm.getLineNumber(end);
         long sta = lm.getStartPosition(line);
-        long en = lm.getStartPosition(endLine+1)-1;
+        int eof = content.length();
+        long lastLine = lm.getLineNumber(eof);
+        long en = lastLine > endLine ? lm.getStartPosition(endLine + 1) - 1 : eof;
         StringBuffer sb = new StringBuffer();
-        sb.append(RetoucheUtils.getHtml(trimStart(content.subSequence((int)sta,(int)start).toString())));
+        sb.append(RetoucheUtils.getHtml(trimStart(content.subSequence((int) sta, start).toString())));
         sb.append("<b>"); //NOI18N
-        sb.append(content.subSequence((int)start,(int)end));
+        sb.append(content.subSequence(start, end));
         sb.append("</b>");//NOI18N
-        sb.append(RetoucheUtils.getHtml(trimEnd(content.subSequence((int)end,(int)en).toString())));
+        sb.append(RetoucheUtils.getHtml(trimEnd(content.subSequence(end, (int) en).toString())));
         
         DataObject dob = null;
         try {
@@ -190,7 +218,12 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
         PositionRef ref2 = ces.createPositionRef(end, Bias.Forward);
         PositionBounds bounds = new PositionBounds(ref1, ref2);
         TreePath tr = getEnclosingTree(tree);
-        return new WhereUsedElement(bounds, sb.toString().trim(), compiler.getFileObject(), tr, compiler);
+        return new WhereUsedElement(
+                bounds,
+                start==end && anonClassNameBug128074 ? NbBundle.getMessage(UIUtilities.class, "LBL_AnonymousClass"):sb.toString().trim(),
+                compiler.getFileObject(),
+                tr,
+                compiler);
     }
     
     private static String trimStart(String s) {
@@ -209,32 +242,27 @@ public class WhereUsedElement extends SimpleRefactoringElementImplementation {
             if (Character.isWhitespace(s.charAt(x))) {
                 continue;
             } else {
-                return s.substring(0, x);
+                return s.substring(0, x + 1);
             }
         }
         return "";
     }
     
     public static WhereUsedElement create(int start, int end, CompilationInfo compiler) {
-        CompilationUnitTree unit = compiler.getCompilationUnit();
-        CharSequence content = null;
-        try {
-            content = unit.getSourceFile().getCharContent(true);
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
-        SourcePositions sp = compiler.getTrees().getSourcePositions();
+        CharSequence content = compiler.getSnapshot().getText();
         LineMap lm = compiler.getCompilationUnit().getLineMap();
         long line = lm.getLineNumber(start);
         long endLine = lm.getLineNumber(end);
         long sta = lm.getStartPosition(line);
-        long en = lm.getStartPosition(endLine+1)-1;
+        int eof = content.length();
+        long lastLine = lm.getLineNumber(eof);
+        long en = lastLine > endLine ? lm.getStartPosition(endLine + 1) - 1 : eof;
         StringBuffer sb = new StringBuffer();
-        sb.append(RetoucheUtils.getHtml(trimStart(content.subSequence((int)sta,(int)start).toString())));
+        sb.append(RetoucheUtils.getHtml(trimStart(content.subSequence((int) sta, start).toString())));
         sb.append("<b>"); //NOI18N
-        sb.append(content.subSequence((int)start,(int)end));
+        sb.append(content.subSequence(start, end));
         sb.append("</b>");//NOI18N
-        sb.append(RetoucheUtils.getHtml(trimEnd(content.subSequence((int)end,(int)en).toString())));
+        sb.append(RetoucheUtils.getHtml(trimEnd(content.subSequence(end, (int) en).toString())));
         
         DataObject dob = null;
         try {
