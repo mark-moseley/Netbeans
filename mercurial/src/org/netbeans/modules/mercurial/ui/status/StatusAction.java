@@ -53,10 +53,10 @@ import org.netbeans.modules.versioning.util.Utils;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
-import java.util.HashMap;
 import org.netbeans.modules.mercurial.util.HgCommand;
 import org.netbeans.modules.mercurial.HgProgressSupport;
 import org.netbeans.modules.mercurial.util.HgUtils;
+import org.netbeans.modules.mercurial.ui.actions.ContextAction;
 
 /**
  * Status action for mercurial: 
@@ -64,7 +64,8 @@ import org.netbeans.modules.mercurial.util.HgUtils;
  * 
  * @author John Rice
  */
-public class StatusAction extends AbstractAction {
+public class StatusAction extends ContextAction {
+
     
     private final VCSContext context;
 
@@ -73,9 +74,7 @@ public class StatusAction extends AbstractAction {
         putValue(Action.NAME, name);
     }
     
-    public void actionPerformed(ActionEvent ev) {
-        if(!Mercurial.getInstance().isGoodVersionAndNotify()) return;
-
+    public void performAction(ActionEvent ev) {
         File [] files = context.getRootFiles().toArray(new File[context.getRootFiles().size()]);
         if (files == null || files.length == 0) return;
                 
@@ -88,12 +87,7 @@ public class StatusAction extends AbstractAction {
     }
     
     public boolean isEnabled() {
-        // If it's a mercurial managed repository enable action
-        File root = HgUtils.getRootFile(context);
-        if (root == null)
-            return false;
-        else
-            return true;
+        return HgUtils.getRootFile(context) != null;
     } 
 
     /**
@@ -117,37 +111,41 @@ public class StatusAction extends AbstractAction {
             Mercurial.LOG.log(Level.FINE, "executeStatus: refreshCached took {0} millisecs", end.getTimeInMillis() - start.getTimeInMillis()); // NOI18N
 
             for (File root :  context.getRootFiles()) {
-                if(support.isCanceled()) {
+                refreshFile(root, repository, support, cache);
+                if (support.isCanceled()) {
                     return;
-                }
-                if (root.isDirectory()) {
-                    Map<File, FileInformation> interestingFiles;
-                    interestingFiles = HgCommand.getInterestingStatus(repository, root);
-                    if (!interestingFiles.isEmpty()){
-                        Collection<File> files = interestingFiles.keySet();
-
-                        Map<File, Map<File,FileInformation>> interestingDirs = 
-                                HgUtils.getInterestingDirs(interestingFiles, files);
-
-                        start = Calendar.getInstance();
-                        for (File file : files) {
-                             if(support.isCanceled()) {
-                                 return;
-                             }
-                             FileInformation fi = interestingFiles.get(file);
-                             
-                             cache.refreshFileStatus(file, fi, 
-                                     interestingDirs.get(file.isDirectory()? file: file.getParentFile())); 
-                        }
-                        end = Calendar.getInstance();
-                        Mercurial.LOG.log(Level.FINE, "executeStatus: process interesting files took {0} millisecs", end.getTimeInMillis() - start.getTimeInMillis()); // NOI18N
-                    } 
-                } else {
-                    cache.refresh(root, FileStatusCache.REPOSITORY_STATUS_UNKNOWN); 
                 }
             }
         } catch (HgException ex) {
             support.annotate(ex);
+        }
+    }
+
+    public static void refreshFile(File root, File repository, HgProgressSupport support, FileStatusCache cache) throws HgException {
+        if (support != null && support.isCanceled()) {
+            return;
+        }
+        Calendar start = Calendar.getInstance();
+        Calendar end = Calendar.getInstance();
+        if (root.isDirectory()) {
+            Map<File, FileInformation> interestingFiles;
+            interestingFiles = HgCommand.getInterestingStatus(repository, root);
+            if (!interestingFiles.isEmpty()) {
+                Collection<File> files = interestingFiles.keySet();
+                Map<File, Map<File, FileInformation>> interestingDirs = HgUtils.getInterestingDirs(interestingFiles, files);
+                start = Calendar.getInstance();
+                for (File file : files) {
+                    if (support != null && support.isCanceled()) {
+                        return;
+                    }
+                    FileInformation fi = interestingFiles.get(file);
+                    cache.refreshFileStatus(file, fi, interestingDirs.get(file.isDirectory() ? file : file.getParentFile()));
+                }
+                end = Calendar.getInstance();
+                Mercurial.LOG.log(Level.FINE, "executeStatus: process interesting files took {0} millisecs", end.getTimeInMillis() - start.getTimeInMillis()); // NOI18N
+            }
+        } else {
+            cache.refresh(root, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
         }
     }
 }
