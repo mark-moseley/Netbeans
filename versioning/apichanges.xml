@@ -108,6 +108,72 @@ is the proper place.
         
         <change>
             <api name="versioning_spi"/>
+            <summary>Added getCollocationQueryImplementation() method to VersioningSystem</summary>
+            <version major="1" minor="9"/>
+            <date day="12" month="5" year="2009"/>
+            <author login="tstupka"/>
+            <compatibility addition="yes"/>
+            <description>
+                New method getAttribute(File file, String attrName). Provides additional VCS specific information
+                about versioned files. The only supported attribute at this moment is 
+                "ProvidedExtensions.RemoteLocation" for which VCS systems
+                overrinding getAttribute should return the files remote repository, resp. remote origin.
+                (e.g. Repository URL in case of SVN or default pull in case of Mercurial).
+            </description>
+            <class package="org.netbeans.modules.versioning.spi" name="VCSInterceptor"/>
+            <issue number="158681"/>
+        </change>
+
+        <change>
+            <api name="versioning_spi"/>
+            <summary>Added getCollocationQueryImplementation() method to VersioningSystem</summary>
+            <version major="1" minor="8"/>
+            <date day="27" month="6" year="2008"/>
+            <author login="msandor"/>
+            <compatibility addition="yes"/>
+            <description>
+                Every Versioning system should provide a CollocationQueryImplementation. This API change has two purposes:
+                1. It makes it clear and explicit that implementors of a VersioningSystem should provide the query. It would be possible for them
+                to just implement and register their own CollocationQueryImplementation but they could easily forget to do that.
+                2. There will be only one registered CQI (Versioning manager) that will delegate the query to the appropriate
+                versioning system which will speed things up.
+            </description>
+            <class package="org.netbeans.modules.versioning.spi" name="VersioningSystem"/>
+            <issue number="137822"/>
+        </change>
+
+        <change>
+            <api name="versioning_spi"/>
+            <summary>Added isMutable() method to VCSInterceptor</summary>
+            <version major="1" minor="7"/>
+            <date day="30" month="3" year="2008"/>
+            <author login="msandor"/>
+            <compatibility addition="yes"/>
+            <description>
+                This new method provides ability to override default File.canWrite() query for versioning systems that
+                keep files read-only on disk and are able to make them read-write on demand in the interceptor (eg. in doDelete()).
+            </description>
+            <class package="org.netbeans.modules.versioning.spi" name="VCSInterceptor"/>
+            <issue number="130044"/>
+        </change>
+
+        <change>
+            <api name="versioning_spi"/>
+            <summary>Added getFiles() method to VCSContext</summary>
+            <version major="1" minor="6"/>
+            <date day="25" month="1" year="2008"/>
+            <author login="msandor"/>
+            <compatibility addition="yes"/>
+            <description>
+                This new method provides access to all files and folders that the user originally selected in the IDE. Current
+                getRootFiles() method removes files from the context if their ancestors are already in the context.
+            </description>
+            <class package="org.netbeans.modules.versioning.spi" name="VCSContext"/>
+            <issue number="125853"/>
+        </change>
+
+        <change>
+            <api name="versioning_spi"/>
             <summary>Added beforeEdit method to VCSInterceptor</summary>
             <version major="1" minor="5"/>
             <date day="15" month="6" year="2007"/>
