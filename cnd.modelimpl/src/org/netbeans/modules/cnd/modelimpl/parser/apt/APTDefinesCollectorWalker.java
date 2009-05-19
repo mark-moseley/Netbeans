@@ -49,10 +49,12 @@ import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.structure.APTDefine;
 import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.structure.APTUndefine;
+import org.netbeans.modules.cnd.apt.support.APTFileCacheEntry;
 import org.netbeans.modules.cnd.apt.support.APTPreprocHandler;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.support.APTWalker;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
-//import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+
 
 /**
  *
@@ -60,48 +62,57 @@ import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
  */
 public class APTDefinesCollectorWalker extends APTSelfWalker {
 
-    /*package*/
-    final Map<String, MacroInfo> macroRefMap;
-    private final String includePath;
+    private final Map<CharSequence, MacroInfo> macroRefMap;
+    private final CharSequence includePath;
 
-    protected APTDefinesCollectorWalker(APTFile apt, CsmFile csmFile, APTPreprocHandler preprocHandler) {
-        this(apt, csmFile, preprocHandler, new HashMap<String, MacroInfo>(), null);
+    protected APTDefinesCollectorWalker(APTFile apt, CsmFile csmFile, APTPreprocHandler preprocHandler, APTFileCacheEntry cacheEntry) {
+        this(apt, csmFile, preprocHandler, new HashMap<CharSequence, MacroInfo>(), null, cacheEntry);
     }
 
-    private APTDefinesCollectorWalker(APTFile apt, CsmFile csmFile, APTPreprocHandler preprocHandler, Map<String, MacroInfo> macroRefMap, String includePath) {
-        super(apt, csmFile, preprocHandler);
+    private APTDefinesCollectorWalker(APTFile apt, CsmFile csmFile, APTPreprocHandler preprocHandler, Map<CharSequence, MacroInfo> macroRefMap, CharSequence includePath, APTFileCacheEntry cacheEntry) {
+        super(apt, csmFile, preprocHandler, cacheEntry);
         this.macroRefMap = macroRefMap;
         this.includePath = includePath;
     }
 
     @Override
-    protected APTWalker createIncludeWalker(APTFile apt, APTSelfWalker parent, String includePath) {
-        return new APTDefinesCollectorWalker(apt, parent.csmFile, ((APTDefinesCollectorWalker) parent).getPreprocHandler(), macroRefMap, includePath);
+    protected APTWalker createIncludeWalker(APTFile apt, APTSelfWalker parent, CharSequence includePath) {
+        return new APTDefinesCollectorWalker(apt, parent.csmFile, ((APTDefinesCollectorWalker) parent).getPreprocHandler(), macroRefMap, includePath, null);
     }
 
     @Override
     protected void onDefine(APT apt) {
         super.onDefine(apt);
         APTDefine aptMacro = (APTDefine) apt;
-        macroRefMap.put(aptMacro.getName().getText(), new MacroInfo(csmFile, apt.getOffset(), includePath));
+        macroRefMap.put(aptMacro.getName().getTextID(), new MacroInfo(csmFile, apt.getOffset(), apt.getEndOffset(), includePath));
     }
 
     @Override
     protected void onUndef(APT apt) {
         super.onUndef(apt);
         APTUndefine aptUndef = (APTUndefine) apt;
-        macroRefMap.remove(aptUndef.getName().getText());
+        macroRefMap.remove(aptUndef.getName().getTextID());
+    }
+
+    /*package*/ final MacroInfo getMacroInfo(APTToken token) {
+        return macroRefMap.get(token.getTextID());
+    }
+
+    @Override
+    protected boolean hasIncludeActionSideEffects() {
+        return true;
     }
 }
-
 class MacroInfo {
 
-    public MacroInfo(CsmFile file, int offset, String includePath) {
+    public MacroInfo(CsmFile file, int startOffest, int endOffset, CharSequence includePath) {
         this.targetFile = UIDCsmConverter.fileToUID(file);
-        this.offset = offset;
+        this.startOffset = startOffest;
+        this.endOffset = endOffset;
         this.includePath = includePath;
     }
     public final CsmUID<CsmFile> targetFile;
-    public final int offset;
-    public final String includePath;
+    public final int startOffset;
+    public final int endOffset;
+    public final CharSequence includePath;
 }
