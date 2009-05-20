@@ -64,6 +64,7 @@ import org.netbeans.modules.j2ee.api.ejbjar.ResourceReference;
 import org.netbeans.modules.j2ee.common.method.MethodModel;
 import org.netbeans.modules.j2ee.common.method.MethodModelSupport;
 import org.netbeans.modules.j2ee.common.queries.api.InjectionTargetQuery;
+import org.netbeans.modules.j2ee.core.api.support.classpath.ContainerClassPathModifier;
 import org.netbeans.modules.j2ee.dd.api.common.ResourceRef;
 import org.netbeans.modules.j2ee.dd.api.ejb.Ejb;
 import org.netbeans.modules.j2ee.dd.api.ejb.EjbJarMetadata;
@@ -107,7 +108,15 @@ public final class SendJMSGenerator {
             FileObject fileObject,
             ServiceLocatorStrategy slStrategy,
             J2eeModuleProvider j2eeModuleProvider) throws IOException {
-        
+
+        Project project = FileOwnerQuery.getOwner(fileObject);
+        ContainerClassPathModifier ccpm = project.getLookup().lookup(ContainerClassPathModifier.class);
+        if (ccpm != null) {
+            ccpm.extendClasspath(fileObject, new String[] {
+                ContainerClassPathModifier.API_J2EE //likely too wide, narrow
+            });
+        }
+
         JavaSource javaSource = JavaSource.forFileObject(fileObject);
         final boolean[] isInjectionTarget = new boolean[1];
         javaSource.runUserActionTask(new Task<CompilationController>() {
@@ -248,9 +257,9 @@ public final class SendJMSGenerator {
                 methodName,
                 "javax.jms.Message",
                 "// TODO create and populate message to send\n" +
-                "// javax.jms.TextMessage tm = session.createTextMessage();\n" +
-                "// tm.setText(messageData.toString());\n"+
-                "// return tm;\n",
+                "javax.jms.TextMessage tm = session.createTextMessage();\n" +
+                "tm.setText(messageData.toString());\n"+
+                "return tm;\n",
                 Arrays.asList(parameters),
                 Collections.singletonList("javax.jms.JMSException"),
                 Collections.singleton(Modifier.PRIVATE)
@@ -333,8 +342,12 @@ public final class SendJMSGenerator {
                 "javax.jms.MessageProducer messageProducer = session.createProducer({1});\n" +
                 "messageProducer.send({2}(session, messageData));\n" +
                 " '}' finally '{'\n" +
-                "if (session != null) '{'\n"+
+                "if (session != null) '{'\n" +
+                "try '{'\n" +
                 " session.close();\n" +
+                "'}' catch (JMSException e) '{'\n" +
+                "java.util.logging.Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.WARNING, \"Cannot close session\", e);\n" +
+                "'}'\n" +
                 "'}'\n" +
                 "if (connection != null) '{'\n" +
                 "connection.close();\n" +
@@ -360,7 +373,11 @@ public final class SendJMSGenerator {
                 "mp.send({2}(s,messageData));\n" +
                 " '}' finally '{'\n" +
                 "if (s != null) '{'\n"+
+                "try '{'\n" +
                 " s.close();\n" +
+                "'}' catch (JMSException e) '{'\n" +
+                "java.util.logging.Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.WARNING, \"Cannot close session\", e);\n" +
+                "'}'\n" +
                 "'}'\n" +
                 "if (conn != null) '{'\n" +
                 "conn.close();\n" +
@@ -384,7 +401,11 @@ public final class SendJMSGenerator {
                 "mp.send({2}(s,messageData));\n" +
                 " '}' finally '{'\n" +
                 "if (s != null) '{'\n"+
+                "try '{'\n" +
                 " s.close();\n" +
+                "'}' catch (JMSException e) '{'\n" +
+                "java.util.logging.Logger.getLogger(this.getClass().getName()).log(java.util.logging.Level.WARNING, \"Cannot close session\", e);\n" +
+                "'}'\n" +
                 "'}'\n" +
                 "if (conn != null) '{'\n" +
                 "conn.close();\n" +
