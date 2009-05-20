@@ -67,6 +67,7 @@ import org.netbeans.api.debugger.Watch;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.JPDAThread;
 import org.netbeans.modules.profiler.heapwalk.HeapFragmentWalker;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.WeakSet;
@@ -86,8 +87,10 @@ public class InstancesView extends TopComponent {
     
     /** Creates a new instance of InstancesView */
     public InstancesView() {
-        setIcon (Utilities.loadImage ("org/netbeans/modules/debugger/jpda/resources/root.gif")); // NOI18N
+        setIcon (ImageUtilities.loadImage ("org/netbeans/modules/debugger/jpda/resources/root.gif")); // NOI18N
         setLayout (new BorderLayout ());
+        // Remember the location of the component when closed.
+        putClientProperty("KeepNonPersistentTCInModelWhenClosed", Boolean.TRUE); // NOI18N
     }
 
     protected void componentShowing() {
@@ -220,7 +223,7 @@ public class InstancesView extends TopComponent {
             int state = JPDADebugger.STATE_DISCONNECTED;
             DebuggerEngine de = DebuggerManager.getDebuggerManager().getCurrentEngine();
             if (de != null) {
-                JPDADebugger d = (JPDADebugger) de.lookupFirst(null, JPDADebugger.class);
+                JPDADebugger d = de.lookupFirst(null, JPDADebugger.class);
                 if (d != null) {
                     state = getThreadsState(d);
                     synchronized (this) {
@@ -306,7 +309,7 @@ public class InstancesView extends TopComponent {
                 }
             });
             org.openide.awt.Mnemonics.setLocalizedText(pauseButton, NbBundle.getMessage(InstancesView.class, "CTL_Pause"));
-            pauseButton.setIcon(new ImageIcon (Utilities.loadImage ("org/netbeans/modules/debugger/resources/actions/Pause.gif")));
+            pauseButton.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/debugger/resources/actions/Pause.gif", false));
             gridBagConstraints.gridx = 0;
             gridBagConstraints.gridy = 2;
             gridBagConstraints.anchor = java.awt.GridBagConstraints.CENTER;
@@ -317,7 +320,7 @@ public class InstancesView extends TopComponent {
         private void doStopCurrentDebugger() {
             DebuggerEngine de = DebuggerManager.getDebuggerManager().getCurrentEngine();
             if (de != null) {
-                de.getActionsManager().doAction(ActionsManager.ACTION_PAUSE);
+                de.getActionsManager().postAction(ActionsManager.ACTION_PAUSE);
             }
         }
 
