@@ -52,6 +52,7 @@ import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
@@ -144,6 +145,7 @@ abstract class WeakListenerImpl implements java.util.EventListener {
         return this;
     }
 
+    @Override
     public String toString() {
         Object listener = ref.get();
 
@@ -474,16 +476,19 @@ abstract class WeakListenerImpl implements java.util.EventListener {
 
         /** To string prints class.
         */
+        @Override
         public String toString() {
             return super.toString() + "[" + listenerClass + "]"; // NOI18N
         }
 
         /** Equal is extended to equal also with proxy object.
         */
+        @Override
         public boolean equals(Object obj) {
             return (proxy == obj) || (this == obj);
         }
 
+        @Override
         Object getImplementator() {
             return proxy;
         }
@@ -522,9 +527,6 @@ abstract class WeakListenerImpl implements java.util.EventListener {
         }
 
         public void run() {
-            // prepare array for passing arguments to getMethod/invoke
-            Object[] params = new Object[1];
-            Class[] types = new Class[1];
             Object src = null; // On whom we're listening
             Method remove = null;
 
@@ -558,8 +560,10 @@ abstract class WeakListenerImpl implements java.util.EventListener {
 
             // get the remove method or use the last one
             if (remove == null) {
-                types[0] = ref.listenerClass;
-                remove = getRemoveMethod(methodClass, methodName, types[0]);
+                remove = getRemoveMethod(methodClass, methodName, new Class[]{ref.listenerClass});
+                if (remove == null) {
+                    remove = getRemoveMethod(methodClass, methodName, new Class[]{String.class, ref.listenerClass});
+                }
 
                 if (remove == null) {
                     LOG.warning(
@@ -578,21 +582,28 @@ abstract class WeakListenerImpl implements java.util.EventListener {
                 }
             }
 
-            params[0] = ref.getImplementator(); // Whom to unregister
-
             try {
-                remove.invoke(src, params);
+                if (remove.getParameterTypes().length == 1) {
+                    remove.invoke(src, new Object[]{ref.getImplementator()});
+                } else {
+                    remove.invoke(src, new Object[]{"", ref.getImplementator()});
+                }
             } catch (Exception ex) { // from invoke(), should not happen
-                LOG.warning(
-                    "Problem encountered while calling " + methodClass + "." + methodName + "(...) on " + src
-                ); // NOI18N
-                LOG.log(Level.WARNING, null, ex);
+                // #151415 - ignore exception from AbstractPreferences if node has been removed
+                if (!"removePreferenceChangeListener".equals(methodName) && !"removeNodeChangeListener".equals(methodName)) {  //NOI18N
+                    String errMessage = "Problem encountered while calling " + methodClass + "." + methodName + "(...) on " + src; // NOI18N
+                    LOG.warning( errMessage );
+                    //detailed logging needed in some cases
+                    boolean showErrMessage = ex instanceof InvocationTargetException
+                            || "object is not an instance of declaring class".equals(ex.getMessage());
+
+                    LOG.log(Level.WARNING, showErrMessage ? errMessage : null, ex);
+                }
             }
         }
 
         /* can return null */
-        private Method getRemoveMethod(Class<?> methodClass, String methodName, Class listenerClass) {
-            final Class<?>[] clarray = new Class<?>[] { listenerClass };
+        private Method getRemoveMethod(Class<?> methodClass, String methodName, Class<?>[] clarray) {
             Method m = null;
 
             try {
