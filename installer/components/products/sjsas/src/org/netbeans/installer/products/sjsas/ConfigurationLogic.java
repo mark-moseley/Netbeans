@@ -39,7 +39,6 @@ package org.netbeans.installer.products.sjsas;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -229,6 +228,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         /////////////////////////////////////////////////////////////////////////////
         try {
             progress.setDetail(getString("CL.install.extra.files")); // NOI18N
+            list.add(new File(directory, DOMAINS_SUBDIR));
             list.add(new File(directory, DERBY_LOG));
         } catch (IOException e) {
             throw new InstallationException(
@@ -321,21 +321,23 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                     getString("CL.install.error.shortcuts.creation"), // NOI18N
                     e);
         }
-        try {
-            ClassLoader cl = getClass().getClassLoader();
-            FileUtils.writeFile(new File(directory, JTB_LICENSE),
-                    ResourceUtils.getResource(JTB_LEGAL_RESOURCE_PREFIX + JTB_LICENSE,
-                    cl));
-            FileUtils.writeFile(new File(directory, JTB_THIRDPARTY_README),
-                    ResourceUtils.getResource(JTB_LEGAL_RESOURCE_PREFIX + JTB_THIRDPARTY_README,
-                    cl));   
-            FileUtils.writeFile(new File(directory, JTB_DISTRIBUTION),
-                    ResourceUtils.getResource(JTB_LEGAL_RESOURCE_PREFIX + JTB_DISTRIBUTION,
-                    cl));    
-        } catch (IOException e) {
-            throw new InstallationException(
-                    getString("CL.install.error.legal.creation"), // NOI18N
-                    e);
+        if(NetBeansUtils.getNetBeansId().equals("NBEETOOLS")) {
+            try {
+                ClassLoader cl = getClass().getClassLoader();
+                FileUtils.writeFile(new File(directory, JTB_LICENSE),
+                        ResourceUtils.getResource(JTB_LEGAL_RESOURCE_PREFIX + JTB_LICENSE,
+                        cl));
+                FileUtils.writeFile(new File(directory, JTB_THIRDPARTY_README),
+                        ResourceUtils.getResource(JTB_LEGAL_RESOURCE_PREFIX + JTB_THIRDPARTY_README,
+                        cl));
+                FileUtils.writeFile(new File(directory, JTB_DISTRIBUTION),
+                        ResourceUtils.getResource(JTB_LEGAL_RESOURCE_PREFIX + JTB_DISTRIBUTION,
+                        cl));
+            } catch (IOException e) {
+                throw new InstallationException(
+                        getString("CL.install.error.legal.creation"), // NOI18N
+                        e);
+            }
         }
         /////////////////////////////////////////////////////////////////////////////
         progress.setPercentage(Progress.COMPLETE);
@@ -564,18 +566,6 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         shortcut.setWorkingDirectory(asLocation);
         shortcut.setRelativePath(getString(AS_RELATIVE_SHORTCUT_LOCATION));
         return shortcut;
-    }
-    @Override
-    public String[] getProhibitedInstallationPathParts() {
-        // http://www.netbeans.org/issues/show_bug.cgi?id=163233
-        final String [] parts = super.getProhibitedInstallationPathParts(); //NOI18N
-        ArrayList <String> list = new ArrayList(Arrays.asList(parts));
-        for(String s : new String [] {"(", ")"}) {//NOI18N
-            if(!list.contains(s)) {
-                list.add(s);
-            }
-        }
-        return list.toArray(new String[] {});
     }
     /////////////////////////////////////////////////////////////////////////////////
     // Constants
