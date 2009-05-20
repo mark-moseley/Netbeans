@@ -134,6 +134,13 @@ public final class EditorFindSupport {
     /** It's public only to keep backwards compatibility of th FindSupport class. */
     public static final String FIND_HISTORY_CHANGED_PROP = "find-history-changed-prop"; //NOI18N
     
+    /**
+     * Default message 'importance' for messages from find and replace actions.
+     * <br/>
+     * Corresponds to StatusDisplayer.IMPORTANCE_FIND_OR_REPLACE.
+     */
+    private static final int IMPORTANCE_FIND_OR_REPLACE = 800;
+
     /** Shared instance of FindSupport class */
     private static EditorFindSupport findSupport;
 
@@ -266,6 +273,9 @@ public final class EditorFindSupport {
     public void putFindProperties(Map<String, Object> propsToAdd) {
         if (!getFindProperties().equals(propsToAdd)) {
             getFindProperties().putAll(propsToAdd);
+        }
+        //highlight will not be updated on empty properties
+        if (propsToAdd.get(FIND_BLOCK_SEARCH_END)!=null) {
             firePropertyChange(null, null, null);
         }
     }
@@ -536,15 +546,15 @@ public final class EditorFindSupport {
                             msg += back ? NbBundle.getBundle(EditorFindSupport.class).getString(WRAP_END_LOCALE)
                                    : NbBundle.getBundle(EditorFindSupport.class).getString(WRAP_START_LOCALE);
                         }
-                        ComponentUtils.setStatusText(c, msg);
+                        ComponentUtils.setStatusText(c, msg, IMPORTANCE_FIND_OR_REPLACE);
                         c.getToolkit().beep();
                     } else {
-                        ComponentUtils.setStatusText(c, msg);
+                        ComponentUtils.setStatusText(c, msg, IMPORTANCE_FIND_OR_REPLACE);
                     }
                     return result;
                 } else { // not found
-                    ComponentUtils.setStatusBoldText(c, exp + NbBundle.getBundle(EditorFindSupport.class).getString(
-                                                    NOT_FOUND_LOCALE));
+                    ComponentUtils.setStatusText(c, exp + NbBundle.getBundle(EditorFindSupport.class).getString(
+                                                    NOT_FOUND_LOCALE), IMPORTANCE_FIND_OR_REPLACE);
                     // issue 14189 - selection was not removed
                     c.getCaret().setDot(c.getCaret().getDot());
                 }
@@ -579,6 +589,9 @@ public final class EditorFindSupport {
             int docLen = doc.getLength();
             if (blockEndPos == -1) {
                 blockEndPos = docLen;
+            }
+            if (startPos == -1) {
+                startPos = docLen;
             }
 
             int retFind[];
@@ -675,7 +688,7 @@ public final class EditorFindSupport {
         if (c != null) {
             String s = (String)props.get(FIND_REPLACE_WITH);
             Caret caret = c.getCaret();
-            if (caret.isSelectionVisible()){
+            if (caret.isSelectionVisible() && caret.getDot() != caret.getMark()){
                 int dotPos = caret.getDot();
                 Object dp = props.get(FIND_BACKWARD_SEARCH);
                 boolean direction = (dp != null) ? ((Boolean)dp).booleanValue() : false;
@@ -728,7 +741,7 @@ public final class EditorFindSupport {
         props = getValidFindProperties(props);
         props = new HashMap<String, Object>(props);
         String replaceWithOriginal = (String)props.get(FIND_REPLACE_WITH);
-        
+
         Boolean b = (Boolean)props.get(FIND_BLOCK_SEARCH);
         boolean blockSearch = (b != null && b.booleanValue());
         b = (Boolean)props.get(FIND_WRAP_SEARCH);
@@ -765,14 +778,14 @@ public final class EditorFindSupport {
                 
                 int actualPos = wrapSearch ? 0 : c.getCaret().getDot();
                 
-                int pos = (blockSearch && blockSearchStart > -1) ? ( backSearch ? blockSearchEnd : blockSearchStart) : actualPos; // actual position
+                int pos = (blockSearch && blockSearchStart > -1) ? ( backSearch ? blockSearchEnd : blockSearchStart) : (backSearch? -1 : actualPos); // actual position
                 
                 while (true) {
                     blockSearchEnd = getBlockEndOffset();
                     FindReplaceResult result = findReplaceInBlock(replaceWithOriginal, c, pos, 
                             (blockSearch && blockSearchStart > -1) ? blockSearchStart : startPosWholeSearch, 
                             (blockSearch && blockSearchEnd > 0) ? blockSearchEnd : endPosWholeSearch, 
-                            props, false);
+                            props, backSearch);
                     if (result == null){
                         break;
                     }
@@ -795,13 +808,13 @@ public final class EditorFindSupport {
                         }
                     }
                     if (skip) {
-                        pos = blk[0] + len;
+                        pos = backSearch ? blk[0] : blk[0] + len;
 
                     } else { // can and will insert the new string
                         if (replaceWith != null && replaceWith.length() > 0) {
                             doc.insertString(blk[0], replaceWith, null);
                         }
-                        pos = blk[0] + ((replaceWith != null) ? replaceWith.length() : 0);
+                        pos = backSearch ? blk[0] : blk[0] + ((replaceWith != null) ? replaceWith.length() : 0);
                         replacedCnt++;
                     }
                 }
@@ -813,13 +826,13 @@ public final class EditorFindSupport {
                     if (findWhat != null) { // nothing to search for
                         exp = "'" + findWhat + "' "; // NOI18N
                     }
-                    ComponentUtils.setStatusBoldText(c, exp + NbBundle.getBundle(EditorFindSupport.class).getString(
-                                NOT_FOUND_LOCALE));
+                    ComponentUtils.setStatusText(c, exp + NbBundle.getBundle(EditorFindSupport.class).getString(
+                                NOT_FOUND_LOCALE), IMPORTANCE_FIND_OR_REPLACE);
                 }else{
                     MessageFormat fmt = new MessageFormat(
                                             NbBundle.getBundle(EditorFindSupport.class).getString(ITEMS_REPLACED_LOCALE));
                     String msg = fmt.format(new Object[] { new Integer(replacedCnt), new Integer(totalCnt) });
-                    ComponentUtils.setStatusText(c, msg);
+                    ComponentUtils.setStatusText(c, msg, IMPORTANCE_FIND_OR_REPLACE);
                 }
 
             } catch (BadLocationException e) {
