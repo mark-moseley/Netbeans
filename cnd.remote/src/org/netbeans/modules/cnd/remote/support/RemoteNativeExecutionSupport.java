@@ -43,6 +43,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Reader;
@@ -134,6 +135,8 @@ public class RemoteNativeExecutionSupport extends RemoteConnectionSupport {
 
         } catch (InterruptedException ie) {
             // this occurs, for example, when user stops running program - need no report
+        } catch (InterruptedIOException ie) {
+            // this occurs, for example, when user stops running program - need no report
         } catch (IOException ioe) {
             log.log(Level.WARNING, ioe.getMessage(), ioe);
         } catch (Exception ex) {
@@ -143,41 +146,6 @@ public class RemoteNativeExecutionSupport extends RemoteConnectionSupport {
 //            disconnect();
         }
     }
-
-//    private String makeCommand(File dirf, String exe, String args, String[] envp) {
-//        String dircmd;
-//        String path = RemotePathMap.getPathMap(executionEnvironment).getRemotePath(dirf.getAbsolutePath());
-//
-//        if (path != null) {
-//            dircmd = "cd \"" + path + "\"; "; // NOI18N
-//        } else {
-//            dircmd = "";
-//        }
-//
-//        StringBuilder command = new StringBuilder(); // NOI18N
-//
-//        // if (enableDisplayVariable) {
-//        if (envp == null ) {
-//            envp = new String[1];
-//            envp[0] = getDisplayString();
-//        } else {
-//            String[] envp2 = new String[envp.length + 1 ];
-//            for (int i = 0; i < envp.length; i++) {
-//                envp2[i] = envp[i];
-//            }
-//            envp2[envp.length] = getDisplayString();
-//            envp = envp2;
-//        }
-//
-//        if (envp != null) {
-//            command.append(ShellUtils.prepareExportString(envp));
-//        }
-//        command.append(exe).append(" ").append(args).append(" 2>&1"); // NOI18N
-//        command.insert(0, dircmd);
-//
-//        String theCommand = ShellUtils.wrapCommand(executionEnvironment, command.toString());
-//        return theCommand;
-//    }
 
     private static String displayString ;
 
