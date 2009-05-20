@@ -42,7 +42,6 @@
 package org.netbeans.modules.vmd.midpnb.screen.display;
 
 import org.netbeans.modules.mobility.svgcore.util.Util;
-import org.netbeans.modules.vmd.api.model.Debug;
 import org.netbeans.modules.vmd.api.model.DesignComponent;
 import org.netbeans.modules.vmd.api.model.PropertyValue;
 import org.netbeans.modules.vmd.api.screen.display.ScreenDeviceInfo;
@@ -55,7 +54,6 @@ import org.netbeans.modules.vmd.midp.screen.display.property.ResourcePropertyEdi
 import org.netbeans.modules.vmd.midpnb.components.svg.SVGImageCD;
 import org.netbeans.modules.vmd.midpnb.components.svg.SVGPlayerCD;
 import org.openide.filesystems.FileObject;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 import javax.microedition.m2g.SVGImage;
 import javax.swing.*;
@@ -65,6 +63,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.netbeans.modules.vmd.api.screen.display.ScreenDisplayPresenter;
 
 /**
  *
@@ -77,12 +78,18 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
     private SVGImageComponent imageView = new SVGImageComponent();
     private ScreenFileObjectListener imageFileListener;
     private FileObject svgFileObject;
+    private boolean useFileListener;
 
     public SVGPlayerDisplayPresenter() {
         JPanel contentPanel = getPanel().getContentPanel();
         contentPanel.setLayout(new BorderLayout());
         stringLabel = new JLabel();
         stringLabel.setHorizontalAlignment(JLabel.CENTER);
+    }
+    
+    public SVGPlayerDisplayPresenter(boolean useFilelistener) {
+        this();
+        this.useFileListener = useFilelistener;
     }
 
     @Override
@@ -99,6 +106,7 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
             SVGImage svgImage = null;
             boolean notSVGTiny = false;
             if (svgImageComponent != null) {
+                // TODO copy image loading code from SVGComponentDisplayPresenter.getSvgImage()
                 PropertyValue propertyValue = svgImageComponent.readProperty(SVGImageCD.PROP_RESOURCE_PATH);
                 if (propertyValue.getKind() == PropertyValue.Kind.VALUE) {
                     Map<FileObject, FileObject> images = MidpProjectSupport.getFileObjectsForRelativeResourcePath(animatorComponent.getDocument(), MidpTypes.getString(propertyValue));
@@ -107,13 +115,13 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
                     if (svgFileObject != null) {
                         try {
                             svgImage = Util.createSVGImage(svgFileObject, true);
-                            if (svgFileObject != null) {
+                            if (svgFileObject != null && useFileListener) {
                                 svgFileObject.removeFileChangeListener(imageFileListener);
                                 imageFileListener = new ScreenFileObjectListener(getRelatedComponent(), svgImageComponent, SVGImageCD.PROP_RESOURCE_PATH);
                                 svgFileObject.addFileChangeListener(imageFileListener);
                             }
                         } catch (IOException e) {
-                            Debug.warning(e);
+                            Logger.getLogger(this.getClass().getName()).log(Level.WARNING, null, e);
                             notSVGTiny = true;
                         }
                     }
@@ -135,6 +143,15 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
             stringLabel.setText(NbBundle.getMessage(SVGPlayerDisplayPresenter.class, "DISP_svg_image_is_usercode")); // NOI18N
             contentPanel.add(stringLabel, BorderLayout.CENTER);
         }
+
+        for (DesignComponent item : getChildren()) {
+            ScreenDisplayPresenter presenter = item.getPresenter(ScreenDisplayPresenter.class);
+            if (presenter == null) {
+                continue;
+            }
+            presenter.reload(deviceInfo);
+            contentPanel.add(presenter.getView(), BorderLayout.PAGE_END);
+        }
     }
 
     @Override
@@ -150,11 +167,36 @@ public class SVGPlayerDisplayPresenter extends DisplayableDisplayPresenter {
     }
 
     @Override
+    public Collection<DesignComponent> getChildren() {
+        return getComponent().getComponents();
+    }
+
+    @Override
     protected void notifyDetached(DesignComponent component) {
         if (svgFileObject != null && imageFileListener != null) {
             svgFileObject.removeFileChangeListener(imageFileListener);
         }
         svgFileObject = null;
         imageFileListener = null;
+    }
+
+    protected float getScaleX(){
+        return imageView.getScaleX();
+    }
+
+    protected float getScaleY(){
+        return imageView.getScaleY();
+    }
+
+    protected int getCorrectionX(){
+        return imageView.getCorrectionX();
+    }
+
+    protected int getCorrectionY(){
+        return imageView.getCorrectionY();
+    }
+
+    protected SVGImage getSVGImage(){
+        return imageView.getImage();
     }
 }
