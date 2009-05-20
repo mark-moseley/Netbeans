@@ -70,6 +70,7 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
     private Element inner;
     private Element outer;
     private InnerToOuterRefactoring refactoring;
+    private boolean isInInnerClass = false;
     
     private Element getCurrentElement() {
         return workingCopy.getTrees().getElement(getCurrentPath());
@@ -83,11 +84,14 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
     public void setWorkingCopy(WorkingCopy wc) throws ToPhaseException {
         super.setWorkingCopy(wc);
         this.inner = refactoring.getSourceType().resolveElement(wc);
-        outer = SourceUtils.getEnclosingTypeElement(inner);
+        outer = wc.getElementUtilities().enclosingTypeElement(inner);
     }
 
     @Override
     public Tree visitIdentifier(IdentifierTree node, Element p) {
+        if (workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
+            return null;
+        }
         if (inner.equals(getCurrentElement())) {
             Tree newTree = make.setLabel(node, refactoring.getClassName());        
             rewrite(node, newTree);
@@ -100,6 +104,13 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
             }
              
             rewrite(node, m);
+        } else if (isInInnerClass) {
+            GeneratorUtilities genUtils = GeneratorUtilities.get(workingCopy); // helper
+            // #it is impossible to call GeneratorUtilities.importFQNs
+            // for the whole nested class since the method creates new identity
+            // of the passed tree
+            Tree newTree = genUtils.importFQNs(node);
+            rewrite(node, newTree);
         }
         return super.visitIdentifier(node, p);
     }
@@ -121,8 +132,43 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
                     thisString = "this"; // NOI18N
             
             }
-            if (thisString!=null) {
-                rewrite(arg0,make.addNewClassArgument(arg0, make.Identifier(thisString)));
+            if (thisString != null) {
+                ExecutableElement constr = (ExecutableElement) currentElement;
+                if (constr.isVarArgs()) {
+                    int index = constr.getParameters().size() - 1;
+                    rewrite(arg0, make.insertNewClassArgument(arg0, index, make.Identifier(thisString)));
+                } else {
+                    rewrite(arg0, make.addNewClassArgument(arg0, make.Identifier(thisString)));
+                }
+            }
+        } else if (refactoring.getReferenceName() != null && currentElement != null
+                // nested class will be moved to new file
+                && outer != null && ((TypeElement) outer).getNestingKind() == NestingKind.TOP_LEVEL) {
+            // 163852: inner class has to be treated especially; inner == nested + not static
+            // translate all new NotMovingInner() -> referenceName.new NotMovingInner() in moved nested class
+            Element enclElm = currentElement.getEnclosingElement();
+            ExpressionTree primary = arg0.getEnclosingExpression();
+            Element primaryElm = null;
+            if (primary != null) {
+                // be aware of Outer.this.new NotMovingInner() -> referenceName.new NotMovingInner()
+                // and also new NotMovingInner().new NotMovingInnerInner() >referenceName.new NotMovingInner().new NotMovingInnerInner()
+                primaryElm = workingCopy.getTrees().getElement(new TreePath(getCurrentPath(), primary));
+                primaryElm = primary != null ? workingCopy.getTypes().asElement(primaryElm.asType()) : null;
+            }
+            if (enclElm != null && enclElm.getKind() == ElementKind.CLASS
+                    && enclElm != inner && isInInnerClass
+                    && !enclElm.getModifiers().contains(Modifier.STATIC)
+                    && ((TypeElement) enclElm).getNestingKind() == NestingKind.MEMBER
+                    && (primaryElm == null && primary == null || primaryElm == outer)) {
+                @SuppressWarnings("unchecked")
+                NewClassTree nju = make.NewClass(
+                        make.Identifier(refactoring.getReferenceName()),
+                        (List<? extends ExpressionTree>) arg0.getTypeArguments(),
+                        // new Outer.Inner() -> referenceName.new Inner()
+                        make.Identifier(enclElm.getSimpleName()),
+                        arg0.getArguments(),
+                        arg0.getClassBody());
+                rewrite(arg0, nju);
             }
         }
         return super.visitNewClass(arg0, arg1);
@@ -130,7 +176,7 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
     
     private TypeElement getOuter(TypeElement element) {
         while (element != null && !workingCopy.getTypes().isSubtype(element.asType(),outer.asType())) {
-            element = SourceUtils.getEnclosingTypeElement(element);
+            element = workingCopy.getElementUtilities().enclosingTypeElement(element);
         }
         return element;
     }
@@ -139,10 +185,11 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
     public Tree visitMethod(MethodTree constructor, Element element) {
         if (constructor.getReturnType()==null) {
             //constructor
-            if (!inner.equals(getCurrentClass()) && workingCopy.getTypes().isSubtype(getCurrentElement().getEnclosingElement().asType(), inner.asType())) {
+            if (refactoring.getReferenceName() != null && !inner.equals(getCurrentClass()) && workingCopy.getTypes().isSubtype(getCurrentElement().getEnclosingElement().asType(), inner.asType())) {
                 MemberSelectTree arg = make.MemberSelect(make.Identifier(getCurrentClass().getEnclosingElement().getSimpleName()), "this"); // NOI18N
                 MethodInvocationTree superCall = (MethodInvocationTree) ((ExpressionStatementTree)constructor.getBody().getStatements().get(0)).getExpression();
-                MethodInvocationTree newSuperCall = make.insertMethodInvocationArgument(superCall, 0, arg);
+                int index = hasVarArgs(constructor) ? constructor.getParameters().size() - 1 : 0;
+                MethodInvocationTree newSuperCall = make.insertMethodInvocationArgument(superCall, index, arg);
                 rewrite(superCall, newSuperCall);
             }
             
@@ -157,12 +204,12 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
         if (currentElement!=null && currentElement == outer) {
             Element outerouter = outer.getEnclosingElement();
             
+            super.visitClass(classTree, element);
             TreePath tp = workingCopy.getTrees().getPath(inner);
             ClassTree innerClass = (ClassTree) tp.getLeaf();
 
             ClassTree newInnerClass = innerClass;
             newInnerClass = genUtils.importComments(newInnerClass, workingCopy.getCompilationUnit());
-            newInnerClass = genUtils.importFQNs(newInnerClass);
 
             newInnerClass = make.setLabel(newInnerClass, refactoring.getClassName());
             
@@ -178,7 +225,8 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
                 CompilationUnitTree compilationUnit = tp.getCompilationUnit();
                 String relativePath = RetoucheUtils.getPackageName(compilationUnit).replace('.', '/') + '/' + refactoring.getClassName() + ".java"; // NOI18N
                 CompilationUnitTree newCompilation = make.CompilationUnit(sourceRoot, relativePath, null, Collections.singletonList(newInnerClass));
-                workingCopy.rewrite(null, newCompilation);        
+                workingCopy.rewrite(null, newCompilation);
+                return newOuter;
             } else {
                 ClassTree outerTree = (ClassTree) workingCopy.getTrees().getTree(outer);
                 ClassTree outerouterTree = (ClassTree) workingCopy.getTrees().getTree(outerouter);
@@ -187,12 +235,10 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
                 workingCopy.rewrite(outerTree, newOuter);
                 JavaRefactoringUtils.cacheTreePathInfo(workingCopy.getTrees().getPath(outer), workingCopy);
                 workingCopy.rewrite(outerouterTree, newOuterOuter);
+                return newOuterOuter;
             }
             
-            for (Element superType:RetoucheUtils.getSuperTypes((TypeElement)inner, workingCopy, true)) {
-                ClassTree tree = (ClassTree) workingCopy.getTrees().getTree(superType);
-            }
-        } else if (currentElement!=null && workingCopy.getTypes().isSubtype(currentElement.asType(), inner.asType()) && currentElement!=inner) {
+        } else if (refactoring.getReferenceName() != null && currentElement!=null && workingCopy.getTypes().isSubtype(currentElement.asType(), inner.asType()) && currentElement!=inner) {
                 VariableTree variable = make.Variable(make.Modifiers(Collections.<Modifier>emptySet()), refactoring.getReferenceName(), make.Type(outer.asType()), null);
                 for (Tree member:classTree.getMembers()) {
                     if (member.getKind() == Tree.Kind.METHOD) {
@@ -200,7 +246,17 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
                         if (m.getReturnType()==null) {
                             MethodInvocationTree superCall = (MethodInvocationTree) ((ExpressionStatementTree) m.getBody().getStatements().get(0)).getExpression();
                             List<ExpressionTree> newArgs = new ArrayList(superCall.getArguments());
-                            newArgs.add((ExpressionTree)make.Identifier(variable.getName().toString()));
+                            
+                            MethodTree newConstructor = null;
+                            ExpressionTree exprTree = (ExpressionTree)make.Identifier(variable.getName().toString());
+                            if (hasVarArgs(m)) {
+                                int index = m.getParameters().size() - 1;
+                                newArgs.add(index, exprTree);
+                                newConstructor = make.insertMethodParameter(m, index, variable);
+                            } else {
+                                newArgs.add(exprTree);
+                                newConstructor = make.addMethodParameter(m, variable);
+                            }
                             MethodInvocationTree method = make.MethodInvocation(
                                     Collections.<ExpressionTree>emptyList(), 
                                     make.Identifier("super"), // NOI18N
@@ -209,7 +265,6 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
                             BlockTree block = make.insertBlockStatement(m.getBody(), 0, make.ExpressionStatement(method));
                             block = make.removeBlockStatement(block, 1);
                             
-                            MethodTree newConstructor = make.addMethodParameter(m, variable);
                             newConstructor = make.Constructor(
                                     make.Modifiers(newConstructor.getModifiers().getFlags(), newConstructor.getModifiers().getAnnotations()),
                                     newConstructor.getTypeParameters(), 
@@ -222,6 +277,16 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
                     }
                 }                
             }
+
+        if (currentElement == inner) {
+            try {
+                isInInnerClass = true;
+                return super.visitClass(classTree, element);
+            } finally {
+                isInInnerClass = false;
+            }
+        }
+        
         return super.visitClass(classTree, element);
     }
     
@@ -245,12 +310,17 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
                 MemberSelectTree m = make.MemberSelect(((MemberSelectTree) ex).getExpression(),refactoring.getClassName());
                 rewrite(memberSelect,m);
             }
-        } else if (isThisReferenceToOuter()&& !"class".equals(memberSelect.getIdentifier().toString())) { //NOI18N
+        } else if (isThisReferenceToOuter() && !"class".equals(memberSelect.getIdentifier().toString()) && !current.getModifiers().contains(Modifier.STATIC)) { //NOI18N
             if (refactoring.getReferenceName()!=null) {
-                MemberSelectTree m = make.MemberSelect(make.Identifier(refactoring.getReferenceName()), memberSelect.getIdentifier());
+                // Outer.this -> outer
+                // Outer.field -> outer.field
+                Tree m = "this".equals(memberSelect.getIdentifier().toString()) // NOI18N
+                        ? make.Identifier(refactoring.getReferenceName())
+                        : make.MemberSelect(make.Identifier(refactoring.getReferenceName()), memberSelect.getIdentifier());
                 rewrite(memberSelect, m);
             } else {
-                problem = MoveTransformer.createProblem(problem, true, NbBundle.getMessage(PushDownTransformer.class, "ERR_InnerToOuter_UseDeclareField", memberSelect));
+                problem = MoveTransformer.createProblem(problem, true, NbBundle.getMessage(InnerToOuterTransformer.class, "ERR_InnerToOuter_UseDeclareField", memberSelect));
+                isThisReferenceToOuter();
             }
         }
         
@@ -261,7 +331,7 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
         Element cur = getCurrentElement();
         if (cur==null || cur.getKind() == ElementKind.PACKAGE)
                 return false;
-        TypeElement encl = SourceUtils.getEnclosingTypeElement(cur);
+        TypeElement encl = workingCopy.getElementUtilities().enclosingTypeElement(cur);
         if (outer.equals(encl) && workingCopy.getTypes().isSubtype(getCurrentClass().asType(), inner.asType())) {
             return true;
         }
@@ -269,12 +339,14 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
     }
     
     private TypeElement getCurrentClass() {
-        TreePath tp = getCurrentPath().getParentPath();
-        while (tp!=null) {
-            if (tp.getLeaf().getKind() == Tree.Kind.CLASS) {
-                return (TypeElement) workingCopy.getTrees().getElement(tp);
+        TreePath treePath = getCurrentPath();
+        while (treePath != null) {
+            if (treePath.getLeaf().getKind() == Tree.Kind.CLASS) {
+                return (TypeElement) workingCopy.getTrees().getElement(treePath);
+            } else if (treePath.getLeaf().getKind() == Tree.Kind.IMPORT) {
+                return (TypeElement) workingCopy.getTrees().getElement(getCurrentPath());
             }
-            tp = tp.getParentPath();
+            treePath = treePath.getParentPath();
         }
         throw new IllegalStateException();
     }
@@ -291,6 +363,15 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
             current = current.getEnclosingElement();
         }
         return false;
+    }
+    
+    private boolean hasVarArgs(MethodTree mt) {
+        List list = mt.getParameters();
+        if (list.isEmpty()) {
+            return false;
+        }
+        VariableTree vt = (VariableTree)list.get(list.size() - 1);
+        return vt.toString().indexOf("...") != -1; // [NOI18N] [TODO] temporal hack, will be rewritten
     }
     
     private ClassTree refactorInnerClass(ClassTree newInnerClass) {
@@ -312,7 +393,10 @@ public class InnerToOuterTransformer extends RefactoringVisitor {
                 if (member.getKind() == Tree.Kind.METHOD) {
                     MethodTree m = (MethodTree) member;
                     if (m.getReturnType()==null) {
-                        MethodTree newConstructor = make.addMethodParameter(m, variable);
+                        MethodTree newConstructor = hasVarArgs(m) ?
+                            make.insertMethodParameter(m, m.getParameters().size() - 1, variable) : 
+                            make.addMethodParameter(m, variable);
+                        
                         AssignmentTree assign = make.Assignment(make.Identifier("this."+referenceName), make.Identifier(referenceName)); // NOI18N
                         BlockTree block = make.insertBlockStatement(newConstructor.getBody(), 1, make.ExpressionStatement(assign));
                         newConstructor = make.Constructor(
