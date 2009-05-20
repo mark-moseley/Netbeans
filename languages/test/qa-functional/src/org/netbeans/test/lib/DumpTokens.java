@@ -73,7 +73,7 @@ public class DumpTokens {
             try{
                 tokens = dumpTokens();
             }catch(IOException e){
-                AssertionError error = new AssertionError("DUMPING ERROR");
+                AssertionError error = new AssertionError("Dumping error");
                 error.initCause(e);
                 throw error;
             }
@@ -83,28 +83,23 @@ public class DumpTokens {
 
     @SuppressWarnings("unchecked")
     private List<Token> dumpTokens() throws IOException {
-        Logger.getLogger(DumpTokens.class.getName()).info("DUMPING TOKNES");
+        Logger.getLogger(DumpTokens.class.getName()).info("Dumping tokens");
         DataObject dataObj = DataObject.find(FileUtil.toFileObject(file));
         EditorCookie ed = dataObj.getCookie(EditorCookie.class);
 
         StyledDocument sDoc = ed.openDocument();
         BaseDocument doc = (BaseDocument) sDoc;
-        ParserManager parser = ParserManager.get(doc);
-        while(parser.getState() != ParserManager.State.OK){// wait parsing finished
-            try {
-                Thread.sleep(1000);
-                Logger.getLogger(DumpTokens.class.getName()).log(Level.INFO, "Waiting for parser");
-            } catch (InterruptedException ex) {
-                Exceptions.printStackTrace(ex);
-            }
-        }
         TokenHierarchy th = null;
+        TokenSequence ts = null;
         int roundCount = 0;
-        while (th == null){
+        while ((th == null) || (ts == null)){
             th = TokenHierarchy.get(doc);
+            if (th != null){
+                ts = th.tokenSequence();
+            }
             roundCount++;
-            if (roundCount > 10){
-                throw new AssertionError("IMPOSSIBLE TO GET TOKEN HIERARCHY " +roundCount+ "times");
+            if (roundCount > 50){
+                throw new AssertionError("Impossible to get token hierarchy " +roundCount+ "times");
             }
             try {
                 Thread.sleep(1000);
@@ -113,9 +108,8 @@ public class DumpTokens {
             }
             
         }
-        th = TokenHierarchy.get(doc);
-        TokenSequence ts = th.tokenSequence();
         try{
+            Logger.getLogger(DumpTokens.class.getName()).info("Parsing token sequence");
             List<Token> tok = dumpTokens(ts);
             return tok;
         }catch(Exception e){
@@ -125,10 +119,9 @@ public class DumpTokens {
     }
     
     private List<Token> dumpTokens(TokenSequence ts){
-        Logger.getLogger(DumpTokens.class.getName()).info("PARSING TOKEN SEQUENCE");
         List<Token> result = null;
         if (ts == null) {
-            throw new AssertionError("No TOKEN SEQUENCE");
+            throw new AssertionError("No token sequence");
         }
         ts.move(0);
 
