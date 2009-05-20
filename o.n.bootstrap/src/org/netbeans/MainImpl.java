@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,6 +41,7 @@
 
 package org.netbeans;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,12 +53,14 @@ import java.security.CodeSource;
 import java.security.PermissionCollection;
 import java.security.Permissions;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.concurrent.atomic.AtomicReference;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
 
@@ -71,7 +74,7 @@ final class MainImpl extends Object {
      * @throws Exception for lots of reasons
      */
     public static void main (String args[]) throws Exception {
-        java.lang.reflect.Method[] m = new java.lang.reflect.Method[1];
+        AtomicReference<Method> m = new AtomicReference<Method>();
         int res = execute (args, System.in, System.out, System.err, m);
         if (res == -1) {
             // Connected to another running NB instance and succeeded in making a call.
@@ -81,7 +84,7 @@ final class MainImpl extends Object {
             System.exit(res);
         }
 
-        m[0].invoke (null, new Object[] { args });
+        m.get().invoke(null, new Object[] {args});
     }
 
     /** Returns string describing usage of the system. Does that by talking to
@@ -105,7 +108,7 @@ final class MainImpl extends Object {
      * @param args the arguments to pass to the handlers
      * @param reader the input stream reader for the handlers
      * @param writer the output stream for the handlers
-     * @param methodToCall null or array with one item that will be set to
+     * @param methodToCall null, or cell that will be set to
      *   a method that shall be executed as the main application
      */
     static int execute (
@@ -113,7 +116,7 @@ final class MainImpl extends Object {
         java.io.InputStream reader,
         java.io.OutputStream writer,
         java.io.OutputStream error,
-        java.lang.reflect.Method[] methodToCall
+        AtomicReference<Method> methodToCall
     ) throws Exception {
         // #42431: turn off jar: caches, they are evil
         // Note that setDefaultUseCaches changes a static field
@@ -125,9 +128,23 @@ final class MainImpl extends Object {
         ArrayList<File> list = new ArrayList<File>();
 
         HashSet<File> processedDirs = new HashSet<File> ();
+        HashSet<String> processedPaths = new HashSet<String> ();
+        List<String> argsL = Arrays.asList (args);
+        // only nbexec.exe puts userdir into netbeans.user
+        String user = System.getProperty ("netbeans.user"); // NOI18N
+        if (user == null) {
+            // read userdir from args (for unix nbexec)
+            int idx = argsL.indexOf ("--userdir"); // NOI18N
+            if (idx != -1 && argsL.size () > idx + 1) {
+                user = argsL.get (idx + 1);
+            }
+        }
+        if (user != null) {
+            build_cp (new File (user), list, processedDirs, processedPaths);
+        }
         String home = System.getProperty ("netbeans.home"); // NOI18N
         if (home != null) {
-            build_cp (new File (home), list, processedDirs);
+            build_cp (new File (home), list, processedDirs, processedPaths);
         }
         // #34069: need to do the same for nbdirs.
         String nbdirs = System.getProperty("netbeans.dirs"); // NOI18N
@@ -135,7 +152,7 @@ final class MainImpl extends Object {
             StringTokenizer tok = new StringTokenizer(nbdirs, File.pathSeparator);
             while (tok.hasMoreTokens()) {
                 // passing false as last argument as we need to initialize openfile-cli.jar
-                build_cp(new File(tok.nextToken()), list, processedDirs);
+                build_cp(new File(tok.nextToken()).getAbsoluteFile(), list, processedDirs, processedPaths);
             }
         }
 
@@ -192,15 +209,10 @@ final class MainImpl extends Object {
 
         }
 
-        String className = System.getProperty(
-            "netbeans.mainclass", "org.netbeans.core.startup.Main" // NOI18N
-        );
-
-        Class<?> c = loader.loadClass(className);
-        Method m = c.getMethod ("main", String[].class); // NOI18N
-
         if (methodToCall != null) {
-            methodToCall[0] = m;
+            String className = System.getProperty("netbeans.mainclass", "org.netbeans.core.startup.Main"); // NOI18N
+            Class<?> c = loader.loadClass(className);
+            methodToCall.set(c.getMethod("main", String[].class)); // NOI18N
         }
 
         return result.getExitCode ();
@@ -235,16 +247,27 @@ final class MainImpl extends Object {
                 if (cp.isEmpty ()) {
                     value = searchBuildNumber(this.getResources("META-INF/MANIFEST.MF"));
                 } else {
-                    value = searchBuildNumber(this.simpleFindResources("META-INF/MANIFEST.MF"));
+                    value = searchBuildNumber(this.findResources("META-INF/MANIFEST.MF"));
                 }
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
 
             if (value == null) {
-                System.err.println("Cannot set netbeans.buildnumber property no OpenIDE-Module-Implementation-Version found"); // NOI18N
+                System.err.println("Cannot set netbeans.buildnumber property no OpenIDE-Module-Build-Version found"); // NOI18N
             } else {
                 System.setProperty ("netbeans.buildnumber", value); // NOI18N
+            }
+        }
+
+        @Override // #154417: work around JAXP #6723276, at least within tests for now
+        public InputStream getResourceAsStream(String name) {
+            if (name.equals("META-INF/services/javax.xml.stream.XMLInputFactory")) { // NOI18N
+                return super.getResourceAsStream(name);
+            } else if (Boolean.getBoolean("org.netbeans.MainImpl.154417") && name.startsWith("META-INF/services/javax.xml.")) { // NOI18N
+                return new ByteArrayInputStream(new byte[0]);
+            } else {
+                return super.getResourceAsStream(name);
             }
         }
 
@@ -259,7 +282,7 @@ final class MainImpl extends Object {
                     InputStream is = u.openStream();
                     mf = new java.util.jar.Manifest(is);
                     is.close();
-                    value = mf.getMainAttributes().getValue("OpenIDE-Module-Implementation-Version"); // NOI18N
+                    value = mf.getMainAttributes().getValue("OpenIDE-Module-Build-Version"); // NOI18N
                     if (value != null) {
                         break;
                     }
@@ -283,12 +306,12 @@ final class MainImpl extends Object {
                 if (user != null) {
                     JarClassLoader.initializeCache();
                     
-                    build_cp (new File (user), toAdd, new HashSet<File> ());
+                    build_cp (new File (user), toAdd, new HashSet<File> (), new HashSet<String> ());
         
                 }
 
                 if (!toAdd.isEmpty ()) {
-                    addSources (toAdd);
+                    // source were already added in MainImpl.execute() method while processing userdir
                     metaInf = Lookups.metaInfServices(this);
                     if (handlers != null) {
                         handlers.clear();
@@ -301,13 +324,12 @@ final class MainImpl extends Object {
         }
 
 
-        /** Startup optimalization. See issue 27226. */
+        /** #27226: startup optimization. */
+        @Override
         protected PermissionCollection getPermissions(CodeSource cs) {
             return getAllPermission();
         }
-        /** Startup optimalization. See issue 27226. */
         private static PermissionCollection modulePermissions;
-        /** Startup optimalization. See issue 27226. */
         private static synchronized PermissionCollection getAllPermission() {
             if (modulePermissions == null) {
                 modulePermissions = new Permissions();
@@ -319,7 +341,7 @@ final class MainImpl extends Object {
 
         /** For a given classloader finds all registered CLIHandlers.
          */
-        public final Collection allCLIs () {
+        public final Collection<? extends CLIHandler> allCLIs () {
             if (handlers == null) {
                 handlers = new ArrayList<CLIHandler>(metaInf.lookupAll(CLIHandler.class));
             }
@@ -327,7 +349,8 @@ final class MainImpl extends Object {
         }
     } // end of BootClassLoader
 
-    private static void append_jars_to_cp (File dir, Collection<File> toAdd) throws IOException {
+    private static void append_jars_to_cp (File base, String pathToDir, Collection<File> toAdd, Set<String> processedPaths) throws IOException {
+        File dir = new File (base, pathToDir);
         if (!dir.isDirectory()) return;
 
         File[] arr = dir.listFiles();
@@ -341,21 +364,23 @@ final class MainImpl extends Object {
             }
             */
             if (n.endsWith("jar") || n.endsWith ("zip")) { // NOI18N
-                toAdd.add(arr[i]);
+                if (processedPaths.add (pathToDir + '/' + n)) { // NOI18N
+                    toAdd.add(arr[i]);
+                }
             }
         }
     }
 
 
-    private static void build_cp(File base, Collection<File> toAdd, Set<File> processedDirs)
+    private static void build_cp(File base, Collection<File> toAdd, Set<File> processedDirs, Set<String> processedPaths)
     throws java.io.IOException {
         if (!processedDirs.add (base)) {
             // already processed
             return;
         }
 
-        append_jars_to_cp(new File(base, "core/patches"), toAdd); // NOI18N
-        append_jars_to_cp(new File(base, "core"), toAdd); // NOI18N
+        append_jars_to_cp(base, "core/patches", toAdd, processedPaths); // NOI18N
+        append_jars_to_cp(base, "core", toAdd, processedPaths); // NOI18N
         // XXX a minor optimization: exclude any unused locale JARs
         // For example, lib/locale/ might contain:
         // core_ja.jar
@@ -368,6 +393,6 @@ final class MainImpl extends Object {
         // [etc.]
         // Only some of these will apply to the current session, based on the
         // current values of Locale.default and NbBundle.branding.
-        append_jars_to_cp(new File(base, "core/locale"), toAdd); // NOI18N
+        append_jars_to_cp(base, "core/locale", toAdd, processedPaths); // NOI18N
     }
 }
