@@ -57,6 +57,7 @@ import org.netbeans.editor.BaseKit;
 import org.netbeans.modules.editor.lib.NavigationHistory;
 import org.openide.awt.DropDownButtonFactory;
 import org.openide.util.ContextAwareAction;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -85,13 +86,16 @@ public final class NavigationHistoryForwardAction extends TextAction implements 
         this.component = component;
         this.waypoint = waypoint;
         
+        putValue("menuText", NbBundle.getMessage(NavigationHistoryBackAction.class,
+                "NavigationHistoryForwardAction_Tooltip_simple")); //NOI18N
+
         if (waypoint != null) {
             putValue(NAME, actionName);
             putValue(SHORT_DESCRIPTION, NbBundle.getMessage(NavigationHistoryBackAction.class, 
                 "NavigationHistoryForwardAction_Tooltip", actionName)); //NOI18N
             this.popupMenu = null;
         } else if (component != null) {
-            putValue(SMALL_ICON, new ImageIcon(Utilities.loadImage("org/netbeans/modules/editor/resources/navigate_forward_16.png"))); //NOI18N
+            putValue(SMALL_ICON, ImageUtilities.loadImageIcon("org/netbeans/modules/editor/resources/navigate_forward_16.png", false)); //NOI18N
             this.popupMenu = new JPopupMenu();
             update();
             NavigationHistory nav = NavigationHistory.getNavigations();
