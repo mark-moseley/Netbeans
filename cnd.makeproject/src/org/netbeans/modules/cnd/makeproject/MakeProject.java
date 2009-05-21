@@ -64,6 +64,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.ToolchainProject;
@@ -77,12 +78,14 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDesc
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfigurationDescriptor;
 import org.netbeans.modules.cnd.makeproject.api.MakeCustomizerProvider;
+import org.netbeans.modules.cnd.makeproject.api.configurations.Configurations;
 import org.netbeans.modules.cnd.makeproject.api.configurations.DevelopmentHostConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Folder;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.ui.MakeLogicalViewProvider;
 import org.netbeans.modules.cnd.utils.MIMEExtensions;
 import org.netbeans.modules.cnd.utils.MIMENames;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
 import org.netbeans.spi.java.classpath.ClassPathFactory;
 import org.netbeans.spi.java.classpath.ClassPathImplementation;
 import org.netbeans.spi.java.classpath.PathResourceImplementation;
@@ -144,7 +147,6 @@ public final class MakeProject implements Project, AntProjectListener {
     private final Lookup lookup;
     private ConfigurationDescriptorProvider projectDescriptorProvider;
     private int projectType = -1;
-    private MakeProject thisMP;
     private Set<String> headerExtensions = MakeProject.createExtensionSet();
     private Set<String> cExtensions = MakeProject.createExtensionSet();
     private Set<String> cppExtensions = MakeProject.createExtensionSet();
@@ -164,7 +166,6 @@ public final class MakeProject implements Project, AntProjectListener {
         sourcepath = new MutableCP(sources);
         lookup = createLookup(aux);
         helper.addAntProjectListener(this);
-        thisMP = this;
 
         // Find the project type from project.xml
         Element data = helper.getPrimaryConfigurationData(true);
@@ -241,7 +242,7 @@ public final class MakeProject implements Project, AntProjectListener {
                     new MakeArtifactProviderImpl(),
                     new ProjectXmlSavedHookImpl(),
                     new ProjectOpenedHookImpl(),
-                    new MakeSharabilityQuery(FileUtil.toFile(getProjectDirectory())),
+                    new MakeSharabilityQuery(projectDescriptorProvider, FileUtil.toFile(getProjectDirectory())),
                     sources,
                     new AntProjectHelperProvider(),
                     projectDescriptorProvider,
@@ -504,10 +505,10 @@ public final class MakeProject implements Project, AntProjectListener {
         }
 
         public String[] getPrivilegedTemplates() {
-            ConfigurationDescriptor configurationDescriptor =
+            MakeConfigurationDescriptor configurationDescriptor =
                     configurationProvider.getConfigurationDescriptor(false);
             if (configurationDescriptor != null) {
-                MakeConfiguration conf = (MakeConfiguration)configurationDescriptor.getConfs().getActive();
+                MakeConfiguration conf = configurationDescriptor.getActiveConfiguration();
                 if (conf != null && conf.isQmakeConfiguration()) {
                     return PRIVILEGED_NAMES_QT;
                 }
@@ -594,6 +595,17 @@ public final class MakeProject implements Project, AntProjectListener {
         this.sourceEncoding = sourceEncoding;
     }
 
+    /** NPE-safe method for getting active configuration */
+    public MakeConfiguration getActiveConfiguration() {
+        if (projectDescriptorProvider.gotDescriptor()) {
+            MakeConfigurationDescriptor projectDescriptor = projectDescriptorProvider.getConfigurationDescriptor();
+            if (projectDescriptor != null) {
+                return projectDescriptor.getActiveConfiguration();
+            }
+        }
+        return null;
+    }
+
     // Private innerclasses ----------------------------------------------------
 
     /*
@@ -678,8 +690,8 @@ public final class MakeProject implements Project, AntProjectListener {
     /**
      * if specified => project name will have information about directory in project view
      */
-    private final static String PROJECT_NAME_WITH_HIDDEN_PATHS = System.getProperty("cnd.project.name.hidden.paths");//NOI18N
-    private final static int PROJECT_NAME_NUM_SHOWN_FOLDERS = Integer.getInteger("cnd.project.name.folders.num", 1);//NOI18N
+    private final static String PROJECT_NAME_WITH_HIDDEN_PATHS = System.getProperty("cnd.project.name.hidden.paths"); //NOI18N
+    private final static int PROJECT_NAME_NUM_SHOWN_FOLDERS = Integer.getInteger("cnd.project.name.folders.num", 1); //NOI18N
 
     private final class Info implements ProjectInformation {
 
@@ -737,10 +749,12 @@ public final class MakeProject implements Project, AntProjectListener {
                     }
                 }
             }
-            DevelopmentHostConfiguration devHost = getDevelopmentHostConfiguration();
-            if (devHost != null && ! devHost.isLocalhost()) {
-                name = NbBundle.getMessage(getClass(), "PRJ_DISPLAY_NAME",
-                        name, devHost.getHostDisplayName(false));
+            if (OpenProjects.getDefault().isProjectOpen(MakeProject.this)){
+                DevelopmentHostConfiguration devHost = getDevelopmentHostConfiguration();
+                if (devHost != null && ! devHost.isLocalhost()) {
+                    name = NbBundle.getMessage(getClass(), "PRJ_DISPLAY_NAME",
+                            name, devHost.getHostDisplayName(false));
+                }
             }
             return name;
         }
@@ -889,7 +903,7 @@ public final class MakeProject implements Project, AntProjectListener {
         public MakeArtifact[] getBuildArtifacts() {
             List<MakeArtifact> artifacts = new ArrayList<MakeArtifact>();
 
-            MakeConfigurationDescriptor projectDescriptor = (MakeConfigurationDescriptor) projectDescriptorProvider.getConfigurationDescriptor();
+            MakeConfigurationDescriptor projectDescriptor = projectDescriptorProvider.getConfigurationDescriptor();
             Configuration[] confs = projectDescriptor.getConfs().getConfs();
 
 //            String projectLocation = null;
@@ -923,39 +937,40 @@ public final class MakeProject implements Project, AntProjectListener {
         }
 
         public Iterator<DataObject> objectsToSearch() {
-            MakeConfigurationDescriptor projectDescriptor = (MakeConfigurationDescriptor) projectDescriptorProvider.getConfigurationDescriptor();
+            MakeConfigurationDescriptor projectDescriptor = projectDescriptorProvider.getConfigurationDescriptor();
             Folder rootFolder = projectDescriptor.getLogicalFolders();
             return rootFolder.getAllItemsAsDataObjectSet(false, "text/").iterator(); // NOI18N
         }
     }
 
-    private DevelopmentHostConfiguration getDevelopmentHostConfiguration() {
-        if (projectDescriptorProvider.gotDescriptor()) {
-            MakeConfigurationDescriptor projectDescriptor = (MakeConfigurationDescriptor) projectDescriptorProvider.getConfigurationDescriptor();
-            MakeConfiguration conf = (MakeConfiguration) projectDescriptor.getConfs().getActive();
-            if (conf != null) {
-                return conf.getDevelopmentHost();
-            }
+    /** NPE-safe method for getting active DevelopmentHostConfiguration */
+    public DevelopmentHostConfiguration getDevelopmentHostConfiguration() {
+        MakeConfiguration conf = getActiveConfiguration();
+        if (conf != null) {
+            return conf.getDevelopmentHost();
         }
         return null;
     }
 
+    /** NPE-safe method for getting active ExecutionEnvironment */
+    public ExecutionEnvironment getDevelopmentHostExecutionEnvironment() {
+        DevelopmentHostConfiguration dc = getDevelopmentHostConfiguration();
+        return (dc == null) ? null : dc.getExecutionEnvironment();
+    }
+
     class RemoteProjectImpl implements RemoteProject {
-        public String getDevelopmentHost() {
+        public ExecutionEnvironment getDevelopmentHost() {
             DevelopmentHostConfiguration devHost = getDevelopmentHostConfiguration();
-            return (devHost == null) ? null : devHost.getName();
+            return (devHost == null) ? null : devHost.getExecutionEnvironment();
         }
     }
 
     class ToolchainProjectImpl implements ToolchainProject {
 
         public CompilerSet getCompilerSet() {
-            if (projectDescriptorProvider.gotDescriptor()) {
-                MakeConfigurationDescriptor projectDescriptor = (MakeConfigurationDescriptor) projectDescriptorProvider.getConfigurationDescriptor();
-                MakeConfiguration conf = (MakeConfiguration) projectDescriptor.getConfs().getActive();
-                if (conf != null) {
-                    return conf.getCompilerSet().getCompilerSet();
-                }
+            MakeConfiguration conf = getActiveConfiguration();
+            if (conf != null) {
+                return conf.getCompilerSet().getCompilerSet();
             }
             return null;
         }
@@ -996,11 +1011,9 @@ public final class MakeProject implements Project, AntProjectListener {
             synchronized (this) {
                 if (currentEventId == eventId) {
                     resources = list;
-                    return resources;
-                } else {
-                    return list;
                 }
             }
+            return list;
         }
 
         public void addPropertyChangeListener(PropertyChangeListener listener) {

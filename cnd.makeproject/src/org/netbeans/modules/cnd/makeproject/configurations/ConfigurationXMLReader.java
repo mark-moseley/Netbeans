@@ -56,6 +56,7 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDesc
 import org.netbeans.modules.cnd.makeproject.api.configurations.Folder;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ItemConfiguration;
+import org.netbeans.modules.cnd.utils.NamedRunnable;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
@@ -82,7 +83,7 @@ public class ConfigurationXMLReader extends XMLDocReader {
     /*
      * was: readFromDisk
      */
-    public ConfigurationDescriptor read(final String relativeOffset) throws IOException {
+    public MakeConfigurationDescriptor read(final String relativeOffset) throws IOException {
         final String tag;
         final FileObject xml;
         // Try first new style file
@@ -102,9 +103,9 @@ public class ConfigurationXMLReader extends XMLDocReader {
         }
         String path = FileUtil.toFile(projectDirectory).getPath();
         final MakeConfigurationDescriptor configurationDescriptor = new MakeConfigurationDescriptor(path);
-        Task task = RequestProcessor.getDefault().post(new Runnable() {
+        Task task = RequestProcessor.getDefault().post(new NamedRunnable("Reading project configuraion") { //NOI18N
 
-            public void run() {
+            protected @Override void runImpl() {
                 try {
                     if (MakeProjectConfigurationProvider.ASYNC_LOAD) {
                         try {

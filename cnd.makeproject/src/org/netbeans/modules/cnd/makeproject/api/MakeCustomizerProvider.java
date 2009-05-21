@@ -50,12 +50,12 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.WeakHashMap;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
-import org.netbeans.modules.cnd.makeproject.MakeSources;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
@@ -85,7 +85,7 @@ public class MakeCustomizerProvider implements CustomizerProvider {
     private static final String COMMAND_CANCEL = "CANCEL";  // NOI18N
     private static final String COMMAND_APPLY = "APPLY";  // NOI18N
     private DialogDescriptor dialogDescriptor;
-    private Map customizerPerProject = new WeakHashMap(); // Is is weak needed here?
+    private Map<Project, Dialog> customizerPerProject = new WeakHashMap<Project, Dialog>(); // Is is weak needed here?
     private ConfigurationDescriptorProvider projectDescriptorProvider;
     private final Set<ActionListener> actionListenerList = new HashSet<ActionListener>();
 
@@ -111,7 +111,7 @@ public class MakeCustomizerProvider implements CustomizerProvider {
     }
 
     public void showCustomizer(final String preselectedNodeName, final Item item, final Folder folder) {
-        if (!projectDescriptorProvider.gotDescriptor()) {
+        if (!projectDescriptorProvider.gotDescriptor() || projectDescriptorProvider.getConfigurationDescriptor().getConfs().size() == 0) {
             //TODO: show warning dialog
             return;
         }
@@ -126,7 +126,7 @@ public class MakeCustomizerProvider implements CustomizerProvider {
     private void showCustomizerWorker(String preselectedNodeName, Item item, Folder folder) {
 
         if (customizerPerProject.containsKey(project)) {
-            Dialog dlg = (Dialog) customizerPerProject.get(project);
+            Dialog dlg = customizerPerProject.get(project);
 
             // check if the project is being customized
             if (dlg.isShowing()) {
@@ -145,7 +145,7 @@ public class MakeCustomizerProvider implements CustomizerProvider {
         }
 
         // Make sure all languages are update
-        ((MakeConfigurationDescriptor) projectDescriptorProvider.getConfigurationDescriptor()).refreshRequiredLanguages();
+        projectDescriptorProvider.getConfigurationDescriptor().refreshRequiredLanguages();
 
         // Create options
         JButton options[] = new JButton[]{
@@ -211,7 +211,7 @@ public class MakeCustomizerProvider implements CustomizerProvider {
 
         customizerPerProject.put(project, dialog);
         dialog.setVisible(true);
-        clonedProjectdescriptor.closed();
+        //clonedProjectdescriptor.closed();
     }
 
     /** Listens to the actions on the Customizer's option buttons */
@@ -250,12 +250,17 @@ public class MakeCustomizerProvider implements CustomizerProvider {
 
                 //projectDescriptor.copyFromProjectDescriptor(clonedProjectdescriptor);
                 makeCustomizer.save();
+
+                List<String> oldSourceRoots = ((MakeConfigurationDescriptor)projectDescriptor).getSourceRoots();
+                List<String> newSourceRoots = ((MakeConfigurationDescriptor)clonedProjectdescriptor).getSourceRoots();
+
                 projectDescriptor.assign(clonedProjectdescriptor);
                 projectDescriptor.setModified();
                 projectDescriptor.save(); // IZ 133606
                 ((MakeConfigurationDescriptor) projectDescriptor).checkForChangedItems(project, folder, item);
+                ((MakeConfigurationDescriptor) projectDescriptor).checkForChangedSourceRoots(oldSourceRoots, newSourceRoots);
 
-                ((MakeSources) ProjectUtils.getSources(project)).descriptorChanged();// FIXUP: should be moved into ProjectDescriptorHelper...
+//                ((MakeSources) ProjectUtils.getSources(project)).descriptorChanged();// FIXUP: should be moved into ProjectDescriptorHelper...
 
                 fireActionEvent(e);
 

@@ -55,7 +55,6 @@ import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.api.project.NativeProject;
 import org.netbeans.modules.cnd.api.project.NativeProjectItemsListener;
-import org.netbeans.modules.cnd.loaders.HDataLoader;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.netbeans.modules.cnd.makeproject.api.configurations.BooleanConfiguration;
@@ -72,8 +71,8 @@ import org.netbeans.modules.cnd.makeproject.api.compilers.BasicCompiler;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Folder;
 import org.netbeans.modules.cnd.makeproject.api.configurations.FolderConfiguration;
 import org.netbeans.modules.cnd.makeproject.ui.MakeLogicalViewProvider;
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.openide.filesystems.FileUtil;
-import org.openide.loaders.ExtensionList;
 import org.openide.util.RequestProcessor;
 
 final public class NativeProjectProvider implements NativeProject, PropertyChangeListener {
@@ -106,16 +105,13 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
     }
 
     private MakeConfigurationDescriptor getMakeConfigurationDescriptor() {
-        return (MakeConfigurationDescriptor) projectDescriptorProvider.getConfigurationDescriptor();
+        return projectDescriptorProvider.getConfigurationDescriptor();
     }
 
     private MakeConfiguration getMakeConfiguration() {
         MakeConfigurationDescriptor descriptor = getMakeConfigurationDescriptor();
         if (descriptor != null) {
-            Configurations confs = descriptor.getConfs();
-            if (confs != null) {
-                return (MakeConfiguration) confs.getActive();
-            }
+            return descriptor.getActiveConfiguration();
         }
         return null;
     }
@@ -228,13 +224,14 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
     public void fireFilesAdded(List<NativeFileItem> nativeFileIetms) {
         //System.out.println("fireFileAdded ");
         ArrayList<NativeFileItem> actualList = new ArrayList<NativeFileItem>();
-        ExtensionList hlist = HDataLoader.getInstance().getExtensions();
         // Remove non C/C++ items
         Iterator iter = nativeFileIetms.iterator();
         while (iter.hasNext()) {
             NativeFileItem nativeFileIetm = (NativeFileItem) iter.next();
             int tool = ((Item) nativeFileIetm).getDefaultTool();
-            if (tool == Tool.CustomTool && !hlist.isRegistered(((Item) nativeFileIetm).getPath())) {
+            if (tool == Tool.CustomTool 
+                // check of mime type is better to support headers without extensions
+                && !MIMENames.HEADER_MIME_TYPE.equals(((Item) nativeFileIetm).getMIMEType())) {
                 continue; // IZ 87407
             }
             actualList.add(nativeFileIetm);
@@ -255,16 +252,17 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
     public void fireFilesRemoved(List<NativeFileItem> nativeFileIetms) {
         //System.out.println("fireFilesRemoved ");
         ArrayList<NativeFileItem> actualList = new ArrayList<NativeFileItem>();
-        ExtensionList hlist = HDataLoader.getInstance().getExtensions();
         // Remove non C/C++ items
         Iterator iter = nativeFileIetms.iterator();
         while (iter.hasNext()) {
             NativeFileItem nativeFileIetm = (NativeFileItem) iter.next();
-            ItemConfiguration itemConfiguration = ((Item) nativeFileIetm).getItemConfiguration(getMakeConfiguration()); //ItemConfiguration)getMakeConfiguration().getAuxObject(ItemConfiguration.getId(((Item)nativeFileIetm).getPath()));
+            ItemConfiguration itemConfiguration = ((Item) nativeFileIetm).getItemConfiguration(getMakeConfiguration());
             if (itemConfiguration == null) {
                 continue;
             }
-            if ((!itemConfiguration.isCompilerToolConfiguration() && !hlist.isRegistered(((Item) nativeFileIetm).getPath())) /*|| itemConfiguration.getExcluded().getValue()*/) {
+            if ((!itemConfiguration.isCompilerToolConfiguration() 
+                // check of mime type is better to support headers without extensions
+                && !MIMENames.HEADER_MIME_TYPE.equals(((Item) nativeFileIetm).getMIMEType()))) {
                 continue; // IZ 87407
             }
             actualList.add(nativeFileIetm);
@@ -316,6 +314,7 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         }
     }
 
+    @SuppressWarnings("unchecked")
     private List<NativeProjectItemsListener> getListenersCopy() {
         synchronized (listeners) {
             return (listeners.size() == 0) ? Collections.EMPTY_LIST : new ArrayList<NativeProjectItemsListener>(listeners);
@@ -368,16 +367,23 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
             // What else can we do?
             firePropertiesChanged(getMakeConfigurationDescriptor().getProjectItems(), true, true, true);
             MakeLogicalViewProvider.checkForChangedItems(getMakeConfigurationDescriptor().getProject(), null, null);
+            MakeLogicalViewProvider.checkForChangedName(getMakeConfigurationDescriptor().getProject());
             return;
         }
 
         // Check compiler collection. Fire if different (IZ 131825)
         if (!oldMConf.getCompilerSet().getName().equals(newMConf.getCompilerSet().getName()) ||
-                !oldMConf.getDevelopmentHost().getName().equals(newMConf.getDevelopmentHost().getName())) {
+                !oldMConf.getDevelopmentHost().getExecutionEnvironment().equals(newMConf.getDevelopmentHost().getExecutionEnvironment())) {
             fireFilesPropertiesChanged(); // firePropertiesChanged(getAllFiles(), true);
             MakeLogicalViewProvider.checkForChangedItems(getMakeConfigurationDescriptor().getProject(), null, null);
+            if (!oldMConf.getDevelopmentHost().getExecutionEnvironment().equals(newMConf.getDevelopmentHost().getExecutionEnvironment())) {
+                MakeLogicalViewProvider.checkForChangedName(getMakeConfigurationDescriptor().getProject());
+            }
             return;
         }
+
+        CompilerSet oldCompilerSet = oldMConf.getCompilerSet().getCompilerSet();
+        CompilerSet newCompilerSet = newMConf.getCompilerSet().getCompilerSet();
 
         // Check all items
         Item[] items = getMakeConfigurationDescriptor().getProjectItems();
@@ -408,21 +414,29 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
             }
 
             if (newItemConf.getTool() == Tool.CCompiler) {
+                if (oldItemConf.getTool() != Tool.CCompiler) {
+                    list.add(items[i]);
+                    continue;
+                }
                 if (!oldItemConf.getCCompilerConfiguration().getPreprocessorOptions().equals(newItemConf.getCCompilerConfiguration().getPreprocessorOptions())) {
                     list.add(items[i]);
                     continue;
                 }
-                if (!oldItemConf.getCCompilerConfiguration().getIncludeDirectoriesOptions().equals(newItemConf.getCCompilerConfiguration().getIncludeDirectoriesOptions())) {
+                if (!oldItemConf.getCCompilerConfiguration().getIncludeDirectoriesOptions(oldCompilerSet).equals(newItemConf.getCCompilerConfiguration().getIncludeDirectoriesOptions(newCompilerSet))) {
                     list.add(items[i]);
                     continue;
                 }
             }
             if (newItemConf.getTool() == Tool.CCCompiler) {
+                if (oldItemConf.getTool() != Tool.CCCompiler) {
+                    list.add(items[i]);
+                    continue;
+                }
                 if (!oldItemConf.getCCCompilerConfiguration().getPreprocessorOptions().equals(newItemConf.getCCCompilerConfiguration().getPreprocessorOptions())) {
                     list.add(items[i]);
                     continue;
                 }
-                if (!oldItemConf.getCCCompilerConfiguration().getIncludeDirectoriesOptions().equals(newItemConf.getCCCompilerConfiguration().getIncludeDirectoriesOptions())) {
+                if (!oldItemConf.getCCCompilerConfiguration().getIncludeDirectoriesOptions(oldCompilerSet).equals(newItemConf.getCCCompilerConfiguration().getIncludeDirectoriesOptions(newCompilerSet))) {
                     list.add(items[i]);
                     continue;
                 }
@@ -454,14 +468,14 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
         boolean ccFiles = false;
         boolean libsChanged = false;
         boolean projectChanged = false;
-        VectorConfiguration cIncludeDirectories;
-        BooleanConfiguration cInheritIncludes;
-        VectorConfiguration cPpreprocessorOption;
-        BooleanConfiguration cInheritMacros;
-        VectorConfiguration ccIncludeDirectories;
-        BooleanConfiguration ccInheritIncludes;
-        VectorConfiguration ccPreprocessorOption;
-        BooleanConfiguration ccInheritMacros;
+        VectorConfiguration<String> cIncludeDirectories = null;
+        BooleanConfiguration cInheritIncludes = null;
+        VectorConfiguration<String> cPpreprocessorOption = null;
+        BooleanConfiguration cInheritMacros = null;
+        VectorConfiguration<String> ccIncludeDirectories = null;
+        BooleanConfiguration ccInheritIncludes = null;
+        VectorConfiguration<String> ccPreprocessorOption = null;
+        BooleanConfiguration ccInheritMacros = null;
         Item[] items;
 
         // Check first whether the development host has changed
@@ -490,14 +504,18 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
             items = folder.getAllItemsAsArray();
         } else if (item != null) {
             ItemConfiguration itemConfiguration = item.getItemConfiguration(getMakeConfiguration()); //ItemConfiguration)getMakeConfiguration().getAuxObject(ItemConfiguration.getId(item.getPath()));
-            cIncludeDirectories = itemConfiguration.getCCompilerConfiguration().getIncludeDirectories();
-            cInheritIncludes = itemConfiguration.getCCompilerConfiguration().getInheritIncludes();
-            cInheritMacros = itemConfiguration.getCCompilerConfiguration().getInheritPreprocessor();
-            cPpreprocessorOption = itemConfiguration.getCCompilerConfiguration().getPreprocessorConfiguration();
-            ccIncludeDirectories = itemConfiguration.getCCCompilerConfiguration().getIncludeDirectories();
-            ccInheritIncludes = itemConfiguration.getCCCompilerConfiguration().getInheritIncludes();
-            ccPreprocessorOption = itemConfiguration.getCCCompilerConfiguration().getPreprocessorConfiguration();
-            ccInheritMacros = itemConfiguration.getCCCompilerConfiguration().getInheritPreprocessor();
+            if (itemConfiguration.getTool() == Tool.CCompiler) {
+                cIncludeDirectories = itemConfiguration.getCCompilerConfiguration().getIncludeDirectories();
+                cInheritIncludes = itemConfiguration.getCCompilerConfiguration().getInheritIncludes();
+                cInheritMacros = itemConfiguration.getCCompilerConfiguration().getInheritPreprocessor();
+                cPpreprocessorOption = itemConfiguration.getCCompilerConfiguration().getPreprocessorConfiguration();
+            }
+            if (itemConfiguration.getTool() == Tool.CCCompiler) {
+                ccIncludeDirectories = itemConfiguration.getCCCompilerConfiguration().getIncludeDirectories();
+                ccInheritIncludes = itemConfiguration.getCCCompilerConfiguration().getInheritIncludes();
+                ccPreprocessorOption = itemConfiguration.getCCCompilerConfiguration().getPreprocessorConfiguration();
+                ccInheritMacros = itemConfiguration.getCCCompilerConfiguration().getInheritPreprocessor();
+            }
             if (itemConfiguration.getExcluded().getDirty()) {
                 itemConfiguration.getExcluded().setDirty(false);
                 ArrayList<NativeFileItem> list = new ArrayList<NativeFileItem>();
@@ -522,18 +540,22 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
             ccInheritMacros = makeConfiguration.getCCCompilerConfiguration().getInheritPreprocessor();
             items = getMakeConfigurationDescriptor().getProjectItems();
             projectChanged = true;
+//            cFiles = true;
+//            ccFiles = true;
         }
 
-        if (cIncludeDirectories.getDirty() || cPpreprocessorOption.getDirty() ||
-                cInheritIncludes.getDirty() || cInheritMacros.getDirty()) {
+        if (cIncludeDirectories != null &&
+            (cIncludeDirectories.getDirty() || cPpreprocessorOption.getDirty() ||
+             cInheritIncludes.getDirty() || cInheritMacros.getDirty())) {
             cFiles = true;
             cIncludeDirectories.setDirty(false);
             cPpreprocessorOption.setDirty(false);
             cInheritIncludes.setDirty(false);
             cInheritMacros.setDirty(false);
         }
-        if (ccIncludeDirectories.getDirty() || ccPreprocessorOption.getDirty() ||
-                ccInheritIncludes.getDirty() || ccInheritMacros.getDirty()) {
+        if (ccIncludeDirectories != null &&
+            (ccIncludeDirectories.getDirty() || ccPreprocessorOption.getDirty() ||
+             ccInheritIncludes.getDirty() || ccInheritMacros.getDirty())) {
             ccFiles = true;
             ccIncludeDirectories.setDirty(false);
             ccPreprocessorOption.setDirty(false);
@@ -680,5 +702,10 @@ final public class NativeProjectProvider implements NativeProject, PropertyChang
             vec.addAll(cccCompilerConfiguration.getPreprocessorConfiguration().getValue());
         }
         return vec;
+    }
+
+    @Override
+    public String toString() {
+        return getProjectDisplayName()+" "+getProjectRoot(); // NOI18N
     }
 }

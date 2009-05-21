@@ -38,21 +38,23 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.actions;
 
+import java.io.File;
 import java.util.ResourceBundle;
 import javax.swing.JButton;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.cnd.loaders.ExeObject;
 import org.netbeans.modules.cnd.makeproject.api.ProjectActionEvent;
 import org.netbeans.modules.cnd.makeproject.api.ProjectActionSupport;
 import org.netbeans.modules.cnd.makeproject.api.RunDialogPanel;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationSupport;
 import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
+import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
@@ -61,92 +63,111 @@ import org.openide.util.NbBundle;
 import org.openide.util.actions.NodeAction;
 
 public class RunDialogAction extends NodeAction {
+
     protected JButton runButton = null;
     private Object options[];
 
     private void init() {
-	if (runButton == null) {
-	    runButton = new JButton(getString("RunButtonText")); // NOI18N
-	    runButton.getAccessibleContext().setAccessibleDescription(getString("RunButtonAD"));
-	    options = new Object[] {
-		runButton,
-		DialogDescriptor.CANCEL_OPTION,
-	    };
-	}
+        if (runButton == null) {
+            runButton = new JButton(getString("RunButtonText")); // NOI18N
+            runButton.getAccessibleContext().setAccessibleDescription(getString("RunButtonAD"));
+            options = new Object[]{
+                        runButton,
+                        DialogDescriptor.CANCEL_OPTION,};
+        }
     }
 
-    public String getName () {
-	return getString("RUN_COMMAND"); // NOI18N
+    public String getName() {
+        return getString("RUN_COMMAND"); // NOI18N
     }
 
-    protected void performAction (final Node[] activatedNodes) {
-	String path = null;
-	if (activatedNodes != null && activatedNodes.length == 1) {
-	    DataObject dataObject = (DataObject)activatedNodes[0].getCookie(DataObject.class);
-	    if (dataObject != null && dataObject instanceof ExeObject) {
-		Node node = dataObject.getNodeDelegate();
-		path = FileUtil.toFile(dataObject.getPrimaryFile()).getPath();
-	    }
-	}
-	perform(path);
+    protected void performAction(final Node[] activatedNodes) {
+        String path = null;
+        if (activatedNodes != null && activatedNodes.length == 1) {
+            DataObject dataObject = activatedNodes[0].getCookie(DataObject.class);
+            String mime = getMime(dataObject);
+            if (dataObject != null  && dataObject.isValid() && MIMENames.isExe(mime)) {
+                FileObject fo = dataObject.getPrimaryFile();
+                if (fo != null) {
+                    File file = FileUtil.toFile(fo);
+                    if (file != null) {
+                        path = file.getPath();
+                    }
+                }
+            }
+        }
+        perform(path);
+    }
+
+    private String getMime(DataObject dob) {
+        FileObject primaryFile = dob == null ? null : dob.getPrimaryFile();
+        String mime = primaryFile == null ? "" : primaryFile.getMIMEType();
+        return mime;
     }
 
     protected boolean enable(Node[] activatedNodes) {
-	if (activatedNodes == null || activatedNodes.length != 1)
-	    return false;
-	DataObject dataObject = (DataObject)activatedNodes[0].getCookie(DataObject.class);
-	if (!(dataObject instanceof ExeObject))
-	    return false;
-	return true;
+        if (activatedNodes == null || activatedNodes.length != 1) {
+            return false;
+        }
+        DataObject dataObject = activatedNodes[0].getCookie(DataObject.class);
+        String mime = getMime(dataObject);
+        // disabled for core files, see issue 136696
+        if (!MIMENames.isExe(mime) || MIMENames.ELF_CORE_MIME_TYPE.equals(mime)) {
+            return false;
+        }
+        return true;
     }
 
     public void perform(String executablePath) {
-	if (runButton == null) {
-	    init();
-	}
-	perform(new RunDialogPanel(executablePath, true, runButton));
+        if (runButton == null) {
+            init();
+        }
+        perform(new RunDialogPanel(executablePath, true, runButton));
     }
 
     protected void perform(RunDialogPanel runDialogPanel) {
-	if (runButton == null) {
-	    init();
-	}
-	DialogDescriptor dialogDescriptor = new DialogDescriptor(
-	    runDialogPanel,
-	    getString("RunDialogTitle"),
-	    true,
-	    options,
-	    runButton,
-	    DialogDescriptor.BOTTOM_ALIGN,
-	    null,
-	    null);
-	Object ret = DialogDisplayer.getDefault().notify(dialogDescriptor);
-	if (ret == runButton) {
-	    Project project = runDialogPanel.getSelectedProject();
-	    RunProfile profile = ConfigurationSupport.getProjectDescriptor(project).getConfs().getActive().getProfile();
-	    String path = runDialogPanel.getExecutablePath();
-            path = IpeUtils.toRelativePath(profile.getRunDirectory(), path); // FIXUP: should use rel or abs ...
-	    ProjectActionEvent projectActionEvent = new ProjectActionEvent(
-			project,
-			ProjectActionEvent.RUN,
-			IpeUtils.getBaseName(path) + " (run)", // NOI18N
-			path,
-			null,
-			profile,
-			false);
-	    ProjectActionSupport.fireActionPerformed(new ProjectActionEvent[] {projectActionEvent});
-	}
+        if (runButton == null) {
+            init();
+        }
+        DialogDescriptor dialogDescriptor = new DialogDescriptor(
+                runDialogPanel,
+                getString("RunDialogTitle"),
+                true,
+                options,
+                runButton,
+                DialogDescriptor.BOTTOM_ALIGN,
+                null,
+                null);
+        Object ret = DialogDisplayer.getDefault().notify(dialogDescriptor);
+        if (ret == runButton) {
+            Project project = runDialogPanel.getSelectedProject();
+            MakeConfiguration conf = ConfigurationSupport.getProjectActiveConfiguration(project);
+            if (conf != null) {
+                RunProfile profile = conf.getProfile();
+                String path = runDialogPanel.getExecutablePath();
+                path = IpeUtils.toRelativePath(profile.getRunDirectory(), path); // FIXUP: should use rel or abs ...
+                ProjectActionEvent projectActionEvent = new ProjectActionEvent(
+                        project,
+                        ProjectActionEvent.Type.RUN,
+                        IpeUtils.getBaseName(path) + " (run)", // NOI18N
+                        path, conf,
+                        profile,
+                        false);
+                ProjectActionSupport.getInstance().fireActionPerformed(new ProjectActionEvent[]{projectActionEvent});
+            }
+        }
     }
 
-    public HelpCtx getHelpCtx () {
+    public HelpCtx getHelpCtx() {
         return new HelpCtx(RunDialogAction.class); // FIXUP ???
     }
 
     private ResourceBundle bundle;
+
     private String getString(String s) {
-	if (bundle == null) {
-	    bundle = NbBundle.getBundle(RunDialogAction.class);
-	}
-	return bundle.getString(s);
+        if (bundle == null) {
+            bundle = NbBundle.getBundle(RunDialogAction.class);
+        }
+        return bundle.getString(s);
     }
 }
