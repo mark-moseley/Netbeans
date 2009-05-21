@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.cnd.apt.support;
 
+import org.netbeans.modules.cnd.apt.structure.APTInclude;
+
 /**
  *
  * @author Vladimir Voskresensky
@@ -60,21 +62,21 @@ public interface APTIncludeHandler {
      * 
      * notify about inclusion
      * @param path included file absolute path
-     * @param directiveLine line number of #include directive in original file (1-based)
+     * @param aptNode #include directive
      * @param resolvedDirIndex index of resolved directory in lists of include paths
      * @return false if inclusion is recursive and was prohibited
      */
-    public boolean pushInclude(String path, int directiveLine, int resolvedDirIndex);
+    public boolean pushInclude(CharSequence path, APTInclude aptNode, int resolvedDirIndex);
     
     /*
      * notify about finished inclusion
      */
-    public String popInclude();
+    public CharSequence popInclude();
     
     /**
      * get resolver for path
      */
-    public APTIncludeResolver getResolver(String path);
+    public APTIncludeResolver getResolver(CharSequence path);
 
     /**
      * returns the first file where include stack started
@@ -87,8 +89,9 @@ public interface APTIncludeHandler {
      * - resolved #include directive as absolute included path
      */
     public interface IncludeInfo {
-        public String getIncludedPath();
+        public CharSequence getIncludedPath();
         public int getIncludeDirectiveLine();
+        public int getIncludeDirectiveOffset();
         public int getIncludedDirIndex();
     } 
     
