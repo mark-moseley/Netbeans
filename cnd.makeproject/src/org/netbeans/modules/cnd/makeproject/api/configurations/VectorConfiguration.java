@@ -1,3 +1,4 @@
+
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
@@ -38,26 +39,25 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.makeproject.api.configurations;
 
-import java.util.Vector;
-import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import java.util.ArrayList;
+import java.util.List;
 
-public class VectorConfiguration {
-    private VectorConfiguration master;
+public class VectorConfiguration<E> {
 
-    private Vector value;
+    private VectorConfiguration<E> master;
+    private List<E> value;
     private boolean dirty = false;
 
-    public VectorConfiguration(VectorConfiguration master) {
-	this.master = master;
-	value = new Vector();
-	reset();
+    public VectorConfiguration(VectorConfiguration<E> master) {
+        this.master = master;
+        value = new ArrayList<E>(0);
+        reset();
     }
 
-    public VectorConfiguration getMaster() {
-	return master;
+    public VectorConfiguration<E> getMaster() {
+        return master;
     }
 
     public void setDirty(boolean dirty) {
@@ -67,57 +67,51 @@ public class VectorConfiguration {
     public boolean getDirty() {
         return dirty;
     }
-    
-    public void add(Object o) {
-	getValue().add(o);
+
+    public void add(E o) {
+        getValue().add(o);
     }
 
-    public void setValue(Vector b) {
-	this.value = b;
+    public void setValue(List<E> l) {
+        this.value = l;
     }
 
-    public Vector getValue() {
-	return value;
-	/*
-	if (master != null && !getModified())
-	    return master.getValue();
-	else
-	    return value;
-	*/
-    }
-
-    public String[] getValueAsArray() {
-	return (String[])getValue().toArray(new String[getValue().size()]);
+    public List<E> getValue() {
+        return value;
+    /*
+    if (master != null && !getModified())
+    return master.getValue();
+    else
+    return value;
+     */
     }
 
     public boolean getModified() {
-	return value.size() != 0;
+        return value.size() != 0;
     }
 
     public void reset() {
-	value.removeAllElements();
+        //value.removeAll(); // FIXUP
+        value = new ArrayList<E>();
     }
 
-    public String getOption(String prependOption) {
-	StringBuilder option = new StringBuilder();
-	String[] values = getValueAsArray();
-	for (int i = 0; i < values.length; i++)
-	    option.append(prependOption + IpeUtils.escapeOddCharacters(values[i]) + " "); // NOI18N
-	return option.toString();
-    }
-    
     // Clone and Assign
-    public void assign(VectorConfiguration conf) {
+    public void assign(VectorConfiguration<E> conf) {
         setDirty(!this.equals(conf));
-	reset();
-	getValue().addAll(conf.getValue());
+        reset();
+        getValue().addAll(conf.getValue());
     }
-     
-    public boolean equals(VectorConfiguration conf) {
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof VectorConfiguration)) {
+            return false;
+        }
+        VectorConfiguration conf = (VectorConfiguration)obj;
         boolean eq = true;
-        if (getValue().size() != conf.getValue().size())
+        if (getValue().size() != conf.getValue().size()) {
             eq = false;
-        else {
+        } else {
             for (int i = 0; i < getValue().size(); i++) {
                 if (!getValue().get(i).equals(conf.getValue().get(i))) {
                     eq = false;
@@ -128,9 +122,50 @@ public class VectorConfiguration {
         return eq;
     }
 
-    public Object clone() {
-	VectorConfiguration clone = new VectorConfiguration(master);
-	clone.setValue((Vector)getValue().clone());
-	return clone;
+    @Override
+    public int hashCode() {
+        int code = 3;
+        for (Object obj : getValue()) {
+            code = 17 * code + obj.hashCode();
+        }
+        return code;
     }
+
+    @Override
+    public VectorConfiguration<E> clone() {
+        VectorConfiguration<E> clone = new VectorConfiguration<E>(master);
+        clone.setValue(new ArrayList<E>(getValue()));
+        return clone;
+    }
+
+    /**
+     * Converts each element of the vector to <code>String</code>
+     * and concatenates the results into a single <code>String</code>.
+     * Elements are separated with spaces.
+     *
+     * @param visitor  will be used to convert each element to <code>String</code>
+     * @return concatenated <code>String</code>
+     */
+    public String toString(ToString<E> visitor) {
+        StringBuilder buf = new StringBuilder();
+        List<E> list = getValue();
+        for (E item : list) {
+            String s = visitor.toString(item);
+            if (s != null && 0 < s.length()) {
+                buf.append(s).append(' '); // NOI18N
+            }
+        }
+        return buf.toString();
+    }
+
+    /**
+     * Used to convert vector elements to <code>String</code>.
+     * See {@link VectorConfiguration#toString(ToString)}.
+     *
+     * @param <E> vector element type
+     */
+    public static interface ToString<E> {
+        String toString(E item);
+    }
+
 }
