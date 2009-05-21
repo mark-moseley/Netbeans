@@ -77,6 +77,13 @@ public final class UIUtils {
         return lfID.endsWith("Windows"); //NOI18N
     }
     
+    /** Finds if GTK LF is active.
+     * @return true if GTK LF is active, false otherwise */
+    public static boolean isGtkLF () {
+        String lfID = UIManager.getLookAndFeel().getID();
+        return lfID.startsWith("GTK"); //NOI18N
+    }
+    
     /** Finds if windows LF with XP theme is active.
      * @return true if windows LF and XP theme is active, false otherwise */
     public static boolean isXPLF () {
@@ -129,7 +136,7 @@ public final class UIUtils {
 
     private static void checkOpenide() {
         try {
-            utilsClass = Class.forName("org.openide.util.Utilities"); //NOI18N
+            utilsClass = Class.forName("org.openide.util.ImageUtilities"); //NOI18N
             utilsMethod = utilsClass.getDeclaredMethod ( "loadImage", new Class[] {String.class}); //NOI18N
             openideAvailable = Boolean.TRUE;
         } catch (Exception e) {
@@ -437,7 +444,9 @@ public final class UIUtils {
                                   "SPACE", "addToSelection",
                              "ctrl SPACE", "toggleAndAnchor",
                             "shift SPACE", "extendTo",
-                       "ctrl shift SPACE", "moveSelectionTo"
+                       "ctrl shift SPACE", "moveSelectionTo",
+                               "SUBTRACT", "collapse",
+                                    "ADD", "expand"
 		 }),
         };
         Object[] res = new Object[uiDefaults.length + inputMaps.length];
