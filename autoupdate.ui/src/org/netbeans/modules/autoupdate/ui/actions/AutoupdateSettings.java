@@ -61,7 +61,7 @@ import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import org.netbeans.modules.autoupdate.ui.Utilities;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.NbPreferences;
 
 /**
@@ -196,7 +196,7 @@ public class AutoupdateSettings {
         err.log (Level.FINER, "Old IDE Identity ID: " + id); // NOI18N
         String newPrefix = "";
         try {
-            FileObject fo = Repository.getDefault().getDefaultFileSystem().findResource("/productid"); // NOI18N
+            FileObject fo = FileUtil.getConfigFile("productid"); // NOI18N
             if (fo != null) {
                 InputStream is = fo.getInputStream();
                 try {
@@ -261,8 +261,27 @@ public class AutoupdateSettings {
         forImport.add (currentVersion);
         if (exp != null && ! forImport.contains (exp)) {
             try {
+                final int period = getPeriod();
+                boolean shared = Utilities.isGlobalInstallation();
                 p.removeNode ();
                 getPreferences ().put (IMPORTED, Boolean.toString (true));
+                getPreferences ().putInt(PROP_PERIOD, period);
+                if (shared) {
+                    // Check that we can use 'shared' flag imported from previous installation with a new one.
+                    // Obtained from SettingsTab.cbGlobalInstallActionPerformed
+                    Collection<File> dirs = Utilities.sharedDirs();
+                    if (!dirs.isEmpty()) {
+                        for (File f : dirs) {
+                            if (f.exists() && f.isDirectory() && !Utilities.canWriteInCluster(f)) {
+                                shared = false;
+                                break;
+                            }
+                        }
+                        if (shared) {
+                            Utilities.setGlobalInstallation(shared);
+                        }
+                    }
+                }
                 err.log (Level.FINE, "Don't read preferences from userdir " + exp);
             } catch (BackingStoreException ex) {
                 err.log (Level.INFO, ex.getLocalizedMessage (), ex);
