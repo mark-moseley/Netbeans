@@ -43,8 +43,8 @@ package org.netbeans.modules.java.source.builder;
 
 import com.sun.tools.javac.code.Type.ErrorType;
 import com.sun.tools.javac.model.JavacElements;
+import com.sun.tools.javac.util.Names;
 import javax.lang.model.util.Elements;
-import org.netbeans.api.java.source.*;
 import com.sun.source.tree.*;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.tools.javac.code.BoundKind;
@@ -72,14 +72,15 @@ import javax.lang.model.type.ArrayType;
 import javax.lang.model.util.Types;
 import static org.netbeans.modules.java.source.save.PositionEstimator.*;
 import static com.sun.tools.javac.code.Flags.*;
-import static com.sun.tools.javac.code.Kinds.*;
-import static com.sun.tools.javac.code.TypeTags.*;
 
 /**
  * Factory for creating new com.sun.source.tree instances.
+ * 
+ * @author Rastislav Komara (<a href="mailto:moonko@netbeans.org">RKo</a>)
+ * @since 0.44.0
  */
 public class TreeFactory {
-    Name.Table names;
+    Names names;
     ClassReader classReader;
     com.sun.tools.javac.tree.TreeMaker make;
     ASTService model;
@@ -99,7 +100,7 @@ public class TreeFactory {
     protected TreeFactory(Context context) {
         context.put(contextKey, this);
         model = ASTService.instance(context);
-        names = Name.Table.instance(context);
+        names = Names.instance(context);
         classReader = ClassReader.instance(context);
         make = com.sun.tools.javac.tree.TreeMaker.instance(context);
         elements = JavacElements.instance(context);
@@ -167,7 +168,7 @@ public class TreeFactory {
     }
     
     public BreakTree Break(CharSequence label) {
-        Name n = label != null ? names.fromString(label) : null;
+        Name n = label != null ? names.fromString(label.toString()) : null;
         return make.Break(n);
     }
     
@@ -199,7 +200,7 @@ public class TreeFactory {
         for (Tree t : memberDecls)
             defs.append((JCTree)t);
         return make.ClassDef((JCModifiers)modifiers, 
-                             names.fromString(simpleName),
+                             names.fromString(simpleName.toString()),
                              typarams.toList(),
                              (JCTree)extendsClause,
                              impls.toList(),
@@ -281,7 +282,7 @@ public class TreeFactory {
     }
     
     public ContinueTree Continue(CharSequence label) {
-        Name n = label != null ? names.fromString(label) : null;
+        Name n = label != null ? names.fromString(label.toString()) : null;
         return make.Continue(n);
     }
     
@@ -327,7 +328,7 @@ public class TreeFactory {
     }
     
     public IdentifierTree Identifier(CharSequence name) {
-        return make.Ident(names.fromString(name));
+        return make.Ident(names.fromString(name.toString()));
     }
     
     public IdentifierTree Identifier(Element element) {
@@ -347,7 +348,7 @@ public class TreeFactory {
     }
     
     public LabeledStatementTree LabeledStatement(CharSequence label, StatementTree statement) {
-        return make.Labelled(names.fromString(label), (JCStatement)statement);
+        return make.Labelled(names.fromString(label.toString()), (JCStatement)statement);
     }
     
     public LiteralTree Literal(Object value) {
@@ -371,7 +372,7 @@ public class TreeFactory {
     }
 
     public MemberSelectTree MemberSelect(ExpressionTree expression, CharSequence identifier) {
-        return make.Select((JCExpression)expression, names.fromString(identifier));
+        return make.Select((JCExpression)expression, names.fromString(identifier.toString()));
     }
     
     public MemberSelectTree MemberSelect(ExpressionTree expression, Element element) {
@@ -398,16 +399,39 @@ public class TreeFactory {
                              List<? extends ExpressionTree> throwsList,
                              BlockTree body,
                              ExpressionTree defaultValue) {
+        return Method(modifiers, name, returnType, typeParameters, parameters, throwsList, body, defaultValue, false);
+    }
+    
+    public MethodTree Method(ModifiersTree modifiers,
+                             CharSequence name,
+                             Tree returnType,
+                             List<? extends TypeParameterTree> typeParameters,
+                             List<? extends VariableTree> parameters,
+                             List<? extends ExpressionTree> throwsList,
+                             BlockTree body,
+                             ExpressionTree defaultValue,
+                             boolean isVarArgs) {
         ListBuffer<JCTypeParameter> typarams = new ListBuffer<JCTypeParameter>();
         for (TypeParameterTree t : typeParameters)
             typarams.append((JCTypeParameter)t);
-        ListBuffer<JCVariableDecl> params = new ListBuffer<JCVariableDecl>();
-        for (VariableTree t : parameters)
-            params.append((JCVariableDecl)t);
+        ListBuffer<JCVariableDecl> params = new ListBuffer<JCVariableDecl>();        
+        if (!parameters.isEmpty() && isVarArgs) {
+            JCVariableDecl variableDecl = (JCVariableDecl) parameters.get(parameters.size()-1);
+            if (variableDecl.getKind() != Kind.ARRAY_TYPE) {                
+                variableDecl.mods = make.Modifiers(variableDecl.mods.flags | Flags.VARARGS);                
+            } else {
+                throw new IllegalArgumentException("Last parameter isn't array. Can't set varargs flag.");
+            }
+        } else if (parameters.isEmpty() && isVarArgs) {
+            throw new IllegalArgumentException("Can't set varargs flag on empty parameter list.");
+        }
+        for (VariableTree t : parameters) {
+            params.append((JCVariableDecl) t);
+        }
         ListBuffer<JCExpression> throwz = new ListBuffer<JCExpression>();
         for (ExpressionTree t : throwsList)
             throwz.append((JCExpression)t);
-        return make.MethodDef((JCModifiers)modifiers, names.fromString(name),
+        return make.MethodDef((JCModifiers)modifiers, names.fromString(name.toString()),
                               (JCExpression)returnType, typarams.toList(),
                               params.toList(), throwz.toList(),
                               (JCBlock)body, (JCExpression)defaultValue);
@@ -466,11 +490,13 @@ public class TreeFactory {
         ListBuffer<JCExpression> dims = new ListBuffer<JCExpression>();
         for (ExpressionTree t : dimensions)
             dims.append((JCExpression)t);
-        ListBuffer<JCExpression> elems = new ListBuffer<JCExpression>();
-        if (initializers != null)
+        ListBuffer<JCExpression> elems = null;
+        if (initializers != null) {
+            elems = new ListBuffer<JCExpression>();
             for (ExpressionTree t : initializers)
                 elems.append((JCExpression)t);
-        return make.NewArray((JCExpression)elemtype, dims.toList(), elems.toList());
+        }
+        return make.NewArray((JCExpression)elemtype, dims.toList(), elems != null ? elems.toList() : null);
     }
     
     public NewClassTree NewClass(ExpressionTree enclosingExpression, 
@@ -595,10 +621,7 @@ public class TreeFactory {
                 break;
             }
             case DECLARED:
-                Type outer = t.getEnclosingType();
-                JCExpression clazz = outer.tag == CLASS && t.tsym.owner.kind == TYP
-                        ? make.Select((JCExpression) Type(outer), t.tsym)
-                        : (JCExpression) QualIdent(t.tsym);
+                JCExpression clazz = (JCExpression) QualIdent(t.tsym);
                 tp = t.getTypeArguments().isEmpty()
                 ? clazz
                         : make.TypeApply(clazz, Types(t.getTypeArguments()));
@@ -607,12 +630,15 @@ public class TreeFactory {
                 
                 tp = make.TypeArray((JCExpression) Type(((ArrayType) type).getComponentType()));
                 break;
+            case NULL:
+                tp = make.Literal(TypeTags.BOT, null);
+                break;
             case ERROR:
                 tp = make.Ident(((ErrorType) type).tsym.name);
                 break;
             default:
-        return make.Type((Type)type);
-    }
+                return make.Type((Type)type);
+        }
     
         return tp;
     }
@@ -625,7 +651,7 @@ public class TreeFactory {
         ListBuffer<JCExpression> bounds = new ListBuffer<JCExpression>();
         for (Tree t : boundsList)
             bounds.append((JCExpression)t);
-        return make.TypeParameter(names.fromString(name), bounds.toList());
+        return make.TypeParameter(names.fromString(name.toString()), bounds.toList());
     }
     
     public UnaryTree Unary(Kind operator, ExpressionTree arg) {
@@ -649,7 +675,7 @@ public class TreeFactory {
                                  CharSequence name,
                                  Tree type,
                                  ExpressionTree initializer) {
-        return make.VarDef((JCModifiers)modifiers, names.fromString(name), 
+        return make.VarDef((JCModifiers)modifiers, names.fromString(name.toString()),
                            (JCExpression)type, (JCExpression)initializer);
     }
     
@@ -1502,7 +1528,7 @@ public class TreeFactory {
         for (Tree t : memberDecls)
             defs.append((JCTree)t);
         return make.ClassDef(make.Modifiers(modifiers, annotations),
-                             names.fromString(simpleName),
+                             names.fromString(simpleName.toString()),
                              typarams.toList(),
                              (JCTree)extendsClause,
                              impls.toList(),
