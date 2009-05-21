@@ -46,6 +46,7 @@ package org.netbeans.modules.cnd.apt.debug;
  * @author Vladimir Voskresensky
  */
 public interface APTTraceFlags {
+    public static final boolean APT_SHARE_MACROS = DebugUtils.getBoolean("apt.share.macros", true); // NOI18N
 
     public static final boolean APT_SHARE_TEXT = DebugUtils.getBoolean("apt.share.text", true); // NOI18N
     //public static final boolean APT_USE_STORAGE_SET = DebugUtils.getBoolean("apt.share.storage", true); // NOI18N
@@ -57,6 +58,7 @@ public interface APTTraceFlags {
 
     public static final boolean TRACE_APT = Boolean.getBoolean("cnd.apt.trace"); // NOI18N
     public static final boolean TRACE_APT_LEXER = Boolean.getBoolean("cnd.aptlexer.trace"); // NOI18N
+    public static final boolean TRACE_APT_CACHE = Boolean.getBoolean("cnd.apt.cache.hits"); // NOI18N
 
     public static final boolean USE_APT_TEST_TOKEN = Boolean.getBoolean("cnd.apt.apttoken"); // NOI18N
 
