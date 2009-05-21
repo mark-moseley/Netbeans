@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.debugger.jpda.ui;
+package org.netbeans.modules.python.debugger.gui;
 
 import java.awt.AWTKeyStroke;
 import java.awt.Dimension;
@@ -47,10 +47,9 @@ import java.awt.KeyboardFocusManager;
 import java.awt.event.ActionEvent;
 import java.net.MalformedURLException;
 import java.net.URL;
+import javax.swing.text.EditorKit;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
-import org.netbeans.api.debugger.jpda.CallStackFrame;
-import org.netbeans.api.debugger.jpda.JPDADebugger;
 
 import org.netbeans.api.editor.DialogBinding;
 
@@ -59,6 +58,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.URLMapper;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.text.CloneableEditorSupport;
 import org.openide.util.NbBundle;
 
 import javax.swing.*;
@@ -72,11 +72,10 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionListener;
 import java.io.IOException;
+import javax.naming.event.EventDirContext;
 import javax.swing.text.StyledDocument;
 import org.netbeans.editor.EditorUI;
 import org.netbeans.editor.ext.ExtCaret;
-import org.netbeans.spi.debugger.jpda.EditorContext;
-import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.ErrorManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.text.NbDocument;
@@ -84,9 +83,9 @@ import org.openide.util.HelpCtx;
 import org.openide.util.RequestProcessor;
 
 /**
- * A GUI panel for customizing a Watch.
+ * A GUI panel for customizing a Watch in python Debugging.
 
- * @author Maros Sandor
+ * @author Jean-Yves Mengant
  */
 public class WatchPanel {
 
@@ -99,8 +98,8 @@ public class WatchPanel {
     }
     
     public static void setupContext(final JEditorPane editorPane, final ActionListener contextSetUp) {
-        //EditorKit kit = CloneableEditorSupport.getEditorKit("text/x-java");
-        //editorPane.setEditorKit(kit); - Do not set it, setupContext() will do the job.
+        EditorKit kit = CloneableEditorSupport.getEditorKit("text/x-python");
+        editorPane.setEditorKit(kit);
         DebuggerEngine en = DebuggerManager.getDebuggerManager ().getCurrentEngine();
         if (EventQueue.isDispatchThread() && en != null) {
             RequestProcessor contextRetrievalRP = en.lookupFirst(null, RequestProcessor.class);
@@ -119,9 +118,7 @@ public class WatchPanel {
                         }
                     }
                 });
-                Context c = retrieveContext(null);
-                if (c != null) setupContext(editorPane, c.url, c.line);
-                else setupUI(editorPane);
+                setupUI(editorPane);
                 return ;
             } else {
                 en = null;
@@ -137,49 +134,12 @@ public class WatchPanel {
     }
 
     private static Context retrieveContext(DebuggerEngine en) {
-        CallStackFrame csf = null;
-        if (en != null) {
-            JPDADebugger d = en.lookupFirst(null, JPDADebugger.class);
-            if (d != null) {
-                csf = d.getCurrentCallStackFrame();
-            }
-        }
-        if (csf != null) {
-            String language = DebuggerManager.getDebuggerManager ().getCurrentSession().getCurrentLanguage();
-            SourcePath sp = en.lookupFirst(null, SourcePath.class);
-            Context c = new Context();
-            c.url = sp.getURL(csf, language);
-            c.line = csf.getLineNumber(language);
-            return c;
-        } else {
-            EditorContext context = EditorContextBridge.getContext();
-            String url = context.getCurrentURL();
-            if (url != null && url.length() > 0) {
-                Context c = new Context();
-                c.url = url;
-                c.line = context.getCurrentLineNumber();
-                if (c.line == -1) {
-                    c.line = 1;
-                }
-                return c;
-            } else {
-                url = EditorContextDispatcher.getDefault().getMostRecentURLAsString();
-                if (url != null && url.length() > 0) {
-                    Context c = new Context();
-                    c.url = url;
-                    c.line = EditorContextDispatcher.getDefault().getMostRecentLineNumber();
-                    if (c.line == -1) {
-                        c.line = 1;
-                    }
-                    return c;
-                } else {
-                    return null;
-                }
-            }
-        }
+      // TODO : check usage and return something consistent
+      return null ;
     }
     
-    public static void setupContext(JEditorPane editorPane, String url, int line) {
+    public static void setupContext(JEditorPane editorPane, final String url, int line) {
+        setupUI(editorPane);
         FileObject file;
         StyledDocument doc;
         try {
@@ -188,8 +148,8 @@ public class WatchPanel {
                 return;
             }
             try {
-                DataObject dobj = DataObject.find (file);
-                EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);
+                final DataObject dobj = DataObject.find (file);
+                final EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);
                 if (ec == null) {
                     return;
                 }
@@ -208,30 +168,27 @@ public class WatchPanel {
             return;
         }
         try {
-            int offset = NbDocument.findLineOffset(doc, line - 1);
+            final int offset = NbDocument.findLineOffset(doc, line);
             //editorPane.getDocument().putProperty(javax.swing.text.Document.StreamDescriptionProperty, dobj);
-            //System.err.println("WatchPanel.setupContext("+file+", "+line+", "+offset+")");
             DialogBinding.bindComponentToDocument(doc, offset, 0, editorPane);
         } catch (IndexOutOfBoundsException ioobex) {
             ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ioobex);
         }
-        setupUI(editorPane);
     }
     
     private static void setupUI(final JEditorPane editorPane) {
-        Runnable runnable = new Runnable() {
+        final Runnable runnable = new Runnable() {
             public void run() {
                 EditorUI eui = org.netbeans.editor.Utilities.getEditorUI(editorPane);
-                if (eui == null) {
-                    return ;
-                }
                 eui.removeLayer(ExtCaret.HIGHLIGHT_ROW_LAYER_NAME);
                 // Do not draw text limit line
                 try {
                     java.lang.reflect.Field textLimitLineField = EditorUI.class.getDeclaredField("textLimitLineVisible"); // NOI18N
                     textLimitLineField.setAccessible(true);
                     textLimitLineField.set(eui, false);
-                } catch (Exception ex) {}
+                } catch (Exception ex) {
+                  ex.printStackTrace(); 
+                }
             }
         };
         if (SwingUtilities.isEventDispatchThread()) {
@@ -250,16 +207,6 @@ public class WatchPanel {
         panel.getAccessibleContext ().setAccessibleDescription (bundle.getString ("ACSD_WatchPanel")); // NOI18N
         JLabel textLabel = new JLabel();
         Mnemonics.setLocalizedText(textLabel, bundle.getString ("CTL_Watch_Name")); // NOI18N
-        if (expression != null && expression.trim().length() == 0) {
-            JEditorPane editor = EditorContextDispatcher.getDefault().getMostRecentEditor();
-            if (editor != null && editor.getDocument() instanceof StyledDocument) {
-                StyledDocument doc = (StyledDocument) editor.getDocument();
-                String selectedExpression = getSelectedIdentifier(doc, editor, editor.getCaret ().getDot ());
-                if (selectedExpression != null) {
-                    expression = selectedExpression;
-                }
-            }
-        }
         editorPane = new JEditorPane();//expression); // NOI18N
         editorPane.setText(expression);
 
@@ -272,16 +219,12 @@ public class WatchPanel {
         setupContext(editorPane, editorPaneUpdated);
         
         JScrollPane sp = createScrollableLineEditor(editorPane);
-        int h = sp.getPreferredSize().height;
-        int w = Math.min(70*editorPane.getFontMetrics(editorPane.getFont()).charWidth('a'),
-                         org.openide.windows.WindowManager.getDefault().getMainWindow().getSize().width);
-        sp.setPreferredSize(new Dimension(w, h));
         FontMetrics fm = editorPane.getFontMetrics(editorPane.getFont());
-        int size = 2*fm.getLeading() + fm.getMaxAscent() + fm.getMaxDescent();
+        int size = 2*fm.getLeading() + fm.getMaxAscent() + fm.getMaxDescent() + 2;
         Insets eInsets = editorPane.getInsets();
         Insets spInsets = sp.getInsets();
         sp.setPreferredSize(new Dimension(30*size,
-                size +
+                size + 2 +
                 eInsets.bottom + eInsets.top +
                 spInsets.bottom + spInsets.top));
         
@@ -344,61 +287,9 @@ public class WatchPanel {
         return sp;
     }
 
-    private static String getSelectedIdentifier (
-        StyledDocument doc,
-        JEditorPane ep,
-        int offset
-    ) {
-        String t = null;
-        if ( (ep.getSelectionStart () <= offset) &&
-             (offset <= ep.getSelectionEnd ())
-        )   t = ep.getSelectedText ();
-        if (t != null) return t;
-
-        int line = NbDocument.findLineNumber (
-            doc,
-            offset
-        );
-        int col = NbDocument.findLineColumn (
-            doc,
-            offset
-        );
-        try {
-            javax.swing.text.Element lineElem =
-                org.openide.text.NbDocument.findLineRootElement (doc).
-                getElement (line);
-
-            if (lineElem == null) return null;
-            int lineStartOffset = lineElem.getStartOffset ();
-            int lineLen = lineElem.getEndOffset() - lineStartOffset;
-            t = doc.getText (lineStartOffset, lineLen);
-            int identStart = col;
-            while (identStart > 0 &&
-                (Character.isJavaIdentifierPart (
-                    t.charAt (identStart - 1)
-                ) ||
-                (t.charAt (identStart - 1) == '.'))) {
-                identStart--;
-            }
-            int identEnd = col;
-            while (identEnd < lineLen &&
-                   Character.isJavaIdentifierPart(t.charAt(identEnd))
-            ) {
-                identEnd++;
-            }
-
-            if (identStart == identEnd) return null;
-            return t.substring (identStart, identEnd);
-        } catch (javax.swing.text.BadLocationException e) {
-            return null;
-        }
-    }
-
-
     private static final class Context {
         public String url;
         public int line;
     }
     
 }
-
