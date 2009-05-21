@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -67,8 +67,11 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.java.project.classpath.ProjectClassPathModifier;
 import org.netbeans.api.java.queries.UnitTestForSourceQuery;
+import org.netbeans.api.java.source.ClasspathInfo;
+import org.netbeans.api.java.source.ClasspathInfo.PathKind;
 import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.project.FileOwnerQuery;
@@ -76,9 +79,11 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.api.project.SourceGroupModifier;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.libraries.LibraryManager;
+import org.netbeans.api.queries.VisibilityQuery;
 import org.netbeans.modules.junit.TestabilityResult.SkippedClass;
 import org.netbeans.modules.junit.plugin.JUnitPlugin;
 import org.netbeans.modules.junit.plugin.JUnitPlugin.CreateTestParam;
@@ -94,7 +99,6 @@ import org.openide.awt.Mnemonics;
 import org.openide.cookies.SaveCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -103,18 +107,12 @@ import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
 import static java.util.logging.Level.FINER;
 import static java.util.logging.Level.FINEST;
-import static javax.lang.model.util.ElementFilter.methodsIn;
-import static javax.lang.model.util.ElementFilter.typesIn;
 import static org.netbeans.api.java.classpath.ClassPath.SOURCE;
 import static org.netbeans.api.java.classpath.ClassPath.COMPILE;
-import static org.netbeans.api.java.classpath.ClassPath.BOOT;
 import static org.netbeans.api.java.project.JavaProjectConstants.SOURCES_TYPE_JAVA;
-import static org.netbeans.modules.junit.JUnitSettings.JUNIT_GENERATOR_ASK_USER;
 import static org.openide.ErrorManager.ERROR;
 import static org.openide.ErrorManager.WARNING;
 import static org.openide.NotifyDescriptor.CANCEL_OPTION;
-import static org.openide.NotifyDescriptor.OK_CANCEL_OPTION;
-import static org.openide.NotifyDescriptor.QUESTION_MESSAGE;
 import static org.openide.NotifyDescriptor.WARNING_MESSAGE;
 
 /**
@@ -818,27 +816,23 @@ public final class DefaultPlugin extends JUnitPlugin {
                     = (filesToTest != null)
                       && (filesToTest.length != 0)
                       && ((filesToTest.length > 1) || !filesToTest[0].isData());
-            final boolean useAnnotations;
             switch (junitVer) {
                 case JUNIT3:
                     templateId = "PROP_junit3_testClassTemplate";       //NOI18N
                     suiteTemplateId = forTestSuite
                                       ? "PROP_junit3_testSuiteTemplate" //NOI18N
                                       : null;
-                    useAnnotations = TestUtil.areAnnotationsSupported(targetRoot);
                     break;
                 case JUNIT4:
                     templateId = "PROP_junit4_testClassTemplate";       //NOI18N
                     suiteTemplateId = forTestSuite
                                       ? "PROP_junit4_testSuiteTemplate" //NOI18N
                                       : null;
-                    useAnnotations = true;
                     break;
                 default:
                     assert false;
                     templateId = null;
                     suiteTemplateId = null;
-                    useAnnotations = false;
                     break;
             }
             DataObject doTestTempl = (templateId != null)
@@ -855,9 +849,7 @@ public final class DefaultPlugin extends JUnitPlugin {
             }
             
             Map<String, Boolean> templateParams = createTemplateParams(params);
-            if (useAnnotations) {
-                templateParams.put(templatePropUseAnnotations, useAnnotations);
-            }
+            setAnnotationsSupport(targetRoot, junitVer, templateParams);
 
             if ((filesToTest == null) || (filesToTest.length == 0)) {
                 //XXX: Not documented that filesToTest may be <null>
@@ -896,7 +888,7 @@ public final class DefaultPlugin extends JUnitPlugin {
                                 templateParams,
                                 doTestTempl,
                                 testClassPath,
-                                false,             //do not skip any classes
+                                TestabilityResult.NO_TESTEABLE_METHODS.getReasonValue(),
                                 null,              //parent suite
                                 progress);
                     } catch (CreationError ex) {
@@ -1034,7 +1026,16 @@ public final class DefaultPlugin extends JUnitPlugin {
 
         boolean storeSettings;
         try {
-            storeSettings = readProjectSettingsJUnitVer(project);
+            try {
+                storeSettings = readProjectSettingsJUnitVer(project);
+            } catch (IllegalStateException ex) {
+                if (SourceGroupModifier.createSourceGroup(project, JavaProjectConstants.SOURCES_TYPE_JAVA, JavaProjectConstants.SOURCES_HINT_TEST) != null) {
+                    //repeat if the folder/Sourcegroup was created.
+                    storeSettings = readProjectSettingsJUnitVer(project);
+                } else {
+                    throw ex;
+                }
+            }
             if (!storeSettings) {
                 LOG_JUNIT_VER.finest(
                 " - will not be able to store JUnit version settings"); //NOI18N
@@ -1629,6 +1630,8 @@ public final class DefaultPlugin extends JUnitPlugin {
      * @see  #junitVer
      */
     private void readSystemSettingsJUnitVer() {
+        junitVer = null;
+        /*
         String value = JUnitSettings.getDefault().getGenerator();
         if ((value == null) || value.equals(JUNIT_GENERATOR_ASK_USER)) {
             junitVer = null;
@@ -1639,6 +1642,7 @@ public final class DefaultPlugin extends JUnitPlugin {
                 junitVer = null;
             }
         }
+        */
     }
     
     /**
@@ -1682,12 +1686,12 @@ public final class DefaultPlugin extends JUnitPlugin {
      */
     private static CreationResults createSingleTest(
                 FileObject sourceFile,
-                String testClassName,
+                String requestedTestClassName,
                 final TestCreator testCreator,
                 final Map<String, ? extends Object> templateParams,
                 DataObject templateDataObj,
                 ClassPath testClassPath,
-                boolean skipNonTestable,
+                long skipTestabilityResultMask,
                 List<String> parentSuite,
                 ProgressIndicator progress) throws CreationError {
         
@@ -1695,11 +1699,15 @@ public final class DefaultPlugin extends JUnitPlugin {
         List<ElementHandle<TypeElement>> testable;
         try {
             JavaSource javaSource = JavaSource.forFileObject(sourceFile);
-            if (skipNonTestable) {
+            //issue 161598
+            if (javaSource == null)
+                return CreationResults.EMPTY;
+            if (skipTestabilityResultMask != 0) {
                 nonTestable = new ArrayList<SkippedClass>();
                 testable = TopClassFinder.findTestableTopClasses(javaSource,
                                                                  testCreator,
-                                                                 nonTestable);
+                                                                 nonTestable,
+                                                                 skipTestabilityResultMask);
             } else {
                 nonTestable = Collections.<SkippedClass>emptyList();
                 testable = TopClassFinder.findTopClasses(javaSource);
@@ -1713,31 +1721,23 @@ public final class DefaultPlugin extends JUnitPlugin {
             result.addSkipped(nonTestable);
         }
         if (!testable.isEmpty()) {
-            String packageName = TestUtil.getPackageName(ClassPath.getClassPath(sourceFile, ClassPath.SOURCE).getResourceName(sourceFile, '.', false));
-
-            /* used only if (testClassName != null): */
-            boolean defClassProcessed = false;
+            /* used only if (requestedTestClassName != null): */
+            boolean mainClassProcessed = false;
 
             try {
                 for (ElementHandle<TypeElement> clsToTest : testable) {
-                    String testResourceName;
-                    String srcClassNameShort
-                            = TestUtil.getSimpleName(clsToTest.getQualifiedName());
-                    if (testClassName == null) {
-                        testResourceName = TestUtil.getTestClassFullName(
-                                                srcClassNameShort, packageName);
-                        testClassName = testResourceName.replace('/', '.');
-                    } else if (!defClassProcessed
-                               && srcClassNameShort.equals(sourceFile.getName())) {
-                        testResourceName = testClassName.replace('.', '/');
-                        defClassProcessed = true;
+                    String testClassName;
+                    String srcClassNameFull = clsToTest.getQualifiedName();
+                    if ((requestedTestClassName != null)
+                            && !mainClassProcessed
+                            && TestUtil.getSimpleName(srcClassNameFull)
+                                   .equals(sourceFile.getName())) {
+                        testClassName = requestedTestClassName;
+                        mainClassProcessed = true;
                     } else {
-                        if (packageName == null) {
-                            packageName = TestUtil.getPackageName(testClassName);
-                        }
-                        testResourceName = TestUtil.getTestClassFullName(
-                                                srcClassNameShort, packageName);
+                        testClassName = TestUtil.getTestClassName(srcClassNameFull);
                     }
+                    String testResourceName = testClassName.replace('.', '/');
 
                     /* find or create the test class DataObject: */
                     DataObject testDataObj = null;
@@ -1798,6 +1798,9 @@ public final class DefaultPlugin extends JUnitPlugin {
                     results.setAbborted();
                     break;
                 }
+                if (!VisibilityQuery.getDefault().isVisible(childFileObj)) {
+                    continue;
+                }
                 results.combine(createTests(childFileObj,
                                             testCreator,
                                             templateParams,
@@ -1814,7 +1817,7 @@ public final class DefaultPlugin extends JUnitPlugin {
             // if everything went ok, and the option is enabled,
             // create a suite for the folder .
             if (!results.isAbborted()
-                    && !mySuite.isEmpty()
+//                    && !mySuite.isEmpty()
                     && JUnitSettings.getDefault().isGenerateSuiteClasses()) {
                 createSuiteTest(srcFileObj,
                                 (String) null,
@@ -1833,7 +1836,7 @@ public final class DefaultPlugin extends JUnitPlugin {
                                        templateParams,
                                        doTestT,
                                        testClassPath,
-                                       true,
+                                       TestabilityResult.NO_TESTEABLE_METHODS.getReasonValue(),
                                        parentSuite,
                                        progress);
         } else {
@@ -1891,12 +1894,12 @@ public final class DefaultPlugin extends JUnitPlugin {
                 testFile = testDataObj.getPrimaryFile();
             }
             
-//            List<String> processedClasses;
-//            JavaSource testSrc = JavaSource.forFileObject(testFile);
+            List<String> processedClasses;
+            //JavaSource testSrc = JavaSource.forFileObject(testFile);
             try {
-//                processedClasses = testCreator.createTestSuite(classesToInclude,
-//                                                               testSrc,
-//                                                               isNew);
+                processedClasses = testCreator.createTestSuite(classesToInclude,
+                                                               testFile,
+                                                               isNew);
                 if (testDataObj == null) {
                     testDataObj = DataObject.find(testFile);
                 }
@@ -1907,13 +1910,13 @@ public final class DefaultPlugin extends JUnitPlugin {
             }
 
             // add the suite class to the list of members of the parent
-//            if ((parentSuite != null) && !processedClasses.isEmpty()) {
-//                for (String simpleClassName : processedClasses) {
-//                    parentSuite.add(dotPkg.length() != 0
-//                                    ? dotPkg + '.' + simpleClassName
-//                                    : simpleClassName);
-//                }
-//            }
+            if ((parentSuite != null) && !processedClasses.isEmpty()) {
+                for (String simpleClassName : processedClasses) {
+                    parentSuite.add(dotPkg.length() != 0
+                                    ? dotPkg + '.' + simpleClassName
+                                    : simpleClassName);
+                }
+            }
             return testDataObj;
         } catch (IOException ioe) {
             throw new CreationError(ioe);
@@ -1967,35 +1970,20 @@ public final class DefaultPlugin extends JUnitPlugin {
                                 final FileObject targetFolder,
                                 final String suiteName,
                                 final Map<CreateTestParam, Object> params) {
-        return createSuiteTest(targetRootFolder,
-                               targetFolder,
-                               suiteName,
-                               params,
-                               createTemplateParams(params));
-    }
-
-    /**
-     *
-     */
-    public DataObject createSuiteTest(
-                                final FileObject targetRootFolder,
-                                final FileObject targetFolder,
-                                final String suiteName,
-                                final Map<CreateTestParam, Object> params,
-                                final Map<String, ? extends Object> templateParams) {
+        final Map<String, Boolean> templateParams = createTemplateParams(params);
+        setAnnotationsSupport(targetFolder, junitVer, templateParams);
         TestCreator testCreator = new TestCreator(params, junitVer);
-        ClassPath testClassPath = ClassPathSupport.createClassPath(
-                new FileObject[] {targetRootFolder});
+        final ClasspathInfo cpInfo = ClasspathInfo.create(targetRootFolder);
         List<String> testClassNames = TestUtil.getJavaFileNames(targetFolder,
-                                                                testClassPath);
+                                                                cpInfo);
         
         final String templateId;
         switch (junitVer) {
             case JUNIT3:
-                templateId = "PROP_junit3_testClassTemplate";           //NOI18N
+                templateId = "PROP_junit3_testSuiteTemplate";           //NOI18N
                 break;
             case JUNIT4:
-                templateId = "PROP_junit4_testClassTemplate";           //NOI18N
+                templateId = "PROP_junit4_testSuiteTemplate";           //NOI18N
                 break;
             default:
                 assert false;
@@ -2015,7 +2003,7 @@ public final class DefaultPlugin extends JUnitPlugin {
                                    testCreator,
                                    templateParams,
                                    doSuiteTempl,
-                                   testClassPath,
+                                   cpInfo.getClassPath(PathKind.SOURCE),
                                    new LinkedList<String>(testClassNames),
                                    null,            //parent suite
                                    null);           //progress indicator
@@ -2054,6 +2042,45 @@ public final class DefaultPlugin extends JUnitPlugin {
     }
 
     /**
+     * Determines whether annotations should be used in test classes in the
+     * given folder when generating the given type of JUnit tests.
+     * If annotations are supported, adds this information to the map of
+     * template parameters.
+     * 
+     * @param  testFolder  target folder for generated test classes
+     * @param  junitVer  type of generated JUnit tests
+     * @param  templateParams  map of template params to store
+     *                         the information to
+     * @return  {@code true} if it was detected that annotations are supported;
+     *          {@code false} otherwise
+     */
+    private static boolean setAnnotationsSupport(
+                                        FileObject testFolder,
+                                        JUnitVersion junitVer,
+                                        Map<String, Boolean> templateParams) {
+        if (!testFolder.isFolder()) {
+            throw new IllegalArgumentException("not a folder");         //NOI18N
+        }
+
+        final boolean supported;
+        switch (junitVer) {
+            case JUNIT3:
+                supported = TestUtil.areAnnotationsSupported(testFolder);
+                break;
+            case JUNIT4:
+                supported = true;
+                break;
+            default:
+                supported = false;
+                break;
+        }
+        if (supported) {
+            templateParams.put(templatePropUseAnnotations, supported);
+        }
+        return supported;
+    }
+
+    /**
      *
      */
     private static void save(DataObject dataObj) throws IOException {
@@ -2076,8 +2103,7 @@ public final class DefaultPlugin extends JUnitPlugin {
         String path = NbBundle.getMessage(DefaultPlugin.class,
                                           templateID);
         try {
-            FileObject fo = Repository.getDefault().getDefaultFileSystem()
-                            .findResource(path);
+            FileObject fo = FileUtil.getConfigFile(path);
             if (fo == null) {
                 noTemplateMessage(path);
                 return null;
