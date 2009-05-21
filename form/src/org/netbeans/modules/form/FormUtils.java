@@ -42,7 +42,6 @@
 package org.netbeans.modules.form;
 
 import java.awt.*;
-import java.awt.event.KeyEvent;
 import java.beans.*;
 import java.io.*;
 import java.util.*;
@@ -50,19 +49,16 @@ import java.lang.reflect.*;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.Action;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListModel;
 import javax.swing.JComponent;
-import javax.swing.KeyStroke;
 import javax.swing.ListModel;
 import javax.swing.border.TitledBorder;
+import javax.swing.event.TreeModelListener;
 import javax.swing.plaf.ComponentUI;
-import javax.swing.text.Keymap;
-import javax.swing.undo.UndoManager;
-import org.netbeans.api.java.source.ui.DialogBinding;
-import org.netbeans.editor.ActionFactory;
-import org.netbeans.editor.BaseDocument;
+import javax.swing.text.Document;
+import javax.swing.tree.DefaultTreeModel;
+import org.netbeans.api.editor.DialogBinding;
 import org.netbeans.editor.EditorUI;
 import org.netbeans.editor.ext.ExtCaret;
 
@@ -71,7 +67,8 @@ import org.openide.util.*;
 import org.openide.nodes.Node;
 import org.openide.filesystems.FileObject;
 import org.netbeans.modules.form.project.ClassPathUtils;
-import org.openide.text.CloneableEditorSupport;
+import org.openide.loaders.DataObject;
+import org.openide.loaders.DataObjectNotFoundException;
 
 /**
  * A class that contains utility methods for the formeditor.
@@ -203,7 +200,8 @@ public class FormUtils
                 "characterAttributes", PROP_HIDDEN,
                 "paragraphAttributes", PROP_HIDDEN },
         { "javax.swing.JTree", CLASS_AND_SUBCLASSES,
-                "border", PROP_PREFERRED },
+                "border", PROP_PREFERRED,
+                "model", PROP_PREFERRED },
         { "javax.swing.JTree", CLASS_EXACTLY,
                 "editing", PROP_HIDDEN,
                 "editingPath", PROP_HIDDEN,
@@ -500,8 +498,6 @@ public class FormUtils
                 border.getTitleFont(),
                 border.getTitleColor());
         }
-        if (o.getClass() == Color.class)
-            return new Color(((Color)o).getRGB());
         if (o instanceof Dimension)
             return new Dimension((Dimension)o);
         if (o instanceof Point)
@@ -510,9 +506,8 @@ public class FormUtils
             return new Rectangle((Rectangle)o);
         if (o instanceof Insets)
             return ((Insets)o).clone();
-        if (o instanceof GradientPaint) {
-            GradientPaint gp = (GradientPaint)o;
-            return new GradientPaint(gp.getPoint1(), gp.getColor1(), gp.getPoint2(), gp.getColor2(), gp.isCyclic());
+        if (o instanceof Paint) {
+            return o;
         }
         if (o.getClass() == DefaultListModel.class) {
             // avoid potential problems with serialization of listeners (#72802)
@@ -531,6 +526,18 @@ public class FormUtils
                 newComboModel.addElement(cloneObject(comboModel.getElementAt(i), formModel));
             }
             return newComboModel;
+        }
+        if (o.getClass() == DefaultTreeModel.class) {
+            DefaultTreeModel model = (DefaultTreeModel)o;
+            TreeModelListener[] listeners = model.getTreeModelListeners();
+            for (TreeModelListener listener : listeners) {
+                model.removeTreeModelListener(listener);
+            }
+            Object clone = cloneBeanInstance(o, null, formModel);
+            for (TreeModelListener listener : listeners) {
+                model.addTreeModelListener(listener);
+            }
+            return clone;
         }
         // for TableModel we use TableModelEditor.NbTableModel which takes care of its serialization
 
@@ -847,7 +854,7 @@ public class FormUtils
     {
         while (props.hasNext()) {
             RADProperty prop = props.next();
-            if (!prop.isChanged() || !prop.canWriteToTarget()) {
+            if (!prop.isChanged() || (!prop.canWriteToTarget() && !(prop instanceof RADComponent.ButtonGroupProperty))) {
                 continue;
             }
 
@@ -855,11 +862,8 @@ public class FormUtils
                 if (relativeProperties != null) {
                     Object value = prop.getValue();
                     if (value instanceof RADComponent
-                        || value instanceof RADComponent.ComponentReference
-                        || (value instanceof RADConnectionPropertyEditor.RADConnectionDesignValue
-                            && (((RADConnectionPropertyEditor.RADConnectionDesignValue)value).type
-                                == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_BEAN)))
-                    {
+                            || value instanceof RADComponent.ComponentReference
+                            || isRelativeConnectionValue(value)) {
                         relativeProperties.add(prop);
                         continue;
                     }
@@ -892,6 +896,17 @@ public class FormUtils
         }
     }
 
+    static boolean isRelativeConnectionValue(Object value) {
+        if (value instanceof RADConnectionPropertyEditor.RADConnectionDesignValue) {
+            RADConnectionPropertyEditor.RADConnectionDesignValue conValue
+                = (RADConnectionPropertyEditor.RADConnectionDesignValue) value;
+            return conValue.type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_BEAN
+                    || conValue.type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_METHOD
+                    || conValue.type == RADConnectionPropertyEditor.RADConnectionDesignValue.TYPE_PROPERTY;
+        }
+        return false;
+    }
+
     public static Method getPropertyWriteMethod(RADProperty property, Class targetClass) {
         Method method = property.getPropertyDescriptor().getWriteMethod();
         if (method != null
@@ -909,40 +924,57 @@ public class FormUtils
     }
 
     public static void setupEditorPane(javax.swing.JEditorPane editor, FileObject srcFile, int ccPosition) {
-        editor.setEditorKit(CloneableEditorSupport.getEditorKit("text/x-java")); // NOI18N
-        DialogBinding.bindComponentToFile(srcFile, ccPosition, 0, editor);
+        DataObject dob = null;
+        try {
+            dob = DataObject.find(srcFile);
+        } catch (DataObjectNotFoundException dnfex) {
+            LOGGER.log(Level.INFO, dnfex.getMessage(), dnfex);
+        }
+        if (!(dob instanceof FormDataObject)) {
+            LOGGER.log(Level.INFO, "Unable to find FormDataObject for " + srcFile); // NOI18N
+            return;
+        }
+        FormDataObject formDob = (FormDataObject)dob;
+        Document document = formDob.getFormEditorSupport().getDocument();
+        DialogBinding.bindComponentToDocument(document, ccPosition, 0, editor);
 
         // do not highlight current row
         EditorUI eui = org.netbeans.editor.Utilities.getEditorUI(editor);
-        eui.removeLayer(ExtCaret.HIGHLIGHT_ROW_LAYER_NAME);
+        if (eui != null) { // Issue 142686
+            eui.removeLayer(ExtCaret.HIGHLIGHT_ROW_LAYER_NAME);
+        }
 
         setupTextUndoRedo(editor);
     }
 
     public static void setupTextUndoRedo(javax.swing.text.JTextComponent editor) {
-        // don't use global undo/redo actions, register basic ones
-        KeyStroke[] undoKeys = new KeyStroke[] { KeyStroke.getKeyStroke(KeyEvent.VK_UNDO, 0),
-                                                 KeyStroke.getKeyStroke(KeyEvent.VK_Z, 130) };
-        KeyStroke[] redoKeys = new KeyStroke[] { KeyStroke.getKeyStroke(KeyEvent.VK_AGAIN, 0),
-                                                 KeyStroke.getKeyStroke(KeyEvent.VK_Y, 130) };
-        Keymap keymap = editor.getKeymap();
-        Action undoAction = new ActionFactory.UndoAction();
-        for (KeyStroke k : undoKeys) {
-            keymap.removeKeyStrokeBinding(k);
-            keymap.addActionForKeyStroke(k, undoAction);
-        }
-        Action redoAction = new ActionFactory.RedoAction();
-        for (KeyStroke k : redoKeys) {
-            keymap.removeKeyStrokeBinding(k);
-            keymap.addActionForKeyStroke(k, redoAction);
-        }
-        Object currentUM = editor.getDocument().getProperty(BaseDocument.UNDO_MANAGER_PROP);
-        if (currentUM instanceof UndoManager) {
-            editor.getDocument().removeUndoableEditListener((UndoManager)currentUM);
-        }
-        UndoManager um = new UndoManager();
-        editor.getDocument().addUndoableEditListener(um);
-        editor.getDocument().putProperty(BaseDocument.UNDO_MANAGER_PROP, um);
+        // #118038
+        // The following code was disabled because there was no corresponding restoring
+        // of the undo/redo actions that this code overrides.
+        // The editor was extended to have default handling of undo/redo for standalone editor panes.
+//         don't use global undo/redo actions, register basic ones
+//        KeyStroke[] undoKeys = new KeyStroke[] { KeyStroke.getKeyStroke(KeyEvent.VK_UNDO, 0),
+//                                                 KeyStroke.getKeyStroke(KeyEvent.VK_Z, 130) };
+//        KeyStroke[] redoKeys = new KeyStroke[] { KeyStroke.getKeyStroke(KeyEvent.VK_AGAIN, 0),
+//                                                 KeyStroke.getKeyStroke(KeyEvent.VK_Y, 130) };
+//        Keymap keymap = editor.getKeymap();
+//        Action undoAction = new ActionFactory.UndoAction();
+//        for (KeyStroke k : undoKeys) {
+//            keymap.removeKeyStrokeBinding(k);
+//            keymap.addActionForKeyStroke(k, undoAction);
+//        }
+//        Action redoAction = new ActionFactory.RedoAction();
+//        for (KeyStroke k : redoKeys) {
+//            keymap.removeKeyStrokeBinding(k);
+//            keymap.addActionForKeyStroke(k, redoAction);
+//        }
+//        Object currentUM = editor.getDocument().getProperty(BaseDocument.UNDO_MANAGER_PROP);
+//        if (currentUM instanceof UndoManager) {
+//            editor.getDocument().removeUndoableEditListener((UndoManager)currentUM);
+//        }
+//        UndoManager um = new UndoManager();
+//        editor.getDocument().addUndoableEditListener(um);
+//        editor.getDocument().putProperty(BaseDocument.UNDO_MANAGER_PROP, um);
     }
 
     // ---------
@@ -1659,8 +1691,8 @@ public class FormUtils
         public boolean equals(Object o) {
             if (o instanceof TypeHelper) {
                 TypeHelper t = (TypeHelper)o;
-                return ((name == null) ? (t.name == null) : t.name.equals(name))
-                        && ((type == null) ? (t.type == null) : t.type.equals(type));
+                return ((name == null) ? (t.name == null) : name.equals(t.name))
+                        && ((type == null) ? (t.type == null) : type.equals(t.type));
             } else {
                 return false;
             }
@@ -1720,15 +1752,33 @@ public class FormUtils
      * that may be broken or malformed. This is a replacement for Introspector.getBeanInfo().
      * @see java.beans.Introspector.getBeanInfo(Class)
      */
-    public static java.beans.BeanInfo getBeanInfo(Class clazz) throws java.beans.IntrospectionException {
+    public static BeanInfo getBeanInfo(Class clazz) throws IntrospectionException {
         try {
             return Utilities.getBeanInfo(clazz);//, java.beans.Introspector.USE_ALL_BEANINFO);
-        } catch (Error ex1) { // why is Error thrown instead of IntrospectionException?
+        } catch (Exception ex) {
+            org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+            return getBeanInfo(clazz, Introspector.IGNORE_IMMEDIATE_BEANINFO);
+        } catch (Error err) {
+            org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, err);
+            return getBeanInfo(clazz, Introspector.IGNORE_IMMEDIATE_BEANINFO);
+        }
+    }
+
+    // helper method for getBeanInfo(Class)
+    private static BeanInfo getBeanInfo(Class clazz, int mode) throws IntrospectionException {
+        if (mode == Introspector.IGNORE_IMMEDIATE_BEANINFO) {
             try {
-                return Introspector.getBeanInfo(clazz, java.beans.Introspector.IGNORE_IMMEDIATE_BEANINFO);
-            } catch (Error ex2) {
-                return Introspector.getBeanInfo(clazz, java.beans.Introspector.IGNORE_ALL_BEANINFO);
+                return Introspector.getBeanInfo(clazz, Introspector.IGNORE_IMMEDIATE_BEANINFO);
+            } catch (Exception ex) {
+                org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, ex);
+                return getBeanInfo(clazz, Introspector.IGNORE_ALL_BEANINFO);
+            } catch (Error err) {
+                org.openide.ErrorManager.getDefault().notify(org.openide.ErrorManager.INFORMATIONAL, err);
+                return getBeanInfo(clazz, Introspector.IGNORE_ALL_BEANINFO);
             }
+        } else {
+            assert mode == Introspector.IGNORE_ALL_BEANINFO;
+            return Introspector.getBeanInfo(clazz, Introspector.IGNORE_ALL_BEANINFO);
         }
     }
 }
