@@ -51,14 +51,15 @@ import org.netbeans.modules.xml.text.api.XMLDefaultTokenContext;
 import org.w3c.dom.*;
 
 import org.netbeans.editor.*;
-import org.netbeans.editor.ext.*;
 import org.openide.ErrorManager;
 
 import org.netbeans.modules.xml.text.syntax.*;
 import org.netbeans.modules.xml.text.syntax.dom.*;
 import org.netbeans.modules.xml.api.model.*;
 import org.netbeans.modules.xml.spi.dom.UOException;
+import org.netbeans.modules.xml.text.bracematch.XMLBraceMatcher;
 import org.netbeans.modules.xml.text.syntax.dom.SyntaxNode;
+import org.netbeans.spi.editor.completion.CompletionItem;
 import org.openide.util.NbBundle;
 
 /**
@@ -74,7 +75,7 @@ import org.openide.util.NbBundle;
  * @version 1.01
  */
 
-public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
+public class XMLCompletionQuery implements XMLTokenIDs {
     
     // the name of a property indentifing cached query
     public static final String DOCUMENT_GRAMMAR_BINDING_PROP = "doc-bind-query";
@@ -94,29 +95,11 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
      * @param support syntax-support that will be used during resolving of the query.
      * @return result of the query or null if there's no result.
      */
-    public CompletionQuery.Result query(JTextComponent component, int offset, SyntaxSupport support) {
-        
-        // assert precondition, actually serial access required
-        
-//        synchronized (this) {
-//            if (thread == null) {
-//                thread = new ThreadLocal();
-//                thread.set(thread);
-//            }
-//            if (thread != thread.get()) {
-//                // unfortunatelly RP can probably provide serialization even
-//                // if delegating to multiple threads
-//                // throw new IllegalStateException("Serial access required!");     //NOI18N
-//            }
-//        }
-        
-        // perform query
-        
+    public List<CompletionItem> query(JTextComponent component, int offset, SyntaxSupport support) {        
         BaseDocument doc = (BaseDocument)component.getDocument();
         if (doc == null) return null;
         XMLSyntaxSupport sup = (XMLSyntaxSupport)support.get(XMLSyntaxSupport.class);
-        if( sup == null ) return null;// No SyntaxSupport for us, no hint for user
-        
+        if( sup == null ) return null;// No SyntaxSupport for us, no hint for user        
         try {
             SyntaxQueryHelper helper = new SyntaxQueryHelper(sup, offset);
             
@@ -126,8 +109,8 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
             
             // completion request originates from area covered by DOM,
             if (helper.getCompletionType() != SyntaxQueryHelper.COMPLETION_TYPE_DTD) {
-                List all = new ArrayList();
-                List list = null;
+                List<CompletionItem> all = new ArrayList<CompletionItem>();
+                List<CompletionItem> list = null;
                 switch (helper.getCompletionType()) {
                     case SyntaxQueryHelper.COMPLETION_TYPE_ATTRIBUTE:
                         list = queryAttributes(helper, doc, sup);
@@ -148,17 +131,16 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
                 }
                 
                 if(list == null) {
-                    // broken document
-                    return cannotSuggest(component, sup.requestedAutoCompletion());
+                    return null;
                 }
 
                 if (helper.getCompletionType() == SyntaxQueryHelper.COMPLETION_TYPE_VALUE) {
                     //might be the end tag autocompletion
                     if(helper.getToken().getTokenID() == XMLDefaultTokenContext.TAG) {
-                        SyntaxElement se = helper.getSyntaxElement();
+                    SyntaxElement se = helper.getSyntaxElement();
                         if(se instanceof StartTag) {
                             String tagName = ((StartTag)se).getNodeName();
-                            if(tagName != null)
+                            if(tagName != null && !XMLBraceMatcher.hasEndTag(doc, offset, tagName))
                                 list.add(new EndTagAutocompletionResultItem(tagName));
                         }
                     }
@@ -168,10 +150,11 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
                     List stlist = findStartTag((SyntaxNode)helper.getSyntaxElement(), !helper.getPreText().endsWith("/") ? "/" : "");
                     if (stlist != null && !stlist.isEmpty()) {
                         ElementResultItem item = (ElementResultItem)stlist.get(0); //we always get just one item
-                        if(!item.getItemText().startsWith("/") || item.getItemText().startsWith(helper.getPreText().substring(1))) {
+                        if(!XMLBraceMatcher.hasEndTag(doc, offset, item.getItemText()) &&
+                           (!item.getItemText().startsWith("/") ||
+                            item.getItemText().startsWith(helper.getPreText().substring(1)))) {
                             String title = NbBundle.getMessage(XMLCompletionQuery.class, "MSG_result", helper.getPreText());
-                            return new XMLCompletionResult(component, title,
-                                    stlist, helper.getOffset(), 0);
+                             //TODOxxxreturn new XMLCompletionResult(component, title,stlist, helper.getOffset(), 0);
                         }
                     }
                 }
@@ -200,28 +183,23 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
                     }
                     
                     if (addEndTag) {
-                        //prevent autocompletion of the only CC item.
-                        if(!list.isEmpty() || startTags.size() > 1) {
-                            all.addAll(startTags);
-                        }
+                        all.addAll(startTags);
                     }
                     
                 }
                 
                 all.addAll(list);
-                
-                if(all.isEmpty()) {
-                    return noSuggestion(component, sup.requestedAutoCompletion());
-                } else {
-                    return new XMLCompletionResult(
-                            component,
-                            title,
-                            all,
-                            helper.getOffset() - helper.getEraseCount(),
-                            helper.getEraseCount()
-                            );
-                }
-                
+                if(!all.isEmpty())
+                    return all;
+                //TODOxxxreturn noSuggestion(component, sup.requestedAutoCompletion());
+                    //TODOxxx
+//                    return new XMLCompletionResult(
+//                            component,
+//                            title,
+//                            all,
+//                            helper.getOffset() - helper.getEraseCount(),
+//                            helper.getEraseCount()
+//                            );                
             } else {
                 // prolog, internal DTD no completition yet
                 if (helper.getToken().getTokenID() == PI_CONTENT) {
@@ -229,57 +207,58 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
                         List encodings = new ArrayList(2);
                         encodings.add(new XMLResultItem("\"UTF-8\""));          // NOI18N
                         encodings.add(new XMLResultItem("\"UTF-16\""));         // NOI18N
-                        return new XMLCompletionResult(
-                                component,
-                                NbBundle.getMessage(XMLCompletionQuery.class, "MSG_encoding_comp"),
-                                encodings,
-                                helper.getOffset(),
-                                0
-                                );
+                        //TODOxxx
+//                        return new XMLCompletionResult(
+//                                component,
+//                                NbBundle.getMessage(XMLCompletionQuery.class, "MSG_encoding_comp"),
+//                                encodings,
+//                                helper.getOffset(),
+//                                0
+//                                );
                     }
                 }
-                return noSuggestion(component, sup.requestedAutoCompletion());
+                //TODOxxxreturn noSuggestion(component, sup.requestedAutoCompletion());
             }
             
         } catch (BadLocationException e) {
             //Util.THIS.debug(e);
         }
-        
+        return null;
         // nobody knows what happened...
-        return noSuggestion(component, sup.requestedAutoCompletion());
+         //TODOxxxreturn noSuggestion(component, sup.requestedAutoCompletion());
     }
-    
+        
     /**
      * Contruct result indicating that grammar is not able to give
      * a hint because document is too broken or invalid. Grammar
      * knows that it's broken.
      */
-    private static Result cannotSuggest(JTextComponent component, boolean auto) {
-        if (auto) return null;
-        return new XMLCompletionResult(
-                component,
-                NbBundle.getMessage(XMLCompletionQuery.class, "BK0002"),
-                Collections.EMPTY_LIST,
-                0,
-                0
-                );
-    }
+//    private static Result cannotSuggest(JTextComponent component, boolean auto) {
+//        if (auto) return null;
+//        return new XMLCompletionResult(
+//                component,
+//                NbBundle.getMessage(XMLCompletionQuery.class, "BK0002"),
+//                Collections.EMPTY_LIST,
+//                0,
+//                0
+//                );
+//    }
     
     /**
      * Contruct result indicating that grammar is not able to give
      * a hint because in given context is not nothing allowed what
      * the grammar know of. May grammar is missing at all.
      */
-    private static Result noSuggestion(JTextComponent component, boolean auto) {
-        if (auto) return null;
-        return new XMLCompletionResult(
-                component,
-                NbBundle.getMessage(XMLCompletionQuery.class, "BK0003"),
-                Collections.EMPTY_LIST,
-                0,
-                0
-                );
-    }
+//    private static Result noSuggestion(JTextComponent component, boolean auto) {
+//        if (auto) return null;
+//        return new XMLCompletionResult(
+//                component,
+//                NbBundle.getMessage(XMLCompletionQuery.class, "BK0003"),
+//                Collections.EMPTY_LIST,
+//                0,
+//                0
+//                );
+//    }
     
     // Grammar binding ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     
@@ -324,25 +303,30 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
         }
     }
     
-    private List queryAttributes(SyntaxQueryHelper helper, Document doc, XMLSyntaxSupport sup) {
+    private List<CompletionItem> queryAttributes(SyntaxQueryHelper helper, Document doc, XMLSyntaxSupport sup) {
         Enumeration res = getPerformer(doc, sup).queryAttributes(helper.getContext());
         return translateAttributes(res, helper.isBoundary());
     }
     
-    private List queryValues(SyntaxQueryHelper helper, Document doc, XMLSyntaxSupport sup) {
-        Enumeration res = getPerformer(doc, sup).queryValues(helper.getContext());
-        return translateValues(res);
+    private List<CompletionItem> queryValues(SyntaxQueryHelper helper, Document doc, XMLSyntaxSupport sup) {
+        try {
+            Enumeration res = getPerformer(doc, sup).queryValues(helper.getContext());
+            return translateValues(res);
+        } catch (Exception ex) {            
+            //issue #118136: just catch and return
+            return null;
+        }
     }
     
-    private List queryNotations(SyntaxQueryHelper helper, Document doc, XMLSyntaxSupport sup) {  //!!! to be implemented
+    private List<CompletionItem> queryNotations(SyntaxQueryHelper helper, Document doc, XMLSyntaxSupport sup) {  //!!! to be implemented
         Enumeration res = getPerformer(doc, sup).queryNotations(helper.getContext().getCurrentPrefix());
         return null;
     }
     
     // Translate general results to editor ones ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     
-    private List translateEntityRefs(Enumeration refs ) {
-        List result = new ArrayList(133);
+    private List<CompletionItem> translateEntityRefs(Enumeration refs ) {
+        List<CompletionItem> result = new ArrayList<CompletionItem>(133);
         while ( refs.hasMoreElements() ) {
             GrammarResult next = (GrammarResult) refs.nextElement();
             if(next != null && next.getNodeName() != null) {
@@ -354,8 +338,8 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
     }
     
     /** Translate results perfromer (DOM nodes) format to CompletionQuery.ResultItems format. */
-    private List translateElements(Enumeration els, String prefix, GrammarQuery perfomer) {
-        List result = new ArrayList(13);
+    private List<CompletionItem> translateElements(Enumeration els, String prefix, GrammarQuery perfomer) {
+        List<CompletionItem> result = new ArrayList<CompletionItem>(13);
         while (els.hasMoreElements()) {
             GrammarResult next = (GrammarResult) els.nextElement();
             if (prefix.equals(next.getNodeName())) {
@@ -373,8 +357,8 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
     }
     
     
-    private List translateAttributes(Enumeration attrs, boolean boundary) {
-        List result = new ArrayList(13);
+    private List<CompletionItem> translateAttributes(Enumeration attrs, boolean boundary) {
+        List<CompletionItem> result = new ArrayList<CompletionItem>(13);
         while (attrs.hasMoreElements()) {
             GrammarResult next = (GrammarResult) attrs.nextElement();
             if(next != null && next.getNodeName() != null) {
@@ -385,8 +369,8 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
         return result;
     }
     
-    private List translateValues(Enumeration values ) {
-        List result = new ArrayList(3);
+    private List<CompletionItem> translateValues(Enumeration values ) {
+        List<CompletionItem> result = new ArrayList<CompletionItem>(3);
         while (values.hasMoreElements()) {
             GrammarResult next = (GrammarResult) values.nextElement();
             if(next != null && next.getDisplayName() != null) {
@@ -405,7 +389,7 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
      * @param prefix that is prepended to created ElementResult e.g. '</'
      * @return list with one ElementResult or empty.
      */
-    private static List findStartTag(SyntaxNode text, String prefix) {
+    private static List<CompletionItem> findStartTag(SyntaxNode text, String prefix) {
         //if ( Util.THIS.isLoggable() ) /* then */ Util.THIS.debug("XMLCompletionQuery.findStartTag: text=" + text);
         
         Node parent = text.getParentNode();
@@ -422,26 +406,26 @@ public class XMLCompletionQuery implements CompletionQuery, XMLTokenIDs {
         XMLResultItem res = new ElementResultItem(prefix + name);
         //if ( Util.THIS.isLoggable() ) Util.THIS.debug("    result=" + res);
         
-        List list = new ArrayList(1);
+        List<CompletionItem> list = new ArrayList<CompletionItem>(1);
         list.add(res);
         
         return list;
     }
     
-    private static List findStartTag(SyntaxNode text) {
+    private static List<CompletionItem> findStartTag(SyntaxNode text) {
         return findStartTag(text, "");
     }
     
-    public static class XMLCompletionResult extends CompletionQuery.DefaultResult {
-        private int substituteOffset;
-        public XMLCompletionResult(JTextComponent component, String title, List data, int offset, int len ) {
-            super(component, title, data, offset, len);
-            substituteOffset = offset;
-        }
-        
-        public int getSubstituteOffset() {
-            return substituteOffset;
-        }
-    }
+//    public static class XMLCompletionResult extends CompletionQuery.DefaultResult {
+//        private int substituteOffset;
+//        public XMLCompletionResult(JTextComponent component, String title, List data, int offset, int len ) {
+//            super(component, title, data, offset, len);
+//            substituteOffset = offset;
+//        }
+//
+//        public int getSubstituteOffset() {
+//            return substituteOffset;
+//        }
+//    }
     
 }
