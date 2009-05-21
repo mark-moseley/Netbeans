@@ -72,7 +72,7 @@ public class PropertiesTableModel extends AbstractTableModel {
 
     /** Listens to changes on the bundle structure. */
     private PropertyBundleListener bundleListener;
-    
+
     /** Create a data node for a given data object.
      * The provided children object will be used to hold all child nodes.
      * @param structure model to work with
@@ -87,10 +87,11 @@ public class PropertiesTableModel extends AbstractTableModel {
         structure.addPropertyBundleListener(
             (PropertyBundleListener) WeakListeners.create(PropertyBundleListener.class, bundleListener, structure)                
         );
-        
-    }     
+
+    }
 
     /** Gets the class for a model. Overrides column class. */
+    @Override
     public Class getColumnClass(int columnIndex) {
         return StringPair.class;
     }
@@ -108,7 +109,7 @@ public class PropertiesTableModel extends AbstractTableModel {
     /** Gets the value for the given row and column. Implements superclass abstract method. */
     public Object getValueAt(int row, int column) {
         BundleStructure bs = structure;
-        
+
         if(column == 0)
             // Get StringPair for key.
             return stringPairForKey(row);//bs.keyAt(row);
@@ -152,6 +153,7 @@ public class PropertiesTableModel extends AbstractTableModel {
     /** Gets name for column. Overrides superclass method.
      * @param column model index of column
      * @return name for column */
+    @Override
     public String getColumnName(int column) {
         String leading;
         
@@ -175,6 +177,7 @@ public class PropertiesTableModel extends AbstractTableModel {
     }
 
     /** Sets the value at rowIndex and columnIndex. Overrides superclass method. */
+    @Override
     public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
         // If values equals -> no change was made -> return immediatelly.
         if (aValue.equals(getValueAt(rowIndex, columnIndex))) {
@@ -249,12 +252,15 @@ public class PropertiesTableModel extends AbstractTableModel {
 
     /** Overrides superclass method. Overrides superclass method.
      * @return true for all cells */
+    @Override
     public boolean isCellEditable(int rowIndex, int columnIndex) {
         if (columnIndex == 0) {
             return !structure.isReadOnly();
         } else {
             PropertiesFileEntry entry = structure.getNthEntry(columnIndex-1);
-            return entry.getFile().canWrite();
+            if (entry != null)
+                return entry.getFile().canWrite();
+            return false;
         }
     }
 
@@ -280,7 +286,16 @@ public class PropertiesTableModel extends AbstractTableModel {
         fireTableChanged(new TableModelEvent(this, 0, getRowCount() - 1, columnModelIndex));
     }
 
+    /**
+     * Get FileEntry  according to column in Table View
+     * @param column
+     * @return
+     */
+    PropertiesFileEntry getFileEntry(int column) {
+        return structure.getNthEntry(column-1);
+    }
     /** Overrides superclass method. */
+    @Override
     public String toString() {
         StringBuffer result = new StringBuffer();
         result.append("------------------------------ TABLE MODEL DUMP -----------------------\n"); // NOI18N
@@ -359,8 +374,8 @@ public class PropertiesTableModel extends AbstractTableModel {
                 // Note: Normal way would be use the next commented out rows, which should do in effect
                 // the same thing like reseting the model, but it doesn't, therefore we reset the model directly.
                 
-                //cancelEditingInTables(getDefaultCancelSelector());
-                //fireTableStructureChanged(); 
+                cancelEditingInTables(getDefaultCancelSelector());
+                fireTableStructureChanged(); 
 
                 Object[] list = PropertiesTableModel.super.listenerList.getListenerList();
                 for(int i = 0; i < list.length; i++) {
@@ -382,7 +397,8 @@ public class PropertiesTableModel extends AbstractTableModel {
 
                         for (int j=0 ; j < jt.getColumnModel().getColumnCount(); j++) {
                             TableColumn column = jt.getColumnModel().getColumn(j);
-                            column.setHeaderValue(jt.getModel().getColumnName(column.getModelIndex()));
+//                            column.setHeaderValue(jt.getModel().getColumnName(column.getModelIndex()));
+                            column.setHeaderValue(jt.getModel().getColumnName(j));
                         }
                     }
                 }
@@ -391,9 +407,11 @@ public class PropertiesTableModel extends AbstractTableModel {
             } else if(changeType == PropertyBundleEvent.CHANGE_FILE) {
                 // File changed.
                 final int index = structure.getEntryIndexByFileName(evt.getEntryName());
+                //This mean file deleted
                 if (index == -1) {
-                    if (Boolean.getBoolean("netbeans.debug.exceptions")) // NOI18N
-                        (new Exception("Changed file not found")).printStackTrace(); // NOI18N
+                    fireTableStructureChanged();
+//                    if (Boolean.getBoolean("netbeans.debug.exceptions")) // NOI18N
+//                        (new Exception("Changed file not found")).printStackTrace(); // NOI18N
                     return;
                 }
                 
@@ -404,8 +422,8 @@ public class PropertiesTableModel extends AbstractTableModel {
                         return (column == index + 1);
                     }
                 });
-                
-                fireTableColumnChanged(index + 1);
+//                fireTableColumnChanged(index + 1);
+                  fireTableStructureChanged();
             } else if(changeType == PropertyBundleEvent.CHANGE_ITEM) {
                 // one item changed
                 final int index2 = structure.getEntryIndexByFileName(evt.getEntryName());
@@ -489,6 +507,7 @@ public class PropertiesTableModel extends AbstractTableModel {
         }
 
         /** Overrides superclass method. */
+        @Override
         public boolean equals(Object obj) {
             if(obj == null || !(obj instanceof StringPair))
                 return false;
@@ -516,8 +535,17 @@ public class PropertiesTableModel extends AbstractTableModel {
             
             return str1.equals(str2);
         }
+
+        @Override
+        public int hashCode() {
+            int hash = 3;
+            hash = 19 * hash + (comment != null ? comment.hashCode() : 0);
+            hash = 19 * hash + (value != null ? value.hashCode() : 0);
+            return hash;
+        }
         
         /** Overrides superclass method. */
+        @Override
         public String toString() {
             return value;
         }
