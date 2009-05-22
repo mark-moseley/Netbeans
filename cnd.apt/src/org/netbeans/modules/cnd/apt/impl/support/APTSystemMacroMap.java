@@ -41,19 +41,21 @@
 
 package org.netbeans.modules.cnd.apt.impl.support;
 
-import antlr.Token;
-import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
+import org.netbeans.modules.cnd.apt.structure.APTDefine;
+import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
+import org.netbeans.modules.cnd.apt.support.APTMacro.Kind;
 import org.netbeans.modules.cnd.apt.support.APTMacroMap;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 
 /**
  *
  * @author Vladimir Voskresensky
  */
-public class APTSystemMacroMap extends APTBaseMacroMap implements APTMacroMap {
+public class APTSystemMacroMap extends APTBaseMacroMap {
     
     private APTMacroMap preMacroMap;
     
@@ -64,30 +66,29 @@ public class APTSystemMacroMap extends APTBaseMacroMap implements APTMacroMap {
     
     public APTSystemMacroMap(List<String> sysMacros) {
         this();
-        fill(sysMacros);
+        fill(sysMacros, true);
     }
     
-    protected APTMacro createMacro(Token name, Collection<Token> params, List<Token> value) {
-        return new APTMacroImpl(name, params, value, true);
+    protected APTMacro createMacro(CharSequence file, APTDefine define, Kind macroType) {
+        return new APTMacroImpl(file, define, macroType);
     }
     
-    public boolean pushExpanding(Token token) {
+    public boolean pushExpanding(APTToken token) {
         APTUtils.LOG.log(Level.SEVERE, "pushExpanding is not supported", new IllegalAccessException());// NOI18N
         return false;
     }
 
     public void popExpanding() {
         APTUtils.LOG.log(Level.SEVERE, "popExpanding is not supported", new IllegalAccessException());// NOI18N
-//        return null;
     }
 
-    public boolean isExpanding(Token token) {
+    public boolean isExpanding(APTToken token) {
         APTUtils.LOG.log(Level.SEVERE, "isExpanding is not supported", new IllegalAccessException());// NOI18N
         return false;
     }  
     
     @Override
-    public APTMacro getMacro(Token token) {
+    public APTMacro getMacro(APTToken token) {
         APTMacro res = super.getMacro(token);
         
         if(res == null) {
@@ -103,12 +104,12 @@ public class APTSystemMacroMap extends APTBaseMacroMap implements APTMacroMap {
     }
 
     @Override
-    public void define(Token name, Collection<Token> params, List<Token> value) {
+    public void define(APTFile file, APTDefine define, Kind macroType) {
         throw new UnsupportedOperationException("Can not modify immutable System macro map"); // NOI18N
     }
 
     @Override
-    public void undef(Token name) {
+    public void undef(APTFile file, APTToken name) {
         throw new UnsupportedOperationException("Can not modify immutable System macro map"); // NOI18N
     }
 }
