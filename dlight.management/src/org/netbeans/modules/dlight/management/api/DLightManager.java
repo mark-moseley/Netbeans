@@ -144,7 +144,7 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
     public void closeSessionOnExit(DLightSession session) {
         SessionState currentSessionState = session.getState();
         if (currentSessionState != SessionState.ANALYZE) {
-            session.closeOnRun();
+            session.closeOnExit();
         } else {
             session.close();
         }
@@ -173,7 +173,7 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
         if (sessions.isEmpty()) {
             setActiveSession(null);
         } else {
-            setActiveSession(sessions.get(0));
+            setActiveSession(sessions.get(sessions.size() - 1));//last one will be active
         }
     }
 
@@ -337,13 +337,14 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
                 } else {
                     // Found! Can craete visualizer with this id for this dataProvider
                     visualizer = VisualizerProvider.getInstance().createVisualizer(configuration, dataProvider);
-                    if (visualizer instanceof SessionStateListener) {
-                        dlightSession.addSessionStateListener((SessionStateListener) visualizer);
-                        ((SessionStateListener) visualizer).sessionStateChanged(dlightSession, null, dlightSession.getState());
-
-                    }
+//                    if (visualizer instanceof SessionStateListener) {
+//                        dlightSession.addSessionStateListener((SessionStateListener) visualizer);
+//                        ((SessionStateListener) visualizer).sessionStateChanged(dlightSession, null, dlightSession.getState());
+//
+//                    }
                     //  visualizer = Visualiz.newVisualizerInstance(visualizerID, activeSession, dataProvider, configuration);
                     dataProvider.attachTo(storage);
+                    activeSession.addDataFilterListener(dataProvider);
                     break;
                 }
             }
@@ -360,7 +361,7 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
                 //if it is DataProvider instance it had to be returned at the previous loop
                 //and if we are here it means no storage exists for this DataProvider
                 // no providers for this storage can be found nor created
-                log.info("Unable to find storage to create Visualizer with ID == " + configuration.getID()); // NOI18N
+                log.fine("Unable to find storage to create Visualizer with ID == " + configuration.getID()); // NOI18N
                 return null;
             } else {
                 // Found! Can craete visualizer with this id for this dataProvider
@@ -374,7 +375,7 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
 
         }
         if (visualizer == null) {
-            log.info("Unable to find factory to create Visualizer with ID == " + configuration.getID()); // NOI18N
+            log.fine("Unable to find factory to create Visualizer with ID == " + configuration.getID()); // NOI18N
             return null;
 
         }
@@ -487,6 +488,8 @@ public final class DLightManager implements DLightToolkitManager, IndicatorActio
 
     public void mouseClickedOnIndicator(Indicator source) {
         DLightSession session = findIndicatorOwner(source);
+        //set active session
+        setActiveSession(session);
         List<VisualizerConfiguration> list = IndicatorAccessor.getDefault().getVisualizerConfigurations(source);
         boolean found = false;
         if (list != null) {
