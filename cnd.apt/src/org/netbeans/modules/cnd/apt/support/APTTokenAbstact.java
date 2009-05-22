@@ -41,6 +41,8 @@
 
 package org.netbeans.modules.cnd.apt.support;
 
+import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
+
 /**
  *
  * @author gorrus
@@ -58,8 +60,8 @@ public abstract class APTTokenAbstact implements APTToken {
     public int getEndLine() {return -1;};
     public void setEndLine(int l) {};
     
-    public int getTextID() {return -1;};
-    public void setTextID(int id) {};
+    public CharSequence getTextID() {return CharSequenceKey.empty();};
+    public void setTextID(CharSequence id) {};
     
     public int getColumn() {return -1;};
     public void setColumn(int c) {};
@@ -76,7 +78,38 @@ public abstract class APTTokenAbstact implements APTToken {
     public int getType() {return INVALID_TYPE;};
     public void setType(int t) {};
     
+    @Override
     public String toString() {
         return "[\"" + getText() + "\",<" + getType() + ">,line=" + getLine() + ",col=" + getColumn() + "]" + ",offset="+getOffset()+",file="+getFilename(); // NOI18N
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final APTTokenAbstact other = (APTTokenAbstact) obj;
+        if (this.getType() != other.getType()) {
+            return false;
+        }
+        if (this.getOffset() != other.getOffset()) {
+            return false;
+        }
+        if (!this.getTextID().equals(other.getTextID())) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 59 * hash + this.getType();
+        hash = 59 * hash + this.getOffset();
+        hash = 59 * hash + this.getTextID().hashCode();
+        return hash;
     }
 }
