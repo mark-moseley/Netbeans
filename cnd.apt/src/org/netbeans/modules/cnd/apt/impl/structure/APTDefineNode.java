@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.cnd.apt.impl.structure;
 
-import antlr.Token;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,6 +51,7 @@ import org.netbeans.modules.cnd.apt.debug.DebugUtils;
 import org.netbeans.modules.cnd.apt.support.APTTokenTypes;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.structure.APTDefine;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 import org.netbeans.modules.cnd.apt.utils.ListBasedTokenStream;
 
@@ -63,8 +63,8 @@ public final class APTDefineNode extends APTMacroBaseNode
                                     implements APTDefine, Serializable {
     private static final long serialVersionUID = -99267816578145490L;
     
-    private List<Token> params = null;
-    private List<Token> bodyTokens = null;
+    private List<APTToken> params = null;
+    private List<APTToken> bodyTokens = null;
     
     private byte state = BEFORE_MACRO_NAME;
     
@@ -88,7 +88,7 @@ public final class APTDefineNode extends APTMacroBaseNode
     }
 
     /** Creates a new instance of APTDefineNode */
-    public APTDefineNode(Token token) {
+    public APTDefineNode(APTToken token) {
         super(token);
     }
 
@@ -96,11 +96,11 @@ public final class APTDefineNode extends APTMacroBaseNode
         return APT.Type.DEFINE;
     }
     
-    public Collection<Token> getParams() {
+    public Collection<APTToken> getParams() {
         if (params == null) {
             return null;
         } else {
-            return Collections.<Token>unmodifiableList(params);// != null ? (Token[]) params.toArray(new Token[params.size()]) : null;
+            return Collections.<APTToken>unmodifiableList(params);// != null ? (APTToken[]) params.toArray(new APTToken[params.size()]) : null;
         }
     }
     
@@ -111,8 +111,8 @@ public final class APTDefineNode extends APTMacroBaseNode
     /**
      * returns List of Tokens of macro body
      */
-    public List<Token> getBody() {
-        return bodyTokens != null ? bodyTokens : Collections.<Token>emptyList();
+    public List<APTToken> getBody() {
+        return bodyTokens != null ? bodyTokens : Collections.<APTToken>emptyList();
     }
     
     /**
@@ -122,9 +122,20 @@ public final class APTDefineNode extends APTMacroBaseNode
         return state != ERROR;
     }
     
-    public boolean accept(Token token) {
+    @Override
+    public boolean accept(APTToken token) {
         int ttype = token.getType();
         if (APTUtils.isEndDirectiveToken(ttype)) {
+            if (bodyTokens != null){
+                ((ArrayList<?>)bodyTokens).trimToSize();
+            }
+            if (params != null){
+                ((ArrayList<?>)params).trimToSize();
+            }
+            if (state == BEFORE_MACRO_NAME) {
+                // macro without name
+                state = ERROR;
+            }
             return false;
         } else {
             switch (state) {
@@ -139,11 +150,11 @@ public final class APTDefineNode extends APTMacroBaseNode
                 case AFTER_MACRO_NAME:
                 {
                     if (token.getType() == APTTokenTypes.FUN_LIKE_MACRO_LPAREN) {
-                        params = new ArrayList<Token>();
+                        params = new ArrayList<APTToken>();
                         state = IN_PARAMS;
                     } else {
                         if (bodyTokens == null) {
-                            bodyTokens = new ArrayList<Token>();
+                            bodyTokens = new ArrayList<APTToken>();
                         }
                         bodyTokens.add(token);                        
                         state = IN_BODY;
@@ -185,7 +196,7 @@ public final class APTDefineNode extends APTMacroBaseNode
                 {
                     // init body list if necessary
                     if (bodyTokens == null) {
-                        bodyTokens = new ArrayList<Token>();
+                        bodyTokens = new ArrayList<APTToken>();
                     }
                     // check for errors:
                     if (token.getType() == APTTokenTypes.SHARP) {
@@ -230,13 +241,13 @@ public final class APTDefineNode extends APTMacroBaseNode
         }
     }
     
-    private boolean isInParamList(Token id) {
+    private boolean isInParamList(APTToken id) {
         assert id != null;
         if (params == null) {
             return false;
         }
-        for (Token param : params) {
-            if (APTUtils.getTokenTextKey(param).equals(APTUtils.getTokenTextKey(id))) {
+        for (APTToken param : params) {
+            if (param.getTextID().equals(id.getTextID())) {
                 return true;
             }
         }
@@ -256,5 +267,28 @@ public final class APTDefineNode extends APTMacroBaseNode
             bodyStr = "{NO BODY}"; // NOI18N
         }
         return ret + paramStr + bodyStr;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!super.equals(obj)) {
+            return false;
+        }
+        final APTDefineNode other = (APTDefineNode) obj;
+        if (this.params != other.params && (this.params == null || !this.params.equals(other.params))) {
+            return false;
+        }
+        if (this.bodyTokens != other.bodyTokens && (this.bodyTokens == null || !this.bodyTokens.equals(other.bodyTokens))) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = super.hashCode();
+        hash = 37 * hash + (this.params != null ? this.params.hashCode() : 0);
+        hash = 37 * hash + (this.bodyTokens != null ? this.bodyTokens.hashCode() : 0);
+        return hash;
     }
 }
