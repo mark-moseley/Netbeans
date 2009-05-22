@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,34 +43,41 @@ package org.netbeans.modules.ruby;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
-import org.netbeans.api.gsf.Index;
+import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
 import org.netbeans.modules.ruby.elements.IndexedField;
-import static org.netbeans.api.gsf.Index.*;
-import org.netbeans.api.gsf.NameKind;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.api.ruby.platform.RubyPlatformManager;
+import org.netbeans.modules.csl.api.ElementKind;
+import org.netbeans.modules.parsing.spi.Parser;
+import org.netbeans.modules.parsing.spi.indexing.support.IndexResult;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
 import org.netbeans.modules.ruby.elements.IndexedClass;
+import org.netbeans.modules.ruby.elements.IndexedConstant;
 import org.netbeans.modules.ruby.elements.IndexedElement;
 import org.netbeans.modules.ruby.elements.IndexedMethod;
+import org.netbeans.modules.ruby.elements.IndexedVariable;
+import org.netbeans.modules.ruby.platform.gems.GemManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.URLMapper;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.util.Exceptions;
 
+import static org.netbeans.modules.ruby.RubyIndexer.*;
 
 /**
  * Access to the index of known Ruby classes - core, libraries, gems, user projects, etc.
@@ -79,62 +86,102 @@ import org.openide.util.Exceptions;
  * @todo Store signature attributes for methods: private/protected?, documented?, returntype?
  * @todo When there are multiple method/field definitions, pick access level from one which sets it
  * @todo I do case-sensitive startsWith filtering here which is probably not good
+ * @todo Abort when search list .size() > N
  * 
  * @author Tor Norbye
  */
 public final class RubyIndex {
 
-    private static final Logger LOGGER = Logger.getLogger(RubyIndex.class.getName());
-    
+    private static final Logger LOGGGER = Logger.getLogger(RubyIndex.class.getName());
+
     public static final String UNKNOWN_CLASS = "<Unknown>"; // NOI18N
-    public static final String OBJECT = "Object"; // NOI18N
-    private static final String CLASS = "Class"; // NOI18N
-    private static final String MODULE = "Module"; // NOI18N
-    static final Set<SearchScope> ALL_SCOPE = EnumSet.allOf(SearchScope.class);
-    static final Set<SearchScope> SOURCE_SCOPE = EnumSet.of(SearchScope.SOURCE);
-    private static String clusterUrl = null;
-    private static final String CLUSTER_URL = "cluster:"; // NOI18N
+    public static final String OBJECT        = "Object"; // NOI18N
+    private static final String CLASS        = "Class"; // NOI18N
+    private static final String MODULE       = "Module"; // NOI18N
+    private static final String CLUSTER_URL  = "cluster:"; // NOI18N
     private static final String RUBYHOME_URL = "ruby:"; // NOI18N
-    private static final String GEM_URL = "gem:"; // NOI18N
-    private final Index index;
+    private static final String GEM_URL      = "gem:"; // NOI18N
 
-    /** Creates a new instance of RubyIndex */
-    public RubyIndex(Index index) {
-        this.index = index;
+    private static String clusterUrl = null;
+    
+    private static final RubyIndex EMPTY = new RubyIndex(null);
+    private FileObject context;
+
+    private final QuerySupport querySupport;
+
+    private static final SortedSet<InvocationCounter> mostTimeConsumingInvocations = new TreeSet<InvocationCounter>();
+    /**
+     * The base class for AR model classes, needs special handling in various
+     * places.
+     */
+    static final String ACTIVE_RECORD_BASE = "ActiveRecord::Base"; //NOI18N
+    
+    private RubyIndex(QuerySupport querySupport) {
+        this.querySupport = querySupport;
     }
 
-    public static RubyIndex get(Index index) {
-        return new RubyIndex(index);
-    }
-
-    private boolean search(String key, String name, NameKind kind, Set<SearchResult> result) {
+    public static RubyIndex get(Collection<FileObject> roots) {
         try {
-            index.gsfSearch(key, name, kind, ALL_SCOPE, result);
+            return new RubyIndex(QuerySupport.forRoots(
+                    RubyIndexer.Factory.NAME,
+                    RubyIndexer.Factory.VERSION,
+                    roots.toArray(new FileObject[roots.size()])));
+        } catch (IOException ioe) {
+            LOGGGER.log(Level.WARNING, null, ioe);
+            return EMPTY;
+        }
+    }
 
+    public static RubyIndex get(final Parser.Result result) {
+        return get(RubyUtils.getFileObject(result));
+    }
+
+    public static RubyIndex get(final FileObject fo) {
+        return fo == null ? null : get(QuerySupport.findRoots(fo,
+                Collections.singleton(RubyLanguage.SOURCE),
+                Collections.singleton(RubyLanguage.BOOT),
+                Collections.<String>emptySet()));
+    }
+
+    public Collection<? extends IndexResult> query(
+            final String fieldName, final String fieldValue,
+            final QuerySupport.Kind kind, final String... fieldsToLoad) {
+        if (querySupport != null) {
+            try {
+                return querySupport.query(fieldName, fieldValue, kind, fieldsToLoad);
+            } catch (IOException ioe) {
+                LOGGGER.log(Level.WARNING, null, ioe);
+            }
+        }
+
+        return Collections.<IndexResult>emptySet();
+    }
+
+//    public static RubyIndex get(Index index) {
+//        return new RubyIndex(index, null);
+//    }
+//
+//    public static RubyIndex get(Index index, FileObject context) {
+//        return new RubyIndex(index, context);
+//    }
+//
+    private boolean search(String key, String name, QuerySupport.Kind kind, Set<IndexResult> result) {
+        try {
+            result.addAll(querySupport.query(key, name, kind,  (String[]) null));
             return true;
         } catch (IOException ioe) {
             Exceptions.printStackTrace(ioe);
-
             return false;
         }
     }
 
-    private boolean search(String key, String name, NameKind kind, Set<SearchResult> result,
-        Set<SearchScope> scope) {
-        try {
-            index.gsfSearch(key, name, kind, scope, result);
-
-            return true;
-        } catch (IOException ioe) {
-            Exceptions.printStackTrace(ioe);
-
-            return false;
-        }
+    FileObject getContext() {
+        return context;
     }
 
-    Set<IndexedClass> getClasses(String name, final NameKind kind, boolean includeAll,
+    Set<IndexedClass> getClasses(String name, final QuerySupport.Kind kind, boolean includeAll,
         boolean skipClasses, boolean skipModules) {
-        return getClasses(name, kind, includeAll, skipClasses, skipModules, ALL_SCOPE, null);
+        return getClasses(name, kind, includeAll, skipClasses, skipModules, null);
     }
 
     /**
@@ -147,9 +194,8 @@ public final class RubyIndex {
      *   class, one for each declaration point. For example, File is defined both in the
      *   builtin stubs as well as in ftools.
      */
-    public Set<IndexedClass> getClasses(String name, final NameKind kind, boolean includeAll,
-        boolean skipClasses, boolean skipModules, Set<Index.SearchScope> scope,
-        Set<String> uniqueClasses) {
+    public Set<IndexedClass> getClasses(String name, final QuerySupport.Kind kind, boolean includeAll,
+        boolean skipClasses, boolean skipModules, Set<String> uniqueClasses) {
         String classFqn = null;
 
         if (name != null) {
@@ -166,34 +212,28 @@ public final class RubyIndex {
             }
         }
 
-        final Set<SearchResult> result = new HashSet<SearchResult>();
+        final Set<IndexResult> result = new HashSet<IndexResult>();
 
-        //        if (!isValid()) {
-        //            LOGGER.fine(String.format("LuceneIndex[%s] is invalid!\n", this.toString()));
-        //            return;
-        //        }
         String field;
 
         switch (kind) {
-        case EXACT_NAME:
-        case PREFIX:
-        case CAMEL_CASE:
-        case REGEXP:
-            field = RubyIndexer.FIELD_CLASS_NAME;
+            case EXACT:
+            case PREFIX:
+            case CAMEL_CASE:
+            case REGEXP:
+                field = FIELD_CLASS_NAME;
+                break;
 
-            break;
+            case CASE_INSENSITIVE_PREFIX:
+            case CASE_INSENSITIVE_REGEXP:
+                field = FIELD_CASE_INSENSITIVE_CLASS_NAME;
+                break;
 
-        case CASE_INSENSITIVE_PREFIX:
-        case CASE_INSENSITIVE_REGEXP:
-            field = RubyIndexer.FIELD_CASE_INSENSITIVE_CLASS_NAME;
-
-            break;
-
-        default:
-            throw new UnsupportedOperationException(kind.toString());
+            default:
+                throw new UnsupportedOperationException(kind.toString());
         }
 
-        search(field, name, kind, result, scope);
+        search(field, name, kind, result);
 
         // TODO Prune methods to fit my scheme - later make lucene index smarter about how to prune its index search
         if (includeAll) {
@@ -204,8 +244,8 @@ public final class RubyIndex {
 
         final Set<IndexedClass> classes = new HashSet<IndexedClass>();
 
-        for (SearchResult map : result) {
-            String clz = map.getValue(RubyIndexer.FIELD_CLASS_NAME);
+        for (IndexResult map : result) {
+            String clz = map.getValue(FIELD_CLASS_NAME);
 
             if (clz == null) {
                 // It's probably a module
@@ -214,26 +254,26 @@ public final class RubyIndex {
             }
 
             // Lucene returns some inexact matches, TODO investigate why this is necessary
-            if ((kind == NameKind.PREFIX) && !clz.startsWith(name)) {
+            if ((kind == QuerySupport.Kind.PREFIX) && !clz.startsWith(name)) {
                 continue;
-            } else if (kind == NameKind.CASE_INSENSITIVE_PREFIX && !clz.regionMatches(true, 0, name, 0, name.length())) {
+            } else if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX && !clz.regionMatches(true, 0, name, 0, name.length())) {
                 continue;
             }
 
             if (classFqn != null) {
-                if (kind == NameKind.CASE_INSENSITIVE_PREFIX ||
-                        kind == NameKind.CASE_INSENSITIVE_REGEXP) {
-                    if (!classFqn.equalsIgnoreCase(map.getValue(RubyIndexer.FIELD_IN))) {
+                if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX ||
+                        kind == QuerySupport.Kind.CASE_INSENSITIVE_REGEXP) {
+                    if (!classFqn.equalsIgnoreCase(map.getValue(FIELD_IN))) {
                         continue;
                     }
-                } else if (kind == NameKind.CAMEL_CASE) {
-                    String in = map.getValue(RubyIndexer.FIELD_IN);
+                } else if (kind == QuerySupport.Kind.CAMEL_CASE) {
+                    String in = map.getValue(FIELD_IN);
                     if (in != null) {
                         // Superslow, make faster 
                         StringBuilder sb = new StringBuilder();
-                        String prefix = null;
+//                        String prefix = null;
                         int lastIndex = 0;
-                        int index;
+                        int idx;
                         do {
 
                             int nextUpper = -1;
@@ -243,17 +283,17 @@ public final class RubyIndex {
                                     break;
                                 }
                             }
-                            index = nextUpper;
-                            String token = classFqn.substring(lastIndex, index == -1 ? classFqn.length(): index);
-                            if ( lastIndex == 0 ) {
-                                prefix = token;
-                            }
+                            idx = nextUpper;
+                            String token = classFqn.substring(lastIndex, idx == -1 ? classFqn.length(): idx);
+//                            if ( lastIndex == 0 ) {
+//                                prefix = token;
+//                            }
                             sb.append(token); 
                             // TODO - add in Ruby chars here?
-                            sb.append( index != -1 ?  "[\\p{javaLowerCase}\\p{Digit}_\\$]*" : ".*"); // NOI18N         
-                            lastIndex = index;
+                            sb.append( idx != -1 ?  "[\\p{javaLowerCase}\\p{Digit}_\\$]*" : ".*"); // NOI18N         
+                            lastIndex = idx;
                         }
-                        while(index != -1);
+                        while(idx != -1);
 
                         final Pattern pattern = Pattern.compile(sb.toString());
                         if (!pattern.matcher(in).matches()) {
@@ -263,13 +303,13 @@ public final class RubyIndex {
                         continue;
                     }
                 } else {
-                    if (!classFqn.equals(map.getValue(RubyIndexer.FIELD_IN))) {
+                    if (!classFqn.equals(map.getValue(FIELD_IN))) {
                         continue;
                     }
                 }
             }
 
-            String attrs = map.getValue(RubyIndexer.FIELD_CLASS_ATTRS);
+            String attrs = map.getValue(FIELD_CLASS_ATTRS);
             boolean isClass = true;
             if (attrs != null) {
                 int flags = IndexedElement.stringToFlag(attrs, 0);
@@ -285,7 +325,7 @@ public final class RubyIndex {
                 continue;
             }
 
-            String fqn = map.getValue(RubyIndexer.FIELD_FQN_NAME);
+            String fqn = map.getValue(FIELD_FQN_NAME);
 
             // Only return a single instance for this signature
             if (!includeAll) {
@@ -351,20 +391,15 @@ public final class RubyIndex {
      *   class, one for each declaration point. For example, File is defined both in the
      *   builtin stubs as well as in ftools.
      */
-    public Set<IndexedClass> getSubClasses(String name, String fqn, final NameKind kind, Set<Index.SearchScope> scope) {
-        final Set<SearchResult> result = new HashSet<SearchResult>();
+    public Set<IndexedClass> getSubClasses(String name, String fqn, final QuerySupport.Kind kind) {
 
-        //        if (!isValid()) {
-        //            LOGGER.fine(String.format("LuceneIndex[%s] is invalid!\n", this.toString()));
-        //            return;
-        //        }
-        String field = RubyIndexer.FIELD_EXTENDS_NAME;
-        search(field, fqn, NameKind.EXACT_NAME, result, scope);
+        Collection<? extends IndexResult> result =
+                query(FIELD_EXTENDS_NAME, fqn, QuerySupport.Kind.EXACT, FIELD_EXTENDS_NAME);
 
         final Set<IndexedClass> classes = new HashSet<IndexedClass>();
 
-        for (SearchResult map : result) {
-            String clz = map.getValue(RubyIndexer.FIELD_CLASS_NAME);
+        for (IndexResult ir : result) {
+            String clz = ir.getValue(FIELD_CLASS_NAME);
 
             if (clz == null) {
                 // It's probably a module
@@ -373,78 +408,79 @@ public final class RubyIndex {
             }
 
             // Lucene returns some inexact matches, TODO investigate why this is necessary
-            if ((kind == NameKind.PREFIX) && !clz.startsWith(name)) {
+            if ((kind == QuerySupport.Kind.PREFIX) && !clz.startsWith(name)) {
                 continue;
-            } else if (kind == NameKind.CASE_INSENSITIVE_PREFIX && !clz.regionMatches(true, 0, name, 0, name.length())) {
+            } else if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX && !clz.regionMatches(true, 0, name, 0, name.length())) {
                 continue;
             }
 
-            String cfqn = map.getValue(RubyIndexer.FIELD_FQN_NAME);
+            String cfqn = ir.getValue(FIELD_FQN_NAME);
 
             // Only return a single instance for this signature
-            classes.add(createClass(cfqn, clz, map));
+            classes.add(createClass(cfqn, clz, ir));
         }
 
         return classes;
     }
     
+    Set<? extends IndexedMethod> getMethods(final String name, final RubyType clz, QuerySupport.Kind kind) {
+        Set<IndexedMethod> methods = new HashSet<IndexedMethod>();
+        for (String realType : clz.getRealTypes()) {
+            methods.addAll(getMethods(name, realType, kind));
+        }
+        return methods;
+    }
+
+    Set<IndexedMethod> getMethods(String name, QuerySupport.Kind kind) {
+        return getMethods(name, (String) null, kind);
+    }
+
     /**
      * Return a set of methods that match the given name prefix, and are in the given
      * class and module. If no class is specified, match methods across all classes.
      * Note that inherited methods are not checked. If you want to match inherited methods
      * you must call this method on each superclass as well as the mixin modules.
      */
-    @SuppressWarnings("unchecked") // unchecked - lucene has source 1.4
-
-    Set<IndexedMethod> getMethods(final String name, final String clz, NameKind kind) {
-        return getMethods(name, clz, kind, ALL_SCOPE);
-    }
-
     @SuppressWarnings("fallthrough")
-    public Set<IndexedMethod> getMethods(final String name, final String clz, NameKind kind,
-        Set<Index.SearchScope> scope) {
+    public Set<IndexedMethod> getMethods(final String name, final String clz, QuerySupport.Kind kind) {
         boolean inherited = clz == null;
         
-        //    public void searchByCriteria(final String name, final ClassIndex.NameKind kind, /*final ResultConvertor<T> convertor,*/ final Set<String> result) throws IOException {
-        final Set<SearchResult> result = new HashSet<SearchResult>();
+        //    public void searchByCriteria(final String name, final ClassIndex.QuerySupport.Kind kind, /*final ResultConvertor<T> convertor,*/ final Set<String> file) throws IOException {
+        final Set<IndexResult> result = new HashSet<IndexResult>();
 
-        //        if (!isValid()) {
-        //            LOGGER.fine(String.format("LuceneIndex[%s] is invalid!\n", this.toString()));
-        //            return;
-        //        }
-        String field = RubyIndexer.FIELD_METHOD_NAME;
-        NameKind originalKind = kind;
-        if (kind == NameKind.EXACT_NAME) {
+        String field = FIELD_METHOD_NAME;
+        QuerySupport.Kind originalKind = kind;
+        if (kind == QuerySupport.Kind.EXACT) {
             // I can't do exact searches on methods because the method
             // entries include signatures etc. So turn this into a prefix
             // search and then compare chopped off signatures with the name
-            kind = NameKind.PREFIX;
+            kind = QuerySupport.Kind.PREFIX;
         }
 
         // No point in doing case insensitive searches on method names because
         // method names in Ruby are always case insensitive anyway
         //            case CASE_INSENSITIVE_PREFIX:
         //            case CASE_INSENSITIVE_REGEXP:
-        //                field = RubyIndexer.FIELD_CASE_INSENSITIVE_METHOD_NAME;
+        //                field = FIELD_CASE_INSENSITIVE_METHOD_NAME;
         //                break;
 
-        search(field, name, kind, result, scope);
+        search(field, name, kind, result);
 
-        //return Collections.unmodifiableSet(result);
+        //return Collections.unmodifiableSet(file);
 
         // TODO Prune methods to fit my scheme - later make lucene index smarter about how to prune its index search
         final Set<IndexedMethod> methods = new HashSet<IndexedMethod>();
 
-        for (SearchResult map : result) {
+        for (IndexResult map : result) {
             if (clz != null) {
-                String fqn = map.getValue(RubyIndexer.FIELD_FQN_NAME);
+                String fqn = map.getValue(FIELD_FQN_NAME);
 
                 if (!(clz.equals(fqn))) {
                     continue;
                 }
             }
 
-            String[] signatures = map.getValues(RubyIndexer.FIELD_METHOD_NAME);
+            String[] signatures = map.getValues(FIELD_METHOD_NAME);
 
             if (signatures != null) {
                 for (String signature : signatures) {
@@ -455,11 +491,11 @@ public final class RubyIndex {
                     }
 
                     // Lucene returns some inexact matches, TODO investigate why this is necessary
-                    if ((kind == NameKind.PREFIX) && !signature.startsWith(name)) {
+                    if ((kind == QuerySupport.Kind.PREFIX) && !signature.startsWith(name)) {
                         continue;
-                    } else if (kind == NameKind.CASE_INSENSITIVE_PREFIX && !signature.regionMatches(true, 0, name, 0, name.length())) {
+                    } else if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX && !signature.regionMatches(true, 0, name, 0, name.length())) {
                         continue;
-                    } else if (kind == NameKind.CASE_INSENSITIVE_REGEXP) {
+                    } else if (kind == QuerySupport.Kind.CASE_INSENSITIVE_REGEXP) {
                         int len = signature.length();
                         int end = signature.indexOf('(');
                         if (end == -1) {
@@ -476,7 +512,7 @@ public final class RubyIndex {
                         } catch (Exception e) {
                             // Silently ignore regexp failures in the search expression
                         }
-                    } else if (originalKind == NameKind.EXACT_NAME) {
+                    } else if (originalKind == QuerySupport.Kind.EXACT) {
                         // Make sure the name matches exactly
                         // We know that the prefix is correct from the first part of
                         // this if clause, by the signature may have more
@@ -493,7 +529,7 @@ public final class RubyIndex {
                 }
             }
 
-            String[] attributes = map.getValues(RubyIndexer.FIELD_ATTRIBUTE_NAME);
+            String[] attributes = map.getValues(FIELD_ATTRIBUTE_NAME);
 
             if (attributes != null) {
                 for (String signature : attributes) {
@@ -504,13 +540,13 @@ public final class RubyIndex {
                     }
 
                     // Lucene returns some inexact matches, TODO investigate why this is necessary
-                    if (kind == NameKind.PREFIX && !signature.startsWith(name)) {
+                    if (kind == QuerySupport.Kind.PREFIX && !signature.startsWith(name)) {
                         continue;
-                    } else if (kind == NameKind.CASE_INSENSITIVE_PREFIX && !signature.regionMatches(true, 0, name, 0, name.length())) {
+                    } else if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX && !signature.regionMatches(true, 0, name, 0, name.length())) {
                         continue;
-                    } else if (kind == NameKind.CASE_INSENSITIVE_REGEXP && !signature.matches(name)) {
+                    } else if (kind == QuerySupport.Kind.CASE_INSENSITIVE_REGEXP && !signature.matches(name)) {
                         continue;
-                    } else if (originalKind == NameKind.EXACT_NAME) {
+                    } else if (originalKind == QuerySupport.Kind.EXACT) {
                         // Make sure the name matches exactly
                         // We know that the prefix is correct from the first part of
                         // this if clause, by the signature may have more
@@ -534,9 +570,9 @@ public final class RubyIndex {
         return methods;
     }
 
-    private IndexedMethod createMethod(String signature, SearchResult map, boolean inherited) {
-        String clz = map.getValue(RubyIndexer.FIELD_CLASS_NAME);
-        String module = map.getValue(RubyIndexer.FIELD_IN);
+    public IndexedMethod createMethod(String signature, IndexResult ir, boolean inherited) {
+        String clz = ir.getValue(FIELD_CLASS_NAME);
+        String module = ir.getValue(FIELD_IN);
 
         if (clz == null) {
             // Module method?
@@ -544,10 +580,9 @@ public final class RubyIndex {
         } else if ((module != null) && (module.length() > 0)) {
             clz = module + "::" + clz;
         }
-
-        String fileUrl = map.getValue(RubyIndexer.FIELD_FILENAME);
-        String fqn = map.getValue(RubyIndexer.FIELD_FQN_NAME);
-        String require = map.getValue(RubyIndexer.FIELD_REQUIRE);
+        
+        String fqn = ir.getValue(FIELD_FQN_NAME);
+        String require = ir.getValue(FIELD_REQUIRE);
 
         // Extract attributes
         int attributeIndex = signature.indexOf(';');
@@ -564,16 +599,16 @@ public final class RubyIndex {
             signature = signature.substring(0, attributeIndex);
         }
 
-        IndexedMethod m =
-            IndexedMethod.create(this, signature, fqn, clz, fileUrl, require, attributes, flags);
+        IndexedMethod m = IndexedMethod.create(this, signature, fqn, clz,
+                ir.getFile(), require, attributes, flags, context);
 
         m.setInherited(inherited);
         return m;
     }
 
-    private IndexedField createField(String signature, SearchResult map, boolean isInstance, boolean inherited) {
-        String clz = map.getValue(RubyIndexer.FIELD_CLASS_NAME);
-        String module = map.getValue(RubyIndexer.FIELD_IN);
+    public IndexedField createField(String signature, IndexResult ir, boolean isInstance, boolean inherited) {
+        String clz = ir.getValue(FIELD_CLASS_NAME);
+        String module = ir.getValue(FIELD_IN);
 
         if (clz == null) {
             // Module method?
@@ -582,9 +617,8 @@ public final class RubyIndex {
             clz = module + "::" + clz;
         }
 
-        String fileUrl = map.getValue(RubyIndexer.FIELD_FILENAME);
-        String fqn = map.getValue(RubyIndexer.FIELD_FQN_NAME);
-        String require = map.getValue(RubyIndexer.FIELD_REQUIRE);
+        String fqn = ir.getValue(FIELD_FQN_NAME);
+        String require = ir.getValue(FIELD_REQUIRE);
 
         int attributeIndex = signature.indexOf(';');
         String attributes = null;
@@ -600,25 +634,43 @@ public final class RubyIndex {
             signature = signature.substring(0, attributeIndex);
         }
 
-        IndexedField m =
-            IndexedField.create(this, signature, fqn, clz, fileUrl, require, attributes, flags);        
+        IndexedField m = IndexedField.create(
+                this, signature, fqn, clz, ir, require, attributes, flags, context);
         m.setInherited(inherited);
 
         return m;
     }
-    
-    private IndexedClass createClass(String fqn, String clz, SearchResult map) {
-        String require = map.getValue(RubyIndexer.FIELD_REQUIRE);
 
-        // TODO - how do I determine -which- file to associate with the file?
-        // Perhaps the one that defines initialize() ?
-        String fileUrl = map.getValue(RubyIndexer.FIELD_FILENAME);
+    private static boolean isEmptyOrNull(String str) {
+        return str == null || "".equals(str.trim());
+    }
+
+    public IndexedConstant createConstant(String signature, IndexResult ir) {
+        String classFQN = ir.getValue(FIELD_FQN_NAME);
+        String require = ir.getValue(FIELD_REQUIRE);
+
+        int typeIndex = signature.indexOf(';');
+        String name = typeIndex == -1 ? signature : signature.substring(0, typeIndex);
+        int flags = 0;
+
+        // TODO parse possibly multiple types
+        String type = typeIndex == -1 ? null : signature.substring(typeIndex + 1);
+
+        RubyType rubyType = isEmptyOrNull(type) ? RubyType.createUnknown() : RubyType.create(type);
+        IndexedConstant m = IndexedConstant.create(
+                this, name, classFQN, ir, require, flags, context, rubyType);
+
+        return m;
+    }
+
+    public IndexedClass createClass(String fqn, String clz, IndexResult ir) {
+        String require = ir.getValue(FIELD_REQUIRE);
 
         if (clz == null) {
-            clz = map.getValue(RubyIndexer.FIELD_CLASS_NAME);
+            clz = ir.getValue(FIELD_CLASS_NAME);
         }
 
-        String attrs = map.getValue(RubyIndexer.FIELD_CLASS_ATTRS);
+        String attrs = ir.getValue(FIELD_CLASS_ATTRS);
         
         int flags = 0;
         if (attrs != null) {
@@ -626,38 +678,38 @@ public final class RubyIndex {
         }
 
         IndexedClass c =
-            IndexedClass.create(this, clz, fqn, fileUrl, require, attrs, flags);
+            IndexedClass.create(this, clz, fqn, ir, require, attrs, flags, context);
 
         return c;
     }
 
     // List of String[2]: 0: requirename, 1: fqn
-    public Set<String[]> getRequires(final String name, final NameKind kind) {
-        final Set<SearchResult> result = new HashSet<SearchResult>();
+    public Set<String[]> getRequires(final String name, final QuerySupport.Kind kind) {
+        final Set<IndexResult> result = new HashSet<IndexResult>();
 
-        String field = RubyIndexer.FIELD_REQUIRE;
+        String field = FIELD_REQUIRE;
 
         search(field, name, kind, result);
 
         // TODO Prune methods to fit my scheme - later make lucene index smarter about how to prune its index search
         final Map<String, String> fqns = new HashMap<String, String>();
 
-        for (SearchResult map : result) {
+        for (IndexResult map : result) {
             String[] r = map.getValues(field);
 
             if (r != null) {
                 for (String require : r) {
                     // Lucene returns some inexact matches, TODO investigate why this is necessary
-                    if (kind == NameKind.PREFIX && !require.startsWith(name)) {
+                    if (kind == QuerySupport.Kind.PREFIX && !require.startsWith(name)) {
                         continue;
-                    } else if (kind == NameKind.CASE_INSENSITIVE_PREFIX && !require.regionMatches(true, 0, name, 0, name.length())) {
+                    } else if (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX && !require.regionMatches(true, 0, name, 0, name.length())) {
                         continue;
                     }
                     assert map != null;
 
                     // TODO - check if there's a rubygem which captures this
                     // require and if so, remove it
-                    String fqn = map.getValue(RubyIndexer.FIELD_FQN_NAME);
+                    String fqn = map.getValue(FIELD_FQN_NAME);
 
                     String there = fqns.get(require);
 
@@ -690,16 +742,16 @@ public final class RubyIndex {
     
     // List of String[2]: 0: requirename, 1: fqn
     public Set<String> getClassesIn(final String require) {
-        final Set<SearchResult> result = new HashSet<SearchResult>();
+        final Set<IndexResult> result = new HashSet<IndexResult>();
 
-        String field = RubyIndexer.FIELD_REQUIRE;
+        String field = FIELD_REQUIRE;
 
-        search(field, require, NameKind.EXACT_NAME, result);
+        search(field, require, QuerySupport.Kind.EXACT, result);
 
         final Set<String> fqns = new HashSet<String>();
         
-        for (SearchResult map : result) {
-            String fqn = map.getValue(RubyIndexer.FIELD_FQN_NAME);
+        for (IndexResult map : result) {
+            String fqn = map.getValue(FIELD_FQN_NAME);
             
             if (fqn != null) {
                 fqns.add(fqn);
@@ -710,10 +762,10 @@ public final class RubyIndex {
     }
 
     public IndexedClass getSuperclass(String fqn) {
-        final Set<SearchResult> result = new HashSet<SearchResult>();
+        final Set<IndexResult> result = new HashSet<IndexResult>();
 
-        NameKind kind = NameKind.EXACT_NAME;
-        String field = RubyIndexer.FIELD_FQN_NAME;
+        QuerySupport.Kind kind = QuerySupport.Kind.EXACT;
+        String field = FIELD_FQN_NAME;
 
         search(field, fqn, kind, result);
 
@@ -721,10 +773,10 @@ public final class RubyIndex {
         // (e.g. you can have your own class named File which has nothing to
         // do with the builtin, and has a separate super class...
         
-        for (SearchResult map : result) {
-            assert fqn.equals(map.getValue(RubyIndexer.FIELD_FQN_NAME));
+        for (IndexResult map : result) {
+            assert fqn.equals(map.getValue(FIELD_FQN_NAME));
 
-            String extendsClass = map.getValue(RubyIndexer.FIELD_EXTENDS_NAME);
+            String extendsClass = map.getValue(FIELD_EXTENDS_NAME);
 
             if (extendsClass != null) {
                 // Found the class name, now look it up in the index
@@ -736,8 +788,8 @@ public final class RubyIndex {
 
                 // There should be exactly one match
                 if (result.size() > 0) {
-                    SearchResult superMap = result.iterator().next();
-                    String superFqn = superMap.getValue(RubyIndexer.FIELD_FQN_NAME);
+                    IndexResult superMap = result.iterator().next();
+                    String superFqn = superMap.getValue(FIELD_FQN_NAME);
 
                     return createClass(superFqn, extendsClass, superMap);
                 } else {
@@ -758,11 +810,11 @@ public final class RubyIndex {
 
         scannedClasses.add(classFqn);
 
-        String searchField = RubyIndexer.FIELD_EXTENDS_NAME;
+        String searchField = FIELD_EXTENDS_NAME;
 
-        Set<SearchResult> result = new HashSet<SearchResult>();
+        Set<IndexResult> result = new HashSet<IndexResult>();
 
-        search(searchField, classFqn, NameKind.EXACT_NAME, result);
+        search(searchField, classFqn, QuerySupport.Kind.EXACT, result);
 
         boolean foundIt = result.size() > 0;
 
@@ -771,8 +823,8 @@ public final class RubyIndex {
             return foundIt;
         }
 
-        for (SearchResult map : result) {
-            String fqn = map.getValue(RubyIndexer.FIELD_FQN_NAME);
+        for (IndexResult map : result) {
+            String fqn = map.getValue(FIELD_FQN_NAME);
             if (!seenClasses.contains(fqn)) {
                 IndexedClass clz = createClass(fqn, null, map);
                 classes.add(clz);
@@ -791,7 +843,7 @@ public final class RubyIndex {
     /** Find the subclasses of the given class name, with the POSSIBLE fqn from the
      * context of the usage. */
     public Set<IndexedClass> getSubClasses(String fqn, String possibleFqn, String name, boolean directOnly) {
-        //String field = RubyIndexer.FIELD_FQN_NAME;
+        //String field = FIELD_FQN_NAME;
         Set<IndexedClass> classes = new HashSet<IndexedClass>();
         Set<String> scannedClasses = new HashSet<String>();
         Set<String> seenClasses = new HashSet<String>();
@@ -831,7 +883,7 @@ public final class RubyIndex {
      * @todo Use arglist arity comparison to reject methods that are not overrides...
      */
     public IndexedMethod getOverridingMethod(String className, String methodName) {
-        Set<IndexedMethod> methods = getInheritedMethods(className, methodName, NameKind.EXACT_NAME);
+        Set<IndexedMethod> methods = getInheritedMethods(className, methodName, QuerySupport.Kind.EXACT);
 
         // TODO - this is only returning ONE match, not the most distant one. I really need to
         // produce a RubyIndex method for this which can walk in there and do a decent job!
@@ -846,14 +898,22 @@ public final class RubyIndex {
         return null;
     }
 
+    Set<IndexedMethod> getInheritedMethods(RubyType receiverType, String prefix, QuerySupport.Kind kind) {
+        Set<IndexedMethod> methods = new HashSet<IndexedMethod>();
+        for (String realType : receiverType.getRealTypes()) {
+            methods.addAll(getInheritedMethods(realType, prefix, kind));
+        }
+        return methods;
+    }
+
     /**
      * Get the set of inherited (through super classes and mixins) for the given fully qualified class name.
      * @param classFqn FQN: module1::module2::moduleN::class
-     * @param prefix If kind is NameKind.PREFIX/CASE_INSENSITIVE_PREFIX, a prefix to filter methods by. Else,
-     *    if kind is NameKind.EXACT_NAME filter methods by the exact name.
+     * @param prefix If kind is QuerySupport.Kind.PREFIX/CASE_INSENSITIVE_PREFIX, a prefix to filter methods by. Else,
+     *    if kind is QuerySupport.Kind.EXACT filter methods by the exact name.
      * @param kind Whether the prefix field should be taken as a prefix or a whole name
      */
-    public Set<IndexedMethod> getInheritedMethods(String classFqn, String prefix, NameKind kind) {
+    public Set<IndexedMethod> getInheritedMethods(String classFqn, String prefix, QuerySupport.Kind kind) {
         boolean haveRedirected = false;
 
         if ((classFqn == null) || classFqn.equals(OBJECT)) {
@@ -864,7 +924,7 @@ public final class RubyIndex {
             haveRedirected = true;
         }
 
-        //String field = RubyIndexer.FIELD_FQN_NAME;
+        //String field = FIELD_FQN_NAME;
         Set<IndexedMethod> methods = new HashSet<IndexedMethod>();
         Set<String> scannedClasses = new HashSet<String>();
         Set<String> seenSignatures = new HashSet<String>();
@@ -873,19 +933,51 @@ public final class RubyIndex {
             prefix = "";
         }
 
+        InvocationCounter counter = new InvocationCounter(classFqn, prefix);
         addMethodsFromClass(prefix, kind, classFqn, methods, seenSignatures, scannedClasses,
-            haveRedirected, false);
+            haveRedirected, false, counter);
+        counter.stop();
+
+        addToMostTimeConsuming(counter);
+        
+        if (LOGGGER.isLoggable(Level.FINEST)) {
+            LOGGGER.log(Level.FINEST, counter.display());
+        }
 
         return methods;
+    }
+
+    void logMostTimeConsuming() {
+        if (!LOGGGER.isLoggable(Level.FINE)) {
+            return;
+        }
+        LOGGGER.fine("The most time consuming invocations ( " + mostTimeConsumingInvocations.size() + "):");
+        LOGGGER.fine("===================================");
+        for (InvocationCounter each : mostTimeConsumingInvocations) {
+            LOGGGER.log(Level.FINE, each.display());
+        }
+        LOGGGER.fine("===================================");
+    }
+
+    private void addToMostTimeConsuming(InvocationCounter counter) {
+        if (mostTimeConsumingInvocations.size() < 20) {
+            mostTimeConsumingInvocations.add(counter);
+        } else if (mostTimeConsumingInvocations.last().compareTo(counter) < 0) {
+            mostTimeConsumingInvocations.remove(mostTimeConsumingInvocations.last());
+            mostTimeConsumingInvocations.add(counter);
+        }
     }
 
     /** Return whether the specific class referenced (classFqn) was found or not. This is
      * not the same as returning whether any classes were added since it may add
      * additional methods from parents (Object/Class).
      */
-    private boolean addMethodsFromClass(String prefix, NameKind kind, String classFqn,
+    private boolean addMethodsFromClass(String prefix, QuerySupport.Kind kind, String classFqn,
         Set<IndexedMethod> methods, Set<String> seenSignatures, Set<String> scannedClasses,
-        boolean haveRedirected, boolean inheriting) {
+        boolean haveRedirected, boolean inheriting, InvocationCounter counter) {
+        
+        counter.increment();
+
         // Prevent problems with circular includes or redundant includes
         if (scannedClasses.contains(classFqn)) {
             return false;
@@ -893,11 +985,10 @@ public final class RubyIndex {
 
         scannedClasses.add(classFqn);
 
-        String searchField = RubyIndexer.FIELD_FQN_NAME;
 
-        Set<SearchResult> result = new HashSet<SearchResult>();
+        Set<IndexResult> result = new HashSet<IndexResult>();
 
-        search(searchField, classFqn, NameKind.EXACT_NAME, result);
+        search(FIELD_FQN_NAME, classFqn, QuerySupport.Kind.EXACT, result);
 
         boolean foundIt = result.size() > 0;
 
@@ -915,14 +1006,14 @@ public final class RubyIndex {
             classIn = classFqn.substring(0, fqnIndex);
         }
 
-        for (SearchResult map : result) {
+        for (IndexResult map : result) {
             assert map != null;
 
             if (extendsClass == null) {
-                extendsClass = map.getValue(RubyIndexer.FIELD_EXTENDS_NAME);
+                extendsClass = map.getValue(FIELD_EXTENDS_NAME);
             }
 
-            String includes = map.getValue(RubyIndexer.FIELD_INCLUDES);
+            String includes = map.getValue(FIELD_INCLUDES);
 
             if (includes != null) {
                 String[] in = includes.split(",");
@@ -935,17 +1026,17 @@ public final class RubyIndex {
 
                     if (classIn != null) {
                         isQualified = addMethodsFromClass(prefix, kind, classIn + "::" + include,
-                                methods, seenSignatures, scannedClasses, haveRedirected, true);
+                                methods, seenSignatures, scannedClasses, haveRedirected, true, counter);
                     }
 
                     if (!isQualified) {
                         addMethodsFromClass(prefix, kind, include, methods, seenSignatures,
-                            scannedClasses, haveRedirected, true);
+                            scannedClasses, haveRedirected, true, counter);
                     }
                 }
             }
 
-            String extendWith = map.getValue(RubyIndexer.FIELD_EXTEND_WITH);
+            String extendWith = map.getValue(FIELD_EXTEND_WITH);
 
             if (extendWith != null) {
                 // Try both with and without a package qualifier
@@ -953,16 +1044,16 @@ public final class RubyIndex {
 
                 if (classIn != null) {
                     isQualified = addMethodsFromClass(prefix, kind, classIn + "::" + extendWith,
-                            methods, seenSignatures, scannedClasses, haveRedirected, true);
+                            methods, seenSignatures, scannedClasses, haveRedirected, true, counter);
                 }
 
                 if (!isQualified) {
                     addMethodsFromClass(prefix, kind, extendWith, methods, seenSignatures,
-                        scannedClasses, haveRedirected, true);
+                        scannedClasses, haveRedirected, true, counter);
                 }
             }
             
-            String[] signatures = map.getValues(RubyIndexer.FIELD_METHOD_NAME);
+            String[] signatures = map.getValues(FIELD_METHOD_NAME);
 
             if (signatures != null) {
                 for (String signature : signatures) {
@@ -974,7 +1065,7 @@ public final class RubyIndex {
                     // Prevent duplicates when method is redefined
                     if (!seenSignatures.contains(signature)) {
                         if (signature.startsWith(prefix)) {
-                            if (kind == NameKind.EXACT_NAME) {
+                            if (kind == QuerySupport.Kind.EXACT) {
                                 // Ensure that the method is not longer than the prefix
                                 if ((signature.length() > prefix.length()) &&
                                         (signature.charAt(prefix.length()) != '(') &&
@@ -983,8 +1074,8 @@ public final class RubyIndex {
                                 }
                             } else {
                                 // REGEXP, CAMELCASE filtering etc. not supported here
-                                assert (kind == NameKind.PREFIX) ||
-                                (kind == NameKind.CASE_INSENSITIVE_PREFIX);
+                                assert (kind == QuerySupport.Kind.PREFIX) ||
+                                (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX);
                             }
 
                             seenSignatures.add(signature);
@@ -997,7 +1088,7 @@ public final class RubyIndex {
                 }
             }
 
-            String[] attributes = map.getValues(RubyIndexer.FIELD_ATTRIBUTE_NAME);
+            String[] attributes = map.getValues(FIELD_ATTRIBUTE_NAME);
 
             if (attributes != null) {
                 for (String attribute : attributes) {
@@ -1009,7 +1100,7 @@ public final class RubyIndex {
                     // Prevent duplicates when method is redefined
                     if (!seenSignatures.contains(attribute)) {
                         if (attribute.startsWith(prefix)) {
-                            if (kind == NameKind.EXACT_NAME) {
+                            if (kind == QuerySupport.Kind.EXACT) {
                                 // Ensure that the method is not longer than the prefix
                                 if ((attribute.length() > prefix.length()) &&
                                         (attribute.charAt(prefix.length()) != '(') &&
@@ -1018,8 +1109,8 @@ public final class RubyIndex {
                                 }
                             } else {
                                 // REGEXP, CAMELCASE filtering etc. not supported here
-                                assert (kind == NameKind.PREFIX) ||
-                                (kind == NameKind.CASE_INSENSITIVE_PREFIX);
+                                assert (kind == QuerySupport.Kind.PREFIX) ||
+                                (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX);
                             }
 
                             seenSignatures.add(attribute);
@@ -1042,28 +1133,28 @@ public final class RubyIndex {
         if (extendsClass == null) {
             if (haveRedirected) {
                 addMethodsFromClass(prefix, kind, OBJECT, methods, seenSignatures, scannedClasses,
-                    true, true);
+                    true, true, counter);
             } else {
                 // Rather than inheriting directly from object,
                 // let's go via Class (and Module) up to Object
                 addMethodsFromClass(prefix, kind, CLASS, methods, seenSignatures, scannedClasses,
-                    true, true);
+                    true, true, counter);
             }
         } else {
-            if ("ActiveRecord::Base".equals(extendsClass)) { // NOI18N
+            if (ACTIVE_RECORD_BASE.equals(extendsClass)) { // NOI18N
                 // Add in database fields as well
                 addDatabaseProperties(prefix, kind, classFqn, methods);
             }
 
             // We're not sure we have a fully qualified path, so try some different candidates
             if (!addMethodsFromClass(prefix, kind, extendsClass, methods, seenSignatures,
-                        scannedClasses, haveRedirected, true)) {
+                        scannedClasses, haveRedirected, true, counter)) {
                 // Search by classIn 
                 String fqn = classIn;
 
                 while (fqn != null) {
                     if (addMethodsFromClass(prefix, kind, fqn + "::" + extendsClass, methods,
-                                seenSignatures, scannedClasses, haveRedirected, true)) {
+                                seenSignatures, scannedClasses, haveRedirected, true, counter)) {
                         break;
                     }
 
@@ -1081,246 +1172,24 @@ public final class RubyIndex {
         return foundIt;
     }
 
-    private void addDatabaseProperties(String prefix, NameKind kind, String classFqn,
+    private void addDatabaseProperties(String prefix, QuerySupport.Kind kind, String classFqn,
         Set<IndexedMethod> methods) {
-        // Query index for database related properties
-        if (classFqn.indexOf("::") != -1) {
-            // Don't know how to handle this scenario
-            return;
-        }
-        
-        String tableName = RubyUtils.tableize(classFqn);
-        
-        String searchField = RubyIndexer.FIELD_DB_TABLE;
-        Set<SearchResult> result = new HashSet<SearchResult>();
-        search(searchField, tableName, NameKind.EXACT_NAME, result);
+        DatabasePropertiesIndexer.indexDatabaseProperties(this, prefix, kind, classFqn, methods);
 
-        List<TableDefinition> tableDefs = new ArrayList<TableDefinition>();
-        TableDefinition schema = null;
-        
-        for (SearchResult map : result) {
-            assert map != null;
-
-            String version = map.getValue(RubyIndexer.FIELD_DB_VERSION);
-            assert tableName.equals(map.getValue(RubyIndexer.FIELD_DB_TABLE));
-            String fileUrl = map.getValue(RubyIndexer.FIELD_FILENAME);
-            TableDefinition def = new TableDefinition(tableName, version, fileUrl);
-            tableDefs.add(def);
-            String[] columns = map.getValues(RubyIndexer.FIELD_DB_COLUMN);
-
-            if (columns != null) {
-                for (String column : columns) {
-                    // TODO - do this filtering AFTER applying diffs when
-                    // I'm doing renaming of columns etc.
-                    def.addColumn(column);
-                }
-            }
-
-            if (RubyIndexer.SCHEMA_INDEX_VERSION.equals(version)) {
-                schema = def;
-                // With a schema I don't need to look at anything else
-                break;
-            }
-        }
-        
-        if (tableDefs.size() > 0) {
-            Map<String,String> columnDefs = new HashMap<String,String>();
-            Map<String,String> fileUrls = new HashMap<String,String>();
-            Set<String> currentCols = new HashSet<String>();
-            if (schema != null) {
-                List<String> cols = schema.getColumns();
-                if (cols != null) {
-                    for (String col : cols) {
-                        int typeIndex = col.indexOf(';');
-                        if (typeIndex != -1) {
-                            String name = col.substring(0, typeIndex);
-                            if (typeIndex < col.length()-1 && col.charAt(typeIndex+1) == '-') {
-                                // Removing column - this is unlikely in a
-                                // schema.rb file!
-                                currentCols.remove(col);
-                            } else {
-                                currentCols.add(name);
-                                fileUrls.put(col, schema.getFileUrl());
-                                columnDefs.put(name, col);
-                            }
-                        } else {
-                            currentCols.add(col);
-                            columnDefs.put(col, col);
-                            fileUrls.put(col, schema.getFileUrl());
-                        }
-                    }
-                }
-            } else {
-                // Apply migration files
-                Collections.sort(tableDefs);
-                for (TableDefinition def : tableDefs) {
-                    List<String> cols = def.getColumns();
-                    if (cols == null) {
-                        continue;
-                    }
-
-                    for (String col : cols) {
-                        int typeIndex = col.indexOf(';');
-                        if (typeIndex != -1) {
-                            String name = col.substring(0, typeIndex);
-                            if (typeIndex < col.length()-1 && col.charAt(typeIndex+1) == '-') {
-                                // Removing column
-                                currentCols.remove(name);
-                            } else {
-                                currentCols.add(name);
-                                fileUrls.put(col, def.getFileUrl());
-                                columnDefs.put(name, col);
-                            }
-                        } else {
-                            currentCols.add(col);
-                            columnDefs.put(col, col);
-                            fileUrls.put(col, def.getFileUrl());
-                        }
-                    }
-                }
-            }
-            
-            // Finally, we've "applied" the migrations - just walk
-            // through the datastructure and create completion matches
-            // as appropriate
-            for (String column : currentCols) {
-                if (column.startsWith(prefix)) {
-                    if (kind == NameKind.EXACT_NAME) {
-                        // Ensure that the method is not longer than the prefix
-                        if ((column.length() > prefix.length())) {
-                            continue;
-                        }
-                    } else {
-                        // REGEXP, CAMELCASE filtering etc. not supported here
-                        assert (kind == NameKind.PREFIX) ||
-                        (kind == NameKind.CASE_INSENSITIVE_PREFIX);
-                    }
-                    
-                    String c = columnDefs.get(column);
-                    String type = tableName;
-                    int semicolonIndex = c.indexOf(';');
-                    if (semicolonIndex != -1) {
-                        type = c.substring(semicolonIndex + 1);
-                    }
-                    String fileUrl = fileUrls.get(column);
-
-                    String signature = column;
-                    String fqn = tableName+"#"+column;
-                    String clz = type;
-                    String require = null;
-                    String attributes = "";
-                    int flags = 0;
-                    
-                    IndexedMethod method =
-                        IndexedMethod.create(this, signature, fqn, clz, fileUrl, require, attributes, flags);
-                    method.setMethodType(IndexedMethod.MethodType.DBCOLUMN);
-                    method.setSmart(true);
-                    methods.add(method);
-                }
-            }
-            
-            if ("find_by_".startsWith(prefix) ||
-                    "find_all_by".startsWith(prefix)) {
-                // Generate dynamic finders
-                for (String column : currentCols) {
-                    String methodOneName = "find_by_" + column;
-                    String methodAllName = "find_all_by_" + column;
-                    if (methodOneName.startsWith(prefix) || methodAllName.startsWith(prefix)) {
-                        if (kind == NameKind.EXACT_NAME) {
-// XXX methodOneName || methodAllName?                            
-                            // Ensure that the method is not longer than the prefix
-                            if ((column.length() > prefix.length())) {
-                                continue;
-                            }
-                        } else {
-                            // REGEXP, CAMELCASE filtering etc. not supported here
-                            assert (kind == NameKind.PREFIX) ||
-                            (kind == NameKind.CASE_INSENSITIVE_PREFIX);
-                        }
-
-                        String type = columnDefs.get(column);
-                        type = type.substring(type.indexOf(';') + 1);
-                        String fileUrl = fileUrls.get(column);
-
-                        String clz = classFqn;
-                        String require = null;
-                        int flags = IndexedElement.STATIC;
-                        String attributes = IndexedElement.flagToString(flags) + ";;;" + "options(:first|:all),args(=>conditions|order|group|limit|offset|joins|readonly:bool|include|select|from|readonly:bool|lock:bool)";
-
-                        if (methodOneName.startsWith(prefix)) {
-                            String signature = methodOneName+"(" + column + ",*options)";
-                            String fqn = tableName+"#"+signature;
-                            IndexedMethod method =
-                                IndexedMethod.create(this, signature, fqn, clz, fileUrl, require, attributes, flags);
-                            method.setInherited(false);
-                            method.setSmart(true);
-                            methods.add(method);
-                        }
-                        if (methodAllName.startsWith(prefix)) {
-                            String signature = methodAllName+"(" + column + ",*options)";
-                            String fqn = tableName+"#"+signature;
-                            IndexedMethod method =
-                                IndexedMethod.create(this, signature, fqn, clz, fileUrl, require, attributes, flags);
-                            method.setInherited(false);
-                            method.setSmart(true);
-                            methods.add(method);
-                        }
-                    }
-                }
-                
-            }
-        }
     }
-    
-    private class TableDefinition implements Comparable<TableDefinition> {
-        private String version;
-        /** table is redundant, I only search by exact tablenames anyway */
-        private String table;
-        private String fileUrl;
-        private List<String> cols;
 
-        TableDefinition(String table, String version, String fileUrl) {
-            this.table = table;
-            this.version = version;
-            this.fileUrl = fileUrl;
-        }
-
-        public int compareTo(RubyIndex.TableDefinition o) {
-            // I can do string comparisons here because the strings
-            // are all padded with zeroes on the left (so 100 is going
-            // to be greater than 099, which wouldn't be true for "99".)
-            return version.compareTo(o.version);
-        }
-        
-        String getFileUrl() {
-            return fileUrl;
-        }
-        
-        void addColumn(String column) {
-            if (cols == null) {
-                cols = new ArrayList<String>();
-            }
-
-            cols.add(column);
-        }
-        
-        List<String> getColumns() {
-            return cols;
-        }
-    }
-    
-    public Set<String> getDatabaseTables(String prefix, NameKind kind) {
+    public Set<String> getDatabaseTables(String prefix, QuerySupport.Kind kind) {
         // Query index for database related properties
         
-        String searchField = RubyIndexer.FIELD_DB_TABLE;
-        Set<SearchResult> result = new HashSet<SearchResult>();
+        String searchField = FIELD_DB_TABLE;
+        Set<IndexResult> result = new HashSet<IndexResult>();
         search(searchField, prefix, kind, result);
 
         Set<String> tables = new HashSet<String>();
-        for (SearchResult map : result) {
+        for (IndexResult map : result) {
             assert map != null;
 
-            String tableName = map.getValue(RubyIndexer.FIELD_DB_TABLE);
+            String tableName = map.getValue(FIELD_DB_TABLE);
             if (tableName != null) {
                 tables.add(tableName);
             }
@@ -1328,8 +1197,46 @@ public final class RubyIndex {
         
         return tables;
     }
-    
-    public Set<IndexedField> getInheritedFields(String classFqn, String prefix, NameKind kind, boolean inherited) {
+
+    public Set<IndexedVariable> getGlobals(String prefix, QuerySupport.Kind kind) {
+        // Query index for database related properties
+
+        String searchField = FIELD_GLOBAL_NAME;
+        Set<IndexResult> result = new HashSet<IndexResult>();
+        // Only include globals from the user's sources, not in the libraries!
+        search(searchField, prefix, kind, result);
+
+        Set<IndexedVariable> globals = new HashSet<IndexedVariable>();
+        for (IndexResult ir : result) {
+            assert ir != null;
+
+            String[] names = ir.getValues(FIELD_GLOBAL_NAME);
+            if (names != null) {
+                for (String name : names) {
+                    int flags = 0;
+                    IndexedVariable var = IndexedVariable.create(this, name, name, null, ir, null, name, flags, ElementKind.GLOBAL, context);
+                    globals.add(var);
+                }
+            }
+        }
+
+        return globals;
+    }
+
+    public Set<? extends IndexedConstant> getConstants(final String constantFqn) {
+        String[] parts = RubyUtils.parseConstantName(constantFqn);
+        return getConstants(parts[0], parts[1]);
+    }
+
+    public Set<? extends IndexedConstant> getConstants(RubyType classFqn, String prefix) {
+        Set<IndexedConstant> constants = new HashSet<IndexedConstant>();
+        for (String realType : classFqn.getRealTypes()) {
+            constants.addAll(getConstants(realType, prefix));
+        }
+        return constants;
+    }
+
+    public Set<? extends IndexedConstant> getConstants(String classFqn, String prefix) {
         boolean haveRedirected = false;
 
         if ((classFqn == null) || classFqn.equals(OBJECT)) {
@@ -1340,7 +1247,64 @@ public final class RubyIndex {
             haveRedirected = true;
         }
 
-        //String field = RubyIndexer.FIELD_FQN_NAME;
+        //String field = FIELD_FQN_NAME;
+        Set<IndexedConstant> constants = new HashSet<IndexedConstant>();
+
+        if (prefix == null) {
+            prefix = "";
+        }
+
+        addConstantsFromClass(prefix, classFqn, constants, haveRedirected);
+
+        return constants;
+    }
+
+    private boolean addConstantsFromClass(
+            final String prefix,
+            final String classFqn,
+            final Set<? super IndexedConstant> constants,
+            final boolean haveRedirected) {
+
+        String searchField = FIELD_FQN_NAME;
+        Set<IndexResult> result = new HashSet<IndexResult>();
+        search(searchField, classFqn, QuerySupport.Kind.EXACT, result);
+
+        // If this is a bogus class entry (no search rsults) don't continue
+        if (result.size() <= 0) {
+            return false;
+        }
+
+        for (IndexResult map : result) {
+            assert map != null;
+
+            String[] indexedConstants = map.getValues(FIELD_CONSTANT_NAME);
+
+            if (indexedConstants != null) {
+                for (String constant : indexedConstants) {
+                    if (prefix.length() == 0 || constant.startsWith(prefix)) {
+                        IndexedConstant c = createConstant(constant, map);
+                        c.setSmart(!haveRedirected);
+                        constants.add(c);
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    public Set<IndexedField> getInheritedFields(String classFqn, String prefix, QuerySupport.Kind kind, boolean inherited) {
+        boolean haveRedirected = false;
+
+        if ((classFqn == null) || classFqn.equals(OBJECT)) {
+            // Redirect inheritance tree to Class to pick up methods in Class and Module
+            classFqn = CLASS;
+            haveRedirected = true;
+        } else if (MODULE.equals(classFqn) || CLASS.equals(classFqn)) {
+            haveRedirected = true;
+        }
+
+        //String field = FIELD_FQN_NAME;
         Set<IndexedField> members = new HashSet<IndexedField>();
         Set<String> scannedClasses = new HashSet<String>();
         Set<String> seenSignatures = new HashSet<String>();
@@ -1365,7 +1329,7 @@ public final class RubyIndex {
      * not the same as returning whether any classes were added since it may add
      * additional methods from parents (Object/Class).
      */
-    private boolean addFieldsFromClass(String prefix, NameKind kind, String classFqn,
+    private boolean addFieldsFromClass(String prefix, QuerySupport.Kind kind, String classFqn,
         Set<IndexedField> methods, Set<String> seenSignatures, Set<String> scannedClasses,
         boolean haveRedirected, boolean instanceVars, boolean inheriting) {
         // Prevent problems with circular includes or redundant includes
@@ -1375,11 +1339,11 @@ public final class RubyIndex {
 
         scannedClasses.add(classFqn);
 
-        String searchField = RubyIndexer.FIELD_FQN_NAME;
+        String searchField = FIELD_FQN_NAME;
 
-        Set<SearchResult> result = new HashSet<SearchResult>();
+        Set<IndexResult> result = new HashSet<IndexResult>();
 
-        search(searchField, classFqn, NameKind.EXACT_NAME, result);
+        search(searchField, classFqn, QuerySupport.Kind.EXACT, result);
 
         boolean foundIt = result.size() > 0;
 
@@ -1397,14 +1361,14 @@ public final class RubyIndex {
             classIn = classFqn.substring(0, fqnIndex);
         }
 
-        for (SearchResult map : result) {
+        for (IndexResult map : result) {
             assert map != null;
 
             if (extendsClass == null) {
-                extendsClass = map.getValue(RubyIndexer.FIELD_EXTENDS_NAME);
+                extendsClass = map.getValue(FIELD_EXTENDS_NAME);
             }
 
-            String includes = map.getValue(RubyIndexer.FIELD_INCLUDES);
+            String includes = map.getValue(FIELD_INCLUDES);
 
             if (includes != null) {
                 String[] in = includes.split(",");
@@ -1427,7 +1391,7 @@ public final class RubyIndex {
                 }
             }
 
-            String extendWith = map.getValue(RubyIndexer.FIELD_EXTEND_WITH);
+            String extendWith = map.getValue(FIELD_EXTEND_WITH);
 
             if (extendWith != null) {
                 // Try both with and without a package qualifier
@@ -1445,7 +1409,7 @@ public final class RubyIndex {
             }
             
 
-            String[] fields = map.getValues(RubyIndexer.FIELD_FIELD_NAME);
+            String[] fields = map.getValues(FIELD_FIELD_NAME);
 
             if (fields != null) {
                 for (String field : fields) {
@@ -1459,15 +1423,16 @@ public final class RubyIndex {
                         // See if we need instancevars or classvars
                         boolean isInstance = true;
                         int signatureIndex = field.indexOf(';');
-                        if (signatureIndex != -1 && field.indexOf('s', signatureIndex+1) != -1) {
-                            isInstance = false;
+                        if (signatureIndex != -1) {
+                            int flags = IndexedElement.stringToFlag(field, signatureIndex + 1);
+                            isInstance = (flags & IndexedElement.STATIC) == 0;
                         }
                         if (isInstance != instanceVars) {
                             continue;
                         }
                         
                         if (field.startsWith(prefix)) {
-                            if (kind == NameKind.EXACT_NAME) {
+                            if (kind == QuerySupport.Kind.EXACT) {
                                 // Ensure that the method is not longer than the prefix
                                 if ((field.length() > prefix.length()) &&
                                         (field.charAt(prefix.length()) != '(') &&
@@ -1476,8 +1441,8 @@ public final class RubyIndex {
                                 }
                             } else {
                                 // REGEXP, CAMELCASE filtering etc. not supported here
-                                assert (kind == NameKind.PREFIX) ||
-                                (kind == NameKind.CASE_INSENSITIVE_PREFIX);
+                                assert (kind == QuerySupport.Kind.PREFIX) ||
+                                (kind == QuerySupport.Kind.CASE_INSENSITIVE_PREFIX);
                             }
 
                             seenSignatures.add(field);
@@ -1552,17 +1517,17 @@ public final class RubyIndex {
     }
 
     private Set<IndexedClass> getDocumentedClasses(final String fqn) {
-        final Set<SearchResult> result = new HashSet<SearchResult>();
-        String field = RubyIndexer.FIELD_FQN_NAME;
+        final Set<IndexResult> result = new HashSet<IndexResult>();
+        String field = FIELD_FQN_NAME;
 
-        search(field, fqn, NameKind.EXACT_NAME, result);
+        search(field, fqn, QuerySupport.Kind.EXACT, result);
 
         Set<IndexedClass> matches = new HashSet<IndexedClass>();
 
-        for (SearchResult map : result) {
+        for (IndexResult map : result) {
             assert map != null;
 
-            String attributes = map.getValue(RubyIndexer.FIELD_CLASS_ATTRS);
+            String attributes = map.getValue(FIELD_CLASS_ATTRS);
 
             if (attributes != null) {
                 int flags = IndexedElement.stringToFlag(attributes, 0);
@@ -1576,15 +1541,15 @@ public final class RubyIndex {
     }
 
     private Set<IndexedMethod> getDocumentedMethods(final String fqn, String method) {
-        final Set<SearchResult> result = new HashSet<SearchResult>();
-        String field = RubyIndexer.FIELD_FQN_NAME;
+        final Set<IndexResult> result = new HashSet<IndexResult>();
+        String field = FIELD_FQN_NAME;
 
-        search(field, fqn, NameKind.EXACT_NAME, result);
+        search(field, fqn, QuerySupport.Kind.EXACT, result);
 
         Set<IndexedMethod> matches = new HashSet<IndexedMethod>();
 
-        for (SearchResult map : result) {
-            String[] signatures = map.getValues(RubyIndexer.FIELD_METHOD_NAME);
+        for (IndexResult map : result) {
+            String[] signatures = map.getValues(FIELD_METHOD_NAME);
 
             if (signatures != null) {
                 for (String signature : signatures) {
@@ -1620,7 +1585,7 @@ public final class RubyIndex {
                 }
             }
 
-            String[] attribs = map.getValues(RubyIndexer.FIELD_ATTRIBUTE_NAME);
+            String[] attribs = map.getValues(FIELD_ATTRIBUTE_NAME);
 
             if (attribs != null) {
                 for (String signature : attribs) {
@@ -1662,17 +1627,17 @@ public final class RubyIndex {
         return matches;
     }
 
-    /** Return the file url corresponding to the given require statement */
-    public String getRequiredFileUrl(final String require) {
-        final Set<SearchResult> result = new HashSet<SearchResult>();
+    /** Return the {@link FileObject} corresponding to the given require statement */
+    public FileObject getRequiredFile(final String require) {
+        final Set<IndexResult> result = new HashSet<IndexResult>();
 
-        String field = RubyIndexer.FIELD_REQUIRE;
+        String field = FIELD_REQUIRE;
 
-        search(field, require, NameKind.EXACT_NAME, result);
+        search(field, require, QuerySupport.Kind.EXACT, result);
 
         // TODO Prune methods to fit my scheme - later make lucene index smarter about how to prune its index search
-        for (SearchResult map : result) {
-            String file = map.getValue(RubyIndexer.FIELD_FILENAME);
+        for (IndexResult ir : result) {
+            FileObject file = ir.getFile();
 
             if (file != null) {
                 return file;
@@ -1706,33 +1671,50 @@ public final class RubyIndex {
     }
     
     // For testing only
-    static void setClusterUrl(String url) {
+    public static void setClusterUrl(String url) {
         clusterUrl = url;
     }
 
     static String getPreindexUrl(String url) {
-        if (RubyIndexer.PREINDEXING) {
-            Iterator<RubyPlatform> it = RubyPlatformManager.platformIterator();
-            while (it.hasNext()) {
-                RubyPlatform platform = it.next();
-                String s = platform.getGemManager().getGemHomeUrl();
-                
-                if (s != null && url.startsWith(s)) {
-                    return GEM_URL + url.substring(s.length());
-                }
-
-                s = platform.getHomeUrl();
-
-                if (url.startsWith(s)) {
-                    url = RUBYHOME_URL + url.substring(s.length());
-
-                    return url;
-                }
-            }
-        } else {
+        return getPreindexUrl(url, null);
+    }
+    static String getPreindexUrl(String url, FileObject context) {
+        // no preindexing in parsing api
+//        if (RubyIndexer.isPreindexing()) {
+//            Iterator<RubyPlatform> it = null;
+//            if (context != null && context.isValid()) {
+//                Project project = FileOwnerQuery.getOwner(context);
+//                if (project != null) {
+//                    RubyPlatform platform = RubyPlatform.platformFor(project);
+//                    if (platform != null) {
+//                        it = Collections.singleton(platform).iterator();
+//                    }
+//                }
+//            }
+//            if (it == null) {
+//                it = RubyPlatformManager.platformIterator();
+//            }
+//            while (it.hasNext()) {
+//                RubyPlatform platform = it.next();
+//                String s = getGemHomeURL(platform);
+//
+//                if (s != null && url.startsWith(s)) {
+//                    return GEM_URL + url.substring(s.length());
+//                }
+//
+//                s = platform.getHomeUrl();
+//
+//                if (url.startsWith(s)) {
+//                    url = RUBYHOME_URL + url.substring(s.length());
+//
+//                    return url;
+//                }
+//            }
+//        } else {
             // FIXME: use right platform
-            RubyPlatform platform = RubyPlatformManager.getDefaultPlatform();
-            String s = platform.getGemManager().getGemHomeUrl();
+        RubyPlatform platform = RubyPlatformManager.getDefaultPlatform();
+        if (platform != null) {
+            String s = getGemHomeURL(platform);
 
             if (s != null && url.startsWith(s)) {
                 return GEM_URL + url.substring(s.length());
@@ -1742,10 +1724,10 @@ public final class RubyIndex {
 
             if (url.startsWith(s)) {
                 url = RUBYHOME_URL + url.substring(s.length());
-
                 return url;
             }
         }
+//        }
 
         String s = getClusterUrl();
 
@@ -1758,15 +1740,29 @@ public final class RubyIndex {
 
     /** Get the FileObject corresponding to a URL returned from the index */
     public static FileObject getFileObject(String url) {
+        return getFileObject(url, null);
+    }
+    
+    public static FileObject getFileObject(String url, FileObject context) {
         try {
             if (url.startsWith(RUBYHOME_URL)) {
-                // TODO - resolve to correct platform
-                // FIXME: per-platform now
-                Iterator<RubyPlatform> it = RubyPlatformManager.platformIterator();
+                Iterator<RubyPlatform> it = null;
+                if (context != null) {
+                    Project project = FileOwnerQuery.getOwner(context);
+                    if (project != null) {
+                        RubyPlatform platform = RubyPlatform.platformFor(project);
+                        if (platform != null) {
+                            it = Collections.singleton(platform).iterator();
+                        }
+                    }
+                }
+                if (it == null) {
+                    it = RubyPlatformManager.platformIterator();
+                }
                 while (it.hasNext()) {
                     RubyPlatform platform = it.next();
-                    url = platform.getHomeUrl() + url.substring(RUBYHOME_URL.length());
-                    FileObject fo = URLMapper.findFileObject(new URL(url));
+                    String u = platform.getHomeUrl() + url.substring(RUBYHOME_URL.length());
+                    FileObject fo = URLMapper.findFileObject(new URL(u));
                     if (fo != null) {
                         return fo;
                     }
@@ -1774,14 +1770,31 @@ public final class RubyIndex {
                 
                 return null;
             } else if (url.startsWith(GEM_URL)) {
-                // FIXME: per-platform now
-                Iterator<RubyPlatform> it = RubyPlatformManager.platformIterator();
+                Iterator<RubyPlatform> it = null;
+                if (context != null) {
+                    Project project = FileOwnerQuery.getOwner(context);
+                    if (project != null) {
+                        RubyPlatform platform = RubyPlatform.platformFor(project);
+                        if (platform != null) {
+                            it = Collections.singleton(platform).iterator();
+                        }
+                    }
+                }
+                if (it == null) {
+                    it = RubyPlatformManager.platformIterator();
+                }
                 while (it.hasNext()) {
                     RubyPlatform platform = it.next();
-                    url = platform.getGemManager().getGemHomeUrl() + url.substring(GEM_URL.length());
-                    FileObject fo = URLMapper.findFileObject(new URL(url));
-                    if (fo != null) {
-                        return fo;
+                    if (!platform.hasRubyGemsInstalled()) {
+                        continue;
+                    }
+                    GemManager gemManager = platform.getGemManager();
+                    if (gemManager != null) {
+                        String u = gemManager.getGemHomeUrl() + url.substring(GEM_URL.length());
+                        FileObject fo = URLMapper.findFileObject(new URL(u));
+                        if (fo != null) {
+                            return fo;
+                        }
                     }
                 }
                 
@@ -1796,5 +1809,81 @@ public final class RubyIndex {
         }
 
         return null;
+    }
+
+    private static String getGemHomeURL(RubyPlatform platform) {
+        return platform.hasRubyGemsInstalled() ? platform.getGemManager().getGemHomeUrl() : null;
+    }
+
+    /**
+     * Helper for measuring how long searching the index takes.
+     */
+    private static final class InvocationCounter implements Comparable<InvocationCounter> {
+
+        private int count = 0;
+        private final long start;
+        private long stop;
+        private final String classFqn;
+        private final String prefix;
+
+        public InvocationCounter(String classFqn, String prefix) {
+            this.classFqn = classFqn;
+            this.prefix = prefix;
+            this.start =  System.currentTimeMillis();
+        }
+
+        void increment() {
+            count++;
+        }
+
+        int result() {
+            return count;
+        }
+
+        void stop() {
+            stop = System.currentTimeMillis();
+        }
+
+        long time() {
+            return stop - start;
+        }
+
+        String display() {
+            return "Class: " + classFqn + ", prefix: " + prefix + ", time: " + time() +"ms, count: " + count; //NOI18N
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final InvocationCounter other = (InvocationCounter) obj;
+            if ((this.classFqn == null) ? (other.classFqn != null) : !this.classFqn.equals(other.classFqn)) {
+                return false;
+            }
+            if (this.time() != other.time() || this.count != other.count) {
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 5;
+            hash = 29 * hash + (this.prefix != null ? this.prefix.hashCode() : 0);
+            return hash;
+        }
+
+        public int compareTo(InvocationCounter o) {
+            if (this.time() > o.time()) {
+                return -1;
+            } else if (this.time() < o.time()) {
+                return 1;
+            }
+            return 0;
+        }
     }
 }
