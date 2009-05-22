@@ -27,79 +27,165 @@
  */
 package org.netbeans.modules.cnd.refactoring.support;
 
-import java.awt.Color;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
-import javax.swing.text.AttributeSet;
+import java.util.Set;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.StyleConstants;
-import org.netbeans.api.editor.mimelookup.MimeLookup;
-import org.netbeans.api.editor.mimelookup.MimePath;
-import org.netbeans.api.editor.settings.FontColorSettings;
+import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.SyntaxSupport;
-import org.netbeans.editor.TokenContextPath;
-import org.netbeans.editor.TokenID;
-import org.netbeans.editor.TokenProcessor;
 import org.netbeans.modules.cnd.api.model.CsmClass;
+import org.netbeans.modules.cnd.api.model.CsmConstructor;
 import org.netbeans.modules.cnd.api.model.CsmDeclaration;
 import org.netbeans.modules.cnd.api.model.CsmEnum;
 import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmFunction;
 import org.netbeans.modules.cnd.api.model.CsmFunctionDefinition;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
+import org.netbeans.modules.cnd.api.model.CsmInclude;
+import org.netbeans.modules.cnd.api.model.CsmMember;
+import org.netbeans.modules.cnd.api.model.CsmModelAccessor;
 import org.netbeans.modules.cnd.api.model.CsmNamedElement;
 import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.api.model.CsmNamespaceDefinition;
 import org.netbeans.modules.cnd.api.model.CsmObject;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.api.model.CsmProject;
-import org.netbeans.modules.cnd.api.model.CsmScope;
-import org.netbeans.modules.cnd.api.model.CsmScopeElement;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.api.model.deep.CsmStatement;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilterBuilder;
+import org.netbeans.modules.cnd.api.model.util.CsmBaseUtilities;
 import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
+import org.netbeans.modules.cnd.api.model.util.UIDs;
 import org.netbeans.modules.cnd.api.model.xref.CsmReference;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceResolver;
 import org.netbeans.modules.cnd.api.project.NativeProject;
+import org.netbeans.modules.cnd.modelutil.CsmDisplayUtilities;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.netbeans.modules.cnd.utils.CndUtils;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.nodes.Node;
 import org.openide.text.CloneableEditorSupport;
-import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 
 /**
  *
  * @author Vladimir Voskresensky
  */
-public class CsmRefactoringUtils {
-
-    private CsmRefactoringUtils() {}
+public final class CsmRefactoringUtils {
+    public static final boolean REFACTORING_EXTRA = CndUtils.getBoolean("cnd.refactoring.extra", false); // NOI18N
     
-    public static Project getContextProject(CsmObject contextObject) {
+    private CsmRefactoringUtils() {
+    }
+
+    public static boolean isElementInOpenProject(FileObject f) {
+        if (f == null) {
+            return false;
+        }
+        Project p = FileOwnerQuery.getOwner(f);
+        return OpenProjects.getDefault().isProjectOpen(p);
+    }
+
+    public static boolean isRefactorable(FileObject fo) {
+        if (fo != null && (FileUtil.getArchiveFile(fo) != null || !fo.canWrite())) {
+            return false;
+        }
+        return true;
+    }
+    
+    public static CsmObject convertToCsmObjectIfNeeded(CsmObject referencedObject) {
+        if (CsmKindUtilities.isInclude(referencedObject)) {
+            referencedObject = ((CsmInclude) referencedObject).getIncludeFile();
+        } else if (CsmKindUtilities.isFunctionDefinition(referencedObject)) {
+            CsmFunction decl = CsmBaseUtilities.getFunctionDeclaration((CsmFunction) referencedObject);
+            if (decl != null) {
+                referencedObject = decl;
+            }
+        }
+        return referencedObject;
+    }
+
+    public static Collection<CsmProject> getContextCsmProjects(CsmObject contextObject) {
+        Collection<CsmProject> prjs = new HashSet<CsmProject>();
         CsmFile contextFile = null;
         if (CsmKindUtilities.isOffsetable(contextObject)) {
             contextFile = ((CsmOffsetable)contextObject).getContainingFile();
         } else if (CsmKindUtilities.isFile(contextObject)) {
             contextFile = (CsmFile)contextObject;
         }
-        Project out = null;
         CsmProject csmProject = null;
         if (contextFile != null) {
             csmProject = contextFile.getProject();
+            prjs.add(csmProject);
+            if (false) {
+                // try another projects which could share the same file
+                FileObject fileObject = CsmUtilities.getFileObject(contextFile);
+                if (fileObject != null) {
+                    CsmFile[] csmFiles = CsmUtilities.getCsmFiles(fileObject);
+                    for (CsmFile csmFile : csmFiles) {
+                        prjs.add(csmFile.getProject());
+                    }
+                }
+            }
         } else if (CsmKindUtilities.isNamespace(contextObject)) {
-            csmProject = ((CsmNamespace)contextObject).getProject();
+            prjs.add(((CsmNamespace)contextObject).getProject());
         }
-        if (csmProject != null) {
-            Object o = csmProject.getPlatformProject();
-            if (o instanceof NativeProject) {
-                o = ((NativeProject)o).getProject();
-            }                
-            if (o instanceof Project) {
-                out = (Project)o;
+        return prjs;
+    }
+
+    public static Collection<CsmProject> getRelatedCsmProjects(CsmObject origObject, CsmProject p) {
+        Collection<CsmProject> out = Collections.<CsmProject>emptyList();
+        if (p != null) {
+            out = Collections.singleton(p);
+        } else {
+            if (true) {
+                // for now return all...
+                Collection<CsmProject> all = CsmModelAccessor.getModel().projects();
+                out = new HashSet<CsmProject>(all);
+            } else {
+                out = new HashSet<CsmProject>();
+                Collection<CsmProject> prjs = getContextCsmProjects(origObject);
+                out.addAll(prjs);
+                boolean addLibs = false;
+                for (CsmProject prj : out) {
+                    if (prj != null && prj.isArtificial()) {
+                        addLibs = true;
+                    }
+                }
+                if (addLibs) {
+                    // add all libraries as well
+                    Collection<CsmProject> all = CsmModelAccessor.getModel().projects();
+                    Set<CsmProject> libs = new HashSet<CsmProject>();
+                    for (CsmProject csmProject : all) {
+                        libs.addAll(csmProject.getLibraries());
+                    }
+                    out.addAll(libs);
+                }
             }
         }
-        
+        return out;
+    }
+    
+    public static Collection<Project> getContextProjects(CsmObject contextObject) {
+        Collection<CsmProject> csmProjects = getContextCsmProjects(contextObject);
+        Collection<Project> out = new ArrayList<Project>();
+        for (CsmProject csmProject : csmProjects) {
+            if (csmProject != null) {
+                Object o = csmProject.getPlatformProject();
+                if (o instanceof NativeProject) {
+                    o = ((NativeProject)o).getProject();
+                }
+                if (o instanceof Project) {
+                    out.add((Project)o);
+                }
+            }
+        }
         return out;
     }
         
@@ -110,13 +196,13 @@ public class CsmRefactoringUtils {
             return csmObject;
         }
     } 
-    
+
     public static String getSimpleText(CsmObject element) {
         String text = "";
         if (element != null) {
             if (CsmKindUtilities.isNamedElement(element)) {
                 text = ((CsmNamedElement) element).getName().toString();
-            } else if (CsmKindUtilities.isStatement((CsmObject)element)) {
+            } else if (CsmKindUtilities.isStatement(element)) {
                 text = ((CsmStatement)element).getText().toString();
             } else if (CsmKindUtilities.isOffsetable(element) ) {
                 text = ((CsmOffsetable)element).getText().toString();
@@ -125,7 +211,7 @@ public class CsmRefactoringUtils {
         return text;
     }
     
-    static FileObject getFileObject(CsmObject object) {
+    public static FileObject getFileObject(CsmObject object) {
         CsmFile container = null;
         if (CsmKindUtilities.isFile(object)) {
             container = (CsmFile)object;
@@ -134,49 +220,33 @@ public class CsmRefactoringUtils {
         }
         return container == null ? null : CsmUtilities.getFileObject(container);
     }
-
-    public static CsmReference findReference(Lookup lookup) {
-        CsmReference ref = lookup.lookup(CsmReference.class);
-        if (ref == null) {
-            Node node = lookup.lookup(Node.class);
-            if (node != null) {
-                ref = CsmReferenceResolver.getDefault().findReference(node);
+    
+    public static CsmObject findContextObject(Lookup lookup) {
+        CsmObject out = lookup.lookup(CsmObject.class);
+        if (out == null) {
+            CsmUID uid = lookup.lookup(CsmUID.class);
+            if (uid != null) {
+                out = (CsmObject) uid.getObject();
+            }
+            if (out == null) {
+                Node node = lookup.lookup(Node.class);
+                if (node != null) {
+                    out = CsmReferenceResolver.getDefault().findReference(node);
+                }
             }
         }
-        return ref;
+        return out;
     }
     
-    @SuppressWarnings("unchecked")
-    public static <T> CsmUID<T> getHandler(T element) {
-        CsmUID<T> uid = null;
-        if (CsmKindUtilities.isIdentifiable(element)) {
-            uid = ((CsmIdentifiable<T>)element).getUID();
-            if (uid.getObject() == null) {
-                System.err.println("UID " + uid + "can't return object " + element);
-                uid = null;
-            }
-        } 
-        if (uid == null) {
-            uid = new SelfUID(element);
-        }
-        return uid;
-    }
-    
-    private static final class SelfUID<T> implements CsmUID<T> {
-        private final T element;
-        SelfUID(T element) {
-            this.element = element;
-        }
-        public T getObject() {
-            return this.element;
-        }
+    public static <T extends CsmObject> CsmUID<T> getHandler(T element) {
+        return element == null ? null : UIDs.get(element);
     }
     
     public static <T> T getObject(CsmUID<T> handler) {
         return handler == null ? null : handler.getObject();
     }
     
-    public static boolean isSupportedReference(CsmReference ref) {
+    public static boolean isSupportedReference(CsmObject ref) {
         return ref != null;
     }    
     
@@ -184,40 +254,65 @@ public class CsmRefactoringUtils {
         if (CsmKindUtilities.isOffsetable(obj)) {
             return getHtml((CsmOffsetable)obj);
         } else if (CsmKindUtilities.isFile(obj)) {
-            return htmlize(((CsmFile)obj).getName().toString());
+            return CsmDisplayUtilities.htmlize(((CsmFile)obj).getName().toString());
         } else {
             return obj.toString();
         }
     }
-    
-    public static CsmObject getEnclosingElement(CsmObject decl) {
-        assert decl != null;
-        if (decl instanceof CsmReference) {
-            decl = ((CsmReference)decl).getOwner();
-        }
-        if (CsmKindUtilities.isOffsetable(decl)) {
-            return findInnerFileObject((CsmOffsetable)decl);
-        }
-        
-        CsmObject scopeElem = decl instanceof CsmReference ? ((CsmReference)decl).getOwner() : decl;
-        while (CsmKindUtilities.isScopeElement(scopeElem)) {
-            CsmScope scope = ((CsmScopeElement)scopeElem).getScope();
-            if (isLangContainerFeature(scope)) {
-                return scope;
-            } else if (CsmKindUtilities.isScopeElement(scope)) {
-                scopeElem = ((CsmScopeElement)scope);
-            } else {
-                if (scope == null) System.err.println("scope element without scope " + scopeElem);
-                break;
-            }
-        }
-        if (CsmKindUtilities.isOffsetable(decl)) {
-            return ((CsmOffsetable)decl).getContainingFile();
+
+    public static CsmFile getCsmFile(CsmObject csmObject) {
+        if (CsmKindUtilities.isFile(csmObject)) {
+            return ((CsmFile) csmObject);
+        } else if (CsmKindUtilities.isOffsetable(csmObject)) {
+            return ((CsmOffsetable) csmObject).getContainingFile();
         }
         return null;
     }
+
+    public static Collection<CsmFunction> getConstructors(CsmClass cls) {
+        Collection<CsmFunction> out = new ArrayList<CsmFunction>();
+        CsmFilterBuilder filterBuilder = CsmSelect.getFilterBuilder();
+        CsmSelect.CsmFilter filter = filterBuilder.createCompoundFilter(
+                filterBuilder.createKindFilter(CsmDeclaration.Kind.FUNCTION, CsmDeclaration.Kind.FUNCTION_DEFINITION),
+                filterBuilder.createNameFilter(cls.getName(), true, true, false));
+        Iterator<CsmMember> classMembers = CsmSelect.getClassMembers(cls, filter);
+        while (classMembers.hasNext()) {
+            CsmMember csmMember = classMembers.next();
+            if (CsmKindUtilities.isConstructor(csmMember)) {
+                out.add((CsmConstructor) csmMember);
+            }
+        }
+        return out;
+    }
+
+    public static CsmObject getEnclosingElement(CsmObject decl) {
+        assert decl != null;
+//        while (decl instanceof CsmReference) {
+//            decl = ((CsmReference)decl).getOwner();
+//        }
+        if (CsmKindUtilities.isOffsetable(decl)) {
+            return findInnerFileObject((CsmOffsetable)decl);
+        }
+//
+//        CsmObject scopeElem = decl instanceof CsmReference ? ((CsmReference)decl).getOwner() : decl;
+//        while (CsmKindUtilities.isScopeElement(scopeElem)) {
+//            CsmScope scope = ((CsmScopeElement)scopeElem).getScope();
+//            if (isLangContainerFeature(scope)) {
+//                return scope;
+//            } else if (CsmKindUtilities.isScopeElement(scope)) {
+//                scopeElem = ((CsmScopeElement)scope);
+//            } else {
+//                if (scope == null) { System.err.println("scope element without scope " + scopeElem); }
+//                break;
+//            }
+//        }
+//        if (CsmKindUtilities.isOffsetable(decl)) {
+//            return ((CsmOffsetable)decl).getContainingFile();
+//        }
+        return null;
+    }
     
-    private static boolean isLangContainerFeature(CsmObject obj) {
+    /*package*/ static boolean isLangContainerFeature(CsmObject obj) {
         assert obj != null;
         return CsmKindUtilities.isFunction(obj) ||
                     CsmKindUtilities.isClass(obj) ||
@@ -248,112 +343,16 @@ public class CsmRefactoringUtils {
                 }
                 int startLine = org.netbeans.editor.Utilities.getRowFirstNonWhite(doc, stOffset);
                 int endLine = org.netbeans.editor.Utilities.getRowLastNonWhite(doc, endOffset) + endLineOffset;
-                displayText = CsmRefactoringUtils.getHtml(startLine, endLine, -1, -1, doc);
+                displayText = CsmDisplayUtilities.getLineHtml(startLine, endLine, -1, -1, doc);
             } catch (BadLocationException ex) {
             }            
         }
         if (displayText == null) {
-            displayText = htmlize(obj.getText().toString());
+            displayText = CsmDisplayUtilities.htmlize(obj.getText().toString());
         }
         return displayText;
     }
-    
-    public static String getHtml(int startLine, int endLine, final int stToken, final int endToken, BaseDocument doc) {
-        final StringBuilder buf = new StringBuilder();
-        String mime = (String) doc.getProperty("mimeType"); // NOI18N
-        Lookup lookup = MimeLookup.getLookup(MimePath.get(mime));
-        SyntaxSupport sup = doc.getSyntaxSupport();
-        final FontColorSettings settings = lookup.lookup(FontColorSettings.class);
-        boolean cont = true;
- 
-        
-        TokenProcessor tp = new TokenProcessor() {
 
-            private int bufferStartPos;
-            private char[] buffer;
-
-            public boolean token(TokenID tokenID, TokenContextPath tokenContextPath, int tokenBufferOffset, int tokenLength) {
-                String text = new String(buffer, tokenBufferOffset, tokenLength);
-                String category = tokenID.getCategory() == null ? tokenID.getName() : tokenID.getCategory().getName();
-                if (category == null) {
-                    category = "whitespace"; //NOI18N
-                } else {
-                    category = tokenContextPath.getNamePrefix() + category;
-                }
-                AttributeSet set = settings.getTokenFontColors(category);
-                if (tokenBufferOffset+bufferStartPos == stToken) {
-                    buf.append("<b>"); // NOI18N
-                }
-                buf.append(color(htmlize(text), set));
-                if (tokenBufferOffset+bufferStartPos+tokenLength == endToken) {
-                    buf.append("</b>"); // NOI18N
-                }
-                return true;
-            }
-
-            public int eot(int offset) {
-                return 0;
-            }
-
-            public void nextBuffer(char[] buffer, int offset, int len, int startPos, int preScan, boolean lastBuffer) {
-                this.buffer = buffer;
-                this.bufferStartPos = startPos - offset;
-            }
-
-        };  
-        while (cont) {
-            try {
-                sup.tokenizeText(tp, startLine, endLine, true); 
-                cont = false;
-            } catch (BadLocationException ex) {
-                Exceptions.printStackTrace(ex);
-            }
-        }
-        
-        return buf.toString();
-    }
-
-    public static String htmlize(String input) {
-        String temp = org.openide.util.Utilities.replaceString(input, "<", "&lt;"); // NOI18N
-        temp = org.openide.util.Utilities.replaceString(temp, ">", "&gt;"); // NOI18N
-        return temp;
-    }
-    
-    private static String color(String string, AttributeSet set) {
-        if (set==null)
-            return string;
-        if (string.trim().length() == 0) {
-            return org.openide.util.Utilities.replaceString(org.openide.util.Utilities.replaceString(string, " ", "&nbsp;"), "\n", "<br>"); //NOI18N
-        } 
-        StringBuilder buf = new StringBuilder(string);
-        if (StyleConstants.isBold(set)) {
-            buf.insert(0,"<b>"); //NOI18N
-            buf.append("</b>"); //NOI18N
-        }
-        if (StyleConstants.isItalic(set)) {
-            buf.insert(0,"<i>"); //NOI18N
-            buf.append("</i>"); //NOI18N
-        }
-        if (StyleConstants.isStrikeThrough(set)) {
-            buf.insert(0,"<s>"); // NOI18N
-            buf.append("</s>"); // NOI18N
-        }
-        buf.insert(0,"<font color=" + getHTMLColor(StyleConstants.getForeground(set)) + ">"); //NOI18N
-        buf.append("</font>"); //NOI18N
-        return buf.toString();
-    }
-    
-    private static String getHTMLColor(Color c) {
-        String colorR = "0" + Integer.toHexString(c.getRed()); //NOI18N
-        colorR = colorR.substring(colorR.length() - 2); 
-        String colorG = "0" + Integer.toHexString(c.getGreen()); //NOI18N
-        colorG = colorG.substring(colorG.length() - 2);
-        String colorB = "0" + Integer.toHexString(c.getBlue()); //NOI18N
-        colorB = colorB.substring(colorB.length() - 2);
-        String html_color = "#" + colorR + colorG + colorB; //NOI18N
-        return html_color;
-    }  
-    
     ////////////////////////////////////////////////////////////////////////////
     // by-offset methods
     
@@ -385,7 +384,8 @@ public class CsmRefactoringUtils {
     public static CsmObject findInnerFileObject(CsmFile file, int offset) {
         assert (file != null) : "can't be null file in findInnerFileObject";
         // check file declarations
-        CsmObject lastObject = findInnerDeclaration(file.getDeclarations().iterator(), offset);
+        CsmFilter filter = CsmSelect.getFilterBuilder().createOffsetFilter(offset);
+        CsmObject lastObject = findInnerDeclaration(CsmSelect.getDeclarations(file, filter), offset);
 //        // check macros if needed
 //        lastObject = lastObject != null ? lastObject : findObject(file.getMacros(), context, offset);
         return lastObject;
@@ -439,5 +439,5 @@ public class CsmRefactoringUtils {
             obj = csmOffsetable.getContainingFile();
         }
         return obj;
-    }
+    } 
 }
