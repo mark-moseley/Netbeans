@@ -43,12 +43,19 @@ package org.netbeans.modules.cnd.modelimpl.csm;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.List;
 import org.netbeans.modules.cnd.api.model.*;
 import antlr.collections.AST;
 import java.io.DataInput;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.StringTokenizer;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
+import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 import org.netbeans.modules.cnd.modelimpl.textcache.QualifiedNameCache;
 import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
@@ -57,23 +64,52 @@ import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
  *
  * @author Vladimir Kvasihn
  */
-public class ClassForwardDeclarationImpl extends OffsetableDeclarationBase<CsmClassForwardDeclaration> implements CsmClassForwardDeclaration {
+public class ClassForwardDeclarationImpl extends OffsetableDeclarationBase<CsmClassForwardDeclaration> 
+                                         implements CsmClassForwardDeclaration, CsmTemplate {
     private final CharSequence name;
-    private final CharSequence[] nameParts;
+    private CharSequence[] nameParts;
+
+    private TemplateDescriptor templateDescriptor = null;
     
-    public ClassForwardDeclarationImpl(AST ast, FileImpl file) {
-        super(ast, file);
+    public ClassForwardDeclarationImpl(AST ast, CsmFile file, boolean global) {
+        super(file, getClassForwardStartOffset(ast), getClassForwardEndOffset(ast));
         AST qid = AstUtil.findChildOfType(ast, CPPTokenTypes.CSM_QUALIFIED_ID);
         name = (qid == null) ? CharSequenceKey.empty() : QualifiedNameCache.getManager().getString(AstRenderer.getQualifiedName(qid));
         nameParts = initNameParts(qid);
+        this.templateDescriptor = TemplateDescriptor.createIfNeeded(ast, file, null, global);
     }
 
+    private static int getClassForwardStartOffset(AST ast) {        
+        AST firstChild = ast.getFirstChild();
+        if (firstChild != null && firstChild.getType() == CPPTokenTypes.LITERAL_typedef) {
+            AST secondChild = firstChild.getNextSibling();
+            if (secondChild != null &&
+                    (secondChild.getType() == CPPTokenTypes.LITERAL_struct ||
+                    secondChild.getType() == CPPTokenTypes.LITERAL_union ||
+                    secondChild.getType() == CPPTokenTypes.LITERAL_class)) {
+                return getStartOffset(secondChild);
+            }
+        }
+        return getStartOffset(ast);        
+    }
+    
+    private static int getClassForwardEndOffset(AST ast) {
+        AST firstChild = ast.getFirstChild();
+        if (firstChild != null && firstChild.getType() == CPPTokenTypes.LITERAL_typedef) {
+            AST qid = AstUtil.findChildOfType(ast, CPPTokenTypes.CSM_QUALIFIED_ID);
+            if(qid != null) {
+                return getEndOffset(qid);
+            }
+        }
+        return getEndOffset(ast);        
+    }
+    
     public CsmScope getScope() {
         return getContainingFile();
     }
 
     public CharSequence getName() {
-        return getQualifiedName();
+        return name;
     }
 
     public CharSequence getQualifiedName() {
@@ -97,17 +133,88 @@ public class ClassForwardDeclarationImpl extends OffsetableDeclarationBase<CsmCl
         CsmObject o = resolve(resolver);
         return (o instanceof CsmClass) ? (CsmClass) o : (CsmClass) null;
     }
-    
-    private String[] initNameParts(AST qid) {
+
+    public boolean isTemplate() {
+        return templateDescriptor != null;
+    }
+
+    public List<CsmTemplateParameter> getTemplateParameters() {
+        return (templateDescriptor != null) ? templateDescriptor.getTemplateParameters() : Collections.<CsmTemplateParameter>emptyList();
+    }
+
+    public CharSequence getDisplayName() {
+        return (templateDescriptor != null) ? CharSequenceKey.create((getName().toString() + templateDescriptor.getTemplateSuffix())) : getName(); // NOI18N
+    }
+
+    private CharSequence[] initNameParts(AST qid) {
         if( qid != null ) {
             return AstRenderer.getNameTokens(qid);
         }
-        return new String[0];
+        return new CharSequence[0];
     }
     
     private CsmObject resolve(Resolver resolver) {
-        return ResolverFactory.createResolver(this, resolver).resolve(nameParts, Resolver.CLASSIFIER);
+        CsmObject result = ResolverFactory.createResolver(this, resolver).resolve(nameParts, Resolver.CLASS);
+        if (result == null) {
+            result = ((ProjectBase) getContainingFile().getProject()).getDummyForUnresolved(nameParts, getContainingFile(), getStartOffset());
+        }
+        // NOTE: result shouldn't be cached. 
+        // class forward could mean different things depending on other includes
+        return result;
     }
+
+    public Collection<CsmScopeElement> getScopeElements() {
+        // currently class forward declaration is a scope only for its template parameters,
+        // but we do not return them as scope elements
+        return Collections.emptyList();
+    }
+
+    public void init(AST ast, CsmScope scope, boolean registerInProject) {
+        // we now know the scope - let's modify nameParts accordingly
+        if (CsmKindUtilities.isQualified(scope)) {
+            CharSequence scopeQName = ((CsmQualifiedNamedElement) scope).getQualifiedName();
+            if (scopeQName != null && scopeQName.length() > 0) {
+                List<CharSequence> l = new ArrayList<CharSequence>();
+                for (StringTokenizer stringTokenizer = new StringTokenizer(scopeQName.toString()); stringTokenizer.hasMoreTokens();) {
+                    l.add(NameCache.getManager().getString(stringTokenizer.nextToken()));
+                }
+                for (int i = 0; i < nameParts.length; i++) {
+                    l.add(nameParts[i]);
+                }
+                CharSequence[] newNameParts = new CharSequence[l.size()];
+                l.toArray(newNameParts);
+                nameParts = newNameParts;
+                if (registerInProject) {
+                    RepositoryUtils.put(this);
+                } else {
+                    Utils.setSelfUID(this);
+                }
+            }
+        }
+        // create fake class we refer to
+        createForwardClassIfNeed(ast, scope, registerInProject);
+    }
+
+    /**
+     * Creates a fake class this forward declaration refers to
+     */
+    protected CsmClass createForwardClassIfNeed(AST ast, CsmScope scope, boolean registerInProject) {
+        return ForwardClass.create(name.toString(), getContainingFile(), ast, scope, registerInProject);
+    }
+
+    @Override
+    public void dispose() {
+        super.dispose();
+        // nobody disposes the fake forward class => we should take care of this
+        CsmClass cls = getCsmClass();
+        if (ForwardClass.isForwardClass(cls)) {
+            ((ForwardClass) cls).dispose();
+        }
+        CsmNamespace scope = getContainingFile().getProject().getGlobalNamespace();
+        ((NamespaceImpl) scope).removeDeclaration(this);
+        ((ProjectBase) getContainingFile().getProject()).unregisterDeclaration(this);
+    }
+
     
     ////////////////////////////////////////////////////////////////////////////
     // iml of SelfPersistent
@@ -116,14 +223,16 @@ public class ClassForwardDeclarationImpl extends OffsetableDeclarationBase<CsmCl
     public void write(DataOutput output) throws IOException {
         super.write(output);
         assert this.name != null;
-        output.writeUTF(this.name.toString());
+        PersistentUtils.writeUTF(name, output);
         PersistentUtils.writeStrings(this.nameParts, output);
+        PersistentUtils.writeTemplateDescriptor(templateDescriptor, output);
     }
     
     public ClassForwardDeclarationImpl(DataInput input) throws IOException {
         super(input);
-        this.name = QualifiedNameCache.getManager().getString(input.readUTF());
+        this.name = PersistentUtils.readUTF(input, QualifiedNameCache.getManager());
         assert this.name != null;
         this.nameParts = PersistentUtils.readStrings(input, NameCache.getManager());
+        this.templateDescriptor = PersistentUtils.readTemplateDescriptor(input);
     }
 }

@@ -42,17 +42,20 @@
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
 import java.io.DataOutput;
+import java.io.File;
 import java.io.IOException;
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.util.Collection;
+import java.util.Iterator;
 import org.netbeans.modules.cnd.api.model.*;
 import org.netbeans.modules.cnd.modelimpl.csm.*;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
+import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDUtilities;
 import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
@@ -73,10 +76,10 @@ public final class Unresolved implements Disposable {
     }
     
     public final class UnresolvedClass extends ClassEnumBase<CsmClass> implements CsmClass {
-	
         public UnresolvedClass(String name) {
             super(name, unresolvedFile, null);
-	    init(unresolvedNamespace, null);
+            initScope(unresolvedNamespace, null);
+            initQualifiedName(unresolvedNamespace, null);
         }
 	
 	public void register() {
@@ -120,7 +123,7 @@ public final class Unresolved implements Disposable {
         }
 
 	@Override
-	protected CsmUID createUID() {
+	protected CsmUID<CsmClass> createUID() {
 	    return UIDUtilities.createUnresolvedClassUID(getName().toString(), getProject());
 	}
 	
@@ -139,10 +142,10 @@ public final class Unresolved implements Disposable {
         }
 
         @Override
-        protected void notifyCreation() {
-            // skip registration
+        protected void notify(CsmObject obj, NotifyEvent kind) {
+            // skip
         }
-
+        
 	@Override
 	protected CsmUID<CsmNamespace> createUID() {
 	    return UIDUtilities.createUnresolvedNamespaceUID(getProject());
@@ -155,7 +158,8 @@ public final class Unresolved implements Disposable {
 	}
     }
     
-    public final class UnresolvedFile implements CsmFile {
+    private static final String UNRESOLVED_FILE_FAKE_PATH = new File((System.getProperty("java.io.tmpdir")), "$_UNRESOLVED_CND_MODEL_FILE_5858$").getAbsolutePath(); // NOI18N
+    public final class UnresolvedFile implements CsmFile, CsmIdentifiable, Disposable {
 	
         private UnresolvedFile() {
         }
@@ -171,6 +175,10 @@ public final class Unresolved implements Disposable {
         }
         
         public CsmProject getProject() {
+            return _getProject();
+        }
+
+        private synchronized CsmProject _getProject() {
             if( projectRef == null ) {
                 assert projectUID != null;
                 return (ProjectBase)UIDCsmConverter.UIDtoProject(projectUID);
@@ -184,13 +192,13 @@ public final class Unresolved implements Disposable {
             return UNRESOLVED; // NOI18N
         }
         public List<CsmInclude> getIncludes() {
-            return Collections.EMPTY_LIST;
+            return Collections.<CsmInclude>emptyList();
         }
         public List<CsmOffsetableDeclaration> getDeclarations() {
-            return Collections.EMPTY_LIST;
+            return Collections.<CsmOffsetableDeclaration>emptyList();
         }
         public String getAbsolutePath() {
-            return "$unresolved file$"; // NOI18N
+            return UNRESOLVED_FILE_FAKE_PATH; // NOI18N
         }
         public boolean isValid() {
             return getProject().isValid();
@@ -201,10 +209,14 @@ public final class Unresolved implements Disposable {
             return true;
         }
         public List<CsmMacro> getMacros() {
-            return Collections.EMPTY_LIST;
+            return Collections.<CsmMacro>emptyList();
+        }
+
+        public Iterator<CsmMacro> getMacros(CsmFilter filter) {
+            return getMacros().iterator();
         }
         
-        public CsmUID getUID() {
+        public CsmUID<CsmFile> getUID() {
             if (uid == null) {
                 uid = UIDUtilities.createUnresolvedFileUID(this.getProject());
             }
@@ -220,6 +232,14 @@ public final class Unresolved implements Disposable {
         public boolean isHeaderFile() {
             return true;
         }
+
+        public Collection<CsmErrorDirective> getErrors() {
+            return Collections.<CsmErrorDirective>emptyList();
+        }
+
+        public void dispose() {
+            UIDUtilities.disposeUnresolved(uid);
+        }
     };
     
     // only one of projectRef/projectUID must be used (based on USE_UID_TO_CONTAINER)
@@ -227,11 +247,11 @@ public final class Unresolved implements Disposable {
     private final CsmUID<CsmProject> projectUID;
     
     // doesn't need Repository Keys
-    private final CsmFile unresolvedFile;
+    private final UnresolvedFile unresolvedFile;
     // doesn't need Repository Keys
-    private final NamespaceImpl unresolvedNamespace;
+    private final UnresolvedNamespace unresolvedNamespace;
     // doesn't need Repository Keys
-    private Map<String, Reference<UnresolvedClass>> dummiesForUnresolved = new HashMap<String, Reference<UnresolvedClass>>();
+    private Map<CharSequence, Reference<UnresolvedClass>> dummiesForUnresolved = new HashMap<CharSequence, Reference<UnresolvedClass>>();
     
     public Unresolved(ProjectBase project) {
         this.projectUID = UIDCsmConverter.projectToUID(project);
@@ -241,34 +261,40 @@ public final class Unresolved implements Disposable {
     }
     
     public void dispose() {
+        disposeAll();
         onDispose();
     }
     
-    private void onDispose() {
-        if (TraceFlags.RESTORE_CONTAINER_FROM_UID) {
+    private synchronized void onDispose() {
+        if (this.projectRef == null) {
             // restore container from it's UID
             this.projectRef = (ProjectBase)UIDCsmConverter.UIDtoProject(this.projectUID);
             assert (this.projectRef != null || this.projectUID == null) : "empty project for UID " + this.projectUID;
         }
     }    
-    
-    public CsmClass getDummyForUnresolved(CharSequence[] nameTokens) {
-	return getDummyForUnresolved(getName(nameTokens));
+
+    private void disposeAll() {
+        this.unresolvedFile.dispose();
     }
     
-    public CsmClass getDummyForUnresolved(String name) {
+    public CsmClass getDummyForUnresolved(CharSequence[] nameTokens) {
+        return getDummyForUnresolved(getName(nameTokens));
+    }
+    
+    public CsmClass getDummyForUnresolved(CharSequence name) {
+        name = NameCache.getManager().getString(name);
         Reference<UnresolvedClass> ref = dummiesForUnresolved.get(name);
         UnresolvedClass cls = ref == null ? null : ref.get();
         if( cls == null ) {
-            cls = new UnresolvedClass(name);
-            dummiesForUnresolved.put(name, new SoftReference(cls));
+            cls = new UnresolvedClass(name.toString());
+            dummiesForUnresolved.put(name, new SoftReference<UnresolvedClass>(cls));
 	    cls.register();
         }
         return cls;
     }
     
     public CsmNamespace getUnresolvedNamespace() {
-	return unresolvedNamespace;
+        return unresolvedNamespace;
     }
     
     public CsmFile getUnresolvedFile() {
