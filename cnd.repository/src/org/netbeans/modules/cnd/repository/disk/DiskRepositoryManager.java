@@ -38,15 +38,17 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.repository.disk;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -54,192 +56,242 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.netbeans.modules.cnd.repository.api.Repository;
+import org.netbeans.modules.cnd.repository.api.RepositoryAccessor;
+import org.netbeans.modules.cnd.repository.api.RepositoryException;
+import org.netbeans.modules.cnd.repository.api.RepositoryTranslation;
 import org.netbeans.modules.cnd.repository.queue.RepositoryQueue;
 import org.netbeans.modules.cnd.repository.queue.RepositoryThreadManager;
+import org.netbeans.modules.cnd.repository.queue.RepositoryWriter;
 import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.spi.RepositoryListener;
 import org.netbeans.modules.cnd.repository.translator.RepositoryTranslatorImpl;
-import org.netbeans.modules.cnd.repository.util.RepositoryExceptionImpl;
 import org.netbeans.modules.cnd.repository.util.RepositoryListenersManager;
 
 /**
  *
  * @author Sergey Grinev
  */
-public final class DiskRepositoryManager extends AbstractDiskRepository implements Repository {
-    private final Map<String, UnitDiskRepository> repositories;
-    
-    private static DiskRepositoryManager    instance = new DiskRepositoryManager();
-    private final RepositoryQueue           queue;
-    private final RepositoryThreadManager   threadManager;
-    private final Persistent                removedObject; 
-    private final ReadWriteLock             rwLock;
+public final class DiskRepositoryManager implements Repository, RepositoryWriter {
 
-    public static DiskRepositoryManager getInstance() {
-        return instance;
+    private final Map<Integer, Unit> units;
+    private final RepositoryQueue queue;
+    private final RepositoryThreadManager threadManager;
+    private final Persistent removedObject;
+    private final ReadWriteLock queueLock;
+    private Map<Integer, Object> unitLocks = new HashMap<Integer, Object>();
+    private final String mainUnitLock = new String("DelegateRepository main lock"); // NOI18N
+
+    public DiskRepositoryManager() {
+        removedObject = new RemovedPersistent();
+        queueLock = new ReentrantReadWriteLock(true);
+        threadManager = new RepositoryThreadManager(this, queueLock);
+        queue = threadManager.startup();
+        units = new ConcurrentHashMap<Integer, Unit>();
     }
-    
-    private DiskRepositoryManager() {
-        removedObject   = new RemovedPersistent();
-        rwLock          = new ReentrantReadWriteLock(true);
-        threadManager   = new RepositoryThreadManager(this, rwLock);
-	queue           = threadManager.startup();
-        repositories    = new ConcurrentHashMap<String, UnitDiskRepository>();
+
+    private Object getUnitLock(int unitId) {
+        synchronized (mainUnitLock) {
+            Object lock = unitLocks.get(unitId);
+            if (lock == null) {
+                lock = new String("unitId=" + unitId); // NOI18N
+                unitLocks.put(unitId, lock);
+            }
+            return lock;
+        }
     }
-    
-    private AbstractDiskRepository getCreateRepository(Key key) throws IOException {
+
+    /** Never returns null - throws exceptions */
+    private Unit getCreateUnit(Key key) throws IOException {
         assert key != null;
+        Unit unit = units.get(key.getUnitId());
+        if (unit != null) {
+            return unit;
+        }
+        return getCreateUnit(key.getUnitId(), key.getUnit().toString());
+    }
 
-        final String unitName = key.getUnit().toString();
+    /** Never returns null - throws exceptions */
+    private Unit getCreateUnit(int unitId, String unitName) throws IOException {
         assert unitName != null;
-        
-        UnitDiskRepository repository = repositories.get(unitName);
-            
-        if (repository == null) {
-            synchronized (repositories) {
-                repository = repositories.get(unitName);
-                if (repository == null) {
+
+        Unit unit = units.get(unitId);
+
+        if (unit == null) {
+            synchronized (getUnitLock(unitId)) {
+                unit = units.get(unitId);
+                if (unit == null) {
                     if (RepositoryListenersManager.getInstance().fireUnitOpenedEvent(unitName)) {
                         RepositoryTranslatorImpl.loadUnitIndex(unitName);
-                        repository = new UnitDiskRepository(unitName);
-                        repositories.put(unitName, repository);
+                        unit = new UnitImpl(unitName);
+                        units.put(unitId, unit);
                     }
                 }
             }
         }
-        
-        return repository;
+
+        return unit;
     }
-    
-    public void put(Key id, Persistent obj) {
-	    queue.addLast(id, obj);
+
+    public void put(Key key, Persistent obj) {
+        try {
+            getCreateUnit(key).putToCache(key, obj);
+            queue.addLast(key, obj);
+        } catch (Throwable ex) {
+            RepositoryListenersManager.getInstance().fireAnException(
+                    getUnitNameSafe(key), new RepositoryException(ex));
+        }
     }
-    
+
+    public void hang(Key key, Persistent obj) {
+        try {
+            getCreateUnit(key).hang(key, obj);
+        } catch (Throwable ex) {
+            RepositoryListenersManager.getInstance().fireAnException(
+                    getUnitNameSafe(key), new RepositoryException(ex));
+        }
+    }
+
     public void write(Key key, Persistent object) {
         try {
-            AbstractDiskRepository diskRep = getCreateRepository(key);
-
-            if (diskRep == null)
-                return;
-            
-            if (object instanceof  RemovedPersistent) {
-                diskRep.remove(key);
+            Unit diskRep = getCreateUnit(key);
+            if (object instanceof RemovedPersistent) {
+                diskRep.removePhysically(key);
             } else {
-                diskRep.write(key, object);
+                diskRep.putPhysically(key, object);
             }
         } catch (Throwable ex) {
             RepositoryListenersManager.getInstance().fireAnException(
-                    key.getUnit().toString(),new RepositoryExceptionImpl(ex));
+                    getUnitNameSafe(key), new RepositoryException(ex));
         }
-    }    
-    
-   public Persistent get(Key key) {
-       assert key != null;
+    }
 
-       try {
-            AbstractDiskRepository diskRep = getCreateRepository(key);
-            if (diskRep != null) {
-                return diskRep.get(key);
-            }
+    public Persistent get(Key key) {
+        try {
+            return getCreateUnit(key).get(key);
         } catch (Throwable ex) {
             RepositoryListenersManager.getInstance().fireAnException(
-                    key.getUnit().toString(),new RepositoryExceptionImpl(ex));
+                    getUnitNameSafe(key), new RepositoryException(ex));
         }
-       
-       return null;
+        return null;
     }
-    
-    
+
+    public Persistent tryGet(Key key) {
+        try {
+            return getCreateUnit(key).tryGet(key);
+        } catch (Throwable ex) {
+            RepositoryListenersManager.getInstance().fireAnException(
+                    getUnitNameSafe(key), new RepositoryException(ex));
+        }
+        return null;
+    }
+
     public void remove(Key key) {
-        queue.addLast(key, removedObject);
-    }    
-    
-    public void waitForQueue() throws InterruptedException {
-        if (queue != null) {
-            while (!queue.disposable()) {
-                Thread.sleep(50);
-                queue.onIdle();
-            }
+        try {
+            getCreateUnit(key).removeFromCache(key);
+            queue.addLast(key, removedObject);
+        } catch (Throwable ex) {
+            RepositoryListenersManager.getInstance().fireAnException(
+                    getUnitNameSafe(key), new RepositoryException(ex));
         }
     }
-    
+
     public void shutdown() {
-        if( threadManager != null ) {
+        if (threadManager != null) {
             threadManager.shutdown();
         }
-        
-        close();
-    }
-    
-    private void iterateWith(Visitor visitor){
-        for (Entry<String, UnitDiskRepository> entry: repositories.entrySet()) {
-            try {
-                visitor.visit(entry.getValue());
-            } catch (Throwable exc) {
-                RepositoryListenersManager.getInstance().fireAnException(
-                        entry.getKey(), new RepositoryExceptionImpl(exc));
-            }
+        List<Entry<Integer, Unit>> entries = new ArrayList<Entry<Integer, Unit>>(units.entrySet());
+        for (Entry<Integer, Unit> entry : entries) {
+            // iz #146241 IllegalStateException in the case revious session terminated with ^C in console
+            // if there are projects that aren't yet closed => the data might be corrupted! => clean untit
+            closeUnit(RepositoryAccessor.getTranslator().getUnitName(entry.getKey()), true, null);
         }
+
+        try {
+            queueLock.writeLock().lock();
+            cleanAndWriteQueue();
+            units.clear();
+        } finally {
+            queueLock.writeLock().unlock();
+        }
+        RepositoryTranslatorImpl.shutdown();
     }
-
-
 
     public boolean maintenance(long timeout) {
-            if( repositories.size() == 0 ) {
-                return false;
-            }
-
-            Collection<UnitDiskRepository> values = repositories.values();
-            UnitDiskRepository[] sfs = (UnitDiskRepository[]) values.toArray(new UnitDiskRepository[values.size()]);
-            Arrays.sort(sfs, new FragmentationComparator());
-            boolean needMoreTime = false;
-            long start = System.currentTimeMillis();
-            for (int i = 0; i < sfs.length; i++) {
-                if( timeout <= 0 ) {
-                    needMoreTime = true;
-                    break;
-                }
-                
-                if( sfs[i].maintenance(timeout) ) {
-                    needMoreTime = true;
-                }
-                timeout -= (System.currentTimeMillis() - start);
-            }
-            return needMoreTime;
-    }
-
-    public void openUnit(String unitName) {
-    }
- 
-
-    public void closeUnit(final String unitName, final boolean cleanRepository, Set<String> requiredUnits) {
-        
-        try {
-            rwLock.writeLock().lock();
-        
-	    Collection<RepositoryQueue.Entry> removedEntries = queue.clearQueue(new UnitFilter(unitName));
-            if (!cleanRepository) {
-		for( RepositoryQueue.Entry entry : removedEntries ) {
-		    write(entry.getKey(), entry.getValue());
-		}
-            }
-            
-            AbstractDiskRepository repository = repositories.remove(unitName);
-            
-            if (repository != null) {
-                try {
-                    repository.close();
-                } catch (Throwable exc) {
-                    RepositoryListenersManager.getInstance().fireAnException(unitName, 
-                            new RepositoryExceptionImpl(exc));
-                }
-            }
-            
-        } finally {
-            rwLock.writeLock().unlock();
+        if (units.size() == 0) {
+            return false;
         }
-            
+
+        Collection<Unit> values = units.values();
+        Unit[] unitList = values.toArray(new Unit[values.size()]);
+        Arrays.sort(unitList, new MaintenanceComparator());
+        boolean needMoreTime = false;
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < unitList.length; i++) {
+            if (timeout <= 0) {
+                needMoreTime = true;
+                break;
+            }
+
+            try {
+                if (unitList[i].maintenance(timeout)) {
+                    needMoreTime = true;
+                }
+            } catch (IOException ex) {
+                RepositoryListenersManager.getInstance().fireAnException(
+                        unitList[i].getName(), new RepositoryException(ex));
+            }
+            timeout -= (System.currentTimeMillis() - start);
+        }
+        return needMoreTime;
+    }
+
+    public void openUnit(int unitId, String unitName) {
+        try {
+            synchronized (getUnitLock(unitId)) {
+                getCreateUnit(unitId, unitName);
+            }
+        } catch (Throwable exc) {
+            RepositoryListenersManager.getInstance().fireAnException(unitName,
+                    new RepositoryException(exc));
+        }
+    }
+
+    public void closeUnit(String unitName, boolean cleanRepository, Set<String> requiredUnits) {
+        int unitId = RepositoryAccessor.getTranslator().getUnitId(unitName);
+        synchronized (getUnitLock(unitId)) {
+            closeUnit2(unitName, cleanRepository, requiredUnits);
+        }
+    }
+
+    private void closeUnit2(final String unitName, final boolean cleanRepository, Set<String> requiredUnits) {
+
+        try {
+            queueLock.writeLock().lock();
+
+            Collection<RepositoryQueue.Entry> removedEntries = queue.clearQueue(new UnitFilter(unitName));
+            if (!cleanRepository) {
+                for (RepositoryQueue.Entry entry : removedEntries) {
+                    write(entry.getKey(), entry.getValue());
+                }
+            }
+
+            int unitId = RepositoryAccessor.getTranslator().getUnitId(unitName);
+            Unit unit = units.remove(unitId);
+
+            if (unit != null) {
+                try {
+                    unit.close();
+                } catch (Throwable exc) {
+                    RepositoryListenersManager.getInstance().fireAnException(unitName,
+                            new RepositoryException(exc));
+                }
+            }
+
+        } finally {
+            queueLock.writeLock().unlock();
+        }
+
         //clean the repository cach files here if it is necessary
         //
         StorageAllocator allocator = StorageAllocator.getInstance();
@@ -247,46 +299,37 @@ public final class DiskRepositoryManager extends AbstractDiskRepository implemen
             allocator.deleteUnitFiles(unitName, true);
         }
         allocator.closeUnit(unitName);
+
+        RepositoryTranslatorImpl.closeUnit(unitName, requiredUnits);
+        RepositoryListenersManager.getInstance().fireUnitClosedEvent(unitName);
     }
-    
+
     public void removeUnit(String unitName) {
-	closeUnit(unitName, true, Collections.<String>emptySet());
-    }
-
-    public void close() {
-        boolean saveAll = true;
-        try {
-            rwLock.writeLock().lock();
-            cleanAndWriteQueue();
-            iterateWith(new CloseVisitor());
-            repositories.clear();
-        } finally {
-            rwLock.writeLock().unlock();
+        int unitId = RepositoryAccessor.getTranslator().getUnitId(unitName);
+        synchronized (getUnitLock(unitId)) {
+            closeUnit(unitName, true, Collections.<String>emptySet());
+            RepositoryTranslatorImpl.removeUnit(unitName);
         }
-
-    }
-
-    public int getFragmentationPercentage() throws IOException {
-        return 0;
-    }
-
-    public void hang(Key key, Persistent obj) {
     }
 
     public void debugClear() {
+        List<Entry<Integer, Unit>> entries = new ArrayList<Entry<Integer, Unit>>(units.entrySet());
+        for (Entry<Integer, Unit> entry : entries) {
+            entry.getValue().debugClear();
+        }
         try {
-            rwLock.writeLock().lock();
+            queueLock.writeLock().lock();
             cleanAndWriteQueue();
         } finally {
-            rwLock.writeLock().unlock();
-        }        
+            queueLock.writeLock().unlock();
+        }
     }
-    
+
     private void cleanAndWriteQueue() {
-	Collection<RepositoryQueue.Entry> removedEntries = queue.clearQueue(new AllFilter());
-	for( RepositoryQueue.Entry entry : removedEntries ) {
-	    write(entry.getKey(), entry.getValue());
-	}
+        Collection<RepositoryQueue.Entry> removedEntries = queue.clearQueue(new AllFilter());
+        for (RepositoryQueue.Entry entry : removedEntries) {
+            write(entry.getKey(), entry.getValue());
+        }
     }
 
     public void cleanCaches() {
@@ -302,12 +345,14 @@ public final class DiskRepositoryManager extends AbstractDiskRepository implemen
     public void startup(int persistMechanismVersion) {
     }
 
-    static private class RemovedPersistent implements Persistent {
-        
+    public void debugDistribution() {
+        for (Unit unit : units.values()){
+            System.err.println("UNIT "+unit.getName());
+            unit.debugDistribution();
+        }
     }
 
-    private interface Visitor {
-        void visit(AbstractDiskRepository repository) throws IOException ;
+    static private class RemovedPersistent implements Persistent {
     }
 
     private static class UnitFilter implements RepositoryQueue.Filter {
@@ -322,29 +367,35 @@ public final class DiskRepositoryManager extends AbstractDiskRepository implemen
             return key.getUnit().equals(unitName);
         }
     }
-    
-   private class AllFilter implements RepositoryQueue.Filter {
+
+    private static class AllFilter implements RepositoryQueue.Filter {
+
         public boolean accept(Key key, Persistent value) {
             return true;
         }
-    }    
-
-    static private class CloseVisitor implements Visitor {
-
-        public CloseVisitor() {
-            super();
-        }
-
-        public void visit(AbstractDiskRepository repository) throws IOException {
-            repository.close();
-        }
     }
-    
-   private static class FragmentationComparator implements Comparator<UnitDiskRepository>, Serializable {
+
+    private static class MaintenanceComparator implements Comparator<Unit>, Serializable {
+
         private static final long serialVersionUID = 7249069246763182397L;
 
-        public int compare(UnitDiskRepository o1, UnitDiskRepository o2) {
-            return o2.getFragmentationPercentage() - o1.getFragmentationPercentage();
+        public int compare(Unit o1, Unit o2) {
+            return getMaintenanceWeight(o2) - getMaintenanceWeight(o1);
         }
-    }    
+    }
+
+    private static int getMaintenanceWeight(Unit unit) {
+        try {
+            return unit.getMaintenanceWeight();
+        } catch (IOException ex) {
+            RepositoryListenersManager.getInstance().fireAnException(
+                    unit.getName(), new RepositoryException(ex));
+        }
+        return 0;
+    }
+
+    private String getUnitNameSafe(Key key) {
+        RepositoryTranslation translator = RepositoryAccessor.getTranslator();
+        return translator.getUnitNameSafe(key.getUnitId());
+    }
 }
