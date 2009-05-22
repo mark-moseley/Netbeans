@@ -43,14 +43,11 @@ package org.netbeans.modules.cnd.debugger.gdb.breakpoints;
 
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.HashSet;
-import java.util.Iterator;
-
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 import org.netbeans.api.debugger.Breakpoint;
-
 import org.netbeans.modules.cnd.debugger.gdb.event.GdbBreakpointEvent;
 import org.netbeans.modules.cnd.debugger.gdb.event.GdbBreakpointListener;
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
@@ -64,21 +61,30 @@ import org.openide.util.Utilities;
 public abstract class GdbBreakpoint extends Breakpoint {
     
     public static final String          PROP_SUSPEND = "suspend"; // NOI18N
+    public static final String          PROP_THREAD_ID = "threadID"; // NOI18N
     public static final String          PROP_HIDDEN = "hidden"; // NOI18N
     public static final String          PROP_PRINT_TEXT = "printText"; // NOI18N
     public static final String          PROP_BREAKPOINT_STATE = "breakpointState"; // NOI18N
     public static final String          PROP_LINE_NUMBER = "lineNumber"; // NOI18N
+    public static final String          PROP_FUNCTION_NAME = "functionName"; // NOI18N
     public static final String          PROP_URL = "url"; // NOI18N
     public static final String          PROP_CONDITION = "condition"; // NOI18N
+    public static final String          PROP_SKIP_COUNT = "skipCount"; // NOI18N
+    
+    public static final int             SUSPEND_NONE = 0;
+    public static final int             SUSPEND_THREAD = 1;
+    public static final int             SUSPEND_ALL = 2;
     
     private int                         lineNumber;
     private boolean                     enabled = true;
     private boolean                     hidden = false;
-    private int                         suspend = 0; // Not fully implemented yet!
+    private boolean                     temporary = false;
+    private int                         suspend = SUSPEND_ALL;
+    private String                      threadID = "1"; // NOI18N
     private String                      printText;
-    private HashSet                     breakpointListeners = new HashSet();
-    private GdbDebugger                 debugger;
+    private final Set<GdbBreakpointListener>  breakpointListeners = new CopyOnWriteArraySet<GdbBreakpointListener>();
     private String                      condition = ""; // NOI18N
+    private int                         skipCount = 0;
     private String                      url = "";       // NOI18N
     private String                      path = "";      // NOI18N
     
@@ -97,6 +103,10 @@ public abstract class GdbBreakpoint extends Breakpoint {
      * @param ln a line number to stop on
      */
     public void setLineNumber(int ln) {
+        setLineNumber(ln, false);
+    }
+
+    private void setLineNumber(int ln, boolean noOld) {
         int old;
         synchronized (this) {
             if (ln == lineNumber) {
@@ -105,7 +115,12 @@ public abstract class GdbBreakpoint extends Breakpoint {
             old = lineNumber;
             lineNumber = ln;
         }
-        firePropertyChange(PROP_LINE_NUMBER, new Integer(old), new Integer(ln));
+        firePropertyChange(PROP_LINE_NUMBER, noOld ? null : Integer.valueOf(old), Integer.valueOf(ln));
+    }
+
+    // see IZ:165386 we should distinguish line updates from LineTranslations
+    public void setLineNumberNoOld(int ln) {
+        setLineNumber(ln, true);
     }
     
     protected void setValid() {
@@ -140,6 +155,8 @@ public abstract class GdbBreakpoint extends Breakpoint {
      * @param file name
      */
     public void setURL(String url) {
+        String old;
+        
         synchronized (this) {
             if (url != null && this.url != null && url.equals(this.url)) {
                 return;
@@ -147,7 +164,7 @@ public abstract class GdbBreakpoint extends Breakpoint {
             // The code below is a protection against "invalid" URL values.
             url = url.replace(" ", "%20"); // NOI18N
             if (!url.startsWith("file:/")) { // NOI18N
-                if (url.startsWith("/")) { // NOI18N
+                if (url.charAt(0) == '/') { // NOI18N
                     url = "file:" + url; // NOI18N
                 } else {
                     url = "file:/" + url; // NOI18N
@@ -173,9 +190,10 @@ public abstract class GdbBreakpoint extends Breakpoint {
             } catch (Exception ex) {
                 assert !Boolean.getBoolean("gdb.assertions.enabled"); // NOI18N
             }
+            old = this.url;
             this.url = url;
+            firePropertyChange (PROP_URL, old, url);
         }
-//        firePropertyChange(PROP_URL, old, url);
     }
     
     /**
@@ -209,6 +227,19 @@ public abstract class GdbBreakpoint extends Breakpoint {
         firePropertyChange(PROP_CONDITION, old, c);
     }
     
+    public int getSkipCount() {
+        return skipCount;
+    }
+    
+    public void setSkipCount(int skipCount) {
+        int old = this.skipCount;
+        if (skipCount != old) {
+            this.skipCount = skipCount;
+            firePropertyChange(PROP_SKIP_COUNT, old, skipCount);
+        }
+        
+    }
+    
     /**
      * Gets value of suspend property.
      *
@@ -224,12 +255,30 @@ public abstract class GdbBreakpoint extends Breakpoint {
      * @param s a new value of suspend property
      */
     public void setSuspend(int s) {
-        if (s == suspend) {
+        setSuspend(s, "");
+    }
+    
+    /**
+     * Sets value of suspend property.
+     *
+     * @param s a new value of suspend property
+     */
+    public void setSuspend(int s, String threadID) {
+        if (s == suspend && this.threadID.equals(threadID)) {
             return;
         }
-        int old = suspend;
+        if (threadID.length() == 0) {
+            threadID = this.threadID;
+        }
+        String old = Integer.toString(suspend) + ':' + this.threadID;
+        String nu = Integer.toString(s) + ':' + threadID;
         suspend = s;
-        firePropertyChange(PROP_SUSPEND, new Integer(old), new Integer(s));
+        this.threadID = threadID;
+        firePropertyChange(PROP_SUSPEND, old, nu);
+    }
+    
+    public String getThreadID() {
+        return threadID;
     }
     
     /**
@@ -254,7 +303,15 @@ public abstract class GdbBreakpoint extends Breakpoint {
         hidden = h;
         firePropertyChange(PROP_HIDDEN, Boolean.valueOf(old), Boolean.valueOf(h));
     }
-    
+
+    public boolean isTemporary() {
+        return temporary;
+    }
+
+    public void setTemporary() {
+        this.temporary = true;
+    }
+
     /**
      * Gets value of print text property.
      *
@@ -270,7 +327,7 @@ public abstract class GdbBreakpoint extends Breakpoint {
      * @param printText a new value of print text property
      */
     public void setPrintText(String printText) {
-        if (this.printText == null || this.printText.equals(printText)) {
+        if (printText == null || printText.equals(this.printText)) {
             return;
         }
         String old = this.printText;
@@ -335,17 +392,8 @@ public abstract class GdbBreakpoint extends Breakpoint {
      * @param event a event to be fired
      */
     public void fireGdbBreakpointChange(GdbBreakpointEvent event) {
-        Iterator i = ((HashSet) breakpointListeners.clone()).iterator();
-        while (i.hasNext()) {
-            ((GdbBreakpointListener) i.next()).breakpointReached(event);
+        for (GdbBreakpointListener listener : breakpointListeners) {
+            listener.breakpointReached(event);
         }
-    }
-    
-    protected void setDebugger(GdbDebugger debugger) {
-	this.debugger = debugger;
-    }
-    
-    public GdbDebugger getDebugger() {
-	return debugger;
     }
 }
