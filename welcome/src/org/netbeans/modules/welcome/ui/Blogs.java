@@ -59,7 +59,7 @@ import org.netbeans.modules.welcome.content.WebLink;
 class Blogs extends RSSFeedReaderPanel {
 
     public Blogs() {
-        super( "Blogs", false ); // NOI18N
+        super( InstallConfig.getDefault().isJavaFXInstalled() ? "BlogsJavaFX" : "Blogs", false ); // NOI18N
 
         add( buildBottomContent(), BorderLayout.SOUTH );
     }
@@ -69,7 +69,7 @@ class Blogs extends RSSFeedReaderPanel {
         BundleSupport.setAccessibilityProperties( allBlogs, "AllBlogs" ); //NOI18N
 
         JPanel panel = new JPanel( new GridBagLayout() );
-        panel.setOpaque( false );
+        panel.setOpaque(false);
         panel.add( allBlogs, new GridBagConstraints(1,0,1,1,0.0,0.0,GridBagConstraints.SOUTHEAST,GridBagConstraints.HORIZONTAL,new Insets(5,5,0,5),0,0) );
         panel.add( new JLabel(), new GridBagConstraints(0,0,1,1,1.0,0.0,GridBagConstraints.CENTER,GridBagConstraints.HORIZONTAL,new Insets(0,0,0,0),0,0) );
 

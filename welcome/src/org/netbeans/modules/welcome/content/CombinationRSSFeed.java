@@ -42,6 +42,8 @@
 package org.netbeans.modules.welcome.content;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -55,8 +57,8 @@ import javax.xml.parsers.ParserConfigurationException;
 import org.netbeans.modules.welcome.content.RSSFeed.ErrorCatcher;
 import org.netbeans.modules.welcome.content.RSSFeed.FeedHandler;
 import org.netbeans.modules.welcome.content.RSSFeed.FeedItem;
+import org.openide.util.NbPreferences;
 import org.openide.xml.XMLUtil;
-import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 
@@ -86,14 +88,14 @@ public class CombinationRSSFeed extends RSSFeed {
         reader.setContentHandler( handler );
         reader.setEntityResolver( org.openide.xml.EntityCatalog.getDefault() );
         reader.setErrorHandler( new ErrorCatcher() );
-        reader.parse( new InputSource(url1) );
+        reader.parse( findInputSource(new URL(url1)) );
 
         ArrayList<FeedItem> res = new ArrayList<FeedItem>( 2*getMaxItemCount() );
         res.addAll( handler.getItemList() );
 
         handler = new FeedHandler( getMaxItemCount() );
         reader.setContentHandler( handler );
-        reader.parse( new InputSource(url2) );
+        reader.parse( findInputSource(new URL(url2)) );
 
         res.addAll( handler.getItemList() );
 
@@ -110,12 +112,23 @@ public class CombinationRSSFeed extends RSSFeed {
     }
 
     @Override
+    protected void clearCache() {
+        try {
+            NbPreferences.forModule( RSSFeed.class ).remove( url2path( new URL(url1))) ;
+            NbPreferences.forModule( RSSFeed.class ).remove( url2path( new URL(url2))) ;
+        } catch( MalformedURLException mE ) {
+            //ignore
+        }
+    }
+
+    @Override
     protected int getMaxItemCount() {
         return this.maxItemCount;
     }
 
     private static class DateFeedItemComparator implements Comparator<FeedItem> {
     private static DateFormat dateFormat = new SimpleDateFormat( "EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH ); // NOI18N
+    private static DateFormat dateFormatLong = new SimpleDateFormat( "yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH ); // NOI18N
     private static DateFormat dateFormatShort = new SimpleDateFormat( "EEE, dd MMM yyyy", Locale.ENGLISH ); // NOI18N
         
     public int compare(FeedItem item1, FeedItem item2) {
@@ -144,7 +157,11 @@ public class CombinationRSSFeed extends RSSFeed {
                 try {     
                     return dateFormatShort.parse( item.dateTime );
                 } catch( ParseException otherPE ) {
-                    //ignore
+                    try {
+                        return dateFormatLong.parse( item.dateTime );
+                    } catch( ParseException e ) {
+                        //ignore
+                    }
                 }
             }
             return null;
