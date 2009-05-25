@@ -39,6 +39,7 @@ package org.netbeans.installer.products.jdk;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import org.netbeans.installer.utils.LogManager;
 import org.netbeans.installer.utils.ResourceUtils;
@@ -50,9 +51,6 @@ import static org.netbeans.installer.utils.StringUtils.BACK_SLASH;
 import static org.netbeans.installer.utils.StringUtils.EMPTY_STRING;
 import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.applications.JavaUtils;
-import static org.netbeans.installer.utils.applications.JavaUtils.JDK_KEY;
-import static org.netbeans.installer.utils.applications.JavaUtils.JRE_KEY;
-import static org.netbeans.installer.utils.applications.JavaUtils.JAVAHOME_VALUE;
 import org.netbeans.installer.utils.exceptions.InitializationException;
 import org.netbeans.installer.utils.exceptions.InstallationException;
 import org.netbeans.installer.utils.exceptions.NativeException;
@@ -65,6 +63,7 @@ import org.netbeans.installer.utils.helper.Platform;
 import org.netbeans.installer.utils.helper.RemovalMode;
 import org.netbeans.installer.utils.helper.Status;
 import org.netbeans.installer.utils.helper.Text;
+import org.netbeans.installer.utils.helper.Version;
 import org.netbeans.installer.utils.progress.CompositeProgress;
 import org.netbeans.installer.utils.progress.Progress;
 import org.netbeans.installer.utils.system.WindowsNativeUtils;
@@ -102,6 +101,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             
             
             boolean jreInstallation = false;
+            boolean javadbInstallation = false;
             final CompositeProgress overallProgress = new CompositeProgress();
             overallProgress.synchronizeTo(progress);
             overallProgress.synchronizeDetails(true);
@@ -112,11 +112,24 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                 if (jdk == null) {
                     final Progress jdkProgress = new Progress();
                     final Progress jreProgress = new Progress();
+                    final Progress javadbProgress = new Progress();
+                    final boolean javadbBundled = getProduct().getVersion().newerOrEquals(Version.getVersion("1.6.0"));
                     if(jre!=null) {
-                        overallProgress.addChild(jdkProgress, progress.COMPLETE);
+                        if(javadbBundled) {
+                            overallProgress.addChild(jdkProgress,    progress.COMPLETE * 6 / 7);
+                            overallProgress.addChild(javadbProgress, progress.COMPLETE * 1 / 7);
+                        } else {
+                            overallProgress.addChild(jdkProgress, progress.COMPLETE);
+                        }
                     } else {
-                        overallProgress.addChild(jdkProgress, progress.COMPLETE * 3 / 5 );
-                        overallProgress.addChild(jreProgress, progress.COMPLETE * 2 / 5);
+                        if(javadbBundled) {
+                            overallProgress.addChild(jdkProgress, progress.COMPLETE * 4 / 7 );
+                            overallProgress.addChild(jreProgress, progress.COMPLETE * 2 / 7);
+                            overallProgress.addChild(javadbProgress, progress.COMPLETE * 1 / 7);
+                        } else {
+                            overallProgress.addChild(jdkProgress, progress.COMPLETE * 3 / 5 );
+                            overallProgress.addChild(jreProgress, progress.COMPLETE * 2 / 5);
+                        }
                     }
                     results = runJDKInstallerWindows(location, installer, jdkProgress);
                     if(results.getErrorCode()==0) {
@@ -134,7 +147,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                                 addUninsallationJVM(results, JavaUtils.findJreHome(getProduct().getVersion()));
                                 if(results.getErrorCode()==0) {
                                     getProduct().setProperty(JRE_INSTALLED_WINDOWS_PROPERTY,
-                                            "" + true);
+                                            "" + true);                                    
                                 }
                             }
                         } else {
@@ -142,6 +155,18 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                                     " is already installed, skipping its configuration");
                         }
                     }
+                    if (!progress.isCanceled() && javadbBundled && results.getErrorCode()==0) {                        
+                        final File javadbInstaller = findJavaDBWindowsInstaller();                        
+                        if (javadbInstaller != null) {
+                            javadbInstallation = true;
+                            getProduct().setProperty(JAVADB_INSTALLER_LOCATION_PROPERTY, javadbInstaller.getAbsolutePath());
+                            results = runJavaDBInstallerWindows(javadbInstaller, javadbProgress);
+                            if (results.getErrorCode() == 0) {
+                                getProduct().setProperty(JAVADB_INSTALLED_WINDOWS_PROPERTY,
+                                        "" + true);
+                            }
+                        }
+                    }                    
                 } else {
                     LogManager.log("... jdk " + getProduct().getVersion() +
                             " is already installed, skipping JDK and JRE configuration");
@@ -162,8 +187,9 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             if(results.getErrorCode()!=0) {
                 throw new InstallationException(
                         ResourceUtils.getString(ConfigurationLogic.class,
-                        (jreInstallation) ? ERROR_JRE_INSTALL_SCRIPT_RETURN_NONZERO_KEY
-                        : ERROR_JDK_INSTALL_SCRIPT_RETURN_NONZERO_KEY,
+                        javadbInstallation ? ERROR_JAVADB_INSTALL_SCRIPT_RETURN_NONZERO_KEY : 
+                        ((jreInstallation) ? ERROR_JRE_INSTALL_SCRIPT_RETURN_NONZERO_KEY
+                        : ERROR_JDK_INSTALL_SCRIPT_RETURN_NONZERO_KEY),
                         StringUtils.EMPTY_STRING + results.getErrorCode()));
             }
         }  finally {
@@ -217,7 +243,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                     ResourceUtils.getString(ConfigurationLogic.class,
                     ERROR_INSTALL_JDK_ERROR_KEY),e);
         }
-        final File logFile = getLog(true,true);
+        final File logFile = getLog("jdk_install");
         
         final String loggingOption = (logFile!=null) ?
             "/log " + BACK_SLASH + QUOTE  + logFile.getAbsolutePath()  + BACK_SLASH + QUOTE +" ":
@@ -256,7 +282,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             FileUtils.writeFile(yesFile, "yes" + SystemUtils.getLineSeparator());
             
             //no separate log file since we can write at the same
-            //final File logFile = getLog(true, true);
+            //final File logFile = getLog("jdk_install");
             final File logFile = null;
             
             final String loggingOption = (logFile!=null) ?
@@ -265,9 +291,19 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             
             SystemUtils.correctFilesPermissions(installer);
             
+            // according to Mandy Chung and Marek Slama:
+            // If NB bundles JDK 6u5, the NB installer has to be modified to add a
+            // new -noregister option to disable JDK registration.
+            // Otherwise, a browser will be popped up during NB+JDK install. 
+            final String registerOption = getProduct().getVersion().
+                    newerOrEquals(Version.getVersion("1.6.0_05")) ? 
+                        " " + NO_REGISTER_JDK_OPTION : 
+                        StringUtils.EMPTY_STRING;
+                
             String [] commands = new String [] {
                 "/bin/sh", "-c",
                 StringUtils.escapePath(installer.getAbsolutePath()) +
+                        registerOption +
                         " < " + StringUtils.escapePath(yesFile.getAbsolutePath()) +
                         loggingOption
             };
@@ -317,39 +353,41 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         }
         return results;
     }
-    
+    private boolean isJDK6U10orLater() {
+        return getProduct().getVersion().newerOrEquals(Version.getVersion("1.6.0_10"));
+    }
+            
     private ExecutionResults runJREInstallerWindows(File jreInstaller, Progress progress) throws InstallationException {
         progress.setDetail(PROGRESS_DETAIL_RUNNING_JRE_INSTALLER);
-        final String [] command ;
+        final List <String> commands = new ArrayList<String> ();
         
-        final File logFile = getLog(false, true);
+        final File logFile = getLog("jre_install");
         
-        if(logFile!=null) {
-            command = new String [] {
-                "msiexec.exe",
-                "/qn",
-                "/i",
-                jreInstaller.getPath(),
-                "IEXPLORER=1",
-                "MOZILLA=1",
-                "/log",
-                logFile.getAbsolutePath()
-            };
-            LogManager.log("... JRE installation log file : " + logFile);
+        if(jreInstaller.getName().equals(JRE_MSI_NAME)) {
+            commands.add("msiexec.exe");
+            commands.add("/qn");
+            commands.add("/i");
+            commands.add(jreInstaller.getPath());
+            commands.add("IEXPLORER=1");
+            commands.add("MOZILLA=1");
+            if (logFile != null) {
+                commands.add("/log");
+                commands.add(logFile.getAbsolutePath());
+                LogManager.log("... JRE installation log file : " + logFile);
+            }
         } else {
-            command = new String [] {
-                "msiexec.exe",
-                "/qn",
-                "/i",
-                jreInstaller.getPath(),
-                "IEXPLORER=1",
-                "MOZILLA=1",
-            };
+            commands.add(jreInstaller.getPath());
+            commands.add("/s");
+            final String loggingOption = (logFile!=null) ?
+            "/log " + BACK_SLASH + QUOTE  + logFile.getAbsolutePath()  + BACK_SLASH + QUOTE +" " : EMPTY_STRING;
+            commands.add(loggingOption);
+
         }
         
+        final String [] command = commands.toArray(new String [] {});
         
         final File location = new File(parseString("$E{ProgramFiles}"),
-                "Java\\jre" + getProduct().getVersion().toJdkStyle());
+                "Java\\jre" + (isJDK6U10orLater() ? "6" : getProduct().getVersion().toJdkStyle()));
         LogManager.log("... JRE installation location (default) : " + location);
         try {
             SystemUtils.setEnvironmentVariable("TEMP",
@@ -377,6 +415,73 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                     ERROR_INSTALL_JRE_ERROR_KEY),e);
         } finally {
             progressThread.finish();
+            if(!jreInstaller.getName().equals(JRE_MSI_NAME)) {
+                try {
+                    FileUtils.deleteFile(jreInstaller);
+                } catch (IOException e) {
+                    LogManager.log("Cannot delete JRE installer file " + jreInstaller, e);                
+                }
+            }
+
+            progress.setPercentage(progress.COMPLETE);
+        }
+    }
+
+    private ExecutionResults runJavaDBInstallerWindows(File javadbInstaller, Progress progress) throws InstallationException {
+        progress.setDetail(PROGRESS_DETAIL_RUNNING_JAVADB_INSTALLER);
+        final String [] command ;
+        
+        final File logFile = getLog("javadb_install");
+        
+        if(logFile!=null) {
+            command = new String [] {
+                "msiexec.exe",
+                "/qn",
+                "/i",
+                javadbInstaller.getPath(),
+                "/log",
+                logFile.getAbsolutePath()
+            };
+            LogManager.log("... JavaDB installation log file : " + logFile);
+        } else {
+            command = new String [] {
+                "msiexec.exe",
+                "/qn",
+                "/i",
+                javadbInstaller.getPath()
+            };
+        }
+        
+        
+        final File location = new File(parseString(SUN_JAVADB_DEFAULT_LOCATION));
+                
+        LogManager.log("... JavaDB installation location (default) : " + location);
+        try {
+            SystemUtils.setEnvironmentVariable("TEMP",
+                    SystemUtils.getTempDirectory().getAbsolutePath(),
+                    EnvironmentScope.PROCESS,
+                    false);
+            SystemUtils.setEnvironmentVariable("TMP",
+                    SystemUtils.getTempDirectory().getAbsolutePath(),
+                    EnvironmentScope.PROCESS,
+                    false);
+        }  catch (NativeException e) {
+            throw new InstallationException(
+                    ResourceUtils.getString(ConfigurationLogic.class,
+                    ERROR_INSTALL_JAVADB_ERROR_KEY),e);
+        }
+        ProgressThread progressThread = new ProgressThread( progress,
+                new File [] {location},
+                getJavaDBInstallationSize());
+        try {
+            progressThread.start();
+            return SystemUtils.executeCommand(command);
+        } catch (IOException e) {
+            throw new InstallationException(
+                    ResourceUtils.getString(ConfigurationLogic.class,
+                    ERROR_INSTALL_JAVADB_ERROR_KEY),e);
+        } finally {
+            progressThread.finish();
             progress.setPercentage(progress.COMPLETE);
         }
     }
@@ -389,7 +494,21 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
      * @return null if jre.msi file for given JRE version is not found
      */
     private File findJREWindowsInstaller() {
-        String installerName = null;
+        if (isJDK6U10orLater()) {
+            // for 6u14+ we additionally bundle public jre installer
+            // for 6u10-6u13, jre.msi is located at the JDK installation directory
+            final String jreFileName = getProduct().getVersion().newerOrEquals(Version.getVersion("1.6.0_14")) ?
+                JRE_INSTALLER_FILE_NAME :
+                JRE_MSI_NAME;
+            
+            File jreInstallerFile = new File(
+                    getProduct().getInstallationLocation(), jreFileName);
+            if (!jreInstallerFile.exists()) {
+                LogManager.log("... JRE installer doesn`t exist : " + jreInstallerFile);
+                return null;
+            }
+            return jreInstallerFile;
+        }
         
         File baseImagesDir  = new File(parseString("$E{CommonProgramFiles}"),
                 "Java\\Update\\Base Images");
@@ -444,12 +563,85 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         LogManager.log("... found JRE windows installer at " + jreInstallerFile.getPath());
         return jreInstallerFile;
     }
+    
+    /** Find path to JavaDB installer ie. javadb.msi file WITHOUT file itself.
+     * @return null if javadb.msi file for given JRE version is not found
+     */
+    private File findJavaDBWindowsInstaller() {
+        if (isJDK6U10orLater()) {
+            // Starting with JDK6U10, javadb.msi is located at the JDK installation directory
+            File javadbInstallerFile = new File(
+                    getProduct().getInstallationLocation(), JAVADB_MSI_NAME);
+            if (!javadbInstallerFile.exists()) {
+                LogManager.log("... JavaDB installer doesn`t exist : " + javadbInstallerFile);
+                return null;
+            }
+            return javadbInstallerFile;
+        }
+
+        File baseImagesDir  = new File(parseString("$E{CommonProgramFiles}"),
+                "Java\\Update\\Base Images");
+        if (!baseImagesDir.exists()) {
+            LogManager.log("... cannot find images dir : " + baseImagesDir);
+            return null;
+        }
+        
+        File [] files = baseImagesDir.listFiles();
+        File jdkDirFile = null;
+        for (int i = 0; i < files.length; i++) {
+            if (files[i].getName().startsWith(JDK_PATCH_DIRECTORY)) {
+                LogManager.log("... using JDK dir : " + files[i]);
+                jdkDirFile = files[i];
+                break;
+            }
+        }
+        if (jdkDirFile==null) {
+            LogManager.log("... cannot find default JDK dir");
+            return null;
+        }
+        if (!jdkDirFile.exists()) {
+            LogManager.log("... default JDK directory does not exist : " + jdkDirFile);
+            return null;
+        }
+        
+        files = jdkDirFile.listFiles();
+        File patchDirFile = null;
+        
+        for (int i = 0; i < files.length; i++) {
+            LogManager.log("... investigating : " + files [i]);
+            if (files[i].getName().startsWith("patch-" + JDK_DEFAULT_INSTALL_DIR)) {
+                patchDirFile = files[i];
+                LogManager.log("... using JDK patch dir : " + patchDirFile);
+                break;
+            }
+        }
+        if (patchDirFile==null) {
+            LogManager.log("... cannot find default JDK patch dir");
+            return null;
+        }
+        if (!patchDirFile.exists()) {
+            LogManager.log("... default JDK patch directory does not exist : " + patchDirFile);
+            return null;
+        }
+        File javadbInstallerFile = new File(patchDirFile,
+                JAVADB_MSI_NAME);
+        if (!javadbInstallerFile.exists()) {
+            LogManager.log("... JavaDB installer doesn`t exist : " + javadbInstallerFile);
+            return null;
+        }
+        LogManager.log("... found JavaDB windows installer at " + javadbInstallerFile.getPath());
+        return javadbInstallerFile;
+    }
+    
     private long getJREinstallationSize() {
         return getProduct().getVersion().getMinor()==5 ?
             70000000L :
             (getProduct().getVersion().getMinor()==6 ?
                 90000000L :
                 100000000L);
+    }
+    private long getJavaDBInstallationSize() {
+        return 30000000L;
     }
     private long getJDKinstallationSize() {
         final long size;
@@ -494,11 +686,44 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             if(key.startsWith("{")) {//all IS-based JDK installations start with this string
                 if(reg.valueExists(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key, "DisplayIcon") &&
                         reg.valueExists(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key,"UninstallString")) {
-                    // this value is created by JDK installer
+                    // this value is created by JDK/JRE installer
                     final String icon = reg.getStringValue(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key, "DisplayIcon");
                     if(icon.endsWith("\\bin\\javaws.exe") && icon.startsWith(location.getAbsolutePath())) {
                         String uninstallString = reg.getStringValue(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key,"UninstallString");
                         int index = uninstallString.indexOf("/I{");
+                        if(index==-1) {
+                            index = uninstallString.indexOf("/X{");
+                        }
+                        if(index!=-1) {
+                            uninstallString = uninstallString.substring(index+2);
+                            if(uninstallString.indexOf("}")!=-1) {
+                                id = uninstallString.substring(0, uninstallString.indexOf("}") + 1);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+        }
+        return id;
+    }
+    private String getJavaDBInstallationID(File location) throws NativeException {
+        String id = null;
+        WindowsNativeUtils utils = (WindowsNativeUtils)SystemUtils.getNativeUtils();
+        WindowsRegistry reg = utils.getWindowsRegistry();
+        String [] keyNames = reg.getSubKeyNames(HKLM, utils.UNINSTALL_KEY);
+        for(String key : keyNames) {
+            if(key.startsWith("{")) {//all IS-based JavaDB installations start with this string
+                if(reg.valueExists(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key, "InstallSource") &&
+                        reg.valueExists(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key,"UninstallString") &&
+                        reg.valueExists(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key,"URLInfoAbout")) {
+                    // this value is created by JavaDB installer
+                    final String urlAbout = reg.getStringValue(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key, "URLInfoAbout");
+                    final File source = new File(reg.getStringValue(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key, "InstallSource"));                    
+                    if(source.equals(location) && urlAbout.equals("http://developers.sun.com/javadb/")) {
+                        String uninstallString = reg.getStringValue(HKLM, utils.UNINSTALL_KEY + reg.SEPARATOR + key,"UninstallString");
+                        int index = uninstallString.indexOf("/X{");
                         if(index!=-1) {
                             uninstallString = uninstallString.substring(index+2);
                             if(uninstallString.indexOf("}")!=-1) {
@@ -521,7 +746,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             
             if(id!=null) {
                 LogManager.log("... uninstall ID : " + id);
-                final File logFile = getLog(true, false);
+                final File logFile = getLog("jdk_uninstall");
                 final String [] commands;
                 if(logFile!=null) {
                     commands = new String [] {"msiexec.exe", "/qn", "/x", id, "/log", logFile.getAbsolutePath()};
@@ -561,7 +786,7 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             
             if(id!=null) {
                 LogManager.log("... uninstall ID : " + id);
-                final File logFile = getLog(false, false);
+                final File logFile = getLog("jre_uninstall");
                 final String [] commands;
                 if(logFile!=null) {
                     commands = new String [] {"msiexec.exe", "/qn", "/x", id, "/log", logFile.getAbsolutePath()};
@@ -582,11 +807,50 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                     progressThread.finish();
                 }
             } else {
-                LogManager.log("... cannot fing JDK in the uninstall section");
+                LogManager.log("... cannot fing JRE in the uninstall section");
             }
             
         } catch (NativeException e) {
             throw new UninstallationException(ERROR_UNINSTALL_JDK_ERROR_KEY,e);
+        } finally {
+            progress.setPercentage(progress.COMPLETE);
+        }
+        return results;
+    }
+    private ExecutionResults runJavaDBUninstallerWindows(Progress progress, File location) throws UninstallationException {
+        ExecutionResults results = null;
+        try{
+            File msiSourceLocation = new File(getProduct().getProperty(JAVADB_INSTALLER_LOCATION_PROPERTY));
+            String id = getJavaDBInstallationID(msiSourceLocation.getParentFile());
+            
+            if(id!=null) {
+                LogManager.log("... uninstall ID : " + id);
+                final File logFile = getLog("javadb_uninstall");
+                final String [] commands;
+                if(logFile!=null) {
+                    commands = new String [] {"msiexec.exe", "/qn", "/x", id, "/log", logFile.getAbsolutePath()};
+                } else {
+                    commands = new String [] {"msiexec.exe", "/qn", "/x", id};
+                }
+                progress.setDetail(PROGRESS_DETAIL_RUNNING_JAVADB_UNINSTALLER);
+                ProgressThread progressThread = new ProgressThread(progress,
+                        new File[] {location}, -1 * FileUtils.getSize(location));
+                try {
+                    progressThread.start();
+                    return SystemUtils.executeCommand(commands);
+                } catch (IOException e) {
+                    throw new UninstallationException(
+                            ResourceUtils.getString(ConfigurationLogic.class,
+                            ERROR_UNINSTALL_JAVADB_ERROR_KEY),e);
+                } finally {
+                    progressThread.finish();
+                }
+            } else {
+                LogManager.log("... cannot fing JavaDB in the uninstall section");
+            }
+            
+        } catch (NativeException e) {
+            throw new UninstallationException(ERROR_UNINSTALL_JAVADB_ERROR_KEY,e);
         } finally {
             progress.setPercentage(progress.COMPLETE);
         }
@@ -597,22 +861,22 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
         return false;
     }
     
-    private File getLog(boolean isJDK, boolean isInstallation) {
+    private File getLog(String suffix) {
         File logFile = LogManager.getLogFile();
         File resultLogFile = null;
         
         if(logFile!=null) {
-            String name = logFile.getName();
+            String name = logFile.getName();            
             
             if(name.lastIndexOf(".")==-1) {
-                name += (isJDK) ? "_jdk" : "_jre";
-                name += (isInstallation) ? "_install" : "_uninstall";
+                name += "_";
+                name += suffix;
                 name += ".log";
             } else {
                 String ext = name.substring(name.lastIndexOf("."));
                 name = name.substring(0, name.lastIndexOf("."));
-                name += (isJDK) ? "_jdk" : "_jre";
-                name += (isInstallation) ? "_install" : "_uninstall";
+                name += "_";
+                name += suffix;
                 name += ext;
             }
             resultLogFile = new File(LogManager.getLogFile().getParentFile(),name);
@@ -631,11 +895,24 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                 
                 final Progress jdkProgress = new Progress();
                 final Progress jreProgress = new Progress();
-                if("true".equals(getProduct().getProperty(JRE_INSTALLED_WINDOWS_PROPERTY))) {                    
-                    overallProgress.addChild(jdkProgress, progress.COMPLETE * 3 / 5 );
-                    overallProgress.addChild(jreProgress, progress.COMPLETE * 2 / 5);
+                final Progress javadbProgress = new Progress();
+                
+                if("true".equals(getProduct().getProperty(JRE_INSTALLED_WINDOWS_PROPERTY))) {
+                    if("true".equals(getProduct().getProperty(JAVADB_INSTALLED_WINDOWS_PROPERTY))) {
+                        overallProgress.addChild(jdkProgress,    progress.COMPLETE * 4 / 7 );
+                        overallProgress.addChild(jreProgress,    progress.COMPLETE * 2 / 7);
+                        overallProgress.addChild(javadbProgress, progress.COMPLETE * 1 / 7);
+                    } else {
+                        overallProgress.addChild(jdkProgress, progress.COMPLETE * 3 / 5 );
+                        overallProgress.addChild(jreProgress, progress.COMPLETE * 2 / 5);
+                    }
                 } else {
-                    overallProgress.addChild(jdkProgress, progress.COMPLETE);
+                    if("true".equals(getProduct().getProperty(JAVADB_INSTALLED_WINDOWS_PROPERTY))) {
+                        overallProgress.addChild(jdkProgress,    progress.COMPLETE * 6 / 7 );                        
+                        overallProgress.addChild(javadbProgress, progress.COMPLETE * 1 / 7);
+                    } else {
+                        overallProgress.addChild(jdkProgress, progress.COMPLETE);
+                    }
                 }
                 
                 results = runJDKUninstallerWindows(jdkProgress, location);                
@@ -651,6 +928,16 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
                                         StringUtils.EMPTY_STRING + results.getErrorCode()));
                             }
                         }
+                        if ("true".equals(getProduct().getProperty(JAVADB_INSTALLED_WINDOWS_PROPERTY))) {
+                            final File javadbLocation = new File(parseString(SUN_JAVADB_DEFAULT_LOCATION));
+                            results = runJavaDBUninstallerWindows(javadbProgress, javadbLocation);
+                            if (results != null && results.getErrorCode() != 0) {
+                                throw new UninstallationException(
+                                        ResourceUtils.getString(ConfigurationLogic.class,
+                                        ERROR_JAVADB_UNINSTALL_SCRIPT_RETURN_NONZERO_KEY,
+                                        StringUtils.EMPTY_STRING + results.getErrorCode()));
+                            }
+                        }                        
                     } else {
                         throw new UninstallationException(
                                 ResourceUtils.getString(ConfigurationLogic.class,
@@ -692,9 +979,16 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
     
     @Override
     public String validateInstallation() {
-        if(super.validateInstallation()!=null) {
+        String message = super.validateInstallation();
+        if(message==null) {
+            File jdkLocation = getProduct().getInstallationLocation();
+            if(JavaUtils.getInfo(jdkLocation)==null) {
+                message = "There is no JDK at " + jdkLocation + " or the installation is corrupted";
+            }
+        }
+        if(message!=null) {
             LogManager.log("JDK validation:");
-            LogManager.log(super.validateInstallation());
+            LogManager.log(message);
             getProduct().setStatus(Status.NOT_INSTALLED);
             getProduct().getParent().removeChild(getProduct());
         }
@@ -811,10 +1105,15 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             "jdk.win.installed";//NOI18N
     public static final String JRE_INSTALLED_WINDOWS_PROPERTY =
             "jre.win.installed";//NOI18N
-    
+    public static final String JAVADB_INSTALLED_WINDOWS_PROPERTY = 
+            "javadb.win.installed";//NOI18N
+    public static final String JAVADB_INSTALLER_LOCATION_PROPERTY =
+            "javadb.msi.location";//NOI18N
     public static final String JDK_INSTALLER_FILE_NAME =
             ResourceUtils.getString(ConfigurationLogic.class,
             "CL.jdk.installer.file");
+    public static final String JRE_INSTALLER_FILE_NAME =
+            "{jre-installer-file}";
     public static final String ERROR_JDK_INSTALL_SCRIPT_RETURN_NONZERO_KEY =
             "CL.error.jdk.installation.return.nonzero";//NOI18N
     public static final String ERROR_JDK_UNINSTALL_SCRIPT_RETURN_NONZERO_KEY =
@@ -823,12 +1122,20 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             "CL.error.jre.uninstallation.return.nonzero";//NOI18N
     public static final String ERROR_JRE_INSTALL_SCRIPT_RETURN_NONZERO_KEY =
             "CL.error.jre.installation.return.nonzero";//NOI18N
+    public static final String ERROR_JAVADB_INSTALL_SCRIPT_RETURN_NONZERO_KEY =
+            "CL.error.javadb.installation.return.nonzero";//NOI18N
+    public static final String ERROR_JAVADB_UNINSTALL_SCRIPT_RETURN_NONZERO_KEY =
+            "CL.error.javadb.uninstallation.return.nonzero";//NOI18N
     public static final String ERROR_INSTALL_JDK_ERROR_KEY =
             "CL.error.install.jdk.exception";//NOI18N
     public static final String ERROR_UNINSTALL_JDK_ERROR_KEY =
             "CL.error.uninstall.jdk.exception";//NOI18N
     public static final String ERROR_INSTALL_JRE_ERROR_KEY =
             "CL.error.install.jre.exception";//NOI18N
+    public static final String ERROR_INSTALL_JAVADB_ERROR_KEY =
+            "CL.error.install.javadb.exception";//NOI18N    
+    public static final String ERROR_UNINSTALL_JAVADB_ERROR_KEY =
+            "CL.error.uninstall.javadb.exception";//NOI18N        
     public static final String ERROR_UNINSTALL_JRE_ERROR_KEY =
             "CL.error.uninstall.jre.exception";//NOI18N
     public static final String ERROR_INSTALL_CANNOT_MOVE_DATA_KEY =
@@ -839,12 +1146,19 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
     public static final String PROGRESS_DETAIL_RUNNING_JRE_INSTALLER =
             ResourceUtils.getString(ConfigurationLogic.class,
             "CL.progress.detail.install.jre");
+    public static final String PROGRESS_DETAIL_RUNNING_JAVADB_INSTALLER =
+            ResourceUtils.getString(ConfigurationLogic.class,
+            "CL.progress.detail.install.javadb");
     public static final String PROGRESS_DETAIL_RUNNING_JDK_UNINSTALLER =
             ResourceUtils.getString(ConfigurationLogic.class,
             "CL.progress.detail.uninstall.jdk");
     public static final String PROGRESS_DETAIL_RUNNING_JRE_UNINSTALLER =
             ResourceUtils.getString(ConfigurationLogic.class,
             "CL.progress.detail.uninstall.jre");
+    public static final String PROGRESS_DETAIL_RUNNING_JAVADB_UNINSTALLER =
+            ResourceUtils.getString(ConfigurationLogic.class,
+            "CL.progress.detail.uninstall.javadb");
+    
     
     public static final String JDK_PATCH_DIRECTORY =
             ResourceUtils.getString(ConfigurationLogic.class,
@@ -854,4 +1168,10 @@ public class ConfigurationLogic extends ProductConfigurationLogic {
             "CL.jdk.install.dir");//NOI18N
     public static final String JRE_MSI_NAME =
             "jre.msi";//NOI18N
+    public static final String JAVADB_MSI_NAME =
+            "javadb.msi";//NOI18N
+    public static final String SUN_JAVADB_DEFAULT_LOCATION =
+            "$E{ProgramFiles}\\Sun\\JavaDB";
+    public static final String NO_REGISTER_JDK_OPTION =
+            "-noregister";
 }
