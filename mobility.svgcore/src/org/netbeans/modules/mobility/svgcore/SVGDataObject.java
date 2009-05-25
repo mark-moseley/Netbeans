@@ -49,7 +49,7 @@ import java.io.OutputStreamWriter;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.logging.Level;
-import java.util.zip.GZIPInputStream;
+import java.util.logging.Logger;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import javax.swing.text.BadLocationException;
@@ -68,6 +68,8 @@ import org.netbeans.modules.xml.multiview.XmlMultiViewEditorSupport;
 import org.netbeans.spi.xml.cookies.CheckXMLSupport;
 import org.netbeans.spi.xml.cookies.DataObjectAdapters;
 import org.netbeans.spi.xml.cookies.ValidateXMLSupport;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
@@ -78,8 +80,8 @@ import org.openide.loaders.SaveAsCapable;
 import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.windows.CloneableTopComponent;
 import org.openide.windows.TopComponent;
 
@@ -90,7 +92,7 @@ import org.openide.windows.TopComponent;
 @SuppressWarnings({"unchecked"})
 public final class SVGDataObject extends XmlMultiViewDataObject {
     private static final long  serialVersionUID = 123471457562776148L;
-    private static final Image SVGFILE_ICON     = Utilities.loadImage("org/netbeans/modules/mobility/svgcore/resources/svg.png"); // NOI18N
+    private static final Image SVGFILE_ICON     = ImageUtilities.loadImage("org/netbeans/modules/mobility/svgcore/resources/svg.png"); // NOI18N
 
     public static final int    XML_VIEW_INDEX   = 0;
     public static final int    SVG_VIEW_INDEX   = 1;
@@ -103,6 +105,7 @@ public final class SVGDataObject extends XmlMultiViewDataObject {
     private transient MultiViewElement m_activeElement = null;
     
     private final DataCache m_dataCache = new XmlMultiViewDataObject.DataCache() {
+        @Override
         public void loadData(FileObject file, FileLock dataLock) throws IOException {
             if ( isSVGZ(file.getExt())) {
                 file = new FileObjectGZIPDelegator(file);
@@ -113,16 +116,50 @@ public final class SVGDataObject extends XmlMultiViewDataObject {
 
     private final class SVGEditorSupport extends XmlMultiViewEditorSupport {
         private static final long  serialVersionUID = 123471457562776148L;
-        
+        private Logger LOG = Logger.getLogger(SVGDataObject.SVGEditorSupport.class.getName());
+        private String m_errorMessage = null;
+
         public SVGEditorSupport() {
             super(SVGDataObject.this);
         }
 
+        @Override
         protected void notifyClosed() {
             super.notifyClosed();
             release();
         }
-        
+
+        @Override
+        public void open() {
+            if (getModel().getModel() != null || getDocument().getLength() == 0){
+                super.open();
+            } else {
+                showErrorDialog(m_errorMessage);
+            }
+        }
+
+        @Override
+        public void edit() {
+            if (getModel().getModel() != null || getDocument().getLength() == 0){
+                super.edit();
+            } else {
+                showErrorDialog(m_errorMessage);
+            }
+        }
+
+        @Override
+        public StyledDocument openDocument() throws IOException {
+            m_errorMessage = null;
+            try{
+                return super.openDocument();
+            } catch (IOException io){
+                m_errorMessage = "Could not open the document: " + io.getMessage();
+                LOG.log(Level.WARNING, io.getMessage());
+                throw io;
+            }
+        }
+
+        @Override
         protected void saveFromKitToStream(StyledDocument doc, EditorKit kit, OutputStream stream)
             throws IOException, BadLocationException {
             FileObject fo = getPrimaryFile();
@@ -139,6 +176,16 @@ public final class SVGDataObject extends XmlMultiViewDataObject {
                 kit.write(new OutputStreamWriter(stream, getEncodingHelper().getEncoding()), doc, 0, doc.getLength());                
             }
         }
+
+        private void showErrorDialog(String message) {
+            if (message != null) {
+                NotifyDescriptor.Message e = new NotifyDescriptor.Message(
+                        message,
+                        NotifyDescriptor.WARNING_MESSAGE);
+                DialogDisplayer.getDefault().notifyLater(e);
+            }
+        }
+
     }
     
     private static final class VisualView extends DesignMultiViewDesc {
@@ -163,10 +210,12 @@ public final class SVGDataObject extends XmlMultiViewDataObject {
             return "multiview_svgview"; //NOI18N
         }
         
+        @Override
         public HelpCtx getHelpCtx() {
             return DEFAULT_HELP;
         }        
         
+        @Override
         public int getPersistenceType() {
             return TopComponent.PERSISTENCE_ONLY_OPENED;
         }
@@ -191,6 +240,7 @@ public final class SVGDataObject extends XmlMultiViewDataObject {
             return "multiview_xml"; //NOI18N
         }
         
+        @Override
         public int getPersistenceType() {
             return TopComponent.PERSISTENCE_ONLY_OPENED;
         }
@@ -218,6 +268,7 @@ public final class SVGDataObject extends XmlMultiViewDataObject {
         SceneManager.log(Level.INFO, "SVGDataObject created for " + pf.getPath()); //NOI18N
     }
         
+    @Override
     public DataCache getDataCache() {
         return m_dataCache;
     }
@@ -269,6 +320,7 @@ public final class SVGDataObject extends XmlMultiViewDataObject {
         SceneManager.log(Level.INFO, "SVGDataObject released for " + getPrimaryFile().getPath()); //NOI18N
     }
     
+    @Override
     protected synchronized XmlMultiViewEditorSupport getEditorSupport() {
         if(editorSupport == null) {
             editorSupport = new SVGEditorSupport();
@@ -284,6 +336,7 @@ public final class SVGDataObject extends XmlMultiViewDataObject {
         };
     }
     
+    @Override
     protected Node createNodeDelegate() {
         return new SVGDataNode(this);
     }
