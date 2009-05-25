@@ -42,16 +42,13 @@
 package org.netbeans.modules.cnd.debugger.gdb.utils;
 
 import java.io.UnsupportedEncodingException;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.CoderResult;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
+import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.netbeans.modules.cnd.debugger.gdb.GdbVariable;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
@@ -238,6 +235,79 @@ public class GdbUtils {
         return false;
     }
     
+    private static abstract class PairProcessor {
+        public abstract void onPair(String key, String value);
+    }
+
+    // Debugger gdb can send different messages
+    // Examples:
+    // 1. at breakpoint
+    //  reason="breakpoint-hit",bkptno="3",thread-id="1",
+    //  frame={addr="0x0040132a",func="main",
+    //  args=[{name="argc",value="1"},{name="argv",value="0x6c1f38"}],
+    //  file="mp.cc",line="38"}
+    // 2. after "Step Into" and "Step Over"
+    //  reason="end-stepping-range",thread-id="1",
+    //  frame={addr="0x004011e8",func="main",
+    //  args=[{name="argc",value="1"},{name="argv",value="0x6c1f38"}],
+    //  file="mp.cc",line="20"}
+    // 3. after "Step Out"
+    //  reason="function-finished",thread-id="1",
+    //  frame={addr="0x00403e03",func="main",
+    //  args=[{name="argc",value="1"},{name="argv",value="0x6f19a8"}],
+    //  file="quote.cc",fullname="g:/tmp/nik/Quote1/quote.cc",
+    //  line="131"},gdb-result-var="$1",return-value="-1"
+    private static void processString(String info, PairProcessor processor) {
+        int len = info.length();
+        int i = 0;
+        boolean isWindows = Utilities.isWindows();
+        
+        mainLoop: while (i < len) {
+            int tstart = i++;
+
+            i = info.indexOf('=', i);
+            if (i == -1) {
+                break;
+            }
+
+            String key = info.substring(tstart, i);
+
+            // jump to the first symbol after =
+            i++;
+
+            int tend;
+            switch (info.charAt(i)) {
+                case '{':
+                    tend = findMatchingCurly(info, i++);
+                    break;
+                case '"':
+                    i++;
+                    tend = findEndOfString(info, i);
+                    break;
+                case '[':
+                    tend = findMatchingBrace(info, i++);
+                    break;
+                default:
+                    break mainLoop;
+            }
+
+            if (tend == -1) {
+                break;
+            }
+
+            // put the value in the map and prepare for the next property
+            String value = info.substring(i, tend);
+            if (isWindows && value.startsWith("/cygdrive/")) { // NOI18N
+                value = value.toUpperCase().charAt(10) + ":" + value.substring(11); // NOI18N
+            }
+            if (key.equals("fullname") || key.equals("file")) { // NOI18N
+                value = gdbToUserEncoding(value); // possibly convert multi-byte fields
+            }
+            processor.onPair(key, value);
+            i = tend + 2;
+        }
+    }
+    
     /**
      *  Parse the input string for key/value pairs. Each key should be unique so
      *  results can be stored in a map.
@@ -246,59 +316,13 @@ public class GdbUtils {
      *  @return A HashMap containing each key/value
      */
     public static Map<String, String> createMapFromString(String info) {
-        HashMap<String, String> map = new HashMap<String, String>();
-        String key, value;
-        int tstart, tend;
-        int len = info.length();
-        int i = 0;
-        char ch;
-        
-        // Debugger gdb can send different messages
-        // Examples:
-        // 1. at breakpoint
-        //  reason="breakpoint-hit",bkptno="3",thread-id="1",
-        //  frame={addr="0x0040132a",func="main",
-        //  args=[{name="argc",value="1"},{name="argv",value="0x6c1f38"}],
-        //  file="mp.cc",line="38"}
-        // 2. after "Step Into" and "Step Over"
-        //  reason="end-stepping-range",thread-id="1",
-        //  frame={addr="0x004011e8",func="main",
-        //  args=[{name="argc",value="1"},{name="argv",value="0x6c1f38"}],
-        //  file="mp.cc",line="20"}
-        // 3. after "Step Out"
-        //  reason="function-finished",thread-id="1",
-        //  frame={addr="0x00403e03",func="main",
-        //  args=[{name="argc",value="1"},{name="argv",value="0x6f19a8"}],
-        //  file="quote.cc",fullname="g:/tmp/nik/Quote1/quote.cc",
-        //  line="131"},gdb-result-var="$1",return-value="-1"
-        
-        while (i < len) {
-            tstart = i++;
-            while (info.charAt(i++) != '=') {
+        final HashMap<String, String> map = new HashMap<String, String>();
+        processString(info, new PairProcessor() {
+            @Override
+            public void onPair(String key, String value) {
+                map.put(key, value);
             }
-            key = info.substring(tstart, i - 1);
-            if ((ch = info.charAt(i++)) == '{') {
-                tend = findMatchingCurly(info, i) - 1;
-            } else if (ch == '"') {
-                tend = findEndOfString(info, i);
-            } else if (ch == '[') {
-                tend = findMatchingBrace(info, i);
-            } else {
-                break;
-            }
-            
-            // put the value in the map and prepare for the next property
-            value = info.substring(i, tend);
-            if (Utilities.isWindows() && value.startsWith("/cygdrive/")) { // NOI18N
-                value = value.charAt(10) + ":" + value.substring(11); // NOI18N
-            }
-            if (key.equals("fullname") || key.equals("file")) { // NOI18N
-                value = gdbToUserEncoding(value); // possibly convert multi-byte fields
-            }
-            map.put(key, value);
-            i = tend + 2;
-        }
-        
+        });
         return map;
     }
     
@@ -312,7 +336,7 @@ public class GdbUtils {
             next = (i + 1) < chars.length ? chars[i + 1] : 0;
             if (ch == '\\' && last != '\\' && next != '\\') {
                 char[] charVal = {chars[++i], chars[++i], chars[++i]};
-                ch = (char) Integer.valueOf(String.valueOf(charVal), 8).intValue();
+                ch = (char) Integer.parseInt(String.valueOf(charVal), 8);
             }
             _bytes.add((byte) ch);
             last = chars[i];
@@ -330,7 +354,7 @@ public class GdbUtils {
         return string;
     }
     
-    public static String utfToGdb(String string) {
+    /*public static String utfToGdb(String string) {
         String lang = System.getenv("LANG") + System.getenv("LC_ALL"); // NOI18N
         
         if (lang != null && (lang.contains("UTF-8") || lang.contains("UTF8"))) { // NOI18N
@@ -346,7 +370,7 @@ public class GdbUtils {
             }
         }
         return string;
-    }
+    }*/
     
     public static boolean isMultiByte(String file) {
         char[] ch = file.toCharArray();
@@ -359,48 +383,39 @@ public class GdbUtils {
     }
     
     /**
-     *  Parse the input string for key/value pairs. The keys are not guaranteed
-     *  to be unique and order may be important, so each key/value pair is stored
-     *  in an ArrayList.
+     *  Parse the input string for key/value pairs.
      *
-     *  @param info A string of key/value pairs where each key/value
-     *  @return An ArrayList with each entry of the form key=value
+     *  @param info A string of key/value pairs
+     *  @return An ArrayList with each entry as a value (keys are thrown away, use createMapFromString if you need them)
      */
     public static List<String> createListFromString(String info) {
+        final List<String> list = new ArrayList<String>();
+        processString(info, new PairProcessor() {
+            @Override
+            public void onPair(String key, String value) {
+                list.add(value);
+            }
+        });
+        return list;
+    }
+
+    /*
+     * Create a list from the list of values:
+     * {addr="0x00001390",data=["0x00","0x01"]},
+     * {addr="0x00001392",data=["0x02","0x03"]},
+     * {addr="0x00001394",data=["0x04","0x05"]}
+     */
+    public static List<String> createListOfValues(String info) {
         List<String> list = new ArrayList<String>();
-        String key, value;
-        int tstart, tend;
-        int len = info.length();
-        int idx = 0;
-        char ch;
-        
-        while (idx < len) {
-            tstart = idx++;
-            while (info.charAt(idx++) != '=') {
+        int start = info.indexOf('{'); // NOI18N
+        while (start != -1) {
+            int end = findMatchingCurly(info, start);
+            if (end == -1) {
+                break;
             }
-            key = info.substring(tstart, idx - 1);
-            if ((ch = info.charAt(idx++)) == '{') {
-                tend = findMatchingCurly(info, idx);
-            } else if (ch == '"') {
-                tend = findEndOfString(info, idx);
-            } else {
-                throw new IllegalStateException(NbBundle.getMessage(
-                        GdbUtils.class, "ERR_UnexpectedGDBReasonMessage")); // NOI18N
-            }
-            
-            // put the value in the list and prepare for the next property
-            value = info.substring(idx, tend);
-            if (Utilities.isWindows() && value.startsWith("/cygdrive/")) { // NOI18N
-                value = value.charAt(10) + ":" + value.substring(11); // NOI18N
-            }
-            if (key.equals("fullname") || key.equals("file")) { // NOI18N
-                value = gdbToUserEncoding(value); // possibly convert multi-byte fields
-            }
-            list.add(key + "=" + value); // NOI18N
-            idx = tend + 1;
-            idx++;
+            list.add(info.substring(start+1, end));
+            start = info.indexOf('{', end); // NOI18N
         }
-        
         return list;
     }
     
@@ -426,7 +441,7 @@ public class GdbUtils {
             if (pos2 != -1) {
                 name = frag.substring(7, pos2 - 1);
                 value = frag.substring(pos2 + 8, frag.length() - 2); // strip double quotes
-                list.add(new GdbVariable(name, null, value));
+                list.add(new GdbVariable(name, value));
             }
             idx = info.indexOf('{', pos);
         }
@@ -445,7 +460,7 @@ public class GdbUtils {
         String name, value; 
         List<GdbVariable> list = new ArrayList<GdbVariable>();
         int len = info.length();
-        int pos, pos2;
+        int pos;
         int idx = 0;
         
         while (len > 0) {
@@ -458,7 +473,7 @@ public class GdbUtils {
                 if (pos > 0) {
                     name = frag.substring(7, pos);
                     value = frag.substring(pos + 9, frag.length() - 2);
-                    list.add(new GdbVariable(name, null, value));
+                    list.add(new GdbVariable(name, value));
                 }
             }
         }
@@ -474,7 +489,6 @@ public class GdbUtils {
         if (info != null && info.indexOf("\\n") != -1) { // NOI18N
             StringBuilder s = new StringBuilder();
             int idx = 0;
-            char last = 0;
             int pos1, pos2, pos3;
             boolean inDoubleQuote = false;
             boolean inSingleQuote = false;
@@ -489,14 +503,14 @@ public class GdbUtils {
             while (idx < info.length()) {
                 char ch = info.charAt(idx);
                 if (inDoubleQuote) {
-                    if (ch == '"' && last != '\\') {
+                    if (ch == '"' && !isSlashBefore(info, idx)) {
                         inDoubleQuote = false;
                     }
                 } else if (inSingleQuote) {
-                    if (ch == '\'' && last != '\\') {
+                    if (ch == '\'' && !isSlashBefore(info, idx)) {
                         inSingleQuote = false;
                     }
-                } else if (ch == '\"' && last != '\\') {
+                } else if (ch == '\"' && !isSlashBefore(info, idx)) {
                     if (inDoubleQuote) {
                         inDoubleQuote = false;
                     } else {
@@ -504,7 +518,7 @@ public class GdbUtils {
                     }
                 } else if (ch == '\'') {
                     inSingleQuote = true;
-                } else if (ch == 'n' && last == '\\') {
+                } else if (ch == 'n' && !isSlashBefore(info, idx)) {
                     s.deleteCharAt(s.length() - 1);
                     ch = 0;
                 } else if (info.substring(idx).startsWith("members of ")) { // NOI18N
@@ -518,7 +532,6 @@ public class GdbUtils {
                 if (ch != 0) {
                     s.append(ch);
                 }
-                last = ch;
                 idx++;
             }
             return s.toString();
@@ -528,18 +541,14 @@ public class GdbUtils {
     }
     
     /** Find the end of a string by looking for a non-escaped double quote */
-    private static int findEndOfString(String s, int idx) {
-        char last = '\0';
-        char ch;
+    public static int findEndOfString(String s, int idx) {
         int len = s.length();
-        
-        while (len-- > 0) {
-            if ((ch = s.charAt(idx)) == '"' && last != '\\') {
+
+        for (;idx < len;idx++) {
+            char ch = s.charAt(idx);
+            if (ch == '"' && !isSlashBefore(s, idx)) {
                 return idx;
-            } else {
-                idx++;
-                last = ch;
-            }
+            } 
         }
         throw new IllegalStateException(NbBundle.getMessage(
                 GdbUtils.class, "ERR_UnexpectedGDBStopMessage")); // NOI18N
@@ -600,7 +609,6 @@ public class GdbUtils {
     private static int findMatchingPair(String pair, String s, int idx) {
         char lbrace = pair.charAt(0);
         char rbrace = pair.charAt(1);
-        char last = ' ';
         int count = 0;
         boolean inDoubleQuote = false;
         boolean inSingleQuote = false;
@@ -615,21 +623,17 @@ public class GdbUtils {
         while (idx < s.length()) {
             char ch = s.charAt(idx);
             if (inDoubleQuote) {
-                if (ch == '"' && last != '\\') {
+                if (ch == '"' && !isSlashBefore(s, idx)) {
                     inDoubleQuote = false;
                 }
             } else if (inSingleQuote) {
-                if (ch == '\'' && last != '\\') {
+                if (ch == '\'' && !isSlashBefore(s, idx)) {
                     inSingleQuote = false;
                 }
             } else if (ch == rbrace && count == 0) {
                 return idx;
-            } else if (ch == '\"' && last != '\\') {
-                if (inDoubleQuote) {
-                    inDoubleQuote = false;
-                } else {
-                    inDoubleQuote = true;
-                }
+            } else if (ch == '\"' && !isSlashBefore(s, idx)) {
+                inDoubleQuote = !inDoubleQuote;
             } else if (ch == '\'') {
                 inSingleQuote = true;
             } else {
@@ -639,11 +643,24 @@ public class GdbUtils {
                     count--;
                 }
             }
-            last = ch;
             idx++;
         }
         
         return -1;
+    }
+
+    /**
+     * Checks if the character at the specified pos has an odd number of slahses before
+     * ///" - is ok, //" is not ok
+     */
+    private static boolean isSlashBefore(String source, int pos) {
+        int count = 0;
+        pos--;
+        while (pos > 0 && source.charAt(pos) == '\\') {
+            pos--;
+            count++;
+        }
+        return count % 2 == 1;
     }
     
     /**
@@ -665,7 +682,6 @@ public class GdbUtils {
      * @param idx The starting index
      */
     public static int findNextComma(String s, int idx, int skipCount) {
-        char last = ' ';
         char ch;
         int i;
         boolean inDoubleQuote = false;
@@ -680,11 +696,11 @@ public class GdbUtils {
         while (idx < s.length()) {
             ch = s.charAt(idx);
             if (inDoubleQuote) {
-                if (ch == '"' && last != '\\') {
+                if (ch == '"' && !isSlashBefore(s, idx)) {
                     inDoubleQuote = false;
                 }
             } else if (inSingleQuote) {
-                if (ch == '\'' && last != '\\') {
+                if (ch == '\'' && !isSlashBefore(s, idx)) {
                     inSingleQuote = false;
                 }
             } else if (ch == '{') {
@@ -710,16 +726,15 @@ public class GdbUtils {
                 }
             } else if (ch == ',' && !isMultiString(s, idx)) {
                 return idx;
-            } else if (ch == '\"' && last != '\\') {
+            } else if (ch == '\"' && !isSlashBefore(s, idx)) {
                 if (inDoubleQuote) {
                     inDoubleQuote = false;
                 } else {
                     inDoubleQuote = true;
                 }
-            } else if (ch == '\'' && last != '\\') {
+            } else if (ch == '\'' && !isSlashBefore(s, idx)) {
                 inSingleQuote = true;
             }
-            last = ch;
             idx++;
         }
         
@@ -754,7 +769,6 @@ public class GdbUtils {
      * @param idx The starting index
      */
     public static int findNextSemi(String s, int idx) {
-        char last = ' ';
         char ch;
         int i;
         boolean inDoubleQuote = false;
@@ -773,11 +787,11 @@ public class GdbUtils {
         while (idx < s.length()) {
             ch = s.charAt(idx);
             if (inDoubleQuote) {
-                if (ch == '"' && last != '\\') {
+                if (ch == '"' && !isSlashBefore(s, idx)) {
                     inDoubleQuote = false;
                 }
             } else if (inSingleQuote) {
-                if (ch == '\'' && last != '\\') {
+                if (ch == '\'' && !isSlashBefore(s, idx)) {
                     inSingleQuote = false;
                 }
             } else if (ch == '{') {
@@ -803,16 +817,15 @@ public class GdbUtils {
                 }
             } else if (ch == ';') {
                 return idx;
-            } else if (ch == '\"' && last != '\\') {
+            } else if (ch == '\"' && !isSlashBefore(s, idx)) {
                 if (inDoubleQuote) {
                     inDoubleQuote = false;
                 } else {
                     inDoubleQuote = true;
                 }
-            } else if (ch == '\'' && last != '\\') {
+            } else if (ch == '\'' && !isSlashBefore(s, idx)) {
                 inSingleQuote = true;
             }
-            last = ch;
             idx++;
         }
         
@@ -838,5 +851,88 @@ public class GdbUtils {
             }
         }
         return -1;
+    }
+    
+    public static String threadId() {
+        Thread cur = Thread.currentThread();
+        return cur.getName() + ':' + Long.toString(cur.getId());
+    }
+
+    public static int log10(int n) {
+        int l = 1;
+        while ((n = n / 10) > 0) {
+            l++;
+        }
+        return l;
+    }
+
+    // We have the same in BreakpointsNodeModel
+    private static final String ZEROS = "            "; // NOI18N
+
+    public static String zeros(int n) {
+        // Perf & mem optimization
+        switch (n) {
+            case 1 : return " "; // NOI18N
+            case 2 : return "  "; // NOI18N
+        }
+        if (n < ZEROS.length()) {
+            return ZEROS.substring(0, n);
+        } else {
+            String z = ZEROS;
+            while (z.length() < n) {
+                z += " ";  // NOI18N
+            }
+            return z;
+        }
+    }
+
+    public static boolean comparePaths(int platform, String path1, String path2) {
+        path1 = path1.trim();
+        path2 = path2.trim();
+        // we need to convert paths to unix-like style, so that normalization works correctly
+        if (platform == PlatformTypes.PLATFORM_WINDOWS) {
+            path1 = WinPath.win2cyg(path1).toLowerCase();
+            path2 = WinPath.win2cyg(path2).toLowerCase();
+        }
+        // see isssue 152489, normalization is required to correctly compare paths with ..
+        try {
+            String norPath1 = new URI(path1).normalize().getPath();
+            String norPath2 = new URI(path2).normalize().getPath();
+            // use normalized paths only if both paths have been normalized correctly
+            path1 = norPath1;
+            path2 = norPath2;
+        } catch (Exception e) {
+            // do nothing
+        }
+        return path1.equals(path2);
+    }
+
+    /**
+     * Compare the executable path from gdb (via the <i>info files</i> command to the executable path
+     * from the project data. This comparison is <b>very</b> system dependent. For MacOS, all compares
+     * are done in lower case. For Unix, they're done as-is. The most difficult platform is Windows,
+     * where, depending on the gdb provider, I can see a Cygwin name, either forward or backward slashes,
+     * either single or double backslashes (MinGW). The ".exe" may also be missing in some cases.
+     *
+     * @param exe1 The first path
+     * @param exe2 The second path
+     * @return True if exe1 and exe2 resolve to the same executable
+     */
+    public static boolean compareExePaths(int platform, String exe1, String exe2) {
+        if (platform == PlatformTypes.PLATFORM_WINDOWS) {
+            exe1 = removeExe(exe1);
+            exe2 = removeExe(exe2);
+        } else if (platform == PlatformTypes.PLATFORM_MACOSX) {
+            exe1 = exe1.toLowerCase();
+            exe2 = exe2.toLowerCase();
+        }
+        return comparePaths(platform, exe1, exe2);
+    }
+
+    private static String removeExe(String exe) {
+        if (exe.endsWith(".exe")) { // NOI18N
+            return exe.substring(0, exe.length() - 4);
+        }
+        return exe;
     }
 }
