@@ -71,10 +71,12 @@ import org.netbeans.modules.cnd.api.model.xref.CsmReferenceKind;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceRepository;
 import org.netbeans.modules.cnd.api.model.xref.CsmReferenceResolver;
 import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.netbeans.modules.cnd.refactoring.support.CsmRefactoringUtils;
 import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.refactoring.api.ui.RefactoringActionsFactory;
 import org.netbeans.spi.editor.highlighting.support.PositionsBag;
 import org.openide.cookies.EditorCookie;
+import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
 import org.openide.text.NbDocument;
@@ -169,16 +171,28 @@ public class InstantRenamePerformer implements DocumentListener, KeyListener {
                 Utilities.setStatusBoldText(target, getString("no-instant-rename")); // NOI18N
                 return;
             }
-            
-            if (allowInstantRename(ref)) {
+
+            boolean doFullRename = true;
+            if (allowInstantRename(ref, dobj.getPrimaryFile())) {
                 Collection<CsmReference> changePoints = computeChangePoints(ref);
-                //String ident = ref.getText();
-                doInstantRename(changePoints, target, caret);
-            } else {
+                if (!changePoints.isEmpty()) {
+                    doFullRename = false;
+                    doInstantRename(changePoints, target, caret);
+                }
+            }
+            if (doFullRename) {
                 doFullRename(dobj, target);
             }
         } catch (BadLocationException e) {
             Exceptions.printStackTrace(e);
+        }
+    }
+
+    private static boolean allowInstantRename(CsmReference ref, FileObject fo) {
+        if (CsmRefactoringUtils.isRefactorable(fo)) {
+            return allowInstantRename(ref);
+        } else {
+            return false;
         }
     }
     
@@ -286,7 +300,7 @@ public class InstantRenamePerformer implements DocumentListener, KeyListener {
     public void keyReleased(KeyEvent e) {
     }
 
-    private void release() {
+    private synchronized void release() {
 	target.putClientProperty(InstantRenamePerformer.class, null);
         if (doc instanceof BaseDocument) {
             ((BaseDocument) doc).removePostModificationDocumentListener(this);
@@ -297,7 +311,7 @@ public class InstantRenamePerformer implements DocumentListener, KeyListener {
 	region = null;
 	doc = null;
 	target = null;
-    instance=null;
+        instance = null;
     }
 
     private static InstantRenamePerformer instance = null;
