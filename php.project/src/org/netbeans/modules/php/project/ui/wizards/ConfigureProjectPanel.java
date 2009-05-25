@@ -45,14 +45,17 @@ import org.netbeans.modules.php.project.ui.SourcesFolderProvider;
 import org.netbeans.modules.php.project.ui.LocalServer;
 import java.awt.Component;
 import java.io.File;
-import java.io.FilenameFilter;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import javax.swing.MutableComboBoxModel;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.queries.FileEncodingQuery;
 import org.netbeans.modules.php.project.environment.PhpEnvironment;
 import org.netbeans.modules.php.project.ui.Utils;
@@ -77,12 +80,6 @@ public class ConfigureProjectPanel implements WizardDescriptor.Panel<WizardDescr
     static final String LOCAL_SERVERS = "localServers"; // NOI18N
     static final String ENCODING = "encoding"; // NOI18N
     static final String ROOTS = "roots"; // NOI18N
-
-    private static final FilenameFilter NB_FILENAME_FILTER = new FilenameFilter() {
-        public boolean accept(File dir, String name) {
-            return "nbproject".equals(name); // NOI18N
-        }
-    };
 
     private final String[] steps;
     private final NewPhpProjectWizardIterator.WizardType wizardType;
@@ -134,11 +131,14 @@ public class ConfigureProjectPanel implements WizardDescriptor.Panel<WizardDescr
                 } else {
                     configureProjectPanelVisual.setLocalServerModel(new LocalServer.ComboBoxModel(LocalServer.PENDING_LOCAL_SERVER));
                     configureProjectPanelVisual.setState(false);
-                    fireChangeEvent();
                     canceled = false;
                     PhpEnvironment.get().readDocumentRoots(new PhpEnvironment.ReadDocumentRootsNotifier() {
-                        public void finished(List<DocumentRoot> documentRoots) {
-                            initLocalServers(documentRoots);
+                        public void finished(final List<DocumentRoot> documentRoots) {
+                            SwingUtilities.invokeLater(new Runnable() {
+                                public void run() {
+                                    initLocalServers(documentRoots);
+                                }
+                            });
                         }
                     });
                 }
@@ -302,6 +302,10 @@ public class ConfigureProjectPanel implements WizardDescriptor.Panel<WizardDescr
         return projectName;
     }
 
+    private File getProjectFolder(String projectName) {
+        return new File(getProjectFolder().getParentFile(), projectName);
+    }
+
     private File getProjectFolder() {
         File projectFolder = (File) descriptor.getProperty(PROJECT_DIR);
         if (projectFolder == null) {
@@ -367,17 +371,26 @@ public class ConfigureProjectPanel implements WizardDescriptor.Panel<WizardDescr
         descriptor.putProperty(RunConfigurationPanel.COPY_SRC_TARGETS, new LocalServer.ComboBoxModel(localServers.toArray(new LocalServer[size])));
 
         // create & set a new model for document roots
-        MutableComboBoxModel model = new LocalServer.ComboBoxModel(new LocalServer(getProjectFolder().getAbsolutePath()));
+        File projectFolder = FileUtil.normalizeFile(getProjectFolder(projectName));
+        LocalServer selected = new LocalServer(projectFolder.getAbsolutePath());
+        MutableComboBoxModel model = new LocalServer.ComboBoxModel(selected);
         for (DocumentRoot root : documentRoots) {
             LocalServer ls = new LocalServer(root.getDocumentRoot() + File.separator + projectName);
             ls.setHint(root.getHint());
             model.addElement(ls);
             if (root.isPreferred()) {
-                model.setSelectedItem(ls);
+                selected = ls;
             }
         }
+        model.setSelectedItem(selected);
+        // store settings
+        descriptor.putProperty(SOURCES_FOLDER, selected);
+        descriptor.putProperty(LOCAL_SERVERS, model);
+        descriptor.putProperty(PROJECT_DIR, projectFolder);
+        // update UI
         configureProjectPanelVisual.setLocalServerModel(model);
         configureProjectPanelVisual.setProjectName(projectName);
+        configureProjectPanelVisual.setProjectFolder(projectFolder.getAbsolutePath());
 
         configureProjectPanelVisual.setState(true);
         fireChangeEvent();
@@ -417,13 +430,23 @@ public class ConfigureProjectPanel implements WizardDescriptor.Panel<WizardDescr
         return null;
     }
 
-    // #137230
+    // #137230, #165918
     private boolean isProjectAlready(File projectFolder) {
         if (!projectFolder.exists()) {
             return false;
         }
-        File[] kids = projectFolder.listFiles(NB_FILENAME_FILTER);
-        return kids != null && kids.length > 0;
+
+        Project prj = null;
+        boolean foundButBroken = false;
+        try {
+            prj = ProjectManager.getDefault().findProject(FileUtil.toFileObject(projectFolder));
+        } catch (IOException ex) {
+            foundButBroken = true;
+        } catch (IllegalArgumentException ex) {
+            // we have passed non-folder - should be already handled
+            assert false : "Should not get here";
+        }
+        return prj != null || foundButBroken;
     }
 
     private String validateSources(boolean children) {
