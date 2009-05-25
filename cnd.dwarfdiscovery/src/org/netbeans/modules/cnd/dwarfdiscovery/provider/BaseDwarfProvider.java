@@ -45,12 +45,10 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import org.netbeans.modules.cnd.discovery.api.DiscoveryProvider;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
 import org.netbeans.modules.cnd.discovery.api.DiscoveryUtils;
@@ -61,7 +59,7 @@ import org.netbeans.modules.cnd.dwarfdump.CompilationUnit;
 import org.netbeans.modules.cnd.dwarfdump.Dwarf;
 import org.netbeans.modules.cnd.dwarfdump.dwarfconsts.LANG;
 import org.netbeans.modules.cnd.dwarfdump.exception.WrongFileFormatException;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -116,6 +114,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         } finally {
             PathCache.dispose();
             grepBase.clear();
+            getCommpilerSettings().dispose();
         }
     }
 
@@ -128,7 +127,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         if (p != null) {
             String s = (String) p.getValue();
             if (s.length() > 0) {
-                restrictSourceRoot = FileUtil.normalizeFile(new File(s)).getAbsolutePath();
+                restrictSourceRoot = CndFileUtils.normalizeFile(new File(s)).getAbsolutePath();
             }
         }
         String restrictCompileRoot = null;
@@ -136,7 +135,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         if (p != null) {
             String s = (String) p.getValue();
             if (s.length() > 0) {
-                restrictCompileRoot = FileUtil.normalizeFile(new File(s)).getAbsolutePath();
+                restrictCompileRoot = CndFileUtils.normalizeFile(new File(s)).getAbsolutePath();
             }
         }
         for (SourceFileProperties f : getSourceFileProperties(file, map)) {
@@ -302,7 +301,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         return list;
     }
 
-    private Map<String,List<String>> grepBase = new ConcurrentHashMap<String, List<String>>();
+    private Map<String,GrepEntry> grepBase = new ConcurrentHashMap<String, GrepEntry>();
     
     public CompilerSettings getCommpilerSettings(){
         return myCommpilerSettings;
@@ -313,6 +312,12 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
     }
     private CompilerSettings myCommpilerSettings;
 
+    public static class GrepEntry {
+        List<String> includes = new ArrayList<String>();
+        String firstMacro = null;
+        int firstMacroLine = -1;
+    }
+
     public static class CompilerSettings{
         private List<String> systemIncludePathsC;
         private List<String> systemIncludePathsCpp;
@@ -320,7 +325,6 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         private Map<String,String> systemMacroDefinitionsCpp;
         private Map<String,String> normalizedPaths = new ConcurrentHashMap<String, String>();
         private String compileFlavor;
-        private String compileDirectory;
         private String cygwinDriveDirectory;
         
         public CompilerSettings(ProjectProxy project){
@@ -329,7 +333,6 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
             systemMacroDefinitionsCpp = DiscoveryUtils.getSystemMacroDefinitions(project, true);
             systemMacroDefinitionsC = DiscoveryUtils.getSystemMacroDefinitions(project,false);
             compileFlavor = DiscoveryUtils.getCompilerFlavor(project);
-            compileDirectory = DiscoveryUtils.getCompilerDirectory(project);
             cygwinDriveDirectory = DiscoveryUtils.getCygwinDrive(project);
         }
         
@@ -359,7 +362,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         }
 
         private String normalizePath(String path){
-            path = FileUtil.normalizeFile(new File(path)).getAbsolutePath();
+            path = CndFileUtils.normalizeFile(new File(path)).getAbsolutePath();
             if (Utilities.isWindows()) {
                 path = path.replace('\\', '/');
             }
@@ -370,12 +373,16 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
             return compileFlavor;
         }
 
-        public String getCompileDirectory() {
-            return compileDirectory;
-        }
-
         public String getCygwinDrive() {
             return cygwinDriveDirectory;
+        }
+
+        private void dispose(){
+            systemIncludePathsC.clear();
+            systemIncludePathsCpp.clear();
+            systemMacroDefinitionsC.clear();
+            systemMacroDefinitionsCpp.clear();
+            normalizedPaths.clear();
         }
     }
 
