@@ -42,44 +42,41 @@
 package org.netbeans.modules.html.editor.indent;
 
 import javax.swing.text.BadLocationException;
-import org.netbeans.api.editor.mimelookup.MimePath;
-import org.netbeans.api.lexer.Language;
-import org.netbeans.api.lexer.LanguagePath;
-import org.netbeans.editor.ext.html.HTMLLexerFormatter;
-import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.editor.indent.spi.Context;
 import org.netbeans.modules.editor.indent.spi.ExtraLock;
 import org.netbeans.modules.editor.indent.spi.IndentTask;
+import org.openide.util.Lookup;
+import org.openide.util.lookup.Lookups;
 
 /**
  * Implementation of IndentTask for text/html mimetype.
  *
  * @author Marek Fukala
  */
-public class HtmlIndentTask implements IndentTask {
+public class HtmlIndentTask implements IndentTask, Lookup.Provider {
 
-    private Context context;
+    private HtmlIndenter indenter;
+    private Lookup lookup;
 
     HtmlIndentTask(Context context) {
-        this.context = context;
+        indenter = new HtmlIndenter(context);
+        lookup = Lookups.singleton(indenter.createFormattingContext());
     }
 
     public void reindent() throws BadLocationException {
-        getFormatter().process(context);
+//        long st = System.currentTimeMillis();
+//        getFormatter().process(context);
+//        Logger.getLogger("TIMER").log(Level.FINE, "HTML Reindent",
+//                    new Object[] {fo, System.currentTimeMillis() - st});
+        indenter.reindent();
     }
 
     public ExtraLock indentLock() {
         return null;
     }
 
-    private HTMLLexerFormatter getFormatter() {
-        MimePath mimePath = MimePath.parse (context.mimePath ());
-        LanguagePath languagePath = LanguagePath.get (Language.find (mimePath.getMimeType (0)));
-        
-        for (int i = 1; i < mimePath.size(); i++) {
-            languagePath = languagePath.embedded(Language.find(mimePath.getMimeType(i)));
-        }
-
-        return new HTMLLexerFormatter(languagePath);
+    public Lookup getLookup() {
+        return lookup;
     }
+    
 }
