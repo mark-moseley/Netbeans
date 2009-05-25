@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -70,17 +70,16 @@ public class InstalledModuleProvider implements InstalledUpdateProvider {
         return getDefault ().getModuleInfos (false);
     }
     
-    private Map<String, ModuleInfo> getModuleInfos (boolean force) {
+    private synchronized  Map<String, ModuleInfo> getModuleInfos (boolean force) {
         if (moduleInfos == null || force) {
             moduleInfos = new HashMap<String, ModuleInfo> ();
             Collection<? extends ModuleInfo> infos = Collections.unmodifiableCollection (result.allInstances ());
             for (ModuleInfo info: infos) {
                 moduleInfos.put (info.getCodeNameBase (), info);
-            }
-            
+            }            
         }
         assert moduleInfos != null;
-        return moduleInfos;
+        return new HashMap<String, ModuleInfo> (moduleInfos);
     }
 
     public static InstalledModuleProvider getDefault () {
@@ -94,10 +93,14 @@ public class InstalledModuleProvider implements InstalledUpdateProvider {
         result = Lookup.getDefault().lookup(new Lookup.Template<ModuleInfo> (ModuleInfo.class));
         lkpListener = new LookupListener() {
             public void resultChanged(LookupEvent ev) {
-                moduleInfos = null;
+                clearModuleInfos();
             }
         };
         result.addLookupListener(lkpListener);
+    }
+
+    private synchronized void clearModuleInfos() {
+        moduleInfos = null;
     }
 
     public String getName () {
@@ -115,28 +118,29 @@ public class InstalledModuleProvider implements InstalledUpdateProvider {
     public Map<String, UpdateItem> getUpdateItems () throws IOException {
         Map<String, UpdateItem> res = new HashMap<String, UpdateItem> ();
         for (ModuleInfo info : getModuleInfos (true).values ()) {
-            SimpleItem simpleItem = new SimpleItem.InstalledModule (info);
             Date time = null; // XXX: it's too expensive, should be extracted lazy - Utilities.readInstallTimeFromUpdateTracking (info);
             String installTime = null;
             if (time != null) {
                 installTime = Utilities.formatDate(time);
             }
-            UpdateItem updateItem = simpleItem.toUpdateItem (null, installTime);
-            res.put (simpleItem.getId (), updateItem);
+            UpdateItemImpl impl = new InstalledModuleItem (
+                    info.getCodeNameBase (),
+                    info.getSpecificationVersion () == null ? null : info.getSpecificationVersion ().toString (),
+                    info,
+                    null, // XXX author
+                    null, // installed cluster
+                    installTime
+                    
+                    );
+            
+            UpdateItem updateItem = Utilities.createUpdateItem (impl);
+            res.put (info.getCodeName () + '_' + info.getSpecificationVersion (), updateItem);
         }
         return res;
     }
 
     public boolean refresh (boolean force) throws IOException {
-        if (moduleInfos == null) {
-            moduleInfos = new HashMap<String, ModuleInfo> ();
-            Collection<? extends ModuleInfo> infos = result.allInstances ();
-            for (ModuleInfo info: infos) {
-                moduleInfos.put (info.getCodeNameBase (), info);
-            }
-            
-        }
-        assert moduleInfos != null;
+        getModuleInfos(false);
         return true;
     }
 
