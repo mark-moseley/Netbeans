@@ -47,10 +47,11 @@ import java.util.Locale;
 import javax.swing.JFileChooser;
 import javax.swing.JPanel;
 import javax.swing.filechooser.FileFilter;
-import org.netbeans.modules.apisupport.project.Util;
 import org.netbeans.modules.apisupport.project.ui.ModuleUISettings;
 import org.netbeans.modules.apisupport.project.ui.platform.NbPlatformCustomizerSources.ListListener;
-import org.netbeans.modules.apisupport.project.universe.NbPlatform;
+import org.netbeans.modules.apisupport.project.universe.JavadocRootsProvider;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
@@ -59,14 +60,14 @@ import org.openide.util.NbBundle;
  *
  * @author Martin Krauskopf
  */
-final class NbPlatformCustomizerJavadoc extends JPanel {
+public final class NbPlatformCustomizerJavadoc extends JPanel {
     
-    private NbPlatform plaf;
-    private PlatformComponentFactory.NbPlatformJavadocRootsModel model;
+    private JavadocRootsProvider jrp;
+    private PlatformComponentFactory.JavadocRootsModel model;
     private final ListListener listListener;
     
     /** Creates new form NbPlatformCustomizerModules */
-    NbPlatformCustomizerJavadoc() {
+    public NbPlatformCustomizerJavadoc() {
         initComponents();
         initAccessibility();
         this.listListener = new ListListener() {
@@ -93,13 +94,13 @@ final class NbPlatformCustomizerJavadoc extends JPanel {
         // update buttons enability appropriately
         removeButton.setEnabled(javadocList.getModel().getSize() > 0 && javadocList.getSelectedIndex() != -1);
         moveUpButton.setEnabled(javadocList.getSelectionModel().getMinSelectionIndex() > 0);
-        moveDownButton.setEnabled(plaf != null &&
-                javadocList.getSelectionModel().getMaxSelectionIndex() < plaf.getJavadocRoots().length - 1);
+        moveDownButton.setEnabled(jrp != null &&
+                javadocList.getSelectionModel().getMaxSelectionIndex() < jrp.getJavadocRoots().length - 1);
     }
     
-    void setPlatform(NbPlatform plaf) {
-        this.plaf = plaf;
-        this.model = new PlatformComponentFactory.NbPlatformJavadocRootsModel(plaf);
+    public void setJavadocRootsProvider(JavadocRootsProvider jrp) {
+        this.jrp = jrp;
+        this.model = new PlatformComponentFactory.JavadocRootsModel(jrp);
         javadocList.setModel(model);
     }
     
@@ -253,10 +254,15 @@ final class NbPlatformCustomizerJavadoc extends JPanel {
         int ret = chooser.showOpenDialog(this);
         if (ret == JFileChooser.APPROVE_OPTION) {
             File javadocRoot = FileUtil.normalizeFile(chooser.getSelectedFile());
-            ModuleUISettings.getDefault().setLastUsedNbPlatformLocation(javadocRoot.getParentFile().getAbsolutePath());
-            URL newUrl = Util.urlForDirOrJar(javadocRoot);
-            model.addJavadocRoot(newUrl);
-            javadocList.setSelectedValue(newUrl, true);
+            URL newUrl = FileUtil.urlForArchiveOrDir(javadocRoot);
+            if (model.containsRoot(newUrl)) {
+                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                    getMessage("MSG_ExistingJavadocRoot")));
+            } else {
+                ModuleUISettings.getDefault().setLastUsedNbPlatformLocation(javadocRoot.getParentFile().getAbsolutePath());
+                model.addJavadocRoot(newUrl);
+                javadocList.setSelectedValue(newUrl, true);
+            }
         }
     }//GEN-LAST:event_addZipFolder
     
