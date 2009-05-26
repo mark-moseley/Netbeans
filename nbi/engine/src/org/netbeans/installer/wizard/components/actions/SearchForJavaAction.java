@@ -38,6 +38,7 @@ package org.netbeans.installer.wizard.components.actions;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -46,6 +47,7 @@ import org.netbeans.installer.product.Registry;
 import org.netbeans.installer.product.components.Product;
 import org.netbeans.installer.utils.helper.ErrorLevel;
 import org.netbeans.installer.utils.ErrorManager;
+import org.netbeans.installer.utils.FileUtils;
 import org.netbeans.installer.utils.LogManager;
 import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StringUtils;
@@ -61,6 +63,7 @@ import org.netbeans.installer.utils.system.windows.WindowsRegistry;
 import static org.netbeans.installer.utils.system.windows.WindowsRegistry.HKLM;
 import static org.netbeans.installer.utils.system.windows.WindowsRegistry.HKCU;
 import org.netbeans.installer.wizard.components.WizardAction;
+import org.netbeans.installer.wizard.components.panels.JdkLocationPanel;
 
 /**
  *
@@ -141,7 +144,7 @@ public class SearchForJavaAction extends WizardAction {
     
     private void getJavaLocationsInfo(List <File> locations, Progress progress) {
         for (int i = 0; i < locations.size(); i++) {
-            final File javaHome = locations.get(i).getAbsoluteFile();
+            File javaHome = locations.get(i).getAbsoluteFile();
             
             progress.setDetail(StringUtils.format(CHECKING, javaHome));
             
@@ -151,7 +154,18 @@ public class SearchForJavaAction extends WizardAction {
             
             // check whether it is a java installation - the result will be null if
             // it is not
-            final JavaInfo javaInfo = JavaUtils.getInfo(javaHome);
+            JavaInfo javaInfo = JavaUtils.getInfo(javaHome);
+
+            if(javaInfo == null) {
+                final File jreHome = new File(javaHome, "jre");
+                if(FileUtils.exists(jreHome)) {
+                    LogManager.log("investigating java home candidate: " + jreHome);
+                    javaInfo = JavaUtils.getInfo(jreHome);
+                    if(javaInfo!=null) {
+                        javaHome = jreHome;
+                    }
+                }
+            }
             
             if (javaInfo != null) {
                 LogManager.logUnindent(
@@ -166,6 +180,7 @@ public class SearchForJavaAction extends WizardAction {
                 }
                 
                 // add the location to the list if it's not already there
+                javaHome = getCanonicalFile(javaHome);
                 if (!javaLocations.contains(javaHome)) {
                     javaLocations.add(javaHome);
                     javaLabels.add(getLabel(javaHome));
@@ -224,17 +239,33 @@ public class SearchForJavaAction extends WizardAction {
     }
     
     public static void addJavaLocation(File location, Version version, String vendor) {
-        if (!javaLocations.contains(location)) {
-            javaLocations.add(location);
-            javaLabels.add(getLabel(location, version, vendor));
-            JavaUtils.addJavaInfo(location, new JavaInfo(version, vendor));
+        File javaHome = getCanonicalFile(location);
+        if (!javaLocations.contains(javaHome)) {
+            javaLocations.add(javaHome);
+            javaLabels.add(getLabel(javaHome, version, vendor));
+            JavaUtils.addJavaInfo(javaHome, new JavaInfo(version, vendor));
         }
+    }
+
+    private static File getCanonicalFile(final File path) {
+        File location = path;
+        if (SystemUtils.isWindows() && location.getAbsolutePath().matches(".*~[0-9]+.*")) {
+            //Issue #166036
+            try {
+                // if C:\Program Files == C:\Progra~1, get canonical representation
+                location = location.getCanonicalFile();
+                LogManager.log("... using " + location + " instead of " + path);
+            } catch (IOException e) {
+            }
+        }
+        return location;
     }
     
     public static void addJavaLocation(File location) {
-        if (!javaLocations.contains(location)) {
-            javaLocations.add(location);
-            javaLabels.add(getLabel(location));
+        File javaHome = getCanonicalFile(location);
+        if (!javaLocations.contains(javaHome)) {
+            javaLocations.add(javaHome);
+            javaLabels.add(getLabel(javaHome));
         }
     }
     public static List <File> getJavaLocations() {
@@ -282,9 +313,11 @@ public class SearchForJavaAction extends WizardAction {
             if (parent.exists() && parent.isDirectory()) {
                 locations.add(parent);
                 final boolean isWindows = SystemUtils.isWindows();
+                final boolean isSolaris = SystemUtils.isSolaris();
                 final File[] children = parent.listFiles(new FileFilter() {
                     public boolean accept(final File pathname) {
                         return pathname.isDirectory() && 
+                                (!isSolaris || !pathname.equals(new File("/export/sybase"))) && //workaround for #143292
                                 (isWindows || !pathname.getName().startsWith("."));
                     }
                 });
@@ -328,7 +361,17 @@ public class SearchForJavaAction extends WizardAction {
         final WindowsRegistry registry =
                 nativeUtils.getWindowsRegistry();
         
+        final int currentMode = registry.getMode();
+        List <Boolean> modes = new ArrayList <Boolean> ();
+        modes.add(null); //default mode
+        
+        if(registry.isAlternativeModeSupported()) {
+            LogManager.log("... alternative registry view is also supported");
+            modes.add(new Boolean(true));//alternative mode
+        }        
         try {
+          for (Boolean mode : modes) {
+            registry.setMode(mode);
             for (int section : new int[]{HKLM, HKCU}) {
                 for (String path: JAVA_WINDOWS_REGISTRY_ENTRIES) {
                     // check whether current path exists in this section
@@ -376,8 +419,11 @@ public class SearchForJavaAction extends WizardAction {
                     }
                 }
             }
+          }
         } catch (NativeException e) {
             ErrorManager.notify(ErrorLevel.DEBUG, "Failed to search in the windows registry", e);
+        } finally {
+            registry.setMode(currentMode);
         }
         
         LogManager.logUnindent("... finished");
@@ -388,6 +434,18 @@ public class SearchForJavaAction extends WizardAction {
             if (jdk.getStatus() == Status.INSTALLED) {
                 if (!locations.contains(jdk.getInstallationLocation())) {
                     locations.add(jdk.getInstallationLocation());
+                }
+            }
+        }
+        
+        for (Product product: Registry.getInstance().getProducts(Status.TO_BE_INSTALLED)) {
+            final String jdkSysPropName = product.getUid() + StringUtils.DOT +
+                    JdkLocationPanel.JDK_LOCATION_PROPERTY;
+            final String jdkSysProp = System.getProperty(jdkSysPropName);
+            if (jdkSysProp != null) {
+                File sprop = new File(jdkSysProp);
+                if (!locations.contains(sprop)) {
+                    locations.add(sprop);
                 }
             }
         }
