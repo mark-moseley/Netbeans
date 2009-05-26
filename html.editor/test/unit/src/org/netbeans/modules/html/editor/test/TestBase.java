@@ -38,41 +38,98 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.html.editor.test;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.StringTokenizer;
+import javax.swing.text.Document;
+import org.netbeans.api.editor.mimelookup.test.MockMimeLookup;
 import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.BaseKit;
 import org.netbeans.junit.MockServices;
-import org.netbeans.junit.NbTestCase;
+import org.netbeans.modules.csl.spi.DefaultLanguageConfig;
 import org.netbeans.modules.editor.NbEditorDocument;
-import org.netbeans.modules.editor.html.HTMLKit;
+import org.netbeans.modules.csl.api.test.CslTestBase;
+import org.netbeans.modules.html.editor.HtmlKit;
+import org.netbeans.modules.html.editor.gsf.HtmlLanguage;
+import org.openide.cookies.EditorCookie;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.FileUtil;
+import org.openide.loaders.DataObject;
 
 /**
- * Common ancestor for all test classes.
- *
- * @author Andrei Badea
+ * @author Marek Fukala
  */
-public class TestBase extends NbTestCase {
-
-    static {
-        MockServices.setServices(new Class[] {RepositoryImpl.class});
-    }
+public class TestBase extends CslTestBase {
 
     private static final String PROP_MIME_TYPE = "mimeType"; //NOI18N
-    
+
     public TestBase(String name) {
         super(name);
     }
 
+    @Override
+    protected void setUp() throws Exception {
+        MockServices.setServices(MockMimeLookup.class);
+        super.setUp();
+    }
+
     protected BaseDocument createDocument() {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
-        doc.putProperty(PROP_MIME_TYPE, BaseKit.getKit(HTMLKit.class).getContentType());
-        doc.putProperty(Language.class, HTMLTokenId.language()); //hack for LanguageManager - shoudl be removed
-        
+        NbEditorDocument doc = new NbEditorDocument(HtmlKit.HTML_MIME_TYPE);
+        doc.putProperty(PROP_MIME_TYPE, HtmlKit.HTML_MIME_TYPE);
+        doc.putProperty(Language.class, HTMLTokenId.language());
         return doc;
     }
-    
+
+    protected Document[] createDocuments(String... fileName) {
+        try {
+            List<Document> docs = new ArrayList<Document>();
+            FileSystem memFS = FileUtil.createMemoryFileSystem();
+            for (String fName : fileName) {
+
+                //we may also create folders
+                StringTokenizer items = new StringTokenizer(fName, "/");
+                FileObject fo = memFS.getRoot();
+                while(items.hasMoreTokens()) {
+                    String item = items.nextToken();
+                    if(items.hasMoreTokens()) {
+                        //folder
+                        fo = fo.createFolder(item);
+                    } else {
+                        //last, create file
+                        fo = fo.createData(item);
+                    }
+                    assertNotNull(fo);
+                }
+                
+                DataObject dobj = DataObject.find(fo);
+                assertNotNull(dobj);
+
+                EditorCookie cookie = dobj.getCookie(EditorCookie.class);
+                assertNotNull(cookie);
+
+                Document document = (Document) cookie.openDocument();
+                assertEquals(0, document.getLength());
+
+                docs.add(document);
+
+            }
+            return docs.toArray(new Document[]{});
+        } catch (Exception ex) {
+            throw new IllegalStateException("Error setting up tests", ex);
+        }
+    }
+
+    @Override
+    protected DefaultLanguageConfig getPreferredLanguage() {
+        return new HtmlLanguage();
+    }
+
+    @Override
+    protected String getPreferredMimeType() {
+        return HtmlKit.HTML_MIME_TYPE;
+    }
 }
