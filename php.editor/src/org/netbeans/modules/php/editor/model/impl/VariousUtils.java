@@ -42,14 +42,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Stack;
-import org.netbeans.modules.gsf.api.annotations.CheckForNull;
+import org.netbeans.api.annotations.common.CheckForNull;
 import org.netbeans.modules.php.editor.CodeUtils;
 import org.netbeans.modules.php.editor.index.PHPIndex;
 import org.netbeans.modules.php.editor.model.ClassScope;
+import org.netbeans.modules.php.editor.model.FieldElement;
 import org.netbeans.modules.php.editor.model.FunctionScope;
 import org.netbeans.modules.php.editor.model.MethodScope;
 import org.netbeans.modules.php.editor.model.ModelElement;
-import org.netbeans.modules.php.editor.model.ModelScope;
+import org.netbeans.modules.php.editor.model.FileScope;
 import org.netbeans.modules.php.editor.model.ModelUtils;
 import org.netbeans.modules.php.editor.model.TypeScope;
 import org.netbeans.modules.php.editor.model.VariableName;
@@ -80,6 +81,8 @@ import org.netbeans.modules.php.editor.parser.astnodes.Variable;
 import org.netbeans.modules.php.editor.parser.astnodes.VariableBase;
 import org.netbeans.modules.php.project.api.PhpSourcePath;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Parameters;
 
 /**
  *
@@ -95,7 +98,11 @@ public class VariousUtils {
     public static final String STATIC_FIELD__TYPE_PREFIX = "static.fld:";
     public static final String VAR_TYPE_PREFIX = "var:";
 
-    static String extractTypeFroVariableBase(VariableBase varBase, Map<String, VariableNameImpl> allAssignments) {
+    public static String extractTypeFroVariableBase(VariableBase varBase) {
+        return extractTypeFroVariableBase(varBase, Collections.<String, AssignmentImpl>emptyMap());
+    }
+
+    static String extractTypeFroVariableBase(VariableBase varBase, Map<String, AssignmentImpl> allAssignments) {
         Stack<VariableBase> stack = new Stack<VariableBase>();
         String typeName = null;
         createVariableBaseChain(varBase, stack);
@@ -150,7 +157,7 @@ public class VariousUtils {
 
 
     @CheckForNull
-    static String extractVariableTypeFromAssignment(Assignment assignment, Map<String, VariableNameImpl> allAssignments) {
+    static String extractVariableTypeFromAssignment(Assignment assignment, Map<String, AssignmentImpl> allAssignments) {
         Expression expression = assignment.getRightHandSide();
         if (expression instanceof Assignment) {
             // handle nested assignments, e.g. $l = $m = new ObjectName;
@@ -177,7 +184,7 @@ public class VariousUtils {
     }
 
     //TODO: needs to be improved to properly return more types
-    public static List<? extends TypeScope> getType(ModelScope topScope, VariableScope varScope, String semiTypeName, int offset, boolean justDispatcher) throws IllegalStateException {
+    public static List<? extends TypeScope> getType(FileScope topScope, VariableScope varScope, String semiTypeName, int offset, boolean justDispatcher) throws IllegalStateException {
         Stack<String> stack = new Stack<String>();
         TypeScope type = null;
         if (semiTypeName != null && semiTypeName.contains("@")) {
@@ -192,16 +199,12 @@ public class VariousUtils {
                 if (VariousUtils.METHOD_TYPE_PREFIX.startsWith(frag)) {
                     operation = VariousUtils.METHOD_TYPE_PREFIX;
                 } else if (VariousUtils.FUNCTION_TYPE_PREFIX.startsWith(frag)) {
-                    assert operation == null;
                     operation = VariousUtils.FUNCTION_TYPE_PREFIX;
                 } else if (VariousUtils.STATIC_METHOD_TYPE_PREFIX.startsWith(frag)) {
-                    assert operation == null;
                     operation = VariousUtils.STATIC_METHOD_TYPE_PREFIX;
                 } else if (VariousUtils.VAR_TYPE_PREFIX.startsWith(frag)) {
-                    assert operation == null;
                     operation = VariousUtils.VAR_TYPE_PREFIX;
                 } else if (VariousUtils.FIELD_TYPE_PREFIX.startsWith(frag)) {
-                    assert operation == null;
                     operation = VariousUtils.FIELD_TYPE_PREFIX;
                 } else {
                     if (operation == null) {
@@ -213,12 +216,12 @@ public class VariousUtils {
                             semiTypeName = null;
                             break;
                         }
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(clsName,topScope));
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(clsName,topScope));
                         if (cls == null) {
                             semiTypeName = null;
                             break;
                         }
-                        MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, frag, topScope, PHPIndex.ANY_ATTR));
+                        MethodScope meth = ModelUtils.getFirst(CachingSupport.getInheritedMethods(cls, frag, topScope, PHPIndex.ANY_ATTR));
                         if (meth == null) {
                             semiTypeName = null;
                             break;
@@ -231,7 +234,7 @@ public class VariousUtils {
                         stack.push(type.getName());
                         operation = null;
                     } else if (operation.startsWith(VariousUtils.FUNCTION_TYPE_PREFIX)) {
-                        FunctionScope fnc = ModelUtils.getFirst(CachedModelSupport.getFunctions(frag, topScope));
+                        FunctionScope fnc = ModelUtils.getFirst(CachingSupport.getFunctions(frag, topScope));
                         if (fnc == null) {
                             semiTypeName = null;
                             break;
@@ -251,12 +254,12 @@ public class VariousUtils {
                             semiTypeName = null;
                             break;
                         }
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(clsName, topScope));
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(clsName, topScope));
                         if (cls == null) {
                             semiTypeName = null;
                             break;
                         }
-                        MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, frgs[1],topScope, PHPIndex.ANY_ATTR));
+                        MethodScope meth = ModelUtils.getFirst(CachingSupport.getInheritedMethods(cls, frgs[1],topScope, PHPIndex.ANY_ATTR));
                                 //ModelUtils.getFirst(cls.getMethods(frgs[1], PhpModifiers.STATIC));
                         if (meth == null) {
                             semiTypeName = null;
@@ -282,7 +285,7 @@ public class VariousUtils {
                             }
                         }
                         if (type == null) {
-                            List<? extends VariableName> variables = varScope.getVariables(frag);
+                            List<? extends VariableName> variables = ModelUtils.filter(varScope.getDeclaredVariables(), frag);
                             if (!variables.isEmpty()) {
                                 VariableName varName = ModelUtils.getFirst(variables);
                                 type = varName != null ? ModelUtils.getFirst(varName.getTypes(offset)) : null;
@@ -296,8 +299,30 @@ public class VariousUtils {
                             }
                         }
                     } else if (operation.startsWith(VariousUtils.FIELD_TYPE_PREFIX)) {
-                        //TODO: not implemented yet
-                        return Collections.<TypeScope>emptyList();
+                        
+                        String clsName = stack.isEmpty() ? null : stack.pop();
+                        String fldName = frag;
+                        if (!fldName.startsWith("$")) {//NOI18N
+                            fldName = "$" + fldName;//NOI18N
+                        }
+
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(clsName, topScope));
+                        if (cls == null) {
+                            semiTypeName = null;
+                            break;
+                        }
+                        FieldElement fld = ModelUtils.getFirst(CachingSupport.getInheritedFields(cls, fldName, topScope, PHPIndex.ANY_ATTR));
+                        if (fld == null) {
+                            semiTypeName = null;
+                            break;
+                        }
+                        type = ModelUtils.getFirst(fld.getTypes(offset));
+                        if (type == null) {
+                            semiTypeName = null;
+                            break;
+                        }
+                        stack.push(type.getName());
+                        operation = null;
                     } else {
                         throw new UnsupportedOperationException(operation);
                     }
@@ -312,7 +337,7 @@ public class VariousUtils {
             if (type != null && semiTypeName.equals(type.getName())) {
                 return Collections.<TypeScope>singletonList(type);
             } else {
-                type = ModelUtils.getFirst(CachedModelSupport.getTypes(semiTypeName, topScope));
+                type = ModelUtils.getFirst(CachingSupport.getTypes(semiTypeName, topScope));
                 if (type != null) {
                     return Collections.<TypeScope>singletonList(type);
                 }
@@ -322,7 +347,7 @@ public class VariousUtils {
         return Collections.<TypeScope>emptyList();
     }
 
-    public static Stack<? extends ModelElement> getElemenst(ModelScope topScope, VariableScope varScope, String semiTypeName, int offset) throws IllegalStateException {
+    public static Stack<? extends ModelElement> getElemenst(FileScope topScope, VariableScope varScope, String semiTypeName, int offset) throws IllegalStateException {
         Stack<ModelElement> emptyStack = new Stack<ModelElement>();
         Stack<ModelElement> retval = new Stack<ModelElement>();
         Stack<String> stack = new Stack<String>();
@@ -362,11 +387,11 @@ public class VariousUtils {
                         if (clsName == null) {
                             return emptyStack;
                         }
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(clsName,topScope));
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(clsName,topScope));
                         if (cls == null) {
                             return emptyStack;
                         }
-                        MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, frag, topScope, PHPIndex.ANY_ATTR));
+                        MethodScope meth = ModelUtils.getFirst(CachingSupport.getInheritedMethods(cls, frag, topScope, PHPIndex.ANY_ATTR));
                         if (meth == null) {
                             return emptyStack;
                         } else {
@@ -380,7 +405,7 @@ public class VariousUtils {
                         stack.push(type.getName());
                         operation = null;
                     } else if (operation.startsWith(VariousUtils.FUNCTION_TYPE_PREFIX)) {
-                        FunctionScope fnc = ModelUtils.getFirst(CachedModelSupport.getFunctions(frag, topScope));
+                        FunctionScope fnc = ModelUtils.getFirst(CachingSupport.getFunctions(frag, topScope));
                         if (fnc == null) {
                             semiTypeName = null;
                             break;
@@ -395,12 +420,12 @@ public class VariousUtils {
                         stack.push(type.getName());
                         operation = null;
                     } else if (operation.startsWith(VariousUtils.CONSTRUCTOR_TYPE_PREFIX)) {
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(frag, topScope));
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(frag, topScope));
                         if (cls == null) {
                             semiTypeName = null;
                             break;
                         } else {
-                            MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, "__construct",topScope, PHPIndex.ANY_ATTR));//NOI18N
+                            MethodScope meth = ModelUtils.getFirst(CachingSupport.getMethods(cls, "__construct",topScope, PHPIndex.ANY_ATTR));//NOI18N
                             if (meth != null) {
                                 retval.push(meth);
                             } else {
@@ -416,11 +441,11 @@ public class VariousUtils {
                         if (clsName == null) {
                             return emptyStack;
                         }
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(clsName, topScope));
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(clsName, topScope));
                         if (cls == null) {
                             return emptyStack;
                         }
-                        MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, frgs[1],topScope, PHPIndex.ANY_ATTR));
+                        MethodScope meth = ModelUtils.getFirst(CachingSupport.getMethods(cls, frgs[1],topScope, PHPIndex.ANY_ATTR));
                                 //ModelUtils.getFirst(cls.getMethods(frgs[1], PhpModifiers.STATIC));
                         if (meth == null) {
                             return emptyStack;
@@ -447,7 +472,7 @@ public class VariousUtils {
                             }
                         }
                         if (type == null) {
-                            List<? extends VariableName> variables = varScope.getVariables(frag);
+                            List<? extends VariableName> variables = ModelUtils.filter(varScope.getDeclaredVariables(), frag);
                             if (!variables.isEmpty()) {
                                 VariableName varName = ModelUtils.getFirst(variables);
                                 type = varName != null ? ModelUtils.getFirst(varName.getTypes(offset)) : null;
@@ -488,17 +513,14 @@ public class VariousUtils {
         }
     }
 
-    private static String extractVariableTypeFromVariableBase(VariableBase varBase, Map<String, VariableNameImpl> allAssignments) {
+    private static String extractVariableTypeFromVariableBase(VariableBase varBase, Map<String, AssignmentImpl> allAssignments) {
         if (varBase instanceof Variable) {
             String varName = CodeUtils.extractVariableName((Variable) varBase);
-            VariableNameImpl nameImpl = allAssignments.get(varName);
-            if (nameImpl != null) {
-                VarAssignmentImpl last = ModelUtils.getLast(nameImpl.getAssignments());
-                if (last != null) {
-                    String semiTypeName = last.typeNameFromUnion();
-                    if (semiTypeName != null) {
-                        return semiTypeName;
-                    }
+            AssignmentImpl assignmentImpl = allAssignments.get(varName);
+            if (assignmentImpl != null) {
+                String semiTypeName = assignmentImpl.typeNameFromUnion();
+                if (semiTypeName != null) {
+                    return semiTypeName;
                 }
             }
             return "@" + VAR_TYPE_PREFIX + varName;
@@ -550,35 +572,21 @@ public class VariousUtils {
         return null;
     }
 
-    public static FileObject resolveInclude(FileObject currentFile, Include include) {
-        String fileName = resolveFileName(include);
-        return (fileName != null) ? resolveRelativeFile(currentFile, fileName) : null;
-    }
-
-    private static FileObject resolveRelativeFile(FileObject currentFile, String name) {
-        while (true) {
-            FileObject result;
-
-//            if (psp != null) {
-                result = PhpSourcePath.resolveFile(currentFile.getParent(), name);
-//            } else {
-//                result = info.getFileObject().getParent().getFileObject(name);
-//            }
-
-            if (result != null) {
-                return result;
-            }
-
-            //try to strip a directory from the "name":
-            int slash = name.indexOf('/');
-
-            if (slash != (-1)) {
-                name = name.substring(slash + 1);
-            } else {
-                return null;
-            }
+    /**
+     * @param sourceFile needs to be data file (not folder)
+     */
+    public static FileObject resolveInclude(FileObject sourceFile, Include include) {
+        Parameters.notNull("sourceFile", sourceFile);
+        FileObject retval = null;
+        if (sourceFile.isFolder()) {
+            throw new IllegalArgumentException(FileUtil.getFileDisplayName(sourceFile));
         }
+        String fileName = resolveFileName(include);        
+        if (fileName != null) {
+            FileObject parent = sourceFile.getParent();
+            assert parent != null : FileUtil.getFileDisplayName(sourceFile);
+            retval = PhpSourcePath.resolveFile(parent, fileName);
+        }
+        return  retval;
     }
-
-
 }
