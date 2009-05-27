@@ -43,10 +43,8 @@
 package org.netbeans.editor.ext.html.parser;
 
 
-import org.netbeans.editor.ext.html.*;
 import java.util.*;
 import javax.swing.text.*;
-import org.netbeans.editor.ext.*;
 import org.openide.ErrorManager;
 
 /**
@@ -66,19 +64,19 @@ public class SyntaxElement {
     public static final int TYPE_ENTITY_REFERENCE = 6;
     
     public static final String[] TYPE_NAMES =
-            new String[]{"comment","declaration","error","text","tag","endtag","entity reference"};
+            new String[]{"comment","declaration","error","text","tag","endtag","entity reference"}; //NOI18N
     
-    private Document document;
+    private ParserSource source;
     
     private int offset;
     private int length;
     private int type;
     
-    SyntaxElement( Document doc, int offset, int length, int type ) {
+    SyntaxElement( ParserSource doc, int offset, int length, int type ) {
         this.offset = offset;
         this.length = length;
         this.type = type;
-        this.document = doc;
+        this.source = doc;
     }
     
     public int offset() {
@@ -95,7 +93,7 @@ public class SyntaxElement {
     
     public String text() {
         try {
-            return document.getText(offset(), length());
+            return source.getText(offset(), length()).toString();
         }catch(BadLocationException ble) {
             ErrorManager.getDefault().notify(ErrorManager.WARNING, ble);
         }
@@ -132,7 +130,7 @@ public class SyntaxElement {
          * @param doctypeFile system identifier for this DOCTYPE, if available.
          *  null otherwise.
          */
-        public Declaration( Document document, int from, int length,
+        public Declaration( ParserSource document, int from, int length,
                 String doctypeRootElement,
                 String doctypePI, String doctypeFile
                 ) {
@@ -172,7 +170,7 @@ public class SyntaxElement {
     public static class Named extends SyntaxElement {
         String name;
         
-        public Named( Document document, int from, int to, int type, String name ) {
+        public Named( ParserSource document, int from, int to, int type, String name ) {
             super( document, from, to, type );
             this.name = name;
         }
@@ -180,6 +178,8 @@ public class SyntaxElement {
         public String getName() {
             return name;
         }
+        
+        @Override
         public String toString() {
             return super.toString() + " - \"" + name + '"'; // NOI18N
         }
@@ -190,7 +190,7 @@ public class SyntaxElement {
         private List<TagAttribute> attribs;
         private boolean empty, openTag;
                 
-        public Tag( Document document, int from, int length, String name, List attribs, boolean openTag, boolean isEmpty ) {
+        public Tag( ParserSource document, int from, int length, String name, List attribs, boolean openTag, boolean isEmpty ) {
             super( document, from, length, openTag ? TYPE_TAG : TYPE_ENDTAG, name );
             this.attribs = attribs;
             this.openTag = openTag;
@@ -208,7 +208,7 @@ public class SyntaxElement {
         }
         
         public List<TagAttribute> getAttributes() {
-            return attribs;
+            return attribs == null ? Collections.EMPTY_LIST : attribs;
         }
         
         public TagAttribute getAttribute(String name) {
@@ -216,7 +216,7 @@ public class SyntaxElement {
         }
         
         public TagAttribute getAttribute(String name, boolean ignoreCase) {
-            for(TagAttribute ta : attribs) {
+            for(TagAttribute ta : getAttributes()) {
                 if(ta.getName().equals(name)) {
                     return ta;
                 }
@@ -224,17 +224,18 @@ public class SyntaxElement {
             return null;
         }
         
+        @Override
         public String toString() {
             StringBuffer ret = new StringBuffer( super.toString() );
             ret.append( " - {" );   // NOI18N
-            
-            for( Iterator i = attribs.iterator(); i.hasNext(); ) {
+
+            for( Iterator i = getAttributes().iterator(); i.hasNext(); ) {
                 ret.append( i.next() );
                 ret.append( ", "  );    // NOI18N
             }
             
             ret.append( "}" );      //NOI18N
-            if(isEmpty()) ret.append(" (EMPTY TAG)");
+            if(isEmpty()) ret.append(" (EMPTY TAG)"); //NOI18N
            
             return ret.toString();
         }
@@ -289,17 +290,26 @@ public class SyntaxElement {
             this.valueOffset = ofs;
         }
         
+        @Override
         public String toString() {
-            return "TagAttribute[name=" + getName() + "; value=" + getValue() + "; nameOffset=" + getNameOffset() + "; valueOffset=" + getValueOffset() +"]";
+            return "TagAttribute[name=" + getName() + "; value=" + getValue() + "; nameOffset=" + getNameOffset() + "; valueOffset=" + getValueOffset() +"]"; //NOI18N
         }
        
         //backward compatibility
+        @Override
         public boolean equals(Object o) {
             if (!(o instanceof TagAttribute)) {
                 return false;
             } else {
                 return getName().equals(((TagAttribute)o).getName());
             }
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 7;
+            hash = 97 * hash + (this.name != null ? this.name.hashCode() : 0);
+            return hash;
         }
     }
 }
