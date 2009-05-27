@@ -80,7 +80,12 @@ public class FilterMappingPanel extends javax.swing.JPanel {
 	}
         for (int i=0;i<filterNames.length;i++) filterNameCB.addItem(filterNames[i]);
         
-        // fill CB1 with servlet names
+        String filterName = fm.getFilterName();
+        if (filterName != null) {
+            filterNameCB.setSelectedItem(filterName);
+        }
+        
+        // fill CB2 with servlet names
 	if(servletNames == null || servletNames.length == 0) {
 	    servletNames = new String[1]; 
 	    servletNames[0] = NbBundle.getMessage(FilterMappingPanel.class,"LBL_no_servlets");
@@ -101,6 +106,7 @@ public class FilterMappingPanel extends javax.swing.JPanel {
 	    urlTF.setText(fm.getUrlPattern());
             servletNameCB.setEnabled(false);
         }
+        
         try {
             String[] dispTypes = fm.getDispatcher();
             for (int i=0;i<dispTypes.length;i++) {
@@ -175,9 +181,8 @@ public class FilterMappingPanel extends javax.swing.JPanel {
 
         setLayout(new java.awt.GridBagLayout());
 
-        jLabel1.setDisplayedMnemonic(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_filterName_mnem").charAt(0));
         jLabel1.setLabelFor(filterNameCB);
-        jLabel1.setText(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_filterName")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel1, org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_filterName")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -193,7 +198,7 @@ public class FilterMappingPanel extends javax.swing.JPanel {
         add(filterNameCB, gridBagConstraints);
         filterNameCB.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "ACSD_filter_name")); // NOI18N
 
-        jLabel4.setText(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_dispatcherTypes")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel4, org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_dispatcherTypes")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 3;
@@ -243,9 +248,8 @@ public class FilterMappingPanel extends javax.swing.JPanel {
         urlTF.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "ACSD_filter_mapping_url_text_field")); // NOI18N
 
         buttonGroup1.add(jRadioButton1);
-        jRadioButton1.setMnemonic(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_urlPattern_mnem").charAt(0));
         jRadioButton1.setSelected(true);
-        jRadioButton1.setText(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_urlPattern")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jRadioButton1, org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_urlPattern")); // NOI18N
         jRadioButton1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jRadioButton1ActionPerformed(evt);
@@ -260,8 +264,7 @@ public class FilterMappingPanel extends javax.swing.JPanel {
         jRadioButton1.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "ACSD_url_pattern")); // NOI18N
 
         buttonGroup1.add(jRadioButton2);
-        jRadioButton2.setMnemonic(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_servletName_mnem1").charAt(0));
-        jRadioButton2.setText(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_servletName")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jRadioButton2, org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_servletName")); // NOI18N
         jRadioButton2.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jRadioButton2ActionPerformed(evt);
@@ -283,7 +286,7 @@ public class FilterMappingPanel extends javax.swing.JPanel {
         gridBagConstraints.insets = new java.awt.Insets(0, 12, 0, 12);
         add(jPanel2, gridBagConstraints);
 
-        jLabel2.setText(org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_applyTo")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(jLabel2, org.openide.util.NbBundle.getMessage(FilterMappingPanel.class, "LBL_applyTo")); // NOI18N
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 1;
@@ -293,14 +296,12 @@ public class FilterMappingPanel extends javax.swing.JPanel {
     }// </editor-fold>//GEN-END:initComponents
 
     private void jRadioButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton2ActionPerformed
-        // TODO add your handling code here:
             urlTF.setEnabled(false);
             servletNameCB.setEnabled(true);
             jRadioButton2.requestFocus();
     }//GEN-LAST:event_jRadioButton2ActionPerformed
 
     private void jRadioButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jRadioButton1ActionPerformed
-        // TODO add your handling code here:
             urlTF.setEnabled(true);
             servletNameCB.setEnabled(false);
             urlTF.requestFocus();
