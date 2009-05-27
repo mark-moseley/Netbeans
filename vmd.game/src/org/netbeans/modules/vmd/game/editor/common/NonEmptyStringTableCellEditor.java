@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,31 +31,48 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.vmd.game.model;
+package org.netbeans.modules.vmd.game.editor.common;
 
-import java.awt.Point;
-import java.util.EventListener;
+import java.awt.Color;
+import java.awt.Component;
+import javax.swing.DefaultCellEditor;
+import javax.swing.JComponent;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.border.LineBorder;
 
-import org.netbeans.modules.vmd.game.model.Scene.LayerInfo;
+/**
+ *
+ * @author akorostelev
+ */
+public class NonEmptyStringTableCellEditor extends DefaultCellEditor {
 
-public interface SceneListener  extends  EventListener {
+    private final static Color ERROR_COLOR = Color.red;
+    private final static Color CORRECT_COLOR = Color.black;
 
-	public void layerAdded(Scene sourceScene, Layer layer, int index);
-	
-	public void layerRemoved(Scene sourceScene, Layer layer, LayerInfo info, int index);
-	
-	public void layerMoved(Scene sourceScene, Layer layer, int indexOld, int indexNew);
-	
-	/**
-	 * The inTransition parameter specifies if the position is final or if the position is still changing. For example
-	 * in the case result of a mouse dragging the layer inside a scene the inTransition argument will be true during the
-	 * drag and false once the drag has ended.
-	 */
-	public void layerPositionChanged(Scene sourceScene, Layer layer, Point oldPosition, Point newPosition, boolean inTransition);
-	
-	public void layerLockChanged(Scene sourceScene, Layer layer, boolean locked);
+    public NonEmptyStringTableCellEditor() {
+        super(new JTextField());
+    }
 
-	public void layerVisibilityChanged(Scene sourceScene, Layer layer, boolean visible);
-	
+    @Override
+    public boolean stopCellEditing() {
+        String s = (String) super.getCellEditorValue();
+        if ("".equals(s)) {
+            ((JComponent) getComponent()).setBorder(new LineBorder(ERROR_COLOR));
+            return false;
+        }
+        return super.stopCellEditing();
+    }
+
+    @Override
+    public Component getTableCellEditorComponent(JTable table, Object value,
+            boolean isSelected, int row, int column) {
+        ((JComponent) getComponent()).setBorder(new LineBorder(CORRECT_COLOR));
+        return super.getTableCellEditorComponent(table, value, isSelected, row, column);
+    }
 }
