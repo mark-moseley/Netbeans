@@ -41,23 +41,33 @@
 
 package org.netbeans.modules.server.ui.node;
 
+import java.awt.EventQueue;
+import java.awt.event.ActionEvent;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Enumeration;
 import java.util.List;
 import javax.swing.Action;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.core.ide.ServicesTabNodeRegistration;
+import org.netbeans.api.server.ServerInstance;
 import org.netbeans.modules.server.ServerRegistry;
-import org.netbeans.spi.server.ServerInstance;
 import org.netbeans.spi.server.ServerInstanceProvider;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
+import org.openide.util.Lookup;
+import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
+import org.openide.util.RequestProcessor;
+import org.openide.util.Utilities;
 import org.openide.util.WeakListeners;
-import org.openide.util.actions.SystemAction;
+import org.openide.util.lookup.Lookups;
 
 public final class RootNode extends AbstractNode {
 
@@ -74,6 +84,13 @@ public final class RootNode extends AbstractNode {
         setIconBaseWithExtension(SERVERS_ICON);
     }
 
+    @ServicesTabNodeRegistration(
+        name = "servers",
+        displayName = "org.netbeans.modules.server.ui.node.Bundle#Server_Registry_Node_Name",
+        shortDescription = "org.netbeans.modules.server.ui.node.Bundle#Server_Registry_Node_Short_Description",
+        iconResource = "org/netbeans/modules/server/ui/resources/servers.png",
+        position = 400
+    )
     public static synchronized RootNode getInstance() {
         if (node == null) {
             ChildFactory factory = new ChildFactory();
@@ -86,10 +103,60 @@ public final class RootNode extends AbstractNode {
 
     @Override
     public Action[] getActions(boolean context) {
-        return new SystemAction[] {SystemAction.get(AddServerInstanceAction.class)};
+        Action[] arr = Utilities.actionsForPath("Servers/Actions").toArray(new Action[0]); // NOI18N
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] == null) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(arr[i].getValue("serverNodeHidden"))) { // NOI18N
+                arr[i] = null;
+            }
+        }
+        return arr;
     }
 
-    private static class ChildFactory extends org.openide.nodes.ChildFactory<ServerInstance> implements ChangeListener {
+
+    static void enableActionsOnExpand() {
+        FileObject fo = FileUtil.getConfigFile("Servers/Actions"); // NOI18N
+        Enumeration<String> en;
+        if (fo != null) {
+            for (FileObject o : fo.getChildren()) {
+                en = o.getAttributes();
+                while (en.hasMoreElements()) {
+                    String attr = en.nextElement();
+                    boolean enable = false;
+                    final String prefix = "property-"; // NOI18N
+                    if (attr.startsWith(prefix)) {
+                        attr = attr.substring(prefix.length());
+                        if (System.getProperty(attr) != null) {
+                            enable = true;
+                        }
+                    } else {
+                        final String config = "config-"; // NOI18N
+                        if (attr.startsWith(config)) {
+                            attr = attr.substring(config.length());
+                            if (FileUtil.getConfigFile(attr) != null) {
+                                enable = true;
+                            }
+                        }
+                    }
+
+                    if (enable) {
+                        Lookup l = Lookups.forPath("Servers/Actions"); // NOI18N
+                        for (Lookup.Item<Action> item : l.lookupResult(Action.class).allItems()) {
+                            if (item.getId().contains(o.getName())) {
+                                Action a = item.getInstance();
+                                a.actionPerformed(new ActionEvent(getInstance(), 0, "noui")); // NOI18N
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static class ChildFactory extends org.openide.nodes.ChildFactory<ServerInstance> 
+    implements ChangeListener, Runnable {
 
         private static final Comparator<ServerInstance> COMPARATOR = new InstanceComparator();
 
@@ -100,27 +167,41 @@ public final class RootNode extends AbstractNode {
             super();
         }
 
-        public synchronized void init() {
-            final ServerRegistry registry = ServerRegistry.getInstance();
+        public void init() {
+            RequestProcessor.getDefault().post(new Runnable() {
 
-            registry.addChangeListener(
-                WeakListeners.create(ChangeListener.class, this, registry));
-            stateChanged(new ChangeEvent(registry));
+                public void run() {
+                    synchronized (ChildFactory.this) {
+                        final ServerRegistry registry = ServerRegistry.getInstance();
+
+                        registry.addChangeListener(
+                            WeakListeners.create(ChangeListener.class, ChildFactory.this, registry));
+                        stateChanged(new ChangeEvent(registry));
+                    }
+                }
+            });
         }
 
-        public synchronized void stateChanged(ChangeEvent e) {
-            if (e.getSource() instanceof ServerRegistry) {
-                for (ServerInstanceProvider type : types) {
-                    type.removeChangeListener(this);
-                }
+        public void stateChanged(final ChangeEvent e) {
+            RequestProcessor.getDefault().post(new Runnable() {
 
-                types.clear();
-                types.addAll(((ServerRegistry) e.getSource()).getProviders());
-                for (ServerInstanceProvider type : types) {
-                    type.addChangeListener(this);
+                public void run() {
+                    synchronized (ChildFactory.this) {
+                        if (e.getSource() instanceof ServerRegistry) {
+                            for (ServerInstanceProvider type : types) {
+                                type.removeChangeListener(ChildFactory.this);
+                            }
+
+                            types.clear();
+                            types.addAll(((ServerRegistry) e.getSource()).getProviders());
+                            for (ServerInstanceProvider type : types) {
+                                type.addChangeListener(ChildFactory.this);
+                            }
+                        }
+                        refresh();
+                    }
                 }
-            }
-            refresh();
+            });
         }
 
         protected final void refresh() {
@@ -136,6 +217,8 @@ public final class RootNode extends AbstractNode {
         protected boolean createKeys(List<ServerInstance> toPopulate) {
             List<ServerInstance> fresh = new ArrayList<ServerInstance>();
 
+            Mutex.EVENT.readAccess(this);
+
             ServerRegistry registry = ServerRegistry.getInstance();
             for (ServerInstanceProvider type : registry.getProviders()) {
                 fresh.addAll(type.getInstances());
@@ -147,7 +230,17 @@ public final class RootNode extends AbstractNode {
             return true;
         }
 
-    }
+        private static boolean actionsPropertiesDone;
+        public void run() {
+            if (actionsPropertiesDone) {
+                return;
+            }
+            assert EventQueue.isDispatchThread();
+            actionsPropertiesDone = true;
+            enableActionsOnExpand();
+            ServerRegistry.getInstance().getProviders();
+        }
+    } // end of ChildFactory
 
     private static class InstanceComparator implements Comparator<ServerInstance>, Serializable {
 
