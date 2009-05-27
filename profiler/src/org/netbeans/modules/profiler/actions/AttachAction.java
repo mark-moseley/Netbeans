@@ -40,12 +40,8 @@
 
 package org.netbeans.modules.profiler.actions;
 
-import org.netbeans.api.progress.ProgressHandle;
-import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.modules.profiler.NetBeansProfiler;
-import org.netbeans.modules.profiler.ui.NBSwingWorker;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import java.awt.event.ActionEvent;
 import javax.swing.*;
 
@@ -58,21 +54,19 @@ import javax.swing.*;
 public final class AttachAction extends AbstractAction {
     //~ Constructors -------------------------------------------------------------------------------------------------------------
 
-    public AttachAction() {
-        putValue(Action.NAME, NbBundle.getMessage(AttachAction.class, "LBL_AttachMainProjectAction") // NOI18N
-        );
-        putValue(Action.SHORT_DESCRIPTION, NbBundle.getMessage(AttachAction.class, "HINT_AttachMainProjectAction") // NOI18N
-        );
-        putValue("iconBase", // NOI18N
-                 "org/netbeans/modules/profiler/actions/resources/attach.png" // NOI18N
-        );
-        putValue(Action.SMALL_ICON,
-                 new ImageIcon(Utilities.loadImage("org/netbeans/modules/profiler/actions/resources/attach.png")) //NOI18N
-        );
+    private AttachAction() {
+        putValue(Action.NAME, NbBundle.getMessage(AttachAction.class, "LBL_AttachMainProjectAction")); // NOI18N
+        putValue(Action.SHORT_DESCRIPTION, NbBundle.getMessage(AttachAction.class, "HINT_AttachMainProjectAction")); // NOI18N
+    }
+
+    private static final AttachAction DEF = new AttachAction();
+    public static AttachAction getDefault() {
+        return DEF;
     }
 
     //~ Methods ------------------------------------------------------------------------------------------------------------------
 
+    @Override
     public boolean isEnabled() {
         if (!NetBeansProfiler.isInitialized()) {
             return false;
