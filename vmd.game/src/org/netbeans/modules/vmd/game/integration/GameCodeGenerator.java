@@ -54,6 +54,7 @@ import javax.swing.text.StyledDocument;
 /**
  * @author David Kaspar
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.vmd.api.io.CodeGenerator.class)
 public class GameCodeGenerator implements CodeGenerator {
 
     public void validateModelForCodeGeneration (DataObjectContext context, DesignDocument document) {
@@ -65,7 +66,8 @@ public class GameCodeGenerator implements CodeGenerator {
         if (GameController.PROJECT_TYPE_GAME.equals (context.getProjectType ())) {
             DataObject dataObject = context.getDataObject ();
             StyledDocument styledDocument = IOSupport.getDataObjectInteface (dataObject).getEditorDocument ();
-            JavaCodeGenerator.getDefault ().updateUserCodesFromEditor (styledDocument);
+            JavaCodeGenerator.getDefault ().updateUserCodesFromEditor (styledDocument,
+                    document);
         }
     }
 
