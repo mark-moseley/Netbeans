@@ -57,6 +57,20 @@ public class ClassCode {
     
     private static final String ARRAY_SUFFIX = "Array"; // NOI18N
     private static final String GETTER_PREFIX = "get"; // NOI18N
+
+    public static class GeneratedCodePresenter extends ModelUpdatePresenter {
+
+        @Override
+        public void modelUpdated() {
+             getComponent().writeProperty( ClassCD.PROP_CODE_GENERATED, 
+                     MidpTypes.createBooleanValue (Boolean.TRUE));
+        }
+
+        public boolean isCodeGenerated(){
+            return Boolean.TRUE.equals( getComponent().readProperty(
+                    ClassCD.PROP_CODE_GENERATED).getPrimitiveValue()) ;
+        }
+    }
     
     static final class ClassCodeReferencePresenter extends CodeReferencePresenter {
         
@@ -65,13 +79,18 @@ public class ClassCode {
         
         protected String generateAccessCode() {
             DesignComponent component = getComponent();
-            boolean lazyInit = MidpTypes.getBoolean(component.readProperty(ClassCD.PROP_LAZY_INIT));
             String instanceName = MidpTypes.getString(component.readProperty(ClassCD.PROP_INSTANCE_NAME));
-            return lazyInit ? createGetterNameFromInstanceName(instanceName) + " ()" : instanceName; // NOI18N
+            return generateAccessCode(instanceName);
         }
         
         protected String generateDirectAccessCode() {
             return MidpTypes.getString(getComponent().readProperty(ClassCD.PROP_INSTANCE_NAME));
+        }
+
+        protected String generateAccessCode( String newName ){
+            DesignComponent component = getComponent();
+            boolean lazyInit = MidpTypes.getBoolean(component.readProperty(ClassCD.PROP_LAZY_INIT));
+            return lazyInit ? createGetterNameFromInstanceName(newName) + " ()" : newName; // NOI18N
         }
         
         protected String generateTypeCode() {

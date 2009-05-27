@@ -57,6 +57,7 @@ import org.openide.util.NbBundle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.netbeans.modules.vmd.api.codegen.ModelUpdatePresenter;
 import org.netbeans.modules.vmd.midp.components.general.ClassCode.CodeClassComponentDependencyPresenter;
 
 /**
@@ -69,6 +70,7 @@ public final class ClassCD extends ComponentDescriptor {
 
     public static final String PROP_INSTANCE_NAME = "instanceName"; // NOI18N
     public static final String PROP_LAZY_INIT = "lazyInit";  // NOI18N
+    public static final String PROP_CODE_GENERATED = "codeGenerated";  // NOI18N
 
     static {
         MidpTypes.registerIcon (TYPEID, null); // TODO - use an empty icon here
@@ -80,7 +82,9 @@ public final class ClassCD extends ComponentDescriptor {
 
     @Override
     public void postInitialize (DesignComponent component) {
-        component.writeProperty (PROP_INSTANCE_NAME, InstanceNameResolver.createFromSuggested (component, ClassCode.getSuggestedMainName (component.getType ())));
+        component.writeProperty (PROP_INSTANCE_NAME, 
+                InstanceNameResolver.createFromSuggested (component,
+                ClassCode.getSuggestedMainName (component.getType ())));
     }
 
     public VersionDescriptor getVersionDescriptor () {
@@ -89,8 +93,15 @@ public final class ClassCD extends ComponentDescriptor {
 
     public List<PropertyDescriptor> getDeclaredPropertyDescriptors () {
        return Arrays.asList(
-            new PropertyDescriptor (PROP_INSTANCE_NAME, MidpTypes.TYPEID_JAVA_LANG_STRING, PropertyValue.createNull (), false, false, Versionable.FOREVER),
-            new PropertyDescriptor (PROP_LAZY_INIT, MidpTypes.TYPEID_BOOLEAN, MidpTypes.createBooleanValue (Boolean.TRUE), false, false, Versionable.FOREVER)
+            new PropertyDescriptor (PROP_INSTANCE_NAME,
+                MidpTypes.TYPEID_JAVA_LANG_STRING, PropertyValue.createNull (),
+                false, false, Versionable.FOREVER),
+            new PropertyDescriptor (PROP_LAZY_INIT, MidpTypes.TYPEID_BOOLEAN, 
+            MidpTypes.createBooleanValue (Boolean.TRUE), false, false,
+                Versionable.FOREVER),
+            new PropertyDescriptor (PROP_CODE_GENERATED,
+                MidpTypes.TYPEID_BOOLEAN, MidpTypes.createBooleanValue (Boolean.FALSE),
+                false, false, Versionable.FOREVER)
        );
     }
 
@@ -98,14 +109,18 @@ public final class ClassCD extends ComponentDescriptor {
         return new DefaultPropertiesPresenter()
             .addPropertiesCategory(MidpPropertiesCategories.CATEGORY_PROPERTIES)
             .addPropertiesCategory(MidpPropertiesCategories.CATEGORY_CODE_PROPERTIES)
-                .addProperty(NbBundle.getMessage(ClassCD.class, "DISP_Class_Instance_Name"), PropertyEditorInstanceName.createInstance(TYPEID), PROP_INSTANCE_NAME) // NOI18N
-                .addProperty(NbBundle.getMessage(ClassCD.class, "DISP_Class_Is_Lazy_Initialized"), PropertyEditorBooleanUC.createInstance(), PROP_LAZY_INIT); // NOI18N
+                .addProperty(NbBundle.getMessage(ClassCD.class, "DISP_Class_Instance_Name"),
+                    PropertyEditorInstanceName.createInstance(TYPEID), PROP_INSTANCE_NAME) // NOI18N
+                    .addProperty(NbBundle.getMessage(ClassCD.class,
+                "DISP_Class_Is_Lazy_Initialized"), PropertyEditorBooleanUC.createInstance(),
+                    PROP_LAZY_INIT); // NOI18N
                 
     }
 
     @Override
     protected void gatherPresenters (ArrayList<Presenter> presenters) {
-        MidpActionsSupport.addCommonActionsPresenters (presenters, true, true, true, true, true);
+        MidpActionsSupport.addCommonClassActionsPresenters (presenters, true,
+                true, true, true, true);
         super.gatherPresenters (presenters);
     }
 
@@ -126,6 +141,7 @@ public final class ClassCD extends ComponentDescriptor {
             new ClassCode.ClassCodeReferencePresenter (),
             new ClassCode.CodeLazyInitPresenter (),
             new ClassCode.CodeClassNamePresenter (),
+            new ClassCode.GeneratedCodePresenter(),
             new CodeClassComponentDependencyPresenter()
         );
     }

@@ -62,6 +62,13 @@ import org.netbeans.modules.vmd.midp.screen.CommandEventSourceSRItemPresenter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.netbeans.modules.vmd.api.model.presenters.actions.ActionsPresenter;
+import org.netbeans.modules.vmd.midp.actions.MidpActionsSupport;
+import org.netbeans.modules.vmd.midp.codegen.ui.RenameCommandAction;
+import org.netbeans.modules.vmd.midp.components.MidpTypes;
+import org.netbeans.modules.vmd.midp.components.general.ClassCD;
+import org.netbeans.modules.vmd.midp.components.general.ClassCode;
+import org.openide.util.actions.SystemAction;
 
 
 /**
@@ -97,7 +104,9 @@ public final class CommandEventSourceCD extends ComponentDescriptor {
     
     @Override
     protected void gatherPresenters(ArrayList<Presenter> presenters) {
-        EventSourceSupport.addActionsPresentres(presenters);
+        EventSourceSupport.addActionsPresentres(presenters, false);
+        presenters.add(ActionsPresenter.create(30,
+                SystemAction.get(RenameCommandAction.class)));
         super.gatherPresenters(presenters);
     }
     
@@ -106,13 +115,13 @@ public final class CommandEventSourceCD extends ComponentDescriptor {
             // info
             InfoPresenter.create (EventSourceSupport.createCommandEventSourceInfoResolver ()),
             // general
-            GoToSourcePresenter.createForwarder (PROP_COMMAND),
-            new SecondaryGoToSourcePresenter() {
+            new GoToSourcePresenter() {
                 protected boolean matches (GuardedSection section) {
                     DesignComponent listener = MidpDocumentSupport.getCommandListener (getComponent ().getDocument (), CommandListenerCD.TYPEID);
                     return MultiGuardedSection.matches (section, listener.getComponentID () + "-commandAction", getComponent ().getComponentID () + "-postAction"); // NOI18N
                 }
             },
+            SecondaryGoToSourcePresenter.createForwarder(PROP_COMMAND),
             // flow
             new CommandEventSourceFlowPinPresenter (),
             // properties
@@ -128,7 +137,21 @@ public final class CommandEventSourceCD extends ComponentDescriptor {
                 }
             },
             // screen
-            new CommandEventSourceSRItemPresenter ()
+            new CommandEventSourceSRItemPresenter (),
+            new ClassCode.GeneratedCodePresenter(){
+
+                @Override
+                public void modelUpdated() {
+                }
+
+                @Override
+                public boolean isCodeGenerated(){
+                    DesignComponent component = getComponent().readProperty(
+                     PROP_COMMAND).getComponent();
+                    return Boolean.TRUE.equals( component.readProperty(
+                        ClassCD.PROP_CODE_GENERATED).getPrimitiveValue()) ;
+                }
+            }
         );
     }
 
