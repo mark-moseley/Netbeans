@@ -47,12 +47,13 @@ import org.netbeans.modules.cnd.api.model.CsmMember;
 import org.netbeans.modules.cnd.api.model.CsmVisibility;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
+import org.netbeans.lib.editor.util.CharSequenceUtilities;
+import org.netbeans.modules.cnd.api.model.CsmClassifier;
 import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
 import org.netbeans.modules.cnd.api.model.util.*;
+import org.netbeans.modules.cnd.modelutil.AntiLoop;
 
 /**
  * utilities to merge/get inheritance information
@@ -270,20 +271,39 @@ public final class CsmInheritanceUtilities {
         return getContextVisibility(clazz, contextDeclaration, CsmVisibility.PUBLIC, false);
     }
     public static CsmVisibility getContextVisibility(CsmClass clazz, CsmOffsetableDeclaration contextDeclaration, CsmVisibility defVisibilityValue, boolean checkInheritance) {
+        return getContextVisibilityInfo(clazz, contextDeclaration, defVisibilityValue, checkInheritance).visibility;
+    }
+
+    public static final class ContextVisibilityInfo {
+        public final  CsmVisibility visibility;
+        public final  boolean friend;
+
+        public ContextVisibilityInfo(CsmVisibility visibility, boolean friend) {
+            this.visibility = visibility;
+            this.friend = friend;
+        }
+    }
+
+    public static ContextVisibilityInfo getContextVisibilityInfo(CsmClass clazz, CsmOffsetableDeclaration contextDeclaration, CsmVisibility defVisibilityValue, boolean checkInheritance) {
         assert (clazz != null);
+
         CsmClass contextClass = CsmBaseUtilities.getContextClass(contextDeclaration);
         // if we are in the same class => we see everything
-        if (contextClass == clazz) {
-            return MAX_VISIBILITY;
+        if (areEqualClasses(clazz, contextClass)) {
+            return new ContextVisibilityInfo(MAX_VISIBILITY, false);
         }
         // friend has maximal visibility
         if (CsmFriendResolver.getDefault().isFriend(contextDeclaration, clazz)) {
-            return MAX_VISIBILITY;
-        }        
+            return new ContextVisibilityInfo(MAX_VISIBILITY, true);
+        }
+        // nested classes should see at least themselves
+        if (isNestedClass(contextClass, clazz)) {
+            return new ContextVisibilityInfo(MAX_VISIBILITY, false);
+        }
         // from global context only public members are visible, friend is checked above
         // return passed default public visibility
         if (contextClass == null || !checkInheritance) {
-            return defVisibilityValue;
+            return new ContextVisibilityInfo(defVisibilityValue, false);
         }
 
         List<CsmInheritance> chain = findInheritanceChain(contextClass, clazz);
@@ -301,12 +321,12 @@ public final class CsmInheritanceUtilities {
                     // create merged visibility based on direct inheritance
                     mergedVisibility = CsmInheritanceUtilities.mergeChildInheritanceVisibility(mergedVisibility, inherit.getVisibility());
                 }
-            }          
-            return mergedVisibility;
+            }
+            return new ContextVisibilityInfo(mergedVisibility, false);
         } else {
             // not inherited class see only public, friend was checked above
             // return passed default public visibility
-            return defVisibilityValue;
+            return new ContextVisibilityInfo(defVisibilityValue, false);
         }
     }
     
@@ -323,7 +343,7 @@ public final class CsmInheritanceUtilities {
      */
     private static List<CsmInheritance> findInheritanceChain(CsmClass child, CsmClass parent) {
         List<CsmInheritance> res = new ArrayList<CsmInheritance>();
-        Set<CsmClass> handledClasses = new HashSet<CsmClass>();
+        AntiLoop handledClasses = new AntiLoop();
         if (findInheritanceChain(child, parent, res, handledClasses)) {
             return res;
         } else {
@@ -333,7 +353,7 @@ public final class CsmInheritanceUtilities {
 
     public static boolean isAssignableFrom(CsmClass child, CsmClass parent) {
         assert (parent != null);
-        if (child == parent) {
+        if (areEqualClasses(parent, child)) {
             return true;
         }
         List<CsmInheritance> chain = CsmInheritanceUtilities.findInheritanceChain(child, parent);
@@ -342,7 +362,7 @@ public final class CsmInheritanceUtilities {
     
     private static boolean findInheritanceChain(CsmClass child, CsmClass parent, 
                                         List<CsmInheritance> res, 
-                                        Set<CsmClass> handledClasses) {
+                                        AntiLoop handledClasses) {
         // remember visited childs
         // quick exit, if already handled before
         if (child == null || !handledClasses.add(child)) {
@@ -366,7 +386,7 @@ public final class CsmInheritanceUtilities {
         for (Iterator it = base.iterator(); it.hasNext();) {
             CsmInheritance curInh = (CsmInheritance) it.next();
             List<CsmInheritance> curInhRes = new ArrayList<CsmInheritance>();
-            if (findInheritanceChain(curInh.getCsmClass(), parent, curInhRes, handledClasses)) {
+            if (findInheritanceChain(getCsmClass(curInh), parent, curInhRes, handledClasses)) {
                 bestChain = curInhRes;
                 bestInh = curInh;
                 // TODO: comment as above
@@ -383,17 +403,45 @@ public final class CsmInheritanceUtilities {
         return false;
     }
 
+    public static CsmClass getCsmClass(CsmInheritance inh) {
+        CsmClassifier classifier = inh.getClassifier();
+        classifier = CsmBaseUtilities.getOriginalClassifier(classifier, inh.getContainingFile());
+        if (CsmKindUtilities.isClass(classifier)) {
+            return (CsmClass)classifier;
+        }
+        return null;
+    }
+
     private static CsmInheritance findDirectInheritance(CsmClass child, CsmClass parent) {
         assert (parent != null);
         Collection base = child.getBaseClasses();
         if (base != null && base.size() > 0) {
             for (Iterator it = base.iterator(); it.hasNext();) {
                 CsmInheritance curInh = (CsmInheritance) it.next();
-                if (curInh.getCsmClass() == parent) {
+                if (areEqualClasses(parent, getCsmClass(curInh))) {
                     return curInh;
                 }
             }
         }
         return null;
+    }
+
+    private static boolean areEqualClasses(CsmClass clazz, CsmClass contextClass) {
+        assert clazz != null;
+        if (clazz.equals(contextClass)) {
+            return true;
+        } else if (contextClass != null) {
+            // TODO: may be move such logic into equals methods of instantiations?
+            if (CsmKindUtilities.isTemplate(clazz) ||
+                    CsmKindUtilities.isTemplateInstantiation(clazz)) {
+                return clazz.getUniqueName().equals(contextClass.getUniqueName());
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNestedClass(CsmClass inner, CsmClass outer) {
+        return inner != null && outer != null &&
+               CharSequenceUtilities.startsWith(inner.getQualifiedName(),outer.getQualifiedName());
     }
 }
