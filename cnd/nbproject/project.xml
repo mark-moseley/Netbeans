@@ -33,6 +33,24 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.netbeans.modules.cnd.api.project</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.5</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.cnd.api.remote</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.0</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.netbeans.modules.cnd.dwarfdump</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
@@ -55,6 +73,14 @@
                     <compile-dependency/>
                     <run-dependency>
                         <specification-version>1.1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.dlight.nativeexecution</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>1.0</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -118,21 +144,6 @@
                     <run-dependency>
                         <release-version>1</release-version>
                         <specification-version>1.22</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.languages</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>0-1</release-version>
-                        <specification-version>1.91</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.languages.sh</code-name-base>
-                    <run-dependency>
-                        <specification-version>1.4</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -234,7 +245,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>7.16</specification-version>
+                        <specification-version>7.19</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -298,7 +309,11 @@
                 <test-type>
                     <name>unit</name>
                     <test-dependency>
-                        <code-name-base>org.netbeans.insane</code-name-base>
+                        <code-name-base>org.netbeans.libs.junit4</code-name-base>
+                        <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.nbjunit</code-name-base>
                         <recursive/>
                         <compile-dependency/>
                     </test-dependency>
@@ -362,13 +377,16 @@
                 <friend>com.sun.tools.swdev.advtools.actions.spi</friend>
                 <friend>com.sun.tools.swdev.projectimport</friend>
                 <friend>com.sun.tools.swdev.sunstudio</friend>
+                <friend>org.netbeans.modules.cnd.api.remote</friend>
                 <friend>org.netbeans.modules.cnd.classview</friend>
                 <friend>org.netbeans.modules.cnd.completion</friend>
                 <friend>org.netbeans.modules.cnd.debugger.gdb</friend>
+                <friend>org.netbeans.modules.cnd.debugger.gdb2</friend>
                 <friend>org.netbeans.modules.cnd.discovery</friend>
                 <friend>org.netbeans.modules.cnd.dwarfdiscovery</friend>
                 <friend>org.netbeans.modules.cnd.editor</friend>
                 <friend>org.netbeans.modules.cnd.folding</friend>
+                <friend>org.netbeans.modules.cnd.gizmo</friend>
                 <friend>org.netbeans.modules.cnd.highlight</friend>
                 <friend>org.netbeans.modules.cnd.make2netbeans</friend>
                 <friend>org.netbeans.modules.cnd.makeproject</friend>
@@ -379,25 +397,22 @@
                 <friend>org.netbeans.modules.cnd.qnavigator</friend>
                 <friend>org.netbeans.modules.cnd.refactoring</friend>
                 <friend>org.netbeans.modules.cnd.remote</friend>
+                <friend>com.sun.cloud.cnd</friend>
                 <package>org.netbeans.modules.cnd</package>
                 <package>org.netbeans.modules.cnd.actions</package>
                 <package>org.netbeans.modules.cnd.api.compilers</package>
                 <package>org.netbeans.modules.cnd.api.execution</package>
                 <package>org.netbeans.modules.cnd.api.picklist</package>
-                <package>org.netbeans.modules.cnd.api.remote</package>
                 <package>org.netbeans.modules.cnd.api.utils</package>
                 <package>org.netbeans.modules.cnd.api.xml</package>
                 <package>org.netbeans.modules.cnd.builds</package>
                 <package>org.netbeans.modules.cnd.editor</package>
-                <package>org.netbeans.modules.cnd.editor.fortran</package>
-                <package>org.netbeans.modules.cnd.editor.makefile</package>
                 <package>org.netbeans.modules.cnd.editor.parser</package>
-                <package>org.netbeans.modules.cnd.editor.shell</package>
                 <package>org.netbeans.modules.cnd.execution</package>
                 <package>org.netbeans.modules.cnd.execution41.org.openide.cookies</package>
                 <package>org.netbeans.modules.cnd.execution41.org.openide.loaders</package>
-                <package>org.netbeans.modules.cnd.loaders</package>
                 <package>org.netbeans.modules.cnd.settings</package>
+                <package>org.netbeans.modules.cnd.spi.compilers</package>
                 <package>org.netbeans.modules.cnd.ui.options</package>
             </friend-packages>
         </data>

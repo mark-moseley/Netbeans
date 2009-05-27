@@ -3,7 +3,7 @@
     <type>org.netbeans.modules.apisupport.project</type>
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/nb-module-project/3">
-            <code-name-base>org.netbeans.modules.cnd.completion</code-name-base>
+            <code-name-base>org.netbeans.modules.cnd.editor</code-name-base>
             <module-dependencies>
                 <dependency>
                     <code-name-base>org.jdesktop.layout</code-name-base>
@@ -11,29 +11,11 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.7</specification-version>
+                        <specification-version>1.5</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
                     <code-name-base>org.netbeans.modules.cnd</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.4</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.cnd.api.model</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.cnd.editor</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
@@ -43,24 +25,6 @@
                 </dependency>
                 <dependency>
                     <code-name-base>org.netbeans.modules.cnd.lexer</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.cnd.model.services</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.0</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.cnd.modelutil</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
@@ -86,21 +50,12 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
-                    <code-name-base>org.netbeans.modules.editor.codetemplates</code-name-base>
+                    <code-name-base>org.netbeans.modules.editor.bracesmatching</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.8</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.netbeans.modules.editor.completion</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <release-version>1</release-version>
-                        <specification-version>1.6.22</specification-version>
+                        <release-version>0-1</release-version>
+                        <specification-version>1.6</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -109,7 +64,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>2</release-version>
-                        <specification-version>1.10</specification-version>
+                        <specification-version>1.7</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -118,7 +73,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.33</specification-version>
+                        <specification-version>1.27</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -127,7 +82,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.10</specification-version>
+                        <specification-version>1.9</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -136,7 +91,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.24</specification-version>
+                        <specification-version>1.21</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -145,7 +100,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.8.22</specification-version>
+                        <specification-version>1.22</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -158,12 +113,21 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.netbeans.modules.options.api</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.6</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.netbeans.modules.options.editor</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.12</specification-version>
+                        <specification-version>1.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -172,7 +136,7 @@
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.9.1</specification-version>
+                        <specification-version>1.14</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -180,7 +144,23 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.7.1</specification-version>
+                        <specification-version>7.0</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.openide.dialogs</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>7.6</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.openide.explorer</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>6.13</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -188,15 +168,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.4.1</specification-version>
-                    </run-dependency>
-                </dependency>
-                <dependency>
-                    <code-name-base>org.openide.io</code-name-base>
-                    <build-prerequisite/>
-                    <compile-dependency/>
-                    <run-dependency>
-                        <specification-version>1.13</specification-version>
+                        <specification-version>7.19</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -204,7 +176,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>5.9.1</specification-version>
+                        <specification-version>7.5</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -212,7 +184,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.5.1</specification-version>
+                        <specification-version>7.4</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -220,7 +192,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.7.1</specification-version>
+                        <specification-version>7.3</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -228,7 +200,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.16</specification-version>
+                        <specification-version>6.17</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -236,7 +208,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.8.1</specification-version>
+                        <specification-version>7.12</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -244,7 +216,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.5.1</specification-version>
+                        <specification-version>6.24</specification-version>
                     </run-dependency>
                 </dependency>
             </module-dependencies>
@@ -267,13 +239,13 @@
                         <test/>
                     </test-dependency>
                     <test-dependency>
-                        <code-name-base>org.netbeans.modules.cnd.modelimpl</code-name-base>
+                        <code-name-base>org.netbeans.modules.cnd.completion</code-name-base>
                         <recursive/>
                         <compile-dependency/>
-                        <test/>
                     </test-dependency>
                     <test-dependency>
-                        <code-name-base>org.netbeans.modules.cnd.modelui</code-name-base>
+                        <code-name-base>org.netbeans.modules.cnd.modelimpl</code-name-base>
+                        <recursive/>
                         <compile-dependency/>
                     </test-dependency>
                     <test-dependency>
@@ -282,17 +254,39 @@
                         <compile-dependency/>
                     </test-dependency>
                     <test-dependency>
+                        <code-name-base>org.netbeans.modules.editor</code-name-base>
+                        <recursive/>
+                        <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
                         <code-name-base>org.netbeans.modules.editor.mimelookup</code-name-base>
+                        <recursive/>
                         <compile-dependency/>
                         <test/>
                     </test-dependency>
                     <test-dependency>
                         <code-name-base>org.netbeans.modules.masterfs</code-name-base>
+                        <recursive/>
                         <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.openide.util</code-name-base>
+                        <recursive/>
+                        <compile-dependency/>
+                        <test/>
                     </test-dependency>
                 </test-type>
             </test-dependencies>
-            <public-packages/>
+            <friend-packages>
+                <friend>org.netbeans.modules.cnd.completion</friend>
+                <friend>org.netbeans.modules.cnd.highlight</friend>
+                <friend>org.netbeans.modules.cnd.kit</friend>
+                <friend>org.netbeans.modules.cnd.modelutil</friend>
+                <friend>org.netbeans.modules.cnd.navigation</friend>
+                <friend>org.netbeans.modules.cnd.refactoring</friend>
+                <package>org.netbeans.modules.cnd.editor.api</package>
+                <package>org.netbeans.modules.cnd.editor.spi.cplusplus</package>
+            </friend-packages>
         </data>
     </configuration>
 </project>
