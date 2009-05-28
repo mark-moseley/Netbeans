@@ -39,8 +39,9 @@
 
 package org.netbeans.modules.php.editor.model.nodes;
 
-import org.netbeans.modules.gsf.api.annotations.NonNull;
+import org.netbeans.api.annotations.common.NonNull;
 import org.netbeans.modules.php.editor.model.Parameter;
+import org.netbeans.modules.php.editor.model.TypeScope;
 
 /**
  *
@@ -70,5 +71,10 @@ class ParameterImpl implements Parameter {
 
     public boolean isMandatory() {
         return defaultValue == null;
+    }
+
+    //TODO: not implemented yet
+    public TypeScope getType() {
+        return null;
     }
 }
