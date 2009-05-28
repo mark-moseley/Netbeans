@@ -140,14 +140,18 @@ abstract class LazyInitFilterNode extends FilterNode {
             }
         }
 
-        @Override
-        protected void removeNotify() {
-            super.removeNotify();
-            setChildren (new LazyChildren());
-        }
-
         public void run() {
-            setChildren (createRealChildren());
+            Children children = createRealChildren();
+            /* Children should not be null in the result. If it null
+             * it means that initialization still is not complete.
+             * So one need to wait . Once again put it into Swing queue.
+             */
+            if ( children == null ){
+                EventQueue.invokeLater (this);
+            }
+            else {
+                setChildren (createRealChildren());
+            }
         }
     }
 }
