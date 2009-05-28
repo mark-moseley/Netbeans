@@ -55,7 +55,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.swing.Icon;
-import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
@@ -63,14 +62,15 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
-import org.netbeans.modules.ruby.modules.project.rake.RakeBasedProjectFactorySingleton;
-import org.netbeans.modules.ruby.modules.project.rake.FileChangeSupport;
-import org.netbeans.modules.ruby.modules.project.rake.FileChangeSupportEvent;
-import org.netbeans.modules.ruby.modules.project.rake.FileChangeSupportListener;
 import org.netbeans.spi.project.support.GenericSources;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ChangeSupport;
 import org.openide.util.WeakListeners;
 
 // XXX should perhaps be legal to call add* methods at any time (should update things)
@@ -126,7 +126,8 @@ public final class SourcesHelper {
             return type;
         }
     }
-    
+
+    private final Project prj;
     private final RakeProjectHelper project;
     private final PropertyEvaluator evaluator;
     private final List<SourceRoot> principalSourceRoots = new ArrayList<SourceRoot>();
@@ -148,7 +149,8 @@ public final class SourcesHelper {
      * @param project an Ant project helper
      * @param evaluator a way to evaluate Ant properties used to define source locations
      */
-    public SourcesHelper(RakeProjectHelper project, PropertyEvaluator evaluator) {
+    public SourcesHelper(Project prj, RakeProjectHelper project, PropertyEvaluator evaluator) {
+        this.prj = prj;
         this.project = project;
         this.evaluator = evaluator;
     }
@@ -205,7 +207,7 @@ public final class SourcesHelper {
      * Add a typed source root which will be considered only in certain contexts.
      * @param location a project-relative or absolute path giving the location
      *                 of a source tree; may contain Ant property substitutions
-     * @param type a source root type such as <a href="@JAVA/PROJECT@/org/netbeans/api/gsfpath/project/JavaProjectConstants.html#SOURCES_TYPE_JAVA"><code>JavaProjectConstants.SOURCES_TYPE_JAVA</code></a>
+     * @param type a source root type such as <a href="@JAVA/PROJECT@/org/netbeans/modules/gsfpath/api/project/JavaProjectConstants.html#SOURCES_TYPE_JAVA"><code>JavaProjectConstants.SOURCES_TYPE_JAVA</code></a>
      * @param displayName a display name (for {@link SourceGroup#getDisplayName})
      * @param icon a regular icon for the source root, or null
      * @param openedIcon an opened variant icon for the source root, or null
@@ -221,7 +223,7 @@ public final class SourcesHelper {
     }
     
     private Project getProject() {
-        return RakeBasedProjectFactorySingleton.getProjectFor(project);
+        return prj;
     }
     
     /**
@@ -247,13 +249,6 @@ public final class SourcesHelper {
      * Calling this method causes the helper object to hold strong references to the
      * current external roots, which helps a project satisfy the requirements of
      * {@link FileOwnerQuery#EXTERNAL_ALGORITHM_TRANSIENT}.
-     * </p>
-     * <p>
-     * You may <em>not</em> call this method inside the project's constructor, as
-     * it requires the actual project to exist and be registered in {@link ProjectManager}.
-     * Typically you would use {@link org.openide.util.Mutex#postWriteRequest} to run it
-     * later, if you were creating the helper in your constructor, since the project construction
-     * normally occurs in read access.
      * </p>
      * @param algorithm an external root registration algorithm as per
      *                  {@link FileOwnerQuery#markExternalOwner}
@@ -379,9 +374,9 @@ public final class SourcesHelper {
         return new SourcesImpl();
     }
     
-    private final class SourcesImpl implements Sources, PropertyChangeListener, FileChangeSupportListener {
+    private final class SourcesImpl implements Sources, PropertyChangeListener, FileChangeListener {
         
-        private final List<ChangeListener> listeners = new ArrayList<ChangeListener>();
+        private final ChangeSupport cs = new ChangeSupport(this);
         private boolean haveAttachedListeners;
         private final Set<File> rootsListenedTo = new HashSet<File>();
         /**
@@ -469,43 +464,25 @@ public final class SourcesHelper {
             return groups.toArray(new SourceGroup[groups.size()]);
         }
         
-        private void listen(File rootLocation) {
+        private synchronized void listen(File rootLocation) {
             // #40845. Need to fire changes if a source root is added or removed.
             if (rootsListenedTo.add(rootLocation) && /* be lazy */ haveAttachedListeners) {
-                FileChangeSupport.DEFAULT.addListener(this, rootLocation);
+                    FileUtil.addFileChangeListener(this, rootLocation);
             }
         }
         
-        public void addChangeListener(ChangeListener listener) {
+        public synchronized void addChangeListener(ChangeListener listener) {
             if (!haveAttachedListeners) {
                 haveAttachedListeners = true;
                 for (File rootLocation : rootsListenedTo) {
-                    FileChangeSupport.DEFAULT.addListener(this, rootLocation);
+                    FileUtil.addFileChangeListener(this, rootLocation);
                 }
             }
-            synchronized (listeners) {
-                listeners.add(listener);
-            }
+            cs.addChangeListener(listener);
         }
-        
+
         public void removeChangeListener(ChangeListener listener) {
-            synchronized (listeners) {
-                listeners.remove(listener);
-            }
-        }
-        
-        private void fireChange() {
-            ChangeListener[] _listeners;
-            synchronized (listeners) {
-                if (listeners.isEmpty()) {
-                    return;
-                }
-                _listeners = listeners.toArray(new ChangeListener[listeners.size()]);
-            }
-            ChangeEvent ev = new ChangeEvent(this);
-            for (ChangeListener l : _listeners) {
-                l.stateChanged(ev);
-            }
+            cs.removeChangeListener(listener);
         }
         
         private void maybeFireChange() {
@@ -522,24 +499,36 @@ public final class SourcesHelper {
                 }
             }
             if (change) {
-                fireChange();
+                cs.fireChange();
             }
         }
 
-        public void fileCreated(FileChangeSupportEvent event) {
+        public void fileFolderCreated(FileEvent fe) {
             // Root might have been created on disk.
             maybeFireChange();
         }
 
-        public void fileDeleted(FileChangeSupportEvent event) {
+        public void fileDataCreated(FileEvent fe) {
+            maybeFireChange();
+        }
+
+        public void fileDeleted(FileEvent fe) {
             // Root might have been deleted.
             maybeFireChange();
         }
 
-        public void fileModified(FileChangeSupportEvent event) {
+        public void fileChanged(FileEvent fe) {
             // ignore; generally should not happen (listening to dirs)
         }
-        
+
+        public void fileRenamed(FileRenameEvent fe) {
+            maybeFireChange();
+        }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) {
+            // #164930 - ignore
+        }
+
         public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
             // Properties may have changed so as cause external roots to move etc.
             maybeFireChange();
