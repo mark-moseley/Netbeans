@@ -41,11 +41,11 @@
 
 package org.netbeans.modules.j2ee.ddloaders.multiview;
 
+import java.awt.BorderLayout;
+import java.awt.Component;
 import org.netbeans.modules.xml.multiview.ui.DefaultTablePanel;
 import org.netbeans.modules.xml.multiview.ui.SectionNodeInnerPanel;
 import org.netbeans.modules.xml.multiview.ui.SectionNodeView;
-
-import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.event.TableModelEvent;
@@ -54,11 +54,16 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
-import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import javax.swing.InputMap;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JTable;
+import javax.swing.KeyStroke;
+import javax.swing.ListSelectionModel;
 
 /**
  * @author pfiala
@@ -75,7 +80,7 @@ public class InnerTablePanel extends SectionNodeInnerPanel {
                 stopCellEditing(table);
                 selectCell(model.addRow(), 0);
                 model.modelUpdatedFromUI();
-                Utils.scrollToVisible(tablePanel);
+                org.netbeans.modules.xml.multiview.Utils.scrollToVisible(tablePanel);
             }
         });
         getEditButton().addActionListener(new ActionListener() {
@@ -163,6 +168,7 @@ public class InnerTablePanel extends SectionNodeInnerPanel {
             /**
              * Invoked when the mouse has been clicked on a component.
              */
+            @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
                     editCell(table.getSelectedRow(), table.getSelectedColumn());
@@ -172,14 +178,13 @@ public class InnerTablePanel extends SectionNodeInnerPanel {
         InputMap inputMap = table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         inputMap.put(KeyStroke.getKeyStroke("ENTER"), "selectNextColumnCell"); //NOI18N
         inputMap.put(KeyStroke.getKeyStroke("shift ENTER"), "selectPreviousColumnCell");    //NOI18N
+        table.getAccessibleContext().setAccessibleName(org.openide.util.NbBundle.getMessage(InnerTablePanel.class, "ACSN_Table")); // NOI18N
+        table.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(InnerTablePanel.class, "ACSD_Table")); // NOI18N
         setLayout(new BorderLayout());
         add(tablePanel, BorderLayout.WEST);
         setColumnWidths();
-        if (model instanceof InnerTableModel) {
-            InnerTableModel innerTableModel = (InnerTableModel) model;
-            setButtonListeners(innerTableModel);
-            setColumnEditors(innerTableModel);
-        }
+        setButtonListeners(model);
+        setColumnEditors(model);
         scheduleRefreshView();
         final TableColumnModel columnModel = table.getColumnModel();
         for (int i = 0, n = columnModel.getColumnCount(); i < n; i++) {
@@ -260,6 +265,7 @@ public class InnerTablePanel extends SectionNodeInnerPanel {
     public void setValue(JComponent source, Object value) {
     }
 
+    @Override
     public void dataModelPropertyChange(Object source, String propertyName, Object oldValue, Object newValue) {
         ((InnerTableModel) getTable().getModel()).tableChanged();
         scheduleRefreshView();
