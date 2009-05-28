@@ -40,13 +40,14 @@
 package org.netbeans.modules.php.editor.model.impl;
 
 import java.util.ArrayList;
-import org.netbeans.modules.gsf.api.NameKind;
+import java.util.Collection;
 import org.netbeans.modules.php.editor.index.IndexedFunction;
 import org.netbeans.modules.php.editor.model.*;
 import java.util.Collections;
 import java.util.List;
 
-import org.netbeans.modules.gsf.api.annotations.NonNull;
+import org.netbeans.api.annotations.common.NonNull;
+import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
 import org.netbeans.modules.php.editor.model.nodes.FunctionDeclarationInfo;
 import org.netbeans.modules.php.editor.model.nodes.MethodDeclarationInfo;
 import org.netbeans.modules.php.editor.parser.astnodes.Program;
@@ -61,22 +62,22 @@ class FunctionScopeImpl extends ScopeImpl implements FunctionScope, VariableCont
     private String returnType;
 
     //new contructors
-    FunctionScopeImpl(ScopeImpl inScope, FunctionDeclarationInfo info, String returnType) {
+    FunctionScopeImpl(Scope inScope, FunctionDeclarationInfo info, String returnType) {
         super(inScope, info, new PhpModifiers(PhpModifiers.PUBLIC), info.getOriginalNode().getBody());
         this.paremeters = info.getParameters();
         this.returnType = returnType;
     }
-    protected FunctionScopeImpl(ScopeImpl inScope, MethodDeclarationInfo info, String returnType) {
+    protected FunctionScopeImpl(Scope inScope, MethodDeclarationInfo info, String returnType) {
         super(inScope, info, info.getAccessModifiers(), info.getOriginalNode().getFunction().getBody());
         this.paremeters = info.getParameters();
         this.returnType = returnType;
     }
 
-    FunctionScopeImpl(ScopeImpl inScope, IndexedFunction indexedFunction) {
+    FunctionScopeImpl(Scope inScope, IndexedFunction indexedFunction) {
         this(inScope, indexedFunction, PhpKind.FUNCTION);
     }
 
-    protected FunctionScopeImpl(ScopeImpl inScope, final IndexedFunction element, PhpKind kind) {
+    protected FunctionScopeImpl(Scope inScope, final IndexedFunction element, PhpKind kind) {
         super(inScope, element, kind);
         List<Parameter> parameters = new ArrayList<Parameter>();
 
@@ -107,25 +108,17 @@ class FunctionScopeImpl extends ScopeImpl implements FunctionScope, VariableCont
     }
 
     //old contructors
-
-    public VariableNameImpl createElement(Program program, Variable node) {
-        VariableNameImpl retval = new VariableNameImpl(this, program, node, false);
-        addElement(retval);
-        return retval;
-    }
     
-    /*FunctionScopeImpl(ScopeImpl inScope, String name, Union2<String,FileObject> file,
-            OffsetRange offsetRange, PhpKind kind, List<? extends String> paremeters, PhpModifiers modifiers, String returnType) {
-        super(inScope, name, file, offsetRange, kind, modifiers);
-        this.paremeters = paremeters;
-        this.returnType = returnType;
-        assert paremeters != null;
-    }*/
 
-    public final List<? extends TypeScope> getReturnTypes() {
-        return (returnType != null && returnType.length() > 0) ?
-            CachedModelSupport.getTypes(returnType.split("\\|")[0], this) :
-            Collections.<TypeScopeImpl>emptyList();
+    public final Collection<? extends TypeScope> getReturnTypes() {
+        Collection<TypeScope> retval = Collections.<TypeScope>emptyList();
+        if (returnType != null && returnType.length() > 0) {
+            retval = new ArrayList<TypeScope>();
+            for (String typeName : returnType.split("\\|")) {
+                retval.addAll(CachingSupport.getTypes(typeName, this));
+            }
+        }
+        return retval;
     }
 
     @NonNull
@@ -144,27 +137,15 @@ class FunctionScopeImpl extends ScopeImpl implements FunctionScope, VariableCont
     }
 
     @Override
-    void checkModifiersAssert() {
-        assert getPhpModifiers() != null;
-        assert getPhpModifiers().isPublic();
-    }
-
-    @Override
-    void checkScopeAssert() {
-        assert getInScope() != null;
-        assert getInScope() instanceof FileScope;
-    }
-
-
-    @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        List<? extends TypeScope> returnTypes = getReturnTypes();
+        Collection<? extends TypeScope> returnTypes = getReturnTypes();
         sb.append('[');
-        for (int i = 0; i < returnTypes.size(); i++) {
-            TypeScope typeScope = returnTypes.get(i);
+        for (TypeScope typeScope : returnTypes) {
+            if (sb.length() == 1) {
+                sb.append("|");
+            }
             sb.append(typeScope.getName());
-            if (i+1 < returnTypes.size()) sb.append("|");
         }
         sb.append("] ");
         sb.append(super.toString()).append("(");
@@ -179,32 +160,37 @@ class FunctionScopeImpl extends ScopeImpl implements FunctionScope, VariableCont
         return sb.toString();
     }
 
-    public List<? extends VariableName> getAllVariables() {
+    public Collection<? extends VariableName> getDeclaredVariables() {
         return getAllVariablesImpl();
     }
 
-    public List<? extends VariableName> getVariables(String... queryName) {
+    public Collection<? extends VariableName> findDeclaredVariables(String... queryName) {
         return getVariablesImpl(queryName);
     }
 
-    public List<? extends VariableName> getVariables(NameKind nameKind, String... queryName) {
-        return getVariables(nameKind, queryName);
+    public Collection<? extends VariableName> findDeclaredVariables(QuerySupport.Kind nameKind, String... queryName) {
+        return findDeclaredVariables(nameKind, queryName);
     }
 
-    public List<? extends VariableNameImpl> getAllVariablesImpl() {
+    public Collection<? extends VariableName> getAllVariablesImpl() {
         return getVariablesImpl();
     }
 
-    public List<? extends VariableNameImpl> getVariablesImpl(String... queryName) {
-        return getVariablesImpl(NameKind.EXACT_NAME, queryName);
+    public Collection<? extends VariableName> getVariablesImpl(String... queryName) {
+        return getVariablesImpl(QuerySupport.Kind.EXACT, queryName);
     }
 
-    public List<? extends VariableNameImpl> getVariablesImpl(final NameKind nameKind, final String... queryName) {
+    public Collection<? extends VariableName> getVariablesImpl(final QuerySupport.Kind nameKind, final String... queryName) {
         return filter(getElements(), new ElementFilter() {
-            public boolean isAccepted(ModelElementImpl element) {
+            public boolean isAccepted(ModelElement element) {
                 return element.getPhpKind().equals(PhpKind.VARIABLE)  &&
                         (queryName.length == 0 || nameKindMatch(element.getName(), nameKind, queryName));
             }
         });
+    }
+  public VariableNameImpl createElement(Program program, Variable node) {
+        VariableNameImpl retval = new VariableNameImpl(this, program, node, false);
+        addElement(retval);
+        return retval;
     }
 }
