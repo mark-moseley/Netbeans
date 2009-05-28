@@ -41,8 +41,12 @@
 package org.netbeans.modules.java.editor.imports;
 
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.ImportTree;
+import com.sun.source.tree.MemberSelectTree;
+import com.sun.source.tree.Tree.Kind;
 import com.sun.source.util.TreePath;
+import com.sun.source.util.TreePathScanner;
 import java.awt.Dialog;
 import java.awt.Toolkit;
 import java.io.IOException;
@@ -54,22 +58,24 @@ import java.util.Map;
 import java.util.prefs.Preferences;
 import javax.lang.model.element.TypeElement;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
+import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.Task;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
-import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.api.java.source.TreeMaker;
 import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.api.java.source.ui.ElementIcons;
+import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.modules.java.editor.semantic.SemanticHighlighter;
 import org.netbeans.modules.editor.java.Utilities;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
-import org.openide.ErrorManager;
 import org.openide.awt.StatusDisplayer;
 import org.openide.filesystems.FileObject;
+import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 
@@ -92,7 +98,7 @@ public class JavaFixAllImports {
     }
     
     public void fixAllImports(FileObject fo) {
-        Task<WorkingCopy> task = new Task<WorkingCopy>() {
+        final Task<WorkingCopy> task = new Task<WorkingCopy>() {
 
             public void run(final WorkingCopy wc) {
                 try {
@@ -163,7 +169,7 @@ public class JavaFixAllImports {
                             variants[index][0] = NbBundle.getMessage(JavaFixAllImports.class, "FixDupImportStmts_CannotResolve"); //NOI18N
                             defaults[index] = variants[index][0];
                             icons[index] = new Icon[1];
-                            icons[index][0] = new ImageIcon( org.openide.util.Utilities.loadImage("org/netbeans/modules/java/editor/resources/error-glyph.gif") );//NOI18N
+                            icons[index][0] = ImageUtilities.loadImageIcon("org/netbeans/modules/java/editor/resources/error-glyph.gif", false);//NOI18N
                         }
 
                         index++;
@@ -217,6 +223,7 @@ public class JavaFixAllImports {
                         if (removeUnusedImports) {
                             //compute imports to remove:
                             List<TreePathHandle> unusedImports = SemanticHighlighter.computeUnusedImports(wc);
+                            unusedImports.addAll(getImportsFromSamePackage(wc));
                             someImportsWereRemoved = !unusedImports.isEmpty();
                             
                             // make the changes to the source
@@ -253,13 +260,77 @@ public class JavaFixAllImports {
             }
         };
         try {
-            JavaSource javaSource = JavaSource.forFileObject(fo);
-            javaSource.runModificationTask(task).commit();
+            final JavaSource javaSource = JavaSource.forFileObject(fo);
+            if (javaSource == null) {
+                StatusDisplayer.getDefault().setStatusText(NbBundle.getMessage(JavaFixAllImports.class, "MSG_CannotFixImports"));
+            } else {
+                //Run Fix Imports as soon as scan finishes. Make it cancellable
+                CancellableTask taskWhenScanFinished = new CancellableTask(new ModificationRunnable(javaSource, task));
+                ProgressHandle handle = ProgressHandleFactory.createHandle(NbBundle.getMessage(JavaFixAllImports.class, "fix-imports"), taskWhenScanFinished); // NOI18N
+                taskWhenScanFinished.setHandle(handle);
+                handle.start();
+                javaSource.runWhenScanFinished(taskWhenScanFinished, true);
+            }
         } catch (IOException ioe) {
-            ErrorManager.getDefault().notify(ioe);
+            Exceptions.printStackTrace(ioe);
         }
     }
+
+    private class ModificationRunnable implements Runnable {
+        private JavaSource javaSource;
+        private Task<WorkingCopy> task;
+
+        public ModificationRunnable(JavaSource javaSource, Task<WorkingCopy> task) {
+            this.javaSource = javaSource;
+            this.task = task;
+        }
+
+        public void run() {
+            try {
+                javaSource.runModificationTask(task).commit();
+            } catch (IOException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+    }
+
     
+    private static List<TreePathHandle> getImportsFromSamePackage(WorkingCopy wc) {
+        ImportVisitor v = new ImportVisitor(wc);
+        v.scan(wc.getCompilationUnit(), null);
+        return v.getImports();
+    }
+
+    private static class ImportVisitor extends TreePathScanner {
+        private CompilationInfo info;
+        private String currentPackage;
+        private List<TreePathHandle> imports;
+
+        private ImportVisitor (CompilationInfo info) {
+            this.info = info;
+            ExpressionTree pkg = info.getCompilationUnit().getPackageName();
+            currentPackage = pkg != null ? pkg.toString() : "";
+            imports = new ArrayList<TreePathHandle>();
+        }
+
+        @Override
+        public Object visitImport(ImportTree node, Object d) {
+            if (node.getQualifiedIdentifier().getKind() == Kind.MEMBER_SELECT) {
+                ExpressionTree exp = ((MemberSelectTree) node.getQualifiedIdentifier()).getExpression();
+                if (exp.toString().equals(currentPackage)) {
+                    imports.add(TreePathHandle.create(getCurrentPath(), info));
+                }
+            }
+
+            super.visitImport(node, null);
+            return null;
+        }
+
+        List<TreePathHandle> getImports() {
+            return imports;
+        }
+    }
+
     //XXX: copied from SourceUtils.addImports. Ideally, should be on one place only:
     public static CompilationUnitTree addImports(CompilationUnitTree cut, List<String> toImport, TreeMaker make)
         throws IOException {

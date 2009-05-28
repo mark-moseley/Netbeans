@@ -49,7 +49,7 @@ import org.netbeans.editor.SyntaxSupport;
 import org.netbeans.editor.TokenItem;
 import org.netbeans.editor.Utilities;
 import org.netbeans.editor.ext.ExtSyntaxSupport;
-import org.openide.ErrorManager;
+import org.openide.util.Exceptions;
 
 /**
  *
@@ -57,7 +57,7 @@ import org.openide.ErrorManager;
  */
 /* package */ class CamelCaseOperations {
 
-    static int nextCamelCasePosition(JTextComponent textComponent) {
+    static int nextCamelCasePosition(JTextComponent textComponent) throws BadLocationException {
         SyntaxSupport syntaxSupport =  Utilities.getSyntaxSupport(textComponent);
         if (syntaxSupport == null) {
             // no syntax support available :(
@@ -66,51 +66,45 @@ import org.openide.ErrorManager;
 
         // get current caret position
         int offset = textComponent.getCaretPosition();
-        try {
-            // get token chain at the offset + 1 ( + 1 so that the following uppercase char is skipped
-            TokenItem tokenItem = ((ExtSyntaxSupport) syntaxSupport).getTokenChain(offset, offset + 1);
+        // get token chain at the offset + 1 ( + 1 so that the following uppercase char is skipped
+        TokenItem tokenItem = ((ExtSyntaxSupport) syntaxSupport).getTokenChain(offset, offset + 1);
 
-            // is this an identifier
-            if (tokenItem != null && ("identifier".equals(tokenItem.getTokenID().getName()))) { // NOI18N
-                String image = tokenItem.getImage();
-                if (image != null && image.length() > 0) {
-                    int length = image.length();
-                    // is caret at the end of the identifier
-                    if (offset != (tokenItem.getOffset() + length)) {
-                        int offsetInImage = offset - tokenItem.getOffset();
-                        int start = offsetInImage + 1;
-                        if (Character.isUpperCase(image.charAt(offsetInImage))) {
-                            // if starting from a Uppercase char, first skip over follwing upper case chars
-                            for (int i = start; i < length; i++) {
-                                char charAtI = image.charAt(i);
-                                if (!Character.isUpperCase(charAtI)) {
-                                    break;
-                                }
-                                start++;
-                            }
-                        }
+        // is this an identifier
+        if (tokenItem != null && ("identifier".equals(tokenItem.getTokenID().getName()))) { // NOI18N
+            String image = tokenItem.getImage();
+            if (image != null && image.length() > 0) {
+                int length = image.length();
+                // is caret at the end of the identifier
+                if (offset != (tokenItem.getOffset() + length)) {
+                    int offsetInImage = offset - tokenItem.getOffset();
+                    int start = offsetInImage + 1;
+                    if (Character.isUpperCase(image.charAt(offsetInImage))) {
+                        // if starting from a Uppercase char, first skip over follwing upper case chars
                         for (int i = start; i < length; i++) {
                             char charAtI = image.charAt(i);
-                            if (Character.isUpperCase(charAtI)) {
-                                // return offset of next uppercase char in the identifier
-                                return tokenItem.getOffset() + i;
+                            if (!Character.isUpperCase(charAtI)) {
+                                break;
                             }
+                            start++;
                         }
                     }
-                    return tokenItem.getOffset() + image.length();
+                    for (int i = start; i < length; i++) {
+                        char charAtI = image.charAt(i);
+                        if (Character.isUpperCase(charAtI)) {
+                            // return offset of next uppercase char in the identifier
+                            return tokenItem.getOffset() + i;
+                        }
+                    }
                 }
+                return tokenItem.getOffset() + image.length();
             }
-
-            // not an identifier - simply return next word offset
-            return Utilities.getNextWord(textComponent, offset);
-        } catch (BadLocationException ble) {
-            // something went wrong :(
-            ErrorManager.getDefault().notify(ble);
         }
-        return -1;
+
+        // not an identifier - simply return next word offset
+        return Utilities.getNextWord(textComponent, offset);
     }
 
-    static int previousCamelCasePosition(JTextComponent textComponent) {
+    static int previousCamelCasePosition(JTextComponent textComponent) throws BadLocationException {
         SyntaxSupport syntaxSupport = Utilities.getSyntaxSupport(textComponent);
         if (syntaxSupport == null) {
             // no syntax support available :(
@@ -125,62 +119,61 @@ import org.openide.ErrorManager;
             return -1;
         }
 
-        try {
-            // get token chain at the offset
-            TokenItem tokenItem = ((ExtSyntaxSupport) syntaxSupport).getTokenChain(offset - 1, offset);
+        // get token chain at the offset
+        TokenItem tokenItem = ((ExtSyntaxSupport) syntaxSupport).getTokenChain(offset - 1, offset);
 
-            // is this an identifier
-            if (tokenItem != null) {
-                if ("identifier".equals(tokenItem.getTokenID().getName())) { // NOI18N
-                    String image = tokenItem.getImage();
-                    if (image != null && image.length() > 0) {
-                        int length = image.length();
-                        int offsetInImage = offset - 1 - tokenItem.getOffset();
-                        if (Character.isUpperCase(image.charAt(offsetInImage))) {
-                            for (int i = offsetInImage - 1; i >= 0; i--) {
-                                char charAtI = image.charAt(i);
-                                if (!Character.isUpperCase(charAtI)) {
-                                    // return offset of previous uppercase char in the identifier
-                                    return tokenItem.getOffset() + i + 1;
-                                }
-                            }
-                            return tokenItem.getOffset();
-                        } else {
-                            for (int i = offsetInImage - 1; i >= 0; i--) {
-                                char charAtI = image.charAt(i);
-                                if (Character.isUpperCase(charAtI)) {
-                                    // now skip over previous uppercase chars in the identifier
-                                    for (int j = i; j >= 0; j--) {
-                                        char charAtJ = image.charAt(j);
-                                        if (!Character.isUpperCase(charAtJ)) {
-                                            // return offset of previous uppercase char in the identifier
-                                            return tokenItem.getOffset() + j + 1;
-                                        }
-                                    }
-                                    return tokenItem.getOffset();
-                                }
+        // is this an identifier
+        if (tokenItem != null) {
+            if ("identifier".equals(tokenItem.getTokenID().getName())) { // NOI18N
+                String image = tokenItem.getImage();
+                if (image != null && image.length() > 0) {
+                    int length = image.length();
+                    int offsetInImage = offset - 1 - tokenItem.getOffset();
+                    if (Character.isUpperCase(image.charAt(offsetInImage))) {
+                        for (int i = offsetInImage - 1; i >= 0; i--) {
+                            char charAtI = image.charAt(i);
+                            if (!Character.isUpperCase(charAtI)) {
+                                // return offset of previous uppercase char in the identifier
+                                return tokenItem.getOffset() + i + 1;
                             }
                         }
                         return tokenItem.getOffset();
+                    } else {
+                        for (int i = offsetInImage - 1; i >= 0; i--) {
+                            char charAtI = image.charAt(i);
+                            if (Character.isUpperCase(charAtI)) {
+                                // now skip over previous uppercase chars in the identifier
+                                for (int j = i; j >= 0; j--) {
+                                    char charAtJ = image.charAt(j);
+                                    if (!Character.isUpperCase(charAtJ)) {
+                                        // return offset of previous uppercase char in the identifier
+                                        return tokenItem.getOffset() + j + 1;
+                                    }
+                                }
+                                return tokenItem.getOffset();
+                            }
+                        }
                     }
-                } else if ("whitespace".equals(tokenItem.getTokenID().getName())) { // NOI18N
-                    TokenItem whitespaceTokenItem = tokenItem;
-                    while (whitespaceTokenItem != null && "whitespace".equals(whitespaceTokenItem.getTokenID().getName())) {
-                        int wsOffset = whitespaceTokenItem.getOffset();
-                        whitespaceTokenItem =((ExtSyntaxSupport) syntaxSupport).getTokenChain(wsOffset - 1, wsOffset);;
+                    return tokenItem.getOffset();
+                }
+            } else if ("whitespace".equals(tokenItem.getTokenID().getName())) { // NOI18N
+                TokenItem whitespaceTokenItem = tokenItem;
+                while (whitespaceTokenItem != null && "whitespace".equals(whitespaceTokenItem.getTokenID().getName())) {
+                    int wsOffset = whitespaceTokenItem.getOffset();
+                    if (wsOffset == 0) {
+                        //#145250: at the very beginning of a file
+                        return 0;
                     }
-                    if (whitespaceTokenItem != null) {
-                        return whitespaceTokenItem.getOffset() + whitespaceTokenItem.getImage().length();
-                    }
+                    whitespaceTokenItem =((ExtSyntaxSupport) syntaxSupport).getTokenChain(wsOffset - 1, wsOffset);
+                }
+                if (whitespaceTokenItem != null) {
+                    return whitespaceTokenItem.getOffset() + whitespaceTokenItem.getImage().length();
                 }
             }
-
-            // not an identifier - simply return previous word offset
-            return Utilities.getPreviousWord(textComponent, offset);
-        } catch (BadLocationException ble) {
-            ErrorManager.getDefault().notify(ble);
         }
-        return -1;
+
+        // not an identifier - simply return previous word offset
+        return Utilities.getPreviousWord(textComponent, offset);
     }
 
     static void replaceChar(JTextComponent textComponent, int offset, char c) {
@@ -190,25 +183,30 @@ import org.openide.ErrorManager;
         replaceText(textComponent, offset, 1, String.valueOf(c));
     }
 
-    static void replaceText(JTextComponent textComponent, int offset, int length, String text) {
+    static void replaceText (final JTextComponent textComponent, final int offset, final int length, final String text) {
         if (!textComponent.isEditable()) {
             return;
         }
         Document document = textComponent.getDocument();
-        if (document instanceof BaseDocument) {
-            ((BaseDocument)document).atomicLock();
-        }
+        if (document instanceof BaseDocument)
+            ((BaseDocument) document).runAtomic (new Runnable () {
+                public void run () {
+                    replaceText2 (textComponent, offset, length, text);
+                }
+            });
+        else
+            replaceText2 (textComponent, offset, length, text);
+    }
+
+    static void replaceText2 (JTextComponent textComponent, int offset, int length, String text) {
+        Document document = textComponent.getDocument();
         try {
             if (length > 0) {
                 document.remove(offset, length);
             }
             document.insertString(offset, text, null);
         } catch (BadLocationException ble) {
-            ErrorManager.getDefault().notify(ble);
-        } finally {
-            if (document instanceof BaseDocument) {
-                ((BaseDocument)document).atomicUnlock();
-            }
+            Exceptions.printStackTrace(ble);
         }
     }
 }
