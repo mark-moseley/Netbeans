@@ -42,9 +42,8 @@
 package org.netbeans.modules.cnd.apt.impl.support;
 
 import antlr.TokenStream;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.Reader;
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.util.Map;
@@ -67,10 +66,10 @@ import org.netbeans.modules.cnd.apt.utils.APTUtils;
  */
 public class APTDriverImpl {
     /** map of active creators */
-    private static Map<String, APTSyncCreator> file2creator = new ConcurrentHashMap<String, APTSyncCreator>();
+    private static final ConcurrentHashMap<CharSequence, APTSyncCreator> file2creator = new ConcurrentHashMap<CharSequence, APTSyncCreator>();
     /** static shared sync map */
-    private static Map<String, Reference<APTFile>> file2ref2apt = new ConcurrentHashMap<String, Reference<APTFile>>();
-    private static Map<String, APTFile> file2apt = new ConcurrentHashMap<String, APTFile>();
+    private static Map<CharSequence, Reference<APTFile>> file2ref2apt = new ConcurrentHashMap<CharSequence, Reference<APTFile>>();
+    private static Map<CharSequence, APTFile> file2apt = new ConcurrentHashMap<CharSequence, APTFile>();
     
     /** instance fields */
     
@@ -79,32 +78,29 @@ public class APTDriverImpl {
     }
     
     public static APTFile findAPT(APTFileBuffer buffer, boolean withTokens) throws IOException {
-        File file = buffer.getFile();
-        String path = file.getAbsolutePath();
+        CharSequence path = buffer.getAbsolutePath();
         APTFile apt = _getAPTFile(path, withTokens);
         if (apt == null) {
-            APTSyncCreator creator;
-            synchronized (file2creator) {
-                creator = file2creator.get(path);
-                if (creator == null) {
-                    creator = new APTSyncCreator();
-                    file2creator.put(path, creator);
+            APTSyncCreator creator = file2creator.get(path);
+            if (creator == null) {
+                // no need to sync on ConcurrentHashMap due to putIfAbsent method
+                creator = new APTSyncCreator();
+                APTSyncCreator old = file2creator.putIfAbsent(path, creator);
+                if (old != null) {
+                    creator = old;
                 }
             }
             assert (creator != null);
             // use instance synchronized method to prevent
             // multiple apt creating for the same file
             apt = creator.findAPT(buffer, withTokens);
-            synchronized (file2creator) {
-                file2creator.remove(path);
-            }
+            file2creator.remove(path);
         }
         return apt;        
     }
 
     public static void invalidateAPT(APTFileBuffer buffer) {
-        File file = buffer.getFile();
-        String path = file.getAbsolutePath();
+        CharSequence path = buffer.getAbsolutePath();
         if (APTTraceFlags.APT_USE_SOFT_REFERENCE) {
             file2ref2apt.remove(path);
         } else {
@@ -128,8 +124,7 @@ public class APTDriverImpl {
         
         /** synchronized on instance */
         public synchronized APTFile findAPT(APTFileBuffer buffer, boolean withTokens) throws IOException {
-            File file = buffer.getFile();
-            String path = file.getAbsolutePath();
+            CharSequence path = buffer.getAbsolutePath();
             // quick exit: check if already was added by another creator
             // during wait
             if (withTokens && fullAPT != null) {
@@ -142,12 +137,12 @@ public class APTDriverImpl {
                 // ok, create new apt
                 
                 // build token stream for file       
-                InputStream stream = null;
+                Reader reader = null;
                 try {
-                    stream = buffer.getInputStream();
+                    reader = buffer.getReader();
                     if (!withTokens) {
-                        TokenStream ts = APTTokenStreamBuilder.buildLightTokenStream(path, stream);
-                        // build apt from token stream
+                        TokenStream ts = APTTokenStreamBuilder.buildLightTokenStream(path, reader);
+                        // build apt from light token stream
                         apt = APTBuilder.buildAPT(path, ts);
                         fullAPT = null;
                         if (apt != null) {
@@ -156,14 +151,14 @@ public class APTDriverImpl {
                                 if (test != null) {
                                     apt = test;
                                 } else {
-                                    System.err.println("error on serialization apt for file " + file.getAbsolutePath()); // NOI18N
+                                    System.err.println("error on serialization apt for file " + path); // NOI18N
                                 }
                             }
                             lightAPT = apt;
-                            _putAPTFile(path, lightAPT, withTokens);
+                            _putAPTFile(path, lightAPT, false);
                         }
                     } else {
-                        TokenStream ts = APTTokenStreamBuilder.buildTokenStream(path, stream);
+                        TokenStream ts = APTTokenStreamBuilder.buildTokenStream(path, reader);
                         // build apt from token stream
                         apt = APTBuilder.buildAPT(path, ts);
                         fullAPT = apt;
@@ -173,25 +168,20 @@ public class APTDriverImpl {
                                 if (test != null) {
                                     apt = test;
                                 } else {
-                                    System.err.println("error on serialization apt for file " + file.getAbsolutePath()); // NOI18N
+                                    System.err.println("error on serialization apt for file " + path); // NOI18N
                                 }
                             }
-                            _putAPTFile(path, apt, withTokens);
-                            APTFile aptLight = (APTFile) APTBuilder.buildAPTLight(apt);
-                            lightAPT = aptLight;
-                            _putAPTFile(path, aptLight, withTokens);
-                            if (!withTokens) {
-                                // were asked to return apt light
-                                apt = aptLight;
-                            }
+                            _putAPTFile(path, fullAPT, true);
+                            lightAPT = (APTFile) APTBuilder.buildAPTLight(apt);
+                            _putAPTFile(path, lightAPT, false);
                         }
                     }
                 } finally {
-                    if (stream != null) {
+                    if (reader != null) {
                         try {
-                            stream.close();
+                            reader.close();
                         } catch (IOException ex) {
-                            APTUtils.LOG.log(Level.SEVERE, "exception on closing stream", ex); // NOI18N
+                            APTUtils.LOG.log(Level.SEVERE, "exception on closing stream\n{0}", new Object[] { ex }); // NOI18N
                         }
                     }
                 }
@@ -200,7 +190,7 @@ public class APTDriverImpl {
         }       
     } 
     
-    private static APTFile _getAPTFile(String path, boolean withTokens) {
+    private static APTFile _getAPTFile(CharSequence path, boolean withTokens) {
         if (withTokens) {
             // we do not cache full apt
             return null;
@@ -215,7 +205,7 @@ public class APTDriverImpl {
         return apt;
     }
     
-    private static void _putAPTFile(String path, APTFile apt, boolean withTokens) {
+    private static void _putAPTFile(CharSequence path, APTFile apt, boolean withTokens) {
         if (withTokens) {
             // we do not cache full apt
             return;
