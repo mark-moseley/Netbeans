@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.TestUtil;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
@@ -66,10 +67,12 @@ import org.netbeans.spi.project.libraries.LibraryTypeProvider;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.InstanceDataObject;
+import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
+import org.openide.util.Mutex.Action;
 import org.openide.util.test.MockLookup;
 import org.openide.xml.EntityCatalog;
 import org.xml.sax.InputSource;
@@ -174,9 +177,12 @@ public class LibrariesStorageTest extends NbTestCase {
         }
     }
     
-    private static void registerLibraryTypeProvider () throws Exception {
+    static void registerLibraryTypeProvider () throws Exception {
+        registerLibraryTypeProvider(TestLibraryTypeProvider.class);
+    }
+    static void registerLibraryTypeProvider (Class<? extends LibraryTypeProvider> type) throws Exception {
         StringTokenizer tk = new StringTokenizer("org-netbeans-api-project-libraries/LibraryTypeProviders","/");
-        FileObject root = Repository.getDefault().getDefaultFileSystem().getRoot();
+        FileObject root = FileUtil.getConfigRoot();
         while (tk.hasMoreElements()) {
             String pathElement = tk.nextToken();
             FileObject tmp = root.getFileObject(pathElement);
@@ -188,11 +194,11 @@ public class LibrariesStorageTest extends NbTestCase {
         if (root.getChildren().length == 0) {
 //            FileObject inst = root.createData("TestLibraryTypeProvider","instance");
 //            inst.setAttribute("newvalue","")
-            InstanceDataObject.create (DataFolder.findFolder(root),"TestLibraryTypeProvider",TestLibraryTypeProvider.class);
+            InstanceDataObject.create (DataFolder.findFolder(root),"TestLibraryTypeProvider", type);
         }
     }
     
-    private static void createLibraryDefinition (final FileObject storageFolder, final String libName) throws IOException {
+    static void createLibraryDefinition (final FileObject storageFolder, final String libName) throws IOException {
         storageFolder.getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
             public void run () throws IOException {
                 FileObject defFile = storageFolder.createData(libName,"xml");
@@ -222,7 +228,7 @@ public class LibrariesStorageTest extends NbTestCase {
         });
     }
     
-    private static class TestListener implements PropertyChangeListener {
+    static class TestListener implements PropertyChangeListener {
         
         private List<String> eventNames = new ArrayList<String>();
         
@@ -241,7 +247,7 @@ public class LibrariesStorageTest extends NbTestCase {
     }
     
     
-    private static class TestEntityCatalog extends EntityCatalog {        
+    static class TestEntityCatalog extends EntityCatalog {        
         
         private static final String DTD = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
             "<!ELEMENT library (name, type, description?, localizing-bundle?, volume*) >\n" +
@@ -316,11 +322,12 @@ public class LibrariesStorageTest extends NbTestCase {
         }
 
         public LibraryImplementation createLibrary() {
+            assert !ProjectManager.mutex().isReadAccess();
             return new TestLibrary ();
         }
         
     }
-    
+
     private static class TestLibrary implements LibraryImplementation {
         
         private String name;
