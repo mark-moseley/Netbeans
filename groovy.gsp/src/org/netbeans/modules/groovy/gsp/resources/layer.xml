@@ -2,18 +2,16 @@
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
 <filesystem>
     <folder name="Loaders">
-        <folder name="application">
-            <folder name="x-httpd-eruby">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
-
+        <folder name="text">
+            <folder name="x-gsp">
+                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/groovy/gsp/resources/GspFile16x16.png"/>
+                <attr name="iconBase" stringvalue="org/netbeans/modules/groovy/gsp/resources/GspFile16x16.png"/>
                 <folder name="Factories">
-                    <file name="org-netbeans-modules-ruby-rhtml-loaders-RhtmlDataLoader.instance">
-                        <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
+                    <file name="org-netbeans-modules-groovy-gsp-loaders-GspDataLoader.instance">
+                        <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.groovy.gsp.resources.Bundle"/>
+                        <attr name="position" intvalue="99999"/>
                     </file>
                 </folder>
-
-                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/ruby/rhtml/resources/rhtml16.gif"/>
-                <attr name="iconBase" stringvalue="org/netbeans/modules/ruby/rhtml/resources/rhtml16.gif"/>
                 <folder name="Actions">
                     <file name="org-openide-actions-OpenAction.instance">
                         <attr name="position" intvalue="100"/>
@@ -64,41 +62,36 @@
     </folder>
     <folder name="Services">
         <folder name="MIMEResolver">
-            <file name="RhtmlResolver.xml" url="RhtmlResolver.xml">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
-                <attr name="position" intvalue="230"/>
+            <file name="GspResolver.xml" url="GspResolver.xml">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.groovy.gsp.resources.Bundle"/>
+                <attr name="position" intvalue="255"/>
             </file>
         </folder>
     </folder>
     <folder name="Templates">
-        <folder name="Ruby">
-            <file name="_view.rhtml" url="RhtmlTemplate.rhtml">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
-                <attr name="position" intvalue="100"/>
-                <attr name="templateCategory" stringvalue="ruby"/>
+        <folder name="Groovy">
+            <file name="_view.gsp" url="GspTemplate.gsp">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.groovy.gsp.resources.Bundle"/>
+                <attr name="position" intvalue="120"/>
+                <attr name="templateCategory" stringvalue="groovy"/>
                 <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
-                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/ruby/rhtml/resources/templatedesc.html"/>
                 <attr name="template" boolvalue="true"/>
-            </file>
-            <file name="_view.erb" url="RhtmlTemplate.rhtml">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
-                <attr name="position" intvalue="102"/>
-                <attr name="templateCategory" stringvalue="ruby"/>
-                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
-                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/ruby/rhtml/resources/templatedesc.html"/>
-                <attr name="template" boolvalue="true"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/groovy/gsp/resources/GspTemplate.html"/>
             </file>
         </folder>
     </folder>
 
     <folder name="Editors">
-        <folder name="application">
-            <folder name="x-httpd-eruby">
-                <file name="org-netbeans-modules-ruby-rhtml-editor-RubyEmbeddingProvider$Factory.instance" />
-                <file name="org-netbeans-modules-ruby-rhtml-editor-HtmlEmbeddingProvider$Factory.instance"/>
+        <folder name="text">
+            <folder name="x-gsp">
 
-                <file name="org-netbeans-modules-ruby-rhtml-RhtmlIndentTaskFactory.instance"/>
-                <file name="org-netbeans-modules-ruby-rhtml-EmbeddedSectionsHighlighting$Factory.instance"/>
+                <file name="org-netbeans-modules-groovy-gsp-editor-embedding-GroovyEmbeddingProvider$Factory.instance">
+                    <attr name="instanceOf" stringvalue="org.netbeans.modules.parsing.spi.TaskFactory"/>
+                </file>
+                <file name="org-netbeans-modules-groovy-gsp-editor-embedding-HtmlEmbeddingProvider$Factory.instance"/>
+
+                <file name="org-netbeans-modules-groovy-gsp-GspIndentTaskFactory.instance"/>
+                <file name="org-netbeans-modules-groovy-gsp-EmbeddedSectionsHighlighting$Factory.instance"/>
                 <file name="org-netbeans-modules-csl-editor-semantic-HighlightsLayerFactoryImpl.instance"/>
                 <file name="org-netbeans-modules-html-editor-coloring-EmbeddingHighlightsLayerFactory.instance"/>
                 <file name="org-netbeans-modules-csl-core-GsfParserFactory.instance">
@@ -107,18 +100,10 @@
                 </file>
 
                 <file name="language.instance">
-                    <attr name="instanceCreate" methodvalue="org.netbeans.modules.ruby.rhtml.lexer.api.RhtmlTokenId.language"/>
+                    <attr name="instanceCreate" methodvalue="org.netbeans.modules.groovy.gsp.lexer.GspTokenId.language"/>
                     <attr name="instanceOf" stringvalue="org.netbeans.api.lexer.Language"/>
                 </file>
-
-                <folder name="FoldManager">
-                    <file name="org-netbeans-modules-csl-editor-fold-GsfFoldManagerFactory.instance"/>
-                </folder>
-                <folder name="SideBar">
-                    <file name="org-netbeans-modules-csl-editor-GsfCodeFoldingSideBarFactory.instance">
-                        <attr name="position" intvalue="1200"/>
-                    </file>
-                </folder>
+                
                 <folder name="CompletionProviders">
                     <file name="org-netbeans-modules-html-editor-completion-HtmlCompletionProvider.instance"/>
                     <file name="org-netbeans-modules-csl-editor-completion-GsfCompletionProvider.instance"/>
@@ -128,9 +113,17 @@
                     -->
                 </folder>
    
+                <folder name="FoldManager">
+                    <file name="org-netbeans-modules-csl-editor-fold-GsfFoldManagerFactory.instance"/>
+                </folder>
+                <folder name="SideBar">
+                    <file name="org-netbeans-modules-csl-editor-GsfCodeFoldingSideBarFactory.instance">
+                        <attr name="position" intvalue="1200"/>
+                    </file>
+                </folder>
                 <!--
                 <folder name="CodeTemplateFilterFactories">
-                    <file name="org-netbeans-modules-ruby-rhtml-editor-RhtmlCodeTemplateFilter$Factory.instance"/>
+                    <file name="org-netbeans-modules-groovy-gsp-editor-GspCodeTemplateFilter$Factory.instance"/>
                     OR:
                     <file name="org-netbeans-modules-csl-editor-codetemplates-GsfCodeTemplateFilter$Factory.instance"/>
                 </folder>   
@@ -143,38 +136,33 @@
                     </file>
                 </folder>
 
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.groovy.gsp.resources.Bundle"/>
                 <folder name="FontsColors">
                     <folder name="NetBeans">
                         <folder name="Defaults">
                             <file name="coloring.xml" url="fontsColors.xml">
-                                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
+                                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.groovy.gsp.resources.Bundle"/>
                             </file>
-                        </folder>
-                    </folder>
-                    <folder name="BlueTheme">
-                        <folder name="Defaults">
-                            <file name="coloring.xml" url="BlueTheme-fontsColors.xml"/>
                         </folder>
                     </folder>
                 </folder>
 
                 <folder name="Preferences">
                     <folder name="Defaults">
-                        <file name="org-netbeans-modules-ruby-rhtml-editor-preferences.xml" url="editor-preferences.xml"/>
+                        <file name="org-netbeans-modules-groovy-gsp-editor-preferences.xml" url="editor-preferences.xml"/>
                     </folder>
                 </folder>
-                
+
                 <file name="EditorKit.instance">
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.rhtml.editor.RhtmlKit"/>
-                    <attr name="instanceOf" stringvalue="javax.swing.text.EditorKit,org.netbeans.modules.ruby.rhtml.editor.RhtmlKit"/>
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.groovy.gsp.editor.GspKit"/>
+                    <attr name="instanceOf" stringvalue="javax.swing.text.EditorKit,org.netbeans.modules.groovy.gsp.editor.GspKit"/>
                     <attr name="beaninfo" boolvalue="false"/>
                 </file>
             
                 <folder name="CodeTemplates">
                     <folder name="Defaults">
                         <file name="codetemplates.xml" url="codetemplates.xml">
-                            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.ruby.rhtml.resources.Bundle"/>
+                            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.groovy.gsp.resources.Bundle"/>
                         </file>
                     </folder>
                 </folder>
@@ -182,8 +170,8 @@
                 <folder name="Keybindings">
                     <folder name="NetBeans">
                         <folder name="Defaults">
-                            <file name="org-netbeans-modules-ruby-keybindings.xml" url="DefaultKeyBindings.xml"/>
-                            <file name="org-netbeans-modules-ruby-keybindings-mac.xml" url="DefaultKeyBindings-Mac.xml">
+                            <file name="org-netbeans-modules-groovy-gsp-keybindings.xml" url="DefaultKeyBindings.xml"/>
+                            <file name="org-netbeans-modules-groovy-gsp-keybindings-mac.xml" url="DefaultKeyBindings-Mac.xml">
                                 <attr name="nbeditor-settings-targetOS" stringvalue="OS_MAC"/>
                             </file>
                         </folder>
@@ -205,19 +193,7 @@
                         <attr name="position" intvalue="1960"/>
                     </file>                    
                 </folder>
-
-                <folder name="Toolbars">
-                    <folder name="Default">
-                        <file name="Separator-before-comment.instance">
-                            <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
-                            <attr intvalue="30000" name="position"/>
-                        </file>
-                        <file name="toggle-comment">
-                            <attr intvalue="30100" name="position"/>
-                        </file>
-                    </folder>
-                </folder>
-
+                
                 <folder name="text">
                     <folder name="html">
                         <folder name="CodeTemplates">
@@ -234,41 +210,23 @@
     </folder>
 
     <folder name="OptionsDialog">
-        <folder name="Editor">
-            <folder name="Formatting">
-                <folder name="application">
-                    <folder name="x-httpd-eruby">
-                        <file name="TabsAndIndents.instance">
-                            <attr name="instanceOf" stringvalue="org.netbeans.modules.options.editor.spi.PreferencesCustomizer$Factory"/>
-                            <attr name="instanceCreate" methodvalue="org.netbeans.modules.options.editor.spi.CustomizerFactories.createDefaultTabsAndIndentsCustomizerFactory"/>
-                            <!-- Use the OptionsDialog/PreviewExamples/application/x-httpd-eruby file.
-                                 If something else is needed use the attribute below. Make sure that
-                                 the preview text file has correct mime type.
-                            <attr name="previewTextFile" stringvalue="file/with/preview/text"/>
-                            -->
-                            <attr name="position" intvalue="100"/>
-                        </file>
-                    </folder>
-                </folder>
-            </folder>
-        </folder>
-
         <folder name="PreviewExamples">
-            <folder name="application">
-                <file name="x-httpd-eruby" url="RhtmlExample"/>
+            <folder name="text">
+                <file name="x-gsp" url="GspExample"/>
             </folder>
         </folder>
     </folder>
+
     <folder name="CslPlugins">
-        <folder name="application">
-            <folder name="x-httpd-eruby">
+        <folder name="text">
+            <folder name="x-gsp">
                 <attr name="useCustomEditorKit" boolvalue="true"/>
                 <file name="language.instance">
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.rhtml.RhtmlLanguage"/>
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.groovy.gsp.GspLanguage"/>
                 </file>
                 <file name="structure.instance">
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.ruby.RubyStructureAnalyzer"/>
-                </file> 
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.groovy.gsp.GspStructureScanner"/>
+                </file>
             </folder>
         </folder>
     </folder>

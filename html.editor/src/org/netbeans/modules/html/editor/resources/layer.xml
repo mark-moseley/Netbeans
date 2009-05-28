@@ -42,6 +42,22 @@ made subject to such option by the copyright holder.
 -->
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.0//EN" "http://www.netbeans.org/dtds/filesystem-1_0.dtd">
 <filesystem>
+    
+    <folder name="CslPlugins">
+        <folder name="text">
+            <folder name="html">
+                <attr name="useCustomEditorKit" boolvalue="true"/>
+                <file name="language.instance">
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.html.editor.gsf.HtmlLanguage"/>
+                </file>
+                <file name="structure.instance">
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.html.editor.gsf.HtmlStructureScanner"/>
+                </file> 
+            </folder>
+        </folder>
+    </folder>
+    
+    
     <folder name="DTDs">
         <folder name="3_2">
             <file name="catalog" url="DTDs/3_2/catalog"/>
@@ -69,64 +85,61 @@ made subject to such option by the copyright holder.
         <folder name="xhtml">
             <file name="catalog" url="DTDs/xhtml/catalog"/>
             
-            <file name="HTMLlat1.ent" url="DTDs/4_01/HTMLlat1.ent"/>
-            <file name="HTMLspecial.ent" url="DTDs/4_01/HTMLspecial.ent"/>
-            <file name="HTMLsymbol.ent" url="DTDs/4_01/HTMLsymbol.ent"/>
-            <file name="frameset.dtd" url="DTDs/4_01/frameset.dtd"/>
-            <file name="loose.dtd" url="DTDs/4_01/loose.dtd"/>
-            <file name="strict.dtd" url="DTDs/4_01/strict.dtd"/>
+            <file name="xhtml-lat1.ent" url="DTDs/xhtml/xhtml-lat1.ent"/>
+            <file name="xhtml-special.ent" url="DTDs/xhtml/xhtml-special.ent"/>
+            <file name="xhtml-symbol.ent" url="DTDs/xhtml/xhtml-symbol.ent"/>
+            <file name="xhtml1-frameset.dtd" url="DTDs/xhtml/xhtml1-frameset.dtd"/>
+            <file name="xhtml1-transitional.dtd" url="DTDs/xhtml/xhtml1-transitional.dtd"/>
+            <file name="xhtml1-strict.dtd" url="DTDs/xhtml/xhtml1-strict.dtd"/>
         </folder>
     </folder>
-
-    <folder name="Services">
-        <folder name="IndentEngine">
-            <file name="org-netbeans-modules-editor-html-LineWrapIndentEngine.settings" url="LineWrapIndentEngine.settings">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.editor.Bundle"/>
-                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/editor/resources/indentEngine.gif"/>
-            </file>
-            <file name="org-netbeans-modules-editor-html-HTMLIndentEngine.settings" url="HTMLIndentEngine.settings">
-                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.editor.Bundle"/>
-                <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/editor/resources/indentEngine.gif"/>
-            </file>
-        </folder>
-
-    </folder>
-
-    <folder name="Templates">
-        <folder name="Services">
-            <folder name="IndentEngine">
-                <file name="org-netbeans-modules-editor-html-LineWrapIndentEngine.settings" url="LineWrapIndentEngine.settings">
-                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.editor.Bundle"/>
-                    <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/editor/resources/indentEngine.gif"/>
-                    <attr name="template" boolvalue="true"/>
-                </file>
-                <file name="org-netbeans-modules-editor-html-HTMLIndentEngine.settings" url="HTMLIndentEngine.settings">
-                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.editor.Bundle"/>
-                    <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/editor/resources/indentEngine.gif"/>
-                    <attr name="template" boolvalue="true"/>
-                </file>
-            </folder>
-        </folder>
-    </folder>
-
+    
+    
     <folder name="Editors">
+
+        <file name="org-netbeans-modules-html-editor-gsf-embedding-CssEmbeddingProvider$Factory.instance">
+            <attr name="instanceOf" stringvalue="org.netbeans.modules.parsing.spi.TaskFactory"/>
+        </file>
+
         <folder name="text">
             <folder name="html">
+
+                <file name="org-netbeans-modules-html-editor-HtmlCaretAwareSourceTask$Factory.instance">
+                    <attr name="instanceOf" stringvalue="org.netbeans.modules.parsing.spi.TaskFactory"/>
+                </file>
+
+                <folder name="Preferences">
+                    <file name="org-netbeans-modules-html-editor-preferences.xml" url="Preferences.xml"/>
+                </folder>
                 
                 <file name="org-netbeans-modules-html-editor-coloring-EmbeddingHighlightsLayerFactory.instance"/>
+                <file name="org-netbeans-modules-csl-editor-semantic-HighlightsLayerFactoryImpl.instance"/>
+                <file name="org-netbeans-modules-csl-core-GsfParserFactory.instance">
+                    <attr name="instanceOf" stringvalue="org.netbeans.modules.parsing.spi.ParserFactory"/>
+                    <attr name="instanceCreate" methodvalue="org.netbeans.modules.csl.core.GsfParserFactory.create"/>
+                </file>
                 
                 <folder name="BracesMatchers">
-                    <file name="org-netbeans-modules-html-editor-HTMLBracesMatching.instance">
+                    <file name="org-netbeans-modules-html-editor-HtmlBracesMatching.instance">
                         <attr name="position" intvalue="50"/>
                     </file>
                 </folder>
                 
-                <attr name="createDataObject" boolvalue="false"/>
+                <folder name="FoldManager">
+                    <file name="org-netbeans-modules-csl-editor-fold-GsfFoldManagerFactory.instance"/>
+                </folder>
+                <folder name="SideBar">
+                    <file name="org-netbeans-modules-csl-editor-GsfCodeFoldingSideBarFactory.instance">
+                        <attr name="position" intvalue="1200"/>
+                    </file>
+                    <file name="org-netbeans-modules-html-editor-NavigationSideBar$NavigationSideBarFactory.instance">
+                        <attr name="position" intvalue="1300"/>
+                        <attr name="location" stringvalue="North"/>
+                        <attr name="scrollable" boolvalue="false"/>
+                    </file>
+                </folder>
+
                 <file name="org-netbeans-modules-html-editor-indent-HtmlIndentTaskFactory.instance"/>
-                
-                <file name="language.nbs" url="HTML.nbs">
-                    <attr name="icon" stringvalue="org/netbeans/modules/html/editor/resources/html.png"/>
-                </file>
                 
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.html.editor.resources.Bundle"/>
                 <folder name="FontsColors">
@@ -138,7 +151,7 @@ made subject to such option by the copyright holder.
                         </folder>
                     </folder>
                 </folder>
-
+                
                 <folder name="Keybindings">
                     <folder name="NetBeans">
                         <folder name="Defaults">
@@ -148,25 +161,27 @@ made subject to such option by the copyright holder.
                 </folder>
                 
                 <folder name="CompletionProviders">
-                    <file name="org-netbeans-modules-editor-html-HTMLCompletionProvider.instance"/>
+                    <file name="org-netbeans-modules-html-editor-completion-HtmlCompletionProvider.instance"/>
+                    <file name="org-netbeans-modules-csl-editor-completion-GsfCompletionProvider.instance"/>
                 </folder>
                 
-                <file name="Settings.settings" url="HTMLOptions.settings"/>
-                <file name="EditorKit.instance">
-                    <attr name="instanceClass" stringvalue="org.netbeans.modules.editor.html.HTMLKit"/>
-                </file>
-
-                <folder name="FoldManager">
-                    <file name="org-netbeans-modules-languages-features-LanguagesFoldManager$Factory.instance"/>
-                </folder>
-                <folder name="SideBar">
-                    <file name="org-netbeans-modules-languages-features-CodeFoldingSideBarFactory.instance">
-                        <attr name="position" intvalue="1500"/>
+                <folder name="HyperlinkProviders">
+                    <file name="GsfHyperlinkProvider.instance">
+                        <attr name="instanceClass" stringvalue="org.netbeans.modules.csl.editor.hyperlink.GsfHyperlinkProvider"/>
+                        <attr name="instanceOf" stringvalue="org.netbeans.lib.editor.hyperlink.spi.HyperlinkProviderExt"/>
                     </file>
                 </folder>
+                
+                <file name="EditorKit.instance">
+                    <attr name="instanceClass" stringvalue="org.netbeans.modules.html.editor.HtmlKit"/>
+                    <attr name="instanceOf" stringvalue="javax.swing.text.EditorKit,org.netbeans.modules.html.editor.HtmlKit"/>
+                    <attr name="beaninfo" boolvalue="false"/>
+                </file>
+                
                 <folder name="UpToDateStatusProvider">
-                    <file name="org-netbeans-modules-languages-features-UpToDateStatusProviderFactoryImpl.instance"/>
+                    <file name="org-netbeans-modules-csl-hints-GsfUpToDateStateProviderFactory.instance"/>
                 </folder>
+                
                 <folder name="Popup">
                     <file name="ViewAction.instance">
                         <attr name="instanceClass" stringvalue="org.openide.actions.ViewAction"/>
@@ -187,7 +202,7 @@ made subject to such option by the copyright holder.
                     <file name="generate-fold-popup">
                         <attr name="position" intvalue="4200"/>
                     </file>
-                    </folder>
+                </folder>
             </folder>
         </folder>
     </folder>
