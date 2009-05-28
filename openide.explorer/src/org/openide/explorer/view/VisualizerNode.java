@@ -207,13 +207,11 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
         if (desc == UNKNOWN) {
             shortDescription = desc = node.getShortDescription();
         }
-        if (icon instanceof Image) {
-            String toolTip = ImageUtilities.getImageToolTip((Image) icon);
-            if (toolTip.length() > 0) {
-                StringBuilder str = new StringBuilder(128);
-                str.append("<html>").append(desc).append("<br>").append(toolTip).append("</html>");
-                desc = str.toString();
-            }
+        String toolTip = ImageUtilities.getImageToolTip(ImageUtilities.icon2Image(icon != null ? icon : getIcon(false, false)));
+        if (toolTip.length() > 0) {
+            StringBuilder str = new StringBuilder(128);
+            str.append("<html>").append(desc).append("<br>").append(toolTip).append("</html>");
+            desc = str.toString();
         }
         return desc;
     }
@@ -273,7 +271,6 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
             ch = Children.MUTEX.readAccess(
                     new Mutex.Action<VisualizerChildren>() {
                         public VisualizerChildren run() {
-                            int nodesCount = node.getChildren().getNodesCount();
                             List<Node> snapshot = node.getChildren().snapshot();
                             VisualizerChildren vc = new VisualizerChildren(VisualizerNode.this, snapshot);
                             notifyVisualizerChildrenChange(true, vc);
@@ -379,11 +376,6 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
     * @param ev event describing the change
     */
     public void childrenReordered(NodeReorderEvent ev) {
-        doChildrenReordered(ev);
-    }
-
-    // helper method (called from TreeTableView.sort)
-    void doChildrenReordered(NodeReorderEvent ev) {
         VisualizerChildren ch = children.get();
 
         int[] perm = ev.getPermutation();
@@ -395,33 +387,6 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
 
         QUEUE.runSafe(new VisualizerEvent.Reordered(ch, perm, ev));
         LOG.log(Level.FINER, "childrenReordered - end"); // NOI18N
-    }
-
-    void reorderChildren(Comparator<VisualizerNode> c) {
-        assert SwingUtilities.isEventDispatchThread();
-
-        VisualizerChildren ch = children.get();
-
-        if (ch == null) {
-            return;
-        }
-
-        new VisualizerEvent.Reordered(ch, c, null).run();
-    }
-
-    void naturalOrder() {
-        //force new creation of the children list in the natural order
-        children.clear();
-        getChildren();
-
-        //sort the children list with a dummy comparator to throw events needed
-        reorderChildren(
-            new Comparator<VisualizerNode>() {
-                public int compare(VisualizerNode o1, VisualizerNode o2) {
-                    return 0;
-                }
-            }
-        );
     }
 
     /** Fired when the node is deleted.
@@ -621,7 +586,7 @@ final class VisualizerNode extends EventListenerList implements NodeListener, Tr
     /** Loads default icon if not loaded. */
     private static Icon getDefaultIcon() {
         if (defaultIcon == null) {
-            defaultIcon = ImageUtilities.image2Icon(ImageUtilities.loadImage(DEFAULT_ICON));
+            defaultIcon = ImageUtilities.loadImageIcon(DEFAULT_ICON, false);
         }
         return defaultIcon;
     }
