@@ -41,15 +41,15 @@
 
 package org.netbeans.modules.cnd.apt.impl.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
+import org.netbeans.modules.cnd.apt.impl.structure.APTBuilderImpl;
+import org.netbeans.modules.cnd.apt.structure.APTDefine;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 import org.netbeans.modules.cnd.apt.utils.ListBasedTokenStream;
 
@@ -57,85 +57,122 @@ import org.netbeans.modules.cnd.apt.utils.ListBasedTokenStream;
  * implementation of APTMacro
  * @author Vladimir Voskresensky
  */
-public class APTMacroImpl implements APTMacro {
-    private final Token name;
-    private final Collection<Token> params;
-    private final List<Token> body;
-    private final boolean system;
+public final class APTMacroImpl implements APTMacro {
+    private final CharSequence file;
+    private final APTDefine defineNode;
+    private final Kind macroType;
+    private volatile int hashCode = 0;
 
-    public APTMacroImpl(Token name, Collection<Token> params, List<Token> body, boolean system) {
-        assert (name != null);
-        this.name = name;
-        this.params = params;
-        this.body = body;
-        this.system = system;
+    public APTMacroImpl(CharSequence file, APTDefine defineNode, Kind macroType) {
+        assert (defineNode.getName() != null);
+        this.file = file;
+        assert file != null;
+        assert file.length() == 0 || macroType == Kind.DEFINED : "file info has only #defined macro " + file;
+        this.defineNode = (APTDefine) APTBuilderImpl.createLightCopy(defineNode);
+        this.macroType = macroType;
     }
 
-    public boolean isSystem() {
-        return system;
+    public CharSequence getFile() {
+        return file;
+    }
+    
+    public Kind getKind() {
+        return macroType;
     }
 
     public boolean isFunctionLike() {
-        return params != null;
+        return defineNode.isFunctionLike();
     }
 
-    public Token getName() {
-        return name;
+    public APTToken getName() {
+        return defineNode.getName();
     }
 
-    public Collection<Token> getParams() {
-        return params;
+    public Collection<APTToken> getParams() {
+        return defineNode.getParams();
     }
 
     public TokenStream getBody() {
-        return body != null ? new ListBasedTokenStream(body) : APTUtils.EMPTY_STREAM;
+        return new ListBasedTokenStream(defineNode.getBody());
     }
-    
+
+    public APTDefine getDefineNode() {
+        return defineNode;
+    }
+
+    @Override
     public boolean equals(Object obj) {
         boolean retValue;
-        if (obj == null || !(obj instanceof APTMacro)) {
+        if (obj == null || !(obj instanceof APTMacroImpl)) {
             retValue = false;
         } else {
-            APTMacro other = (APTMacro)obj;
+            APTMacroImpl other = (APTMacroImpl)obj;
             retValue = APTMacroImpl.equals(this, other);
         }
         return retValue;
     }
     
-    private static final boolean equals(APTMacro one, APTMacro other) {
-        // compare only name
-        return (one.getName().getText().compareTo(other.getName().getText()) == 0);
+    private static final boolean equals(APTMacroImpl one, APTMacroImpl other) {
+        if (one.macroType != other.macroType) {
+            return false;
+        }
+        // check files
+        if ((one.file == other.file) && (one.file != null) && !one.file.equals(other.file)) {
+            return false;
+        }
+        return one.defineNode.equals(other.defineNode);
     }
     
+    @Override
     public int hashCode() {
-        int retValue = 17;
-        retValue = 31*retValue + getName().getText().hashCode();
+        int retValue = hashCode;
+        if (retValue == 0) {
+            // init hash
+            retValue = 31*retValue + macroType.ordinal();
+            retValue = 31*retValue + (file == null ? 0 : file.hashCode());
+            retValue = 31*retValue + defineNode.hashCode();
+            hashCode = retValue;
+        }
         return retValue;
     }       
 
     @Override
     public String toString() {
         StringBuilder retValue = new StringBuilder();
-        retValue.append(isSystem() ? "<S>":"<U>"); // NOI18N
+        // preserve macro signature for existing model tests
+        switch(getKind()){
+            case DEFINED:
+                retValue.append("<U>"); // NOI18N
+                break;
+            case COMPILER_PREDEFINED:
+                retValue.append("<S>"); // NOI18N
+                break;
+            case POSITION_PREDEFINED:
+                retValue.append("<S>"); // NOI18N
+                break;
+            case USER_SPECIFIED:
+            default:
+                retValue.append("<S>"); // NOI18N
+                break;
+        }
         retValue.append("#define '"); // NOI18N
         retValue.append(getName());
-        if (params != null) {
+        if (getParams() != null) {
             retValue.append("["); // NOI18N
-            for (Iterator<Token> it = params.iterator();it.hasNext();) {
-                Token elem = it.next();
-                retValue.append(elem);
-                if (it.hasNext()) {
+            boolean first = true;
+            for (APTToken elem : getParams()) {
+                if (!first) {
                     retValue.append(", "); // NOI18N
-                } else {
-                    break;
-                } 
+                }
+                first = false;
+                retValue.append(elem);
             }
             retValue.append("]"); // NOI18N
         }
-        TokenStream body = getBody();
-        if (body != null) {
+        TokenStream bodyStream = getBody();
+        if (bodyStream != null) {
             retValue.append("'='"); // NOI18N
-            retValue.append(APTUtils.toString(body));
+            retValue.append(APTUtils.toString(bodyStream));
         }
         return retValue.toString();
     }       
@@ -147,4 +184,5 @@ public class APTMacroImpl implements APTMacro {
     public APTMacroImpl(DataInput input) throws IOException {
         throw new UnsupportedOperationException("Not yet implemented"); // NOI18N
     }
+
 }
