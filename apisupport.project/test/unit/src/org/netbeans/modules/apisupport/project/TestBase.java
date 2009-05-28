@@ -67,6 +67,7 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.apisupport.project.suite.SuiteProject;
 import org.netbeans.modules.apisupport.project.suite.SuiteProjectGenerator;
+import org.netbeans.modules.apisupport.project.ui.ImportantFilesNodeFactory;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.netbeans.modules.apisupport.project.universe.NbPlatform;
@@ -82,8 +83,8 @@ import org.openide.util.Lookup;
  */
   public abstract class TestBase extends NbTestCase {
 
-    public static final String CLUSTER_IDE = "ide9";
-    public static final String CLUSTER_PLATFORM = "platform8";
+    public static final String CLUSTER_IDE = "ide11";
+    public static final String CLUSTER_PLATFORM = "platform10";
     public static final String CLUSTER_ENTERPRISE = "enterprise5";
     public static final String CLUSTER_APISUPPORT = "apisupport1";
     public static final String CLUSTER_JAVA = "java2";
@@ -349,6 +350,18 @@ import org.openide.util.Lookup;
             os.close();
         }
     }
+
+    /**
+     * Blocking call waiting for change in project metadata to be reflected
+     * in nodes.
+     */
+    public static void waitForNodesUpdate() {
+      ImportantFilesNodeFactory.getNodesSyncRP().post(new Runnable() {
+
+          public void run() {
+          }
+      }).waitFinished();
+    }
     
     // XXX copied from TestBase in ant/freeform
     public static final class TestPCL implements PropertyChangeListener {
@@ -445,7 +458,7 @@ import org.openide.util.Lookup;
     /** Generates an empty suite. */
     public static SuiteProject generateSuite(File workDir, String prjDir, String platformID) throws IOException {
         File prjDirF = file(workDir, prjDir);
-        SuiteProjectGenerator.createSuiteProject(prjDirF, platformID);
+        SuiteProjectGenerator.createSuiteProject(prjDirF, platformID, false);
         return (SuiteProject) ProjectManager.getDefault().findProject(
                 FileUtil.toFileObject(prjDirF));
     }
@@ -470,20 +483,22 @@ import org.openide.util.Lookup;
      * what is generated.
      */
     public static NbModuleProject generateSuiteComponent(SuiteProject suiteProject, File parentDir, String prjDir) throws Exception {
+        FileObject fo = generateSuiteComponentDirectory(suiteProject, parentDir, prjDir);
+        return (NbModuleProject) ProjectManager.getDefault().findProject(fo);
+    }
+
+    /**
+     * The same as {@link #generateSuiteComponent(SuiteProject, File, String)} but without
+     * <em>opening</em> a generated project.
+     */
+    public static FileObject generateSuiteComponentDirectory( SuiteProject suiteProject, File parentDir,String prjDir) throws IOException {
         String prjDirDotted = prjDir.replace('/', '.');
         File suiteDir = suiteProject.getProjectDirectoryFile();
         File prjDirF = file(parentDir, prjDir);
-        NbModuleProjectGenerator.createSuiteComponentModule(
-                prjDirF,
-                "org.example." + prjDirDotted, // cnb
-                "Testing Module", // display name
-                "org/example/" + prjDir + "/resources/Bundle.properties",
-                "org/example/" + prjDir + "/resources/layer.xml",
-                suiteDir); // suite directory
-        return (NbModuleProject) ProjectManager.getDefault().findProject(
-                FileUtil.toFileObject(prjDirF));
+        NbModuleProjectGenerator.createSuiteComponentModule(prjDirF, "org.example." + prjDirDotted, "Testing Module", "org/example/" + prjDir + "/resources/Bundle.properties", "org/example/" + prjDir + "/resources/layer.xml", suiteDir); // suite directory
+        return FileUtil.toFileObject(prjDirF);
     }
-    
+
     /**
      * Create a fresh JAR file.
      * @param jar the file to create
@@ -518,14 +533,19 @@ import org.openide.util.Lookup;
     }
     
     public static void makePlatform(File d) throws IOException {
+        makePlatform(d, "1.6.1"); // like 5.0
+    }
+    
+    public static void makePlatform(File d, String harnessSpecVersion) throws IOException {
         // To satisfy NbPlatform.defaultPlatformLocation and NbPlatform.isValid, and make at least one module:
         Manifest mani = new Manifest();
         mani.getMainAttributes().putValue("OpenIDE-Module", "core");
         TestBase.createJar(new File(new File(new File(d, "platform"), "core"), "core.jar"), Collections.EMPTY_MAP, mani);
         mani = new Manifest();
         mani.getMainAttributes().putValue("OpenIDE-Module", "org.netbeans.modules.apisupport.harness");
-        mani.getMainAttributes().putValue("OpenIDE-Module-Specification-Version", "1.6.1"); // like 5.0
+        mani.getMainAttributes().putValue("OpenIDE-Module-Specification-Version", harnessSpecVersion);
         TestBase.createJar(new File(new File(new File(d, "harness"), "modules"), "org-netbeans-modules-apisupport-harness.jar"), Collections.EMPTY_MAP, mani);
+        FileUtil.refreshFor(d);
     }
     
     public static void delete(File f) throws IOException {
