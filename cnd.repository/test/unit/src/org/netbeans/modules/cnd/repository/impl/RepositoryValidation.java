@@ -28,13 +28,7 @@
 
 package org.netbeans.modules.cnd.repository.impl;
 
-import java.io.File;
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.modules.cnd.modelimpl.trace.TraceModelTestBase;
 
 /**
  *
@@ -47,17 +41,25 @@ public class RepositoryValidation extends RepositoryValidationBase {
     }
 
     protected @Override void setUp() throws Exception {
-        //System.setProperty("cnd.repository.hardrefs", Boolean.TRUE.toString()); //NOI18N
-        assertNotNull("This test can only be run from suite", RepositoryValidationGoldens.workingDirectory); //NOI18N
-        System.setProperty(PROPERTY_GOLDEN_PATH, RepositoryValidationGoldens.workingDirectory);
+        System.setProperty("cnd.repository.hardrefs", Boolean.FALSE.toString()); //NOI18N
+        System.setProperty("org.netbeans.modules.cnd.apt.level","OFF"); // NOI18N
+        assertNotNull("This test can only be run from suite", RepositoryValidationGoldens.getGoldenDirectory()); //NOI18N
+        System.setProperty(PROPERTY_GOLDEN_PATH, RepositoryValidationGoldens.getGoldenDirectory());
         super.setUp();
     }
-    
+
     public void testRepository() throws Exception {
         List<String> args = find();
         assert args.size() > 0;
-        args.add("-fq"); //NOI18N
+        //args.add("-fq"); //NOI18N
 
         performTest(args.toArray(new String[]{}), nimi + ".out", nimi + ".err");
+        assertNoExceptions();
     }
+
+    @Override
+    protected void tearDown() throws Exception {
+        getTestModelHelper().shutdown(false);
+    }
+
 }
