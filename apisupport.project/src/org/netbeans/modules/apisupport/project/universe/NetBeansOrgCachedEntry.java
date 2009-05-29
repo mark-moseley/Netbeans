@@ -41,6 +41,7 @@ package org.netbeans.modules.apisupport.project.universe;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,6 +49,7 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.modules.apisupport.project.ManifestManager.PackageExport;
+import org.netbeans.modules.apisupport.project.Util;
 import org.openide.filesystems.FileUtil;
 
 /**
@@ -70,6 +72,7 @@ final class NetBeansOrgCachedEntry extends AbstractEntryWithSources {
     private final String[] runtimeDependencies;
     private final String[] testDependencies;
     private ModuleEntry officialEntry;
+    private URL javadoc;
 
     public NetBeansOrgCachedEntry(File nb_all, File nbdestdir, String cnb, File jar, File[] classPathExtensions, File sourceLocation, String netbeansOrgPath,
             String[] buildPrerequisites, String clusterName, String[] runtimeDependencies, String[] testDependencies) {
@@ -121,16 +124,12 @@ final class NetBeansOrgCachedEntry extends AbstractEntryWithSources {
         }
     }
 
-    public File getDestDir() {
-        return nbdestdir;
-    }
-
     private synchronized void ensureOfficialEntry(String why) {
         if (officialEntry == null) {
             LOG.fine("Had to fall back to loading official entry for " + cnb + " because of " + why);
             Map<String,ModuleEntry> entries = new HashMap<String,ModuleEntry>();
             try {
-                ModuleList.scanPossibleProject(sourceLocation, entries, false, false, nb_all, nbdestdir, netbeansOrgPath, false);
+                ModuleList.scanPossibleProject(sourceLocation, entries, false, false, nb_all, nbdestdir, netbeansOrgPath);
                 officialEntry = entries.get(cnb);
                 if (officialEntry == null) {
                     LOG.fine("Failed to load official entry for " + cnb);
@@ -199,4 +198,9 @@ final class NetBeansOrgCachedEntry extends AbstractEntryWithSources {
         return "NetBeansOrgCachedEntry[" + getSourceLocation() + (officialEntry != null ? "->" + officialEntry : "") + "]"; // NOI18N
     }
 
+    public URL getJavadoc(final NbPlatform platform) {
+        if (javadoc == null)
+            javadoc = NetBeansOrgEntry.findJavadocForNetBeansOrgModules(this, nbdestdir);
+        return javadoc;
+    }
 }
