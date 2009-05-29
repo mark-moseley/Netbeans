@@ -55,6 +55,8 @@ import org.openide.nodes.AbstractNode;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.text.Line;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.NodeAction;
@@ -95,9 +97,13 @@ final class TextDetail {
     private Line lineObj;
     /** SearchPattern used to create the hit of this DetailNode */
     private SearchPattern searchPattern;
+    /** Start offset of the matched text in the file */
+    private int startOffset;
+    /** End offset of the matched text in the file */
+    private int endOffset;
+    /** Whole matched text */
+    private String matchedText;
 
-    
-    
     /** Constructor using data object. 
      * @param pattern  SearchPattern used to create the hit of this DetailNode 
      */
@@ -116,26 +122,10 @@ final class TextDetail {
      * @see #DH_SHOW 
      * @see #DH_HIDE */
     void showDetail(int how) {
-        if ((dobj == null) || !dobj.isValid()) {
+        prepareLine();
+        if (lineObj == null) {
             Toolkit.getDefaultToolkit().beep();
             return;
-        }
-        if (lineObj == null) { // try to get Line from DataObject
-            LineCookie lineCookie = dobj.getCookie(LineCookie.class);
-            if (lineCookie != null) {
-                Line.Set lineSet = lineCookie.getLineSet();
-                try {
-                    lineObj = lineSet.getOriginal(line - 1);
-                } catch (IndexOutOfBoundsException ioobex) {
-                    // The line doesn't exist - go to the last line
-                    lineObj = lineSet.getOriginal(findMaxLine(lineSet));
-                    column = markLength = 0;
-                }
-            }
-            if (lineObj == null) {
-                Toolkit.getDefaultToolkit().beep();
-                return;
-            }
         }
 
         if (how == DH_HIDE) {
@@ -146,9 +136,9 @@ final class TextDetail {
             edCookie.open();
 	}
         if (how == DH_SHOW) {
-            lineObj.show(Line.SHOW_TRY_SHOW, column - 1);
+            lineObj.show(ShowOpenType.NONE, ShowVisibilityType.NONE, column - 1);
         } else if (how == DH_GOTO) {
-            lineObj.show(Line.SHOW_GOTO, column - 1);
+            lineObj.show(ShowOpenType.OPEN, ShowVisibilityType.FOCUS, column - 1);
         }
         if ((markLength > 0) && (edCookie != null)) {
             final JEditorPane[] panes = edCookie.getOpenedPanes();
@@ -214,7 +204,55 @@ final class TextDetail {
     int getMarkLength() {
         return markLength;
     }
-    
+
+    /** Gets the end position of the matched text in the file. */
+    int getEndOffset() {
+        return endOffset;
+    }
+
+    /** Sets the end position of the matched text in the file. */
+    void setEndOffset(int endOffset) {
+        this.endOffset = endOffset;
+    }
+
+    /** Gets the start position of the matched text in the file. */
+    int getStartOffset() {
+        return startOffset;
+    }
+
+    /** Sets the start position of the matched text in the file. */
+    void setStartOffset(int startOffset) {
+        this.startOffset = startOffset;
+    }
+
+    /** Gets the matched text. */
+    String getMatchedText() {
+        return matchedText;
+    }
+
+    /** Sets the matched text. */
+    void setMatchedText(String matchedText) {
+        this.matchedText = matchedText;
+    }
+
+    private void prepareLine() {
+        if (dobj == null || !dobj.isValid()) {
+            lineObj = null;
+        } else if (lineObj == null) { // try to get Line from DataObject
+            LineCookie lineCookie = dobj.getCookie(LineCookie.class);
+            if (lineCookie != null) {
+                Line.Set lineSet = lineCookie.getLineSet();
+                try {
+                    lineObj = lineSet.getOriginal(line - 1);
+                } catch (IndexOutOfBoundsException ioobex) {
+                    // The line doesn't exist - go to the last line
+                    lineObj = lineSet.getOriginal(findMaxLine(lineSet));
+                    column = markLength = 0;
+                }
+            }
+        }
+    }
+
     /**
      * Returns the maximum line in the <code>set</code>.
      * Used to display the end of file when the corresponding
@@ -283,6 +321,11 @@ final class TextDetail {
             setShortDescription(DetailNode.getShortDesc(txtDetail));
             setValue(SearchDisplayer.ATTR_OUTPUT_LINE,
                      DetailNode.getFullDesc(txtDetail));
+            // A workaround for #124559 - when the detail becomes visible,
+            // get the Line object. Later - if the user jumps to the document,
+            // changes it and saves - the Line objects are not created for the
+            // original set of lines.
+            txtDetail.prepareLine();
         }
         
         @Override
@@ -328,8 +371,12 @@ final class TextDetail {
 
                     bold.append(XMLUtil.toElementContent(plain.substring(0, col0)));  // NOI18N
                     bold.append("<b>");  // NOi18N
-                    int end = col0 + txtDetail.getMarkLength();
-                    bold.append(XMLUtil.toElementContent(plain.substring(col0, end)));
+                    int end = col0 + Math.min(txtDetail.getMarkLength(), txtDetail.getLineText().length() - col0);
+                    if ((col0 + txtDetail.getMarkLength()) > txtDetail.getLineText().length()){
+                        bold.append(XMLUtil.toElementContent(plain.substring(col0, end) + " ...")); //NOI18N
+                    }else{
+                        bold.append(XMLUtil.toElementContent(plain.substring(col0, end)));
+                    }
                     bold.append("</b>"); // NOi18N
                     if (txtDetail.getLineText().length() > end) {
                         bold.append(XMLUtil.toElementContent(plain.substring(end)));
@@ -354,7 +401,7 @@ final class TextDetail {
         }
       
         /** Displays the matching string in a text editor. */
-        private void gotoDetail() {
+        void gotoDetail() {
             txtDetail.showDetail(TextDetail.DH_GOTO);
         }
 

@@ -42,13 +42,12 @@
 package org.openide.text;
 
 
-import java.awt.Dialog;
 import java.io.IOException;
 import javax.swing.JEditorPane;
 import junit.framework.*;
 import org.netbeans.junit.*;
-import org.openide.DialogDescriptor;
-import org.openide.NotifyDescriptor;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.UserCancelException;
@@ -108,7 +107,7 @@ public class CloneableEditorSupportPaneTest extends NbTestCase implements Clonea
         javax.swing.text.Document doc = support.openDocument ();
         support.open();
         Line line = support.getLineSet().getCurrent(0);
-        line.show(Line.SHOW_SHOW);
+        line.show(ShowOpenType.OPEN, ShowVisibilityType.NONE);
         JEditorPane[] panes = support.getOpenedPanes();
         assertNotNull(panes);
         assertEquals(1, panes.length);
@@ -116,21 +115,47 @@ public class CloneableEditorSupportPaneTest extends NbTestCase implements Clonea
         assertTrue(instance.activated);
                 
     }
+
+    /** Test with new Line.show API */
+    public void testGetOpenedPanes2 () throws Exception {
+        content = "Ahoj\nMyDoc";
+        javax.swing.text.Document doc = support.openDocument ();
+        support.open();
+        Line line = support.getLineSet().getCurrent(0);
+        line.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.NONE);
+        JEditorPane[] panes = support.getOpenedPanes();
+        assertNotNull(panes);
+        assertEquals(1, panes.length);
+        assertNotNull(instance);
+        assertTrue(instance.activated);
+
+    }
   
-     public void testGetOpenedPanes2ForSeparatePane() throws Exception {
+    public void testGetOpenedPanes2ForSeparatePane() throws Exception {
         content = "Ahoj\nMyDoc";
         javax.swing.text.Document doc = support2.openDocument ();
         support2.open();
         Line line = support2.getLineSet().getCurrent(0);
-        line.show(Line.SHOW_SHOW);
+        line.show(ShowOpenType.OPEN, ShowVisibilityType.NONE);
         JEditorPane[] panes = support2.getOpenedPanes();
         assertNotNull(panes);
         assertEquals(1, panes.length);
         assertNotNull(instance2);
-                
     }
 
-         
+    /** Test with new Line.show API */
+    public void testGetOpenedPanes2ForSeparatePane2() throws Exception {
+        content = "Ahoj\nMyDoc";
+        javax.swing.text.Document doc = support2.openDocument ();
+        support2.open();
+        Line line = support2.getLineSet().getCurrent(0);
+        line.show(Line.ShowOpenType.OPEN, Line.ShowVisibilityType.NONE);
+        JEditorPane[] panes = support2.getOpenedPanes();
+        assertNotNull(panes);
+        assertEquals(1, panes.length);
+        assertNotNull(instance2);
+    }
+
     public void testDocumentSaveCancelledByUser() throws Exception {
         //register DialogDisplayer which "pushes" Yes option in the document save dialog
         MockServices.setServices(DD.class);
@@ -145,7 +170,7 @@ public class CloneableEditorSupportPaneTest extends NbTestCase implements Clonea
         //open the document
         sup.open();
         Line line = sup.getLineSet().getCurrent(0);
-        line.show(Line.SHOW_SHOW);
+        line.show(ShowOpenType.OPEN, ShowVisibilityType.NONE);
         
         //check document opened
         assertTrue(sup.isDocumentLoaded());

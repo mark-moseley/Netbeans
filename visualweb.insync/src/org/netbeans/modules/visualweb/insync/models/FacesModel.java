@@ -69,6 +69,8 @@ import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.loaders.OperationEvent;
 import org.openide.loaders.OperationListener;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.netbeans.modules.visualweb.extension.openide.util.Trace;
@@ -275,6 +277,7 @@ public class FacesModel extends Model {
     /**
      * A Model.Factory that knows how and when to make faces page FacesModels from file objects.
      */
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.visualweb.insync.Model.Factory.class, position=10)
     public static class FacesFactory implements Model.Factory {
 //        static final String[] mimes = DesignerService.getDefault().getMimeTypes();
         static final String[] mimes = InSyncServiceProvider.get().getMimeTypes();
@@ -324,6 +327,7 @@ public class FacesModel extends Model {
     /**
      * A Model.Factory that knows how and when to make simple bean FacesModels from file objects.
      */
+    @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.visualweb.insync.Model.Factory.class, position=20)
     public static class BeansFactory implements Model.Factory {
         static final String[] mimes = { "text/x-java" };
 
@@ -371,7 +375,7 @@ public class FacesModel extends Model {
     
 
     //--------------------------------------------------------------------------------- Construction
-    private static final Logger TIMERS = Logger.getLogger("TIMER.facesModels"); // NOI18N
+    private static final Logger TIMERS = Logger.getLogger("TIMER.visualweb"); // NOI18N
     
     /**
      * Creates a new instance of FacesModel
@@ -1427,7 +1431,7 @@ public class FacesModel extends Model {
                 Line.Set ls = lc.getLineSet();
                 if (ls != null) {
                     Line line = ls.getCurrent(lineNo);
-                    line.show(Line.SHOW_GOTO, col);
+                    line.show(ShowOpenType.OPEN, ShowVisibilityType.FOCUS, col);
                 }
             }
 
@@ -1822,30 +1826,30 @@ public class FacesModel extends Model {
         clearHtml();
     }
 
-    void refreshUnits() {
-        SourceUnit markupUnit = getMarkupUnit();
-        SourceUnit javaUnit = getJavaUnit();
+    void refreshUnits(boolean immediate) {
+        SourceUnit mu = getMarkupUnit();
+        SourceUnit ju = getJavaUnit();
         
         // flush
-        if ((markupUnit != null && markupUnit.getState() == Unit.State.MODELDIRTY) || 
-            (javaUnit != null && javaUnit.getState() == Unit.State.MODELDIRTY)) {
+        if ((mu != null && mu.getState() == Unit.State.MODELDIRTY) || 
+            (ju != null && ju.getState() == Unit.State.MODELDIRTY)) {
             flush();
         }
         
         boolean doSync = false;
         
         // clean
-        if (markupUnit != null && markupUnit.getState() == Unit.State.CLEAN) {
-            markupUnit.setSourceDirty();
+        if (mu != null && mu.getState() == Unit.State.CLEAN) {
+            mu.setSourceDirty();
             doSync = true;
         }
-        if (javaUnit != null && javaUnit.getState() == Unit.State.CLEAN) {
-            javaUnit.setSourceDirty();
+        if (ju != null && ju.getState() == Unit.State.CLEAN) {
+            ju.setSourceDirty();
             doSync = true;
         }
         
         // sync
-        if (doSync) {       
+        if (doSync && immediate) {       
             sync();
         }
     }

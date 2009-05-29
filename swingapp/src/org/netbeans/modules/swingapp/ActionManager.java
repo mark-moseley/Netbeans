@@ -44,7 +44,6 @@ import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
 import java.util.*;
 import javax.swing.Timer;
 import javax.swing.SwingUtilities;
@@ -104,6 +103,8 @@ import org.netbeans.modules.form.FormModelListener;
 import org.openide.cookies.EditorCookie;
 import org.openide.loaders.DataObject;
 import org.openide.text.Line;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 
 /**
  * The ActionManager is a singleton which tracks all actions throughout the project.
@@ -126,29 +127,27 @@ import org.openide.text.Line;
 public class ActionManager {
     
     private static Map<Project,ActionManager> ams;
-    private static Map<ActionManager, Project> reverseams;
     
-    private static ActionManager emptyActionManager = new ActionManager(null);
-
-    public static synchronized ActionManager getActionManager(FileObject fileInProject) {
+    public static ActionManager getActionManager(FileObject fileInProject) {
         if(ams == null) {
-            ams = new HashMap<Project,ActionManager>();
-            reverseams = new HashMap<ActionManager,Project>();
+            ams = Collections.synchronizedMap(new HashMap<Project,ActionManager>());
         }
         Project proj = getProject(fileInProject);
         ActionManager am = ams.get(proj);
         if(am == null && AppFrameworkSupport.isFrameworkEnabledProject(fileInProject)) {
-            ClassPath cp = ClassPath.getClassPath(fileInProject, ClassPath.SOURCE);
-            FileObject root = cp.findOwnerRoot(fileInProject);
-            am = new ActionManager(root);
-            ams.put(proj,am); // PENDING never removed, this is memory leak!!!
-            reverseams.put(am,proj);
-            am = ams.get(proj);
+            synchronized(ActionManager.class) {
+                if (ams.get(proj) == null) {
+                    ClassPath cp = ClassPath.getClassPath(fileInProject, ClassPath.SOURCE);
+                    FileObject root = cp.findOwnerRoot(fileInProject);
+                    am = new ActionManager(proj, root);
+                    ams.put(proj,am);
+                }
+            }
         }
         return am;
     }
     
-    public static synchronized ActionManager getActionManager(Project project) {
+    public static ActionManager getActionManager(Project project) {
         Sources srcs = project.getLookup().lookup(Sources.class);
         if(srcs == null) return null;
         SourceGroup groups[] = srcs.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
@@ -158,70 +157,7 @@ public class ActionManager {
             return null;
         }
     }
-    
-    
-    private static void addProject(Project p) {
-        ActionManager am = ActionManager.getActionManager(p);
-        // do the first scan for actions
-        if(am != null) {
-            am.rescan();
-        }
-    }
-    private static void removeProject(Project p) {
-        if(ams != null) {
-            ActionManager am = ams.get(p);
-            am.rescanTimer.stop();
-            ams.remove(p);
-            reverseams.remove(am);
-        }
-    }
-    
-    public static ActionManager getEmptyActionManager() {
-        return emptyActionManager;
-    }
-    
-    public static Set<Project> getKnownProjects() {
-        if(ams == null) {
-            return Collections.emptySet();
-        }
-        return Collections.unmodifiableSet(ams.keySet());
-    }
-    
-    
-    /**
-     * Removes all closed projects by looking through the list of open projects
-     * and removing any extras. Returns true of there were any projects to be removed
-     * @param openProjects an array of currently open projects
-     * @return true if any projects were removed, else false
-     */
-    public static boolean clearClosedProjects(Project[] openProjects) {
-        boolean updated = false;
-        Set<Project> known = getKnownProjects();
-        known = new HashSet<Project>(known);
-        Set<Project> newSet = new HashSet<Project>();
-        for(Project p : openProjects) {
-            if(!known.contains(p)) {
-                newSet.add(p);
-            }
-            known.remove(p);
-        }
-        if(known.size() > 0) {
-            for(Project p : known) {
-                removeProject(p);
-            }
-            updated = true;
-        }
-        if(newSet.size() > 0) {
-            for(Project p : newSet) {
-                addProject(p);
-            }
-            updated = true;
-        }
-        
-        return updated;
-    }
-    
-    
+
     // a map of all actions by classname
     private Map<String,List<ProxyAction>> actions;
     // a list of all actions
@@ -236,24 +172,26 @@ public class ActionManager {
     private List<ActionChangedListener> acls;
     // the root object of this ActionManager's project
     private FileObject root;
+    // the ActionManager's project
+    private Project project;
     
     public Project getProject() {
-        return reverseams.get(this);
+        return project;
     }
     
     public FileObject getApplicationClassFile() {
         String appClassName = AppFrameworkSupport.getApplicationClassName(getRoot());
-        return getFileForClass(appClassName);
+        return (appClassName == null) ? null : getFileForClass(appClassName);
     }
     
     /** Creates a new instance of ActionManager */
-    private ActionManager(FileObject root) {
+    private ActionManager(Project project, FileObject root) {
+        this.project = project;
         this.root = root;
         actionList = new ArrayList<ProxyAction>();
         pcls = new ArrayList<PropertyChangeListener>();
         acls = new ArrayList<ActionChangedListener>();
         actions = new HashMap<String, List<ProxyAction>>();
-        rescanTimer.start();
     }
     
     public FileObject getRoot() {
@@ -286,7 +224,10 @@ public class ActionManager {
      */
     public void rescan() {
         actions = new HashMap<String,List<ProxyAction>>();
-        scanFolderForActions(getRoot(), actions);
+        FileObject root = getRoot();
+        if (root != null) {
+            scanFolderForActions(root, actions);
+        }
         actionList.clear();
         for(String appClsName : actions.keySet()) {
             actionList.addAll(actions.get(appClsName));
@@ -295,55 +236,75 @@ public class ActionManager {
     }
     
     /** request the specified file be rescanned in the near future. */
-    public void lazyRescan(FileObject fo) {
-        if(!scanQueue.contains(fo)) {
+    public static synchronized void lazyRescan(FileObject fo) {
+        if (scanQueue != null && !scanQueue.contains(fo)) {
             scanQueue.add(fo);
         }
     }
-    //the scan queue is traversed every 5 seconds to look for new files that must
+
+    //the scan queue is traversed every 3 seconds to look for new files that must
     //be scanned. they are removed from the queue after scanning.
-    //this ensures a file is never scanned more than once every five seconds
-    private List<FileObject> scanQueue = Collections.synchronizedList(new ArrayList<FileObject>());
-    private Timer rescanTimer = new Timer(5*1000, new ActionListener() {
-        public void actionPerformed(ActionEvent e) {
-            if(scanQueue.isEmpty()) return;
-            List<FileObject> queue;
-            synchronized(scanQueue) {
-                queue = new ArrayList<FileObject>(scanQueue);
-                scanQueue.clear();
-            }
-            for (FileObject fo : queue) {
-                if (fo == null || !fo.isValid()) { // might have been deleted meanwhile
-                    continue;
-                }
-                //clear all of the actions for this file out of the master list
-                String className = AppFrameworkSupport.getClassNameForFile(fo);
-                if(actions.containsKey(className)) {
-                    List<ProxyAction> oldActions = actions.get(className);
-                    for(ProxyAction oldAct : oldActions) {
-                        Iterator<ProxyAction> ait = actionList.iterator();
-                        while(ait.hasNext()) {
-                            if(actionsMatch(ait.next(),oldAct)) {
-                                ait.remove();
-                            }
-                        }
+    //this ensures a file is never scanned more than once every three seconds
+    private static List<FileObject> scanQueue;
+    private static Timer rescanTimer;
+
+    private static synchronized void startAutoRescan() {
+        if (scanQueue == null) {
+            scanQueue = Collections.synchronizedList(new ArrayList<FileObject>());
+            rescanTimer = new Timer(3000, new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    // Note: this code is called in AWT thread, as well stopAutoRescan.
+                    if (scanQueue == null || scanQueue.isEmpty()) {
+                        return;
                     }
-                    //then remove the actions for this file from the master hashtable
-                    actions.remove(className);
+                    List<FileObject> queue;
+                    synchronized(scanQueue) {
+                        queue = new ArrayList<FileObject>(scanQueue);
+                        scanQueue.clear();
+                    }
+                    for (FileObject fo : queue) {
+                        if (fo == null || !fo.isValid()) { // might have been deleted meanwhile
+                            continue;
+                        }
+                        //clear all of the actions for this file out of the master list
+                        String className = AppFrameworkSupport.getClassNameForFile(fo);
+                        ActionManager am = ActionManager.getActionManager(fo);
+                        Map<String,List<ProxyAction>> actions = am.actions;
+                        if (actions.containsKey(className)) {
+                            List<ProxyAction> oldActions = actions.get(className);
+                            for(ProxyAction oldAct : oldActions) {
+                                Iterator<ProxyAction> ait = am.actionList.iterator();
+                                while(ait.hasNext()) {
+                                    if(actionsMatch(ait.next(),oldAct)) {
+                                        ait.remove();
+                                    }
+                                }
+                            }
+                            //then remove the actions for this file from the master hashtable
+                            actions.remove(className);
+                        }
+                        //rescans this file and replaces the list of actions for this file
+                        getActionsFromFile(fo, actions);
+                        if (actions.containsKey(className)) {
+                            List<ProxyAction> newActions = actions.get(className);
+                            am.actionList.addAll(newActions);
+                        }
+                        am.fireStructureChanged();
+                    }
                 }
-                //rescans this file and replaces the list of actions for this file
-                getActionsFromFile(fo, actions);
-                if(actions.containsKey(className)) {
-                    List<ProxyAction> newActions = actions.get(className);
-                    actionList.addAll(newActions);
-                }
-                fireStructureChanged();
-            }
+            });
+            rescanTimer.start();
         }
-    });
-    
-    
-    
+    }
+
+    private static synchronized void stopAutoRescan() {
+        if (scanQueue != null) {
+            rescanTimer.stop();
+            scanQueue = null;
+            rescanTimer = null;
+        }
+    }
+
     public List<ProxyAction> getAllActions() {
         return actionList;
     }
@@ -409,7 +370,7 @@ public class ActionManager {
             if (lineObj == null) {
                 Toolkit.getDefaultToolkit().beep();
             } else {
-                lineObj.show(Line.SHOW_GOTO);
+                lineObj.show(ShowOpenType.OPEN, ShowVisibilityType.FOCUS);
             }
         } catch (Exception ex) {
             Logger.getLogger(ActionMethodTask.class.getName()).log(Level.INFO, null, ex);
@@ -724,7 +685,7 @@ public class ActionManager {
         }
         return false;
     }
-    
+
     public void updateAction(ProxyAction action) {
         List<ProxyAction> actions = getActions(action.getClassname(), false);
         boolean replaced = false;
@@ -780,6 +741,9 @@ public class ActionManager {
                 RADProperty prop = comp.getBeanProperty("action");//NOI18N
                 if(prop != null) {
                     try {
+                        if (!(prop.getValue() instanceof ProxyAction)) {
+                            continue; // Hack to fix issue 112040
+                        }
                         //set to null then to the proxy to force an update
                         prop.setValue(null);
                         prop.setValue(action);
@@ -1218,6 +1182,9 @@ public class ActionManager {
     
     private static void getActionsFromFile(FileObject sourceFile,
             Map<String, List<ProxyAction>> classNameToActions) {
+        if (sourceFile == null) {
+            return;
+        }
         try {
             List<ProxyAction> result = new ClassTask<List<ProxyAction>>(sourceFile) {
                 List<ProxyAction> run(CompilationController controller, ClassTree classTree, TypeElement classElement) {
@@ -1265,18 +1232,24 @@ public class ActionManager {
                 }
             }.execute();
             
-            if (result != null && !result.isEmpty()) {
+            // issue #155337 - getDesignResourceMap() returns null rarely ...
+            DesignResourceMap resourceMap =
+                    ResourceUtils.getDesignResourceMap(sourceFile, true);
+
+            if (result != null && !result.isEmpty() && resourceMap != null) {
                 // remember the actions, load resources
                 String className = AppFrameworkSupport.getClassNameForFile(sourceFile);
                 classNameToActions.put(className, result);
                 for (ProxyAction action : result) {
-                    action.setResourceMap(ResourceUtils.getDesignResourceMap(sourceFile, true));
+                    action.setResourceMap(resourceMap);
                     action.loadFromResourceMap();
                 }
             }
         } catch (IOException ex) {
             ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
         }
+
+        startAutoRescan();
     }
 
     static List<String> findBooleanProperties(FileObject fo) {
@@ -1381,7 +1354,7 @@ public class ActionManager {
         return javaFile.getParent().getFileObject(javaFile.getName()+".form"); // NOI18N
     }
     
-    public boolean actionsMatch(ProxyAction pact, ProxyAction action) {
+    public static boolean actionsMatch(ProxyAction pact, ProxyAction action) {
         if(pact == null || action == null) {
             return false;
         }
@@ -1518,6 +1491,10 @@ public class ActionManager {
                                 public void run() {
                                     mod.removeFormModelListener(ths);
                                     registeredForms.remove(mod);
+                                    if (registeredForms.isEmpty()) {
+                                        stopAutoRescan();
+                                        ams.clear();
+                                    }
                                 }
                             });
                         }
@@ -1526,5 +1503,9 @@ public class ActionManager {
             }
         });
         registeredForms.add(formModel);
+    }
+
+    static boolean anyFormOpened() {
+        return registeredForms != null && !registeredForms.isEmpty();
     }
 }

@@ -41,22 +41,37 @@
 
 package org.netbeans.modules.j2ee.ddloaders.common.xmlutils;
 
-import org.openide.cookies.*;
+import java.io.BufferedInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringReader;
 import org.openide.nodes.CookieSet;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.MultiFileLoader;
 import org.openide.loaders.XMLDataObject;
 import org.openide.text.Line;
-import org.openide.windows.*;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 import org.openide.util.NbBundle;
-
-import java.io.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.xml.sax.*;
-import org.openide.xml.*;
 import org.netbeans.api.xml.cookies.CheckXMLCookie;
-import org.netbeans.spi.xml.cookies.*;
+import org.netbeans.spi.xml.cookies.CheckXMLSupport;
+import org.netbeans.spi.xml.cookies.DataObjectAdapters;
+import org.openide.cookies.CloseCookie;
+import org.openide.cookies.EditCookie;
+import org.openide.cookies.EditorCookie;
+import org.openide.cookies.LineCookie;
+import org.openide.cookies.PrintCookie;
+import org.openide.cookies.SaveCookie;
+import org.openide.windows.InputOutput;
+import org.openide.windows.OutputEvent;
+import org.openide.windows.OutputListener;
+import org.openide.windows.OutputWriter;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 /** Represents a XMLJ2eeDataObject in the Repository.
  *
@@ -83,18 +98,20 @@ public abstract class XMLJ2eeDataObject extends XMLDataObject implements CookieS
         throws org.openide.loaders.DataObjectExistsException {
         super(pf,loader);
         
-        getCookieSet().add(XMLJ2eeEditorSupport.class, this);
-        getCookieSet().add(EditCookie.class, this);
-        getCookieSet().add(EditorCookie.class, this);
-        getCookieSet().add(LineCookie.class, this);
-        getCookieSet().add(PrintCookie.class, this);
-        getCookieSet().add(CloseCookie.class, this);
+        CookieSet cs = getCookieSet();
+        cs.add(XMLJ2eeEditorSupport.class, this);
+        cs.add(EditCookie.class, this);
+        cs.add(EditorCookie.class, this);
+        cs.add(LineCookie.class, this);
+        cs.add(PrintCookie.class, this);
+        cs.add(CloseCookie.class, this);
         // added CheckXMLCookie
         InputSource in = DataObjectAdapters.inputSource(this);
         CheckXMLCookie checkCookie = new CheckXMLSupport(in);
-        getCookieSet().add(checkCookie);
+        cs.add(checkCookie);
     }
     // Issuezilla 23493 - this is the way how to disable the OpenCoookie from this data object
+    @Override
     protected EditorCookie createEditorCookie () {
         return null;
     }    
@@ -287,20 +304,18 @@ public abstract class XMLJ2eeDataObject extends XMLDataObject implements CookieS
             if (error==null) return;
             if (errorAnnotation==null)
                  errorAnnotation = new org.openide.text.Annotation() {
-                 public String getAnnotationType() {
-                   return "xml-j2ee-annotation";    // NOI18N
-                 }
-                 String desc = NbBundle.getMessage(XMLJ2eeDataObject.class, "HINT_XMLErrorDescription");
-                 public String getShortDescription() {
-                   return desc;
-                 }
+                     public String getAnnotationType() {
+                        return "xml-j2ee-annotation";    // NOI18N
+                     }
+                     public String getShortDescription() {
+                        return NbBundle.getMessage(XMLJ2eeDataObject.class, "HINT_XMLErrorDescription");
+                     }
             };
             if (inOut==null)
                 inOut=org.openide.windows.IOProvider.getDefault().getIO(NbBundle.getMessage(XMLJ2eeDataObject.class, "TXT_parser"), false);
             inOut.setFocusTaken (false);
             OutputWriter outputWriter = inOut.getOut();
             int line   = Math.max(0,error.getErrorLine());
-//            int column = Math.max(0,error.getErrorColumn());
             
             LineCookie cookie = (LineCookie)getCookie(LineCookie.class);
             // getting Line object
@@ -313,9 +328,12 @@ public abstract class XMLJ2eeDataObject extends XMLDataObject implements CookieS
                 // defining of new OutputListener
                 IOCtl outList= new IOCtl(xline);
                 outputWriter.println(this.getOutputStringForInvalidDocument(error),outList);
-            }catch(IOException e){}        
+            } catch (IOException e) {
+                Logger.getLogger("XMLJ2eeDataObject").log(Level.FINE, "ignored exception", e); //NOI18N
+            }
     }
     
+    @Override
     public void setValid(boolean valid) throws java.beans.PropertyVetoException {
         if (!valid && inOut!=null) inOut.closeInputOutput();
         super.setValid(valid);
@@ -331,12 +349,12 @@ public abstract class XMLJ2eeDataObject extends XMLDataObject implements CookieS
 
         public void outputLineSelected (OutputEvent ev) {
             errorAnnotation.attach(xline);
-            xline.show(Line.SHOW_TRY_SHOW);
+            xline.show(ShowOpenType.NONE, ShowVisibilityType.NONE);
         }
 
         public void outputLineAction (OutputEvent ev) {
             errorAnnotation.attach(xline);
-            xline.show(Line.SHOW_TRY_SHOW);
+            xline.show(ShowOpenType.NONE, ShowVisibilityType.NONE);
         }
         
         public void outputLineCleared (OutputEvent ev) {

@@ -31,7 +31,7 @@ import javax.xml.namespace.QName;
 import org.netbeans.core.api.multiview.MultiViewHandler;
 import org.netbeans.core.api.multiview.MultiViewPerspective;
 import org.netbeans.core.api.multiview.MultiViews;
-import org.netbeans.modules.bpel.core.util.SelectBpelElement;
+import org.netbeans.modules.bpel.core.SelectBpelElement;
 import org.netbeans.modules.bpel.debugger.ui.breakpoint.BreakpointTranslator;
 import org.netbeans.modules.bpel.debugger.ui.util.Log;
 import org.netbeans.modules.bpel.debugger.ui.util.ModelUtil;
@@ -49,6 +49,8 @@ import org.openide.text.Line;
 import org.netbeans.modules.bpel.debugger.api.AnnotationType;
 import org.netbeans.modules.bpel.debugger.spi.EditorContext;
 import org.openide.nodes.Node;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 
@@ -283,6 +285,23 @@ public class BpelEditorContext implements EditorContext {
                     
                     mvh.requestVisible(mvp);
                     mvh.requestActive(mvp);
+                } else {
+                    final String currentId = 
+                            mvh.getSelectedPerspective().preferredID();
+                    
+                    if (!currentId.equals("orch-designer") && 
+                            !currentId.equals("bpelsource")) {
+                        
+                        for (MultiViewPerspective temp: mvh.getPerspectives()) {
+                            if (temp.preferredID().equals("orch-designer")) {
+                                mvp = temp;
+                                break;
+                            }
+                        }
+                        
+                        mvh.requestVisible(mvp);
+                        mvh.requestActive(mvp);
+                    }
                 }
                 
                 if (mvp.preferredID().equals("orch-designer")) {
@@ -316,7 +335,7 @@ public class BpelEditorContext implements EditorContext {
                     
                     final Line line = 
                             lineCookie.getLineSet().getCurrent(lineNumber - 1);
-                    line.show(Line.SHOW_GOTO);
+                    line.show(ShowOpenType.OPEN, ShowVisibilityType.FOCUS);
                 }
             }
         });

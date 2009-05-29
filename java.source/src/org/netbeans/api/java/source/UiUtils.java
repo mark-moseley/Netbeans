@@ -50,6 +50,8 @@ import com.sun.source.util.TreePathScanner;
 import com.sun.tools.javac.util.Context;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
@@ -57,13 +59,14 @@ import javax.swing.Icon;
 import javax.swing.text.StyledDocument;
 import org.netbeans.modules.java.source.pretty.VeryPretty;
 import org.netbeans.modules.java.ui.Icons;
-import org.openide.ErrorManager;
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.LineCookie;
 import org.openide.cookies.OpenCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.text.Line;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 import org.openide.text.NbDocument;
 
 /** This class contains various methods bound to visualization of Java model 
@@ -214,7 +217,8 @@ public final class  UiUtils {
             return null;
         }
     }
-    
+
+    private static Logger log = Logger.getLogger(UiUtils.class.getName());
     static Object[] getOpenInfo(final FileObject fo, final ElementHandle<? extends Element> handle) {
         assert fo != null;
         
@@ -222,7 +226,9 @@ public final class  UiUtils {
             int offset = getOffset(fo, handle);
             return new Object[] {fo, offset};
         } catch (IOException e) {
-            ErrorManager.getDefault().notify(e);
+            if (log.isLoggable(Level.SEVERE))
+                log.log(Level.SEVERE, e.getMessage(), e);
+//            ErrorManager.getDefault().notify(e);
             return null;
         }
     }
@@ -328,7 +334,7 @@ public final class  UiUtils {
                         Line l = lc.getLineSet().getCurrent(line);
                         
                         if (l != null) {
-                            l.show(Line.SHOW_GOTO, column);
+                            l.show(ShowOpenType.OPEN, ShowVisibilityType.FOCUS, column);
                             return true;
                         }
                     }
@@ -342,7 +348,9 @@ public final class  UiUtils {
                 return true;
             }
         } catch (IOException e) {
-            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
+            if (log.isLoggable(Level.INFO))
+                log.log(Level.INFO, e.getMessage(), e);
+//            ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
         }
         
         return false;
@@ -360,7 +368,9 @@ public final class  UiUtils {
                 try {
                     info.toPhase(JavaSource.Phase.RESOLVED);
                 } catch (IOException ioe) {
-                    ErrorManager.getDefault().notify(ioe);
+                    if (log.isLoggable(Level.SEVERE))
+                        log.log(Level.SEVERE, ioe.getMessage(), ioe);
+//                    ErrorManager.getDefault().notify(ioe);
                 }
                 Element el = handle.resolve(info);                
                 if (el == null)

@@ -71,7 +71,6 @@ import org.netbeans.modules.visualweb.project.jsf.api.JsfProjectUtils;
 import org.netbeans.modules.visualweb.xhtml.F_Verbatim;
 import java.beans.PropertyDescriptor;
 import java.io.File;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.IOException;
 import java.io.StringWriter;
@@ -95,7 +94,8 @@ import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.text.Line;
-import org.netbeans.modules.visualweb.extension.openide.util.Trace;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 import org.openide.util.NbBundle;
 import org.openide.windows.IOProvider;
 import org.openide.windows.InputOutput;
@@ -105,6 +105,7 @@ import org.openide.windows.OutputWriter;
 import org.w3c.dom.Document;
 import org.w3c.dom.DocumentFragment;
 import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 
 import org.w3c.dom.NodeList;
@@ -1058,14 +1059,15 @@ public final class Util {
         // (4) See if the body is a plain html <body> tag or if it's rendered from
         //    another component
         Element element = dom.getDocumentElement();
-        
-        if (element.hasAttribute("xmlns:ui")) { // NOI18N
-            assert element.getAttribute("xmlns:ui").equals("http://www.sun.com/web/ui"); // NOI18N
-            
-            return true;
-        }
-        
-        return false;
+
+//        if (element.hasAttribute("xmlns:ui")) { // NOI18N
+//            assert element.getAttribute("xmlns:ui").equals("http://www.sun.com/web/ui"); // NOI18N
+//
+//            return true;
+//        }
+//
+//        return false;
+        return hasXmlnsOfValue(element, "http://www.sun.com/web/ui"); // NOI18N
     }
     
     public static boolean isWoodstockPage(Document dom) {
@@ -1080,12 +1082,30 @@ public final class Util {
         //    another component
         Element element = dom.getDocumentElement();
         
-        if (element.hasAttribute("xmlns:webuijsf")) { // NOI18N
-            assert element.getAttribute("xmlns:webuijsf").equals("http://www.sun.com/webui/webuijsf"); // NOI18N
-            
-            return true; 
+//        if (element.hasAttribute("xmlns:webuijsf")) { // NOI18N
+//            assert element.getAttribute("xmlns:webuijsf").equals("http://www.sun.com/webui/webuijsf"); // NOI18N
+//
+//            return true;
+//        }
+//
+//        return false;
+        return hasXmlnsOfValue(element, "http://www.sun.com/webui/webuijsf"); // NOI18N
+    }
+
+    private static boolean hasXmlnsOfValue(Element element, String xmlnsValue) {
+        if (element == null || xmlnsValue == null) {
+            return false;
         }
-        
+        NamedNodeMap attrs = element.getAttributes();
+        for (int i = 0; i < attrs.getLength(); i++) {
+            Node attr = attrs.item(i);
+            String name = attr.getNodeName();
+            if (name.startsWith("xmlns:")) { // NOI18N
+                if (xmlnsValue.equals(attr.getNodeValue())) {
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
@@ -1423,7 +1443,7 @@ public final class Util {
                 // -1: convert line numbers to be zero-based
                 Line line = ls.getCurrent(lineno-1);
                 // TODO - pass in a column too?
-                line.show(Line.SHOW_GOTO, column);
+                line.show(ShowOpenType.OPEN, ShowVisibilityType.FOCUS, column);
             }
         }
     }

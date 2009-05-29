@@ -89,6 +89,8 @@ import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.text.Line;
+import org.openide.text.Line.ShowOpenType;
+import org.openide.text.Line.ShowVisibilityType;
 import org.openide.util.NbBundle;
 
 import org.w3c.tidy.Tidy;
@@ -256,7 +258,7 @@ implements JsfForm.ErrorPanel {
                         if (ls != null) {
                             // -1: convert line numbers to be zero-based
                             Line line = ls.getCurrent(selected.getLine() - 1);
-                            line.show(Line.SHOW_GOTO);
+                            line.show(ShowOpenType.OPEN, ShowVisibilityType.FOCUS);
                         }
                     }
                 }
@@ -475,15 +477,15 @@ implements JsfForm.ErrorPanel {
 
                 xercesDom = parser.parse(is2);
             } catch (java.io.IOException e) {
-                ErrorManager.getDefault().notify(e);
+                ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
 
                 return null;
             } catch (org.xml.sax.SAXException e) {
-                ErrorManager.getDefault().notify(e);
+                ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
 
                 return null;
             } catch (javax.xml.parsers.ParserConfigurationException e) {
-                ErrorManager.getDefault().notify(e);
+                ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, e);
 
                 return null;
             }
