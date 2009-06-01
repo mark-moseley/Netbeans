@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import javax.swing.MutableComboBoxModel;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.php.project.api.PhpOptions;
@@ -57,6 +58,7 @@ import org.netbeans.modules.php.project.connections.spi.RemoteConfiguration;
 import org.netbeans.modules.php.project.environment.PhpEnvironment;
 import org.netbeans.modules.php.project.environment.PhpEnvironment.DocumentRoot;
 import org.netbeans.modules.php.project.ui.LocalServer;
+import org.netbeans.modules.php.project.ui.LocalServer.ComboBoxModel;
 import org.netbeans.modules.php.project.ui.SourcesFolderProvider;
 import org.netbeans.modules.php.project.ui.Utils;
 import org.netbeans.modules.php.project.ui.customizer.PhpProjectProperties;
@@ -146,12 +148,34 @@ public class RunConfigurationPanel implements WizardDescriptor.Panel<WizardDescr
                     runAsRemoteWeb.hideIndexFile();
                     runAsScript.hideIndexFile();
                     break;
+                case REMOTE:
+                    runAsRemoteWeb.setIndexFile(DEFAULT_INDEX_FILE);
+                    runAsRemoteWeb.setUploadFiles(PhpProjectProperties.UploadFiles.ON_SAVE);
+                    runAsRemoteWeb.hideRunAs();
+                    runAsRemoteWeb.hideIndexFile();
+                    runAsRemoteWeb.hideUploadFiles();
+                    break;
             }
-            RunAsPanel.InsidePanel[] insidePanels = new RunAsPanel.InsidePanel[] {
-                runAsLocalWeb,
-                runAsRemoteWeb,
-                runAsScript,
-            };
+
+            RunAsPanel.InsidePanel[] insidePanels = null;
+            switch (wizardType) {
+                case NEW:
+                case EXISTING:
+                    insidePanels = new RunAsPanel.InsidePanel[] {
+                        runAsLocalWeb,
+                        runAsRemoteWeb,
+                        runAsScript,
+                    };
+                    break;
+                case REMOTE:
+                    insidePanels = new RunAsPanel.InsidePanel[] {
+                        runAsRemoteWeb,
+                    };
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown wizard type: " + wizardType);
+            }
+
             runConfigurationPanelVisual = new RunConfigurationPanelVisual(this, sourcesFolderProvider, configManager, insidePanels);
 
             // listen to the changes in php interpreter
@@ -183,6 +207,9 @@ public class RunConfigurationPanel implements WizardDescriptor.Panel<WizardDescr
             case EXISTING:
                 findIndexFile();
                 break;
+            case REMOTE:
+                setUrl();
+                break;
         }
 
         MutableComboBoxModel localServerModel = getLocalServerModel();
@@ -194,11 +221,14 @@ public class RunConfigurationPanel implements WizardDescriptor.Panel<WizardDescr
             runAsLocalWeb.setCopyFilesState(false);
             canceled = false;
             PhpEnvironment.get().readDocumentRoots(new PhpEnvironment.ReadDocumentRootsNotifier() {
-                public void finished(List<DocumentRoot> documentRoots) {
-                    initLocalServerModel(documentRoots);
+                public void finished(final List<DocumentRoot> documentRoots) {
+                    SwingUtilities.invokeLater(new Runnable() {
+                        public void run() {
+                            initLocalServerModel(documentRoots);
+                        }
+                    });
                 }
             });
-            fireChangeEvent();
         }
         runAsLocalWeb.setCopyFiles(getCopyFiles());
 
@@ -244,13 +274,25 @@ public class RunConfigurationPanel implements WizardDescriptor.Panel<WizardDescr
         }
         int size = documentRoots.size();
         List<LocalServer> localServers = new ArrayList<LocalServer>(size);
+        LocalServer selected = null;
         for (DocumentRoot root : documentRoots) {
             String srcRoot = new File(root.getDocumentRoot(), sourcesFolderProvider.getSourcesFolderName()).getAbsolutePath();
             LocalServer ls = new LocalServer(null, root.getUrl(), root.getDocumentRoot(), srcRoot, true);
             localServers.add(ls);
+            if (selected == null) {
+                selected = ls;
+            }
         }
 
-        runAsLocalWeb.setLocalServerModel(new LocalServer.ComboBoxModel(localServers.toArray(new LocalServer[size])));
+        ComboBoxModel model = new LocalServer.ComboBoxModel(localServers.toArray(new LocalServer[localServers.size()]));
+        // store settings
+        if (selected != null) {
+            model.setSelectedItem(selected);
+            descriptor.putProperty(COPY_SRC_TARGET, selected);
+        }
+        descriptor.putProperty(COPY_SRC_TARGETS, model);
+        // update UI
+        runAsLocalWeb.setLocalServerModel(model);
         runAsLocalWeb.setCopyFilesState(true);
         readingDocumentRoots = false;
         fireChangeEvent();
@@ -372,7 +414,13 @@ public class RunConfigurationPanel implements WizardDescriptor.Panel<WizardDescr
         String activeConfig = configProvider.getActiveConfig();
         String runAs = configManager.configurationFor(activeConfig).getValue(RUN_AS);
         if (runAs == null) {
-            return PhpProjectProperties.RunAsType.LOCAL;
+            switch (wizardType) {
+                case REMOTE:
+                    return PhpProjectProperties.RunAsType.REMOTE;
+
+                default:
+                    return PhpProjectProperties.RunAsType.LOCAL;
+            }
         }
         return PhpProjectProperties.RunAsType.valueOf(runAs);
     }
@@ -625,6 +673,13 @@ public class RunConfigurationPanel implements WizardDescriptor.Panel<WizardDescr
 
     public void cancel() {
         canceled = true;
+    }
+
+    private void setUrl() {
+        assert wizardType == NewPhpProjectWizardIterator.WizardType.REMOTE;
+        if (descriptor.getProperty(URL) == null) {
+            runAsRemoteWeb.setUrl("http://"); // NOI18N
+        }
     }
 
     private class WizardConfigProvider implements ConfigManager.ConfigProvider {
