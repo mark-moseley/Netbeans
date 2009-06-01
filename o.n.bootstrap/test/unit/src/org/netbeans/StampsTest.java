@@ -45,10 +45,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.util.LinkedList;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
 import org.netbeans.junit.Log;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.NbTestSuite;
 
 /**
  *
@@ -59,6 +63,12 @@ public class StampsTest extends NbTestCase {
     private File ide;
     private File platform;
     private File install;
+    
+    
+    public static Test suite() {
+        //return new StampsTest("testStampsInvalidatedWhenClustersChange");
+        return new NbTestSuite(StampsTest.class);
+    }
     
     public StampsTest(String testName) {
         super(testName);
@@ -85,6 +95,10 @@ public class StampsTest extends NbTestCase {
         Stamps.main("reset");
         
         Thread.sleep(100);
+
+        Logger l = Logger.getLogger("org");
+        l.setLevel(Level.OFF);
+        l.setUseParentHandlers(false);
     }
 
     @Override
@@ -122,12 +136,12 @@ public class StampsTest extends NbTestCase {
         CountingSecurityManager.initialize(new File(userdir, "var").getPath());
         long newStamp2 = Stamps.moduleJARs();
         
-        CountingSecurityManager.assertCounts("Just two accesses to cache", 2);
+        CountingSecurityManager.assertCounts("Just four accesses to cache", 4);
         assertEquals("Stamps are the same", stamp, newStamp2);
-        
-    }
-
-    public void testWriteToCache() throws Exception {
+    }        
+    
+    
+    public void testStampsInvalidatedWhenClustersChange() throws IOException {
         final Stamps s = Stamps.getModulesJARs();
         
         assertNull(s.asByteBuffer("mycache.dat"));
@@ -164,6 +178,156 @@ public class StampsTest extends NbTestCase {
         assertEquals("10 bytes stream", 10, is.available());
         is.close();
         bb.clear();
+
+        System.getProperties().remove("netbeans.dirs");
+        Stamps.main("reset");
+        Stamps p = Stamps.getModulesJARs();
+
+        assertNull(p.asByteBuffer("mycache.dat"));
+        assertNull(p.asStream("mycache.dat"));
+    }        
+
+    public void testWriteToCache() throws Exception {
+        final Stamps s = Stamps.getModulesJARs();
+        
+        assertNull(s.asByteBuffer("mycache.dat"));
+        assertNull(s.asStream("mycache.dat"));
+        class Up implements Stamps.Updater {
+
+            public void flushCaches(DataOutputStream os) throws IOException {
+                os.writeInt(1);
+                os.writeInt(2);
+                os.writeShort(2);
+            }
+
+            public void cacheReady() {
+                assertNotNull("stream can be obtained", s.asStream("mycache.dat"));
+            }
+            
+        }
+        Up updater = new Up();
+        
+        s.scheduleSave(updater, "mycache.dat", false);
+        
+        assertNull(s.asByteBuffer("mycache.dat"));
+        assertNull(s.asStream("mycache.dat"));
+        
+        s.waitFor(false);
+        
+        ByteBuffer bb;
+        InputStream is;
+        assertNotNull(bb = s.asByteBuffer("mycache.dat"));
+        assertNotNull(is = s.asStream("mycache.dat"));
+        
+        assertEquals("10 bytes", 10, bb.remaining());
+        assertEquals("10 bytes stream", 10, is.available());
+        is.close();
+        bb.clear();
+
+        s.discardCaches();
+        
+        assertNull(s.asByteBuffer("mycache.dat"));
+        assertNull(s.asStream("mycache.dat"));
+    }
+    
+    public void testAppendToCache() throws Exception {
+        final Stamps s = Stamps.getModulesJARs();
+        
+        assertNull(s.asByteBuffer("mycache.dat"));
+        assertNull(s.asStream("mycache.dat"));
+
+        class Up implements Stamps.Updater {
+
+            public void flushCaches(DataOutputStream os) throws IOException {
+                os.writeInt(1);
+                os.writeInt(2);
+                os.writeShort(2);
+            }
+
+            public void cacheReady() {
+                assertNotNull("stream can be obtained", s.asStream("mycache.dat"));
+            }
+            
+        }
+        Up updater = new Up();
+        
+        s.scheduleSave(updater, "mycache.dat", true);
+        
+        assertNull(s.asByteBuffer("mycache.dat"));
+        assertNull(s.asStream("mycache.dat"));
+        
+        s.waitFor(false);
+
+        {
+            ByteBuffer bb;
+            InputStream is;
+            assertNotNull(bb = s.asByteBuffer("mycache.dat"));
+            assertNotNull(is = s.asStream("mycache.dat"));
+
+            assertEquals("10 bytes", 10, bb.remaining());
+            assertEquals("10 bytes stream", 10, is.available());
+
+            is.close();
+            bb.clear();
+        }
+        
+        s.scheduleSave(updater, "mycache.dat", true);
+        
+        s.waitFor(false);
+
+        {
+            ByteBuffer bb;
+            assertNotNull(bb = s.asByteBuffer("mycache.dat"));
+
+            assertEquals("appened bytes", 20, bb.remaining());
+
+            bb.clear();
+        }
+        
+    }
+    
+    
+    public void testFastWhenShutdown() throws Exception {
+        Stamps s = Stamps.getModulesJARs();
+        
+        assertNull(s.asByteBuffer("mycache.dat"));
+        assertNull(s.asStream("mycache.dat"));
+
+        class Up implements Stamps.Updater {
+            volatile boolean finished;
+
+            public void flushCaches(DataOutputStream os) throws IOException {
+                byte[] arr = new byte[4096];
+                for (int i = 0; i < 10000; i++) {
+                    long previous = System.currentTimeMillis();
+                    os.write(arr);
+                    synchronized (this) {
+                        notifyAll();
+                    }
+                }
+                finished = true;
+            }
+
+            public void cacheReady() {
+            }
+            
+        }
+        Up updater = new Up();
+        
+        s.scheduleSave(updater, "mycache.dat", false);
+
+        long now = System.currentTimeMillis();
+        s.flush(1000);
+        synchronized (updater) {
+            updater.wait();
+        }
+        long diff = System.currentTimeMillis() - now;
+        if (diff < 800) {
+            fail("Updating shall start after 1s, not sooner: " + diff);
+        }
+        s.waitFor(false);
+        
+        assertTrue("Save is done", updater.finished);
     }
     
     public void testWriteToCacheWithError() {
@@ -176,6 +340,11 @@ public class StampsTest extends NbTestCase {
             boolean called;
 
             public void flushCaches(DataOutputStream os) throws IOException {
+                for (int i = 0; i < 1024 * 1024; i++) {
+                    os.write(10);
+                }
+                os.flush();
+                os.close();
                 throw new IOException("Not supported yet.");
             }
 
