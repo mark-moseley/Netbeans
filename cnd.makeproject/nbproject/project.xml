@@ -15,12 +15,30 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.netbeans.api.java.classpath</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.19</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.netbeans.api.progress</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
                         <specification-version>1.5.12</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.asm</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.2</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -37,8 +55,33 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-			<release-version>1</release-version>
+                        <release-version>1</release-version>
                         <specification-version>1.3</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.cnd.api.remote</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.0</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.cnd.utils</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>1.1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.dlight.nativeexecution</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>1.0</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -51,12 +94,20 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.netbeans.modules.parsing.api</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <specification-version>1.9</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.netbeans.modules.project.ant</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
-                        <specification-version>1.12.1</specification-version>
+                        <specification-version>1.31</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -107,7 +158,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.5.1</specification-version>
+                        <specification-version>7.8</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -131,7 +182,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.4.1</specification-version>
+                        <specification-version>7.19</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -179,7 +230,7 @@
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
-                        <specification-version>6.8.1</specification-version>
+                        <specification-version>7.22</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -200,18 +251,42 @@
                     </run-dependency>
                 </dependency>
             </module-dependencies>
+            <test-dependencies>
+                <test-type>
+                    <name>unit</name>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.libs.junit4</code-name-base>
+                        <compile-dependency/>
+                    </test-dependency>
+                    <test-dependency>
+                        <code-name-base>org.netbeans.modules.cnd.remote</code-name-base>
+                    </test-dependency>
+                </test-type>
+            </test-dependencies>
             <friend-packages>
+                <friend>com.sun.cloud.cnd</friend>
+                <friend>com.sun.cloud.cnd.remote.ext</friend>
+                <friend>com.sun.dlight</friend>
+                <friend>com.sun.dlight.model</friend>
+                <friend>com.sun.dlight.projectsupport</friend>
+                <friend>com.sun.dlight.remotesupport</friend>
+                <friend>com.sun.dlight.target</friend>
+                <friend>com.sun.dlight.xyplot</friend>
                 <friend>com.sun.tools.debugger.dbxgui</friend>
+                <friend>com.sun.tools.debugger.dbxtool</friend>
                 <friend>com.sun.tools.swdev.advtools.actions.performanceanalyzeractions</friend>
                 <friend>com.sun.tools.swdev.advtools.actions.spi</friend>
                 <friend>com.sun.tools.swdev.projectimport</friend>
                 <friend>com.sun.tools.swdev.sunstudio</friend>
                 <friend>org.netbeans.modules.cnd.debugger.gdb</friend>
-                <friend>org.netbeans.modules.cnd.make2netbeans</friend>
+                <friend>org.netbeans.modules.cnd.debugger.gdb2</friend>
                 <friend>org.netbeans.modules.cnd.discovery</friend>
                 <friend>org.netbeans.modules.cnd.dwarfdiscovery</friend>
+                <friend>org.netbeans.modules.cnd.gizmo</friend>
                 <friend>org.netbeans.modules.cnd.highlight</friend>
+                <friend>org.netbeans.modules.cnd.make2netbeans</friend>
                 <friend>org.netbeans.modules.cnd.modeldiscovery</friend>
+                <friend>org.netbeans.modules.cnd.remote</friend>
                 <package>org.netbeans.modules.cnd.makeproject.api</package>
                 <package>org.netbeans.modules.cnd.makeproject.api.actions</package>
                 <package>org.netbeans.modules.cnd.makeproject.api.compilers</package>
@@ -222,6 +297,7 @@
                 <package>org.netbeans.modules.cnd.makeproject.api.runprofiles</package>
                 <package>org.netbeans.modules.cnd.makeproject.api.ui</package>
                 <package>org.netbeans.modules.cnd.makeproject.api.wizards</package>
+                <package>org.netbeans.modules.cnd.makeproject.spi.configurations</package>
                 <package>org.netbeans.modules.cnd.makeproject.ui.utils</package>
             </friend-packages>
         </data>
