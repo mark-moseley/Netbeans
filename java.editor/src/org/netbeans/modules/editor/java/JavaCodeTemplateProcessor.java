@@ -50,6 +50,8 @@ import java.util.concurrent.Future;
 import javax.lang.model.element.*;
 import javax.lang.model.type.*;
 import javax.lang.model.util.Types;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 
 import org.netbeans.api.java.source.*;
@@ -76,15 +78,17 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
     public static final String NEW_VAR_NAME = "newVarName"; //NOI18N
     public static final String NAMED = "named"; //NOI18N
     public static final String UNCAUGHT_EXCEPTION_TYPE = "uncaughtExceptionType"; //NOI18N
+    public static final String UNCAUGHT_EXCEPTION_CATCH_STATEMENTS = "uncaughtExceptionCatchStatements"; //NOI18N
 
-    private static final String FALSE = "false"; //NOI18N
+    private static final String TRUE = "true"; //NOI18N
     private static final String NULL = "null"; //NOI18N
     private static final String ERROR = "<error>"; //NOI18N
+    private static final String CLASS = "class"; //NOI18N
     
     private CodeTemplateInsertRequest request;
 
+    private int caretOffset;
     private CompilationInfo cInfo = null;
-    private Future<Void> initTask = null;
     private TreePath treePath = null;
     private Scope scope = null;
     private TypeElement enclClass = null;
@@ -97,7 +101,9 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
         this.request = request;
     }
     
-    public synchronized void updateDefaultValues() {
+    public void updateDefaultValues() {
+        updateTemplateEnding();
+        updateTemplateBasedOnCatchers();
         updateTemplateBasedOnSelection();
         boolean cont = true;
         while (cont) {
@@ -132,13 +138,61 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
     
     public void release() {
     }
+
+    private void updateTemplateEnding() {
+        String text = request.getParametrizedText();
+        if (text.endsWith("\n")) { //NOI18N
+            JTextComponent component = request.getComponent();
+            int offset = component.getSelectionEnd();
+            Document doc = component.getDocument();
+            if (doc.getLength() > offset) {
+                try {
+                    if ("\n".equals(doc.getText(offset, 1))) {
+                        request.setParametrizedText(text.substring(0, text.length() - 1));
+                    }
+                } catch (BadLocationException ble) {
+                }
+            }
+        }
+    }
+
+    private void updateTemplateBasedOnCatchers() {
+        for (CodeTemplateParameter parameter : request.getAllParameters()) {
+            for (String hint : parameter.getHints().keySet()) {
+                if (UNCAUGHT_EXCEPTION_CATCH_STATEMENTS.equals(hint) && initParsing()) {
+                    SourcePositions[] sourcePositions = new SourcePositions[1];
+                    TreeUtilities tu = cInfo.getTreeUtilities();
+                    StatementTree stmt = tu.parseStatement("{" + request.getInsertText() + "}", sourcePositions); //NOI18N
+                    if (!errChecker.containsErrors(stmt)) {
+                        TreePath path = tu.pathFor(new TreePath(treePath, stmt), parameter.getInsertTextOffset(), sourcePositions[0]);
+                        path = Utilities.getPathElementOfKind(Tree.Kind.TRY, path);
+                        if (path != null && ((TryTree)path.getLeaf()).getBlock() != null) {
+                            tu.attributeTree(stmt, scope);
+                            StringBuilder sb = new StringBuilder();
+                            int cnt = 0;
+                            for (TypeMirror tm : tu.getUncaughtExceptions(new TreePath(path, ((TryTree)path.getLeaf()).getBlock()))) {
+                                sb.append("catch ("); //NOI18N
+                                sb.append("${_GEN_UCE_TYPE_" + cnt++ + " type=" + Utilities.getTypeName(tm, true) + " default=" + Utilities.getTypeName(tm, false) + "}"); //NOI18N
+                                sb.append(" ${_GEN_UCE_NAME_" + cnt++ + " newVarName}){}"); //NOI18N
+                            }
+                            if (sb.length() > 0) {
+                                StringBuilder ptBuilder = new StringBuilder(request.getParametrizedText());
+                                ptBuilder.replace(parameter.getParametrizedTextStartOffset(), parameter.getParametrizedTextEndOffset(), sb.toString());
+                                request.setParametrizedText(ptBuilder.toString());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     private void updateTemplateBasedOnSelection() {
         for (CodeTemplateParameter parameter : request.getAllParameters()) {
             if (CodeTemplateParameter.SELECTION_PARAMETER_NAME.equals(parameter.getName())) {
                 JTextComponent component = request.getComponent();
                 if (component.getSelectionStart() != component.getSelectionEnd()) {
-                    if (isBlockContext(request.getCodeTemplate().getContexts()) && initParsing()) {
+                    if (initParsing()) {
                         TreeUtilities tu = cInfo.getTreeUtilities();
                         StatementTree stat = tu.parseStatement(request.getInsertText(), null);
                         EnumSet<Tree.Kind> kinds = EnumSet.of(Tree.Kind.BLOCK, Tree.Kind.DO_WHILE_LOOP,
@@ -148,8 +202,12 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
                             TreePath treePath = tu.pathFor(component.getSelectionStart());
                             Tree tree = treePath.getLeaf();
                             if (tree.getKind() == Tree.Kind.BLOCK && tree == tu.pathFor(component.getSelectionEnd()).getLeaf()) {
+                                String selection = component.getSelectedText();
+                                int idx = 0;
+                                while ((idx < selection.length()) && (selection.charAt(idx) <= ' '))
+                                    idx++;
                                 final StringBuilder selectionText = new StringBuilder(parameter.getValue());
-                                final int caretOffset = component.getSelectionStart();
+                                final int caretOffset = component.getSelectionStart() + idx;
                                 final StringBuilder sb = new StringBuilder();
                                 final Trees trees = cInfo.getTrees();
                                 final SourcePositions sp = trees.getSourcePositions();
@@ -233,7 +291,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
             for (Map.Entry<CodeTemplateParameter, TypeMirror> entry : param2types.entrySet()) {
                 CodeTemplateParameter param = entry.getKey();
                 TypeMirror tm = param2types.get(param);
-                TreePath tp = cInfo.getTreeUtilities().pathFor(request.getInsertTextOffset() + param.getInsertTextOffset());
+                TreePath tp = cInfo.getTreeUtilities().pathFor(caretOffset + param.getInsertTextOffset());
                 CharSequence typeName = imp.resolveImport(tp, tm);
                 if (CAST.equals(param2hints.get(param))) {
                     param.setValue("(" + typeName + ")"); //NOI18N
@@ -258,7 +316,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
                 if (ve != null) {
                     param2hints.put(param, INSTANCE_OF);
                     return ve.getSimpleName().toString();
-                } else if (name == null) {
+                } else if (name != null) {
                     ve = staticInstanceOf((String)entry.getValue(), name);
                     if (ve != null) {
                         param2hints.put(param, INSTANCE_OF);
@@ -416,7 +474,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
                         final boolean isStatic = element.getKind().isClass() || element.getKind().isInterface();
                         ElementUtilities.ElementAcceptor acceptor = new ElementUtilities.ElementAcceptor() {
                             public boolean accept(Element e, TypeMirror t) {
-                                return e.getKind().isField() && !ERROR.contentEquals(e.getSimpleName()) &&
+                                return e.getKind().isField() && !ERROR.contentEquals(e.getSimpleName()) && !CLASS.contentEquals(e.getSimpleName()) &&
                                         (!isStatic || e.getModifiers().contains(Modifier.STATIC)) &&
                                         tu.isAccessible(scope, e, t) &&
                                         (e.getKind().isField() && types.isAssignable(((VariableElement)e).asType(), dType) || e.getKind() == ElementKind.METHOD && types.isAssignable(((ExecutableElement)e).getReturnType(), dType));
@@ -450,7 +508,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
                     if (type.getKind() == TypeKind.DECLARED)
                         return NULL;
                     else if (type.getKind() == TypeKind.BOOLEAN)
-                        return FALSE;
+                        return TRUE;
                 }
             }
         } catch (Exception e) {
@@ -488,7 +546,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
     
     private TypeMirror iterableElementType(int caretOffset) {
         try {            
-            if (isBlockContext(request.getCodeTemplate().getContexts()) && initParsing()) {
+            if (initParsing()) {
                 SourcePositions[] sourcePositions = new SourcePositions[1];
                 TreeUtilities tu = cInfo.getTreeUtilities();
                 StatementTree stmt = tu.parseStatement("{" + request.getInsertText() + "}", sourcePositions); //NOI18N
@@ -518,7 +576,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
     
     private TypeMirror assignmentSideType(int caretOffset, boolean left) {
         try {
-            if (isBlockContext(request.getCodeTemplate().getContexts()) && initParsing()) {
+            if (initParsing()) {
                 SourcePositions[] sourcePositions = new SourcePositions[1];
                 TreeUtilities tu = cInfo.getTreeUtilities();
                 StatementTree stmt = tu.parseStatement("{" + request.getInsertText() + "}", sourcePositions); //NOI18N
@@ -529,14 +587,21 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
                 if (tree == null)
                     return null;
                 tu.attributeTree(stmt, scope);
+                TypeMirror tm = null;
                 if (tree.getLeaf().getKind() == Tree.Kind.ASSIGNMENT) {
                     AssignmentTree as = (AssignmentTree)tree.getLeaf();
                     TreePath type = new TreePath(tree, left ? as.getVariable() : as.getExpression());
-                    return cInfo.getTrees().getTypeMirror(type);
+                    tm = cInfo.getTrees().getTypeMirror(type);
+                } else {
+                    VariableTree vd = (VariableTree)tree.getLeaf();
+                    TreePath type = new TreePath(tree, left ? vd.getType() : vd.getInitializer());
+                    tm = cInfo.getTrees().getTypeMirror(type);
                 }
-                VariableTree vd = (VariableTree)tree.getLeaf();
-                TreePath type = new TreePath(tree, left ? vd.getType() : vd.getInitializer());
-                return cInfo.getTrees().getTypeMirror(type);
+                if (tm != null && tm.getKind() == TypeKind.ERROR)
+                    tm = cInfo.getTrees().getOriginalType((ErrorType)tm);
+                if (tm.getKind() == TypeKind.NONE)
+                    tm = cInfo.getElements().getTypeElement("java.lang.Object").asType(); //NOI18N
+                return tm;
             }
         } catch (Exception e) {
         }
@@ -545,7 +610,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
     
     private TypeMirror cast(int caretOffset) {
         try {
-            if (isBlockContext(request.getCodeTemplate().getContexts()) && initParsing()) {
+            if (initParsing()) {
                 SourcePositions[] sourcePositions = new SourcePositions[1];
                 TreeUtilities tu = cInfo.getTreeUtilities();
                 StatementTree stmt = tu.parseStatement("{" + request.getInsertText() + "}", sourcePositions); //NOI18N
@@ -559,27 +624,33 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
                 if (tree.getLeaf().getKind() == Tree.Kind.ASSIGNMENT) {
                     AssignmentTree as = (AssignmentTree)tree.getLeaf();
                     TypeMirror left = cInfo.getTrees().getTypeMirror(new TreePath(tree, as.getVariable()));
+                    if (left == null)
+                        return null;
                     TreePath exp = new TreePath(tree, as.getExpression());
                     if (exp.getLeaf() instanceof TypeCastTree)
                         exp = new TreePath(exp, ((TypeCastTree)exp.getLeaf()).getExpression());
                     TypeMirror right = cInfo.getTrees().getTypeMirror(exp);
-                    if (right == null || left == null)
+                    if (right == null)
                         return null;
+                    if (right.getKind() == TypeKind.ERROR)
+                        right = cInfo.getTrees().getOriginalType((ErrorType)right);
                     if (cInfo.getTypes().isAssignable(right, left))
                         return null;
                     return left;
                 }
                 VariableTree vd = (VariableTree)tree.getLeaf();
                 TypeMirror left = cInfo.getTrees().getTypeMirror(new TreePath(tree, vd.getType()));
+                if (left == null)
+                    return null;
                 TreePath exp = new TreePath(tree, vd.getInitializer());
                 if (exp.getLeaf() instanceof TypeCastTree)
                     exp = new TreePath(exp, ((TypeCastTree)exp.getLeaf()).getExpression());
                 TypeMirror right = cInfo.getTrees().getTypeMirror(exp);
                 if (right == null)
                     return null;
-                if (left == null)
-                    return null;
-                if (right.getKind() != TypeKind.ERROR && cInfo.getTypes().isAssignable(right, left))
+                if (right.getKind() == TypeKind.ERROR)
+                    right = cInfo.getTrees().getOriginalType((ErrorType)right);
+                if (cInfo.getTypes().isAssignable(right, left) || !cInfo.getTypeUtilities().isCastable(right, left))
                     return null;
                 return left;
             }
@@ -590,7 +661,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
     
     private String newVarName(int caretOffset) {
         try {
-            if (isBlockContext(request.getCodeTemplate().getContexts()) && initParsing()) {
+            if (initParsing()) {
                 SourcePositions[] sourcePositions = new SourcePositions[1];
                 TreeUtilities tu = cInfo.getTreeUtilities();
                 StatementTree stmt = tu.parseStatement("{" + request.getInsertText() + "}", sourcePositions); //NOI18N
@@ -602,14 +673,14 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
                     Scope s = tu.attributeTreeTo(stmt, scope, decl.getLeaf());
                     TypeMirror type = cInfo.getTrees().getTypeMirror(decl);
                     boolean isConst = ((VariableTree)decl.getLeaf()).getModifiers().getFlags().containsAll(EnumSet.of(Modifier.FINAL, Modifier.STATIC));
-                    final Name varName = ((VariableTree)decl.getLeaf()).getName();
+                    final Element element = cInfo.getTrees().getElement(decl);
                     ElementUtilities.ElementAcceptor acceptor = new ElementUtilities.ElementAcceptor() {
                         public boolean accept(Element e, TypeMirror t) {
                             switch(e.getKind()) {
                                 case EXCEPTION_PARAMETER:
                                 case LOCAL_VARIABLE:
                                 case PARAMETER:
-                                    return varName != e.getSimpleName();
+                                    return element != e;
                                 default:
                                     return false;
                             }
@@ -627,7 +698,7 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
     
     private TypeMirror uncaughtExceptionType(int caretOffset) {
         try {
-            if (isBlockContext(request.getCodeTemplate().getContexts()) && initParsing()) {
+            if (initParsing()) {
                 SourcePositions[] sourcePositions = new SourcePositions[1];
                 TreeUtilities tu = cInfo.getTreeUtilities();
                 StatementTree stmt = tu.parseStatement("{" + request.getInsertText() + "}", sourcePositions); //NOI18N
@@ -658,32 +729,20 @@ public class JavaCodeTemplateProcessor implements CodeTemplateProcessor {
         }
     }
     
-    private boolean isBlockContext(List<String> contexts) {
-        if (contexts != null) {
-            for (String ctx : contexts) {
-                Tree.Kind kind = Tree.Kind.valueOf(ctx);
-                if (kind != null && Tree.Kind.BLOCK == kind) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-    
-    private synchronized boolean initParsing() {
-        if (cInfo == null && initTask == null) {
+    private boolean initParsing() {
+        if (cInfo == null) {
             JTextComponent c = request.getComponent();
-            final int caretOffset = c.getSelectionStart();
+            caretOffset = c.getSelectionStart();
             JavaSource js = JavaSource.forDocument(c.getDocument());
             if (js != null) {
                 try {
-                    initTask = js.runWhenScanFinished(new Task<CompilationController>() {
+                    Future<Void> initTask = js.runWhenScanFinished(new Task<CompilationController>() {
 
                         public void run(final CompilationController controller) throws IOException {
+                            if (cInfo != null)
+                                return;
                             controller.toPhase(JavaSource.Phase.RESOLVED);
-                            synchronized(JavaCodeTemplateProcessor.this) {
-                                cInfo = controller;
-                            }
+                            cInfo = controller;
                             final TreeUtilities tu = cInfo.getTreeUtilities();
                             treePath = tu.pathFor(caretOffset);
                             scope = tu.scopeFor(caretOffset);
