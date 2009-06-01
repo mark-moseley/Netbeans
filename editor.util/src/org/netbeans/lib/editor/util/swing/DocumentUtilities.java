@@ -43,18 +43,23 @@ package org.netbeans.lib.editor.util.swing;
 
 import java.lang.reflect.Field;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
+import javax.swing.text.EditorKit;
 import javax.swing.text.Element;
+import javax.swing.text.PlainDocument;
+import javax.swing.text.JTextComponent;
 import javax.swing.text.Segment;
 import javax.swing.text.StyledDocument;
 import javax.swing.undo.CannotRedoException;
 import javax.swing.undo.CannotUndoException;
 import javax.swing.undo.UndoableEdit;
 import org.netbeans.lib.editor.util.AbstractCharSequence;
+import org.netbeans.lib.editor.util.CharSequenceUtilities;
 import org.netbeans.lib.editor.util.CompactMap;
 
 /**
@@ -66,6 +71,9 @@ import org.netbeans.lib.editor.util.CompactMap;
 
 public final class DocumentUtilities {
     
+    /** BaseDocument's version. */
+    private static final String VERSION_PROP = "version"; //NOI18N
+
     private static final Object TYPING_MODIFICATION_DOCUMENT_PROPERTY = new Object();
     
     private static final Object TYPING_MODIFICATION_KEY = new Object();
@@ -284,7 +292,9 @@ public final class DocumentUtilities {
      * <br>
      *
      * @param doc document for which the charsequence is being obtained.
-     * @return non-null character sequence.
+     * @return non-null character sequence. Length of the character sequence
+     *  is <code>doc.getLength() + 1</code> where the extra character is '\n'
+     *  (it corresponds to AbstractDocument-based document implementations).
      *  <br>
      *  The returned character sequence should only be accessed under
      *  document's readlock (or writelock).
@@ -304,21 +314,18 @@ public final class DocumentUtilities {
      *
      * @param doc document for which the charsequence is being obtained.
      * @param offset starting offset of the charsequence to obtain.
-     * @param length length of the charsequence to obtain
+     * @param length length of the charsequence to obtain. It must be <code>&gt;= 0</code>
+     *   and <code>&lt;doc.getLength() + 1</code>.
      * @return non-null character sequence.
-     * @exception BadLocationException  some portion of the given range
-     *   was not a valid part of the document.  The location in the exception
+     * @exception BadLocationException some portion of the given range
+     *   was not a valid part of the document. The location in the exception
      *   is the first bad position encountered.
      *  <br>
      *  The returned character sequence should only be accessed under
      *  document's readlock (or writelock).
      */
     public static CharSequence getText(Document doc, int offset, int length) throws BadLocationException {
-        CharSequence text = (CharSequence)doc.getProperty(CharSequence.class);
-        if (text == null) {
-            text = new DocumentCharSequence(doc);
-            doc.putProperty(CharSequence.class, text);
-        }
+        CharSequence text = getText(doc);
         try {
             return text.subSequence(offset, offset + length);
         } catch (IndexOutOfBoundsException e) {
@@ -326,7 +333,9 @@ public final class DocumentUtilities {
             if (offset >= 0 && offset + length > text.length()) {
                 badOffset = length;
             }
-            throw new BadLocationException(e.getMessage(), badOffset);
+            BadLocationException ble = new BadLocationException(e.getMessage(), badOffset);
+            ble.initCause(e);
+            throw ble;
         }
     }
     
@@ -551,6 +560,98 @@ public final class DocumentUtilities {
     }
 
     /**
+     * Get string representation of an offset for debugging purposes
+     * in form "offset[line:column]". Both lines and columns start counting from 1
+     * like in the editor's status bar. Tabs are expanded when counting the column.
+     *
+     * @param doc non-null document in which the offset is located.
+     * @param offset offset in the document.
+     * @return string representation of the offset.
+     * @since 1.25
+     */
+    public static String debugOffset(Document doc, int offset) {
+        return appendOffset(null, doc, offset).toString();
+    }
+
+    /**
+     * Get string representation of an offset for debugging purposes
+     * in form "offset[line:column]". Both lines and columns start counting from 1
+     * like in the editor's status bar. Tabs are expanded when counting the column.
+     *
+     * @param sb valid string builder to which text will be appended or null in which case
+     *  the method itself will create a string builder and it will return it.
+     * @param doc non-null document in which the offset is located.
+     * @param offset offset in the document.
+     * @return non-null string builder to which the description was added.
+     * @since 1.27
+     */
+    public static StringBuilder appendOffset(StringBuilder sb, Document doc, int offset) {
+        if (sb == null) {
+            sb = new StringBuilder(50);
+        }
+        sb.append(offset).append('[');
+        if (offset < 0) { // Offset too low
+            sb.append("<0");
+        } else if (offset > doc.getLength() + 1) { // +1 for AbstractDocument-based docs
+            sb.append(">").append(doc.getLength());
+        } else { // Valid offset
+            Element paragraphRoot = getParagraphRootElement(doc);
+            int lineIndex = paragraphRoot.getElementIndex(offset);
+            Element lineElem = paragraphRoot.getElement(lineIndex);
+            sb.append(lineIndex + 1).append(':'); // Line
+            sb.append(visualColumn(doc, lineElem.getStartOffset(), offset) + 1); // Column
+        }
+        sb.append(']');
+        return sb;
+    }
+
+    /**
+     * Get string representation of an offset for debugging purposes
+     * in form "offset[line:column]". Both lines and columns start counting from 1
+     * like in the editor's status bar. Tabs are expanded when counting the column.
+     *
+     * @param sb valid string builder to which text will be appended or null in which case
+     *  the method itself will create a string builder and it will return it.
+     * @param evt non-null document event.
+     * @return non-null string builder to which the description was added.
+     * @since 1.27
+     */
+    public static StringBuilder appendEvent(StringBuilder sb, DocumentEvent evt) {
+        if (sb == null) {
+            sb = new StringBuilder(100);
+        }
+        DocumentEvent.EventType type = evt.getType();
+        sb.append(type).append(", ");
+        appendOffset(sb, evt.getDocument(), evt.getOffset());
+        sb.append(", l=").append(evt.getLength());
+        // Possibly append the modification text
+        String modText;
+        if ((modText = getModificationText(evt)) != null) {
+            sb.append(", modText=\"");
+            CharSequenceUtilities.debugText(sb, modText);
+            sb.append('"');
+        }
+        return sb;
+    }
+
+    private static int visualColumn(Document doc, int lineStartOffset, int offset) {
+        Integer tabSizeInteger = (Integer) doc.getProperty(PlainDocument.tabSizeAttribute);
+        int tabSize = (tabSizeInteger != null) ? tabSizeInteger : 8;
+        CharSequence docText = getText(doc);
+        // Expected that offset <= docText.length()
+        int column = 0;
+        for (int i = lineStartOffset; i < offset; i++) {
+            char c = docText.charAt(i);
+            if (c == '\t') {
+                column = (column + tabSize) / tabSize * tabSize;
+            } else {
+                column++;
+            }
+        }
+        return column;
+    }
+
+    /**
      * Implementation of the character sequence for a generic document
      * that does not provide its own implementation of character sequence.
      */
@@ -565,15 +666,18 @@ public final class DocumentUtilities {
         }
 
         public int length() {
-            return doc.getLength();
+            // Assuming AbstractDocument-based contents which have mandatory extra '\n' at end
+            return doc.getLength() + 1;
         }
 
         public synchronized char charAt(int index) {
             try {
                 doc.getText(index, 1, segment);
             } catch (BadLocationException e) {
-                throw new IndexOutOfBoundsException(e.getMessage()
+                IndexOutOfBoundsException ioobe = new IndexOutOfBoundsException(e.getMessage()
                     + " at offset=" + e.offsetRequested()); // NOI18N
+                ioobe.initCause(e);
+                throw ioobe;
             }
             char ch = segment.array[segment.offset];
             segment.array = null; // Allow GC of large char arrays
@@ -630,11 +734,11 @@ public final class DocumentUtilities {
             return null;
         }
         
-        public String toString() {
+        public @Override String toString() {
             return getName();
         }
 
-    }
+    } // End of EventPropertiesElement class
     
     private static final class EventPropertiesElementChange
     implements DocumentEvent.ElementChange, UndoableEdit  {
@@ -717,4 +821,61 @@ public final class DocumentUtilities {
 
     }
     
+    /**
+     * Gets the mime type of a document. If the mime type can't be determined
+     * this method will return <code>null</code>. This method should work reliably
+     * for Netbeans documents that have their mime type stored in a special
+     * property. For any other documents it will probably just return <code>null</code>.
+     * 
+     * @param doc The document to get the mime type for.
+     * 
+     * @return The mime type of the document or <code>null</code>.
+     * @see org.netbeans.modules.editor.NbEditorDocument#MIME_TYPE_PROP
+     * @since 1.23
+     */
+    public static String getMimeType(Document doc) {
+        return (String)doc.getProperty("mimeType"); //NOI18N
+    }
+
+    /**
+     * Gets the mime type of a document in <code>JTextComponent</code>. If
+     * the mime type can't be determined this method will return <code>null</code>.
+     * It tries to determine the document's mime type first and if that does not
+     * work it uses mime type from the <code>EditorKit</code> attached to the
+     * component.
+     * 
+     * @param component The component to get the mime type for.
+     * 
+     * @return The mime type of a document opened in the component or <code>null</code>.
+     * @since 1.23
+     */
+    public static String getMimeType(JTextComponent component) {
+        Document doc = component.getDocument();
+        String mimeType = getMimeType(doc);
+        if (mimeType == null) {
+            EditorKit kit = component.getUI().getEditorKit(component);
+            if (kit != null) {
+                mimeType = kit.getContentType();
+            }
+        }
+        return mimeType;
+    }
+
+    /**
+     * Attempts to get the version of a <code>Document</code>. Netbeans editor
+     * documents are versioned, which means that every time a document is modified
+     * its version is incremented. This method can be used to read the latest version
+     * of a netbeans document.
+     * 
+     * @param doc The document to get a version for.
+     *
+     * @return The document's version or <code>0</code> if the document does not
+     *   support versioning (ie. is not a netbeans editor document).
+     *
+     * @since 1.27
+     */
+    public static long getDocumentVersion(Document doc) {
+        Object version = doc.getProperty(VERSION_PROP);
+        return version instanceof AtomicLong ? ((AtomicLong) version).get() : 0;
+    }
 }

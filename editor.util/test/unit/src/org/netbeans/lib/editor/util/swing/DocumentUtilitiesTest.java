@@ -52,6 +52,19 @@ public class DocumentUtilitiesTest extends NbTestCase {
         super(testName);
     }
 
+    public void testDebugOffset() throws Exception {
+        PlainDocument doc = new PlainDocument(); // tabSize is 8
+        //                   0123 45 678 90123456 789
+        doc.insertString(0, "abc\na\tbc\nabcdefg\thij", null);
+        assertEquals("0[1:1]", DocumentUtilities.debugOffset(doc, 0));
+        assertEquals("5[2:2]", DocumentUtilities.debugOffset(doc, 5));
+        assertEquals("6[2:9]", DocumentUtilities.debugOffset(doc, 6));
+        assertEquals("7[2:10]", DocumentUtilities.debugOffset(doc, 7));
+        assertEquals("16[3:8]", DocumentUtilities.debugOffset(doc, 16));
+        assertEquals("17[3:9]", DocumentUtilities.debugOffset(doc, 17));
+        assertEquals("19[3:11]", DocumentUtilities.debugOffset(doc, 19));
+    }
+
     public void testIsReadLocked() throws Exception {
         PlainDocument doc = new PlainDocument();
         assertFalse(DocumentUtilities.isReadLocked(doc));
@@ -60,6 +73,19 @@ public class DocumentUtilitiesTest extends NbTestCase {
             assertTrue(DocumentUtilities.isReadLocked(doc));
         } finally {
             doc.readUnlock();
+        }
+    }
+
+    public void testGetText() throws Exception {
+        PlainDocument doc = new PlainDocument();
+        CharSequence text = DocumentUtilities.getText(doc);
+        assertEquals(1, text.length());
+        assertEquals('\n', text.charAt(0));
+
+        text = DocumentUtilities.getText(doc);
+        doc.insertString(0, "a\nb", null);
+        for (int i = 0; i < doc.getLength() + 1; i++) {
+            assertEquals(doc.getText(i, 1).charAt(0), text.charAt(i));
         }
     }
     
