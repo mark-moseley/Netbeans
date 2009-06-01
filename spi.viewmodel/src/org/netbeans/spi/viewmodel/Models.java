@@ -371,6 +371,9 @@ public final class Models {
     
     private static <T> void revertOrder(List<T> filters) {
         int n = filters.size();
+        // [TODO] do not remove the following line, prevents null to be returned by filters.remove(i);
+        // needs deeper investigation why it can occure
+        filters.toString();
         for (int i = 0; i < n; ) {
             T filter = filters.remove(i);
             boolean first = filter.getClass ().getName ().endsWith ("First");
@@ -759,6 +762,16 @@ public final class Models {
         }
 
         public void modelChanged(ModelEvent event) {
+            if (event instanceof ModelEvent.NodeChanged &&
+                    (event.getSource() instanceof NodeModel || event.getSource() instanceof NodeModelFilter)) {
+                // CompoundNodeModel.modelChanged() takes this.
+                return ;
+            }
+            if (event instanceof ModelEvent.TableValueChanged &&
+                    (event.getSource() instanceof TableModel || event.getSource() instanceof TableModelFilter)) {
+                // CompoundTableModel.modelChanged() takes this.
+                return ;
+            }
             ModelEvent newEvent = translateEvent(event, this);
             Collection<ModelListener> listeners;
             synchronized (modelListeners) {
@@ -902,6 +915,16 @@ public final class Models {
         }
 
         public void modelChanged(ModelEvent event) {
+            if (event instanceof ModelEvent.TableValueChanged &&
+                    (event.getSource() instanceof TableModel || event.getSource() instanceof TableModelFilter)) {
+                // CompoundTableModel.modelChanged() takes this.
+                return ;
+            }
+            if (event instanceof ModelEvent.TreeChanged &&
+                    (event.getSource() instanceof TreeModel || event.getSource() instanceof TreeModelFilter)) {
+                // CompoundTreeModel.modelChanged() takes this.
+                return ;
+            }
             ModelEvent newEvent = translateEvent(event, this);
             Collection<ModelListener> listeners;
             synchronized (modelListeners) {
@@ -1178,6 +1201,15 @@ public final class Models {
         }
 
         public void modelChanged(ModelEvent event) {
+            if (event instanceof ModelEvent.NodeChanged && (event.getSource() instanceof NodeModel || event.getSource() instanceof NodeModelFilter)) {
+                // CompoundNodeModel.modelChanged() takes this.
+                return ;
+            }
+            if (event instanceof ModelEvent.TreeChanged &&
+                    (event.getSource() instanceof TreeModel || event.getSource() instanceof TreeModelFilter)) {
+                // CompoundTreeModel.modelChanged() takes this.
+                return ;
+            }
             ModelEvent newEvent = translateEvent(event, this);
             Collection<ModelListener> listeners;
             synchronized (modelListeners) {
@@ -1230,8 +1262,8 @@ public final class Models {
 
         private static TreeModel[] convert (List<TreeModel> l) {
             TreeModel[] models = new TreeModel [l.size ()];
-            return l.toArray (models);
-        }
+                return l.toArray (models);
+            }
 
         /**
          * Creates new instance of DelegatingTreeModel for given array of 
@@ -1515,6 +1547,15 @@ public final class Models {
         }
 
         public void modelChanged(ModelEvent event) {
+            if (event instanceof ModelEvent.NodeChanged && (event.getSource() instanceof NodeModel || event.getSource() instanceof NodeModelFilter)) {
+                // CompoundNodeModel.modelChanged() takes this.
+                return ;
+            }
+            if (event instanceof ModelEvent.TableValueChanged &&
+                    (event.getSource() instanceof TableModel || event.getSource() instanceof TableModelFilter)) {
+                // CompoundTableModel.modelChanged() takes this.
+                return ;
+            }
             ModelEvent newEvent = translateEvent(event, this);
             Collection<ModelListener> listeners;
             synchronized (modelListeners) {
