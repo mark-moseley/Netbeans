@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
 import java.io.DataInput;
@@ -53,12 +52,11 @@ import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.api.project.NativeFileItem;
 import org.netbeans.modules.cnd.api.project.NativeProject;
 import org.netbeans.modules.cnd.apt.support.APTDriver;
-import org.netbeans.modules.cnd.apt.support.APTPreprocHandler;
-import org.netbeans.modules.cnd.apt.utils.APTIncludeUtils;
-import org.netbeans.modules.cnd.modelimpl.cache.CacheManager;
+import org.netbeans.modules.cnd.apt.support.APTFileCacheManager;
 import org.netbeans.modules.cnd.modelimpl.debug.Diagnostic;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.openide.util.RequestProcessor;
 
 /**
@@ -66,62 +64,63 @@ import org.openide.util.RequestProcessor;
  * @author Vladimir Kvashin
  */
 public final class ProjectImpl extends ProjectBase {
-    
+
     private ProjectImpl(ModelImpl model, Object platformProject, String name) {
         super(model, platformProject, name);
-        // RepositoryUtils.put(this);
+    // RepositoryUtils.put(this);
     }
-    
+
     public static ProjectImpl createInstance(ModelImpl model, String platformProject, String name) {
         return createInstance(model, (Object) platformProject, name);
     }
-    
+
     public static ProjectImpl createInstance(ModelImpl model, NativeProject platformProject, String name) {
         return createInstance(model, (Object) platformProject, name);
     }
-    
+
     private static ProjectImpl createInstance(ModelImpl model, Object platformProject, String name) {
-	ProjectBase instance = null;
-	if( TraceFlags.PERSISTENT_REPOSITORY ) {
-	    try {
-		instance = readInstance(model, platformProject, name);
-	    }
-	    catch( Exception e ) {
-		// just report to console;
-		// the code below will create project "from scratch"
-		cleanRepository(platformProject, false);
-		DiagnosticExceptoins.register(e);
-	    }
-	}
-	if( instance == null ) {
-	   instance = new ProjectImpl(model, platformProject, name); 
-	}
-	return (ProjectImpl) instance;
+        ProjectBase instance = null;
+        if (TraceFlags.PERSISTENT_REPOSITORY) {
+            try {
+                instance = readInstance(model, platformProject, name);
+            } catch (Exception e) {
+                // just report to console;
+                // the code below will create project "from scratch"
+                cleanRepository(platformProject, false);
+                DiagnosticExceptoins.register(e);
+            }
+        }
+        if (instance == null) {
+            instance = new ProjectImpl(model, platformProject, name);
+        }
+        return (ProjectImpl) instance;
     }
-    
-    protected void scheduleIncludedFileParsing(FileImpl csmFile, APTPreprocHandler.State state) {
-        // add project's file to the head
-        ParserQueue.instance().addFirst(csmFile, state, true);
+
+    @Override
+    protected final ParserQueue.Position getIncludedFileParserQueuePosition() {
+        return ParserQueue.Position.HEAD;
     }
-    
-    public @Override void onFileEditStart(final FileBuffer buf, NativeFileItem nativeFile) {
-        if( !acceptNativeItem(nativeFile)) {
+
+    public 
+    @Override
+    void onFileEditStart(final FileBuffer buf, NativeFileItem nativeFile) {
+        if (!acceptNativeItem(nativeFile)) {
             return;
         }
-        if( TraceFlags.DEBUG ) Diagnostic.trace("------------------------- onFileEditSTART " + buf.getFile().getName()); // NOI18N
-	final FileImpl impl = createOrFindFileImpl(buf, nativeFile);
+        if (TraceFlags.DEBUG) {
+            Diagnostic.trace("------------------------- onFileEditSTART " + buf.getFile().getName()); //NOI18N
+        }
+        final FileImpl impl = createOrFindFileImpl(buf, nativeFile);
         if (impl != null) {
-            impl.setBuffer(buf); 
-            synchronized( editedFiles ) {
+            impl.setBuffer(buf);
+            synchronized (editedFiles) {
                 editedFiles.add(impl);
             }
-            if (TraceFlags.USE_AST_CACHE) {
-                CacheManager.getInstance().invalidate(impl);
-            } else {
-                APTDriver.getInstance().invalidateAPT(buf);
-            }
+            APTDriver.getInstance().invalidateAPT(buf);
+            APTFileCacheManager.invalidate(buf);
             schedule(buf, impl);
             buf.addChangeListener(new ChangeListener() {
+
                 public void stateChanged(ChangeEvent e) {
                     schedule(buf, impl);
                 }
@@ -129,30 +128,32 @@ public final class ProjectImpl extends ProjectBase {
         }
     }
 
-    public @Override void onFileEditEnd(FileBuffer buf, NativeFileItem nativeFile) {
-        if( ! acceptNativeItem(nativeFile)) {
+    public 
+    @Override
+    void onFileEditEnd(FileBuffer buf, NativeFileItem nativeFile) {
+        if (!acceptNativeItem(nativeFile)) {
             return;
         }
-        if( TraceFlags.DEBUG ) Diagnostic.trace("------------------------- onFileEditEND " + buf.getFile().getName()); // NOI18N
-        FileImpl file = getFile(buf.getFile());
-        if( file != null ) {
-            synchronized( editedFiles ) {
-                if (!editedFiles.remove(file)){
+        if (TraceFlags.DEBUG) {
+            Diagnostic.trace("------------------------- onFileEditEND " + buf.getFile().getName()); //NOI18N
+        }
+        FileImpl file = getFile(buf.getFile(), false);
+        if (file != null) {
+            synchronized (editedFiles) {
+                if (!editedFiles.remove(file)) {
                     // FixUp double file edit end on mounted files
                     return;
                 }
             }
             file.setBuffer(buf);
-            if (TraceFlags.USE_DEEP_REPARSING) {
-                DeepReparsingUtils.reparseOnEdit(file, this);
-            } else {
-                ParserQueue.instance().addFirst(file, getPreprocHandler(buf.getFile()).getState(), false);
-            }
+            file.clearStateCache();
+            // no need for deep parsing util call here, because it will be called as external notification change anyway
+//            DeepReparsingUtils.reparseOnEdit(file, this);
         }
     }
-    
+
     private void addToQueue(FileBuffer buf, FileImpl file) {
-        if( isDisposing() ) {
+        if (isDisposing()) {
             return;
         }
         try {
@@ -161,27 +162,29 @@ public final class ProjectImpl extends ProjectBase {
             DiagnosticExceptoins.register(ex);
         }
     }
-    
+
     public void onFilePropertyChanged(NativeFileItem nativeFile) {
-        if( ! acceptNativeItem(nativeFile)) {
+        if (!acceptNativeItem(nativeFile)) {
             return;
         }
-        if( TraceFlags.DEBUG ) Diagnostic.trace("------------------------- onFilePropertyChanged " + nativeFile.getFile().getName()); // NOI18N
+        if (TraceFlags.DEBUG) {
+            Diagnostic.trace("------------------------- onFilePropertyChanged " + nativeFile.getFile().getName()); //NOI18N
+        }
         DeepReparsingUtils.reparseOnPropertyChanged(nativeFile, this);
     }
-    
+
     public void onFilePropertyChanged(List<NativeFileItem> items) {
-        if (items.size()>0){
+        if (items.size() > 0) {
             DeepReparsingUtils.reparseOnPropertyChanged(items, this);
         }
     }
-    
+
     public void onFileRemoved(FileImpl impl) {
         try {
             //Notificator.instance().startTransaction();
             onFileRemovedImpl(impl);
-            if( impl != null ) {
-                DeepReparsingUtils.reparseOnRemoved(impl,this);
+            if (impl != null) {
+                DeepReparsingUtils.reparseOnRemoved(impl, this);
             }
         } finally {
             //Notificator.instance().endTransaction();
@@ -189,20 +192,24 @@ public final class ProjectImpl extends ProjectBase {
         }
     }
 
+    public void onFileImplRemoved(List<FileImpl> files) {
+        for (FileImpl impl : files) {
+            onFileRemovedImpl(impl);
+        }
+        DeepReparsingUtils.reparseOnRemoved(files, this);
+    }
+
     private FileImpl onFileRemovedImpl(FileImpl impl) {
-        APTIncludeUtils.clearFileExistenceCache();
-        if( impl != null ) {
-            synchronized( editedFiles ) {
+        CndFileUtils.clearFileExistenceCache();
+        if (impl != null) {
+            synchronized (editedFiles) {
                 editedFiles.remove(impl);
             }
             removeNativeFileItem(impl.getUID());
             impl.dispose();
-            removeFile(new File(impl.getAbsolutePath()));
-            if (TraceFlags.USE_AST_CACHE) {
-                CacheManager.getInstance().invalidate(impl);
-            } else {
-                APTDriver.getInstance().invalidateAPT(impl.getBuffer());
-            }
+            removeFile(impl.getAbsolutePath());
+            APTDriver.getInstance().invalidateAPT(impl.getBuffer());
+            APTFileCacheManager.invalidate(impl.getBuffer());
             ParserQueue.instance().remove(impl);
         }
         return impl;
@@ -212,13 +219,13 @@ public final class ProjectImpl extends ProjectBase {
         try {
             ParserQueue.instance().onStartAddingProjectFiles(this);
             List<FileImpl> toReparse = new ArrayList<FileImpl>();
-            for(NativeFileItem item : items) {
+            for (NativeFileItem item : items) {
                 File file = item.getFile();
                 try {
                     //Notificator.instance().startTransaction();
-		    FileImpl impl = getFile(file);
-                    if( impl != null ) {
-			onFileRemovedImpl(impl);
+                    FileImpl impl = getFile(file, false);
+                    if (impl != null) {
+                        onFileRemovedImpl(impl);
                         toReparse.add(impl);
                     }
                 } finally {
@@ -226,29 +233,29 @@ public final class ProjectImpl extends ProjectBase {
                     Notificator.instance().flush();
                 }
             }
-            DeepReparsingUtils.reparseOnRemoved(toReparse,this);
-        } finally{
+            DeepReparsingUtils.reparseOnRemoved(toReparse, this);
+        } finally {
             ParserQueue.instance().onEndAddingProjectFiles(this);
         }
     }
 
     public void onFileAdded(NativeFileItem nativeFile) {
-	onFileAddedImpl(nativeFile, true);
+        onFileAddedImpl(nativeFile, true);
     }
 
     private NativeFileItem onFileAddedImpl(NativeFileItem nativeFile, boolean deepReparse) {
-        if( acceptNativeItem(nativeFile)) {
-	    APTIncludeUtils.clearFileExistenceCache();
+        if (acceptNativeItem(nativeFile)) {
+            CndFileUtils.clearFileExistenceCache();
             try {
                 //Notificator.instance().startTransaction();
-                createIfNeed(nativeFile, isSourceFile(nativeFile), null);
+                createIfNeed(nativeFile, isSourceFile(nativeFile));
                 return nativeFile;
             } finally {
                 //Notificator.instance().endTransaction();
                 Notificator.instance().flush();
-		if( deepReparse ) {
-		    DeepReparsingUtils.reparseOnAdded(nativeFile,this);
-		}
+                if (deepReparse) {
+                    DeepReparsingUtils.reparseOnAdded(nativeFile, this);
+                }
             }
         }
         return null;
@@ -258,53 +265,57 @@ public final class ProjectImpl extends ProjectBase {
         try {
             ParserQueue.instance().onStartAddingProjectFiles(this);
             List<NativeFileItem> toReparse = new ArrayList<NativeFileItem>();
-            for(NativeFileItem item : items) {
+            for (NativeFileItem item : items) {
                 NativeFileItem done = onFileAddedImpl(item, false);
-                if(done != null) {
+                if (done != null) {
                     toReparse.add(done);
                 }
             }
-            DeepReparsingUtils.reparseOnAdded(toReparse,this);
-        } finally{
+            DeepReparsingUtils.reparseOnAdded(toReparse, this);
+        } finally {
             ParserQueue.instance().onEndAddingProjectFiles(this);
         }
     }
-    
-    protected @Override void ensureChangedFilesEnqueued() {
-        synchronized( editedFiles ) {
+
+    protected 
+    @Override
+    void ensureChangedFilesEnqueued() {
+        synchronized (editedFiles) {
             super.ensureChangedFilesEnqueued();
-            for( Iterator iter = editedFiles.iterator(); iter.hasNext(); ) {
+            for (Iterator iter = editedFiles.iterator(); iter.hasNext();) {
                 FileImpl file = (FileImpl) iter.next();
-                if( ! file.isParsingOrParsed() ) {
-                    ParserQueue.instance().addLast(file, getPreprocHandler(file.getBuffer().getFile()).getState());
+                if (!file.isParsingOrParsed()) {
+                    ParserQueue.instance().add(file, getPreprocHandler(file.getBuffer().getFile()).getState(), ParserQueue.Position.TAIL);
                 }
             }
         }
-        //N.B. don't clear list of editedFiles here.
+    //N.B. don't clear list of editedFiles here.
     }
-    
-    protected @Override boolean hasChangedFiles(CsmFile skipFile) {
+
+    protected 
+    @Override
+    boolean hasChangedFiles(CsmFile skipFile) {
         if (skipFile == null) {
             return false;
         }
-        synchronized( editedFiles ) {
-            for( Iterator iter = editedFiles.iterator(); iter.hasNext(); ) {
+        synchronized (editedFiles) {
+            for (Iterator iter = editedFiles.iterator(); iter.hasNext();) {
                 FileImpl file = (FileImpl) iter.next();
-                if( (skipFile != file) && ! file.isParsingOrParsed() ) {
+                if ((skipFile != file) && !file.isParsingOrParsed()) {
                     return true;
                 }
             }
         }
         return false;
     }
-    
-    
-    private Set<CsmFile> editedFiles = new HashSet<CsmFile>();
-    
-    public @Override ProjectBase findFileProject(CharSequence absPath) {
+    private final Set<CsmFile> editedFiles = new HashSet<CsmFile>();
+
+    public 
+    @Override
+    ProjectBase findFileProject(CharSequence absPath) {
         ProjectBase retValue = super.findFileProject(absPath);
         // trick for tracemodel. We should accept all not registered files as well, till it is not system one.
-        if (ParserThreadManager.instance().isStandalone()) {
+        if (retValue == null && ParserThreadManager.instance().isStandalone()) {
             retValue = absPath.toString().startsWith("/usr") ? retValue : this; // NOI18N
         }
         return retValue;
@@ -333,59 +344,62 @@ public final class ProjectImpl extends ProjectBase {
     protected void clearNativeFileContainer() {
         nativeFiles.clear();
     }
-    
     private NativeFileContainer nativeFiles = new NativeFileContainer();
-    
+
     ////////////////////////////////////////////////////////////////////////////
     // impl of persistent
-    
-    public @Override void write(DataOutput aStream) throws IOException {
+    public 
+    @Override
+    void write(DataOutput aStream) throws IOException {
         super.write(aStream);
-	// we don't need this since ProjectBase persists fqn 
+        // we don't need this since ProjectBase persists fqn
         //UIDObjectFactory aFactory = UIDObjectFactory.getDefaultFactory();
         //aFactory.writeUID(getUID(), aStream);
-        LibraryManager.getInstance().writeProjectLibraries(getUID(),aStream);
+        LibraryManager.getInstance().writeProjectLibraries(getUID(), aStream);
     }
 
     public ProjectImpl(DataInput input) throws IOException {
         super(input);
-	// we don't need this since ProjectBase persists fqn 
+        // we don't need this since ProjectBase persists fqn
         //UIDObjectFactory aFactory = UIDObjectFactory.getDefaultFactory();
         //CsmUID uid = aFactory.readUID(input);
         //LibraryManager.getInsatnce().read(uid, input);
-	LibraryManager.getInstance().readProjectLibraries(getUID(), input);
-        //nativeFiles = new NativeFileContainer();
+        LibraryManager.getInstance().readProjectLibraries(getUID(), input);
+    //nativeFiles = new NativeFileContainer();
     }
-    
+
     ////////////////////////////////////////////////////////////////////////////
     private RequestProcessor.Task task = null;
-    private final static int DELAY = 1001;
-    
-    public void schedule(final FileBuffer buf, final FileImpl file) {
-        if (task==null) {
-            task = RequestProcessor.getDefault().create(new Runnable() {
-                public void run() {
-                    try {
-                        addToQueue(buf, file);
-                    } catch (AssertionError ex) {
-                        DiagnosticExceptoins.register(ex);
-                    } catch (Exception ex) {
-                        DiagnosticExceptoins.register(ex);
-                    }
-                }
-            }, true);
-            task.setPriority(Thread.MIN_PRIORITY);
+
+    public synchronized void schedule(final FileBuffer buf, final FileImpl file) {
+        if (task != null) {
+            task.cancel();
         }
-        task.cancel();
-        task.schedule(DELAY);        
+         task = RequestProcessor.getDefault().create(new Runnable() {
+
+            public void run() {
+                try {
+                    addToQueue(buf, file);
+                } catch (AssertionError ex) {
+                    DiagnosticExceptoins.register(ex);
+                } catch (Exception ex) {
+                    DiagnosticExceptoins.register(ex);
+                }
+            }
+        }, true);
+        task.setPriority(Thread.MIN_PRIORITY);
+        int delay = TraceFlags.REPARSE_DELAY;
+        if (file.getLastParseTime() / (delay+1) > 2) {
+            delay = Math.max(delay, file.getLastParseTime()+2000);
+        }
+        task.schedule(delay);
     }
 
     @Override
     public void setDisposed() {
         super.setDisposed();
-        if( task != null ) {
+        if (task != null) {
             task.cancel();
         }
     }
-    
 }
