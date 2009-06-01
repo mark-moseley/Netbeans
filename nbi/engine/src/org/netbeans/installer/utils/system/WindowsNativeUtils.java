@@ -39,6 +39,7 @@ package org.netbeans.installer.utils.system;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -62,6 +63,7 @@ import org.netbeans.installer.utils.system.windows.SystemApplication;
 import org.netbeans.installer.utils.system.windows.FileExtension;
 import org.netbeans.installer.utils.system.windows.WindowsRegistry;
 import org.netbeans.installer.utils.helper.FilesList;
+import org.netbeans.installer.utils.helper.Platform;
 import org.netbeans.installer.utils.system.launchers.Launcher;
 import org.netbeans.installer.utils.progress.Progress;
 import org.netbeans.installer.utils.system.cleaner.OnExitCleanerHandler;
@@ -81,6 +83,8 @@ public class WindowsNativeUtils extends NativeUtils {
             NATIVE_JNILIB_RESOURCE_SUFFIX + "windows/windows-x86.dll"; //NOI18N
     public static final String LIBRARY_PATH_X64 =
             NATIVE_JNILIB_RESOURCE_SUFFIX + "windows/windows-x64.dll"; //NOI18N
+    public static final String LIBRARY_PATH_IA64 =
+            NATIVE_JNILIB_RESOURCE_SUFFIX + "windows/windows-ia64.dll"; //NOI18N
     
     private static final String CLEANER_RESOURCE =
             NATIVE_CLEANER_RESOURCE_SUFFIX +
@@ -173,6 +177,8 @@ public class WindowsNativeUtils extends NativeUtils {
     
     private boolean isUserAdminSet;
     private boolean isUserAdmin;
+
+    private String browserCommand;
     
     
     //////////////////////////////////////////////////////////////////////////
@@ -209,14 +215,35 @@ public class WindowsNativeUtils extends NativeUtils {
     
     // constructor //////////////////////////////////////////////////////////////////
     WindowsNativeUtils() {
+        String libraryPath;
         if (SystemUtils.isCurrentJava64Bit()) {
-            loadNativeLibrary(LIBRARY_PATH_X64);
+            if(System.getProperty("os.arch").equals("ia64")) {
+                libraryPath = LIBRARY_PATH_IA64;
+            } else {
+                libraryPath = LIBRARY_PATH_X64;
+            }
         } else {
-            loadNativeLibrary(LIBRARY_PATH_X86);
+            libraryPath = LIBRARY_PATH_X86;
+        }
+        try {
+            loadNativeLibrary(libraryPath);
+        } catch (NativeException e) {
+            // can`t live without the native library
+            ErrorManager.notifyCritical("Cannot load native library which is stricly necessary to work correctly.",e);
         }
         //initializeForbiddenFiles(FORBIDDEN_DELETING_FILES_WINDOWS);
-        initializeForbiddenFiles();
-        initializeRegistryKeys();
+        if(nativeLibraryLoaded) {
+            initializeForbiddenFiles();
+            initializeRegistryKeys();
+        }
+    }
+    @Override
+    protected Platform getPlatform() {
+        return SystemUtils.isCurrentJava64Bit() ? 
+                            (System.getProperty("os.arch").equals("ia64") ? 
+                               Platform.WINDOWS_IA64 : 
+                               Platform.WINDOWS_X64) : 
+                            Platform.WINDOWS_X86;
     }
     
     private void initializeRegistryKeys() {
@@ -573,7 +600,13 @@ public class WindowsNativeUtils extends NativeUtils {
                 }
                 
                 if (registry.keyExists(section, rootKey)) {
-                    registry.setStringValue(section, rootKey, name, value, expand);
+                    if (value != null) {
+                        registry.setStringValue(section, rootKey, name, value, expand);
+                    } else if(registry.valueExists(section, rootKey, name)) {
+                        registry.deleteValue(section, rootKey, name);
+                    } else {
+			LogManager.log(ErrorLevel.MESSAGE, "Environment variable " + name + " is not set");
+		    }
                     notifyEnvironmentChanged0();
                 } else {
                     LogManager.log(ErrorLevel.WARNING,
@@ -740,7 +773,7 @@ public class WindowsNativeUtils extends NativeUtils {
             return null;
         }
     }
-    
+    @Override
     public boolean checkFileAccess(File file, boolean isReadNotModify) throws NativeException {
         int result = 0;
         try {
@@ -918,12 +951,10 @@ public class WindowsNativeUtils extends NativeUtils {
     }
     
     private void changeDefaultApplication(SystemApplicationKey app, FileExtensionKey fe, Properties props) throws NativeException {
-        if(app.isUseByDefault()) {
+        if(app.isUseByDefault() == null || app.isUseByDefault().booleanValue() == true) {
             String name = fe.getDotName();
             String extKey = fe.getKey();
-            String appLocation = app.getLocation();
-            String appKey = app.getKey();
-            String command = app.getCommand();
+            String appKey = app.getKey();            
             
             if(!registry.keyExists(clSection, clKey +  extKey + SHELL_OPEN_COMMAND)) {
                 registry.createKey(clSection, clKey +  extKey + SHELL_OPEN_COMMAND);
@@ -940,22 +971,20 @@ public class WindowsNativeUtils extends NativeUtils {
                 s = registry.getStringValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME);
             }
             
-            registry.setStringValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME, appKey);
-            if(s!=null) {
-                setExtProperty(props, name, EXT_HKCU_DEFAULTAPP_PROPERTY,s);
+            if (app.isUseByDefault() != null || s == null) {
+                registry.setStringValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME, appKey);
+                if (s != null) {
+                    setExtProperty(props, name, EXT_HKCU_DEFAULTAPP_PROPERTY, s);
+                }
             }
-            
         }
     }
     
     private void rollbackDefaultApplication(SystemApplicationKey app, FileExtensionKey fe, Properties props) throws NativeException {
         String property;
-        if(app.isUseByDefault()) {
+        if(app.isUseByDefault() == null || app.isUseByDefault().booleanValue() == true) {
             String name = fe.getDotName();
-            String extKey = fe.getKey();
-            String appLocation = app.getLocation();
-            String appKey = app.getKey();
-            String command = app.getCommand();
+            String extKey = fe.getKey();            
             property = getExtProperty(props, name, EXT_HKCRSHELL_OPEN_COMMAND_PROPERTY);
             if(property!=null) {
                 String s = SHELL_OPEN_COMMAND;
@@ -970,7 +999,7 @@ public class WindowsNativeUtils extends NativeUtils {
             if(registry.keyExists(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name)) {
                 if(property!=null) {
                     registry.setStringValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME, property);
-                } else {
+                } else if(app.isUseByDefault()!=null) {
                     registry.deleteValue(HKCU, CURRENT_USER_FILE_EXT_KEY + SEP + name, APPLICATION_VALUE_NAME);
                 }
             }
@@ -1129,7 +1158,6 @@ public class WindowsNativeUtils extends NativeUtils {
         String appLocation = app.getLocation();
         String appKey = app.getKey();
         String appFriendlyName = app.getFriendlyName();
-        String command = app.getCommand();
         String name = key.getDotName();
         if(!registry.keyExists(clSection, clKey + APPLICATIONS_KEY_NAME,appKey)) {
             registry.createKey(clSection, clKey + APPLICATIONS_KEY_NAME,appKey);
@@ -1232,6 +1260,76 @@ public class WindowsNativeUtils extends NativeUtils {
     private boolean isEmpty(String str) {
         return (str==null || str.equals(EMPTY_STRING));
     }
+
+    private void initBrowser() {
+        if (browserCommand != null) {
+            return;
+        }
+
+        try {
+            String type = null;
+            if (registry.keyExists(WindowsRegistry.HKEY_CURRENT_USER, "Software\\Classes\\.html")) {
+                type = registry.getStringValue(WindowsRegistry.HKEY_CURRENT_USER, "Software\\Classes\\.html", "");
+            } else if (registry.keyExists(WindowsRegistry.HKEY_CLASSES_ROOT, ".html")) {
+                type = registry.getStringValue(WindowsRegistry.HKEY_CLASSES_ROOT, ".html", "");
+            }
+
+            LogManager.log("... html type : " + type);
+            if (type != null && !type.equals("")) {
+                browserCommand = null;
+                String userCmdKey = "Software\\Classes\\" + type + "\\shell\\open\\command";
+                String systemCmdKey = type + "\\shell\\open\\command";
+                if (registry.keyExists(WindowsRegistry.HKEY_CURRENT_USER, userCmdKey)) {
+                    browserCommand = registry.getStringValue(WindowsRegistry.HKEY_CURRENT_USER, userCmdKey, "");
+                    LogManager.log("... using user browser");
+                } else if (registry.keyExists(WindowsRegistry.HKEY_CLASSES_ROOT, systemCmdKey)) {
+                    browserCommand = registry.getStringValue(WindowsRegistry.HKEY_CLASSES_ROOT, systemCmdKey, "");
+                    LogManager.log("... using system browser");
+                }
+                if (browserCommand != null && !browserCommand.contains("%1")) {
+                    userCmdKey = "Software\\Classes\\" + type + "\\shell\\opennew\\command";
+                    systemCmdKey = type + "\\shell\\opennew\\command";
+                    if (registry.keyExists(WindowsRegistry.HKEY_CURRENT_USER, userCmdKey)) {
+                        browserCommand = registry.getStringValue(WindowsRegistry.HKEY_CURRENT_USER, userCmdKey, "");
+                        LogManager.log("... using user browser");
+                    } else if (registry.keyExists(WindowsRegistry.HKEY_CLASSES_ROOT, systemCmdKey)) {
+                        browserCommand = registry.getStringValue(WindowsRegistry.HKEY_CLASSES_ROOT, systemCmdKey, "");
+                        LogManager.log("... using system browser");
+                    }
+                }
+                LogManager.log("... command : " + browserCommand);
+                if (browserCommand != null && !browserCommand.equals("")) {
+                    if (browserCommand.contains("%1") && !browserCommand.contains("\"%1\"")) {
+                        browserCommand = browserCommand.replace("%1", "\"%1\"");
+                    }
+                }
+            }
+        } catch (NativeException e) {
+            LogManager.log(e);
+        }
+    }
+    
+    public boolean openBrowser(URI uri) {
+        if (isBrowseSupported()) {
+            String command = browserCommand.replace("%1", uri.toString());
+            try {
+                LogManager.log("... running : " + command);
+                Runtime.getRuntime().exec(command);
+                return true;
+            } catch (IOException e) {
+                LogManager.log(e);
+
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isBrowseSupported() {
+        initBrowser();
+        return browserCommand!=null;
+    }
+
     
     private void notifyAssociationChanged() throws NativeException {
         notifyAssociationChanged0();
