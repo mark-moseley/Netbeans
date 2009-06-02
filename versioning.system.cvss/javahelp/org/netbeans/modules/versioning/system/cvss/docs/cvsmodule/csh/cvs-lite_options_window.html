@@ -1,11 +1,12 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
             "http://www.w3.org/TR/html4/loose.dtd">
 <!--
-*     Copyright © 2007 Sun Microsystems, Inc. All rights reserved.
+*     Copyright © 2009 Sun Microsystems, Inc. All rights reserved.
 *     Use is subject to license terms.
 -->
 <html>
-    <head>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
         <title>CVS: Versioning Options Window</title>
         <link href="nbdocs://org.netbeans.modules.usersguide/org/netbeans/modules/usersguide/ide.css"
             rel="StyleSheet" type="text/css">
@@ -38,7 +39,11 @@
                 can manually specify their commit through the 
                 <a href="cvs-lite_commit_dialog.html">Commit dialog</a>.)</li>
             <li><strong>Wrap Commit Messages To (characters)</strong>. Specify whether to wrap 
-                commit messages following a specified number of characters.</li>            
+                commit messages following a specified number of characters.</li>
+            <li><strong>Automatically prune directories after checkout</strong>. Pruning is the
+                process of deleting empty directories after an update or checkout operation.
+                Selecting this option ensures that any empty directories remaining when a
+                checkout operation completes will be removed. (Selected by default.)</li>
         </ul>
         
         <ul class="note">

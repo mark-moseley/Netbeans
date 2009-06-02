@@ -1,11 +1,12 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
             "http://www.w3.org/TR/html4/loose.dtd">
 <!--
-*     Copyright © 2007 Sun Microsystems, Inc. All rights reserved.
+*     Copyright © 2009 Sun Microsystems, Inc. All rights reserved.
 *     Use is subject to license terms.
 -->
 <html>
-    <head>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
         <title>Subversion: Options Window</title>
         <link href="nbdocs://org.netbeans.modules.usersguide/org/netbeans/modules/usersguide/ide.css"
             rel="StyleSheet" type="text/css">
@@ -27,10 +28,12 @@
         <p>You can specify the following Subversion settings:</p>
             
         <ul>
-            <li><strong>Specify the SVN Home Folder</strong>. Enter the path to the Subversion 
-                executable home folder in the IDE. Click Browse to navigate to the folder on 
-                your system. Any changes made will take effect upon restarting the IDE></li>
-            <li><strong>Connection Settings</strong>. Click the Connection Settings button to
+            <li><strong>Specify the SVN executable File</strong>. Enter the path to the Subversion
+                executable file in the IDE. This should be the path up to, but not including,
+                the file. Click Browse to navigate to the folder on your system. If left blank,
+                the IDE searches for the executable in its default location. Any changes made
+                will take effect upon restarting the IDE.</li>
+            <li><strong>Connection Settings</strong>. Click the Manage Connection Settings button to
                 view previously saved repository URLs used in the IDE. From the Manage Connection
                 Settings dialog, you can change URL-specific settings, such as username and 
                 password. You can also remove previously saved URLs.</li>
@@ -57,6 +60,10 @@
             <li><strong>Variable content</strong>. You can specify rules defining how status 
                 labels should appear depending on the repository folder(s) which files belong 
                 to. To do so, click the Define {folder} button.</li>
+            <li><strong>Other: Automatically open Output window tabs</strong>. Selecting this option
+                sets the Output window to open a new tab each time that a new versioning operation that involves
+                interaction with the repository takes place (e.g., commit, checkout). This
+                option is selected by default.</li>
         </ul>
     
         <dl>

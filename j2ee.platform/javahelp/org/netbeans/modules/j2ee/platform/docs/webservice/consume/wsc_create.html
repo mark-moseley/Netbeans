@@ -1,9 +1,10 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
-<!-- * Copyright © 2007 Sun Microsystems,
+<!-- * Copyright © 2009 Sun Microsystems,
 Inc.  All rights reserved.  
 Use is subject to license terms.  *--> 
 <html> 
-    <head> 
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
         <title>Generating a JAX-WS Web Service Client</title>
         <link rel="stylesheet" href="nbdocs://org.netbeans.modules.usersguide/org/netbeans/modules/usersguide/ide.css" type="text/css">
     </head> 
@@ -79,10 +80,9 @@ Use is subject to license terms.  *-->
                 </ul>
                 <p>For Java SE clients, use the JAX Version drop-down to
                 specify whether you want to create a JAX-WS client
-                or a JAX-RPC client.
+            or a JAX-RPC client.</p>
             </li>
-
-            <li>Click Finish.</li>
+            <li>If you want to use raw XML messages when invoking the web service, select Generate Dispatch Code. The client code is generated using the <tt>java.xml.ws.Dispatch</tt> interface instead of the usual service endpoint interface. This is an advanced feaure and is unselected by default.</li>            <li>Click Finish.</li>
 
  
            

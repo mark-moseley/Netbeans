@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='ISO-8859-1' ?>
 
 <!--
-*     Copyright © 2007 Sun Microsystems, Inc. All rights reserved.
+*     Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
 *     Use is subject to license terms.
 -->
 
@@ -123,6 +123,9 @@
     <!-- Options window -->
     <!-- <mapID target="org.netbeans.modules.subversion.options.SvnOptionsController" url="svnmodule/csh/svn_options.html" /> -->
 
+    <!-- Server Certificate Verification dialog -->
+    <mapID target="org.netbeans.modules.subversion.serverCertificateVerification" url="svnmodule/csh/svn_cert_verification.html" />    
+
     <!-- Subversion Manage Connection Settings dialog (accessed from Options window) -->
     <!-- TODO: Request new target (currently: org.openide.util.HelpCtx.DEFAULT_HELP) -->
 
@@ -131,6 +134,9 @@
 
     <!-- Subversion menu -->
     <mapID target="org.netbeans.modules.subversion.ui.status.OpenVersioningAction" url="nbdocs://org.netbeans.modules.usersguide/org/netbeans/modules/usersguide/pending.html" />
+
+    <!-- Select dialog -->
+    <mapID target="org.netbeans.modules.subversion.FileSelector" url="svnmodule/csh/svn_select_dialog.html" />
 
     <!-- TODO find out what this is for -->
     <mapID target="org.netbeans.modules.subversion.client.SvnClientExceptionHandler" url="pending.html" />
@@ -177,6 +183,9 @@
 
         <!-- TODO: find out what this target is for -->
         <mapID target="org.netbeans.modules.subversion.ui.browser.urlpattern" url="svnmodule/csh/svn_browse_rep_folders_dialog.html" />
+
+    <!-- Open Projects dialog (This applies to all versioning systems!) -->
+        <mapID target="org.netbeans.modules.versioning.util.projects.ProjectOpener" url="svnmodule/csh/vcs_open_projects_dialog.html" />
 
 </map>
 

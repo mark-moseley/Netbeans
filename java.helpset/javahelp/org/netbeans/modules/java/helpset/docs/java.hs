@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='ISO-8859-1' ?>
 <!--
-*     Copyright � 2007 Sun Microsystems, Inc. All rights reserved.
+*     Copyright (c) 2009 Sun Microsystems, Inc. All rights reserved.
 *     Use is subject to license terms.
 -->
 <!DOCTYPE helpset
@@ -30,7 +30,7 @@
   <view>
     <name>Search</name>
     <label>Search</label>
-    <type>javax.help.SearchView</type> 
+    <type>javax.help.ModifiedSearchView</type> 
     <data engine="com.sun.java.help.search.DefaultSearchEngine">      
       JavaHelpSearch
     </data>  

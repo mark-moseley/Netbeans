@@ -1,11 +1,12 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
             "http://www.w3.org/TR/html4/loose.dtd">
 <!--
-*     Copyright © 2007 Sun Microsystems, Inc. All rights reserved.
+*     Copyright © 2009 Sun Microsystems, Inc. All rights reserved.
 *     Use is subject to license terms.
 -->
 <html>
-    <head>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
         <title>Working with Branches in Subversion</title>
         <link href="nbdocs://org.netbeans.modules.usersguide/org/netbeans/modules/usersguide/ide.css"
             rel="StyleSheet" type="text/css">
@@ -40,12 +41,11 @@
         <p>If you need to edit files on a branch folder that already exists, you can checkout 
             the branch to copy the files to a local working directory. You must however create 
             a new local working directory within which to checkout the branch.</p>
-</p>
             
         <h4>To checkout a branch to your local working directory:</h4>
         
         <ol>
-            <li>Choose Versioning &gt; Subversion &gt; Checkout from the main menu. The 
+            <li>Choose Team &gt; (Subversion &gt;) Checkout from the main menu. The
                 Subversion Checkout wizard opens.</li>
             <li>In the first panel of the wizard, enter a URL that contains the connection 
                 protocol and location to the repository. Depending on your protocol selection
@@ -112,7 +112,7 @@
                 area. If you want to switch to the branch after creating it, select the
                 Switch to Copy checkbox.</li>
             <li>Click Copy. The IDE creates the branch by copying the folder contents to the 
-                specified location in the repository.</p>
+                specified location in the repository.</li>
         </ol>
 
         <h3><a name="switch"></a>Switching to a Branch</h3>
@@ -126,8 +126,8 @@
         <ol>
             <li>Select a versioned file or folder (e.g. from the Projects, Files, or Favorites 
                 window) and choose either Subversion &gt; Switch to Copy from the right-click 
-                menu or Versioning &gt; Switch to from the IDE's main menu. The Subversion Switch
-                dialog box opens.</li>
+                menu or Team &gt; (Subversion &gt;) Switch to from the IDE's main menu. The
+                Subversion Switch dialog box opens.</li>
             <li>For Repository Folder, enter the branch folder you want to switch to, or click 
                 Browse to view a list of all locations in the repository.
             
