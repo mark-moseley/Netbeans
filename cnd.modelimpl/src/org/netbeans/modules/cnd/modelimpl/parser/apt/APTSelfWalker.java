@@ -36,6 +36,9 @@ import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.structure.APTInclude;
 import org.netbeans.modules.cnd.apt.support.APTAbstractWalker;
 import org.netbeans.modules.cnd.apt.support.APTDriver;
+import org.netbeans.modules.cnd.apt.support.APTFileCacheEntry;
+import org.netbeans.modules.cnd.apt.support.APTFileCacheManager;
+import org.netbeans.modules.cnd.apt.support.APTMacroMap;
 import org.netbeans.modules.cnd.apt.support.APTPreprocHandler;
 import org.netbeans.modules.cnd.apt.support.APTWalker;
 import org.netbeans.modules.cnd.apt.support.ResolvedPath;
@@ -57,20 +60,20 @@ public class APTSelfWalker extends APTAbstractWalker {
 
     protected final CsmFile csmFile;
 
-    protected APTSelfWalker(APTFile apt, CsmFile csmFile, APTPreprocHandler preprocHandler) {
-        super(apt, preprocHandler);
+    protected APTSelfWalker(APTFile apt, CsmFile csmFile, APTPreprocHandler preprocHandler, APTFileCacheEntry cacheEntry) {
+        super(apt, preprocHandler, cacheEntry);
         this.csmFile = csmFile;
     }
     
-    protected APTSelfWalker(APTFile apt, APTSelfWalker parent) {
-        this(apt, parent.csmFile, parent.getPreprocHandler());
-    }
-    
-    protected void include(ResolvedPath resolvedPath, APTInclude aptInclude) {
-        if (resolvedPath != null && getIncludeHandler().pushInclude(resolvedPath.getPath(), aptInclude.getToken().getLine(), resolvedPath.getIndex())) {
+    protected boolean include(ResolvedPath resolvedPath, APTInclude aptInclude, APTMacroMap.State postIncludeState) {
+        if (resolvedPath != null && getIncludeHandler().pushInclude(resolvedPath.getPath(), aptInclude, resolvedPath.getIndex())) {
             try {
-                APTFile apt = APTDriver.getInstance().findAPTLight(new FileBufferFile(new File(resolvedPath.getPath())));
-                createIncludeWalker(apt, this, resolvedPath.getPath()).visit();
+                APTFile apt = APTDriver.getInstance().findAPTLight(new FileBufferFile(new File(resolvedPath.getPath().toString())));
+                APTPreprocHandler preprocHandler = getPreprocHandler();
+                APTFileCacheEntry cache = APTFileCacheManager.getEntry(resolvedPath.getPath(),preprocHandler, false);
+                createIncludeWalker(apt, this, resolvedPath.getPath(), cache).visit();
+                // remember walk
+                APTFileCacheManager.setAPTCacheEntry(resolvedPath.getPath(), preprocHandler, cache, false);
             } catch (FileNotFoundException ex) {
                 APTUtils.LOG.log(Level.WARNING, "APTSelfWalker: file {0} not found", new Object[] {resolvedPath.getPath()});// NOI18N
 		DiagnosticExceptoins.register(ex);
@@ -81,9 +84,15 @@ public class APTSelfWalker extends APTAbstractWalker {
                 getIncludeHandler().popInclude();
             }
         }
+        return postIncludeState == null;
     }
     
-    protected APTWalker createIncludeWalker(APTFile apt, APTSelfWalker parent, String includePath) {
-        return new APTSelfWalker(apt, parent);
+    protected APTWalker createIncludeWalker(APTFile apt, APTSelfWalker parent, CharSequence includePath, APTFileCacheEntry cache) {
+        return new APTSelfWalker(apt, parent.csmFile, parent.getPreprocHandler(), cache);
+    }
+
+    @Override
+    protected boolean hasIncludeActionSideEffects() {
+        return false;
     }
 }
