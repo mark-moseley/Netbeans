@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,7 +43,6 @@ package org.netbeans.modules.mercurial;
 import javax.swing.SwingUtilities;
 import org.netbeans.modules.versioning.spi.VCSInterceptor;
 import org.netbeans.modules.versioning.util.Utils;
-import org.netbeans.modules.mercurial.HgException;
 import java.io.File;
 import java.io.IOException;
 import org.netbeans.modules.mercurial.util.HgCommand;
@@ -51,12 +50,16 @@ import org.openide.util.RequestProcessor;
 import java.util.logging.Level;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.Collection;
-import java.util.Calendar;
+import java.util.Set;
 import org.netbeans.modules.mercurial.util.HgUtils;
-import org.netbeans.api.queries.SharabilityQuery;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import org.netbeans.modules.mercurial.ui.status.StatusAction;
+import org.netbeans.modules.mercurial.util.HgRepositoryContextCache;
+import org.openide.filesystems.FileUtil;
+
 
 /**
  * Listens on file system changes and reacts appropriately, mainly refreshing affected files' status.
@@ -67,118 +70,76 @@ public class MercurialInterceptor extends VCSInterceptor {
 
     private final FileStatusCache   cache;
 
-    private List<File> dirsToDelete; 
+    private ConcurrentLinkedQueue<File> filesToRefresh = new ConcurrentLinkedQueue<File>();
+
+    private RequestProcessor.Task refreshTask;
+
+    private static final RequestProcessor rp = new RequestProcessor("MercurialRefresh", 1, true);
 
     public MercurialInterceptor() {
         cache = Mercurial.getInstance().getFileStatusCache();
-        dirsToDelete = new ArrayList<File>();
+        refreshTask = rp.create(new RefreshTask());
     }
 
     public boolean beforeDelete(File file) {
-        if (file == null) return true;
+        Mercurial.LOG.fine("beforeDelete " + file);
+        if (file == null) return false;
         if (HgUtils.isPartOfMercurialMetadata(file)) return false;
-        
-        // We track the deletion of top level directories
-        if (file.isDirectory()) {
-            for (Iterator i = dirsToDelete.iterator(); i.hasNext();) {
-                File dir = (File) i.next();
-                if (file.equals(dir.getParentFile())) {
-                    i.remove();
-                }
-            }
-            if (SharabilityQuery.getSharability(file) != SharabilityQuery.NOT_SHARABLE) {
-                dirsToDelete.add(file);
-            }
-        }
+
+        // we don't care about ignored files
+        // IMPORTANT: false means mind checking the sharability as this might cause deadlock situations
+        if(HgUtils.isIgnored(file, false)) return false; // XXX what about other events?
         return true;
     }
 
     public void doDelete(File file) throws IOException {
-        return;
+        // XXX runnig hg rm for each particular file when removing a whole firectory might no be neccessery:
+        //     just delete it via file.delete and call, group the files in afterDelete and schedule a delete
+        //     fo the parent or for a bunch of files at once. 
+        Mercurial.LOG.fine("doDelete " + file);
+        if (file == null) return;
+        Mercurial hg = Mercurial.getInstance();
+        File root = hg.getRepositoryRoot(file);
+        try {
+            file.delete();
+            HgCommand.doRemove(root, file, null);
+        } catch (HgException ex) {
+            Mercurial.LOG.log(Level.FINE, "doDelete(): File: {0} {1}", new Object[] {file.getAbsolutePath(), ex.toString()}); // NOI18N
+        }  
     }
 
     public void afterDelete(final File file) {
-        Utils.post(new Runnable() {
+        Mercurial.LOG.fine("afterDelete " + file);
+        if (file == null) return;
+        // we don't care about ignored files
+        // IMPORTANT: false means mind checking the sharability as this might cause deadlock situations
+        if(HgUtils.isIgnored(file, false)) {
+            if (Mercurial.LOG.isLoggable(Level.FINER)) {
+                Mercurial.LOG.log(Level.FINE, "skipping afterDelete(): File: {0} is ignored", new Object[] {file.getAbsolutePath()}); // NOI18N
+            }
+            return;
+        }
+        Mercurial hg = Mercurial.getInstance();
+        final File root = hg.getRepositoryRoot(file);
+        rp.post(new Runnable() {
             public void run() {
-                fileDeletedImpl(file);
+                if (file.isDirectory()) {
+                    try {
+                        Map<File, FileInformation> interestingFiles = HgCommand.getInterestingStatus(root, file);
+                        FileInformation fi = interestingFiles.get(file);
+                        cache.refreshFileStatus(file, fi, interestingFiles);
+                    } catch (HgException ex) {
+                        Mercurial.LOG.log(Level.FINE, "fileDeletedImpl(): File: {0} {1}", new Object[] {file.getAbsolutePath(), ex.toString()}); // NOI18N
+                    }             
+                } else if (file.getParentFile() != null) {
+                    reScheduleRefresh(800, file);
+                }
             }
         });
     }
-    
-    private void fileDeletedImpl(final File file) {
-        if (file == null) return;
-        Mercurial hg = Mercurial.getInstance();
-        final File root = hg.getTopmostManagedParent(file);
-        RequestProcessor rp = null;
-        if (root != null) {
-            rp = hg.getRequestProcessor(root.getAbsolutePath());
-        }
-        if (file.exists()) {
-            if (file.isDirectory()) {
-                file.delete();
-                if (!dirsToDelete.remove(file)) return;
-                if (root == null) return;
-                HgProgressSupport support = new HgProgressSupport() {
-                    public void perform() {
-                        try {
-                            HgCommand.doRemove(root, file);
-                            // We need to cache the status of all deleted files
-                            Map<File, FileInformation> interestingFiles = HgCommand.getInterestingStatus(root, file);
-                            if (!interestingFiles.isEmpty()){
-                                Collection<File> files = interestingFiles.keySet();
-
-                                Map<File, Map<File,FileInformation>> interestingDirs =
-                                        HgUtils.getInterestingDirs(interestingFiles, files);
-
-                                Calendar start = Calendar.getInstance();
-                                for (File tmpFile : files) {
-                                    if(this.isCanceled()) {
-                                        return;
-                                    }
-                                    FileInformation fi = interestingFiles.get(tmpFile);
-
-                                    cache.refreshFileStatus(tmpFile, fi,
-                                    interestingDirs.get(tmpFile.isDirectory()? tmpFile: tmpFile.getParentFile()), true);
-                                }
-                                Calendar end = Calendar.getInstance();
-                            }
-                        } catch (HgException ex) {
-                            Mercurial.LOG.log(Level.FINE, "fileDeletedImpl(): File: {0} {1}", new Object[] {file.getAbsolutePath(), ex.toString()}); // NOI18N
-                        }             
-                    }
-                };
-
-                support.start(rp, root.getAbsolutePath(), 
-                        org.openide.util.NbBundle.getMessage(MercurialInterceptor.class, "MSG_Remove_Progress")); // NOI18N
-            } else {
-                // If we are deleting a parent directory of this file
-                // skip the call to hg remove as we will do it for the directory
-                file.delete();
-                if (root == null) return;
-                for (File dir : dirsToDelete) {
-                    File tmpFile = file.getParentFile();
-                    while (tmpFile != null) {
-                        if (tmpFile.equals(dir)) return;
-                        tmpFile = tmpFile.getParentFile();
-                    }
-                }
-                HgProgressSupport support = new HgProgressSupport() {
-                    public void perform() {
-                        try {
-                            HgCommand.doRemove(root, file);
-                            cache.refresh(file, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
-                        } catch (HgException ex) {
-                            Mercurial.LOG.log(Level.FINE, "fileDeletedImpl(): File: {0} {1}", new Object[] {file.getAbsolutePath(), ex.toString()}); // NOI18N
-                        }             
-                    }
-                };
-                support.start(rp, root.getAbsolutePath(), 
-                        org.openide.util.NbBundle.getMessage(MercurialInterceptor.class, "MSG_Remove_Progress")); // NOI18N
-            }
-        }
-    }
 
     public boolean beforeMove(File from, File to) {
+        Mercurial.LOG.fine("beforeMove " + from + "->" + to);
         if (from == null || to == null || to.exists()) return true;
         
         Mercurial hg = Mercurial.getInstance();
@@ -189,6 +150,7 @@ public class MercurialInterceptor extends VCSInterceptor {
     }
 
     public void doMove(final File from, final File to) throws IOException {
+        Mercurial.LOG.fine("doMove " + from + "->" + to);
         if (from == null || to == null || to.exists()) return;
         
         if (SwingUtilities.isEventDispatchThread()) {
@@ -227,34 +189,35 @@ public class MercurialInterceptor extends VCSInterceptor {
 
     private void hgMoveImplementation(final File srcFile, final File dstFile) throws IOException {
         final Mercurial hg = Mercurial.getInstance();
-        final File root = hg.getTopmostManagedParent(srcFile);
+        final File root = hg.getRepositoryRoot(srcFile);
+        final File dstRoot = hg.getRepositoryRoot(dstFile);
         if (root == null) return;
 
-        RequestProcessor rp = hg.getRequestProcessor(root.getAbsolutePath());
+        RequestProcessor rp = hg.getRequestProcessor(root);
 
+        Mercurial.LOG.log(Level.FINE, "hgMoveImplementation(): File: {0} {1}", new Object[] {srcFile, dstFile}); // NOI18N
+
+        srcFile.renameTo(dstFile);
         Runnable moveImpl = new Runnable() {
             public void run() {
+                OutputLogger logger = OutputLogger.getLogger(root.getAbsolutePath());
                 try {
-                    int status = hg.getFileStatusCache().getStatus(srcFile).getStatus();
-                    if (status == FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY) {
-                        srcFile.renameTo(dstFile);
-                    } else if (status == FileInformation.STATUS_VERSIONED_ADDEDLOCALLY) {
-                        srcFile.renameTo(dstFile);
-                        HgCommand.doRemove(root, srcFile);
-                        HgCommand.doAdd(root, dstFile);
-                    } else {
-                        HgCommand.doRename(root, srcFile, dstFile);
+                    if (root.equals(dstRoot)) {
+                        HgCommand.doRenameAfter(root, srcFile, dstFile, logger);
                     }
                 } catch (HgException e) {
                     Mercurial.LOG.log(Level.FINE, "Mercurial failed to rename: File: {0} {1}", new Object[] {srcFile.getAbsolutePath(), dstFile.getAbsolutePath()}); // NOI18N
+                } finally {
+                    logger.closeLog();
                 }
             }
         };
 
-        rp.post(moveImpl).waitFinished();
+        rp.post(moveImpl);
     }
 
     public void afterMove(final File from, final File to) {
+        Mercurial.LOG.fine("afterMove " + from + "->" + to);
         Utils.post(new Runnable() {
             public void run() {
                 fileMovedImpl(from, to);
@@ -265,32 +228,57 @@ public class MercurialInterceptor extends VCSInterceptor {
     private void fileMovedImpl(final File from, final File to) {
         if (from == null || to == null || !to.exists()) return;
         if (to.isDirectory()) return;
-        Mercurial hg = Mercurial.getInstance();        
-        final File root = hg.getTopmostManagedParent(from);
-        if (root == null) return;
-        
-        RequestProcessor rp = hg.getRequestProcessor(root.getAbsolutePath());
 
-        HgProgressSupport supportCreate = new HgProgressSupport() {
-            public void perform() {
-                cache.refresh(from, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
-                cache.refresh(to, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
-            }
-        };
-
-        supportCreate.start(rp, root.getAbsolutePath(), 
-                org.openide.util.NbBundle.getMessage(MercurialInterceptor.class, "MSG_Move_Progress")); // NOI18N
+        File parent = from.getParentFile();
+        // There is no point in refreshing the cache for ignored files.
+        if (parent != null && !HgUtils.isIgnored(parent, false)) {
+            reScheduleRefresh(800, from);
+        }
     }
     
-    public boolean beforeCreate(File file, boolean isDirectory) {
-        return super.beforeCreate(file, isDirectory);
+    public boolean beforeCreate(final File file, boolean isDirectory) {
+        Mercurial.LOG.fine("beforeCreate " + file + " " + isDirectory);
+        if (HgUtils.isPartOfMercurialMetadata(file)) return false;
+        if (!isDirectory && !file.exists()) {
+            FileInformation info = cache.getCachedStatus(file);
+            if (info != null && info.getStatus() == FileInformation.STATUS_VERSIONED_REMOVEDLOCALLY) {
+                Mercurial.LOG.log(Level.FINE, "beforeCreate(): LocallyDeleted: {0}", file); // NOI18N
+                Mercurial hg = Mercurial.getInstance();
+                final File root = hg.getRepositoryRoot(file);
+                if (root == null) return false;
+                final OutputLogger logger = Mercurial.getInstance().getLogger(root.getAbsolutePath());
+                final Throwable innerT[] = new Throwable[1];
+                Runnable outOfAwt = new Runnable() {
+                    public void run() {
+                        try {
+                            List<File> revertFiles = new ArrayList<File>();
+                            revertFiles.add(file);
+                            HgCommand.doRevert(root, revertFiles, null, false, logger);
+                        } catch (Throwable t) {
+                            innerT[0] = t;
+                        }
+                    }
+                };
+
+                Mercurial.getInstance().getRequestProcessor().post(outOfAwt).waitFinished();
+                if (innerT[0] != null) {
+                    Mercurial.LOG.log(Level.FINE, "beforeCreate(): File: {0} {1}", new Object[] {file.getAbsolutePath(), innerT[0].toString()}); // NOI18N
+                }
+                Mercurial.LOG.log(Level.FINE, "beforeCreate(): afterWaitFinished: {0}", file); // NOI18N
+                logger.closeLog();
+                file.delete();
+            }
+        }
+        return false;
     }
 
     public void doCreate(File file, boolean isDirectory) throws IOException {
+        Mercurial.LOG.fine("doCreate " + file + " " + isDirectory);
         super.doCreate(file, isDirectory);
     }
 
     public void afterCreate(final File file) {
+        Mercurial.LOG.fine("afterCreate " + file);
         Utils.post(new Runnable() {
             public void run() {
                 fileCreatedImpl(file);
@@ -300,20 +288,12 @@ public class MercurialInterceptor extends VCSInterceptor {
 
     private void fileCreatedImpl(final File file) {
         if (file.isDirectory()) return;
-        Mercurial hg = Mercurial.getInstance();        
-        final File root = hg.getTopmostManagedParent(file);
-        if (root == null) return;
-        
-        RequestProcessor rp = hg.getRequestProcessor(root.getAbsolutePath());
+        Mercurial.LOG.log(Level.FINE, "fileCreatedImpl {0}", file);
 
-        HgProgressSupport supportCreate = new HgProgressSupport() {
-            public void perform() {
-                cache.refresh(file, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
-            }
-        };
-
-        supportCreate.start(rp, root.getAbsolutePath(), 
-                org.openide.util.NbBundle.getMessage(MercurialInterceptor.class, "MSG_Create_Progress")); // NOI18N
+        // There is no point in refreshing the cache for ignored files.
+        if (!HgUtils.isIgnored(file, false)) {
+            reScheduleRefresh(800, file.getParentFile());
+        }
     }
     
     public void afterChange(final File file) {
@@ -324,21 +304,160 @@ public class MercurialInterceptor extends VCSInterceptor {
         });
     }
 
+    @Override
+    public Object getAttribute(final File file, String attrName) {
+        if("ProvidedExtensions.RemoteLocation".equals(attrName)) {
+            return getRemoteRepository(file);
+        } else if("ProvidedExtensions.Refresh".equals(attrName)) {
+            return new Runnable() {
+                public void run() {
+                    try {
+                        File repository = Mercurial.getInstance().getRepositoryRoot(file);
+                        if (repository == null) {
+                            return;
+                        }
+                        FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();
+                        cache.refreshCached(file);
+                        StatusAction.refreshFile(file, repository, null, cache);
+                    } catch (HgException ex) {
+                        ExceptionHandler eh = new ExceptionHandler(ex);
+                        eh.notifyException();
+                    }
+                }
+            };
+        } else {
+            return super.getAttribute(file, attrName);
+        }
+    }
+
+    private String getRemoteRepository(File file) {
+        if(file == null) return null;
+        String remotePath = HgRepositoryContextCache.getInstance().getPullDefault(file);
+        if(remotePath == null || remotePath.trim().equals("")) {
+            Mercurial.LOG.log(Level.FINE, "No defalt pull available for managed file : [" + file + "]");
+            remotePath = HgRepositoryContextCache.getInstance().getPushDefault(file);
+
+            Mercurial.LOG.log(Level.WARNING, "No defalt pull or push available for managed file : [" + file + "]");
+        }
+        if(remotePath != null) {
+            remotePath = remotePath.trim();
+            remotePath = HgUtils.removeHttpCredentials(remotePath);
+            if(remotePath.equals("")) {
+                // return null if empty
+                remotePath = null;
+            }
+        }
+        return remotePath;
+    }
+
+
+
     private void fileChangedImpl(final File file) {
         if (file.isDirectory()) return;
-        Mercurial hg = Mercurial.getInstance();        
-        final File root = hg.getTopmostManagedParent(file);
-        if (root == null) return;
-        
-        RequestProcessor rp = hg.getRequestProcessor(root.getAbsolutePath());
+        Mercurial.LOG.log(Level.FINE, "fileChangedImpl(): File: {0}", file); // NOI18N
+        // There is no point in refreshing the cache for ignored files.
+        if (!HgUtils.isIgnored(file, false)) {
+            reScheduleRefresh(800, file);
+        }
+    }
 
-        HgProgressSupport supportCreate = new HgProgressSupport() {
-            public void perform() {
-                cache.refresh(file, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
+    public Boolean isRefreshScheduled(File file) {
+        return filesToRefresh.contains(file);
+    }
+
+    private void reScheduleRefresh(int delayMillis, File fileToRefresh) {
+        if ("true".equals(System.getProperty("mercurial.onEventRefreshRoot"))) { //NOI18N
+            // refresh all at once
+            filesToRefresh.add(fileToRefresh);
+        } else {
+            // refresh one by one
+            File parent = fileToRefresh.getParentFile();
+            if (!filesToRefresh.contains(parent)) {
+                if (!filesToRefresh.offer(parent)) {
+                    Mercurial.LOG.log(Level.FINE, "reScheduleRefresh failed to add to filesToRefresh queue {0}", fileToRefresh);
+                }
             }
-        };
+        }
+        refreshTask.schedule(delayMillis);
+    }
 
-        supportCreate.start(rp, root.getAbsolutePath(), 
-                org.openide.util.NbBundle.getMessage(MercurialInterceptor.class, "MSG_Change_Progress")); // NOI18N
-   }
+    private class RefreshTask implements Runnable {
+        public void run() {
+            Thread.interrupted();
+            File fileToRefresh;
+            if ("true".equals(System.getProperty("mercurial.onEventRefreshRoot"))) { //NOI18N
+                // fill a fileset with all the modified files
+                HashSet<File> files = new HashSet<File>(filesToRefresh.size());
+                File file;
+                while ((file = filesToRefresh.poll()) != null) {
+                    files.add(file);
+                }
+                refreshAll(files);
+            } else if ((fileToRefresh = filesToRefresh.poll()) != null) {
+                Mercurial.LOG.log(Level.INFO, "RefreshTask called refreshAll {0}", fileToRefresh);
+                cache.refreshAll(fileToRefresh);
+                fileToRefresh = filesToRefresh.peek();
+                if (fileToRefresh != null) {
+                    refreshTask.schedule(0);
+                }
+            }
+        }
+    }
+
+    /**
+     * Prepares refresh candidates and calls the cache refresh
+     * @param files
+     */
+    private void refreshAll (final Set<File> files) {
+        if (files.isEmpty()) {
+            return;
+        }
+        HashMap<File, File> rootFiles = new HashMap<File, File>(5);
+        File firstFile = files.iterator().next();
+        File firstRepository = Mercurial.getInstance().getRepositoryRoot(firstFile);
+        assert firstRepository != null;
+        rootFiles.put(firstRepository, FileUtil.normalizeFile(firstFile));
+
+        for (File file : files) {
+            boolean added = false;
+            file = FileUtil.normalizeFile(file);
+            for (Map.Entry<File, File> entry : rootFiles.entrySet()) {
+                File ancestorCandidate = entry.getValue();
+                File childCandidate = file;
+                added = true;
+                if (childCandidate.equals(ancestorCandidate)) {
+                    // file has already been inserted
+                    break;
+                }
+                if (file.getAbsolutePath().length() < entry.getValue().getAbsolutePath().length()) {
+                    // entry path is too short to be the file's parent
+                    ancestorCandidate = file;
+                    childCandidate = entry.getValue();
+                }
+                if (!Utils.isAncestorOrEqual(ancestorCandidate, childCandidate)) {
+                    ancestorCandidate = Utils.getCommonParent(childCandidate, ancestorCandidate);
+                }
+                if (ancestorCandidate == entry.getValue()) {
+                    // already added
+                    break;
+                } else if (ancestorCandidate != null && entry.getKey().equals(Mercurial.getInstance().getRepositoryRoot(ancestorCandidate))) {
+                    // file is under the repository root
+                    entry.setValue(ancestorCandidate);
+                    break;
+                } else {
+                    added = false;
+                }
+            }
+            if (!added) {
+                // not added yet
+                File repository = Mercurial.getInstance().getRepositoryRoot(file);
+                assert repository != null;
+                rootFiles.put(repository, FileUtil.normalizeFile(file));
+            }
+        }
+
+        if (!rootFiles.isEmpty()) {
+            cache.refreshAllRoots(rootFiles);
+        }
+    }
 }
