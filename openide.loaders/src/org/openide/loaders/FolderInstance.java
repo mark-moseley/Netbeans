@@ -41,14 +41,16 @@
 
 package org.openide.loaders;
 
+import java.awt.EventQueue;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.openide.*;
+import org.netbeans.modules.openide.loaders.AWTTask;
 import org.openide.filesystems.*;
 import org.openide.cookies.InstanceCookie;
 import org.openide.util.Task;
@@ -103,7 +105,7 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
     /* -------------------------------------------------------------------- */
     
     /** a queue to run requests in */
-    private static final RequestProcessor PROCESSOR = new RequestProcessor (
+    static final RequestProcessor PROCESSOR = new RequestProcessor (
       "Folder Instance Processor" // NOI18N
     );
     
@@ -158,6 +160,10 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
      *  Started immediately after the <code>recognizingTask</code> is finished.
      */
     private Task creationTask;
+    /** Sequence number for creationTask */
+    private volatile int creationSequence;
+    /** shall instances be precreated before postCreationTask is called? */
+    private boolean precreateInstances;
     
     /* -------------------------------------------------------------------- */
     /* -- Constructor(s) -------------------------------------------------- */
@@ -169,7 +175,7 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
     public FolderInstance (DataFolder df) {
         this ((DataObject.Container)df);
     }
-    
+
     /** A new object that listens on changes in a container.
      * @param container the object to associate with
      * @since 1.11
@@ -210,6 +216,14 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
             err.fine("new " + this); // NOI18N
         }
     }
+
+    /** for use from MenuFolder and ToolbarFolder via DataObjectAccessor
+     * if proved functional, it can be made new constructor in the future
+     */
+    void precreateInstances() {
+        this.precreateInstances = true;
+    }
+
     
     /* -------------------------------------------------------------------- */
     /* -- Implementation of org.openide.Cookies.InstanceCookie ------------ */
@@ -237,15 +251,15 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
     */
     public Class<?> instanceClass ()
     throws java.io.IOException, ClassNotFoundException {
-        Object object = this.object;
-        if (object != null) {
-            if (object instanceof java.io.IOException) {
-                throw (java.io.IOException)object;
+        Object tmp = this.object;
+        if (tmp != null) {
+            if (tmp instanceof java.io.IOException) {
+                throw (java.io.IOException)tmp;
             }
-            if (object instanceof ClassNotFoundException) {
-                throw (ClassNotFoundException)object;
+            if (tmp instanceof ClassNotFoundException) {
+                throw (ClassNotFoundException)tmp;
             }
-            return object.getClass ();
+            return tmp.getClass ();
         }
 
         return Object.class;
@@ -258,32 +272,32 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
     */
     public Object instanceCreate ()
     throws java.io.IOException, ClassNotFoundException {
-        Object object = CURRENT.get ();
+        Object tmp = CURRENT.get ();
         
-        if (object == null || LAST_CURRENT.get () != this) {
+        if (tmp == null || LAST_CURRENT.get () != this) {
             err.fine("do into waitFinished"); // NOI18N
             waitFinished ();
 
-            object = FolderInstance.this.object;
+            tmp = FolderInstance.this.object;
         }
 
         if (err.isLoggable(Level.FINE)) {
-            err.fine("instanceCreate: " + object); // NOI18N
+            err.fine("instanceCreate: " + tmp); // NOI18N
         }
 
-        if (object instanceof java.io.IOException) {
-            throw (java.io.IOException)object;
+        if (tmp instanceof java.io.IOException) {
+            throw (java.io.IOException)tmp;
         }
-        if (object instanceof ClassNotFoundException) {
-            throw (ClassNotFoundException)object;
+        if (tmp instanceof ClassNotFoundException) {
+            throw (ClassNotFoundException)tmp;
         }
         
-        if (object == CURRENT) {
+        if (tmp == CURRENT) {
             // uninitialized
             throw new IOException ("Cyclic reference. Somebody is trying to get value from FolderInstance (" + getClass ().getName () + ") from the same thread that is processing the instance"); // NOI18N
         }
         
-        return object;
+        return tmp;
     }
     
     /* -------------------------------------------------------------------- */
@@ -320,7 +334,17 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
                 err.fine("creationTask: " + creationTask); // NOI18N
             }
             if (t != null) {
-                t.waitFinished ();
+                if (EventQueue.isDispatchThread()) {
+                    try {
+                        if (!t.waitFinished(1000)) {
+                            AWTTask.flush();
+                            continue;
+                        }
+                    } catch (InterruptedException ex) {
+                        continue;
+                    }
+                }
+                t.waitFinished();
             }
 
 
@@ -391,6 +415,7 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
         InstanceCookie cookie;
         //Order of checking reversed first check cookie and then folder
         // test if we accept the instance
+        // XXX for subtle reasons, current test fails if this is changed to getLookup:
         cookie = dob.getCookie(InstanceCookie.class);
         try {
             cookie = cookie == null ? null : acceptCookie (cookie);
@@ -398,23 +423,25 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
         } catch (IOException ex) {
             // an error during a call to acceptCookie
             err.log(Level.WARNING, null, ex);
+            revertProblematicFile(dob);
             cookie = null;
         } catch (ClassNotFoundException ex) {
             // an error during a call to acceptCookie
-            err.log(Level.WARNING, null, ex);
+            err.log(Level.INFO, null, ex);
+            revertProblematicFile(dob);
             cookie = null;
         }
         
         if (cookie == null) {
-            DataFolder folder = dob.getCookie(DataFolder.class);
-            if (folder != null) {
-                HoldInstance previous = map.get (folder.getPrimaryFile ());
+            DataFolder fld = dob.getCookie(DataFolder.class);
+            if (fld != null) {
+                HoldInstance previous = map.get (fld.getPrimaryFile ());
                 if (previous != null && previous.cookie != null) {
                     // the old cookie will be returned if the folder is already registered
                     cookie = previous;
                     acceptType = 2;
                 } else {
-                    cookie = acceptFolder (folder);
+                    cookie = acceptFolder (fld);
                     acceptType = 3;
                 }
             }
@@ -434,6 +461,16 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
         }
 
         return cookie;
+    }
+    private void revertProblematicFile(DataObject dob) {
+        Object rw = dob.getPrimaryFile().getAttribute("removeWritables"); // NOI18N
+        if (rw instanceof Callable) {
+            try {
+                ((Callable<?>) rw).call();
+            } catch (Exception x) {
+                err.log(Level.INFO, null, x);
+            }
+        }
     }
     
     /** Allows subclasses to decide whether they want to work with
@@ -650,17 +687,79 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
     * @param arr collection of DataObjects
     */
     final void processObjects (final Collection<DataObject> arr) {
-        creationTask = postCreationTask (new Runnable () {
-            public void run () {
-                defaultProcessObjects (arr);
+        class R extends Task {
+            HoldInstance[] all;
+            Object[] instances;
+            int sequence;
+            Task postCreationTask;
+            RequestProcessor.Task instancesTask;
+
+            public void init() {
+                all = defaultProcessObjects(arr);
             }
-        });
+
+            public void instances() {
+                instances = new Object[all.length];
+                for (int indx = 0; indx < all.length; indx++) {
+                    try {
+                        instances[indx] = all[indx].instanceCreate();
+                        if (instances[indx] != null) {
+                            continue;
+                        }
+                    } catch (IOException ex) {
+                        err().log(Level.INFO, "Cannot create " + all[indx], ex);
+                    } catch (ClassNotFoundException ex) {
+                        err().log(Level.INFO, "Cannot create " + all[indx], ex);
+                    }
+                    all[indx] = new HoldInstance(null, all[indx].cookie);
+                }
+            }
+
+            @Override
+            public void run() {
+                if (sequence != creationSequence) {
+                    return;
+                }
+                if (instancesTask != null) {
+                    if (PROCESSOR.isRequestProcessorThread()) {
+                        init();
+                        instances();
+                        postCreationTask = postCreationTask(this);
+                        return;
+                    }
+                }
+
+                if (all == null) {
+                    init();
+                }
+                defaultProcessObjectsFinal(all);
+            }
+
+            @Override
+            public void waitFinished() {
+                if (instancesTask != null) {
+                    instancesTask.waitFinished();
+                }
+                if (postCreationTask != null) {
+                    postCreationTask.waitFinished();
+                }
+            }
+        }
+        R process = new R();
+        process.sequence = ++creationSequence;
+        if (precreateInstances) {
+            process.instancesTask = PROCESSOR.create(process);
+            creationTask = process;
+            process.instancesTask.schedule(0);
+        } else {
+            creationTask = postCreationTask(process);
+        }
     }
 
     /** Default processing of objects.
     * @param arr array of objects to process
     */
-    private final void defaultProcessObjects (Collection<DataObject> arr) {
+    private final HoldInstance[] defaultProcessObjects (Collection<DataObject> arr) {
         err.fine("defaultProcessObjects");
         HashSet<FileObject> toRemove;
         ArrayList<HoldInstance> cookies = new ArrayList<HoldInstance> ();
@@ -762,6 +861,10 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
         
         updateWaitFor (all);
 
+        return all;
+    }
+    
+    final void defaultProcessObjectsFinal(HoldInstance[] all) {
         Object result = null;
         try {
             result = createInstance (all);
@@ -1026,6 +1129,9 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
         */
         public Object instanceCreate ()
         throws java.io.IOException, ClassNotFoundException {
+            if (source == null) {
+                return null;
+            }
             return instanceForCookie (source, cookie);
         }
 
@@ -1046,6 +1152,11 @@ public abstract class FolderInstance extends Task implements InstanceCookie { //
             } else {
                 return null;
             }
+        }
+
+        @Override
+        public String toString() {
+            return super.toString() + "[" + source.getPrimaryFile().getPath() + "]"; // NOI18N
         }
     } // end of HoldInstance
     
