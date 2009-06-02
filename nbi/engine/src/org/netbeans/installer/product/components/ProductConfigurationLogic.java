@@ -38,7 +38,9 @@ package org.netbeans.installer.product.components;
 
 import java.io.File;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.netbeans.installer.utils.FileUtils;
 import org.netbeans.installer.utils.ResourceUtils;
@@ -128,13 +130,18 @@ public abstract class ProductConfigurationLogic {
     // various documentation/legal getters //////////////////////////////////////////
     public Text getLicense() {
         final String text = parseString(
-                "$R{" + StringUtils.asPath(getClass()) + "/license.txt}");
+                "$R{" + StringUtils.asPath(getClass()) + "/license.txt;" + 
+                StringUtils.ENCODING_UTF8 + "}");
         
         return new Text(text, ContentType.PLAIN_TEXT);
     }
     
     public Map<String, Text> getThirdPartyLicenses() {
         return null;
+    }
+
+    public boolean requireLegalArtifactSaving() {
+        return true;
     }
     
     public Text getThirdPartyLicense() {
@@ -225,7 +232,12 @@ public abstract class ProductConfigurationLogic {
     public int getLogicPercentage() {
         return 10;
     }
-    
+    /** 
+     * Get additonal information about the product that is used during system integration
+     */
+    public Map <String, Object> getAdditionalSystemIntegrationInfo() {
+        return new HashMap<String, Object>();
+    }
     // installation behavior ////////////////////////////////////////////////////////
     public RemovalMode getRemovalMode() {
         return RemovalMode.ALL;
@@ -242,6 +254,13 @@ public abstract class ProductConfigurationLogic {
     
     protected final String getString(String key) {
         return ResourceUtils.getString(getClass(), key);
+    }
+
+    protected final Map <Locale, String> getStrings(String key) {
+        return ResourceUtils.getStrings(getClass(), key);
+    }
+    protected final Map <Locale, String> getStrings(String key, Object... arguments) {
+        return ResourceUtils.getStrings(getClass(), key, arguments);
     }
     
     protected final String getString(String key, Object... arguments) {

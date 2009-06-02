@@ -40,10 +40,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -62,6 +65,7 @@ import org.netbeans.installer.utils.SystemUtils;
 import org.netbeans.installer.utils.exceptions.NativeException;
 import org.netbeans.installer.utils.helper.ApplicationDescriptor;
 import org.netbeans.installer.utils.helper.Pair;
+import org.netbeans.installer.utils.helper.Platform;
 import org.netbeans.installer.utils.system.cleaner.ProcessOnExitCleanerHandler;
 import org.netbeans.installer.utils.system.launchers.Launcher;
 import org.netbeans.installer.utils.progress.Progress;
@@ -83,6 +87,8 @@ public class UnixNativeUtils extends NativeUtils {
     private boolean isUserAdmin;
     private boolean checkQuota = true;
     private File quotaExecutable = null;
+    private File browserExecutable = null;
+    private boolean browserExecutableSet = false;
     
     private static final String[] FORBIDDEN_DELETING_FILES_UNIX = {
         System.getProperty("user.home"),
@@ -118,7 +124,25 @@ public class UnixNativeUtils extends NativeUtils {
 
     public static final String XDG_DATA_DIRS_ENV_VARIABLE =
             "XDG_DATA_DIRS"; // NOI18N
+    
+    public static final String XDG_DESKTOP_DIR_ENV_VARIABLE =
+            "XDG_DESKTOP_DIR";
+    public static final String XDG_USERDIRS_DIRS = 
+            ".config/user-dirs.dirs";//NOI18N
+    public static final String XDG_USERDIRS_CONF = 
+            ".config/user-dirs.conf";//NOI18N    
+    public static final String XDG_USERDIRS_GLOBAL_CONF = 
+            "/etc/xdg/user-dirs.conf";//NOI18N
+    public static final String DESKTOP_EXT = 
+            ".desktop";//NOI18N
 
+    public static final String XDG_CONFIG_HOME_ENV_VARIABLE =
+            "XDG_CONFIG_HOME";//NOI18N
+    public static final String XDG_CONFIG_HOME_DEFAULT =
+            ".config";//NOI18N
+    public static final String XDG_APPLICATION_MENU_FILE =
+            "menus/applications.menu";//NOI18N
+    
     public static final String DEFAULT_XDG_DATA_HOME =
             ".local/share"; // NOI18N
 
@@ -128,6 +152,93 @@ public class UnixNativeUtils extends NativeUtils {
     public UnixNativeUtils() {
         initializeForbiddenFiles();
     }
+
+
+    protected void loadLibrary(String path) {
+        try {
+            loadNativeLibrary(path);
+        } catch (NativeException e) {
+            //ok, not loaded, we`ll use Java`s implementation
+            LogManager.log("Could not load native library due to some reasons, " + //NOI18N
+                    "falling back to the Java implementation", e); //NOI18N
+        }
+    }
+    
+    @Override
+    protected Platform getPlatform() {
+        final String osName = System.getProperty("os.name");
+
+        if (osName.equals("FreeBSD")) {
+            return getPlatformFreeBSD();
+        } else if (osName.equals("OpenBSD")) {
+            return getPlatformOpenBSD();
+        } else if (osName.endsWith("BSD")) {
+            return getPlatformBSD();
+        } else if (osName.equals("AIX")) {
+            return getPlatformAIX();
+        } else if (osName.toLowerCase(Locale.ENGLISH).startsWith("hp-ux")) {
+            return getPlatformHPUX();
+        } else {
+            return Platform.UNIX;
+        }
+    }
+    
+    private Platform getPlatformOpenBSD() {
+        final String osArch = System.getProperty("os.arch");
+        if (osArch.contains("ppc") || osArch.contains("PowerPC")) {
+            return SystemUtils.isCurrentJava64Bit() ? Platform.OPENBSD_PPC64 : Platform.OPENBSD_PPC;
+        } else if (osArch.contains("sparc")) {
+            return Platform.OPENBSD_SPARC;
+        } else if (osArch.matches("i[3-6]86|x86|amd64|x86_64")) {
+            return SystemUtils.isCurrentJava64Bit() ? Platform.OPENBSD_X64 : Platform.OPENBSD_X86;
+        } else {
+            return Platform.OPENBSD;
+        }
+    }
+    private Platform getPlatformFreeBSD() {
+        final String osArch = System.getProperty("os.arch");
+        if (osArch.contains("ppc") || osArch.contains("PowerPC")) {
+            return SystemUtils.isCurrentJava64Bit() ? Platform.FREEBSD_PPC64 : Platform.FREEBSD_PPC;
+        } else if (osArch.contains("sparc")) {
+            return Platform.FREEBSD_SPARC;
+        } else if (osArch.matches("i[3-6]86|x86|amd64|x86_64")) {
+            return SystemUtils.isCurrentJava64Bit() ? Platform.FREEBSD_X64 : Platform.FREEBSD_X86;
+        } else {
+            return Platform.FREEBSD;
+        }
+    }
+    private Platform getPlatformBSD() {
+        final String osArch = System.getProperty("os.arch");
+        if (osArch.contains("ppc") || osArch.contains("PowerPC")) {
+            return SystemUtils.isCurrentJava64Bit() ? Platform.BSD_PPC64 : Platform.BSD_PPC;
+        } else if (osArch.contains("sparc")) {
+            return Platform.BSD_SPARC;
+        } else if (osArch.matches("i[3-6]86|x86|amd64|x86_64")) {
+            return SystemUtils.isCurrentJava64Bit() ? Platform.BSD_X64 : Platform.BSD_X86;
+        } else {
+            return Platform.BSD;
+        }
+    }
+    private Platform getPlatformAIX() {
+        final String osArch = System.getProperty("os.arch");
+        if (osArch.contains("ppc") || osArch.contains("PowerPC")) {
+            return SystemUtils.isCurrentJava64Bit() ? Platform.AIX_PPC64 : Platform.AIX_PPC;
+        } else {
+            return Platform.AIX;
+        }
+    }
+    
+    private Platform getPlatformHPUX() {
+        final String osArch = System.getProperty("os.arch");
+        if (osArch.toLowerCase(Locale.ENGLISH).replace("-", "_").startsWith("pa_risc")) {
+            return osArch.startsWith("PA_RISC2.0") ? Platform.HPUX_PA_RISC20 : Platform.HPUX_PA_RISC;
+        } else if (osArch.toLowerCase(Locale.ENGLISH).startsWith("ia64")) {
+            return Platform.HPUX_IA64;
+        } else {
+            return Platform.HPUX;
+        }
+    }
+    
     public boolean isCurrentUserAdmin() throws NativeException{
         if(isUserAdminSet) {
             return isUserAdmin;
@@ -158,21 +269,66 @@ public class UnixNativeUtils extends NativeUtils {
         LogManager.logIndent(
                 "devising the shortcut location by type: " + locationType); // NOI18N
 
-        final String XDG_DATA_HOME =
-                SystemUtils.getEnvironmentVariable(XDG_DATA_HOME_ENV_VARIABLE);
-        final String XDG_DATA_DIRS =
-                SystemUtils.getEnvironmentVariable(XDG_DATA_DIRS_ENV_VARIABLE);
+        final File shortcutFile;
+        
+        switch (locationType) {
+            case CURRENT_USER_DESKTOP:
+            case ALL_USERS_DESKTOP:
+                final File desktopLocation = getDesktopFolder();
+                LogManager.log("... desktop folder : " + desktopLocation);
+                shortcutFile = new File(desktopLocation, getShortcutFileName(shortcut));
+                break;
+            case CURRENT_USER_START_MENU:
+                final File currentUserAppFolder = 
+                        getApplicationsLocation(
+                        getCurrentUserLocation());
+                LogManager.log("... current user app folder : " + currentUserAppFolder);
+                shortcutFile =  new File(currentUserAppFolder, 
+                        getShortcutFileName(shortcut));
+                break;
+            case ALL_USERS_START_MENU:
+                final File allUsersAppFolder = 
+                        getApplicationsLocation(
+                        getAllUsersLocation());
+                LogManager.log("... all users app folder : " + allUsersAppFolder);
+                shortcutFile = new File(allUsersAppFolder,
+                        getShortcutFileName(shortcut));
+                break;
+            default:
+                shortcutFile = null;
 
-        final File currentUserLocation;
-        if (XDG_DATA_HOME == null) {
-            currentUserLocation = new File(
-                    SystemUtils.getUserHomeDirectory(),
-                    DEFAULT_XDG_DATA_HOME);
-        } else {
-            currentUserLocation = new File(
-                    XDG_DATA_HOME);
         }
 
+        LogManager.logUnindent(
+                "shortcut file: " + shortcutFile); // NOI18N
+
+        return shortcutFile;
+    }
+    
+    private String getShortcutFileName(Shortcut shortcut) {
+        String fileName = shortcut.getFileName();
+        if (fileName == null) {
+            if (shortcut instanceof FileShortcut) {
+                final File target = ((FileShortcut) shortcut).getTarget();
+
+                fileName = target.getName();
+                if(!target.isDirectory()) {
+                    fileName += DESKTOP_EXT;
+                }
+            } else if(shortcut instanceof InternetShortcut) {
+                fileName = ((InternetShortcut) shortcut).getURL().getFile() +
+                        DESKTOP_EXT;
+            }
+        }
+        return fileName;
+    }
+    
+    private File getApplicationsLocation(File location) {
+        return new File(location, "applications");
+    }
+    
+    private File getAllUsersLocation() {
+        final String XDG_DATA_DIRS = System.getenv(XDG_DATA_DIRS_ENV_VARIABLE);                
         final File allUsersLocation;
         if (XDG_DATA_DIRS == null) {
             allUsersLocation = new File(DEFAULT_XDG_DATA_DIRS);
@@ -186,55 +342,159 @@ public class UnixNativeUtils extends NativeUtils {
             }
             allUsersLocation = new File(firstPath);
         }
+        
+        LogManager.log(XDG_DATA_DIRS_ENV_VARIABLE + " = " + allUsersLocation); // NOI18N
+        
+        return allUsersLocation;
+    }
+    
+    private File getCurrentUserLocation() {
+        final File currentUserLocation;
+        final String XDG_DATA_HOME = System.getenv(XDG_DATA_HOME_ENV_VARIABLE);
 
-        LogManager.log(
-                "XDG_DATA_HOME = " + currentUserLocation); // NOI18N
-        LogManager.log(
-                "XDG_DATA_DIRS = " + allUsersLocation); // NOI18N
+        if (XDG_DATA_HOME == null) {
+            currentUserLocation = new File(
+                    SystemUtils.getUserHomeDirectory(),
+                    DEFAULT_XDG_DATA_HOME);
+        } else {
+            currentUserLocation = new File(XDG_DATA_HOME);
+        }
+        
+        LogManager.log(XDG_DATA_DIRS_ENV_VARIABLE + " = " + currentUserLocation); // NOI18N
 
-        String fileName = shortcut.getFileName();
-        if (fileName == null) {
-            if (shortcut instanceof FileShortcut) {
-                final File target = ((FileShortcut) shortcut).getTarget();
-
-                fileName = target.getName();
-                if(!target.isDirectory()) {
-                    fileName += ".desktop";
+        return currentUserLocation;
+    }
+    
+    private File getDesktopFolder() {
+        // TODO
+        // If using XDG, desktop folder can be obtained simpler using '/usr/bin/xdg-user-dir DESKTOP' command
+        // See also http://www.netbeans.org/issues/show_bug.cgi?id=144646
+        final String desktopDir = System.getenv(XDG_DESKTOP_DIR_ENV_VARIABLE);
+        final File globalConfigFile = new File(XDG_USERDIRS_GLOBAL_CONF);
+        final File userHome       = SystemUtils.getUserHomeDirectory();
+        final File userDirsFile   = new File(userHome, XDG_USERDIRS_DIRS);
+        final File userConfigFile = new File(userHome, XDG_USERDIRS_CONF);
+        LogManager.log("... getting desktop folder");
+        if (desktopDir != null && !desktopDir.equals("")) {
+            LogManager.log(XDG_DESKTOP_DIR_ENV_VARIABLE + " = " + desktopDir);
+            File f = new File(desktopDir);
+            if (f.exists()) {
+                LogManager.log("... desktop dir : " + f);
+                return f;
+            } else {
+                LogManager.log("... " + XDG_DESKTOP_DIR_ENV_VARIABLE + " is defined but does not exist:" + desktopDir);
+            }
+        } else if (System.getenv("XDG_SESSION_COOKIE") == null && System.getenv(XDG_DATA_DIRS_ENV_VARIABLE) == null) {
+            LogManager.log("... neither XDG_SESSION_COOKIE nor " + XDG_DATA_DIRS_ENV_VARIABLE + " environment variable is defined");
+        } else if (!FileUtils.exists(globalConfigFile)) {
+            LogManager.log("... global XDG config file does not exist");
+        } else if (!FileUtils.exists(userDirsFile)) {
+            LogManager.log("... user XDG config file does not exist");
+        } else if (!FileUtils.canRead(userDirsFile)) {
+            LogManager.log("... cannot read user XDG config file");
+        } else {
+            try {
+                boolean useXdgDirs = false;
+                for (File configFile : new File[]{userConfigFile, globalConfigFile}) {
+                    if (!FileUtils.exists(configFile)) {
+                        continue;
+                    }
+                    for (String s : FileUtils.readStringList(configFile)) {
+                        final Matcher matcher = Pattern.compile("enabled=(.*)").matcher(s);
+                        if (matcher.find()) {
+                            if (!Boolean.parseBoolean(matcher.group(1).toLowerCase(Locale.ENGLISH))) {
+                                LogManager.log("... XDG dirs are disabled");
+                                useXdgDirs = false;
+                                break;
+                            } else {
+                                LogManager.log("... XDG dirs are enabled");
+                                useXdgDirs = true;
+                            }
+                        }
+                    }
                 }
-            } else if(shortcut instanceof InternetShortcut) {
-                fileName = ((InternetShortcut) shortcut).getURL().getFile() +
-                        ".desktop";
+                
+                if (useXdgDirs) {
+                    String encoding = StringUtils.EMPTY_STRING;// by default
+                    for (File configFile : new File[]{userConfigFile, globalConfigFile}) {
+                        if (!FileUtils.exists(configFile)) {
+                            continue;
+                        }
+                        for (String s : FileUtils.readStringList(configFile)) {
+                            final Matcher matcher = Pattern.compile("filename_encoding=(.*)").matcher(s);
+                            if (matcher.find()) {
+                                encoding = matcher.group(1);
+                                if (encoding.equals("locale")) {
+                                    // http://src.opensolaris.org/source/xref/jds/spec-files/trunk/SUNWxdg-user-dirs.spec
+                                    encoding = null;
+                                }
+                                break;
+                            }
+                        }
+                        if (encoding == null || !encoding.equals(StringUtils.EMPTY_STRING)) {
+                            break;
+                        } else {
+                            encoding = StringUtils.ENCODING_UTF8;
+                        }
+                    }
+                    LogManager.log("... using encoding for config file reading : " + encoding );
+                    List<String> content = (encoding == null) ? FileUtils.readStringList(userDirsFile) : FileUtils.readStringList(userDirsFile, encoding);
+
+                    for (String s : content) {
+                        LogManager.log("...... evaluating string : " + s);
+                        Matcher matcher = Pattern.compile("^" + XDG_DESKTOP_DIR_ENV_VARIABLE + "=\"(.*)\"").matcher(s);
+                        if (matcher.find()) {
+                            LogManager.log("...... matches expected pattern");
+                            final String value = matcher.group(1).replace("$HOME", userHome.getAbsolutePath());
+                            File f = new File(value);
+                            if (FileUtils.exists(f)) {
+                                return f;
+                            } else {
+                                LogManager.log("... custom desktop directory defined but does not exist: " + f);
+                                LogManager.log("... probably wrong encoding used, fallback to system utils");
+                                throw new IOException("File " + f + " is defined as desktop folder but does not exist");
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                LogManager.log(e);
+                //fallback
+                try {
+                    final File bin = new File("/usr/bin/xdg-user-dir");
+                    if (FileUtils.exists(bin)) {
+                        String stdout = SystemUtils.executeCommand(bin.getAbsolutePath(), "DESKTOP").getStdOut();
+                        if (stdout.length() > 0) {
+                            File dsk = new File(stdout);
+                            if (FileUtils.exists(dsk)) {
+                                return dsk;
+                            } else {
+                                LogManager.log("... custom desktop directory defined (system util) but does not exist: " + dsk);
+                                LogManager.log("... probably wrong encoding, fallback to default");                                
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    LogManager.log(ex);
+                }
             }
         }
-
-        LogManager.log(""); // NOI18N
-
-        final File shortcutFile;
-        switch (locationType) {
-            case CURRENT_USER_DESKTOP:
-            case ALL_USERS_DESKTOP:
-                shortcutFile = new File(
-                        SystemUtils.getUserHomeDirectory(),
-                        "Desktop/" + fileName);
-                break;
-            case CURRENT_USER_START_MENU:
-                shortcutFile = new File(
-                        currentUserLocation,
-                        "applications/" + fileName);
-                break;
-            case ALL_USERS_START_MENU:
-                shortcutFile = new File(
-                        allUsersLocation,
-                        "applications/" + fileName);
-                break;
-            default:
-                shortcutFile = null;
+        return new File(userHome, "Desktop");
+    }
+    
+    private void addLocalizedMapEntry(List<String> list, String entryName, Map<Locale, String> entryMap) {
+        if (!entryMap.isEmpty()) {
+            String name = entryMap.get(new Locale(StringUtils.EMPTY_STRING));
+            if(name==null) {
+                name = entryMap.get(Locale.getDefault());
+            }
+            list.add(entryName + "=" + name);
+            for (Locale locale : entryMap.keySet()) {
+                if (!name.equals(entryMap.get(locale))) {
+                    list.add(entryName + "[" + locale + "]=" + StringUtils.getLocalizedString(entryMap, locale));
+                }
+            }
         }
-
-        LogManager.logUnindent(
-                "shortcut file: " + shortcutFile); // NOI18N
-
-        return shortcutFile;
     }
 
     private List <String> getDesktopEntry(FileShortcut shortcut) {
@@ -242,7 +502,8 @@ public class UnixNativeUtils extends NativeUtils {
 
         list.add("[Desktop Entry]");
         list.add("Encoding=UTF-8");
-        list.add("Name=" + shortcut.getName());
+        addLocalizedMapEntry(list, "Name",    shortcut.getNames());
+        addLocalizedMapEntry(list, "Comment", shortcut.getDescriptions());
         list.add("Exec=/bin/sh \"" + shortcut.getTarget() + "\"" + 
                 ((shortcut.getArguments()!=null && shortcut.getArguments().size()!=0) ? 
                     StringUtils.SPACE + shortcut.getArgumentsString() : StringUtils.EMPTY_STRING)
@@ -268,7 +529,9 @@ public class UnixNativeUtils extends NativeUtils {
         final List <String> list = new ArrayList<String> ();
         list.add("[Desktop Entry]");
         list.add("Encoding=UTF-8");
-        list.add("Name=" + shortcut.getName());
+        addLocalizedMapEntry(list, "Name",    shortcut.getNames());
+        addLocalizedMapEntry(list, "Comment", shortcut.getDescriptions());
+        
         list.add("URL=" + shortcut.getURL());
         if(shortcut.getIcon()!=null) {
             list.add("Icon=" + shortcut.getIconPath());
@@ -284,7 +547,16 @@ public class UnixNativeUtils extends NativeUtils {
         return list;
     }
 
-    
+    private void addExecutablePermissions(File file) throws IOException {
+        // add x permission bit to r bits
+        int permissions = SystemUtils.getPermissions(file);
+        int newPermissions = (permissions +
+                ((permissions & FileAccessMode.RU) != 0 ? FileAccessMode.EU : 0) +
+                ((permissions & FileAccessMode.RG) != 0 ? FileAccessMode.EG : 0) +
+                ((permissions & FileAccessMode.RO) != 0 ? FileAccessMode.EO : 0));
+        SystemUtils.setPermissions(file, newPermissions, FA_MODE_SET);
+    }
+
     public File createShortcut(Shortcut shortcut, LocationType locationType) throws NativeException {
         final File          file     = getShortcutLocation(shortcut, locationType);
         try {
@@ -295,16 +567,44 @@ public class UnixNativeUtils extends NativeUtils {
                 } else {
                     FileUtils.writeStringList(file,
                             getDesktopEntry((FileShortcut)shortcut));
+                    addExecutablePermissions(file);
+                    postShortcutCreate(shortcut, locationType);
                 }
             } else if(shortcut instanceof InternetShortcut) {
                 FileUtils.writeStringList(file,
                         getDesktopEntry((InternetShortcut)shortcut));
+                addExecutablePermissions(file);
+                postShortcutCreate(shortcut, locationType);
             }
         } catch (IOException e) {
             throw new NativeException("Cannot create shortcut", e);
         }
 
         return file;
+    }
+
+    private void postShortcutCreate(Shortcut shortcut, LocationType locationType) {
+        if(locationType.equals(LocationType.CURRENT_USER_START_MENU)) {
+            // #165320
+            final String XDG_CONFIG_HOME = System.getenv(XDG_CONFIG_HOME_ENV_VARIABLE);
+            final File configHome = XDG_CONFIG_HOME != null ?
+                new File(XDG_CONFIG_HOME) :
+                new File (SystemUtils.getUserHomeDirectory(), XDG_CONFIG_HOME_DEFAULT);
+            
+            final File appsMenu = new File(configHome, XDG_APPLICATION_MENU_FILE);
+            if(!FileUtils.exists(appsMenu)) {
+                try {
+                    FileUtils.mkdirs(appsMenu.getParentFile());
+                    boolean created = appsMenu.createNewFile();
+                    if(created) {
+                        SystemUtils.sleep(50);
+                        FileUtils.deleteFile(appsMenu);
+                    }
+                } catch (IOException e) {
+                    LogManager.log(e);
+                }
+            }
+        }
     }
 
     public void removeShortcut(Shortcut shortcut, LocationType locationType, boolean cleanupParents) throws NativeException {
@@ -323,6 +623,43 @@ public class UnixNativeUtils extends NativeUtils {
         }
     }
 
+    @Override
+    public boolean isBrowseSupported() {
+        initBrowser();
+        return browserExecutable!=null;
+    }
+
+    public boolean openBrowser(URI uri) {
+        initBrowser();
+        if (browserExecutable != null) {
+            LogManager.log("... using browser: " + browserExecutable);
+            try {
+                Runtime.getRuntime().exec(new String[]{browserExecutable.getAbsolutePath(), uri.toString()});
+                return true;
+            } catch (IOException e) {
+                LogManager.log(e);
+            }
+        }
+        return false;
+    }
+
+    protected String[] getPossibleBrowserLocations() {
+        return new String [] {};
+    }
+
+    private void initBrowser() {
+        if(browserExecutableSet) return;
+        final String[] possibleBrowsers = getPossibleBrowserLocations();
+        for (String s : possibleBrowsers) {
+            File f = new File(s);
+            if (f.exists()) {
+                browserExecutable = f;
+                break;
+            }
+        }
+        browserExecutableSet = true;
+    }
+    
     public List<File> findExecutableFiles(File parent) throws IOException {
         List<File> files = new ArrayList<File>();
 
@@ -727,7 +1064,21 @@ public class UnixNativeUtils extends NativeUtils {
 
         return list;
     }
-
+    
+    private String[] getDfCommand(String... args) {
+        List <String> command = new ArrayList <String> ();
+        command.add("df");//NOI18N
+        command.add(getCurrentPlatform().isCompatibleWith(Platform.HPUX) ? "-kP" : "-k"); //NOI18N
+        // it is also possible to use bdf instead of df -kP but block size is 512 in that case        
+        
+        if (args != null && args.length > 0) {
+            for(String arg:args) {
+                command.add(arg);
+            }
+        }
+        return command.toArray(new String[0]);
+    }
+        
     public List<File> getFileSystemRoots() throws IOException {
         try {
             setEnvironmentVariable(
@@ -745,8 +1096,8 @@ public class UnixNativeUtils extends NativeUtils {
                     "LC_NUMERIC", "C", EnvironmentScope.PROCESS, false);
             setEnvironmentVariable(
                     "LC_TIME", "C", EnvironmentScope.PROCESS, false);
-
-            final String stdout = SystemUtils.executeCommand("df", "-k").getStdOut();
+            
+            final String stdout = SystemUtils.executeCommand(getDfCommand()).getStdOut();
             final String[] lines = StringUtils.splitByLines(stdout);
 
             // a quick and dirty solution - we assume that % is present only once in
@@ -813,7 +1164,7 @@ public class UnixNativeUtils extends NativeUtils {
         }
         
         try {
-            final String stdout = SystemUtils.executeCommand("df", "-k", s).getStdOut().trim();
+            final String stdout = SystemUtils.executeCommand(getDfCommand(s)).getStdOut().trim();
             final String[] lines = StringUtils.splitByLines(stdout);
 
             // a quick and dirty solution - we assume that % is present only once in
