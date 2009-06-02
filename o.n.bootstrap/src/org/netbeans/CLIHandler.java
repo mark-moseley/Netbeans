@@ -65,7 +65,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.logging.Level;
@@ -76,7 +75,7 @@ import org.openide.util.Task;
 /**
  * Command Line Interface and User Directory Locker support class.
  * Subclasses may be registered into the system to handle special command-line options.
- * To be registered, use <samp>META-INF/services/org.netbeans.CLIHandler</code>
+ * To be registered, use {@link org.openide.util.lookup.ServiceProvider}
  * in a JAR file in the startup or dynamic class path (e.g. <samp>lib/ext/</samp>
  * or <samp>lib/</samp>).
  * @author Jaroslav Tulach
@@ -123,7 +122,7 @@ public abstract class CLIHandler extends Object {
     
     /** Testing output of the threads.
      */
-    private static Logger OUTPUT = Logger.getLogger("org.netbeans.CLIHandler"); // NOI18N
+    private static final Logger OUTPUT = Logger.getLogger(CLIHandler.class.getName());
     
     private int when;
     
@@ -144,10 +143,8 @@ public abstract class CLIHandler extends Object {
      */
     protected abstract int cli(Args args);
     
-    protected static void showHelp(PrintWriter w, Collection handlers, int when) {
-        Iterator it = handlers.iterator();
-        while (it.hasNext()) {
-            CLIHandler h = (CLIHandler)it.next();
+    protected static void showHelp(PrintWriter w, Collection<? extends CLIHandler> handlers, int when) {
+        for (CLIHandler h : handlers) {
             if (when != -1 && when != h.when) {
                 continue;
             }
@@ -195,7 +192,7 @@ public abstract class CLIHandler extends Object {
         }
     }
     
-    private static boolean checkHelp(Args args, Collection handlers) {
+    private static boolean checkHelp(Args args, Collection<? extends CLIHandler> handlers) {
         String[] argv = args.getArguments();
         for (int i = 0; i < argv.length; i++) {
             if (argv[i] == null) {
@@ -216,12 +213,10 @@ public abstract class CLIHandler extends Object {
     /** Notification of available handlers.
      * @return non-zero if one of the handlers fails
      */
-    protected static int notifyHandlers(Args args, Collection handlers, int when, boolean failOnUnknownOptions, boolean consume) {
+    protected static int notifyHandlers(Args args, Collection<? extends CLIHandler> handlers, int when, boolean failOnUnknownOptions, boolean consume) {
         try {
             int r = 0;
-            Iterator it = handlers.iterator();
-            while (it.hasNext()) {
-                CLIHandler h = (CLIHandler)it.next();
+            for (CLIHandler h : handlers) {
                 if (h.when != when) continue;
 
                 r = h.cli(args);
@@ -392,7 +387,7 @@ public abstract class CLIHandler extends Object {
      */
     static int finishInitialization (boolean recreate) {
         OUTPUT.log(Level.FINER, "finishInitialization {0}", recreate);
-        List toRun;
+        List<Execute> toRun;
         synchronized (CLIHandler.class) {
             toRun = doLater;
             doLater = recreate ? new ArrayList<Execute> () : null;
@@ -405,9 +400,7 @@ public abstract class CLIHandler extends Object {
         }
         
         if (toRun != null) {
-            Iterator it = toRun.iterator ();
-            while (it.hasNext ()) {
-                Execute r = (Execute)it.next ();
+            for (Execute r : toRun) {
                 int result = r.exec ();
                 if (result != 0) {
                     return result;
@@ -466,7 +459,7 @@ public abstract class CLIHandler extends Object {
      */
     static Status initialize(
         final Args args, final Integer block, 
-        final Collection handlers, 
+        final Collection<? extends CLIHandler> handlers,
         final boolean failOnUnknownOptions, 
         boolean cleanLockFile,
         Runnable runWhenHome
@@ -589,8 +582,7 @@ public abstract class CLIHandler extends Object {
                     public int exec () {
                         return notifyHandlers(args, handlers, WHEN_INIT, failOnUnknownOptions, failOnUnknownOptions);
                     }
-                    
-                    public String toString() {
+                    public @Override String toString() {
                         return handlers.toString();
                     }
                 });
@@ -626,6 +618,14 @@ public abstract class CLIHandler extends Object {
                     if (port != -1) {
                         try {
                             enterState(94, block);
+                            try {
+                                Socket socket = new Socket(localHostAddress (), port);
+                                socket.close();
+                            } catch (Exception ex3) {
+                                // socket is not open, remove the file and try once more
+                                lockFile.delete();
+                                continue;
+                            }
                             // just wait a while
                             Thread.sleep(2000);
                         } catch (InterruptedException inter) {
@@ -742,7 +742,7 @@ public abstract class CLIHandler extends Object {
                                 case -1:
                                     enterState(48, block);
                                     // EOF. Why does this happen?
-                                    break;
+                                    break COMMUNICATION;
                                 default:
                                     enterState(49, block);
                                     assert false : reply;
@@ -944,7 +944,7 @@ public abstract class CLIHandler extends Object {
         private byte[] key;
         private ServerSocket socket;
         private Integer block;
-        private Collection handlers;
+        private Collection<? extends CLIHandler> handlers;
         private Socket work;
         private static volatile int counter;
         private final boolean failOnUnknownOptions;
@@ -953,7 +953,7 @@ public abstract class CLIHandler extends Object {
         /** by default wait 100ms before sending a REPLY_FAIL message */
         private static long failDelay = 100;
         
-        public Server(byte[] key, Integer block, Collection handlers, boolean failOnUnknownOptions) throws IOException {
+        public Server(byte[] key, Integer block, Collection<? extends CLIHandler> handlers, boolean failOnUnknownOptions) throws IOException {
             super("CLI Requests Server"); // NOI18N
             this.key = key;
             this.setDaemon(true);
@@ -965,7 +965,7 @@ public abstract class CLIHandler extends Object {
             start();
         }
         
-        public Server(Socket request, byte[] key, Integer block, Collection handlers, boolean failOnUnknownOptions) throws IOException {
+        public Server(Socket request, byte[] key, Integer block, Collection<? extends CLIHandler> handlers, boolean failOnUnknownOptions) throws IOException {
             super("CLI Handler Thread Handler: " + ++counter); // NOI18N
             this.key = key;
             this.setDaemon(true);
@@ -981,13 +981,13 @@ public abstract class CLIHandler extends Object {
             return socket.getLocalPort();
         }
         
-        public void run() {
+        public @Override void run() {
             if (work != null) {
                 // I am a worker not listener server
                 try {
                     handleConnect(work);
                 } catch (IOException ex) {
-                    ex.printStackTrace();
+                    OUTPUT.log(Level.WARNING, null, ex);
                 }
                 return;
             }
@@ -1086,7 +1086,7 @@ public abstract class CLIHandler extends Object {
                         super ("Computes values in handlers");
                     }
                     
-                    public void run () {
+                    public @Override void run() {
                         try {
                             if (checkHelp(arguments, handlers)) {
                                 res = 2;
@@ -1204,11 +1204,11 @@ public abstract class CLIHandler extends Object {
                 }
             }
             
-            public void close() throws IOException {
+            public @Override void close() throws IOException {
                 super.close();
             }
             
-            public int available() throws IOException {
+            public @Override int available() throws IOException {
                 // ask for data
                 os.write(REPLY_AVAILABLE);
                 os.flush();
@@ -1216,11 +1216,11 @@ public abstract class CLIHandler extends Object {
                 return is.readInt();
             }
             
-            public int read(byte[] b) throws IOException {
+            public @Override int read(byte[] b) throws IOException {
                 return read(b, 0, b.length);
             }
             
-            public int read(byte[] b, int off, int len) throws IOException {
+            public @Override int read(byte[] b, int off, int len) throws IOException {
                 // ask for data
                 os.write(REPLY_READ);
                 os.writeInt(len);
@@ -1250,19 +1250,19 @@ public abstract class CLIHandler extends Object {
                 write(arr);
             }
             
-            public void write(byte[] b) throws IOException {
+            public @Override void write(byte[] b) throws IOException {
                 write(b, 0, b.length);
             }
             
-            public void close() throws IOException {
+            public @Override void close() throws IOException {
                 super.close();
             }
             
-            public void flush() throws IOException {
+            public @Override void flush() throws IOException {
                 os.flush();
             }
             
-            public void write(byte[] b, int off, int len) throws IOException {
+            public @Override void write(byte[] b, int off, int len) throws IOException {
                 os.write(type);
                 os.writeInt(len);
                 os.write(b, off, len);
