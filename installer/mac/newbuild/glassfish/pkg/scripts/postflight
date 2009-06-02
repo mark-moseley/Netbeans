@@ -22,11 +22,13 @@ set -e
 #update netbeans.conf
 script_dir=`dirname "$0"`
 
+JAVA_HOME=`"$script_dir"/get_current_jdk.sh`
+
 . "$script_dir"/env.sh
 
 "$script_dir"/add_gf.sh "$NETBEANS_INSTALL_DIR" "$2"
 
-"$script_dir"/unpack200.sh "$2" "$2"
+"$script_dir"/unpack200.sh "$2" "$2" "$JAVA_HOME"
 
 cd "$2"
 
@@ -34,12 +36,17 @@ echo Configuring GlassFish in `pwd`
 
 ant_bin=./lib/ant/bin/ant
 
-java_exe=`"$script_dir"/get_current_jdk.sh`/bin/java
+#set JAVA_HOME to be used by ant
+java_exe="$JAVA_HOME/bin/java"
 
 getPort() {
    basePort=$1
    freePort=`$java_exe -jar "$script_dir"/getport.jar $basePort`
    echo $freePort
+}
+
+getHostName() {
+   echo `$java_exe -jar "$script_dir"/getport.jar "getHostName"`
 }
 
 if [ -f $ant_bin ]
@@ -57,8 +64,12 @@ then
   orb_port=`getPort 3700`
   imq_port=`getPort 7676`
   https_port=`getPort 8181`
+  host_name=`getHost`
 
-  $ant_bin -f setup.xml -Dadmin.port=$admin_port -Dinstance.port=$instance_port -Dorb.port=$orb_port -Dimq.port=$imq_port -Dhttps.port=$https_port
+  export JAVA_HOME
+  $ant_bin --noconfig -v -f setup.xml -Dinstall.home="$2" -Dsource="$SERVICE_TAG_SOURCE" -Dadmin.port=$admin_port -Dinstance.port=$instance_port -Dorb.port=$orb_port -Dimq.port=$imq_port -Dhttps.port=$https_port
+#TODO replase admin.host=localhost to admin.host=$host_name in ./samples/common.properties file
+
 else
   echo No ant found: $ant_bin
 fi
@@ -82,3 +93,8 @@ echo "Updating glassfish security files permissions to $ownership"
 
 #add Product ID
 "$script_dir"/addproduct_id.sh "GLASSFISH"
+
+#create ST for NB
+"$script_dir"/servicetag.sh "gf-v2" "$2"
+
+
