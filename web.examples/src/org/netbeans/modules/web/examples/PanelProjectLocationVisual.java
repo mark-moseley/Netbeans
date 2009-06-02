@@ -43,17 +43,15 @@ package org.netbeans.modules.web.examples;
 
 import java.io.File;
 import java.text.MessageFormat;
-
 import javax.swing.JFileChooser;
+import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-
 import org.netbeans.spi.project.ui.support.ProjectChooser;
-
 import org.openide.WizardDescriptor;
 import org.openide.util.NbBundle;
 
-public class PanelProjectLocationVisual extends SettingsPanel implements DocumentListener {
+class PanelProjectLocationVisual extends JPanel implements DocumentListener {
 
     private PanelConfigureProject panel;
 
@@ -186,7 +184,7 @@ public class PanelProjectLocationVisual extends SettingsPanel implements Documen
     
     boolean valid(WizardDescriptor wizardDescriptor) {
         if (projectNameTextField.getText().length() == 0) {
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(PanelProjectLocationVisual.class,"MSG_IllegalProjectName")); //NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(PanelProjectLocationVisual.class,"MSG_IllegalProjectName")); //NOI18N
             return false; // Display name not specified
         }
         
@@ -194,11 +192,11 @@ public class PanelProjectLocationVisual extends SettingsPanel implements Documen
         File[] children = destFolder.listFiles();
         if (destFolder.exists() && children != null && children.length > 0) {
             // Folder exists and is not empty
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(PanelProjectLocationVisual.class,"MSG_ProjectFolderExists")); //NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, NbBundle.getMessage(PanelProjectLocationVisual.class,"MSG_ProjectFolderExists")); //NOI18N
             return false;
         }
                 
-        wizardDescriptor.putProperty("WizardPanel_errorMessage", ""); //NOI18N
+        wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, ""); //NOI18N
         return true;
     }
     
