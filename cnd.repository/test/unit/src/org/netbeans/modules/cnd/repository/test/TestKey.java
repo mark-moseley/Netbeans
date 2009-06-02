@@ -38,83 +38,116 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.cnd.modelimpl.uid;
+
+package org.netbeans.modules.cnd.repository.test;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.api.model.CsmUID;
-import org.netbeans.modules.cnd.modelimpl.repository.KeyHolder;
-import org.netbeans.modules.cnd.modelimpl.repository.KeyObjectFactory;
-import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.repository.spi.Key;
+import org.netbeans.modules.cnd.repository.spi.PersistentFactory;
 import org.netbeans.modules.cnd.repository.support.SelfPersistent;
 
+
 /**
- * help class for CsmUID based on repository Key
- * @author Vladimir Voskresensky
+ * Test interface Implementation 
+ * for tests
+ * @author Vladimir Kvashin
  */
-public abstract class KeyBasedUID<T> implements CsmUID<T>, KeyHolder, SelfPersistent, Comparable<CsmUID<T>> {
-
-    private final Key key;
-
-    protected KeyBasedUID(Key key) {
-        assert key != null;
-        this.key = key;
+public class TestKey implements Key, SelfPersistent {
+    
+    private String key;
+    private String unit;
+    private Behavior behavior;
+    
+    public Behavior getBehavior() {
+	return Behavior.Default;
     }
-
-    public T getObject() {
-        return RepositoryUtils.get(this);
+    
+    public TestKey(String key, String unit, Behavior behavior) {
+	this.key = key;
+        this.unit = unit;
+        this.behavior = behavior;
     }
+    
 
-    public Key getKey() {
-        return key;
+    public TestKey(DataInput stream) throws IOException {
+        this(stream.readUTF(), stream.readUTF(), 
+                stream.readBoolean() ? Behavior.LargeAndMutable : Behavior.Default);
     }
-
-    public abstract void dispose(T obj);
-
-    @Override
-    public String toString() {
-        String retValue;
-
-        retValue = key.toString();
-        return "KeyBasedUID on " + retValue; // NOI18N
+    
+    
+    public String getAt(int level) {
+	return key;
     }
-
-    @Override
-    public int hashCode() {
-        int retValue;
-
-        retValue = key.hashCode();
-        return retValue;
+    
+    public int getDepth() {
+	return 1;
+    }
+    
+    public PersistentFactory getPersistentFactory() {
+	return TestFactory.instance();
+    }
+    
+    public int getSecondaryAt(int level) {
+	return 0;
+    }
+    
+    public int getSecondaryDepth() {
+	return 0;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || obj.getClass() != this.getClass()) {
+        if (obj == null) {
             return false;
         }
-        KeyBasedUID other = (KeyBasedUID) obj;
-        return this.key.equals(other.key);
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final TestKey other = (TestKey) obj;
+        if (this.key != other.key && (this.key == null || !this.key.equals(other.key))) {
+            return false;
+        }
+        if (this.unit != other.unit && (this.unit == null || !this.unit.equals(other.unit))) {
+            return false;
+        }
+        if (this.behavior != other.behavior) {
+            return false;
+        }
+        return true;
     }
 
-    public void write(DataOutput aStream) throws IOException {
-        KeyObjectFactory.getDefaultFactory().writeKey(key, aStream);
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 59 * hash + (this.key != null ? this.key.hashCode() : 0);
+        hash = 59 * hash + (this.unit != null ? this.unit.hashCode() : 0);
+        hash = 59 * hash + (this.behavior != null ? this.behavior.hashCode() : 0);
+        return hash;
     }
 
-    /* package */ KeyBasedUID(DataInput aStream) throws IOException {
-        key = KeyObjectFactory.getDefaultFactory().readKey(aStream);
+    
+    @Override
+    public String toString() {
+	return unit + ':' + key + ' ' + behavior;
     }
 
-    @SuppressWarnings("unchecked")
-    public int compareTo(CsmUID<T> o) {
-        assert o != null;
-        assert o instanceof KeyBasedUID;
-        Comparable o1 = (Comparable) this.key;
-        Comparable o2 = (Comparable) ((KeyBasedUID) o).key;
-        return o1.compareTo(o2);
+    public String getUnit() {
+	return unit;
     }
-}    
+
+    public int getUnitId() {
+        return 0;
+    }
+
+    public void write(DataOutput output) throws IOException {
+        output.writeUTF(key);
+        output.writeUTF(unit);
+        output.writeBoolean(behavior == Behavior.LargeAndMutable);
+    }
+
+    public boolean hasCache() {
+        return false;
+    }
+}

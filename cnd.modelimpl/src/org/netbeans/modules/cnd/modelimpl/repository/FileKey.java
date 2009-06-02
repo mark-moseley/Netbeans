@@ -43,7 +43,6 @@ package org.netbeans.modules.cnd.modelimpl.repository;
 
 import java.io.DataInput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.api.model.CsmFile;
 import org.netbeans.modules.cnd.modelimpl.csm.core.CsmObjectFactory;
 import org.netbeans.modules.cnd.modelimpl.csm.core.FileImpl;
 import org.netbeans.modules.cnd.repository.spi.PersistentFactory;
@@ -59,8 +58,17 @@ final class FileKey extends ProjectFileNameBasedKey {
 	super(aStream);
     }
     
+    /*package-local*/ CharSequence getName() {
+        return getFileName();
+    }
+    
     public String toString() {
 	return "FileKey (" + getProjectName() + ", " + getFileNameSafe() + ")"; // NOI18N
+    }
+
+    @Override
+    public int hashCode() {
+        return 37*KeyObjectFactory.KEY_FILE_KEY + super.hashCode();
     }
     
     public PersistentFactory getPersistentFactory() {
@@ -74,5 +82,10 @@ final class FileKey extends ProjectFileNameBasedKey {
     public int getSecondaryAt(int level) {
 	assert level == 0;
 	return KeyObjectFactory.KEY_FILE_KEY;
+    }
+
+    @Override
+    public boolean hasCache() {
+        return true;
     }
 }

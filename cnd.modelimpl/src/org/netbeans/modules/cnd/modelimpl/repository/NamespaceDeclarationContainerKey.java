@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,84 +31,62 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.cnd.modelimpl.uid;
+
+package org.netbeans.modules.cnd.modelimpl.repository;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import org.netbeans.modules.cnd.api.model.CsmUID;
-import org.netbeans.modules.cnd.modelimpl.repository.KeyHolder;
-import org.netbeans.modules.cnd.modelimpl.repository.KeyObjectFactory;
-import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
+import org.netbeans.modules.cnd.api.model.CsmNamespace;
 import org.netbeans.modules.cnd.repository.spi.Key;
-import org.netbeans.modules.cnd.repository.support.SelfPersistent;
 
 /**
- * help class for CsmUID based on repository Key
+ *
  * @author Vladimir Voskresensky
  */
-public abstract class KeyBasedUID<T> implements CsmUID<T>, KeyHolder, SelfPersistent, Comparable<CsmUID<T>> {
+final public class NamespaceDeclarationContainerKey extends NamespaceKey {
 
-    private final Key key;
-
-    protected KeyBasedUID(Key key) {
-        assert key != null;
-        this.key = key;
+    public NamespaceDeclarationContainerKey(CsmNamespace ns) {
+        super(ns);
     }
-
-    public T getObject() {
-        return RepositoryUtils.get(this);
-    }
-
-    public Key getKey() {
-        return key;
-    }
-
-    public abstract void dispose(T obj);
 
     @Override
     public String toString() {
-        String retValue;
-
-        retValue = key.toString();
-        return "KeyBasedUID on " + retValue; // NOI18N
+        return "NSDeclContainer " + super.toString(); // NOI18N
     }
 
     @Override
     public int hashCode() {
-        int retValue;
-
-        retValue = key.hashCode();
-        return retValue;
+        return 37*KeyObjectFactory.KEY_NS_DECLARATION_CONTAINER_KEY + super.hashCode();
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || obj.getClass() != this.getClass()) {
-            return false;
-        }
-        KeyBasedUID other = (KeyBasedUID) obj;
-        return this.key.equals(other.key);
+    public int getSecondaryAt(int level) {
+        assert level == 0;
+        return KeyObjectFactory.KEY_NS_DECLARATION_CONTAINER_KEY;
     }
 
+    @Override
     public void write(DataOutput aStream) throws IOException {
-        KeyObjectFactory.getDefaultFactory().writeKey(key, aStream);
+        super.write(aStream);
     }
 
-    /* package */ KeyBasedUID(DataInput aStream) throws IOException {
-        key = KeyObjectFactory.getDefaultFactory().readKey(aStream);
+    /*package*/ NamespaceDeclarationContainerKey(DataInput aStream) throws IOException {
+        super(aStream);
     }
 
-    @SuppressWarnings("unchecked")
-    public int compareTo(CsmUID<T> o) {
-        assert o != null;
-        assert o instanceof KeyBasedUID;
-        Comparable o1 = (Comparable) this.key;
-        Comparable o2 = (Comparable) ((KeyBasedUID) o).key;
-        return o1.compareTo(o2);
+    @Override
+    public Key.Behavior getBehavior() {
+        return Behavior.LargeAndMutable;
     }
-}    
+
+    @Override
+    public boolean hasCache() {
+        return true;
+    }
+}

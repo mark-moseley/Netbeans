@@ -57,6 +57,12 @@ public interface Key {
      * @return the unit
      */
     CharSequence getUnit();
+
+    /** return a unit id which serves as a sign of global set of keys, e.g., 
+     *  projects in the IDE
+     * @return the unit
+     */
+    int getUnitId();
     
     /** Behaviors allow repository to optimize
      *  storaging files
@@ -70,6 +76,12 @@ public interface Key {
      * @return key Behavior
      */
     Behavior getBehavior();
+
+    /**
+     * return true if key may have a local L1 cache
+     * @return
+     */
+    public boolean hasCache();
     
     /** returns depth of primary key's hierarchy *
      * @return depth of primary key's hierarchy

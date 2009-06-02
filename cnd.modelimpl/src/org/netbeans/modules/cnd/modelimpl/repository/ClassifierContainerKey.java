@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,6 +31,10 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 package org.netbeans.modules.cnd.modelimpl.repository;
 
@@ -47,36 +45,32 @@ import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.repository.spi.PersistentFactory;
 
 /**
- * Key for DeclarationContainer data
- * @author Vladimir Kvashin
+ *
+ * @author Alexander Simon
  */
-public class DeclarationContainerKey extends ProjectNameBasedKey {
+public final class ClassifierContainerKey extends ProjectNameBasedKey {
 
-    public DeclarationContainerKey(String project) {
+    public ClassifierContainerKey(String project) {
         super(project);
     }
 
-    public DeclarationContainerKey(DataInput in) throws IOException {
+    public ClassifierContainerKey(DataInput in) throws IOException {
         super(in);
-    }
-
-    public int getSecondaryDepth() {
-        return 1;
-    }
-
-    @Override
-    public String toString() {
-        return "DeclarationContainerKey " + getProjectName(); // NOI18N
-    }
-
-    @Override
-    public int hashCode() {
-        return 37*KeyObjectFactory.KEY_DECLARATION_CONTAINER_KEY + super.hashCode();
     }
 
     public int getSecondaryAt(int level) {
         assert (level == 0);
-        return KeyObjectFactory.KEY_DECLARATION_CONTAINER_KEY;
+        return KeyObjectFactory.KEY_CLASSIFIER_CONTAINER_KEY;
+    }
+
+    @Override
+    public int hashCode() {
+        return 37*KeyObjectFactory.KEY_CLASSIFIER_CONTAINER_KEY + super.hashCode();
+    }
+
+
+    public int getSecondaryDepth() {
+        return 1;
     }
 
     public PersistentFactory getPersistentFactory() {
@@ -91,5 +85,10 @@ public class DeclarationContainerKey extends ProjectNameBasedKey {
     @Override
     public boolean hasCache() {
         return true;
+    }
+
+    @Override
+    public String toString() {
+        return "ClassifierContainerKey " + getProjectName(); // NOI18N
     }
 }

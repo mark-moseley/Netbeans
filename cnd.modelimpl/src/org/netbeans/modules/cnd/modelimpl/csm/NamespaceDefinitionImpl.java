@@ -49,12 +49,16 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import org.netbeans.modules.cnd.api.model.*;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
 import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDCsmConverter;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
 import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
+import org.netbeans.modules.cnd.modelimpl.uid.UIDUtilities;
 
 /**
  * Implements CsmNamespaceDefinition
@@ -82,37 +86,104 @@ public final class NamespaceDefinitionImpl extends OffsetableDeclarationBase<Csm
         assert namespaceUID != null;
         this.namespaceRef = null;
         
-        if( nsImpl instanceof NamespaceImpl ) {
-            nsImpl.addNamespaceDefinition(this);
-        }
+        nsImpl.addNamespaceDefinition(this);
     }
 
+    public static NamespaceDefinitionImpl findOrCreateNamespaceDefionition(MutableDeclarationsContainer container, AST ast, NamespaceImpl parentNamespace, FileImpl containerfile) {
+        int start = getStartOffset(ast);
+        int end = getEndOffset(ast);
+        CharSequence name = NameCache.getManager().getString(ast.getText()); // otherwise equals returns false
+        // #147376 Strange navigator behavior in header
+        CsmOffsetableDeclaration candidate = container.findExistingDeclaration(start, end, name);
+        if (CsmKindUtilities.isNamespaceDefinition(candidate)) {
+            return (NamespaceDefinitionImpl) candidate;
+        } else {
+            NamespaceDefinitionImpl ns = new NamespaceDefinitionImpl(ast, containerfile, parentNamespace);
+            container.addDeclaration(ns);
+            return ns;
+        }
+    }
+    
     public CsmDeclaration.Kind getKind() {
         return CsmDeclaration.Kind.NAMESPACE_DEFINITION;
     }
             
     public Collection<CsmOffsetableDeclaration> getDeclarations() {
         Collection<CsmOffsetableDeclaration> decls;
-        synchronized (declarations) {
+        synchronized (this) {
             decls = UIDCsmConverter.UIDsToDeclarations(declarations);
         }
         return decls;
     }
-    
+
+    public Iterator<CsmOffsetableDeclaration> getDeclarations(CsmFilter filter) {
+        Iterator<CsmOffsetableDeclaration> out;
+        synchronized (this) {
+            out = UIDCsmConverter.UIDsToDeclarationsFiltered(declarations, filter);
+         }
+         return out;
+    }
+
+    public CsmOffsetableDeclaration findExistingDeclaration(int start, int end, CharSequence name) {
+        CsmUID<CsmOffsetableDeclaration> out = null;
+        // look for the object with the same start position and the same name
+        // TODO: for now we are in O(n), but better to be O(ln n) speed
+        synchronized (this) {
+            out = UIDUtilities.findExistingUIDInList(declarations, start, end, name);
+//            if (FileImpl.traceFile(getContainingFile().getAbsolutePath())) {
+//                System.err.printf("%s found %s [%d-%d] in \n\t%s\n", (out == null) ? "NOT " : "", name, start, end, declarations);
+//            }
+        }
+        return UIDCsmConverter.UIDtoDeclaration(out);
+    }
+
     public void addDeclaration(CsmOffsetableDeclaration decl) {
         CsmUID<CsmOffsetableDeclaration> uid = RepositoryUtils.put(decl);
         assert uid != null;
-        declarations.add(uid);
+        synchronized (this) {
+            UIDUtilities.insertIntoSortedUIDList(uid, declarations);
+        }
+        if (decl instanceof VariableImpl) {
+            VariableImpl v = (VariableImpl) decl;
+            if (!NamespaceImpl.isNamespaceScope(v, false)) {
+                v.setScope(this, true);
+            }
+        }
+        if (decl instanceof FunctionImpl) {
+            FunctionImpl f = (FunctionImpl) decl;
+            if (!NamespaceImpl.isNamespaceScope(f)) {
+                f.setScope(this);
+            }
+        }
         // update repository
         RepositoryUtils.put(this);
+    }
+    
+    private void insertIntoSortedDeclArray(CsmUID<CsmOffsetableDeclaration> uid) {
+        int start = UIDUtilities.getStartOffset(uid);
+        // start from the last, because most of the time we are in append, not insert mode
+        for (int pos = declarations.size() - 1; pos >= 0; pos--) {
+            CsmUID<CsmOffsetableDeclaration> currUID = declarations.get(pos);
+            int i = UIDUtilities.compareWithinFile(currUID, uid);
+            if (i <= 0) {
+                if (i == 0){
+                    declarations.set(pos, uid);
+                } else {
+                    declarations.add(pos+1, uid);
+                }
+                return;
+            } else if (UIDUtilities.getStartOffset(currUID) < start){
+                break;
+            }
+        }
+        declarations.add(uid);
     }
     
     public void removeDeclaration(CsmOffsetableDeclaration declaration) {
         CsmUID<CsmOffsetableDeclaration> uid = UIDCsmConverter.declarationToUID(declaration);
         assert uid != null;
-        boolean res = declarations.remove(uid);
-        assert res;
-        RepositoryUtils.remove(uid);
+        declarations.remove(uid);
+        RepositoryUtils.remove(uid, declaration);
         // update repository
         RepositoryUtils.put(this);
     }
@@ -137,7 +208,29 @@ public final class NamespaceDefinitionImpl extends OffsetableDeclarationBase<Csm
     public CsmScope getScope() {
         return getContainingFile();
     }
+    
+    public Collection<CsmScopeElement> getScopeElements() {
+        List<CsmScopeElement> l = new ArrayList<CsmScopeElement>();
+        for (Iterator iter = getDeclarations().iterator(); iter.hasNext();) {
+            CsmDeclaration decl = (CsmDeclaration) iter.next();
+            if (isOfMyScope(decl)) {
+                l.add(decl);
+            }
+        }
+        return l;
+    }
 
+    private boolean isOfMyScope(CsmDeclaration decl) {
+        if (decl instanceof VariableImpl) {
+            return ! NamespaceImpl.isNamespaceScope((VariableImpl) decl, false);
+        } else if (decl instanceof FunctionImpl) {
+            return ! NamespaceImpl.isNamespaceScope((FunctionImpl) decl);
+
+        } else {
+            return false;
+        }
+    }
+    
     @Override
     public void dispose() {
         super.dispose();
@@ -145,7 +238,7 @@ public final class NamespaceDefinitionImpl extends OffsetableDeclarationBase<Csm
         //NB: we're copying declarations, because dispose can invoke this.removeDeclaration
         Collection<CsmOffsetableDeclaration> decls;
         List<CsmUID<CsmOffsetableDeclaration>> uids;
-        synchronized (declarations) {
+        synchronized (this) {
             decls = getDeclarations();
             uids = declarations;
             declarations  = Collections.synchronizedList(new ArrayList<CsmUID<CsmOffsetableDeclaration>>());
@@ -158,7 +251,7 @@ public final class NamespaceDefinitionImpl extends OffsetableDeclarationBase<Csm
     }
 
     private void onDispose() {
-        if (TraceFlags.RESTORE_CONTAINER_FROM_UID) {
+        if (this.namespaceRef == null) {
             // restore container from it's UID
             this.namespaceRef = (NamespaceImpl) UIDCsmConverter.UIDtoNamespace(this.namespaceUID);
             assert this.namespaceRef != null || this.namespaceUID == null : "no object for UID " + this.namespaceUID;
@@ -188,9 +281,13 @@ public final class NamespaceDefinitionImpl extends OffsetableDeclarationBase<Csm
         factory.writeUID(this.namespaceUID, output);
         
         assert this.name != null;
-        output.writeUTF(this.name.toString());
+        PersistentUtils.writeUTF(name, output);
+
+        if (getName().length() == 0) {
+            writeUID(output);
+        }
     }  
-    
+
     public NamespaceDefinitionImpl(DataInput input) throws IOException {
         super(input);
         UIDObjectFactory factory = UIDObjectFactory.getDefaultFactory();
@@ -201,7 +298,11 @@ public final class NamespaceDefinitionImpl extends OffsetableDeclarationBase<Csm
         assert this.namespaceUID != null;
         this.namespaceRef = null;    
         
-        this.name = NameCache.getManager().getString(input.readUTF());
+        this.name = PersistentUtils.readUTF(input, NameCache.getManager());
         assert this.name != null;
+
+        if (getName().length() == 0) {
+            readUID(input);
+        }
     }      
 }

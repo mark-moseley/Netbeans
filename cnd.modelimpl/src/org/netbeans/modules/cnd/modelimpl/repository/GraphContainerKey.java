@@ -38,53 +38,52 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.repository;
 
 import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.IOException;
 import org.netbeans.modules.cnd.modelimpl.csm.core.CsmObjectFactory;
-import org.netbeans.modules.cnd.repository.spi.Key;
-import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.spi.PersistentFactory;
-import org.netbeans.modules.cnd.repository.support.SelfPersistent;
 
 /**
  * Key for GraphContainer data
  * @author Vladimir Kvashin
  */
-public class GraphContainerKey extends ProjectNameBasedKey {
-    
+final public class GraphContainerKey extends ProjectNameBasedKey {
+
     public GraphContainerKey(String project) {
-	 super(project);
+        super(project);
     }
-    
+
     public GraphContainerKey(DataInput in) throws IOException {
-	super(in);
+        super(in);
     }
-    
+
     public int getSecondaryDepth() {
-	return 1;
-    }
-    
-    @Override
-    public String toString() {
-	return "GraphContainerKey " + getProjectName(); // NOI18N
-    }
-    
-    public int getSecondaryAt(int level) {
-	assert (level == 0);
-	return KeyObjectFactory.KEY_GRAPH_CONTAINER_KEY;
-    }
-    
-    public PersistentFactory getPersistentFactory() {
-	return CsmObjectFactory.instance();
+        return 1;
     }
 
     @Override
-    public Key.Behavior getBehavior() {
-	return Key.Behavior.LargeAndMutable;
+    public int hashCode() {
+        return 37*KeyObjectFactory.KEY_GRAPH_CONTAINER_KEY + super.hashCode();
     }
-    
+
+    @Override
+    public String toString() {
+        return "GraphContainerKey " + getProjectName(); // NOI18N
+    }
+
+    public int getSecondaryAt(int level) {
+        assert (level == 0);
+        return KeyObjectFactory.KEY_GRAPH_CONTAINER_KEY;
+    }
+
+    public PersistentFactory getPersistentFactory() {
+        return CsmObjectFactory.instance();
+    }
+
+    @Override
+    public boolean hasCache() {
+        return true;
+    }
 }

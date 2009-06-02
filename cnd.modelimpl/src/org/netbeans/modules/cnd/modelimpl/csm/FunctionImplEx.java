@@ -47,11 +47,17 @@ import antlr.collections.AST;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect;
+import org.netbeans.modules.cnd.api.model.services.CsmSelect.CsmFilter;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
 import org.netbeans.modules.cnd.modelimpl.parser.generated.CPPTokenTypes;
 import org.netbeans.modules.cnd.modelimpl.csm.core.*;
+import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.repository.PersistentUtils;
+import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.modelimpl.textcache.NameCache;
 import org.netbeans.modules.cnd.modelimpl.textcache.QualifiedNameCache;
+import org.netbeans.modules.cnd.utils.cache.APTStringManager;
 
 /**
  * A class that 
@@ -64,21 +70,22 @@ import org.netbeans.modules.cnd.modelimpl.textcache.QualifiedNameCache;
 public class FunctionImplEx<T>  extends FunctionImpl<T> {
 
     private CharSequence qualifiedName;
-    private boolean qualifiedNameIsFake = false;
-    private final CharSequence[] classOrNspNames;
+    private static final byte QUALIFIED_NAME = 1 << (FunctionImpl.LAST_USED_FLAG_INDEX+1);
+    private final CharSequence[] classOrNspNames;   
+    private AST fixFakeRegistrationAst = null; // AST for fixing fake registrations
     
-    public FunctionImplEx(AST ast, CsmFile file, CsmScope scope) {
-        this(ast, file, scope, true);
-    }
-    
-    protected  FunctionImplEx(AST ast, CsmFile file, CsmScope scope, boolean register) {
-        super(ast, file, scope, false);
-        classOrNspNames = CastUtils.isCast(ast) ? CastUtils.getClassOrNspNames(ast) : initClassOrNspNames(ast);
+    public FunctionImplEx(AST ast, CsmFile file, CsmScope scope, boolean register, boolean global) throws AstRendererException {
+        super(ast, file, scope, false, global);
+        classOrNspNames = CastUtils.isCast(ast) ? getClassOrNspNames(ast) : initClassOrNspNames(ast);
         if (register) {
             registerInProject();
         }
     }
-    
+
+    public FunctionImplEx(AST ast, CsmFile file, CsmScope scope, AST fakeRegistrationAst, boolean register, boolean global) throws AstRendererException {
+        this(ast, file, scope, register, global);
+        fixFakeRegistrationAst = fakeRegistrationAst;
+    }
 
     /** @return either class or namespace */
     protected CsmObject findOwner(Resolver parent) {
@@ -86,9 +93,7 @@ public class FunctionImplEx<T>  extends FunctionImpl<T> {
 	if( cnn != null ) {
 	    CsmObject obj = ResolverFactory.createResolver(this, parent).resolve(cnn, Resolver.CLASSIFIER | Resolver.NAMESPACE);
 	    if( obj instanceof CsmClass ) {
-		if( !( obj instanceof Unresolved.UnresolvedClass) ) {
-		    return (CsmClass) obj;
-		}
+                return (CsmClass) obj;
 	    }
 	    else if( obj instanceof CsmNamespace ) {
 		return (CsmNamespace) obj;
@@ -96,8 +101,36 @@ public class FunctionImplEx<T>  extends FunctionImpl<T> {
 	}
 	return null;
     }    
-    
-    public static String[] initClassOrNspNames(AST node) {
+
+
+    private static CharSequence[] getClassOrNspNames(AST ast) {
+	assert CastUtils.isCast(ast);
+	AST child = ast.getFirstChild();
+	if( child != null && child.getType() == CPPTokenTypes.ID ) {
+	    AST next = child.getNextSibling();
+	    if( next != null && next.getType() == CPPTokenTypes.SCOPE ) {
+		List<CharSequence> l = new ArrayList<CharSequence>();
+                APTStringManager manager = NameCache.getManager();
+		l.add(manager.getString(child.getText()));
+		begin:
+		for( next = next.getNextSibling(); next != null; next = next.getNextSibling() ) {
+		    switch( next.getType() ) {
+			case CPPTokenTypes.ID:
+			    l.add(manager.getString(next.getText()));
+                            break;
+			case CPPTokenTypes.SCOPE:
+			    break; // do nothing
+			default:
+			    break begin;
+		    }
+		}
+		return  l.toArray(new CharSequence[l.size()]);
+	    }
+	}
+	return null;
+    }
+
+    private static CharSequence[] initClassOrNspNames(AST node) {
         //qualified id
         AST qid = AstUtil.findMethodName(node);
         if( qid == null ) {
@@ -105,97 +138,155 @@ public class FunctionImplEx<T>  extends FunctionImpl<T> {
         }
         int cnt = qid.getNumberOfChildren();
         if( cnt >= 1 ) {
-            List/*<String>*/ l = new ArrayList/*<String>*/();
+            List<CharSequence> l = new ArrayList<CharSequence>();
+            APTStringManager manager = NameCache.getManager();
             for( AST token = qid.getFirstChild(); token != null; token = token.getNextSibling() ) {
                 if( token.getType() == CPPTokenTypes.ID ) {
                     if( token.getNextSibling() != null ) {
-                        l.add(token.getText());
+                        l.add(manager.getString(token.getText()));
                     }
                 }
             }
-            return (String[]) l.toArray(new String[l.size()]);
+            return l.toArray(new CharSequence[l.size()]);
         }
         return null;
     }
     
     @Override
     public CharSequence getQualifiedName() {
-	if( qualifiedName == null ) {
-	    qualifiedName = QualifiedNameCache.getManager().getString(findQualifiedName());
-	}
-	return qualifiedName;
+        if( qualifiedName == null ) {
+            qualifiedName = QualifiedNameCache.getManager().getString(findQualifiedName());
+        }
+        return qualifiedName;
     }
-    
+
     protected String findQualifiedName() {
-	CsmObject owner = findOwner(null);
-	if( owner instanceof CsmQualifiedNamedElement  ) {
-	    qualifiedNameIsFake = false;
-	    return ((CsmQualifiedNamedElement) owner).getQualifiedName().toString() + getScopeSuffix() + "::" + getQualifiedNamePostfix(); // NOI18N
-	}
-	else {
-	    qualifiedNameIsFake = true;
-	    CharSequence[] cnn = classOrNspNames;
-	    CsmNamespaceDefinition nsd = findNamespaceDefinition();
-	    StringBuilder sb = new StringBuilder();
-	    if( nsd != null ) {
-		sb.append(nsd.getQualifiedName());
-	    }
-	    if( cnn != null ) {
-		for (int i = 0; i < cnn.length; i++) {
-		    if( sb.length() > 0 ) {
-			sb.append("::"); // NOI18N
-		    }
-		    sb.append(cnn[i]);
-		}
-	    }
-	    if( sb.length() == 0 ) {
-		sb.append("unknown>"); // NOI18N
-	    }
-            sb.append(getScopeSuffix());
-	    sb.append("::"); // NOI18N
-	    sb.append(getQualifiedNamePostfix());
-	    return sb.toString();
-	}
+        CsmObject owner = findOwner(null);
+        if(CsmKindUtilities.isQualified(owner)) {
+            setFlags(QUALIFIED_NAME, false);
+            return ((CsmQualifiedNamedElement) owner).getQualifiedName().toString() + getScopeSuffix() + "::" + getQualifiedNamePostfix(); // NOI18N
+        }
+        setFlags(QUALIFIED_NAME, true);
+        CharSequence[] cnn = classOrNspNames;
+        CsmNamespaceDefinition nsd = findNamespaceDefinition();
+        StringBuilder sb = new StringBuilder();
+        if( nsd != null ) {
+            sb.append(nsd.getQualifiedName());
+        }
+        if( cnn != null ) {
+            for (int i = 0; i < cnn.length; i++) {
+                if( sb.length() > 0 ) {
+                    sb.append("::"); // NOI18N
+                }
+                sb.append(cnn[i]);
+            }
+        }
+        if( sb.length() == 0 ) {
+            sb.append("unknown>"); // NOI18N
+        }
+        sb.append(getScopeSuffix());
+        sb.append("::"); // NOI18N
+        sb.append(getQualifiedNamePostfix());
+        return sb.toString();
     }
     
     @Override
     protected void registerInProject() {
-	super.registerInProject();
-	if( qualifiedNameIsFake ) {
-	    ((FileImpl) getContainingFile()).onFakeRegisration(this);
-	}
+        super.registerInProject();
+        if( hasFlags(QUALIFIED_NAME) ) {
+            ((FileImpl) getContainingFile()).onFakeRegisration(this);
+        }
     }
     
-    public void fixFakeRegistration() {
-	CharSequence newQname = QualifiedNameCache.getManager().getString(findQualifiedName());
-	if( !newQname.equals(qualifiedName) ) {
-	    ProjectBase aProject = ((FileImpl) getContainingFile()).getProjectImpl();
-            aProject.unregisterDeclaration(this);
-            this.cleanUID();
-	    qualifiedName = newQname;
-	    aProject.registerDeclaration(this);
-	}
+    public final boolean fixFakeRegistration(boolean projectParsedMode) {
+        boolean fixed = false;
+        if (fixFakeRegistrationAst != null) {
+            CsmObject owner = findOwner(null);
+            if (CsmKindUtilities.isClass(owner)) {
+                CsmClass cls = (CsmClass) owner;
+                for (CsmMember member : cls.getMembers()) {
+                    if (member.isStatic() && member.getName().equals(getName())) {
+                        FileImpl aFile = (FileImpl) getContainingFile();
+                        VariableDefinitionImpl var = new VariableDefinitionImpl(fixFakeRegistrationAst, getContainingFile(), getReturnType(), getName().toString());
+                        aFile.getProjectImpl(true).unregisterDeclaration(this);
+                        RepositoryUtils.remove(getUID(), this);
+                        aFile.getProjectImpl(true).registerDeclaration(var);
+                        aFile.addDeclaration(var);
+                        fixFakeRegistrationAst = null;
+                        return true;
+                    }
+                }
+            } else if (CsmKindUtilities.isNamespace(owner)) {
+                CsmFilter filter = CsmSelect.getFilterBuilder().createCompoundFilter(
+                         CsmSelect.getFilterBuilder().createKindFilter(CsmDeclaration.Kind.VARIABLE, CsmDeclaration.Kind.VARIABLE_DEFINITION),
+                         CsmSelect.getFilterBuilder().createNameFilter(getName(), true, true, false));
+                Iterator<CsmOffsetableDeclaration> it = CsmSelect.getDeclarations(((CsmNamespace)owner), filter);
+                while (it.hasNext()) {
+                    CsmDeclaration decl = it.next();
+                    if (CsmKindUtilities.isExternVariable(decl) && decl.getName().equals(getName())) {
+                        FileImpl aFile = (FileImpl) getContainingFile();
+                        VariableDefinitionImpl var = new VariableDefinitionImpl(fixFakeRegistrationAst, getContainingFile(), getReturnType(), getName().toString());
+                        aFile.getProjectImpl(true).unregisterDeclaration(this);
+                        RepositoryUtils.remove(getUID(), this);
+                        aFile.getProjectImpl(true).registerDeclaration(var);
+                        aFile.addDeclaration(var);
+                        fixFakeRegistrationAst = null;
+                        return true;
+                    }
+                }
+            }
+            if (projectParsedMode) {
+                try {
+                    FileImpl aFile = (FileImpl) getContainingFile();
+                    FunctionImpl fi = new FunctionImpl(fixFakeRegistrationAst, getContainingFile(), this.getScope(), true, true);
+                    fixFakeRegistrationAst = null;
+                    aFile.getProjectImpl(true).unregisterDeclaration(this);
+                    RepositoryUtils.remove(getUID(), this);
+                    aFile.addDeclaration(fi);
+                    fixed = true;
+                    if (NamespaceImpl.isNamespaceScope(fi)) {
+                        if (CsmKindUtilities.isNamespace(this.getScope())) {
+                            ((NamespaceImpl) this.getScope()).addDeclaration(fi);
+                        }
+                    }
+                } catch (AstRendererException e) {
+                    DiagnosticExceptoins.register(e);
+                }
+            }
+        } else {
+            CharSequence newQname = QualifiedNameCache.getManager().getString(findQualifiedName());
+            if (!newQname.equals(qualifiedName)) {
+                ProjectBase aProject = ((FileImpl)getContainingFile()).getProjectImpl(true);
+                aProject.unregisterDeclaration(this);
+                this.cleanUID();
+                qualifiedName = newQname;
+                aProject.registerDeclaration(this);
+                fixed = true;
+            }
+        }
+        return fixed;
     }
     
     private CsmNamespaceDefinition findNamespaceDefinition() {
-	return findNamespaceDefinition(getContainingFile().getDeclarations());
+        CsmFilter filter = CsmSelect.getFilterBuilder().createKindFilter(Kind.NAMESPACE_DEFINITION);
+        return findNamespaceDefinition(CsmSelect.getDeclarations(getContainingFile(), filter), filter);
     }
     
-    private CsmNamespaceDefinition findNamespaceDefinition(Collection/*<CsmOffsetableDeclaration>*/ declarations) {
-	for (Iterator it = declarations.iterator(); it.hasNext();) {
-	    CsmOffsetableDeclaration decl = (CsmOffsetableDeclaration) it.next();
-	    if( decl.getStartOffset() > this.getStartOffset() ) {
-		break;
-	    }
-	    if( decl.getKind() == CsmDeclaration.Kind.NAMESPACE_DEFINITION ) {
-		if( this.getEndOffset() < decl.getEndOffset() ) {
-		    CsmNamespaceDefinition nsdef = (CsmNamespaceDefinition) decl;
-		    CsmNamespaceDefinition inner = findNamespaceDefinition(nsdef.getDeclarations());
-		    return (inner == null) ? nsdef : inner;
-		}
-	    }
-	}
-	return null;
+    private CsmNamespaceDefinition findNamespaceDefinition(Iterator<CsmOffsetableDeclaration> it, CsmFilter filter) {
+        while(it.hasNext()) {
+            CsmOffsetableDeclaration decl = it.next();
+            if (decl.getStartOffset() > this.getStartOffset()) {
+                break;
+            }
+            if (decl.getKind() == CsmDeclaration.Kind.NAMESPACE_DEFINITION) {
+                if (this.getEndOffset() < decl.getEndOffset()) {
+                    CsmNamespaceDefinition nsdef = (CsmNamespaceDefinition) decl;
+                    CsmNamespaceDefinition inner = findNamespaceDefinition(CsmSelect.getDeclarations(nsdef, filter), filter);
+                    return (inner == null) ? nsdef : inner;
+                }
+            }
+        }
+        return null;
     }    
     
     
@@ -207,16 +298,13 @@ public class FunctionImplEx<T>  extends FunctionImpl<T> {
         super.write(output);
         // can be null
         PersistentUtils.writeUTF(this.qualifiedName, output);
-        output.writeBoolean(this.qualifiedNameIsFake);
         PersistentUtils.writeStrings(this.classOrNspNames, output);
     }
     
     public FunctionImplEx(DataInput input) throws IOException {
 	super(input);
         // can be null
-        String read = PersistentUtils.readUTF(input);
-        this.qualifiedName = read == null ? null : QualifiedNameCache.getManager().getString(read);
-        this.qualifiedNameIsFake = input.readBoolean();
+        this.qualifiedName = PersistentUtils.readUTF(input, QualifiedNameCache.getManager());
         this.classOrNspNames = PersistentUtils.readStrings(input, NameCache.getManager());
     }
 }

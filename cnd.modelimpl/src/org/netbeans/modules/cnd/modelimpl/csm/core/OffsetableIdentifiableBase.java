@@ -38,7 +38,6 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
 import antlr.collections.AST;
@@ -46,10 +45,11 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import org.netbeans.modules.cnd.api.model.CsmFile;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmOffsetable;
 import org.netbeans.modules.cnd.api.model.CsmUID;
+import org.netbeans.modules.cnd.modelimpl.repository.RepositoryUtils;
 import org.netbeans.modules.cnd.modelimpl.uid.UIDObjectFactory;
+import org.netbeans.modules.cnd.modelimpl.uid.UIDProviderIml;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.support.SelfPersistent;
 
@@ -60,48 +60,68 @@ import org.netbeans.modules.cnd.repository.support.SelfPersistent;
  * @see CsmUID
  * @author Vladimir Voskresensky
  */
-public abstract class OffsetableIdentifiableBase<T> extends OffsetableBase implements CsmIdentifiable<T>, Persistent, SelfPersistent {
+public abstract class OffsetableIdentifiableBase<T> extends OffsetableBase implements CsmIdentifiable, Persistent, SelfPersistent {
     
+    private CsmUID<?> uid = null;
+
     protected OffsetableIdentifiableBase(AST ast, CsmFile file) {
         super(ast, file);
     }
-    
+
     protected OffsetableIdentifiableBase(CsmFile containingFile, CsmOffsetable pos) {
         super(containingFile, pos);
-    }  
-    
-    protected abstract CsmUID createUID();
-    
+    }
+
+    protected OffsetableIdentifiableBase(CsmFile containingFile, int startOffset, int endOffset) {
+        super(containingFile, startOffset, endOffset);
+    }
+
+    protected abstract CsmUID<?> createUID();
+
+    @Override
+    public void dispose() {
+        RepositoryUtils.disposeUID(uid, this);
+        super.dispose();
+    }
+
+    @SuppressWarnings("unchecked")
     public CsmUID<T> getUID() {
         if (uid == null) {
             uid = createUID();
         }
-        return uid;
+        return (CsmUID<T>) uid;
     }
-    
+
+    protected final void setSelfUID() {
+        if (uid != null) {
+            new Exception("replacing " + uid + " to self UID").printStackTrace(); // NOI18N
+            if (UIDProviderIml.isSelfUID(uid)) {
+                return;
+            }
+        }
+        uid = UIDProviderIml.createSelfUID(this);
+    }
+
     protected void cleanUID() {
         // this.uid = null;
     }
-    
-    private CsmUID uid = null;       
 
     ////////////////////////////////////////////////////////////////////////////
     // impl of SelfPersistent
-    
     @Override
     public void write(DataOutput output) throws IOException {
         super.write(output);
     }
-    
+
     protected OffsetableIdentifiableBase(DataInput input) throws IOException {
         super(input);
-    } 
-    
+    }
+
     protected final void writeUID(DataOutput output) throws IOException {
         UIDObjectFactory factory = UIDObjectFactory.getDefaultFactory();
         factory.writeUID(uid, output);
     }
-    
+
     protected final void readUID(DataInput input) throws IOException {
         UIDObjectFactory factory = UIDObjectFactory.getDefaultFactory();
         this.uid = factory.readUID(input);
