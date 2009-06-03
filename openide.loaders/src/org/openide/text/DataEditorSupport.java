@@ -61,10 +61,10 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import javax.swing.text.EditorKit;
 import javax.swing.text.StyledDocument;
 import org.netbeans.api.queries.FileEncodingQuery;
@@ -72,13 +72,16 @@ import org.netbeans.modules.openide.loaders.DataObjectAccessor;
 import org.netbeans.modules.openide.loaders.UIException;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.cookies.EditorCookie;
 import org.openide.cookies.OpenCookie;
+import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileLock;
+import org.openide.filesystems.FileRenameEvent;
 import org.openide.filesystems.FileSystem;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
@@ -107,7 +110,7 @@ public class DataEditorSupport extends CloneableEditorSupport {
     private final DataObject obj;
     /** listener to associated node's events */
     private NodeListener nodeL;
-    
+
     /** Editor support for a given data object. The file is taken from the
     * data object and is updated if the object moves or renames itself.
     * @param obj object to work with
@@ -228,8 +231,15 @@ public class DataEditorSupport extends CloneableEditorSupport {
             }
         }
 
-        return NbBundle.getMessage (DataObject.class, "LAB_EditorName",
-		new Integer (version), name );
+        try {
+            return NbBundle.getMessage(DataObject.class, "LAB_EditorName",
+                    new Integer(version), name);
+        } catch (IllegalArgumentException iae) {
+            // #166035 - formatting someimes fail, so report input parameters
+            String pattern = NbBundle.getMessage(DataObject.class, "LAB_EditorName");
+            ERR.log(Level.WARNING, "Formatting failed. pattern=" + pattern + ", version=" + version + ", name=" + name, iae);  //NOI18N
+            return name;
+        }
     }
     
     @Override
@@ -311,11 +321,11 @@ public class DataEditorSupport extends CloneableEditorSupport {
         StyledDocument doc = super.createStyledDocument (kit);
             
         // set document name property
-        doc.putProperty(javax.swing.text.Document.TitleProperty,
+        doc.putProperty(Document.TitleProperty,
             FileUtil.getFileDisplayName(obj.getPrimaryFile())
         );
         // set dataobject to stream desc property
-        doc.putProperty(javax.swing.text.Document.StreamDescriptionProperty,
+        doc.putProperty(Document.StreamDescriptionProperty,
             obj
         );
         
@@ -363,6 +373,35 @@ public class DataEditorSupport extends CloneableEditorSupport {
      * between saveFromKitToStream and saveDocument
      */
     private static Map<DataObject,Charset> charsets = Collections.synchronizedMap(new HashMap<DataObject,Charset>());
+    /** Holds counter of charsets cache. Cached value mustn't be removed until couter is zero. */
+    private static final Map<DataObject,Integer> cacheCounter = Collections.synchronizedMap(new HashMap<DataObject,Integer>());
+
+    private static int incrementCacheCounter(DataObject tmpObj) {
+        synchronized (cacheCounter) {
+            Integer count = cacheCounter.get(tmpObj);
+            if (count == null) {
+                count = 0;
+            }
+            count++;
+            cacheCounter.put(tmpObj, count);
+            return count;
+        }
+    }
+
+    private static synchronized int decrementCacheCounter(DataObject tmpObj) {
+        synchronized (cacheCounter) {
+            Integer count = cacheCounter.get(tmpObj);
+            assert count != null;
+            count--;
+            if (count == 0) {
+                cacheCounter.remove(tmpObj);
+            } else {
+                cacheCounter.put(tmpObj, count);
+            }
+            return count;
+        }
+    }
+
     /**
      * @inheritDoc
      */
@@ -395,13 +434,20 @@ public class DataEditorSupport extends CloneableEditorSupport {
 
     @Override
     public StyledDocument openDocument() throws IOException {
-        Charset c = FileEncodingQuery.getEncoding(this.getDataObject().getPrimaryFile());
         DataObject tmpObj = getDataObject();
+        Charset c = charsets.get(tmpObj);
+        if (c == null) {
+            c = FileEncodingQuery.getEncoding(tmpObj.getPrimaryFile());
+        }
         try {
             charsets.put(tmpObj, c);
+            incrementCacheCounter(tmpObj);
             return super.openDocument();
         } finally {
-            charsets.remove(tmpObj);
+            if (decrementCacheCounter(tmpObj) == 0) {
+                charsets.remove(tmpObj);
+            }
+            ERR.finest("openDocument - charset removed");
         }
     }
 
@@ -594,11 +640,18 @@ public class DataEditorSupport extends CloneableEditorSupport {
          */
         private transient boolean warned;
 
+        /** Atomic action used to ignore fileChange event from FileObject.refresh */
+        private transient FileSystem.AtomicAction action = null;
+
+        /** Holds read-only state of associated file object. */
+        private transient boolean canWrite;
+
         /** Constructor.
         * @param obj this support should be associated with
         */
         public Env (DataObject obj) {
             super (obj);
+            canWrite = obj.getPrimaryFile().canWrite();
         }
         
         /** Getter for the file to work on.
@@ -606,7 +659,7 @@ public class DataEditorSupport extends CloneableEditorSupport {
         */
         private FileObject getFileImpl () {
             // updates the file if there was a change
-	    changeFile();
+            changeFile();
             return fileObject;
         }
         
@@ -627,9 +680,7 @@ public class DataEditorSupport extends CloneableEditorSupport {
         * file object.
         */
         protected final void changeFile () {
-
             FileObject newFile = getFile ();
-            
             if (newFile.equals (fileObject)) {
                 // the file has not been updated
                 return;
@@ -655,6 +706,8 @@ public class DataEditorSupport extends CloneableEditorSupport {
                 lockAgain = false;
             }
 
+            boolean wasNull = fileObject == null;
+
             fileObject = newFile;
             ERR.fine("changeFile: " + newFile + " for " + fileObject); // NOI18N
             fileObject.addFileChangeListener (new EnvListener (this));
@@ -667,7 +720,9 @@ public class DataEditorSupport extends CloneableEditorSupport {
                     Logger.getLogger(DataEditorSupport.class.getName()).log(Level.WARNING, null, e);
                 }
             }
-            
+            if (!wasNull) {
+                firePropertyChange("expectedTime", null, getTime()); // NOI18N
+            }
         }
         
         
@@ -709,7 +764,17 @@ public class DataEditorSupport extends CloneableEditorSupport {
         */
         public Date getTime() {
             // #32777 - refresh file object and return always the actual time
-            getFileImpl().refresh(false);
+            action = new FileSystem.AtomicAction() {
+                public void run() throws IOException {
+                    getFileImpl().refresh(false);
+                }
+            };
+            try {
+                getFileImpl().getFileSystem().runAtomicAction(action);
+            } catch (IOException ex) {
+                //Nothing to do here
+            }
+            
             return getFileImpl ().lastModified ();
         }
         
@@ -770,13 +835,38 @@ public class DataEditorSupport extends CloneableEditorSupport {
         * @param expected is the change expected
         * @param time of the change
         */
-        final void fileChanged (boolean expected, long time) {
-            ERR.fine("fileChanged: " + expected + " for " + fileObject); // NOI18N
-            if (expected) {
+        final void fileChanged (FileEvent fe) {
+            ERR.fine("fileChanged: " + fe.isExpected() + " for " + fileObject); // NOI18N
+            //#155680: We will ignore events generated from FileObject.refresh() in getTime().
+            if ((action != null) && fe.firedFrom(action)) {
+                return;
+            }
+            if (fe.isExpected()) {
                 // newValue = null means do not ask user whether to reload
                 firePropertyChange (PROP_TIME, null, null);
             } else {
-                firePropertyChange (PROP_TIME, null, new Date (time));
+                firePropertyChange (PROP_TIME, null, new Date (fe.getTime()));
+            }
+        }
+
+        /** Called from EnvListener if read-only state is externally changed (#129178).
+         * @param readOnly true if changed to read-only state, false if changed to read-write
+         */
+        private void readOnlyRefresh() {
+            boolean oldCanWrite = canWrite;
+            canWrite = getFileImpl().canWrite();
+            if (oldCanWrite != canWrite) {
+                if (!canWrite && isModified()) {
+                    // notify user if the object is modified and externally changed to read-only
+                    DialogDisplayer.getDefault().notify(
+                            new NotifyDescriptor.Message(
+                            NbBundle.getMessage(DataObject.class,
+                            "MSG_FileReadOnlyChanging",
+                            new Object[]{getFileImpl().getNameExt()}),
+                            NotifyDescriptor.WARNING_MESSAGE));
+                }
+                // event is consumed in CloneableEditorSupport
+                firePropertyChange("DataEditorSupport.read-only.changing", null, null);  //NOI18N
             }
         }
 
@@ -800,6 +890,28 @@ public class DataEditorSupport extends CloneableEditorSupport {
             // Closes the components.
             firePropertyChange(Env.PROP_VALID, Boolean.TRUE, Boolean.FALSE);            
              */
+        }
+
+        /**
+         * Called from the <code>EnvListener</code>.
+         */
+        final void updateDocumentProperty () {
+            //Update document TitleProperty
+            EditorCookie ec = getDataObject().getCookie(EditorCookie.class);
+            if (ec != null) {
+                StyledDocument doc = ec.getDocument();
+                if (doc != null) {
+                    doc.putProperty(Document.TitleProperty,
+                    FileUtil.getFileDisplayName(getDataObject().getPrimaryFile()));
+                }
+            }
+        }
+        
+        /** Called from the <code>EnvListener</code>.
+         */
+        final void fileRenamed () {
+            //#151787: Sync timestamp when svn client changes timestamp externally during rename.
+            firePropertyChange("expectedTime", null, getTime()); // NOI18N
         }
         
         @Override
@@ -876,6 +988,9 @@ public class DataEditorSupport extends CloneableEditorSupport {
         public void fileDeleted(FileEvent fe) {
             Env myEnv = this.env.get();
             FileObject fo = fe.getFile();
+            if (myEnv != null) {
+                myEnv.updateDocumentProperty();
+            }
             if(myEnv == null || myEnv.getFileImpl() != fo) {
                 // the Env change its file and we are not used
                 // listener anymore => remove itself from the list of listeners
@@ -915,10 +1030,29 @@ public class DataEditorSupport extends CloneableEditorSupport {
                 myEnv.fileRemoved(true);
                 fe.getFile().addFileChangeListener(this);
             } else {
-                myEnv.fileChanged (fe.isExpected (), fe.getTime ());
+                myEnv.fileChanged (fe);
             }
         }
-                
+        
+        @Override
+        public void fileRenamed(FileRenameEvent fe) {
+            Env myEnv = this.env.get();
+            if (myEnv != null) {
+                myEnv.updateDocumentProperty();
+                myEnv.fileRenamed();
+            }
+        }
+        
+        @Override
+        public void fileAttributeChanged(FileAttributeEvent fae) {
+            // wait only for event from org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObj.refreshImpl()
+            if ("DataEditorSupport.read-only.refresh".equals(fae.getName())) {  //NOI18N
+                Env myEnv = this.env.get();
+                if (myEnv != null) {
+                    myEnv.readOnlyRefresh();
+                }
+            }
+        }
     }
     
     /** Listener on node representing associated data object, listens to the
@@ -1000,12 +1134,19 @@ public class DataEditorSupport extends CloneableEditorSupport {
                 throw e;
             }
             DataObject tmpObj = des.getDataObject();
-            Charset c = FileEncodingQuery.getEncoding(tmpObj.getPrimaryFile());
+            Charset c = charsets.get(tmpObj);
+            if (c == null) {
+                c = FileEncodingQuery.getEncoding(tmpObj.getPrimaryFile());
+            }
             try {
                 charsets.put(tmpObj, c);
+                incrementCacheCounter(tmpObj);
+                ERR.finest("SaveImpl - charset put");
                 des.superSaveDoc();
             } finally {
-                charsets.remove(tmpObj);
+                if (decrementCacheCounter(tmpObj) == 0) {
+                    charsets.remove(tmpObj);
+                }
             }
         }
 
@@ -1016,7 +1157,7 @@ public class DataEditorSupport extends CloneableEditorSupport {
 
         @Override
         public boolean equals(Object obj) {
-            return getClass() == obj.getClass();
+            return obj != null && getClass() == obj.getClass();
         }
     }
     
