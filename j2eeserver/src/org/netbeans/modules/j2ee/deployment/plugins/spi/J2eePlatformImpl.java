@@ -46,9 +46,13 @@ import java.awt.Image;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Set;
 import org.netbeans.api.java.platform.JavaPlatform;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
 import org.netbeans.spi.project.libraries.LibraryImplementation;
+import org.openide.util.Lookup;
 
 /**
  * Base SPI interface for J2eePlatform. The J2eePlatform describes the target
@@ -117,6 +121,7 @@ public abstract class J2eePlatformImpl {
      * .
      * @return <code>true</code> if platform supports tool of the given name, 
      *         <code>false</code> otherwise.
+     * @deprecated {@link #getLookup()} should be used to obtain tool specifics
      */
     public abstract boolean isToolSupported(String toolName);
     
@@ -126,8 +131,9 @@ public abstract class J2eePlatformImpl {
      * class.
      *
      * @return list of supported J2EE specification versions.
+     * @deprecated override {@link #getSupportedProfiles()} and {@link #getSupportedProfiles(java.lang.Object)}
      */
-    public abstract Set/*<String>*/ getSupportedSpecVersions();
+    public abstract Set<String> getSupportedSpecVersions();
     
     /**
      * Return a list of supported J2EE specification versions for
@@ -142,11 +148,34 @@ public abstract class J2eePlatformImpl {
      * @param moduleType one of the constants defined in 
      *   {@link org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule}
      * @return list of supported J2EE specification versions.
+     * @deprecated override {@link #getSupportedProfiles()} and {@link #getSupportedProfiles(java.lang.Object)}
      */
     public Set <String> getSupportedSpecVersions(Object moduleType) {
         return getSupportedSpecVersions();
     }
-    
+
+    public Set<Profile> getSupportedProfiles() {
+        Set<Profile> set = new HashSet<Profile>();
+        for (String spec : getSupportedSpecVersions()) {
+            Profile profile = Profile.fromPropertiesString(spec);
+            if (profile != null) {
+                set.add(profile);
+            }
+        }
+        return set;
+    }
+
+    public Set<Profile> getSupportedProfiles(Object moduleType) {
+        Set<Profile> set = new HashSet<Profile>();
+        for (String spec : getSupportedSpecVersions(moduleType)) {
+            Profile profile = Profile.fromPropertiesString(spec);
+            if (profile != null) {
+                set.add(profile);
+            }
+        }
+        return set;
+    }
+
     /**
      * Return a list of supported J2EE module types. Use module types defined in the 
      * {@link org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule}
@@ -229,8 +258,25 @@ public abstract class J2eePlatformImpl {
      *         specified tool.
      *         
      * @since 1.16
+     * @deprecated {@link #getLookup()} should be used to obtain tool specifics
      */
     public String getToolProperty(String toolName, String propertyName) {
         return null;
     }
+    
+    /**
+     * Lookup providing a way to find non mandatory technologies supported
+     * by the platform.
+     * <p>
+     * <div class="nonnormative">
+     * The typical example of such support is a webservice stack.
+     * </div>
+     *
+     * @return Lookup providing way to find other supported technologies
+     * @since 1.44
+     */
+    public Lookup getLookup() {
+        return Lookup.EMPTY;
+    }
+
 }
