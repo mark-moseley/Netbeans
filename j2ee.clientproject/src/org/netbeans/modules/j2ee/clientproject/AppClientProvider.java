@@ -61,9 +61,10 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.modules.j2ee.clientproject.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
 import org.netbeans.modules.j2ee.clientproject.ui.customizer.AppClientProjectProperties;
-//import org.netbeans.modules.j2ee.common.Util;
+import org.netbeans.modules.java.api.common.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.j2ee.common.project.ui.J2EEProjectProperties;
 import org.netbeans.modules.j2ee.dd.api.client.AppClient;
 import org.netbeans.modules.j2ee.dd.api.client.AppClientMetadata;
 import org.netbeans.modules.j2ee.dd.api.client.DDProvider;
@@ -71,7 +72,6 @@ import org.netbeans.modules.j2ee.dd.api.webservices.WebservicesMetadata;
 import org.netbeans.modules.j2ee.dd.spi.MetadataUnit;
 import org.netbeans.modules.j2ee.dd.spi.client.AppClientMetadataModelFactory;
 import org.netbeans.modules.j2ee.dd.spi.webservices.WebservicesMetadataModelFactory;
-//import org.netbeans.modules.j2ee.dd.api.webservices.Webservices;
 import org.netbeans.modules.j2ee.deployment.common.api.EjbChangeDescriptor;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
@@ -81,13 +81,12 @@ import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleImplementat
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
 import org.netbeans.modules.j2ee.spi.ejbjar.CarImplementation;
-//import org.netbeans.modules.websvc.api.webservices.WebServicesSupport;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.modules.websvc.api.client.WebServicesClientConstants;
 import org.netbeans.spi.java.classpath.ClassPathProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.openide.DialogDisplayer;
-//import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -147,8 +146,8 @@ public final class AppClientProvider extends J2eeModuleProvider
     
     /** Package-private for unit test only. */
     static boolean needConfigurationFolder(final String version) {
-        return AppClientProjectProperties.J2EE_1_3.equals(version) ||
-                AppClientProjectProperties.J2EE_1_4.equals(version);
+        return EjbProjectConstants.J2EE_13_LEVEL.equals(version) ||
+                EjbProjectConstants.J2EE_13_LEVEL.equals(version);
     }
     
     public File getMetaInfAsFile() {
@@ -207,11 +206,6 @@ public final class AppClientProvider extends J2eeModuleProvider
     }
     
     @Override
-    public boolean useDefaultServer() {
-        return true;
-    }
-    
-    @Override
     public String getServerID() {
         return helper.getStandardPropertyEvaluator().getProperty(AppClientProjectProperties.J2EE_SERVER_TYPE);
     }
@@ -231,7 +225,7 @@ public final class AppClientProvider extends J2eeModuleProvider
     }
     
     public FileObject getContentDirectory() {
-        return getFileObject(AppClientProjectProperties.BUILD_CLASSES_DIR);
+        return getFileObject(ProjectProperties.BUILD_CLASSES_DIR);
     }
     
     public FileObject getBuildDirectory() {
@@ -239,7 +233,7 @@ public final class AppClientProvider extends J2eeModuleProvider
     }
     
     public File getContentDirectoryAsFile() {
-        return getFile(AppClientProjectProperties.BUILD_CLASSES_DIR);
+        return getFile(ProjectProperties.BUILD_CLASSES_DIR);
     }
     
    // TODO MetadataModel: remove when transition to AppClientMetadata is finished

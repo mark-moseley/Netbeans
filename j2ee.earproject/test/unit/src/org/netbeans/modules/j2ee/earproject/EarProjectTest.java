@@ -60,6 +60,7 @@ import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.j2ee.dd.api.application.Application;
 import org.netbeans.modules.j2ee.dd.api.application.DDProvider;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
 import org.netbeans.modules.j2ee.earproject.test.TestUtil;
 import org.netbeans.modules.j2ee.earproject.ui.wizards.NewEarProjectWizardIteratorTest;
 import org.netbeans.modules.project.uiapi.ProjectOpenedTrampoline;
@@ -94,10 +95,11 @@ public class EarProjectTest extends NbTestCase {
     public void testEarWithoutDDOpeningJavaEE() throws Exception {
         File prjDirF = new File(getWorkDir(), "TestEarProject_15");
         EarProjectGenerator.createProject(prjDirF, "test-project",
-                J2eeModule.JAVA_EE_5, serverID, "1.5");
+                Profile.JAVA_EE_5, serverID, "1.5", null, null);
         File dirCopy = copyFolder(prjDirF);
         File ddF = new File(dirCopy, "src/conf/application.xml");
         assertFalse("has no deployment descriptor", ddF.isFile());
+        FileUtil.toFileObject(getWorkDir()).getFileSystem().refresh(false);
         FileObject fo = FileUtil.toFileObject(dirCopy);
         Project project = ProjectManager.getDefault().findProject(fo);
         assertNotNull("project is found", project);
@@ -107,11 +109,12 @@ public class EarProjectTest extends NbTestCase {
     public void testEarWithoutDDOpeningJ2EE() throws Exception { // #75586
         File prjDirF = new File(getWorkDir(), "TestEarProject_14");
         EarProjectGenerator.createProject(prjDirF, "test-project",
-                J2eeModule.J2EE_14, serverID, "1.4");
+                Profile.J2EE_14, serverID, "1.4", null, null);
         File dirCopy = copyFolder(prjDirF);
         File ddF = new File(dirCopy, "src/conf/application.xml");
         assertTrue("has deployment descriptor", ddF.isFile());
         ddF.delete(); // one of #75586 scenario
+        FileUtil.toFileObject(getWorkDir()).getFileSystem().refresh(false);
         FileObject fo = FileUtil.toFileObject(dirCopy);
         Project project = ProjectManager.getDefault().findProject(fo);
         assertNotNull("project is found", project);
@@ -122,14 +125,15 @@ public class EarProjectTest extends NbTestCase {
     public void testThatMissingDDIsNotRegeneratedDuringOpeningJavaEE() throws Exception {
         File earDirF = new File(getWorkDir(), "testEA");
         String name = "Test EnterpriseApplication";
-        String j2eeLevel = J2eeModule.JAVA_EE_5;
+        Profile j2eeProfile = Profile.JAVA_EE_5;
         String ejbName = "testEA-ejb";
         String acName = "testEA-ac";
-        NewEarProjectWizardIteratorTest.generateEARProject(earDirF, name, j2eeLevel,
+        NewEarProjectWizardIteratorTest.generateEARProject(earDirF, name, j2eeProfile,
                 serverID, null, ejbName, acName, null, null, null);
         File dirCopy = copyFolder(earDirF);
         File ddF = new File(dirCopy, "src/conf/application.xml");
         assertFalse("has no deployment descriptor", ddF.isFile());
+        FileUtil.toFileObject(getWorkDir()).getFileSystem().refresh(false);
         FileObject fo = FileUtil.toFileObject(dirCopy);
         Project project = ProjectManager.getDefault().findProject(fo);
         assertNotNull("project is found", project);
@@ -144,14 +148,15 @@ public class EarProjectTest extends NbTestCase {
     public void testThatMissingDDIsRegeneratedCorrectlyDuringOpeningJ2EE() throws Exception { // #81154
         File earDirF = new File(getWorkDir(), "testEA");
         String name = "Test EnterpriseApplication";
-        String j2eeLevel = J2eeModule.J2EE_14;
+        Profile j2eeProfile = Profile.J2EE_14;
         String ejbName = "testEA-ejb";
         String acName = "testEA-ac";
-        NewEarProjectWizardIteratorTest.generateEARProject(earDirF, name, j2eeLevel,
+        NewEarProjectWizardIteratorTest.generateEARProject(earDirF, name, j2eeProfile,
                 serverID, null, ejbName, acName, null, null, null);
         File dirCopy = copyFolder(earDirF);
         File ddF = new File(dirCopy, "src/conf/application.xml");
         assertTrue("has deployment descriptor", ddF.isFile());
+        FileUtil.toFileObject(getWorkDir()).getFileSystem().refresh(false);
         validate(ddF);
         ddF.delete(); // one of #81154 scenario
         FileObject fo = FileUtil.toFileObject(dirCopy);
@@ -167,16 +172,17 @@ public class EarProjectTest extends NbTestCase {
     public void testOpeningWihtoutPrivateMetadataAndSrcDirectory() throws Exception { // #83507
         File earDirF = new File(getWorkDir(), "testEA");
         String name = "Test EnterpriseApplication";
-        String j2eeLevel = J2eeModule.JAVA_EE_5;
+        Profile j2eeProfile = Profile.JAVA_EE_5;
         String ejbName = "testEA-ejb";
         String acName = "testEA-ac";
-        NewEarProjectWizardIteratorTest.generateEARProject(earDirF, name, j2eeLevel,
+        NewEarProjectWizardIteratorTest.generateEARProject(earDirF, name, j2eeProfile,
                 serverID, null, ejbName, acName, null, null, null);
         File dirCopy = copyFolder(earDirF);
         TestUtil.deleteRec(new File(new File(dirCopy, "nbproject"), "private"));
         TestUtil.deleteRec(new File(dirCopy, "src"));
         TestUtil.deleteRec(new File(new File(new File(dirCopy, "testEA-ac"), "nbproject"), "private"));
         TestUtil.deleteRec(new File(new File(new File(dirCopy, "testEA-ejb"), "nbproject"), "private"));
+        FileUtil.toFileObject(getWorkDir()).getFileSystem().refresh(false);
         FileObject fo = FileUtil.toFileObject(dirCopy);
         Project project = ProjectManager.getDefault().findProject(fo);
         assertNotNull("project is found", project);
@@ -186,10 +192,10 @@ public class EarProjectTest extends NbTestCase {
     public void testEarProjectIsGCed() throws Exception { // #83128
         File prjDirF = new File(getWorkDir(), "testEA");
         String name = "Test EnterpriseApplication";
-        String j2eeLevel = "1.4";
+        Profile j2eeProfile = Profile.J2EE_14;
 
         // creates a project we will use for the import
-        NewEarProjectWizardIteratorTest.generateEARProject(prjDirF, name, j2eeLevel,
+        NewEarProjectWizardIteratorTest.generateEARProject(prjDirF, name, j2eeProfile,
                 serverID, null, null, null, null, null, null);
         Project earProject = ProjectManager.getDefault().findProject(FileUtil.toFileObject(prjDirF));
         EarProjectTest.openProject((EarProject) earProject);
@@ -241,7 +247,7 @@ public class EarProjectTest extends NbTestCase {
             if (from.getName().equals("CVS")) {
                 return;
             }
-            to.mkdir();
+            FileUtil.createFolder(to);
             String[] kids = from.list();
             for (int i = 0; i < kids.length; i++) {
                 doCopy(new File(from, kids[i]), new File(to, kids[i]));

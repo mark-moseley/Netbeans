@@ -57,6 +57,9 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
+import org.netbeans.modules.java.api.common.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.j2ee.common.project.ui.J2EEProjectProperties;
 import org.netbeans.modules.j2ee.dd.api.ejb.DDProvider;
 import org.netbeans.modules.j2ee.dd.api.ejb.EjbJarMetadata;
 import org.netbeans.modules.j2ee.dd.api.webservices.WebservicesMetadata;
@@ -82,7 +85,8 @@ import org.netbeans.modules.j2ee.dd.spi.webservices.WebservicesMetadataModelFact
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleChangeReporter;
-import org.netbeans.modules.j2ee.ejbjarproject.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.j2ee.ejbjarproject.ui.customizer.EjbJarCompositePanelProvider;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.modules.websvc.spi.webservices.WebServicesConstants;
 
 
@@ -119,7 +123,7 @@ public final class EjbJarProvider extends J2eeModuleProvider
         if (metaInfFo != null) {
             ddFO = metaInfFo.getFileObject(FILE_DD);
         }
-        if (ddFO == null && !EjbJarProjectProperties.JAVA_EE_5.equals(getJ2eePlatformVersion())) {
+        if (ddFO == null && !EjbProjectConstants.JAVA_EE_5_LEVEL.equals(getJ2eePlatformVersion())) {
             // ...generate the DD from template...
         }
         return ddFO;
@@ -139,22 +143,27 @@ public final class EjbJarProvider extends J2eeModuleProvider
     }
     
     public FileObject getMetaInf() {
-        FileObject metaInf = getFileObject(EjbJarProjectProperties.META_INF);
+        String value = helper.getStandardPropertyEvaluator().getProperty(EjbJarProjectProperties.META_INF);
+
+        return resolveMetaInf(value);
+    }
+
+    FileObject resolveMetaInf(String value) {
+        FileObject metaInf = value != null ? helper.resolveFileObject(value) : null;
         if (metaInf == null) {
             String version = project.getAPIEjbJar().getJ2eePlatformVersion();
             if (needConfigurationFolder(version)) {
-                String relativePath = helper.getStandardPropertyEvaluator().getProperty(EjbJarProjectProperties.META_INF);
-                String path = (relativePath != null ? helper.resolvePath(relativePath) : "");
+                String path = (value != null ? helper.resolvePath(value) : "");
                 showErrorMessage(NbBundle.getMessage(EjbJarProvider.class,"MSG_MetaInfCorrupted", project.getName(), path));
             }
         }
         return metaInf;
     }
-    
+
     /** Package-private for unit test only. */
     static boolean needConfigurationFolder(final String version) {
-        return EjbJarProjectProperties.J2EE_1_3.equals(version) ||
-                EjbJarProjectProperties.J2EE_1_4.equals(version);
+        return EjbProjectConstants.J2EE_13_LEVEL.equals(version) ||
+                EjbProjectConstants.J2EE_14_LEVEL.equals(version);
     }
     
     public File getMetaInfAsFile() {
@@ -211,10 +220,10 @@ public final class EjbJarProvider extends J2eeModuleProvider
     public org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleChangeReporter getModuleChangeReporter() {
         return this;
     }
-    
+
     @Override
-    public boolean useDefaultServer() {
-        return false;
+    public DeployOnSaveSupport getDeployOnSaveSupport() {
+        return project.getDeployOnSaveSupport();
     }
     
     @Override
@@ -233,11 +242,13 @@ public final class EjbJarProvider extends J2eeModuleProvider
     }
     
     public Iterator getArchiveContents() throws java.io.IOException {
-        return new IT(getContentDirectory());
+        FileObject content = getContentDirectory();
+        content.refresh();
+        return new IT(content);
     }
     
     public FileObject getContentDirectory() {
-        return getFileObject(EjbJarProjectProperties.BUILD_CLASSES_DIR);
+        return getFileObject(ProjectProperties.BUILD_CLASSES_DIR);
     }
     
     public FileObject getBuildDirectory() {
@@ -245,7 +256,7 @@ public final class EjbJarProvider extends J2eeModuleProvider
     }
     
     public File getContentDirectoryAsFile() {
-        return getFile(EjbJarProjectProperties.BUILD_CLASSES_DIR);
+        return getFile(ProjectProperties.BUILD_CLASSES_DIR);
     }
     
     public <T> MetadataModel<T> getMetadataModel(Class<T> type) {

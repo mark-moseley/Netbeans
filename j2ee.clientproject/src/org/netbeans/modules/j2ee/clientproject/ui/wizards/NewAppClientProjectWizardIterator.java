@@ -55,8 +55,15 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.j2ee.api.ejbjar.Ear;
 import org.netbeans.modules.j2ee.clientproject.AppClientProject;
+import org.netbeans.modules.j2ee.clientproject.api.AppClientProjectCreateData;
 import org.netbeans.modules.j2ee.clientproject.api.AppClientProjectGenerator;
-import org.netbeans.modules.j2ee.clientproject.ui.FoldersListSettings;
+import org.netbeans.modules.j2ee.common.project.ui.UserProjectSettings;
+import org.netbeans.modules.j2ee.common.SharabilityUtility;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectLocationWizardPanel;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectServerWizardPanel;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
+import org.netbeans.spi.java.project.support.ui.SharableLibrariesUtils;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.ui.support.ProjectChooser;
 import org.openide.WizardDescriptor;
@@ -70,8 +77,6 @@ import org.openide.util.NbBundle;
  */
 public class NewAppClientProjectWizardIterator implements WizardDescriptor.ProgressInstantiatingIterator {
     
-    static final String PROP_NAME_INDEX = "nameIndex";      //NOI18N
-    
     private static final long serialVersionUID = 1L;
     
     public static NewAppClientProjectWizardIterator library() {
@@ -80,13 +85,21 @@ public class NewAppClientProjectWizardIterator implements WizardDescriptor.Progr
     
     private WizardDescriptor.Panel[] createPanels() {
         return new WizardDescriptor.Panel[] {
-            new PanelConfigureProject()
+            new ProjectLocationWizardPanel(J2eeModule.CLIENT, 
+                    NbBundle.getMessage(NewAppClientProjectWizardIterator.class, "LAB_ConfigureProject"),
+                    NbBundle.getMessage(NewAppClientProjectWizardIterator.class, "TXT_NewAppClient"),
+                    NbBundle.getMessage(NewAppClientProjectWizardIterator.class, "TXT_JavaApplication")), // NOI18N
+            new ProjectServerWizardPanel(J2eeModule.CLIENT, 
+                    NbBundle.getMessage(NewAppClientProjectWizardIterator.class, "NewAppClientProjectWizardIterator.secondStep"),
+                    NbBundle.getMessage(NewAppClientProjectWizardIterator.class, "TXT_NewAppClient"),
+                    true, true, false, false, false, true),
         };
     }
     
     private String[] createSteps() {
         return new String[] {
-            NbBundle.getMessage(NewAppClientProjectWizardIterator.class,"LAB_ConfigureProject"),
+            NbBundle.getMessage(NewAppClientProjectWizardIterator.class,"LAB_ConfigureProject"), // NOI18N
+            NbBundle.getMessage(NewAppClientProjectWizardIterator.class, "NewAppClientProjectWizardIterator.secondStep"), // NOI18N
         };
     }
     
@@ -101,17 +114,24 @@ public class NewAppClientProjectWizardIterator implements WizardDescriptor.Progr
         handle.progress(NbBundle.getMessage(NewAppClientProjectWizardIterator.class, "LBL_NewAppClientProjectWizardIterator_WizardProgress_CreatingProject"), 1);
         
         Set<FileObject> resultSet = new HashSet<FileObject>();
-        File dirF = (File)wiz.getProperty(WizardProperties.PROJECT_DIR);
+        File dirF = (File)wiz.getProperty(ProjectLocationWizardPanel.PROJECT_DIR);
         if (dirF != null) {
             dirF = FileUtil.normalizeFile(dirF);
         }
-        String name = (String)wiz.getProperty(WizardProperties.NAME);
-        String mainClass = (String)wiz.getProperty(WizardProperties.MAIN_CLASS);
+
+        String mainClass = (String)wiz.getProperty(ProjectServerWizardPanel.MAIN_CLASS);
+        AppClientProjectCreateData createData = new AppClientProjectCreateData();
+        createData.setProjectDir(dirF);
+        createData.setName((String)wiz.getProperty(ProjectLocationWizardPanel.NAME));
+        createData.setMainClass(mainClass);
+        createData.setServerInstanceID((String) wiz.getProperty(ProjectServerWizardPanel.SERVER_INSTANCE_ID));
+        createData.setJavaEEProfile((Profile) wiz.getProperty(ProjectServerWizardPanel.J2EE_LEVEL));
+        createData.setLibrariesDefinition(
+                SharabilityUtility.getLibraryLocation((String) wiz.getProperty(ProjectServerWizardPanel.WIZARD_SHARED_LIBRARIES)));
+        createData.setServerLibraryName((String) wiz.getProperty(ProjectServerWizardPanel.WIZARD_SERVER_LIBRARY));
         
-        String serverInstanceID = (String) wiz.getProperty(WizardProperties.SERVER_INSTANCE_ID);
-        String j2eeLevel = (String) wiz.getProperty(WizardProperties.J2EE_LEVEL);
+        AntProjectHelper h = AppClientProjectGenerator.createProject(createData);
         
-        AntProjectHelper h = AppClientProjectGenerator.createProject(dirF, name, mainClass, j2eeLevel, serverInstanceID);
         handle.progress(2);
         
         if (mainClass != null && mainClass.length() > 0) {
@@ -128,7 +148,7 @@ public class NewAppClientProjectWizardIterator implements WizardDescriptor.Progr
         }
         FileObject dir = FileUtil.toFileObject(dirF);
         
-        Project earProject = (Project) wiz.getProperty(WizardProperties.EAR_APPLICATION);
+        Project earProject = (Project) wiz.getProperty(ProjectServerWizardPanel.EAR_APPLICATION);
         AppClientProject createdAppClientProject = (AppClientProject) ProjectManager.getDefault().findProject(dir);
         if (earProject != null && createdAppClientProject != null) {
             Ear ear = Ear.getEar(earProject.getProjectDirectory());
@@ -138,19 +158,18 @@ public class NewAppClientProjectWizardIterator implements WizardDescriptor.Progr
         }
         
         // remember last used server
-        FoldersListSettings.getDefault().setLastUsedServer(serverInstanceID);
+        UserProjectSettings.getDefault().setLastUsedServer(createData.getServerInstanceID());
+        SharableLibrariesUtils.setLastProjectSharable(createData.getLibrariesDefinition() != null);
         
         // downgrade the Java platform or src level to 1.4
-        String platformName = (String)wiz.getProperty(WizardProperties.JAVA_PLATFORM);
-        String sourceLevel = (String)wiz.getProperty(WizardProperties.SOURCE_LEVEL);
+        String platformName = (String)wiz.getProperty(ProjectServerWizardPanel.JAVA_PLATFORM);
+        String sourceLevel = (String)wiz.getProperty(ProjectServerWizardPanel.SOURCE_LEVEL);
         if (platformName != null || sourceLevel != null) {
             AppClientProjectGenerator.setPlatform(h, platformName, sourceLevel);
         }
         
         // Returning FileObject of project diretory.
         // Project will be open and set as main
-        Integer index = (Integer) wiz.getProperty(PROP_NAME_INDEX);
-        FoldersListSettings.getDefault().setNewApplicationCount(index.intValue());
         resultSet.add(dir);
         
         dirF = (dirF != null) ? dirF.getParentFile() : null;
@@ -185,9 +204,9 @@ public class NewAppClientProjectWizardIterator implements WizardDescriptor.Progr
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent)c;
                 // Step #.
-                jc.putClientProperty("WizardPanel_contentSelectedIndex", new Integer(i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }
         //set the default values of the sourceRoot and the testRoot properties
@@ -197,9 +216,9 @@ public class NewAppClientProjectWizardIterator implements WizardDescriptor.Progr
     
     public void uninitialize(WizardDescriptor wiz) {
         if (this.wiz != null) { // #74316
-            this.wiz.putProperty(WizardProperties.PROJECT_DIR, null);
-            this.wiz.putProperty(WizardProperties.NAME, null);
-            this.wiz.putProperty(WizardProperties.MAIN_CLASS, null);
+            this.wiz.putProperty(ProjectLocationWizardPanel.PROJECT_DIR, null);
+            this.wiz.putProperty(ProjectLocationWizardPanel.NAME, null);
+            this.wiz.putProperty(ProjectServerWizardPanel.MAIN_CLASS, null);
             this.wiz = null;
         }
         panels = null;

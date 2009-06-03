@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,37 +39,50 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.j2ee.clientproject;
+package org.netbeans.modules.j2ee.common.project.ui;
 
-import javax.lang.model.element.TypeElement;
-import org.netbeans.api.java.source.CompilationController;
-import org.netbeans.api.java.source.SourceUtils;
-import org.netbeans.modules.j2ee.api.ejbjar.Car;
-import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
-import org.netbeans.modules.j2ee.common.queries.spi.InjectionTargetQueryImplementation;
+import java.util.*;
+import org.netbeans.spi.project.support.ant.EditableProperties;
 
-/**
- *
- * @author jungi
+
+/** Helper class. Defines constants for properties. Knows the proper
+ *  place where to store the properties.
+ * 
+ * @author Petr Hrebejk, Radko Najman, David Konecny
  */
-@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.j2ee.common.queries.spi.InjectionTargetQueryImplementation.class)
-public class AppClientInjectionTargetQueryImplementation implements InjectionTargetQueryImplementation {
-    
-    public AppClientInjectionTargetQueryImplementation() {
-    }
-    
-    public boolean isInjectionTarget(CompilationController controller, TypeElement typeElement) {
-        Car apiCar = Car.getCar(controller.getFileObject());
-        if (apiCar != null && 
-                !apiCar.getJ2eePlatformVersion().equals(EjbProjectConstants.J2EE_13_LEVEL) &&
-                !apiCar.getJ2eePlatformVersion().equals(EjbProjectConstants.J2EE_14_LEVEL)) {
-            return SourceUtils.isMainClass(typeElement.getQualifiedName().toString(), controller.getClasspathInfo());
-        }
-        return false;
-    }
+public final class J2EEProjectProperties {
 
-    public boolean isStaticReferenceRequired(CompilationController controller, TypeElement typeElement) {
-        // all injection references must be static in appclient
-        return isInjectionTarget(controller, typeElement);
+    public static final String J2EE_PLATFORM_CLASSPATH = "j2ee.platform.classpath"; //NOI18N
+    
+    /**
+     * Remove obsolete properties from private properties.
+     * @param privateProps private properties
+     */
+    public static void removeObsoleteLibraryLocations(EditableProperties privateProps) {
+        // remove special properties from private.properties:
+        Iterator<String> propKeys = privateProps.keySet().iterator();
+        while (propKeys.hasNext()) {
+            String key = propKeys.next();
+            if (key.endsWith(".libdirs") || key.endsWith(".libfiles") || //NOI18N
+                    (key.indexOf(".libdir.") > 0) || (key.indexOf(".libfile.") > 0)) { //NOI18N
+                propKeys.remove();
+            }
+        }
+    }
+            
+    
+
+    /**
+     * Returns <code>true</code> if the server library is used for j2ee instead
+     * of the classpath pointing to the server installation.
+     *
+     * @param projectProperties project properties
+     * @param j2eePlatformClasspathProperty name of the classpath property
+     * @return <code>true</code> if the server library is used for j2ee instead
+     *             of the classpath pointing to the server installation
+     */
+    public static boolean isUsingServerLibrary(EditableProperties projectProperties, String j2eePlatformClasspathProperty) {
+        String value = projectProperties.getProperty(j2eePlatformClasspathProperty);
+        return (value != null && !"".equals(value.trim()));
     }
 }

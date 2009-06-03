@@ -43,8 +43,15 @@ package org.netbeans.modules.web.project;
 
 import java.awt.*;
 import java.io.File;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Arrays;
+import java.util.ResourceBundle;
 import java.util.Vector;
 
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import javax.swing.*;
 
 import org.openide.filesystems.FileUtil;
@@ -54,12 +61,21 @@ import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.platform.JavaPlatformManager;
-import org.netbeans.modules.web.project.ui.customizer.WebProjectProperties;
+import org.netbeans.api.project.libraries.Library;
+import org.netbeans.api.project.libraries.LibraryChooser;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
+import org.netbeans.modules.web.api.webmodule.WebModule;
+import org.openide.filesystems.FileObject;
+import org.openide.util.NbBundle;
+import org.openide.util.Parameters;
 
 public class Utils {
 
+    private static final Logger UI_LOGGER = Logger.getLogger("org.netbeans.ui.web.project"); // NOI18N
+    private static final Logger USG_LOGGER = Logger.getLogger("org.netbeans.ui.metrics.web.project"); // NOI18N
+
     // COPIED FROM TOMCAT
-    private static final String javaKeywords[] = {
+    private static final String JAVA_KEYWORDS[] = {
         "abstract", "assert", "boolean", "break", "byte", "case",
         "catch", "char", "class", "const", "continue",
         "default", "do", "double", "else", "enum", "extends",
@@ -140,7 +156,7 @@ public class Utils {
      * @return the default value of the <tt>debug.classpath</tt> property.
      */
     public static String getDefaultDebugClassPath() {
-        return "${" + WebProjectProperties.BUILD_CLASSES_DIR + "}:${" + WebProjectProperties.JAVAC_CLASSPATH + "}"; // NOI18N
+        return "${" + ProjectProperties.BUILD_CLASSES_DIR + "}:${" + ProjectProperties.JAVAC_CLASSPATH + "}"; // NOI18N
     }
     
     /**
@@ -241,7 +257,7 @@ public class Utils {
      * @return the components of the path
      */
     private static final String [] split(String path, String pat) {
-        Vector comps = new Vector();
+        Vector<String> comps = new Vector<String>();
         int pos = path.indexOf(pat);
         int start = 0;
         while( pos >= 0 ) {
@@ -257,7 +273,7 @@ public class Utils {
         }
         String [] result = new String[comps.size()];
         for(int i=0; i < comps.size(); i++) {
-            result[i] = (String)comps.elementAt(i);
+            result[i] = comps.elementAt(i);
         }
         return result;
     }
@@ -311,21 +327,7 @@ public class Utils {
      * Test whether the argument is a Java keyword
      */
     private static boolean isJavaKeyword(String key) {
-        int i = 0;
-        int j = javaKeywords.length;
-        while (i < j) {
-            int k = (i+j)/2;
-            int result = javaKeywords[k].compareTo(key);
-            if (result == 0) {
-                return true;
-            }
-            if (result < 0) {
-                i = k+1;
-            } else {
-                j = k;
-            }
-        }
-        return false;
+        return Arrays.binarySearch(JAVA_KEYWORDS, key) >= 0;
     }
 
     public static Color getErrorColor() {
@@ -347,4 +349,119 @@ public class Utils {
         }
         return classpath.toString();
     }
+
+    /**
+     * Logs the UI gesture.
+     *
+     * @param bundle resource bundle to use for message
+     * @param message message key
+     * @param params message parameters, may be <code>null</code>
+     */
+    public static void logUI(ResourceBundle bundle,String message, Object[] params) {
+        Parameters.notNull("message", message);
+        Parameters.notNull("bundle", bundle);
+
+        LogRecord logRecord = new LogRecord(Level.INFO, message);
+        logRecord.setLoggerName(UI_LOGGER.getName());
+        logRecord.setResourceBundle(bundle);
+        if (params != null) {
+            logRecord.setParameters(params);
+        }
+        UI_LOGGER.log(logRecord);
+    }
+
+    /**
+     * Logs usage data.
+     *
+     * @param srcClass source class
+     * @param message message key
+     * @param params message parameters, may be <code>null</code>
+     */
+    public static void logUsage(Class srcClass, String message, Object[] params) {
+        Parameters.notNull("message", message); // NOI18N
+
+        LogRecord logRecord = new LogRecord(Level.INFO, message);
+        logRecord.setLoggerName(USG_LOGGER.getName());
+        logRecord.setResourceBundle(NbBundle.getBundle(srcClass));
+        logRecord.setResourceBundleName(srcClass.getPackage().getName() + ".Bundle"); // NOI18N
+        if (params != null) {
+            logRecord.setParameters(params);
+        }
+        USG_LOGGER.log(logRecord);
+    }
+    
+    public static String getServletName(FileObject docBase, FileObject jsp) {
+        String jspRelativePath = FileUtil.getRelativePath(docBase, jsp);
+        return getServletResourcePath(null, jspRelativePath);
+    }
+    
+    public static String getServletResourcePath(String moduleContextPath, String jspResourcePath) {
+        return getServletPackageName(jspResourcePath).replace('.', '/') + '/' +
+            getServletClassName(jspResourcePath) + ".java";
+    }
+
+    private static String getServletPackageName(String jspUri) {
+        String dPackageName = getDerivedPackageName(jspUri);
+        if (dPackageName.length() == 0) {
+            return JSP_PACKAGE_NAME;
+        }
+        return JSP_PACKAGE_NAME + '.' + getDerivedPackageName(jspUri);
+    }
+    
+    private static String getDerivedPackageName(String jspUri) {
+        int iSep = jspUri.lastIndexOf('/');
+        return (iSep > 0) ? makeJavaPackage(jspUri.substring(0,iSep)) : "";
+    }
+    
+    private static String getServletClassName(String jspUri) {
+        int iSep = jspUri.lastIndexOf('/') + 1;
+        return makeJavaIdentifier(jspUri.substring(iSep));
+    }
+    
+    /**
+     * Creates an URL of a classpath or sourcepath root
+     * For the existing directory it returns the URL obtained from {@link File#toUri()}
+     * For archive file it returns an URL of the root of the archive file
+     * For non existing directory it fixes the ending '/'
+     * @param root the file of a root
+     * @param offset a path relative to the root file or null (eg. src/ for jar:file:///lib.jar!/src/)" 
+     * @return an URL of the root
+     * @throws MalformedURLException if the URL cannot be created
+     */
+    public static URL getRootURL (File root, String offset) throws MalformedURLException {
+        URL url = root.toURI().toURL();
+        if (FileUtil.isArchiveFile(url)) {
+            url = FileUtil.getArchiveRoot(url);
+        } else if (!root.exists()) {
+            url = new URL(url.toExternalForm() + "/"); // NOI18N
+        }
+        if (offset != null) {
+            assert offset.endsWith("/");    //NOI18N
+            url = new URL(url.toExternalForm() + offset); // NOI18N
+        }
+        return url;
+    }
+    
+    public static LibraryChooser.Filter getFilter(WebProject p) {
+        LibraryChooser.Filter filter = null;
+        WebModule wm = WebModule.getWebModule(p.getProjectDirectory());
+        if (wm != null && WebModule.J2EE_13_LEVEL.equals(wm.getJ2eePlatformVersion())) { // NOI18N
+            filter = new LibraryChooser.Filter() {
+                public boolean accept(Library library) {
+                    if ("javascript".equals(library.getType())) { //NOI18N
+                        return false;
+                    }
+                    try {
+                        library.getContent("classpath"); //NOI18N
+                    } catch (IllegalArgumentException ex) {
+                        return false;
+                    }
+                    return !library.getName().matches("jstl11|jaxrpc16|toplink|Spring|jaxws20|jaxb20|struts|jsf"); // NOI18N
+                }
+            };
+        }
+        return filter;
+    }
+
+    
 }

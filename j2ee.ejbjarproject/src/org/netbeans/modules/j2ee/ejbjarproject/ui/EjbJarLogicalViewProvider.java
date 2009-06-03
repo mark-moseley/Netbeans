@@ -46,28 +46,19 @@ import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.CharConversionException;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.ResourceBundle;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.JSeparator;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
-import org.netbeans.modules.j2ee.ejbjarproject.SourceRoots;
 
 import org.openide.nodes.*;
 import org.openide.util.*;
@@ -84,31 +75,34 @@ import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
-import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.netbeans.spi.project.ui.support.ProjectSensitiveActions;
 import org.netbeans.spi.java.project.support.ui.BrokenReferencesSupport;
 import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.Sources;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.j2ee.ejbjarproject.ui.customizer.EjbJarProjectProperties;
-import org.netbeans.modules.j2ee.ejbjarproject.UpdateHelper;
 import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataFolder;
 import org.openide.util.lookup.Lookups;
 
 
 import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
+import org.netbeans.modules.j2ee.common.project.ui.DeployOnSaveUtils;
+import org.netbeans.modules.j2ee.common.project.ui.J2EEProjectProperties;
 import org.netbeans.modules.j2ee.common.ui.BrokenServerSupport;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.InstanceListener;
 import org.netbeans.modules.j2ee.ejbjarproject.EjbJarProject;
 import org.netbeans.modules.j2ee.spi.ejbjar.support.J2eeProjectView;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
+import org.netbeans.modules.java.api.common.project.ui.LogicalViewProvider2;
+import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
 import org.netbeans.spi.project.ui.support.NodeFactorySupport;
-import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileStatusEvent;
-import org.openide.filesystems.FileStatusListener;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
@@ -117,7 +111,7 @@ import org.openide.loaders.DataObjectNotFoundException;
  * Support for creating logical views.
  * @author Petr Hrebejk
  */
-public class EjbJarLogicalViewProvider implements LogicalViewProvider {
+public class EjbJarLogicalViewProvider implements LogicalViewProvider2 {
     private static final RequestProcessor BROKEN_LINKS_RP = new RequestProcessor("EjbJarLogicalViewProvider.BROKEN_LINKS_RP"); // NOI18N
     
     private final EjbJarProject project;
@@ -214,11 +208,11 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
     // Private innerclasses ----------------------------------------------------
    
     private static final String[] BREAKABLE_PROPERTIES = new String[] {
-        EjbJarProjectProperties.JAVAC_CLASSPATH,
+        ProjectProperties.JAVAC_CLASSPATH,
         EjbJarProjectProperties.DEBUG_CLASSPATH,
-        EjbJarProjectProperties.RUN_TEST_CLASSPATH, 
+        ProjectProperties.RUN_TEST_CLASSPATH,
         EjbJarProjectProperties.DEBUG_TEST_CLASSPATH, 
-        EjbJarProjectProperties.JAVAC_TEST_CLASSPATH,
+        ProjectProperties.JAVAC_TEST_CLASSPATH,
     };
 
     public boolean hasBrokenLinks() {
@@ -238,26 +232,35 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
         return result;
     }        
 
+    private boolean isDeployOnSaveSupportedAndDisabled() {
+        boolean deployOnSaveEnabled = Boolean.valueOf(project.evaluator().getProperty(
+                EjbJarProjectProperties.J2EE_DEPLOY_ON_SAVE));
+        if (deployOnSaveEnabled) {
+            return false;
+        }
+
+        boolean deployOnSaveSupported = false;
+        try {
+            String instanceId = project.evaluator().getProperty(EjbJarProjectProperties.J2EE_SERVER_INSTANCE);
+            if (instanceId != null) {
+                deployOnSaveSupported = Deployment.getDefault().getServerInstance(instanceId)
+                        .isDeployOnSaveSupported();
+            }
+        } catch (InstanceRemovedException ex) {
+            // false
+        }
+        return deployOnSaveSupported;
+    }
+    
     /** Filter node containin additional features for the J2SE physical
      */
-    private final class WebLogicalViewRootNode extends AbstractNode implements Runnable, FileStatusListener, ChangeListener, PropertyChangeListener {
+    private final class WebLogicalViewRootNode extends AbstractNode {
 
         private Action brokenLinksAction;
         private BrokenServerAction brokenServerAction;
         private boolean broken;
-        private static final String BROKEN_PROJECT_BADGE = "org/netbeans/modules/j2ee/ejbjarproject/ui/resources/brokenProjectBadge.gif"; // NOI18N
-        
-        // icon badging >>>
-        private Set files;
-        private Map fileSystemListeners;
-        private RequestProcessor.Task task;
-        private final Object privateLock = new Object();
-        private boolean iconChange;
-        private boolean nameChange;
-        private ChangeListener sourcesListener;
-        private Map groupsListeners;
-        // icon badging <<<
-        
+        private boolean deployOnSaveDisabled;
+
         public WebLogicalViewRootNode() {
             super(NodeFactorySupport.createCompositeChildren(project, "Projects/org-netbeans-modules-j2ee-ejbjarproject/Nodes"), // NOI18N
                     createLookup(project));
@@ -272,115 +275,7 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
                            project.getLookup().lookup(J2eeModuleProvider.class);
             moduleProvider.addInstanceListener((InstanceListener)WeakListeners.create(
                         InstanceListener.class, brokenServerAction, moduleProvider));
-            setProjectFiles(project);
-        }
-        
-        protected final void setProjectFiles(Project project) {
-            Sources sources = ProjectUtils.getSources(project);  // returns singleton
-            if (sourcesListener == null) {                
-                sourcesListener = WeakListeners.change(this, sources);
-                sources.addChangeListener(sourcesListener);                                
-            }
-            setGroups(Arrays.asList(sources.getSourceGroups(Sources.TYPE_GENERIC)));
-        }
-
-
-        private final void setGroups(Collection groups) {
-            if (groupsListeners != null) {
-                Iterator it = groupsListeners.keySet().iterator();
-                while (it.hasNext()) {
-                    SourceGroup group = (SourceGroup) it.next();
-                    PropertyChangeListener pcl = (PropertyChangeListener) groupsListeners.get(group);
-                    group.removePropertyChangeListener(pcl);
-                }
-            }
-            groupsListeners = new HashMap();
-            Set roots = new HashSet();
-            Iterator it = groups.iterator();
-            while (it.hasNext()) {
-                SourceGroup group = (SourceGroup) it.next();
-                PropertyChangeListener pcl = WeakListeners.propertyChange(this, group);
-                groupsListeners.put(group, pcl);
-                group.addPropertyChangeListener(pcl);
-                FileObject fo = group.getRootFolder();
-                if (project.getProjectDirectory().equals(fo)) {
-                    // add rather children of project's root folder than the
-                    // folder itself (cf. #78994)
-                    Enumeration en = project.getProjectDirectory().getChildren(false);
-                    while (en.hasMoreElements()) {
-                        FileObject child = (FileObject) en.nextElement();
-                        if (FileOwnerQuery.getOwner(child) == project) {
-                            roots.add(child);
-                        }
-                    }
-                } else {
-                    roots.add(fo);
-                }
-            }
-            setFiles(roots);
-        }
-
-        protected final void setFiles(Set files) {
-            if (fileSystemListeners != null) {
-                Iterator it = fileSystemListeners.keySet().iterator();
-                while (it.hasNext()) {
-                    FileSystem fs = (FileSystem) it.next();
-                    FileStatusListener fsl = (FileStatusListener) fileSystemListeners.get(fs);
-                    fs.removeFileStatusListener(fsl);
-                }
-            }
-                        
-            fileSystemListeners = new HashMap();
-            this.files = files;
-            if (files == null) return;
-
-            Iterator it = files.iterator();
-            Set hookedFileSystems = new HashSet();
-            while (it.hasNext()) {
-                FileObject fo = (FileObject) it.next();
-                try {
-                    FileSystem fs = fo.getFileSystem();
-                    if (hookedFileSystems.contains(fs)) {
-                        continue;
-                    }
-                    hookedFileSystems.add(fs);
-                    FileStatusListener fsl = FileUtil.weakFileStatusListener(this, fs);
-                    fs.addFileStatusListener(fsl);
-                    fileSystemListeners.put(fs, fsl);
-                } catch (FileStateInvalidException e) {
-                    Exceptions.printStackTrace(Exceptions.attachLocalizedMessage(e, "Can not get " + fo + " filesystem, ignoring...")); // NO18N
-                }
-            }
-        }
-        
-        public java.awt.Image getIcon (int type) {
-            java.awt.Image img = getMyIcon (type);
-
-            if (files != null && files.iterator().hasNext()) {
-                try {
-                    FileObject fo = (FileObject) files.iterator().next();
-                    img = fo.getFileSystem ().getStatus ().annotateIcon (img, type, files);
-                } catch (FileStateInvalidException e) {
-                    Logger.getLogger("global").log(Level.INFO, null, e);
-                }
-            }
-
-            return img;
-        }
-
-        public java.awt.Image getOpenedIcon (int type) {
-            java.awt.Image img = getMyOpenedIcon(type);
-
-            if (files != null && files.iterator().hasNext()) {
-                try {
-                    FileObject fo = (FileObject) files.iterator().next();
-                    img = fo.getFileSystem ().getStatus ().annotateIcon (img, type, files);
-                } catch (FileStateInvalidException e) {
-                    Logger.getLogger("global").log(Level.INFO, null, e);
-                }
-            }
-
-            return img;
+            deployOnSaveDisabled = isDeployOnSaveSupportedAndDisabled();
         }
         
         @Override
@@ -389,68 +284,29 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
             return NbBundle.getMessage(EjbJarLogicalViewProvider.class, "HINT_project_root_node", prjDirDispName); // NO18N
         }
 
-        public void run() {
-            boolean fireIcon;
-            boolean fireName;
-            synchronized (privateLock) {
-                fireIcon = iconChange;
-                fireName = nameChange;
-                iconChange = false;
-                nameChange = false;
-            }
-            if (fireIcon) {
-                fireIconChange();
-                fireOpenedIconChange();
-            }
-            if (fireName) {
-                fireDisplayNameChange(null, null);
+        @Override
+        public Image getIcon(int type) {
+            Image original = super.getIcon( type );
+            if (broken || brokenServerAction.isEnabled()) {
+                return ImageUtilities.mergeImages(original, ProjectProperties.ICON_BROKEN_BADGE.getImage(), 8, 0);
+            } else if (deployOnSaveDisabled) {
+                return DeployOnSaveUtils.badgeDisabledDeployOnSave(original);
+            } else {
+                return original;
             }
         }
 
-        public void annotationChanged(FileStatusEvent event) {
-            if (task == null) {
-                task = RequestProcessor.getDefault().create(this);
+        @Override
+        public Image getOpenedIcon(int type) {
+            Image original = super.getOpenedIcon(type);
+            if (broken || brokenServerAction.isEnabled()) {
+                return ImageUtilities.mergeImages(original, ProjectProperties.ICON_BROKEN_BADGE.getImage(), 8, 0);
+            } else if (deployOnSaveDisabled) {
+                return DeployOnSaveUtils.badgeDisabledDeployOnSave(original);
+            } else {
+                return original;
             }
-
-            synchronized (privateLock) {
-                if ((iconChange == false && event.isIconChange())  || (nameChange == false && event.isNameChange())) {
-                    Iterator it = files.iterator();
-                    while (it.hasNext()) {
-                        FileObject fo = (FileObject) it.next();
-                        if (event.hasChanged(fo)) {
-                            iconChange |= event.isIconChange();
-                            nameChange |= event.isNameChange();
-                        }
-                    }
-                }
-            }
-
-            task.schedule(50);  // batch by 50 ms
-         }
- 
-        // sources change
-        public void stateChanged(ChangeEvent e) {
-            setProjectFiles(project);
         }
-
-        // group change
-        public void propertyChange(PropertyChangeEvent evt) {
-            setProjectFiles(project);
-        }
-        
-        public Image getMyIcon(int type) {
-            Image original = super.getIcon( type );                
-            return broken || brokenServerAction.isEnabled() 
-                    ? Utilities.mergeImages(original, Utilities.loadImage(BROKEN_PROJECT_BADGE), 8, 0) 
-                    : original;
-        }
-
-        public Image getMyOpenedIcon(int type) {
-            Image original = super.getOpenedIcon(type);                
-            return broken || brokenServerAction.isEnabled() 
-                    ? Utilities.mergeImages(original, Utilities.loadImage(BROKEN_PROJECT_BADGE), 8, 0) 
-                    : original;
-        }            
 
         public String getHtmlDisplayName() {
             String dispName = super.getDisplayName();
@@ -483,6 +339,13 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
         
         // Private methods -------------------------------------------------    
 
+        private void setDeployOnSaveDisabled (boolean value) {
+            this.deployOnSaveDisabled = value;
+            fireIconChange();
+            fireOpenedIconChange();
+            fireDisplayNameChange(null, null);
+        }
+        
         private Action[] getAdditionalActions() {
 
             ResourceBundle bundle = NbBundle.getBundle(EjbJarLogicalViewProvider.class);
@@ -492,6 +355,7 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
             List<Action> actions = new ArrayList<Action>(30);
             actions.add(CommonProjectActions.newFileAction());
             actions.add(null);
+            
             actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_BUILD, bundle.getString( "LBL_BuildAction_Name" ), null )); // NOI18N
             actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_REBUILD, bundle.getString( "LBL_RebuildAction_Name" ), null )); // NOI18N
             actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_CLEAN, bundle.getString( "LBL_CleanAction_Name" ), null )); // NOI18N
@@ -503,7 +367,8 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
             actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_RUN, bundle.getString( "LBL_RunAction_Name" ), null )); // NOI18N
             actions.add(ProjectSensitiveActions.projectCommandAction( EjbProjectConstants.COMMAND_REDEPLOY, bundle.getString( "LBL_RedeployAction_Name" ), null )); // NOI18N
             actions.add(ProjectSensitiveActions.projectCommandAction( ActionProvider.COMMAND_DEBUG, bundle.getString( "LBL_DebugAction_Name" ), null )); // NOI18N
-            addFromLayers(actions, "Projects/Profiler_Actions_temporary"); //NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Profiler_Actions_temporary")); //NOI18N
+            actions.add(ProjectSensitiveActions.projectCommandAction(ActionProvider.COMMAND_TEST, bundle.getString("LBL_TestAction_Name"), null)); // NOI18N
             actions.add(null);
             actions.add(CommonProjectActions.setAsMainProjectAction());
             actions.add(CommonProjectActions.openSubprojectsAction());
@@ -518,7 +383,7 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
             
             // honor 57874 contract
             
-            addFromLayers(actions, "Projects/Actions"); //NOI18N
+            actions.addAll(Utilities.actionsForPath("Projects/Actions")); //NOI18N
             
             actions.add(null);
             
@@ -533,17 +398,6 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
             return actions.toArray(new javax.swing.Action[actions.size()]);
         }
         
-        private void addFromLayers(List<Action> actions, String path) {
-            Lookup look = Lookups.forPath(path);
-            for (Object next : look.lookupAll(Object.class)) {
-                if (next instanceof Action) {
-                    actions.add((Action) next);
-                } else if (next instanceof JSeparator) {
-                    actions.add(null);
-                }
-            }
-        }                
-
         /** This action is created only when project has broken references.
          * Once these are resolved the action is disabled.
          */
@@ -587,9 +441,12 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
                     fireIconChange();
                     fireOpenedIconChange();
                     fireDisplayNameChange(null, null);
-                    //to refresh library references in private.properties
-                    new EjbJarProjectProperties (project, updateHelper, evaluator, resolver).save();
                 }
+                old = WebLogicalViewRootNode.this.deployOnSaveDisabled;
+                boolean dosDisabled = isDeployOnSaveSupportedAndDisabled();
+                if (old != dosDisabled) {
+                    setDeployOnSaveDisabled(dosDisabled);
+                }                
             }
             
             public void refsMayChanged() {
@@ -621,11 +478,15 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
             }
 
             public void actionPerformed(ActionEvent e) {
-                String j2eeSpec = EjbJarProjectProperties.getProperty(
-                        EjbJarProjectProperties.J2EE_PLATFORM,
-                        helper,
-                        AntProjectHelper.PROJECT_PROPERTIES_PATH);
-                String instance = BrokenServerSupport.selectServer(j2eeSpec, J2eeModule.EJB);
+                Profile j2eeProfile = Profile.fromPropertiesString(project.evaluator().getProperty(EjbJarProjectProperties.J2EE_PLATFORM));
+                if (j2eeProfile == null) {
+                    j2eeProfile = Profile.JAVA_EE_5;
+                    Logger.getLogger(EjbJarLogicalViewProvider.class.getName()).warning(
+                            "project ["+project.getProjectDirectory()+"] is missing "+EjbJarProjectProperties.J2EE_PLATFORM+". " + // NOI18N
+                            "default value will be used instead: "+j2eeProfile); // NOI18N
+                    updateJ2EESpec(project, project.getAntProjectHelper(), j2eeProfile);
+                }
+                String instance = BrokenServerSupport.selectServer(j2eeProfile, J2eeModule.EJB);
                 if (instance != null) {
                     EjbJarProjectProperties.setServerInstance(
                             project, helper, instance);
@@ -633,6 +494,21 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
                 checkMissingServer();
             }
 
+            private void updateJ2EESpec(final Project project, final AntProjectHelper helper, final Profile j2eeProfile) {
+                ProjectManager.mutex().postWriteRequest(new Runnable() {
+                    public void run() {
+                        try {
+                            EditableProperties projectProps = helper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
+                            projectProps.put(EjbJarProjectProperties.J2EE_PLATFORM, j2eeProfile.toPropertiesString());
+                            helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, projectProps);
+                            ProjectManager.getDefault().saveProject(project);
+                        } catch (IOException e) {
+                            Exceptions.printStackTrace(e);
+                        }
+                    }
+                });
+            }
+            
             public void propertyChange(PropertyChangeEvent evt) {
                 if (EjbJarProjectProperties.J2EE_SERVER_INSTANCE.equals(evt.getPropertyName())) {
                     checkMissingServer();
@@ -652,12 +528,20 @@ public class EjbJarLogicalViewProvider implements LogicalViewProvider {
 
             private void checkMissingServer() {
                 boolean old = brokenServer;
-                String servInstID = EjbJarProjectProperties.getProperty(EjbJarProjectProperties.J2EE_SERVER_INSTANCE, helper, AntProjectHelper.PRIVATE_PROPERTIES_PATH);
+                String servInstID = project.evaluator().getProperty(EjbJarProjectProperties.J2EE_SERVER_INSTANCE);
                 brokenServer = BrokenServerSupport.isBroken(servInstID);
-                if (old != brokenServer) {
-                    fireIconChange();
-                    fireOpenedIconChange();
-                    fireDisplayNameChange(null, null);
+                if (old != brokenServer) 
+                {
+                    SwingUtilities.invokeLater(new Runnable()
+                    {
+
+                        public void run()
+                        {
+                            fireIconChange();
+                            fireOpenedIconChange();
+                            fireDisplayNameChange(null, null);
+                        }
+                    });
                 }
             }
         }

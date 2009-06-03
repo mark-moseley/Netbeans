@@ -48,6 +48,7 @@ import java.util.List;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
 import org.netbeans.modules.j2ee.earproject.test.TestUtil;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
@@ -95,7 +96,7 @@ public class EarProjectGeneratorTest extends NbTestCase {
         "display.browser",
         "dist.dir",
         "dist.jar",
-        "j2ee.appclient.mainclass.args",
+        "j2ee.deploy.on.save",
         "j2ee.platform",
         "j2ee.server.type",
         "jar.compress",
@@ -122,7 +123,6 @@ public class EarProjectGeneratorTest extends NbTestCase {
         "display.browser",
         "dist.dir",
         "dist.jar",
-        "j2ee.appclient.mainclass.args",
         "j2ee.platform",
         "j2ee.server.type",
         "jar.compress",
@@ -138,6 +138,7 @@ public class EarProjectGeneratorTest extends NbTestCase {
         //"resource.dir",  -XXX- this is not found in project.props
         //        when the project is created from ex. sources. Bug or not???
         "source.root",
+        "file.reference.testImportProject-EARProject",
     };
 
     public EarProjectGeneratorTest(String name) {
@@ -151,15 +152,9 @@ public class EarProjectGeneratorTest extends NbTestCase {
     }
 
     public void testCreateProjectJavaEE5() throws Exception {
-        
-        
-        // #102486 - test broken for long time; commenting out
-        if (true) return;
-        
-        
         File prjDirF = new File(getWorkDir(), "EARProject");
         AntProjectHelper aph = EarProjectGenerator.createProject(prjDirF, "test-project",
-                J2eeModule.JAVA_EE_5, serverID, "1.5");
+                Profile.JAVA_EE_5, serverID, "1.5", null, null);
         assertNotNull(aph);
         FileObject prjDirFO = aph.getProjectDirectory();
         for (String file : CREATED_FILES) {
@@ -183,15 +178,9 @@ public class EarProjectGeneratorTest extends NbTestCase {
     }
 
     public void testCreateProjectJ2EE14() throws Exception {
-        
-        
-        // #102486 - test broken for long time; commenting out
-        if (true) return;
-        
-        
         File prjDirF = new File(getWorkDir(), "EARProject");
         AntProjectHelper aph = EarProjectGenerator.createProject(prjDirF, "test-project",
-                J2eeModule.J2EE_14, serverID, "1.4");
+                Profile.J2EE_14, serverID, "1.4", null, null);
         assertNotNull(aph);
         FileObject prjDirFO = aph.getProjectDirectory();
         for (String file : CREATED_FILES) {
@@ -209,16 +198,10 @@ public class EarProjectGeneratorTest extends NbTestCase {
     }
 
     public void testImportProject() throws Exception {
-        
-        
-        // #102486 - test broken for long time; commenting out
-        if (true) return;
-        
-        
         File prjDirF = new File(getWorkDir(), "EARProject");
         AntProjectHelper helper = EarProjectGenerator.importProject(prjDirF, prjDirF,
-                "test-project-ext-src", J2eeModule.JAVA_EE_5, serverID, null,
-                "1.5", Collections.<FileObject, ModuleType>emptyMap());
+                "test-project-ext-src", Profile.JAVA_EE_5, serverID, null,
+                "1.5", Collections.<FileObject, ModuleType>emptyMap(), null, null);
         assertNotNull(helper);
         FileObject prjDirFO = FileUtil.toFileObject(prjDirF);
         for (String createdFile : CREATED_FILES_EXT_SOURCES) {
@@ -243,7 +226,7 @@ public class EarProjectGeneratorTest extends NbTestCase {
     public void testProjectNameIsSet() throws Exception { // #73930
         File prjDirF = new File(getWorkDir(), "EARProject");
         EarProjectGenerator.createProject(prjDirF, "test-project",
-                J2eeModule.JAVA_EE_5, serverID, "1.5");
+                Profile.JAVA_EE_5, serverID, "1.5", null, null);
         // test also build
         final File buildXML = new File(prjDirF, "build.xml");
         String projectName = ProjectManager.mutex().readAccess(new Mutex.ExceptionAction<String>() {
@@ -260,7 +243,7 @@ public class EarProjectGeneratorTest extends NbTestCase {
     public void testProjectNameIsEscaped() throws Exception {
         final File prjDirF = new File(getWorkDir(), "EARProject");
         EarProjectGenerator.createProject(prjDirF, "test project",
-                J2eeModule.JAVA_EE_5, serverID, "1.5");
+                Profile.JAVA_EE_5, serverID, "1.5", null, null);
         // test build.xml
         String buildXmlProjectName = ProjectManager.mutex().readAccess(new Mutex.ExceptionAction<String>() {
             public String run() throws Exception {

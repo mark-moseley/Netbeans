@@ -44,16 +44,12 @@ package org.netbeans.modules.web.project.ui.wizards;
 import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
-import java.lang.StringBuffer;
 import java.text.MessageFormat;
 import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
@@ -71,19 +67,20 @@ import org.netbeans.spi.project.ui.support.ProjectChooser;
 import org.netbeans.api.progress.ProgressHandle;
 
 import org.netbeans.modules.j2ee.api.ejbjar.Ear;
-import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
-import org.netbeans.modules.j2ee.dd.api.web.WebApp;
-import org.netbeans.modules.j2ee.dd.api.web.WelcomeFileList;
+import org.netbeans.modules.j2ee.common.SharabilityUtility;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectLocationWizardPanel;
+import org.netbeans.modules.j2ee.common.project.ui.ProjectServerWizardPanel;
 import org.netbeans.modules.web.api.webmodule.WebFrameworks;
 import org.netbeans.modules.web.api.webmodule.WebModule;
-import org.netbeans.modules.web.spi.webmodule.WebFrameworkProvider;
 import org.netbeans.modules.web.project.WebProject;
 import org.netbeans.modules.web.project.api.WebProjectCreateData;
 import org.netbeans.modules.web.project.api.WebProjectUtilities;
-import org.netbeans.modules.web.project.ui.FoldersListSettings;
-import org.openide.filesystems.Repository;
-import org.openide.loaders.DataFolder;
-import org.openide.loaders.DataObject;
+import org.netbeans.modules.j2ee.common.project.ui.UserProjectSettings;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
+import org.netbeans.modules.web.project.Utils;
+import org.netbeans.spi.java.project.support.ui.SharableLibrariesUtils;
 
 /**
  * Wizard to create a new Web project.
@@ -92,9 +89,6 @@ import org.openide.loaders.DataObject;
 public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressInstantiatingIterator {
     
     private static final long serialVersionUID = 1L;
-    
-    static final String PROP_NAME_INDEX = "nameIndex"; //NOI18N
-    static final String UI_LOGGER_NAME = "org.netbeans.ui.web.project"; //NOI18N
 
     /** Create a new wizard iterator. */
     public NewWebProjectWizardIterator() {}
@@ -104,11 +98,13 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
 	if (WebFrameworks.getFrameworks().size() > 0)
 	    steps = new String[] {
 		NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectTitleName"), //NOI18N
+                NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectServer"),
 		NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP2_Frameworks") //NOI18N
 	    };
 	else
 	    steps = new String[] {
 		NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectTitleName"), //NOI18N
+                NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectServer")
 	    };
 	
         return steps;
@@ -118,44 +114,47 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
         assert false : "This method cannot be called if the class implements WizardDescriptor.ProgressInstantiatingIterator.";
         return null;
     }
-        
+
+    boolean isIstantiating = false;
+
     public Set<FileObject> instantiate(ProgressHandle handle) throws IOException {
+        isIstantiating = true;
         handle.start(4);
         handle.progress(NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NewWebProjectWizardIterator_WizardProgress_CreatingProject"), 1);
         
-        Set resultSet = new HashSet();
+        Set<FileObject> resultSet = new HashSet<FileObject>();
 
-        File dirF = (File) wiz.getProperty(WizardProperties.PROJECT_DIR);
+        File dirF = (File) wiz.getProperty(ProjectLocationWizardPanel.PROJECT_DIR);
         if (dirF != null) {
             dirF = FileUtil.normalizeFile(dirF);
         }
 
-        String servInstID = (String) wiz.getProperty(WizardProperties.SERVER_INSTANCE_ID);
+        String servInstID = (String) wiz.getProperty(ProjectServerWizardPanel.SERVER_INSTANCE_ID);
         
         WebProjectCreateData createData = new WebProjectCreateData();
         createData.setProjectDir(dirF);
-        createData.setName((String) wiz.getProperty(WizardProperties.NAME));
+        createData.setName((String) wiz.getProperty(ProjectLocationWizardPanel.NAME));
         createData.setServerInstanceID(servInstID);
-        createData.setSourceStructure((String)wiz.getProperty(WizardProperties.SOURCE_STRUCTURE));
         if (createData.getSourceStructure() == null) {
             createData.setSourceStructure(WebProjectUtilities.SRC_STRUCT_BLUEPRINTS);
         }
-        createData.setJavaEEVersion((String) wiz.getProperty(WizardProperties.J2EE_LEVEL));
-        createData.setContextPath((String) wiz.getProperty(WizardProperties.CONTEXT_PATH));
-        createData.setJavaPlatformName((String) wiz.getProperty(WizardProperties.JAVA_PLATFORM));
-        createData.setSourceLevel((String) wiz.getProperty(WizardProperties.SOURCE_LEVEL));
+        createData.setJavaEEProfile((Profile) wiz.getProperty(ProjectServerWizardPanel.J2EE_LEVEL));
+        createData.setContextPath((String) wiz.getProperty(ProjectServerWizardPanel.CONTEXT_PATH));
+        createData.setJavaPlatformName((String) wiz.getProperty(ProjectServerWizardPanel.JAVA_PLATFORM));
+        createData.setSourceLevel((String) wiz.getProperty(ProjectServerWizardPanel.SOURCE_LEVEL));
+        
+        createData.setLibrariesDefinition(
+                SharabilityUtility.getLibraryLocation((String) wiz.getProperty(ProjectServerWizardPanel.WIZARD_SHARED_LIBRARIES)));
+        createData.setServerLibraryName((String) wiz.getProperty(ProjectServerWizardPanel.WIZARD_SERVER_LIBRARY));
+        
         AntProjectHelper h = WebProjectUtilities.createProject(createData);
         handle.progress(2);
         
         FileObject dir = FileUtil.toFileObject(dirF);
 
-        Integer index = (Integer) wiz.getProperty(PROP_NAME_INDEX);
-        if(index != null) {
-            FoldersListSettings.getDefault().setNewProjectCount(index.intValue());
-        }
-        wiz.putProperty(WizardProperties.NAME, null); // reset project name
+        wiz.putProperty(ProjectLocationWizardPanel.NAME, null); // reset project name
 
-        Project earProject = (Project) wiz.getProperty(WizardProperties.EAR_APPLICATION);
+        Project earProject = (Project) wiz.getProperty(ProjectServerWizardPanel.EAR_APPLICATION);
         
         WebProject createdWebProject = (WebProject) ProjectManager.getDefault().findProject(dir);
         if (earProject != null && createdWebProject != null) {
@@ -166,7 +165,8 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
         }
 
         //remember last used server
-        FoldersListSettings.getDefault().setLastUsedServer(servInstID);
+        UserProjectSettings.getDefault().setLastUsedServer(servInstID);
+        SharableLibrariesUtils.setLastProjectSharable(createData.getLibrariesDefinition() != null);
 	
         // save last project location
         dirF = (dirF != null) ? dirF.getParentFile() : null;
@@ -184,7 +184,7 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
             for(int i = 0; i < selectedExtenders.size(); i++) {
                 Object o = ((WebModuleExtender) selectedExtenders.get(i)).extend(apiWebModule);
                 if (o != null && o instanceof Set)
-                    resultSet.addAll((Set)o);
+                    resultSet.addAll((Set<FileObject>)o);
             }
         }
 
@@ -193,9 +193,6 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
         
         handle.progress(NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NewWebProjectWizardIterator_WizardProgress_PreparingToOpen"), 4);
 
-        LogRecord logRecord = new LogRecord(Level.INFO, "UI_WEB_PROJECT_CREATE");  //NOI18N
-        logRecord.setLoggerName(UI_LOGGER_NAME);                   //NOI18N
-        logRecord.setResourceBundle(NbBundle.getBundle(NewWebProjectWizardIterator.class));
         
         List <String> selectedFrameworkNames = (List<String>) wiz.getProperty(WizardProperties.FRAMEWORK_NAMES);
         int frameworkCount = (selectedFrameworkNames != null) ? selectedFrameworkNames.size() : 0;
@@ -211,8 +208,33 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
             }
         }
         
-        logRecord.setParameters(parameters);
-        Logger.getLogger(UI_LOGGER_NAME).log(logRecord);
+        Utils.logUI(NbBundle.getBundle(NewWebProjectWizardIterator.class),
+                "UI_WEB_PROJECT_CREATE", parameters); // NOI18N
+
+        Object[] parameters2 = new Object[5];
+        parameters2[0] = ""; // NOI18N
+        try {
+            if (servInstID != null) {
+                parameters2[0] = Deployment.getDefault().getServerInstance(servInstID).getServerDisplayName();
+            }
+        }
+        catch (InstanceRemovedException ire) {
+            // ignore
+        }
+        parameters2[1] = createData.getJavaEEVersion();
+        parameters2[2] = createData.getSourceLevel();
+        parameters2[3] = createData.getSourceStructure();
+        StringBuffer sb = new StringBuffer(50);
+        if (selectedFrameworkNames != null) {
+            for (int i = 0; i < selectedFrameworkNames.size(); i++) {
+                sb.append(selectedFrameworkNames.get(i));
+                if ((i + 1) < selectedFrameworkNames.size()) {
+                    sb.append("|"); // NOI18N
+                }
+            }
+        }
+        parameters2[4] = sb;
+        Utils.logUsage(NewWebProjectWizardIterator.class, "USG_PROJECT_CREATE_WEB", parameters2); // NOI18N
         
         // Returning set of FileObject of project diretory. 
         // Project will be open and set as main
@@ -231,13 +253,27 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
 	if (WebFrameworks.getFrameworks().size() > 0)
 	    //standard panels + configurable framework panel
 	    panels = new WizardDescriptor.Panel[] {
-		new PanelConfigureProject(),
-		new PanelSupportedFrameworks()
+                new ProjectLocationWizardPanel(J2eeModule.WAR, 
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectTitleName"),
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "TXT_NewWebApp"),
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NPW1_DefaultProjectName")),
+                new ProjectServerWizardPanel(J2eeModule.WAR, 
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectServer"),
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "TXT_NewWebApp"),
+                        true, false, true, false, false, true),
+		new PanelSupportedFrameworks(this)
 	    };
 	else
 	    //no framework available, don't show framework panel
 	    panels = new WizardDescriptor.Panel[] {
-		new PanelConfigureProject(),
+                new ProjectLocationWizardPanel(J2eeModule.WAR, 
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectTitleName"),
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "TXT_NewWebApp"),
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NPW1_DefaultProjectName")),
+                new ProjectServerWizardPanel(J2eeModule.WAR, 
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "LBL_NWP1_ProjectServer"),
+                        NbBundle.getMessage(NewWebProjectWizardIterator.class, "TXT_NewWebApp"),
+                        true, false, true, false, false, true),
 	    };
         panelsCount = panels.length;
         
@@ -248,17 +284,17 @@ public class NewWebProjectWizardIterator implements WizardDescriptor.ProgressIns
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent)c;
                 // Step #.
-                jc.putClientProperty("WizardPanel_contentSelectedIndex", Integer.valueOf(i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, Integer.valueOf(i)); // NOI18N
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
             }
         }
     }
     
     public void uninitialize(WizardDescriptor wiz) {
         if (this.wiz != null) {
-            this.wiz.putProperty(WizardProperties.PROJECT_DIR,null);
-            this.wiz.putProperty(WizardProperties.NAME,null);
+            this.wiz.putProperty(ProjectLocationWizardPanel.PROJECT_DIR,null);
+            this.wiz.putProperty(ProjectLocationWizardPanel.NAME,null);
             this.wiz = null;
         }
         panels = null;

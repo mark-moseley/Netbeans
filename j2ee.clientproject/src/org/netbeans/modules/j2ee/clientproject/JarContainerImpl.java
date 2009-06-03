@@ -55,12 +55,12 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
 import org.netbeans.api.project.ant.AntArtifactQuery;
+import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbReference;
 import org.netbeans.modules.j2ee.api.ejbjar.EnterpriseReferenceContainer;
 import org.netbeans.modules.j2ee.api.ejbjar.EnterpriseReferenceSupport;
 import org.netbeans.modules.j2ee.api.ejbjar.MessageDestinationReference;
 import org.netbeans.modules.j2ee.api.ejbjar.ResourceReference;
-import org.netbeans.modules.j2ee.clientproject.ui.customizer.AntArtifactChooser;
 import org.netbeans.modules.j2ee.common.queries.api.InjectionTargetQuery;
 import org.netbeans.modules.j2ee.dd.api.client.AppClient;
 import org.netbeans.modules.j2ee.dd.api.client.DDProvider;
@@ -258,8 +258,6 @@ public class JarContainerImpl implements EnterpriseReferenceContainer {
         ProjectClassPathExtender cpExtender = webProject.getLookup().lookup(ProjectClassPathExtender.class);
         if (cpExtender != null) {
             try {
-                AntArtifactChooser.ArtifactItem artifactItems[] = new AntArtifactChooser.ArtifactItem [1];
-                //artifactItems[0] = new AntArtifactChooser.ArtifactItem(target, target.getArtifactLocation());
                 AntArtifact target = getAntArtifact(ejbReference);
                 cpExtender.addAntArtifact(target, target.getArtifactLocations()[0].normalize());
             } catch (IOException ioe) {
@@ -291,7 +289,7 @@ public class JarContainerImpl implements EnterpriseReferenceContainer {
     }
     
     private static boolean isDescriptorMandatory(String j2eeVersion) {
-        if ("1.3".equals(j2eeVersion) || "1.4".equals(j2eeVersion)) {
+        if (EjbProjectConstants.J2EE_13_LEVEL.equals(j2eeVersion) || EjbProjectConstants.J2EE_14_LEVEL.equals(j2eeVersion)) {
             return true;
         }
         return false;
