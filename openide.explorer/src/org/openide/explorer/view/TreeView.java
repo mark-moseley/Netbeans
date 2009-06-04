@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,6 +40,8 @@
  */
 package org.openide.explorer.view;
 
+import java.awt.Component;
+import java.awt.Container;
 import org.openide.awt.MouseUtils;
 import org.openide.explorer.ExplorerManager;
 import org.openide.nodes.Children;
@@ -55,11 +57,12 @@ import org.openide.util.WeakListeners;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.Lookups;
 import org.openide.util.lookup.ProxyLookup;
-import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -85,7 +88,7 @@ import java.beans.PropertyVetoException;
 import java.beans.VetoableChangeListener;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
@@ -101,11 +104,13 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JRootPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.JViewport;
 import javax.swing.KeyStroke;
+import javax.swing.ScrollPaneLayout;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
@@ -123,6 +128,7 @@ import javax.swing.plaf.UIResource;
 import javax.swing.text.Position;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.RowMapper;
+import javax.swing.tree.TreeCellEditor;
 import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
@@ -143,6 +149,8 @@ public abstract class TreeView extends JScrollPane {
     //
     // static fields
     //
+
+    static final Logger LOG = Logger.getLogger(TreeView.class.getName());
 
     /** generated Serialized Version UID */
     static final long serialVersionUID = -1639001987693376168L;
@@ -207,9 +215,7 @@ public abstract class TreeView extends JScrollPane {
     /** Drop support */
     transient TreeViewDropSupport dropSupport;
     transient boolean dropTargetPopupAllowed = true;
-    transient private Container contentPane;
-    transient private List storeSelectedPaths;
-
+    
     // default DnD actions
     transient private int allowedDragActions = DnDConstants.ACTION_COPY_OR_MOVE | DnDConstants.ACTION_REFERENCE;
     transient private int allowedDropActions = DnDConstants.ACTION_COPY_OR_MOVE | DnDConstants.ACTION_REFERENCE;
@@ -219,6 +225,9 @@ public abstract class TreeView extends JScrollPane {
      * Defaults to false meaning prefix is used.
      */
     transient private boolean quickSearchUsingSubstring = false;
+    
+    /** Holds VisualizerChildren for all visible nodes */
+    private final VisualizerHolder visHolder = new VisualizerHolder();
 
     /** Constructor.
     */
@@ -231,6 +240,8 @@ public abstract class TreeView extends JScrollPane {
     * @param popupAllowed should right-click open popup?
     */
     public TreeView(boolean defaultAction, boolean popupAllowed) {
+        setLayout(new ExplorerScrollPaneLayout());
+
         initializeTree();
 
 //        // activation of drop target
@@ -267,7 +278,13 @@ public abstract class TreeView extends JScrollPane {
         setPreferredSize(dim);
     }
 
+    @Override
     public void updateUI() {
+        Set<VisualizerChildren> tmp = visHolder;
+        if (tmp != null) {
+            tmp.clear();
+        }
+
         super.updateUI();
 
         //On GTK L&F, the viewport border must be set to empty (not null!) or we still get border buildup
@@ -296,6 +313,9 @@ public abstract class TreeView extends JScrollPane {
         // Init of the editor
         tree.setCellEditor(new TreeViewCellEditor(tree));
         tree.setEditable(true);
+        int rowHeight = rend.getTreeCellRendererComponent(tree, null, false, false, false, 0, true).getPreferredSize().height;
+        tree.setRowHeight(rowHeight);
+        tree.setLargeModel(true);
 
         // set selection mode to DISCONTIGUOUS_TREE_SELECTION as default
         setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
@@ -322,7 +342,7 @@ public abstract class TreeView extends JScrollPane {
      * @return <code>true</code> if so
      */
     public boolean isPopupAllowed() {
-        return popupListener != null;
+        return popupListener != null && isShowing();
     }
 
     /** Enable/disable displaying popup menus on tree view items.
@@ -367,11 +387,13 @@ public abstract class TreeView extends JScrollPane {
     }
 
     /** Requests focus for the tree component. Overrides superclass method. */
+    @Override
     public void requestFocus() {
         tree.requestFocus();
     }
 
     /** Requests focus for the tree component. Overrides superclass method. */
+    @Override
     public boolean requestFocusInWindow() {
         return tree.requestFocusInWindow();
     }
@@ -516,29 +538,40 @@ public abstract class TreeView extends JScrollPane {
     *
     * @param n node to collapse
     */
-    public void collapseNode(Node n) {
+    public void collapseNode(final Node n) {
         if (n == null) {
             throw new IllegalArgumentException();
         }
 
-        TreePath treePath = new TreePath(treeModel.getPathToRoot(VisualizerNode.getVisualizer(null, n)));
-        tree.collapsePath(treePath);
+        // run safely to be sure all preceding events are processed (especially VisualizerEvent.Added)
+        // otherwise VisualizerNodes may not be in hierarchy yet (see #140629)
+        VisualizerNode.runSafe(new Runnable() {
+
+            public void run() {
+                tree.collapsePath(getTreePath(n));
+            }
+        });
     }
 
     /** Expandes the node in the tree.
     *
     * @param n node
     */
-    public void expandNode(Node n) {
+    public void expandNode(final Node n) {
         if (n == null) {
             throw new IllegalArgumentException();
         }
 
         lookupExplorerManager();
 
-        TreePath treePath = new TreePath(treeModel.getPathToRoot(VisualizerNode.getVisualizer(null, n)));
+        // run safely to be sure all preceding events are processed (especially VisualizerEvent.Added)
+        // otherwise VisualizerNodes may not be in hierarchy yet (see #140629)
+        VisualizerNode.runSafe(new Runnable() {
 
-        tree.expandPath(treePath);
+            public void run() {
+                tree.expandPath(getTreePath(n));
+            }
+        });
     }
 
     /** Test whether a node is expanded in the tree or not
@@ -546,16 +579,14 @@ public abstract class TreeView extends JScrollPane {
     * @return true if the node is expanded
     */
     public boolean isExpanded(Node n) {
-        TreePath treePath = new TreePath(treeModel.getPathToRoot(VisualizerNode.getVisualizer(null, n)));
-
-        return tree.isExpanded(treePath);
+        return tree.isExpanded(getTreePath(n));
     }
 
     /** Expands all paths.
     */
     public void expandAll() {
         int i = 0;
-        int j /*, k = tree.getRowCount()*/;
+        int j;
 
         do {
             do {
@@ -571,6 +602,7 @@ public abstract class TreeView extends JScrollPane {
     // Processing functions
     //
 
+    @Override
     public void validate() {
         Children.MUTEX.readAccess(new Runnable() {
             public void run() {
@@ -581,6 +613,7 @@ public abstract class TreeView extends JScrollPane {
 
     /** Initializes the component and lookup explorer manager.
     */
+    @Override
     public void addNotify() {
         super.addNotify();
         lookupExplorerManager();
@@ -617,6 +650,7 @@ public abstract class TreeView extends JScrollPane {
 
     /** Deinitializes listeners.
     */
+    @Override
     public void removeNotify() {
         super.removeNotify();
 
@@ -716,11 +750,9 @@ public abstract class TreeView extends JScrollPane {
             }
 
             for (int j = toBeExpaned.size() - 1; j >= 0; j--) {
-                expandNode((Node) toBeExpaned.get(j));
+                expandNode(toBeExpaned.get(j));
             }
-
-            TreePath treePath = new TreePath(treeModel.getPathToRoot(VisualizerNode.getVisualizer(null, nodes[i])));
-            paths[i] = treePath;
+            paths[i] = getTreePath(nodes[i]);
         }
 
         int[] rows = rowMapper.getRowsForPaths(paths);
@@ -736,6 +768,10 @@ public abstract class TreeView extends JScrollPane {
 
         // all is ok
         return false;
+    }
+    
+    TreePath getTreePath(Node node) {
+        return new TreePath(treeModel.getPathToRoot(VisualizerNode.getVisualizer(null, node)));
     }
 
     //
@@ -761,18 +797,37 @@ public abstract class TreeView extends JScrollPane {
     /** Synchronize the root context from the manager of this Explorer.
     */
     final void synchronizeRootContext() {
-        treeModel.setNode(manager.getRootContext());
+        // #151850 cancel editing before changing root node
+        Mutex.EVENT.readAccess(
+                new Runnable() {
+
+                    public void run() {
+                        TreeCellEditor cellEditor = tree.getCellEditor();
+                        if (cellEditor instanceof TreeViewCellEditor) {
+                            ((TreeViewCellEditor) cellEditor).abortTimer();
+                        }
+                        tree.cancelEditing();
+                    }
+                });
+        treeModel.setNode(manager.getRootContext(), visHolder);
     }
 
     /** Synchronize the explored context from the manager of this Explorer.
     */
     final void synchronizeExploredContext() {
-        Node n = manager.getExploredContext();
-
-        if (n != null) {
-            TreePath treePath = new TreePath(treeModel.getPathToRoot(VisualizerNode.getVisualizer(null, n)));
-            showPath(treePath);
+        final Node n = manager.getExploredContext();
+        if (n == null) {
+            return;
         }
+
+        // run safely to be sure all preceding events are processed (especially VisualizerEvent.Added)
+        // otherwise VisualizerNodes may not be in hierarchy yet (see #140629)
+        VisualizerNode.runSafe(new Runnable() {
+
+            public void run() {
+                showPath(getTreePath(n));
+            }
+        });
     }
 
     /** Sets the selection model, which must be one of
@@ -807,76 +862,87 @@ public abstract class TreeView extends JScrollPane {
     //
     // showing and removing the wait cursor
     //
-    private void showWaitCursor() {
-        if (getRootPane() == null) {
+    private void showWaitCursor (boolean show) {
+        JRootPane rPane = getRootPane();
+        if (rPane == null) {
             return;
         }
 
-        contentPane = getRootPane().getContentPane();
-
         if (SwingUtilities.isEventDispatchThread()) {
-            contentPane.setCursor(Utilities.createProgressCursor(contentPane));
+            doShowWaitCursor(rPane.getGlassPane(), show);
         } else {
-            SwingUtilities.invokeLater(new CursorR(contentPane, Utilities.createProgressCursor(contentPane)));
+            SwingUtilities.invokeLater(new CursorR(rPane.getGlassPane(), show));
         }
     }
 
-    private void showNormalCursor() {
-        if (contentPane == null) {
-            return;
+    private static void doShowWaitCursor (Component glassPane, boolean show) {
+        if (show) {
+            glassPane.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+            glassPane.setVisible(true);
+        } else {
+            glassPane.setVisible(false);
+            glassPane.setCursor(null);
+        }
+    }
+
+    private static class CursorR implements Runnable {
+        private Component glassPane;
+        private boolean show;
+
+        private CursorR(Component cont, boolean show) {
+            this.glassPane = cont;
+            this.show = show;
         }
 
-        if (SwingUtilities.isEventDispatchThread()) {
-            contentPane.setCursor(null);
-        } else {
-            SwingUtilities.invokeLater(new CursorR(contentPane, null));
+        public void run() {
+            doShowWaitCursor(glassPane, show);
         }
     }
 
     private void prepareWaitCursor(final Node node) {
         // check type of node
         if (node == null) {
-            showNormalCursor();
+            showWaitCursor(false);
         }
 
-        showWaitCursor();
+        showWaitCursor(true);
         RequestProcessor.getDefault().post(new Runnable() {
 
-                                               public void run() {
-                                                   try {
-                                                       node.getChildren().getNodes(true);
-                                                   }
-                                                   catch (Exception e) {
-                                                       // log a exception
-                                                       Logger.getLogger(TreeView.class.getName()).log(Level.WARNING,
-                                                                         null, e);
-                                                   }
-                                                   finally {
-                                                       // show normal cursor above all
-                                                       showNormalCursor();
-                                                   }
-                                               }
-                                           });
+            public void run() {
+                try {
+                    node.getChildren().getNodesCount(true);
+                } catch (Exception e) {
+                    // log a exception
+                    LOG.log(Level.WARNING, null, e);
+                } finally {
+                    // show normal cursor above all
+                    showWaitCursor(false);
+                }
+            }
+        });
     }
 
     /** Synchronize the selected nodes from the manager of this Explorer.
     * The default implementation does nothing.
     */
     final void synchronizeSelectedNodes() {
-        // #40152: if there is any scheduled change to view, perform it now
-        VisualizerNode.runQueue();
+        // run safely to be sure all preceding events are processed (especially VisualizerEvent.Added)
+        // otherwise VisualizerNodes may not be in hierarchy yet (see #140629)
+        VisualizerNode.runSafe(new Runnable() {
 
-        Node[] arr = manager.getSelectedNodes();
-        TreePath[] paths = new TreePath[arr.length];
+            public void run() {
+                Node[] arr = manager.getSelectedNodes();
+                TreePath[] paths = new TreePath[arr.length];
 
-        for (int i = 0; i < arr.length; i++) {
-            TreePath treePath = new TreePath(treeModel.getPathToRoot(VisualizerNode.getVisualizer(null, arr[i])));
-            paths[i] = treePath;
-        }
+                for (int i = 0; i < arr.length; i++) {
+                    paths[i] = getTreePath(arr[i]);
+                }
 
-        tree.getSelectionModel().removeTreeSelectionListener(managerListener);
-        showSelection(paths);
-        tree.getSelectionModel().addTreeSelectionListener(managerListener);
+                tree.getSelectionModel().removeTreeSelectionListener(managerListener);
+                showSelection(paths);
+                tree.getSelectionModel().addTreeSelectionListener(managerListener);
+            }
+        });
     }
 
     void scrollTreeToVisible(TreePath path, TreeNode child) {
@@ -898,25 +964,19 @@ public abstract class TreeView extends JScrollPane {
     void createPopup(int xpos, int ypos) {
         // bugfix #23932, don't create if it's disabled
         if (isPopupAllowed()) {
-            Node[] arr = manager.getSelectedNodes();
+            Node[] selNodes = manager.getSelectedNodes();
 
-            if (arr.length == 0) {
-                // Should probably not happen when shown from right-click, but may well when from S-F10.
-                // Create popup menu for the root node, and make sure it is selected so that action context is correct.
-                arr = new Node[] { manager.getRootContext() };
-
-                try {
-                    manager.setSelectedNodes(arr);
-                } catch (PropertyVetoException e) {
-                    assert false : e; // not permitted to be thrown
+            if (selNodes.length > 0) {
+                Action[] actions = NodeOp.findActions(selNodes);
+                if (actions.length > 0) {
+                    createPopup(xpos, ypos, Utilities.actionsToPopup(actions, this));
+                }                
+            } else if (manager.getRootContext() != null) {
+                JPopupMenu popup = manager.getRootContext().getContextMenu();
+                if (popup != null) {
+                    createPopup(xpos, ypos, popup);
                 }
-            }
-
-            Action[] actions = NodeOp.findActions(arr);
-
-            if (actions.length > 0) {
-                createPopup(xpos, ypos, Utilities.actionsToPopup(actions, this));
-            }
+            }                
         }
     }
 
@@ -1063,31 +1123,27 @@ public abstract class TreeView extends JScrollPane {
         
         List<TreePath> remSel = null;
         for (VisualizerNode vn : removed) {
-            TreePath path = new TreePath(treeModel.getPathToRoot(vn));
+            visHolder.removeRecur(vn.getChildren(false));
+            TreePath path = new TreePath(vn.getPathToRoot());
 	    for(TreePath tp : selPaths) {
                 if (path.isDescendant(tp)) {
-                    if (remSel == null) remSel = new ArrayList();
+                    if (remSel == null) {
+                        remSel = new ArrayList<TreePath>();
+                    }
                     remSel.add(tp);
                 }
 	    }
         }
         
         if (remSel != null) {
-            sm.removeSelectionPaths(remSel.toArray(new TreePath[remSel.size()]));
-        }
-    }
-
-    private static class CursorR implements Runnable {
-        private Container contentPane;
-        private Cursor c;
-
-        private CursorR(Container cont, Cursor c) {
-            contentPane = cont;
-            this.c = c;
-        }
-
-        public void run() {
-            contentPane.setCursor(c);
+            try {
+                sm.removeSelectionPaths(remSel.toArray(new TreePath[remSel.size()]));
+            } catch (NullPointerException e) {
+                // if editing of label of removed node was in progress
+                // BasicTreeUI will try to cancel editing and repaint node 
+                // which fails because node is already removed so it cannot get bounds of it
+                // catch and ignore (issue #136123)
+            }
         }
     }
 
@@ -1096,7 +1152,7 @@ public abstract class TreeView extends JScrollPane {
         TreeWillExpandListener, TreeSelectionListener, Runnable {
         private RequestProcessor.Task scheduled;
         private TreePath[] readAccessPaths;
-
+        
         TreePropertyListener() {
         }
 
@@ -1122,21 +1178,27 @@ public abstract class TreeView extends JScrollPane {
             if (manager == null) {
                 return; // the tree view has been removed before the event got delivered
             }
+            Children.MUTEX.readAccess(new Runnable() {
 
-            if (evt.getPropertyName().equals(ExplorerManager.PROP_ROOT_CONTEXT)) {
-                synchronizeRootContext();
-            }
+                public void run() {
+                    if (evt.getPropertyName().equals(ExplorerManager.PROP_ROOT_CONTEXT)) {
+                        synchronizeRootContext();
+                    }
 
-            if (evt.getPropertyName().equals(ExplorerManager.PROP_EXPLORED_CONTEXT)) {
-                synchronizeExploredContext();
-            }
+                    if (evt.getPropertyName().equals(ExplorerManager.PROP_EXPLORED_CONTEXT)) {
+                        synchronizeExploredContext();
+                    }
 
-            if (evt.getPropertyName().equals(ExplorerManager.PROP_SELECTED_NODES)) {
-                synchronizeSelectedNodes();
-            }
+                    if (evt.getPropertyName().equals(ExplorerManager.PROP_SELECTED_NODES)) {
+                        synchronizeSelectedNodes();
+                    }
+                }
+            });
         }
 
         public synchronized void treeExpanded(TreeExpansionEvent ev) {
+            VisualizerNode vn = (VisualizerNode) ev.getPath().getLastPathComponent();
+            visHolder.add(vn.getChildren());
             
             if (!tree.getScrollsOnExpand()) {
                 return;
@@ -1158,10 +1220,12 @@ public abstract class TreeView extends JScrollPane {
                 public void run() {
                     if (!SwingUtilities.isEventDispatchThread()) {
                         SwingUtilities.invokeLater(this);
-
                         return;
                     }
-
+                    if (!Children.MUTEX.isReadAccess() && !Children.MUTEX.isWriteAccess()) {
+                        Children.MUTEX.readAccess(this);
+                        return;
+                    }
                     try {
                         if (!tree.isVisible(path)) {
                             // if the path is not visible - don't check the children
@@ -1212,7 +1276,8 @@ public abstract class TreeView extends JScrollPane {
         }
 
         public synchronized void treeCollapsed(final TreeExpansionEvent ev) {
-            showNormalCursor();
+
+            showWaitCursor(false);
             class Request implements Runnable {
                 private TreePath path;
 
@@ -1227,8 +1292,12 @@ public abstract class TreeView extends JScrollPane {
                         return;
                     }
 
+                    // we are delayed, another treeExpanded() could arrive meanwhile
+                    boolean expanded = true;
+
                     try {
-                        if (tree.isExpanded(path)) {
+                        expanded = tree.isExpanded(path);
+                        if (expanded) {
                             // the tree shows the path - do not collapse
                             // the tree
                             return;
@@ -1257,6 +1326,10 @@ public abstract class TreeView extends JScrollPane {
 
                         treeModel.nodeStructureChanged(myNode);
                     } finally {
+                        if (!expanded) {
+                            VisualizerNode vn = (VisualizerNode) path.getLastPathComponent();
+                            visHolder.removeRecur(vn.getChildren(false));
+                        }
                         this.path = null;
                     }
                 }
@@ -1273,7 +1346,6 @@ public abstract class TreeView extends JScrollPane {
         */
         public void valueChanged(TreeSelectionEvent ev) {
             TreePath[] paths = tree.getSelectionPaths();
-            storeSelectedPaths = Arrays.asList((paths == null) ? new TreePath[0] : paths);
 
             if (paths == null) {
                 // part of bugfix #37279, if DnD is active then is useless select a nearby node
@@ -1312,6 +1384,7 @@ public abstract class TreeView extends JScrollPane {
 
             for (int i = 0; i < paths.length; i++) {
                 Node n = Visualizer.findNode(paths[i].getLastPathComponent());
+                n = getOriginalNode (n);
 
                 if( isUnderRoot( manager.getRootContext(), n ) ) {
                     ll.add(n);
@@ -1319,7 +1392,7 @@ public abstract class TreeView extends JScrollPane {
             }
             callSelectionChanged(ll.toArray(new Node[ll.size()]));
         }
-        
+
         /** Checks whether given Node is a subnode of rootContext.
         * @return true if specified Node is under current rootContext
         */
@@ -1348,6 +1421,10 @@ public abstract class TreeView extends JScrollPane {
     }
      // end of TreePropertyListener
 
+    Node getOriginalNode (Node n) {
+        return n;
+    }
+
     /** Popup adapter.
     */
     class PopupAdapter extends MouseUtils.PopupMouseAdapter {
@@ -1358,9 +1435,9 @@ public abstract class TreeView extends JScrollPane {
             int selRow = tree.getRowForLocation(e.getX(), e.getY());
 
             if ((selRow == -1) && !isRootVisible()) {
-                // Use the invisible root node as a fake selection, and show its popup.
+                // clear selection
                 try {
-                    manager.setSelectedNodes(new Node[] { manager.getRootContext() });
+                    manager.setSelectedNodes(new Node[]{});
                 } catch (PropertyVetoException exc) {
                     assert false : exc; // not permitted to be thrown
                 }
@@ -1390,6 +1467,7 @@ public abstract class TreeView extends JScrollPane {
                  * @return true if the action is enabled, false otherwise
                  * @see Action#isEnabled
                  */
+            @Override
                 public boolean isEnabled() {
                     return TreeView.this.isFocusOwner() || tree.isFocusOwner();
                 }
@@ -1423,6 +1501,7 @@ public abstract class TreeView extends JScrollPane {
         }
 
         /* clicking adapter */
+        @Override
         public void mouseClicked(MouseEvent e) {
             int selRow = tree.getRowForLocation(e.getX(), e.getY());
 
@@ -1461,8 +1540,14 @@ public abstract class TreeView extends JScrollPane {
             
             if (nodes.length > 0) {
                 Action a = nodes[0].getPreferredAction();
+                if (a == null) {
+                    return;
+                }
                 for (int i=1; i<nodes.length; i++) {
-                    if (! nodes[i].getPreferredAction().equals(a)) return;
+                    Action ai = nodes[i].getPreferredAction();
+                    if (ai == null || !ai.equals(a)) {
+                        return;
+                    }
                 }
                 
                 // switch to replacement action if there is some
@@ -1478,49 +1563,157 @@ public abstract class TreeView extends JScrollPane {
         }
     }
 
+    @Override
+    public Insets getInsets() {
+        Insets res = getInnerInsets();
+        res = new Insets(res.top, res.left, res.bottom, res.right);
+        if( null != searchpanel && searchpanel.isVisible() ) {
+            res.bottom += searchpanel.getPreferredSize().height;
+        }
+        return res;
+    }
+
+    private Insets getInnerInsets() {
+        Insets res = super.getInsets();
+        if( null == res ) {
+            res = new Insets(0,0,0,0);
+        }
+        return res;
+    }
+
+    private JPanel searchpanel = null;
+    // searchTextField manages focus because it handles VK_TAB key
+    private JTextField searchTextField = new JTextField() {
+        @Override
+        public boolean isManagingFocus() {
+            return true;
+        }
+
+        @Override
+        public void processKeyEvent(KeyEvent ke) {
+            //override the default handling so that
+            //the parent will never receive the escape key and
+            //close a modal dialog
+            if (ke.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                removeSearchField();
+                ke.consume();
+
+                // bugfix #32909, reqest focus when search field is removed
+                SwingUtilities.invokeLater(
+                    new Runnable() {
+                        //additional bugfix - do focus change later or removing
+                        //the component while it's focused will cause focus to
+                        //get transferred to the next component in the
+                        //parent focusTraversalPolicy *after* our request
+                        //focus completes, so focus goes into a black hole - Tim
+                        public void run() {
+                            if( null != tree )
+                                tree.requestFocus();
+                        }
+                    }
+                );
+            } else {
+                super.processKeyEvent(ke);
+            }
+        }
+    };
+    private int originalScrollMode;
+
+    private static class SearchPanel extends JPanel {
+        public SearchPanel() {
+            if( ViewUtil.isAquaLaF )
+                setBorder(BorderFactory.createEmptyBorder(9,6,8,2));
+            else
+                setBorder(BorderFactory.createEmptyBorder(2,6,2,2));
+            setOpaque( true );
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            if( ViewUtil.isAquaLaF && g instanceof Graphics2D ) {
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setPaint( new GradientPaint(0, 0, UIManager.getColor("NbExplorerView.quicksearch.background.top"),
+                        0, getHeight(), UIManager.getColor("NbExplorerView.quicksearch.background.bottom")));//NOI18N
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+                g2d.setColor( UIManager.getColor("NbExplorerView.quicksearch.border") ); //NOI18N
+                g2d.drawLine(0, 0, getWidth(), 0);
+            } else {
+                super.paintComponent(g);
+            }
+        }
+    }
+
+
+    private void prepareSearchPanel() {
+        if( searchpanel == null ) {
+            searchpanel = new SearchPanel();
+
+            JLabel lbl = new JLabel(NbBundle.getMessage(TreeView.class, "LBL_QUICKSEARCH")); //NOI18N
+            searchpanel.setLayout(new BoxLayout(searchpanel, BoxLayout.X_AXIS));
+            searchpanel.add(lbl);
+            searchpanel.add(searchTextField);
+            lbl.setLabelFor(searchTextField);
+            searchTextField.setColumns(10);
+            searchTextField.setMaximumSize(searchTextField.getPreferredSize());
+            searchTextField.putClientProperty("JTextField.variant", "search"); //NOI18N
+            lbl.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
+        }
+    }
+
+    /**
+     * Adds the search field to the tree.
+     */
+    private void displaySearchField() {
+        if( null != searchpanel )
+            return;
+
+        JViewport vp = getViewport();
+        originalScrollMode = vp.getScrollMode();
+        vp.setScrollMode(JViewport.SIMPLE_SCROLL_MODE);
+        searchTextField.setFont(tree.getFont());
+        prepareSearchPanel();
+        add(searchpanel);
+        invalidate();
+        revalidate();
+        repaint();
+        searchTextField.requestFocus();
+    }
+
+    /**
+     * Removes the search field from the tree.
+     */
+    private void removeSearchField() {
+        if( null == searchpanel )
+            return;
+
+        remove(searchpanel);
+        searchpanel = null;
+        getViewport().setScrollMode(originalScrollMode);
+        invalidate();
+        revalidate();
+        repaint();
+    }
+
+    private class ExplorerScrollPaneLayout extends ScrollPaneLayout {
+
+        @Override
+        public void layoutContainer( Container parent ) {
+            super.layoutContainer(parent);
+            if( null != searchpanel && searchpanel.isVisible() ) {
+                Insets innerInsets = getInnerInsets();
+                Dimension prefSize = searchpanel.getPreferredSize();
+                searchpanel.setBounds(innerInsets.left, parent.getHeight()-innerInsets.bottom-prefSize.height,
+                        parent.getWidth()-innerInsets.left-innerInsets.right, prefSize.height);
+            }
+        }
+    }
+
     private final class ExplorerTree extends JTree implements Autoscroll {
         AutoscrollSupport support;
         private String maxPrefix;
-        int SEARCH_FIELD_PREFERRED_SIZE = 160;
         int SEARCH_FIELD_SPACE = 3;
         private boolean firstPaint = true;
 
-        // searchTextField manages focus because it handles VK_TAB key
-        private JTextField searchTextField = new JTextField() {
-                public boolean isManagingFocus() {
-                    return true;
-                }
-
-                public void processKeyEvent(KeyEvent ke) {
-                    //override the default handling so that
-                    //the parent will never receive the escape key and
-                    //close a modal dialog
-                    if (ke.getKeyCode() == ke.VK_ESCAPE) {
-                        removeSearchField();
-                        ke.consume();
-
-                        // bugfix #32909, reqest focus when search field is removed
-                        SwingUtilities.invokeLater(
-                            new Runnable() {
-                                //additional bugfix - do focus change later or removing
-                                //the component while it's focused will cause focus to
-                                //get transferred to the next component in the 
-                                //parent focusTraversalPolicy *after* our request
-                                //focus completes, so focus goes into a black hole - Tim
-                                public void run() {
-                                    ExplorerTree.this.requestFocus();
-                                }
-                            }
-                        );
-                    } else {
-                        super.processKeyEvent(ke);
-                    }
-                }
-            };
-
-        private JPanel searchpanel = null;
-        final private int heightOfTextField = searchTextField.getPreferredSize().height;
-        private int originalScrollMode;
 
         ExplorerTree(TreeModel model) {
             super(model);
@@ -1549,16 +1742,20 @@ public abstract class TreeView extends JScrollPane {
             setDragEnabled( true );
         }
 
+        @Override
         public void addNotify() {
             super.addNotify();
             ViewTooltips.register(this);
+            ViewUtil.adjustBackground( this );
         }
         
+        @Override
         public void removeNotify() {
             super.removeNotify();
             ViewTooltips.unregister(this);
         }
 
+        @Override
         public void updateUI() {
             super.updateUI();
             setBorder(BorderFactory.createEmptyBorder());
@@ -1595,14 +1792,17 @@ public abstract class TreeView extends JScrollPane {
         // Certain operation should be executed in guarded mode - e.g.
         // not allow changes in nodes during the operation being executed
         //
+        @Override
         public void paint(final Graphics g) {
             new GuardedActions(0, g);
         }
 
+        @Override
         protected void validateTree() {
             new GuardedActions(1, null);
         }
 
+        @Override
         public void doLayout() {
             new GuardedActions(2, null);
         }
@@ -1620,7 +1820,13 @@ public abstract class TreeView extends JScrollPane {
                 return;
             }
 
-            ExplorerTree.super.paint(g);
+            try {
+                ExplorerTree.super.paint(g);
+            } catch (NullPointerException ex) {
+                // #139696: Making this issue more acceptable by not showing a dialog
+                // still it deserves more investigation later
+               LOG.log(Level.INFO, "Problems while painting", ex);  // NOI18N
+            }
         }
 
         private void guardedValidateTree() {
@@ -1629,23 +1835,9 @@ public abstract class TreeView extends JScrollPane {
 
         private void guardedDoLayout() {
             super.doLayout();
-
-            Rectangle visibleRect = getVisibleRect();
-
-            if ((searchpanel != null) && searchpanel.isDisplayable()) {
-                int width = Math.min(
-                        getPreferredSize().width - (SEARCH_FIELD_SPACE * 2),
-                        SEARCH_FIELD_PREFERRED_SIZE - SEARCH_FIELD_SPACE
-                    );
-
-                searchpanel.setBounds(
-                    Math.max(SEARCH_FIELD_SPACE, (visibleRect.x + visibleRect.width) - width),
-                    visibleRect.y + SEARCH_FIELD_SPACE, Math.min(visibleRect.width, width) - SEARCH_FIELD_SPACE,
-                    heightOfTextField
-                );
-            }
         }
 
+        @Override
         public void setFont(Font f) {
             if (f != getFont()) {
                 firstPaint = true;
@@ -1653,13 +1845,9 @@ public abstract class TreeView extends JScrollPane {
             }
         }
 
+        @Override
         protected void processFocusEvent(FocusEvent fe) {
-            super.processFocusEvent(fe);
-
-            //Since the selected when focused is different, we need to force a
-            //repaint of the entire selection, but let's do it in guarded more
-            //as any other repaint
-            new GuardedActions(3, null);
+            new GuardedActions(3, fe);
         }
 
         private void repaintSelection() {
@@ -1669,10 +1857,18 @@ public abstract class TreeView extends JScrollPane {
             if (first != -1) {
                 if (first == last) {
                     Rectangle r = getRowBounds(first);
+                    if (r == null) {
+                        repaint();
+                        return;
+                    }
                     repaint(r.x, r.y, r.width, r.height);
                 } else {
                     Rectangle top = getRowBounds(first);
                     Rectangle bottom = getRowBounds(last);
+                    if (top == null || bottom == null) {
+                        repaint();
+                        return;
+                    }
                     Rectangle r = new Rectangle();
                     r.x = Math.min(top.x, bottom.x);
                     r.y = top.y;
@@ -1680,20 +1876,6 @@ public abstract class TreeView extends JScrollPane {
                     r.height = (bottom.y + bottom.height) - top.y;
                     repaint(r.x, r.y, r.width, r.height);
                 }
-            }
-        }
-
-        private void prepareSearchPanel() {
-            if (searchpanel == null) {
-                searchpanel = new JPanel();
-
-                JLabel lbl = new JLabel(NbBundle.getMessage(TreeView.class, "LBL_QUICKSEARCH")); //NOI18N
-                searchpanel.setLayout(new BoxLayout(searchpanel, BoxLayout.X_AXIS));
-                searchpanel.add(lbl);
-                searchpanel.add(searchTextField);
-                lbl.setLabelFor(searchTextField);
-                searchpanel.setBorder(BorderFactory.createRaisedBevelBorder());
-                lbl.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
             }
         }
 
@@ -1708,6 +1890,7 @@ public abstract class TreeView extends JScrollPane {
             // Add new key listeners
             addKeyListener(
                 new KeyAdapter() {
+                @Override
                     public void keyTyped(KeyEvent e) {
                         int modifiers = e.getModifiers();
                         int keyCode = e.getKeyCode();
@@ -1835,36 +2018,6 @@ public abstract class TreeView extends JScrollPane {
             return null;
         }
 
-        /**
-         * Adds the search field to the tree.
-         */
-        private void displaySearchField() {
-            if (!searchTextField.isDisplayable()) {
-                JViewport viewport = TreeView.this.getViewport();
-                originalScrollMode = viewport.getScrollMode();
-                viewport.setScrollMode(JViewport.SIMPLE_SCROLL_MODE);
-                searchTextField.setFont(ExplorerTree.this.getFont());
-                prepareSearchPanel();
-                add(searchpanel);
-                revalidate();
-                repaint();
-                searchTextField.requestFocus();
-            }
-        }
-
-        /**
-         * Removes the search field from the tree.
-         */
-        private void removeSearchField() {
-            if (searchpanel.isDisplayable()) {
-                remove(searchpanel);
-                TreeView.this.getViewport().setScrollMode(originalScrollMode);
-
-                Rectangle r = searchpanel.getBounds();
-                this.repaint(r);
-            }
-        }
-
         /** notify the Component to autoscroll */
         public void autoscroll(Point cursorLoc) {
             getSupport().autoscroll(cursorLoc);
@@ -1887,6 +2040,7 @@ public abstract class TreeView extends JScrollPane {
             return support;
         }
 
+        @Override
         public String getToolTipText(MouseEvent event) {
             if (event != null) {
                 Point p = event.getPoint();
@@ -1907,10 +2061,12 @@ public abstract class TreeView extends JScrollPane {
             return null;
         }
 
+        @Override
         protected TreeModelListener createTreeModelListener() {
             return new ModelHandler();
         }
 
+        @Override
         public AccessibleContext getAccessibleContext() {
             if (accessibleContext == null) {
                 accessibleContext = new AccessibleExplorerTree();
@@ -1919,38 +2075,39 @@ public abstract class TreeView extends JScrollPane {
             return accessibleContext;
         }
 
-        private class GuardedActions implements Mutex.Action<Void> {
+        private class GuardedActions implements Mutex.Action<Object> {
             private int type;
             private Object p1;
+            final Object ret;
 
             public GuardedActions(int type, Object p1) {
                 this.type = type;
                 this.p1 = p1;
-                Children.MUTEX.readAccess(this);
+                if (Children.MUTEX.isReadAccess() || Children.MUTEX.isWriteAccess()) {
+                    ret = run();
+                } else {
+                    ret = Children.MUTEX.readAccess(this);
+                }
             }
 
-            public Void run() {
+            public Object run() {
                 switch (type) {
                 case 0:
                     guardedPaint((Graphics) p1);
-
                     break;
-
                 case 1:
                     guardedValidateTree();
-
                     break;
-
                 case 2:
                     guardedDoLayout();
-
                     break;
-
                 case 3:
+                    ExplorerTree.super.processFocusEvent((FocusEvent)p1);
+                    //Since the selected when focused is different, we need to force a
+                    //repaint of the entire selection, but let's do it in guarded more
+                    //as any other repaint
                     repaintSelection();
-
                     break;
-
                 default:
                     throw new IllegalStateException("type: " + type);
                 }
@@ -1981,6 +2138,7 @@ public abstract class TreeView extends JScrollPane {
                 searchForNode();
             }
 
+            @Override
             public void keyPressed(KeyEvent e) {
                 int keyCode = e.getKeyCode();
 
@@ -2063,7 +2221,8 @@ public abstract class TreeView extends JScrollPane {
             }
 
             public void focusGained(FocusEvent e) {
-                // Do nothing
+                // make sure nothing is selected
+                searchTextField.select(1, 1);
             }
 
             public void focusLost(FocusEvent e) {
@@ -2075,10 +2234,12 @@ public abstract class TreeView extends JScrollPane {
             AccessibleExplorerTree() {
             }
 
+            @Override
             public String getAccessibleName() {
                 return TreeView.this.getAccessibleContext().getAccessibleName();
             }
 
+            @Override
             public String getAccessibleDescription() {
                 return TreeView.this.getAccessibleContext().getAccessibleDescription();
             }
@@ -2088,6 +2249,7 @@ public abstract class TreeView extends JScrollPane {
             ModelHandler() {
             }
 
+            @Override
             public void treeStructureChanged(TreeModelEvent e) {
                 // Remember selections and expansions
                 TreePath[] selectionPaths = getSelectionPaths();
@@ -2116,6 +2278,7 @@ public abstract class TreeView extends JScrollPane {
                 }
             }
 
+            @Override
             public void treeNodesRemoved(TreeModelEvent e) {
                 // called to removed from JTree.expandedState
                 super.treeNodesRemoved(e);
@@ -2140,21 +2303,41 @@ public abstract class TreeView extends JScrollPane {
     }
     
     private static class DummyTransferHandler extends TransferHandler /*implements UIResource*/ {
+        @Override
         public void exportAsDrag(JComponent comp, InputEvent e, int action) {
             //do nothing - ExplorerDnDManager will kick in when necessary
         }
+        @Override
         public void exportToClipboard(JComponent comp, Clipboard clip, int action)
                                                       throws IllegalStateException {
             //do nothing - Node actions will hande this
         }
+        @Override
         public boolean canImport(JComponent comp, DataFlavor[] transferFlavors) {
             return false; //TreeViewDropSupport will decided
         }
+        @Override
         public boolean importData(JComponent comp, Transferable t) {
             return false;
         }
+        @Override
         public int getSourceActions(JComponent c) {
             return COPY_OR_MOVE;
+        }
+    }
+
+    static class VisualizerHolder extends HashSet<VisualizerChildren> {
+
+        /** removes recursively VisualizerChildren */
+        void removeRecur(VisualizerChildren visChildren) {
+            Enumeration<VisualizerNode> vnodes = visChildren.children(false);
+            while (vnodes.hasMoreElements()) {
+                VisualizerNode vn = vnodes.nextElement();
+                if (vn != null) {
+                    removeRecur(vn.getChildren(false));
+                }
+            }
+            remove(visChildren);
         }
     }
 }
