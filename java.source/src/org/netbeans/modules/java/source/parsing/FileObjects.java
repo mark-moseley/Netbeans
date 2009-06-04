@@ -53,12 +53,16 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.RandomAccessFile;
 import java.io.Reader;
 import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.util.Comparator;
@@ -73,13 +77,11 @@ import org.netbeans.modules.java.JavaDataLoader;
 import org.netbeans.modules.java.preprocessorbridge.spi.JavaFileFilterImplementation;
 import org.netbeans.modules.java.source.JavaFileFilterQuery;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.util.NbBundle;
+import org.openide.util.Parameters;
 import org.openide.util.Utilities;
 
 /** Creates various kinds of file objects 
@@ -87,6 +89,7 @@ import org.openide.util.Utilities;
  * XXX - Rename to JavaFileObjects
  *
  * @author Petr Hrebejk
+ * @author Tomas Zezula
  */
 public class FileObjects {
     
@@ -102,6 +105,7 @@ public class FileObjects {
     public static final String HTML  = "html"; //NOI18N
     public static final String SIG   = "sig";  //NOI18N
     public static final String RS    = "rs";   //NOI18N
+    public static final String RX    = "rx";   //NOI18N
     
     
     /** Creates a new instance of FileObjects */
@@ -121,7 +125,7 @@ public class FileObjects {
      * @param name the base (simple name)
      * @return {@link JavaFileObject}, never returns null
      */
-    public static JavaFileObject zipFileObject( File zipFile, String folder, String baseName, long mtime) {
+    public static InferableJavaFileObject zipFileObject( File zipFile, String folder, String baseName, long mtime) {
         assert zipFile != null;                
         return new ZipFileObject( zipFile, folder, baseName, mtime);
     }
@@ -136,7 +140,7 @@ public class FileObjects {
      * @param offset the start of zip entry in the zip file
      * @return {@link JavaFileObject}, never returns null
      */
-    public static JavaFileObject zipFileObject (File zipFile, String folder, String baseName, long mtime, long offset) {
+    public static InferableJavaFileObject zipFileObject (File zipFile, String folder, String baseName, long mtime, long offset) {
         assert zipFile != null;
         return new FastZipFileObject (zipFile, folder, baseName, mtime, offset);
     }
@@ -151,7 +155,7 @@ public class FileObjects {
      * @param offset the start of zip entry in the zip file
      * @return {@link JavaFileObject}, never returns null
      */
-    public static JavaFileObject zipFileObject(ZipFile zipFile, String folder, String baseName, long mtime) {
+    public static InferableJavaFileObject zipFileObject(ZipFile zipFile, String folder, String baseName, long mtime) {
         assert zipFile != null;
         return new CachedZipFileObject (zipFile, folder, baseName, mtime);
     }
@@ -162,7 +166,7 @@ public class FileObjects {
      * @pram root - the classpath root owning the file
      * @return {@link JavaFileObject}, never returns null
      */
-    public static JavaFileObject fileFileObject( final File file, final File root, final JavaFileFilterImplementation filter) {
+    public static InferableJavaFileObject fileFileObject( final File file, final File root, final JavaFileFilterImplementation filter) {
         return fileFileObject(file, root, filter, null);
     }
     
@@ -173,7 +177,7 @@ public class FileObjects {
      * @param encoding - the file's encoding
      * @return {@link JavaFileObject}, never returns null
      */
-    public static JavaFileObject fileFileObject( final File file, final File root, final JavaFileFilterImplementation filter, Charset encoding) {
+    public static InferableJavaFileObject fileFileObject( final File file, final File root, final JavaFileFilterImplementation filter, Charset encoding) {
         assert file != null;
         assert root != null;
         String[] pkgNamePair = getFolderAndBaseName(getRelativePath(root,file),File.separatorChar);
@@ -202,7 +206,7 @@ public class FileObjects {
      * @return {@link JavaFileObject}, never returns null
      * @exception {@link IOException} may be thrown
      */
-    public static JavaFileObject nbFileObject (final FileObject file, final FileObject root) throws IOException {
+    public static SourceFileObject nbFileObject (final FileObject file, final FileObject root) throws IOException {
         return nbFileObject (file, root, null, false);
     }
     
@@ -216,7 +220,7 @@ public class FileObjects {
      * @return {@link JavaFileObject}, never returns null
      * @exception {@link IOException} may be thrown
      */
-    public static JavaFileObject nbFileObject (final FileObject file, final FileObject root, JavaFileFilterImplementation filter, boolean renderNow) throws IOException {
+    public static SourceFileObject nbFileObject (final FileObject file, final FileObject root, JavaFileFilterImplementation filter, boolean renderNow) throws IOException {
         assert file != null;
         if (!file.isValid() || file.isVirtual()) {
             throw new InvalidFileException (file);
@@ -225,27 +229,63 @@ public class FileObjects {
     }
     
     /**
+     * Creates {@link JavaFileObject} for a NetBeans {@link FileObject}
+     * Any client which needs to create {@link JavaFileObject} for java
+     * source file should use this factory method.
+     * @param {@link FileObject} for which the {@link JavaFileObject} should be created
+     * @param {@link FileObject} root owning the file
+     * @param renderNow if true the snap shot of the file is taken immediately
+     * @return {@link JavaFileObject}, never returns null
+     * @exception {@link IOException} may be thrown
+     */
+    public static SourceFileObject nbFileObject (final FileObject file, final FileObject root,
+            final JavaFileFilterImplementation filter, final CharSequence content) throws IOException {
+        assert file != null;
+        if (!file.isValid() || file.isVirtual()) {
+            throw new InvalidFileException (file);
+        }
+        return new SourceFileObject (file, root, filter, content);
+    }
+    
+    /**
      * Creates virtual {@link JavaFileObject} with given name and content.
      * This method should be used only by tests, regular client should never
      * use this method.
-     * @param content the content of the {@link JavaFileObject}
+     * @param pkg packageName     
      * @param name the name of the {@link JavaFileObject}
+     * @param content the content of the {@link JavaFileObject}
      * @return {@link JavaFileObject}, never returns null
      */
-    public static JavaFileObject memoryFileObject( CharSequence content, CharSequence name ) {
-        final String nameStr = name.toString();
-        if (!nameStr.equals(getBaseName(nameStr))) {
-            throw new IllegalArgumentException ("Memory is flat");      //NOI18N
-        }
+    public static JavaFileObject memoryFileObject(final CharSequence pkg, final CharSequence name, CharSequence content) {
+        return memoryFileObject(pkg, name, null, System.currentTimeMillis(), content);
+    }
+    /**
+     * Creates virtual {@link JavaFileObject} with given name and content.
+     * This method should be used only by tests, regular client should never
+     * use this method.
+     * @param pkg packageName     
+     * @param name the name of the {@link JavaFileObject}
+     * @param URI uri of the {@link JavaFileObject}, if null the relative URI
+     * in the form binaryName.extension is generated.
+     * @param lastModified mtime of the virtual file
+     * @param content the content of the {@link JavaFileObject}
+     * @return {@link JavaFileObject}, never returns null
+     */
+    public static FileObjects.InferableJavaFileObject memoryFileObject(final CharSequence pkg, final CharSequence name,
+        final URI uri, final long lastModified, final CharSequence content) {
+        Parameters.notNull("pkg", pkg);
+        Parameters.notNull("name", name);
+        Parameters.notNull("content", content);
+        final String pkgStr  = (pkg instanceof String) ? (String) pkg : pkg.toString();
+        final String nameStr = (name instanceof String) ? (String) name : name.toString();        
         int length = content.length();        
         if ( length != 0 && Character.isWhitespace( content.charAt( length - 1 ) ) ) {
-            return new MemoryFileObject( nameStr, CharBuffer.wrap( content ) );
+            return new MemoryFileObject(pkgStr, nameStr, uri, lastModified, CharBuffer.wrap( content ) );
         }
         else {
-            return new MemoryFileObject( nameStr, (CharBuffer)CharBuffer.allocate( length + 1 ).append( content ).append( ' ' ).flip() );
-        }
-        
-    }            
+            return new MemoryFileObject(pkgStr, nameStr, uri, lastModified, (CharBuffer)CharBuffer.allocate( length + 1 ).append( content ).append( ' ' ).flip() );
+        }        
+    }        
     
     public static String stripExtension( String fileName ) {        
         int dot = fileName.lastIndexOf(".");
@@ -400,24 +440,32 @@ public class FileObjects {
         return relativePath.toString();
     }
     
-    public static String[] getParentRelativePathAndName (final String className) {
-        if (className.charAt(className.length()-1) == '.') {
+    public static String[] getParentRelativePathAndName (final String fqn) {        
+        final String[] result = getPackageAndName(fqn);
+        if (result != null) {
+            result[0] = result[0].replace('.','/');      //NOI18N
+        }
+        return result;
+    }     
+    
+    public static String[] getPackageAndName (final String fqn) {
+        if (fqn.charAt(fqn.length()-1) == '.') {
             return null;
         }
-        final int index = className.lastIndexOf('.');
+        final int index = fqn.lastIndexOf('.');
         if (index<0) {
             return new String[] {
                 "",     //NOI18N
-                className
+                fqn
             };
         }
         else {
             return new String[] {
-                className.substring(0,index).replace('.','/'),      //NOI18N
-                className.substring(index+1)
+                fqn.substring(0,index),
+                fqn.substring(index+1)
             };
         }
-    }            
+    }
     
     
     /**
@@ -459,7 +507,22 @@ public class FileObjects {
     
     // Innerclasses ------------------------------------------------------------
     
-    public static abstract class Base implements JavaFileObject {
+    /**
+     * JavaFileObject which is able to infer itself.
+     * 
+     */
+    public static interface InferableJavaFileObject extends JavaFileObject {
+        
+        /**
+         * Returns binary name of the {@link JavaFileObject}.
+         * @return the binary name or null when {@link JavaFileObject}
+         * is not able to infer.
+         */
+        public String inferBinaryName ();
+        
+    }
+    
+    public static abstract class Base implements InferableJavaFileObject {
 
         protected final JavaFileObject.Kind kind;
         protected final String pkgName;
@@ -475,7 +538,7 @@ public class FileObjects {
             this.ext = res[1];
             this.kind = FileObjects.getKind (this.ext);
         }
-        
+                
         public JavaFileObject.Kind getKind() {
             return this.kind;
         }
@@ -514,7 +577,21 @@ public class FileObjects {
         
         public String getExt () {
             return this.ext;
-        }        
+        }
+        
+        public boolean isVirtual () {
+            return false;
+        }
+        
+        public final String inferBinaryName () {
+            final StringBuilder sb = new StringBuilder ();
+            sb.append (this.pkgName);
+            if (sb.length()>0) {
+                sb.append('.'); //NOI18N
+            }
+            sb.append(this.nameWithoutExt);
+            return sb.toString();   
+        }
         
         private static String[] getNameExtPair (String name) {
             int index = name.lastIndexOf ('.');            
@@ -547,13 +624,12 @@ public class FileObjects {
         protected FileBase (final File file, final String pkgName, final String name) {
             super (pkgName, name);
             assert file != null;
-            assert file.equals(FileUtil.normalizeFile(file)) : "File: " + file.getAbsolutePath() + " Normalized File: " + FileUtil.normalizeFile(file).getAbsolutePath();  //NOI18N
             this.f = file;
         }
         
         public File getFile () {
             return this.f;
-        }
+        }                
     }
     
     
@@ -574,12 +650,12 @@ public class FileObjects {
         final String foPath = fo.getAbsolutePath();
         assert foPath.startsWith(rootPath) : String.format("getRelativePath(%s, %s)", rootPath, foPath);
         int index = rootPath.length();
-        if (rootPath.charAt(index-1)!=File.separatorChar) {
+        if (rootPath.charAt(index - 1) != File.separatorChar) {
             index++;
-        }            
+        }
         int foIndex = foPath.length();
         if (foIndex <= index) {
-            return "";  //NOI18N
+            return ""; //NOI18N
         }
         return foPath.substring(index);
     }           
@@ -645,24 +721,41 @@ public class FileObjects {
 	}
 
 	public CharSequence getCharContent(boolean ignoreEncodingErrors) throws IOException {
-            
+        return FileObjects.getCharContent(new FileInputStream(f), encoding, filter, f.length(), ignoreEncodingErrors);
+    }
+	@Override
+	public boolean equals(Object other) {
+	    if (!(other instanceof RegularFileObject))
+		return false;
+	    RegularFileObject o = (RegularFileObject) other;
+	    return f.equals(o.f);
+	}
+
+	@Override
+	public int hashCode() {
+	    return f.hashCode();
+	}
+        
+    }
+    
+	public static CharSequence getCharContent(InputStream ins, Charset encoding, JavaFileFilterImplementation filter, long expectedLength, boolean ignoreEncodingErrors) throws IOException {
             char[] result;
             Reader in;
-            
+
             if (encoding != null) {
-                in = new InputStreamReader (new FileInputStream(this.f), encoding);
+                in = new InputStreamReader (ins, encoding);
             } else {
-                in = new InputStreamReader (new FileInputStream(this.f));
+                in = new InputStreamReader (ins);
             }
-            if (this.filter != null) {
-                in = this.filter.filterReader(in);
+            if (filter != null) {
+                in = filter.filterReader(in);
             }
             int red = 0;
             try {
-                int len = (int)this.f.length();
+                int len = (int) expectedLength;
                 if (len == 0) len++; //len - red would be 0 while reading from the stream
                 result = new char [len+1];
-                int rv;	    
+                int rv;
                 while ((rv=in.read(result,red,len-red))>=0) {
                     red += rv;
                     //In case the filter enlarged the file
@@ -680,22 +773,6 @@ public class FileObjects {
             CharSequence buffer = CharBuffer.wrap (result, 0, red);
             return buffer;
 	}
-
-	@Override
-	public boolean equals(Object other) {
-	    if (!(other instanceof RegularFileObject))
-		return false;
-	    RegularFileObject o = (RegularFileObject) other;
-	    return f.equals(o.f);
-	}
-
-	@Override
-	public int hashCode() {
-	    return f.hashCode();
-	}
-        
-    }
-    
     
     private static class NewFromTemplateFileObject extends RegularFileObject {
         
@@ -748,8 +825,7 @@ public class FileObjects {
             FileObject parentFo = FileUtil.createFolder(parent);
             assert parentFo != null;
             DataFolder target = DataFolder.findFolder(parentFo);
-            FileSystem dfs = Repository.getDefault().getDefaultFileSystem();
-            FileObject template = dfs.findResource("Templates/Classes/Empty.java");     //NOI18N
+            FileObject template = FileUtil.getConfigFile("Templates/Classes/Empty.java");     //NOI18N
             DataObject templateDobj = DataObject.find(template);
             String simpleName = FileObjects.stripExtension(f.getName());
             DataObject newDobj = templateDobj.createFromTemplate(target, simpleName);
@@ -833,7 +909,35 @@ public class FileObjects {
         
         public final URI toUri () {
             URI  zdirURI = this.getArchiveURI();
-            return URI.create ("jar:"+zdirURI.toString()+"!/"+resName);  //NOI18N
+            try {
+                //Optimistic try and see
+                return new URI ("jar:"+zdirURI.toString()+"!/"+resName);  //NOI18N
+            } catch (URISyntaxException e) {
+                //Need to encode the resName part (slower)
+                final StringBuilder sb = new StringBuilder ();
+                final String[] elements = resName.split("/");                 //NOI18N
+                try {
+                    for (int i = 0; i< elements.length; i++) {
+                        String element = elements[i];
+                        element = URLEncoder.encode(element, "UTF-8");       //NOI18N
+                        element = element.replace("+", "%20");               //NOI18N
+                        sb.append(element);
+                        if (i< elements.length - 1) {
+                            sb.append('/');
+                        }
+                    }
+                    return new URI("jar:"+zdirURI.toString()+"!/"+sb.toString());    //NOI18N
+                } catch (final UnsupportedEncodingException e2) {
+                    final IllegalStateException ne = new IllegalStateException ();
+                    ne.initCause(e2);
+                    throw ne;
+                }
+                catch (final URISyntaxException e2) {
+                    final IllegalStateException ne = new IllegalStateException ();
+                    ne.initCause(e2);
+                    throw ne;
+                }
+            }
         }
         
         @Override
@@ -956,6 +1060,8 @@ public class FileObjects {
                 return new BufferedInputStream (FastJar.getInputStream(archiveFile, offset));
             } catch (IOException e) {
                 return super.openInputStream();
+            } catch (IndexOutOfBoundsException e) {
+                return super.openInputStream();
             }
         }
         
@@ -1008,14 +1114,19 @@ public class FileObjects {
      */    
     private static class MemoryFileObject extends Base {
         
-        private String fileName;
-        private CharBuffer cb;
+        private final long lastModified;
+        private final CharBuffer cb;
+        private final URI uri;
+        private final boolean isVirtual;
         
-        public MemoryFileObject( String fileName, CharBuffer cb ) {            
-            super ("",fileName);    //NOI18N
+        public MemoryFileObject(final String packageName, final String fileName,
+                final URI uri, final long lastModified, final CharBuffer cb ) {            
+            super (packageName, fileName);    //NOI18N
             this.cb = cb;
-            this.fileName = fileName;
-        }                
+            this.lastModified = lastModified;
+            this.uri = uri;
+            this.isVirtual = uri != null;
+        }
         
 
         /**
@@ -1025,7 +1136,7 @@ public class FileObjects {
          * @throws UnsupportedOperationException if character access is not supported
          */
         public java.nio.CharBuffer getCharContent(boolean ignoreEncodingErrors) throws java.io.IOException {
-            return cb;
+            return cb.duplicate();
         }
 
         public boolean delete() {
@@ -1034,11 +1145,21 @@ public class FileObjects {
         }        
 
         public URI toUri () {
-            return URI.create (this.nameWithoutExt);
+            if (this.uri != null) {
+                return this.uri;
+            }
+            else {
+                return URI.create (convertPackage2Folder(this.pkgName) + '/' + this.nameWithoutExt);    //NOI18N
+            }
+        }
+        
+        @Override
+        public boolean isVirtual () {
+            return isVirtual;
         }
 
         public long getLastModified() {
-            return System.currentTimeMillis(); // XXX
+            return this.lastModified;
         }
 
         /**
@@ -1069,7 +1190,7 @@ public class FileObjects {
          * @throws IOException if an error occurs while opening the reader
          */
         public java.io.Reader openReader (boolean b) throws java.io.IOException {
-            throw new UnsupportedOperationException();
+            return new StringReader(this.cb.toString());
         }
 
         /**
