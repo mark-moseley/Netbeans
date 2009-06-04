@@ -42,15 +42,16 @@ package org.netbeans.editor.ext.html.parser;
 
 import java.util.List;
 import java.util.logging.Logger;
-import org.netbeans.editor.ext.html.*;
 import java.io.IOException;
 import java.util.logging.Level;
 import javax.swing.text.BadLocationException;
+import junit.framework.Test;
+import junit.framework.TestSuite;
+import org.netbeans.api.editor.mimelookup.test.MockMimeLookup;
 import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.LanguagePath;
 import org.netbeans.editor.ext.html.test.TestBase;
-import org.netbeans.modules.editor.NbEditorDocument;
-import org.netbeans.modules.editor.html.HTMLKit;
+import org.netbeans.junit.MockServices;
 
 /** SyntaxParser unit tests
  *
@@ -60,27 +61,27 @@ public class SyntaxParserTest extends TestBase {
 
     private static final LanguagePath languagePath = LanguagePath.get(HTMLTokenId.language());
 
-    public SyntaxParserTest() throws IOException, BadLocationException {
-        super("SyntaxParserTest");
+    public SyntaxParserTest(String testName) throws IOException, BadLocationException {
+        super(testName);
+    }
+
+    public static Test xsuite() throws IOException, BadLocationException {
+        TestSuite suite = new TestSuite();
+        suite.addTest(new SyntaxParserTest("testParseBrokenSource"));
+        suite.addTest(new SyntaxParserTest("testParseBrokenSource2"));
+        return suite;
     }
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
         Logger.getLogger(SyntaxParser.class.getName()).setLevel(Level.FINE);
+        MockServices.setServices(MockMimeLookup.class);
     }
 
     public void testOpenTag() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
         String text = "<div>";
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
@@ -101,18 +102,10 @@ public class SyntaxParserTest extends TestBase {
         assertEquals(text, divTag.text());
 
     }
-    
+
     public void testEndTag() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
         String text = "</div>";
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
@@ -133,18 +126,10 @@ public class SyntaxParserTest extends TestBase {
         assertEquals(text, divTag.text());
 
     }
-    
-     public void testTagWithOneAttribute() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
+
+    public void testTagWithOneAttribute() throws BadLocationException {
         String text = "<div align=\"center\"/>";
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
@@ -179,17 +164,9 @@ public class SyntaxParserTest extends TestBase {
 
     }
 
-        public void testTagWithUnquotedAttribute() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
+    public void testTagWithUnquotedAttribute() throws BadLocationException {
         String text = "<div align=center/>";
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
@@ -223,20 +200,12 @@ public class SyntaxParserTest extends TestBase {
         assertEquals("center".length(), align.getValueLength());
 
     }
-    
+
     //+ new line and tab in the tag and whitespaces around the equal operator
     public void testTagWithOneAttribute2() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
         String text = "<div \t \n align =\t \"center\"/>";
         //             012345 67 890123456 78 9012345 678
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
@@ -270,19 +239,11 @@ public class SyntaxParserTest extends TestBase {
         assertEquals("\"center\"".length(), align.getValueLength());
 
     }
-    
+
     public void testTagWithMoreAttributes() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
         String text = "<div align=\"center\" \t\n title=\"mydiv\" />";
         //             012345678901 2345678 90 1 23456789 012345 6789
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
@@ -314,7 +275,7 @@ public class SyntaxParserTest extends TestBase {
         assertEquals("\"center\"", attr.getValue());
         assertEquals(11, attr.getValueOffset());
         assertEquals("\"center\"".length(), attr.getValueLength());
-        
+
         attr = attributes.get(1);
 
         assertEquals("title", attr.getName());
@@ -326,23 +287,16 @@ public class SyntaxParserTest extends TestBase {
     }
 
     public void testEntityReference() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
+
         String text = "&nbsp; &amp;";
         //             012345678901
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
-        assertEquals(2, elements.size());
+        assertEquals(3, elements.size());
 
         SyntaxElement e1 = elements.get(0);
-        SyntaxElement e2 = elements.get(1);
+        SyntaxElement e2 = elements.get(2);
 
         assertNotNull(e1);
         assertNotNull(e2);
@@ -362,17 +316,9 @@ public class SyntaxParserTest extends TestBase {
     }
 
     public void testComment() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
         String text = "<!-- comment -->";
         //             01234567890123456
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
@@ -392,23 +338,15 @@ public class SyntaxParserTest extends TestBase {
     }
 
     public void testMultipleComments() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
         String comments = "<!-- comment1 --><!-- comment2 -->";
         String text = comments + "\n";
 
         //"<!-- comment1 --><!-- comment2 -->\n"
         //             01234567890123456
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
-        assertEquals(1, elements.size());
+        assertEquals(2, elements.size());
 
         SyntaxElement e1 = elements.get(0);
 
@@ -425,27 +363,18 @@ public class SyntaxParserTest extends TestBase {
     }
 
     public void testMultipleCommentsSeparated() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
-
         String comment1 = "<!-- comment1 -->";
         String comment2 = "<!-- comment2 -->";
         String text = comment1 + "\t\n " + comment2 + "\n";
         //             <!-- comment1 -->\t\n <!-- comment2 -->\n
         //             012345678901234567 8 9012345678901234567 890
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
-        assertEquals(2, elements.size());
+        assertEquals(4, elements.size());
 
         SyntaxElement e1 = elements.get(0);
-        SyntaxElement e2 = elements.get(1);
+        SyntaxElement e2 = elements.get(2);
 
         assertNotNull(e1);
         assertNotNull(e2);
@@ -463,113 +392,325 @@ public class SyntaxParserTest extends TestBase {
         assertEquals(comment2, e2.text());
 
     }
-    
-     public void testSimpleSGMLDeclaration() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
+
+    public void testSimpleSGMLDeclaration() throws BadLocationException {
         String text = "<!X Y Z>";
         //             0123456789
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
 
         SyntaxElement e1 = elements.get(0);
-        
+
         assertNotNull(e1);
-        
+
         assertEquals(SyntaxElement.TYPE_DECLARATION, e1.type());
-        
-        SyntaxElement.Declaration declaration = (SyntaxElement.Declaration)e1;
-        
+
+        SyntaxElement.Declaration declaration = (SyntaxElement.Declaration) e1;
+
         assertEquals(0, e1.offset());
-        
+
         assertEquals(text.length(), e1.length());
-        
+
         assertEquals(text, e1.text());
-        
+
         assertNull(declaration.getRootElement());
         assertNull(declaration.getPublicIdentifier());
         assertNull(declaration.getDoctypeFile());
-        
+
     }
-     
-     public void testSGMLDeclaration() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
+
+    public void testSGMLDeclaration() throws BadLocationException {
         String text = "<!X -- comment -- Y \n \t Z>";
         //             0123456789
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
 
         SyntaxElement e1 = elements.get(0);
-        
+
         assertNotNull(e1);
-        
+
         assertEquals(SyntaxElement.TYPE_DECLARATION, e1.type());
-        
-        SyntaxElement.Declaration declaration = (SyntaxElement.Declaration)e1;
-        
+
+        SyntaxElement.Declaration declaration = (SyntaxElement.Declaration) e1;
+
         assertEquals(0, e1.offset());
-        
+
         assertEquals(text.length(), e1.length());
-        
+
         assertEquals(text, e1.text());
-        
+
         assertNull(declaration.getRootElement());
         assertNull(declaration.getPublicIdentifier());
         assertNull(declaration.getDoctypeFile());
 
     }
-    
-     public void testDoctype() throws BadLocationException {
-        NbEditorDocument doc = new NbEditorDocument(HTMLKit.class);
-        String text = "<!DOCTYPE html \t PUBLIC \"id\" \n \"file\">";
+
+    public void testDoctype() throws BadLocationException {
+        String text = "<!DOCTYPE html \t PUBLIC \"id part 2\" \n \"file\">";
         //             0123456789
-        doc.insertString(0, text, null);
-        SyntaxParser parser = SyntaxParser.get(doc, languagePath);
-
-        assertNotNull(parser);
-
-        parser.forceParse();
-
-        List<SyntaxElement> elements = parser.elements();
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
 
         assertNotNull(elements);
         assertEquals(1, elements.size());
 
         SyntaxElement e1 = elements.get(0);
-        
+
         assertNotNull(e1);
-        
+
         assertEquals(SyntaxElement.TYPE_DECLARATION, e1.type());
-        
-        SyntaxElement.Declaration declaration = (SyntaxElement.Declaration)e1;
-        
+
+        SyntaxElement.Declaration declaration = (SyntaxElement.Declaration) e1;
+
         assertEquals(0, e1.offset());
-        
+
         assertEquals(text.length(), e1.length());
-        
+
         assertEquals(text, e1.text());
-        
-        assertEquals("html",declaration.getRootElement());
-        assertEquals("\"id\"", declaration.getPublicIdentifier());
+
+        assertEquals("html", declaration.getRootElement());
+        assertEquals("id part 2", declaration.getPublicIdentifier());
         assertEquals("\"file\"", declaration.getDoctypeFile());
-        
+
     }
-    
+
+    public void testDoctypeSimplePublicId() throws BadLocationException {
+        String text = "<!DOCTYPE html \t PUBLIC \"simpleid\" \n \"file\">";
+        //             0123456789
+
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        assertNotNull(elements);
+        assertEquals(1, elements.size());
+
+        SyntaxElement e1 = elements.get(0);
+
+        assertNotNull(e1);
+
+        assertEquals(SyntaxElement.TYPE_DECLARATION, e1.type());
+
+        SyntaxElement.Declaration declaration = (SyntaxElement.Declaration) e1;
+
+        assertEquals(0, e1.offset());
+
+        assertEquals(text.length(), e1.length());
+
+        assertEquals(text, e1.text());
+
+        assertEquals("html", declaration.getRootElement());
+        assertEquals("simpleid", declaration.getPublicIdentifier());
+        assertEquals("\"file\"", declaration.getDoctypeFile());
+
+    }
+
+    public void testTagWithStyleAttributes() throws BadLocationException {
+        String text = "<div style=\"color:red\"/>";
+        //             012345678901 2345678 90 1 23456789 012345 6789
+
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        assertNotNull(elements);
+        assertEquals(1, elements.size());
+
+        SyntaxElement div = elements.get(0);
+
+        assertNotNull(div);
+        assertEquals(SyntaxElement.TYPE_TAG, div.type());
+        assertTrue(div instanceof SyntaxElement.Tag);
+
+        SyntaxElement.Tag divTag = (SyntaxElement.Tag) div;
+
+        List<SyntaxElement.TagAttribute> attributes = divTag.getAttributes();
+
+        assertNotNull(attributes);
+        assertEquals(1, attributes.size());
+
+        SyntaxElement.TagAttribute attr = attributes.get(0);
+
+        assertEquals("style", attr.getName());
+        assertEquals(5, attr.getNameOffset());
+        assertEquals("\"color:red\"", attr.getValue());
+        assertEquals(11, attr.getValueOffset());
+        assertEquals("\"color:red\"".length(), attr.getValueLength());
+
+
+    }
+
+    public void testParseText() throws BadLocationException {
+        String text = "<div>text</div>last";
+        //             012345678901 2345678 90 1 23456789 012345 6789
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        assertNotNull(elements);
+        assertEquals("Unexpected number of elements: " + elementsToString(elements), 4, elements.size());
+
+        SyntaxElement se = elements.get(1);
+        assertNotNull(se);
+        assertEquals(SyntaxElement.TYPE_TEXT, se.type());
+        assertEquals("text", se.text());
+
+        se = elements.get(3);
+        assertNotNull(se);
+        assertEquals(SyntaxElement.TYPE_TEXT, se.type());
+        assertEquals("last", se.text());
+    }
+
+    public void testParseNewLineText() throws BadLocationException {
+        String text = "<div>\n</div>\nlast";
+        //             012345678901 2345678 90 1 23456789 012345 6789
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        assertNotNull(elements);
+        assertEquals("Unexpected number of elements: " + elementsToString(elements), 4, elements.size());
+
+        SyntaxElement se = elements.get(1);
+        assertNotNull(se);
+        assertEquals(SyntaxElement.TYPE_TEXT, se.type());
+
+        se = elements.get(3);
+        assertNotNull(se);
+        assertEquals(SyntaxElement.TYPE_TEXT, se.type());
+    }
+
+    public void testParseBrokenSource() throws BadLocationException {
+        String text = "<div></";
+        //             012345678901 2345678 90 1 23456789 012345 6789
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        assertNotNull(elements);
+        assertEquals(2, elements.size());
+
+        SyntaxElement div = elements.get(0);
+
+        assertNotNull(div);
+        assertEquals(SyntaxElement.TYPE_TAG, div.type());
+        assertTrue(div instanceof SyntaxElement.Tag);
+
+        SyntaxElement error = elements.get(1);
+
+        assertNotNull(error);
+        assertEquals(SyntaxElement.TYPE_ERROR, error.type());
+
+    }
+
+    public void testParseBrokenSource2() throws BadLocationException {
+        String text = "<div></</div>";
+        //             012345678901 2345678 90 1 23456789 012345 6789
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        assertNotNull(elements);
+        assertEquals(3, elements.size());
+
+        SyntaxElement se = elements.get(0);
+        assertNotNull(se);
+        assertEquals(SyntaxElement.TYPE_TAG, se.type());
+        assertTrue(se instanceof SyntaxElement.Tag);
+
+        se = elements.get(1);
+        assertNotNull(se);
+        assertEquals(SyntaxElement.TYPE_ERROR, se.type());
+
+        se = elements.get(2);
+        assertNotNull(se);
+        assertEquals(SyntaxElement.TYPE_ENDTAG, se.type());
+        assertTrue(se instanceof SyntaxElement.Tag);
+
+    }
+
+    //we do not properly parse the end tag here
+    public void testParseBrokenOpenTag() throws BadLocationException {
+        String text = "<div align= </div>";
+        //             012345678901 2345678 90 1 23456789 012345 6789
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        System.out.println(elementsToString(elements));
+
+        assertNotNull(elements);
+        assertEquals(2, elements.size());
+
+        SyntaxElement div = elements.get(0);
+
+        assertNotNull(div);
+        assertEquals(SyntaxElement.TYPE_TAG, div.type());
+        assertTrue(div instanceof SyntaxElement.Tag);
+
+        SyntaxElement endtag = elements.get(1);
+
+        assertNotNull(endtag);
+        assertEquals(SyntaxElement.TYPE_TEXT, endtag.type());
+
+    }
+
+    //in this case the end tag should be properly parsed
+    public void testParseBrokenOpenTag2() throws BadLocationException {
+        String text = "<div align=@# </div>";
+        //             012345678901 2345678 90 1 23456789 012345 6789
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        System.out.println(elementsToString(elements));
+
+        assertNotNull(elements);
+        assertEquals(2, elements.size());
+
+        SyntaxElement div = elements.get(0);
+
+        assertNotNull(div);
+        assertEquals(SyntaxElement.TYPE_TAG, div.type());
+        assertTrue(div instanceof SyntaxElement.Tag);
+
+        SyntaxElement endtag = elements.get(1);
+
+        assertNotNull(endtag);
+        assertEquals(SyntaxElement.TYPE_ENDTAG, endtag.type());
+
+    }
+
+    public void testParseBrokenOpenTagAtFileEnd() throws BadLocationException {
+        String text = "<div align=";
+        //             012345678901 2345678 90 1 23456789 012345 6789
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        assertNotNull(elements);
+        assertEquals(1, elements.size());
+
+        SyntaxElement div = elements.get(0);
+
+        assertNotNull(div);
+        assertEquals(SyntaxElement.TYPE_TAG, div.type());
+        assertTrue(div instanceof SyntaxElement.Tag);
+
+    }
+
+    //we do not properly parse the end tag here
+    public void testParseUnfinishedOpenTag() throws BadLocationException {
+        String text = "<col";
+        //             01234567
+        List<SyntaxElement> elements = SyntaxParser.parse(text).getElements();
+
+        assertNotNull(elements);
+        assertEquals(1, elements.size());
+
+        SyntaxElement div = elements.get(0);
+
+        assertNotNull(div);
+        assertEquals(SyntaxElement.TYPE_TAG, div.type());
+        assertTrue(div instanceof SyntaxElement.Tag);
+        assertEquals("<col", div.text());
+        assertEquals(4, div.length());
+
+    }
+
+    private static String elementsToString(List<SyntaxElement> elements) {
+        StringBuffer sb = new StringBuffer();
+        for(SyntaxElement se : elements) {
+            sb.append(se.toString());
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+
 }
