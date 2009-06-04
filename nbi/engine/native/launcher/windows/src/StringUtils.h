@@ -65,6 +65,7 @@ extern const char *  ARG_CPP_PROP;
 extern const char *  ARG_EXTRACT_PROP;
 extern const char *  ARG_DISABLE_SPACE_CHECK;
 extern const char *  ARG_LOCALE_PROP;
+extern const char *  ARG_SILENT_PROP;
 extern const char *  ARG_HELP_PROP;
 extern const char * MSG_CREATE_TMPDIR;     
 extern const char * MSG_EXTRACT_DATA;     
@@ -134,7 +135,9 @@ extern const char * MAIN_WINDOW_TITLE;
     
     WCHAR * newpWCHAR(DWORD length);
     char * newpChar(DWORD length);
-    
+    WCHAR * searchW( const WCHAR * wcs1, const WCHAR * wcs2);
+    char * searchA(const char* str1, const char * str2);
+
     WCHAR ** newppWCHAR(DWORD length);
     char ** newppChar(DWORD length);
     int64t * newint64_t(DWORD low, DWORD high);

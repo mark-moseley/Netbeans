@@ -66,6 +66,7 @@ const char * ARG_CPP_PROP                 = "nlw.arg.classpathp";
 const char * ARG_EXTRACT_PROP             = "nlw.arg.extract";
 const char * ARG_DISABLE_SPACE_CHECK      = "nlw.arg.disable.space.check";
 const char * ARG_LOCALE_PROP              = "nlw.arg.locale";
+const char * ARG_SILENT_PROP              = "nlw.arg.silent";
 const char * ARG_HELP_PROP                = "nlw.arg.help";
 
 const char * MSG_CREATE_TMPDIR     = "nlw.msg.create.tmpdir";
@@ -105,9 +106,55 @@ void freeI18NMessages(LauncherProperties * props) {
     }
 }
 
+char * searchA(const char * wcs1, const char * wcs2) {
+    char *cp = (char *) wcs1;
+    char *s1, *s2;
+    
+    if ( !*wcs2) {
+        return (char *)wcs1;
+    }
+    
+    while (*cp) {
+        s1 = cp;
+        s2 = (char *) wcs2;
+        
+        while ( *s1 && *s2 && !(*s1-*s2) ) {
+            s1++, s2++;
+        }
+        if (!*s2) {
+            return(cp);
+        }
+        cp++;
+    }
+    return(NULL);
+}
+
+WCHAR * searchW(const WCHAR * wcs1, const WCHAR * wcs2) {
+    WCHAR *cp = (WCHAR *) wcs1;
+    WCHAR *s1, *s2;
+    
+    if ( !*wcs2) {
+        return (WCHAR *)wcs1;
+    }
+    
+    while (*cp) {
+        s1 = cp;
+        s2 = (WCHAR *) wcs2;
+        
+        while ( *s1 && *s2 && !(*s1-*s2) ) {
+            s1++, s2++;
+        }
+        if (!*s2) {
+            return(cp);
+        }
+        cp++;
+    }
+    return(NULL);
+}
+
 void getI18nPropertyTitleDetail(LauncherProperties * props, const char * name, WCHAR ** title, WCHAR ** detail) {
     const WCHAR * prop = getI18nProperty(props,name);    
-    WCHAR * detailStringSep = wcsstr(prop, L"\n");
+    WCHAR * detailStringSep = searchW(prop, L"\n");
     
     if(detailStringSep == NULL) {
         *title = appendStringW(NULL, prop);
@@ -171,6 +218,8 @@ WCHAR * getDefaultString(const char *name) {
         return L"%s Disable free space check";
     } else if(lstrcmpA(name, ARG_LOCALE_PROP )==0) {
         return L"%s Use specified locale for messagess";       
+    } else if(lstrcmpA(name, ARG_SILENT_PROP )==0) {
+        return L"%s Run silently";       
     } else if(lstrcmpA(name, MSG_CREATE_TMPDIR)==0) {
         return L"Creating tmp directory...";
     } else if(lstrcmpA(name, MSG_EXTRACT_DATA)==0) {
@@ -272,7 +321,7 @@ WCHAR * escapeString(const WCHAR * string) {
     DWORD i=0;
     DWORD r=0;
     DWORD bsCounter = 0;    
-    int quoting = wcsstr(string, L" ") || wcsstr(string, L"\t");
+    int quoting = searchW(string, L" ") || searchW(string, L"\t");
     if(quoting) {
         result[r++] = '\"';
     }
@@ -380,7 +429,7 @@ DWORD getLineSeparatorNumber(char *str) {
     DWORD result = 0;
     char *ptr = str;
     if(ptr!=NULL) {
-        while((ptr = strstr(ptr, "\n"))!=NULL) {
+        while((ptr = searchA(ptr, "\n"))!=NULL) {
             ptr++;
             result++;
             if(ptr==NULL)  break;
