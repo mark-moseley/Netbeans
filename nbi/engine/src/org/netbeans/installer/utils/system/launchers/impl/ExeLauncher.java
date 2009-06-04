@@ -52,6 +52,7 @@ import org.netbeans.installer.utils.LogManager;
 import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StringUtils;
 import org.netbeans.installer.utils.helper.JavaCompatibleProperties;
+import org.netbeans.installer.utils.helper.Version;
 import org.netbeans.installer.utils.system.launchers.LauncherProperties;
 import org.netbeans.installer.utils.system.launchers.LauncherResource;
 import org.netbeans.installer.utils.progress.Progress;
@@ -63,7 +64,7 @@ import org.netbeans.installer.utils.system.NativeUtils;
  */
 public class ExeLauncher extends CommonLauncher {
     private static final String EXE_EXT = ".exe"; //NOI18N
-    private static final int EXE_STUB_FILL_SIZE = 420000;
+    private static final int EXE_STUB_FILL_SIZE = 450000;
     private static final long MAXDWORD = 4294967296L; // actually it is MAXDWORD + 1
     
     public static final String DEFAULT_WINDOWS_RESOURCE_SUFFIX =
@@ -75,16 +76,26 @@ public class ExeLauncher extends CommonLauncher {
     public static final String EXE_LAUNCHER_STUB =
             DEFAULT_WINDOWS_RESOURCE_SUFFIX + EXE_LAUNCHER_STUB_NAME;
     public static final String DEFAULT_WINDOWS_RESOURCE_I18N =
-            DEFAULT_WINDOWS_RESOURCE_SUFFIX + I18N;
+            DEFAULT_WINDOWS_RESOURCE_SUFFIX + I18N + "/";//NOI18N
+    public static final String DEFAULT_WINDOWS_RESOURCE_I18N_BUNDLE_NAME =
+            "launcher"; //NOI18N
     /**
      * See <code>ShLauncher#MIN_JAVA_VERSION_UNIX</code> for details.
      */
     public static final String MIN_JAVA_VERSION_WINDOWS       = "1.5.0_03";
     public static final String MIN_JAVA_VERSION_WINDOWS_VISTA = "1.5.0_11";
+    public static final String MIN_JAVA_VERSION_WINDOWS_2K8   = "1.5.0_17";
+    public static final String MIN_JAVA_VERSION_WINDOWS_7     = "1.5.0_19";
+    
+    /* IBM does not report the update number so allow to work even on 1.5.0 */
+    public static final String MIN_IBM_JAVA_VERSION = "1.5.0";
+
     public static final String OSNAME_WINDOWS_XP = "XP";
     public static final String OSNAME_WINDOWS_VISTA = "Vista";
     public static final String OSNAME_WINDOWS_2K = "2000";
     public static final String OSNAME_WINDOWS_2K3 = "2003";
+    public static final String OSNAME_WINDOWS_2K8 = "2008";
+    public static final String OSNAME_WINDOWS_7   = "Windows 7";
     
     public ExeLauncher(LauncherProperties props) {
         super(props);
@@ -192,17 +203,28 @@ public class ExeLauncher extends CommonLauncher {
         return new String [] {outputFile.getAbsolutePath()};
     }
     
-    public List <JavaCompatibleProperties> getDefaultCompatibleJava() {
-        List <JavaCompatibleProperties> list = new ArrayList <JavaCompatibleProperties>();
-        list.add(new JavaCompatibleProperties(
-                MIN_JAVA_VERSION_WINDOWS_VISTA, null, null,  OSNAME_WINDOWS_VISTA, null));
-        list.add(new JavaCompatibleProperties(
-                MIN_JAVA_VERSION_WINDOWS, null, null, OSNAME_WINDOWS_XP, null));
-        list.add(new JavaCompatibleProperties(
-                MIN_JAVA_VERSION_WINDOWS, null, null, OSNAME_WINDOWS_2K, null));
-        list.add(new JavaCompatibleProperties(
-                MIN_JAVA_VERSION_WINDOWS, null, null, OSNAME_WINDOWS_2K3, null));
-        return list;
+    @Override
+    public List<JavaCompatibleProperties> getDefaultCompatibleJava(Version version) {
+        if (version.equals(Version.getVersion("1.5"))) {
+            List<JavaCompatibleProperties> list = new ArrayList<JavaCompatibleProperties>();
+            list.add(new JavaCompatibleProperties(
+                    MIN_JAVA_VERSION_WINDOWS_VISTA, null, null, OSNAME_WINDOWS_VISTA, null));
+            list.add(new JavaCompatibleProperties(
+                    MIN_JAVA_VERSION_WINDOWS, null, null, OSNAME_WINDOWS_XP, null));
+            list.add(new JavaCompatibleProperties(
+                    MIN_JAVA_VERSION_WINDOWS, null, null, OSNAME_WINDOWS_2K, null));
+            list.add(new JavaCompatibleProperties(
+                    MIN_JAVA_VERSION_WINDOWS, null, null, OSNAME_WINDOWS_2K3, null));
+            list.add(new JavaCompatibleProperties(
+                    MIN_JAVA_VERSION_WINDOWS_2K8, null, null, OSNAME_WINDOWS_2K8, null));
+            list.add(new JavaCompatibleProperties(
+                    MIN_JAVA_VERSION_WINDOWS_7, null, null, OSNAME_WINDOWS_7, null));
+            list.add(new JavaCompatibleProperties(
+                MIN_IBM_JAVA_VERSION, null, "IBM Corporation", null, null));
+            return list;
+        } else {
+            return super.getDefaultCompatibleJava(version);            
+        }        
     }
     
     private String changeJavaPropertyCounter(final String string) {
@@ -375,6 +397,9 @@ public class ExeLauncher extends CommonLauncher {
             
         }
     }
+    private void addData(FileOutputStream fos, Version version, boolean isUnicode) throws IOException {
+        addData(fos,(version==null) ? null : version.toJdkStyle(),isUnicode);
+    }
     
     private void addData(FileOutputStream fos, String str, boolean isUnicode) throws IOException {
         if(str!=null) {
@@ -389,7 +414,14 @@ public class ExeLauncher extends CommonLauncher {
     public String getExtension() {
         return EXE_EXT;
     }
-    protected String getI18NResourcePrefix() {
-        return DEFAULT_WINDOWS_RESOURCE_SUFFIX;
+    @Override
+    public String getI18NResourcePrefix() {
+        return i18nPrefix !=null ? i18nPrefix :
+            DEFAULT_WINDOWS_RESOURCE_I18N;
+    }
+    @Override
+    public String getI18NBundleBaseName() {
+        return i18nBundleBaseName != null ? i18nBundleBaseName :
+            DEFAULT_WINDOWS_RESOURCE_I18N_BUNDLE_NAME;
     }
 }

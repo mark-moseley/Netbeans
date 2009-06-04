@@ -52,6 +52,7 @@ import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StreamUtils;
 import org.netbeans.installer.utils.StringUtils;
 import org.netbeans.installer.utils.helper.JavaCompatibleProperties;
+import org.netbeans.installer.utils.helper.Version;
 import org.netbeans.installer.utils.system.launchers.LauncherProperties;
 import org.netbeans.installer.utils.system.launchers.LauncherResource;
 import org.netbeans.installer.utils.progress.Progress;
@@ -69,6 +70,10 @@ public class ShLauncher extends CommonLauncher {
     public static final String I18N = "i18n"; //NOI18N
     public static final String SH_LAUNCHER_STUB =
             DEFAULT_UNIX_RESOURCE_SUFFIX + SH_LAUNCHER_STUB_NAME;
+    public static final String DEFAULT_UNIX_RESOURCE_I18N =
+            DEFAULT_UNIX_RESOURCE_SUFFIX + I18N + "/"; //NOI18N
+    public static final String DEFAULT_UNIX_RESOURCE_I18N_BUNDLE_NAME =
+            "launcher"; //NOI18N
     
     private static final String SH_EXT = ".sh"; //NOI18N
     private static final int SH_BLOCK = 1024;
@@ -89,21 +94,24 @@ public class ShLauncher extends CommonLauncher {
      */
     public static final String MIN_JAVA_VERSION_UNIX = "1.5.0_03";
     
+    /* IBM does not report the update number so allow to work even on 1.5.0*/
+    public static final String MIN_IBM_JAVA_VERSION = "1.5.0";
+    
     private static final String [] JAVA_COMMON_LOCATIONS = {
-        "/usr/java", "/usr/java/*",
-        "/usr/jdk",  "/usr/jdk/*",
+        "/usr/java*", "/usr/java/*",
+        "/usr/jdk*",  "/usr/jdk/*",
         "/usr/j2se",  "/usr/j2se/*",
         "/usr/j2sdk", "/usr/j2sdk/*",
         
-        "/usr/java/jdk", "/usr/java/jdk/*",
+        "/usr/java/jdk*", "/usr/java/jdk/*",
         "/usr/jdk/instances", "/usr/jdk/instances/*",
         
         "/usr/local/java", "/usr/local/java/*",
-        "/usr/local/jdk",  "/usr/local/jdk/*",
+        "/usr/local/jdk*",  "/usr/local/jdk/*",
         "/usr/local/j2se", "/usr/local/j2se/*",
         "/usr/local/j2sdk","/usr/local/j2sdk/*",
         
-        "/opt/java",  "/opt/java/*",
+        "/opt/java*",  "/opt/java/*",
         "/opt/jdk*",  "/opt/jdk/*",
         "/opt/j2sdk", "/opt/j2sdk/*",
         "/opt/j2se",  "/opt/j2se/*",
@@ -112,7 +120,7 @@ public class ShLauncher extends CommonLauncher {
         "/usr/lib/jvm/*",
         "/usr/lib/jdk*",
         
-        "/export/jdk",   "/export/jdk/*",
+        "/export/jdk*",   "/export/jdk/*",
         "/export/java",  "/export/java/*",
         "/export/j2se",  "/export/j2se/*",
         "/export/j2sdk", "/export/j2sdk/*"
@@ -234,11 +242,18 @@ public class ShLauncher extends CommonLauncher {
         return new String [] {outputFile.getAbsolutePath()};
     }
     
-    public List <JavaCompatibleProperties> getDefaultCompatibleJava() {
-        List <JavaCompatibleProperties> list = new ArrayList <JavaCompatibleProperties>();
-        list.add(new JavaCompatibleProperties(
+    @Override
+    public List <JavaCompatibleProperties> getDefaultCompatibleJava(Version version) {
+        if (version.equals(Version.getVersion("1.5"))) {
+            List <JavaCompatibleProperties> list = new ArrayList <JavaCompatibleProperties>();
+            list.add(new JavaCompatibleProperties(
                 MIN_JAVA_VERSION_UNIX, null, null, null, null));
-        return list;
+            list.add(new JavaCompatibleProperties(
+                MIN_IBM_JAVA_VERSION, null, "IBM Corporation", null, null));
+            return list;
+        } else {
+            return super.getDefaultCompatibleJava(version);            
+        }
     }
     
     protected void addOtherResources(StringBuilder sb) throws IOException {
@@ -267,6 +282,7 @@ public class ShLauncher extends CommonLauncher {
                 path = resource.getAbsolutePath();
             }
             addNumberVariable(sb, id + "_SIZE", size);
+            addStringVariable(sb, id + "_MD5", resource.getMD5());
         } else {
             path = resource.getAbsolutePath();
         }
@@ -276,8 +292,15 @@ public class ShLauncher extends CommonLauncher {
                 escapeVarSign(escapeSlashesAndChars(path)));
         
     }
-    protected String getI18NResourcePrefix() {
-        return DEFAULT_UNIX_RESOURCE_SUFFIX;
+    @Override
+    public String getI18NResourcePrefix() {
+        return i18nPrefix != null ? i18nPrefix :
+            DEFAULT_UNIX_RESOURCE_I18N;
+    }
+    @Override
+    public String getI18NBundleBaseName() {
+        return i18nBundleBaseName != null ? i18nBundleBaseName :
+            DEFAULT_UNIX_RESOURCE_I18N_BUNDLE_NAME;
     }
     
     public String getExtension() {
@@ -378,7 +401,11 @@ public class ShLauncher extends CommonLauncher {
         while (true);
         return str;
     }
-    
+    private void addVersionVariable(StringBuilder sb, String name, Version version)  {
+        String str = (version != null) ? version.toJdkStyle() : StringUtils.EMPTY_STRING;
+        sb.append(name + StringUtils.EQUAL + StringUtils.QUOTE +
+                str + StringUtils.QUOTE + SH_LINE_SEPARATOR);
+    }
     private void addStringVariable(StringBuilder sb, String name, String value)  {
         String str = (value != null) ? value : StringUtils.EMPTY_STRING;
         sb.append(name + StringUtils.EQUAL + StringUtils.QUOTE +
@@ -404,8 +431,8 @@ public class ShLauncher extends CommonLauncher {
             
             JavaCompatibleProperties prop = compatibleJava.get(i);
             LogManager.log("... adding compatible jvm [" + i + "] : " + prop.toString()); //NOI18N
-            addStringVariable(sb, "JAVA_COMP_VERSION_MIN", prop.getMinVersion());
-            addStringVariable(sb, "JAVA_COMP_VERSION_MAX", prop.getMaxVersion());
+            addVersionVariable(sb, "JAVA_COMP_VERSION_MIN", prop.getMinVersion());
+            addVersionVariable(sb, "JAVA_COMP_VERSION_MAX", prop.getMaxVersion());
             addStringVariable(sb, "JAVA_COMP_VENDOR", prop.getVendor());
             addStringVariable(sb, "JAVA_COMP_OSNAME", prop.getOsName());
             addStringVariable(sb, "JAVA_COMP_OSARCH", prop.getOsArch());
