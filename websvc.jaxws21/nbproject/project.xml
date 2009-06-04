@@ -47,12 +47,26 @@ made subject to such option by the copyright holder.
             <code-name-base>org.netbeans.modules.websvc.jaxws21</code-name-base>
             <module-dependencies>
                 <dependency>
+                    <code-name-base>org.netbeans.libs.jaxb</code-name-base>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.6</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.netbeans.modules.websvc.jaxws21api</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
                         <specification-version>1.1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.xml.jaxb.api</code-name-base>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.0</specification-version>
                     </run-dependency>
                 </dependency>
             </module-dependencies>
@@ -63,10 +77,12 @@ made subject to such option by the copyright holder.
                 <friend>org.netbeans.modules.jaxb.project</friend>
                 <friend>org.netbeans.modules.visualweb.websvcmgr</friend>
                 <friend>org.netbeans.modules.websvc.jaxwsmodel</friend>
+                <friend>org.netbeans.modules.websvc.design</friend>
                 <friend>org.netbeans.modules.websvc.manager</friend>
                 <friend>org.netbeans.modules.identity.profile.api</friend>
                 <friend>org.netbeans.modules.xml.jaxb</friend>
                 <friend>org.netbeans.modules.websvc.components.strikeiron</friend>
+                <friend>org.netbeans.modules.websvc.saas.services.strikeiron</friend>
                 <package>com.sun.tools.ws.processor</package>
                 <package>com.sun.tools.ws.processor.generator</package>
                 <package>com.sun.tools.ws.processor.model</package>
@@ -147,35 +163,7 @@ made subject to such option by the copyright holder.
                 <package>com.sun.xml.ws.util.exception</package>
                 <package>com.sun.xml.ws.util.localization</package>
                 <package>com.sun.xml.ws.util.xml</package>
-                <package>javax.activation</package>
             </friend-packages>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/jaxws-tools.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/jaxws-rt.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/jaxb-xjc.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/jaxb-impl.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/activation.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/sjsxp.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/streambuffer.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/stax-ex.jar</runtime-relative-path>
-            </class-path-extension>
-            <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/saaj-impl.jar</runtime-relative-path>
-            </class-path-extension>
             <class-path-extension>
                 <runtime-relative-path>ext/jaxws21/FastInfoset.jar</runtime-relative-path>
             </class-path-extension>
@@ -183,7 +171,25 @@ made subject to such option by the copyright holder.
                 <runtime-relative-path>ext/jaxws21/http.jar</runtime-relative-path>
             </class-path-extension>
             <class-path-extension>
-                <runtime-relative-path>ext/jaxws21/resolver.jar</runtime-relative-path>
+                <runtime-relative-path>ext/jaxws21/jaxws-rt.jar</runtime-relative-path>
+            </class-path-extension>
+            <class-path-extension>
+                <runtime-relative-path>ext/jaxws21/jaxws-tools.jar</runtime-relative-path>
+            </class-path-extension>
+            <class-path-extension>
+                <runtime-relative-path>ext/jaxws21/mimepull.jar</runtime-relative-path>
+            </class-path-extension>
+            <class-path-extension>
+                <runtime-relative-path>ext/jaxws21/saaj-impl.jar</runtime-relative-path>
+            </class-path-extension>
+            <class-path-extension>
+                <runtime-relative-path>ext/jaxws21/sjsxp.jar</runtime-relative-path>
+            </class-path-extension>
+            <class-path-extension>
+                <runtime-relative-path>ext/jaxws21/stax-ex.jar</runtime-relative-path>
+            </class-path-extension>
+            <class-path-extension>
+                <runtime-relative-path>ext/jaxws21/streambuffer.jar</runtime-relative-path>
             </class-path-extension>
         </data>
     </configuration>
