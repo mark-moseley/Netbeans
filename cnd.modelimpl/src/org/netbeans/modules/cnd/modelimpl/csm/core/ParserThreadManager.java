@@ -38,53 +38,56 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.csm.core;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
 import org.netbeans.modules.cnd.modelimpl.debug.DiagnosticExceptoins;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 
 /**
  *
  * @author Vladimir Kvashin
  */
-public class ParserThreadManager  {
-    
+public final class ParserThreadManager {
+
     private static ParserThreadManager instance;
-    
     private static final String threadNameBase = "Code Model Parser"; // NOI18N
     private RequestProcessor processor;
     private Set<Wrapper> wrappers = new CopyOnWriteArraySet<Wrapper>();
     private int currThread = 0;
-    
+    private boolean started = false;
+
     private class Wrapper implements Runnable {
-        
+
         private ParserThread delegate;
         private Thread thread;
-        
+
         public Wrapper(ParserThread delegate) {
             this.delegate = delegate;
         }
-        
+
         public void stop() {
             assert this.delegate != null;
             this.delegate.stop();
         }
-        
+
+        public boolean isStoped() {
+            assert this.delegate != null;
+            return this.delegate.isStoped();
+        }
+
         public void run() {
             try {
                 thread = Thread.currentThread();
                 thread.setName(threadNameBase + ' ' + currThread++);
                 wrappers.add(this);
                 delegate.run();
-            }
-	    catch(Throwable thr) {
-		DiagnosticExceptoins.register(thr);
-	    }
-            finally {
+            } catch (Throwable thr) {
+                DiagnosticExceptoins.register(thr);
+            } finally {
                 wrappers.remove(this);
             }
         }
@@ -92,73 +95,92 @@ public class ParserThreadManager  {
 
     private ParserThreadManager() {
     }
-    
+
     public static synchronized ParserThreadManager instance() {
-        if( instance == null ) {
+        if (instance == null) {
             instance = new ParserThreadManager();
         }
         return instance;
     }
-    
+
     public boolean isStandalone() {
         return (processor == null);
     }
-            
+
     // package-local
-    void startup(boolean standalone) {
-        
-	ParserQueue.instance().startup();
-	
+    synchronized void startup(boolean standalone) {
+
+        if (started) {
+            shutdown();
+        }
+
+        ParserQueue.instance().startup();
+
 //        int threadCount = Integer.getInteger("cnd.modelimpl.parser.wrappers",
 //                Math.max(Runtime.getRuntime().availableProcessors()-1, 1)).intValue();
 
         int threadCount = Integer.getInteger("cnd.modelimpl.parser.threads", // NOI18N
-		Runtime.getRuntime().availableProcessors()).intValue(); // NOI18N
+                Runtime.getRuntime().availableProcessors()).intValue(); // NOI18N
 
-	threadCount = Math.min(threadCount, 4);
-	threadCount = Math.max(threadCount, 1);
-	
-        
-        if( ! standalone ) {
+        threadCount = Math.min(threadCount, 8);
+        threadCount = Math.max(threadCount, 1);
+
+
+        if (!standalone) {
             processor = new RequestProcessor(threadNameBase, threadCount);
         }
         for (int i = 0; i < threadCount; i++) {
             Runnable r = new Wrapper(new ParserThread());
-            if( standalone ) {
+            if (standalone) {
                 new Thread(r).start();
-            }
-            else {
+            } else {
                 processor.post(r);
             }
         }
+        started = true;
     }
 
-    
     // package-local
-    void shutdown() {
-	if( TraceFlags.TRACE_MODEL_STATE ) System.err.println("=== ParserThreadManager.shutdown");
-            
+    synchronized void shutdown() {
+        if (TraceFlags.TRACE_MODEL_STATE) {
+            System.err.println("=== ParserThreadManager.shutdown");
+        }
+
         for (Wrapper wrapper : wrappers) {
             wrapper.stop();
         }
-        
-	ParserQueue.instance().shutdown();
+        for (Wrapper wrapper : wrappers) {
+            while (true) {
+                if (wrapper.isStoped()) {
+                    break;
+                }
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        }
+
+        ParserQueue.instance().shutdown();
+        currThread = 0;
+        started = false;
     }
-    
+
     public boolean isParserThread() {
-        if( isStandalone() ) {
+        if (isStandalone()) {
             Thread current = Thread.currentThread();
-            
+
             for (Wrapper wrapper : wrappers) {
                 if (wrapper.thread == current) {
                     return true;
                 }
             }
-	    return false;
+            return false;
         } else {
             return processor.isRequestProcessorThread();
         }
-    }      
+    }
 
     public void waitEmptyProjectQueue(ProjectBase prj) {
         ParserQueue.instance().waitEmpty(prj);
