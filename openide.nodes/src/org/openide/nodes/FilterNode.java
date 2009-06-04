@@ -71,6 +71,7 @@ import java.util.logging.Logger;
 import org.openide.nodes.Node.PropertySet;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup.Item;
+import org.openide.util.Parameters;
 
 
 /** A proxy for another node.
@@ -198,10 +199,8 @@ public class FilterNode extends Node {
             (children == null) ? (original.isLeaf() ? org.openide.nodes.Children.LEAF : new Children(original)) : children,
             lookup
         );
-        
-        if (original == null) {
-            throw new IllegalArgumentException("Original node cannot be null.");  // NOI18N
-        }
+
+        Parameters.notNull("original", original);
 
         this.childrenProvided = children != null;
         this.original = original;
@@ -407,6 +406,8 @@ public class FilterNode extends Node {
      *@since 1.39
      */
     protected final void changeOriginal(Node original, boolean changeChildren) {
+        Parameters.notNull("original", original);
+
         if (
             changeChildren && !(getChildren() instanceof FilterNode.Children) &&
                 !(getChildren() == Children.LEAF /* && original.isLeaf () */)
@@ -1378,13 +1379,7 @@ public class FilterNode extends Node {
                     nodeL = null;
                 }
 
-                if (this.original.getChildren().isLazy() || 
-                        this.original.getChildren().isLazy() != original.getChildren().isLazy()) {
-                    changeSupport(original);
-                } else {
-                    // reset the original node
-                    this.original = original;
-                }
+                changeSupport(original);
 
                 if (wasAttached) {
                     addNotifyImpl();
@@ -1641,7 +1636,7 @@ public class FilterNode extends Node {
             }
 
             public Node[] callGetNodes(boolean optimalResult) {
-                Node[] hold;
+                Node[] hold = null;
                 if (optimalResult) {
                     hold = original.getChildren().getNodes(true);
                 }
@@ -1650,7 +1645,7 @@ public class FilterNode extends Node {
             }
 
             public int callGetNodesCount(boolean optimalResult) {
-                Node[] hold;
+                Node[] hold = null;
                 if (optimalResult) {
                     hold = original.getChildren().getNodes(optimalResult);
                 }
@@ -1658,7 +1653,7 @@ public class FilterNode extends Node {
             }
 
             public Node findChild(String name) {
-                original.getChildren().findChild(name);
+                Node dontGC = original.getChildren().findChild(name);
                 return Children.super.findChild(name);
             }
 
@@ -1722,7 +1717,7 @@ public class FilterNode extends Node {
 
                 public FilterLazySnapshot(List<Entry> entries, java.util.Map<Entry, EntryInfo> e2i) {
                     super(entries, e2i);
-                    origSnapshot = (LazySnapshot) origSupport.createSnapshot();
+                    origSnapshot = origSupport.createSnapshot();
                 }
 
                 @Override
@@ -1753,7 +1748,12 @@ public class FilterNode extends Node {
             }
         
             public Node[] callGetNodes(boolean optimalResult) {
-                return Children.this.getNodes();
+                Node[] hold = null;
+                if (optimalResult) {
+                    hold = original.getChildren().getNodes(true);
+                }
+                hold = Children.this.getNodes();
+                return hold;
             }
 
             public int callGetNodesCount(boolean optimalResult) {
