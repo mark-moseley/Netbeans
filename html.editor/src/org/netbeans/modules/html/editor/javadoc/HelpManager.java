@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.editor.ext.html.javadoc;
+package org.netbeans.modules.html.editor.javadoc;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -47,10 +47,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
+import java.net.URI;
 import java.net.URL;
-import java.util.Enumeration;
 import java.util.Hashtable;
-import java.util.StringTokenizer;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import org.openide.ErrorManager;
@@ -101,7 +100,7 @@ public class HelpManager {
             if (helpMap == null){
                 //Parse the config file
                 InputStream in = HelpManager.class.getClassLoader()
-                .getResourceAsStream("org/netbeans/editor/ext/html/javadoc/resources/HtmlHelp.xml"); //NOI18N
+                .getResourceAsStream("org/netbeans/modules/html/editor/resources/HtmlHelp.xml"); //NOI18N
                 if (in == null){
                     helpMap = new Hashtable();
                     return;
@@ -126,14 +125,12 @@ public class HelpManager {
                 
                 helpMap = handler.getMap();
                 
-                String url="";
-                
                 File f = InstalledFileLocator.getDefault().locate(help, null, false); //NoI18N
                 if (f != null){
                     try {
                         URL urll = f.toURL();
                         urll = FileUtil.getArchiveRoot(urll);
-                        helpZipURL = urll.toString();
+                        helpZipURL = new URI(urll.getProtocol(), urll.getFile(), urll.getRef()).toString();
                     } catch (java.net.MalformedURLException e){
                         ErrorManager.getDefault().notify(ErrorManager.EXCEPTION, e);
                         helpMap = new Hashtable();
