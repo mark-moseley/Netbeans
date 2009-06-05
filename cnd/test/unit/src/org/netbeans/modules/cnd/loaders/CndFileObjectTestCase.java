@@ -42,7 +42,8 @@
 package org.netbeans.modules.cnd.loaders;
 
 import java.io.File;
-import org.netbeans.modules.cnd.test.BaseTestCase;
+import org.netbeans.modules.cnd.test.CndBaseTestCase;
+import org.netbeans.modules.cnd.utils.MIMENames;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 
@@ -50,7 +51,7 @@ import org.openide.filesystems.FileUtil;
  *
  * @author Vladimir Voskresensky
  */
-public class CndFileObjectTestCase extends BaseTestCase {
+public class CndFileObjectTestCase extends CndBaseTestCase {
     
     public CndFileObjectTestCase(String testName) {
         super(testName);
@@ -67,30 +68,30 @@ public class CndFileObjectTestCase extends BaseTestCase {
     }
 
     public void testCFileObject() throws Exception {
-        File newFile = new File(super.getWorkDir(), "file.c");
+        File newFile = new File(super.getWorkDir(), "file.c"); // NOI18N
         newFile.createNewFile();
         assertTrue("Not created file " + newFile, newFile.exists());
         FileObject fo = FileUtil.toFileObject(newFile);
         assertNotNull("Not found file object for file" + newFile, fo);
-        assertEquals("Not text/x-c mime type", "text/x-c", fo.getMIMEType());
+        assertEquals("Not text/x-c mime type", MIMENames.C_MIME_TYPE, fo.getMIMEType());
     }
     
     public void testCCFileObject() throws Exception {
-        File newFile = new File(super.getWorkDir(), "file.cc");
+        File newFile = new File(super.getWorkDir(), "file.cc"); // NOI18N
         newFile.createNewFile();
         assertTrue("Not created file " + newFile, newFile.exists());
         FileObject fo = FileUtil.toFileObject(newFile);
         assertNotNull("Not found file object for file" + newFile, fo);
-        assertEquals("Not text/x-c++ mime type", "text/x-c++", fo.getMIMEType());
+        assertEquals("Not text/x-c++ mime type", MIMENames.CPLUSPLUS_MIME_TYPE, fo.getMIMEType());
     }
 
     public void testHFileObject() throws Exception {
-        File newFile = new File(super.getWorkDir(), "file.h");
+        File newFile = new File(super.getWorkDir(), "file.h"); // NOI18N
         newFile.createNewFile();
         assertTrue("Not created file " + newFile, newFile.exists());
         FileObject fo = FileUtil.toFileObject(newFile);
         assertNotNull("Not found file object for file" + newFile, fo);
-        assertEquals("Not text/x-c++ mime type", "text/x-c++", fo.getMIMEType());
+        assertEquals("Not text/x-c++ mime type", MIMENames.HEADER_MIME_TYPE, fo.getMIMEType());
     }
     
 }

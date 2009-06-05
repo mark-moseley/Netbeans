@@ -38,12 +38,11 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.loaders;
 
 import java.io.File;
 import org.netbeans.editor.BaseDocument;
-import org.netbeans.modules.cnd.test.BaseTestCase;
+import org.netbeans.modules.cnd.test.CndBaseTestCase;
 import org.netbeans.modules.cnd.test.CndCoreTestUtils;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -53,40 +52,46 @@ import org.openide.loaders.DataObject;
  *
  * @author Vladimir Voskresensky
  */
-public class CndDocumentProviderTestCase extends BaseTestCase {
-    
+public class CndDocumentProviderTestCase extends CndBaseTestCase {
+
+    private static final boolean TRACE = false;
+
     /**
      * Creates a new instance of CndDocumentProviderTestCase
      */
     public CndDocumentProviderTestCase(String testName) {
         super(testName);
     }
-    
+
     public void testHeaderDocument() throws Exception {
-        testBaseDocumentInitialized("file.h", HDataObject.class);
+        testBaseDocumentInitialized("file.h", HDataObject.class); // NOI18N
     }
-    
+
     public void testCSourceDocument() throws Exception {
-        testBaseDocumentInitialized("file.c", CDataObject.class);
+        testBaseDocumentInitialized("file.c", CDataObject.class); // NOI18N
     }
 
     public void testCppSourceDocument() throws Exception {
-        testBaseDocumentInitialized("file.cc", CCDataObject.class);
+        testBaseDocumentInitialized("file.cc", CCDataObject.class); // NOI18N
     }
 
     private void testBaseDocumentInitialized(String file, Class clazz) throws Exception {
         File newFile = new File(super.getWorkDir(), file);
         newFile.createNewFile();
         assertTrue("Not created file " + newFile, newFile.exists());
-        FileObject fo = FileUtil.toFileObject(newFile);        
+        FileObject fo = FileUtil.toFileObject(newFile);
         DataObject dob = DataObject.find(fo);
         assertNotNull(dob);
         assertSame(dob.getClass(), clazz);
         BaseDocument doc = CndCoreTestUtils.getBaseDocument(dob);
         assertNotNull(doc);
-        System.err.println("text len: " + doc.getLength());
-        if (doc.getLength() > 0) {
-            System.err.println("text: " + doc.getText(0, doc.getLength() - 1));
+        if (TRACE) {
+            System.err.println("text len: " + doc.getLength());
         }
-    }        
+        if (doc.getLength() > 0) {
+            if (TRACE) {
+                System.err.println("text: " + doc.getText(0, doc.getLength() - 1));
+            }
+        }
+    }
 }

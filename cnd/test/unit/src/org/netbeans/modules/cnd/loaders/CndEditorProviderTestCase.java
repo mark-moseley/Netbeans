@@ -38,14 +38,13 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.loaders;
 
 import java.io.File;
 import javax.swing.JEditorPane;
 import org.netbeans.editor.BaseDocument;
 import org.netbeans.editor.Utilities;
-import org.netbeans.modules.cnd.test.BaseTestCase;
+import org.netbeans.modules.cnd.test.CndBaseTestCase;
 import org.netbeans.modules.cnd.test.CndCoreTestUtils;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -55,29 +54,35 @@ import org.openide.loaders.DataObject;
  *
  * @author Vladimir Voskresensky
  */
-public class CndEditorProviderTestCase extends BaseTestCase {
-    
+public class CndEditorProviderTestCase extends CndBaseTestCase {
+
+    private static final boolean TRACE = false;
+
     /**
      * Creates a new instance of CndEditorProviderTestCase
      */
     public CndEditorProviderTestCase(String testName) {
         super(testName);
     }
-    
+
     public void testEditorSupport() throws Exception {
-        File newFile = new File(super.getWorkDir(), "file.h");
+        File newFile = new File(super.getWorkDir(), "file.h"); // NOI18N
         newFile.createNewFile();
         assertTrue("Not created file " + newFile, newFile.exists());
-        FileObject fo = FileUtil.toFileObject(newFile);        
+        FileObject fo = FileUtil.toFileObject(newFile);
         DataObject dob = DataObject.find(fo);
         assertTrue(dob instanceof HDataObject);
         JEditorPane pane = CndCoreTestUtils.getEditorPane(dob);
         assertNotNull(pane);
         BaseDocument doc = Utilities.getDocument(pane);
         assertNotNull(doc);
-        System.err.println("text len: " + doc.getLength());
-        if (doc.getLength() > 0) {
-            System.err.println("text: " + doc.getText(0, doc.getLength() - 1));
+        if (TRACE) {
+            System.err.println("text len: " + doc.getLength());
         }
-    }     
+        if (doc.getLength() > 0) {
+            if (TRACE) {
+                System.err.println("text: " + doc.getText(0, doc.getLength() - 1));
+            }
+        }
+    }
 }
