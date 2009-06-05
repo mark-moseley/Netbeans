@@ -43,9 +43,7 @@ package org.netbeans.modules.editor.java;
 
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import javax.swing.Action;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
@@ -775,16 +773,15 @@ public class JavaKit extends NbEditorKit {
 
     @EditorActionRegistration(
             name = gotoSourceAction,
-            mimeType = JAVA_MIME_TYPE
+            mimeType = JAVA_MIME_TYPE,
+            popupText = "#goto_source_open_source_not_formatted"
     )
     public static class JavaGoToSourceAction extends BaseAction {
 
         static final long serialVersionUID =-6440495023918097760L;
 
         public JavaGoToSourceAction() {
-            super(ABBREV_RESET | MAGIC_POSITION_RESET | UNDO_MERGE_RESET
-                  | SAVE_POSITION
-                 );
+            super(ABBREV_RESET | MAGIC_POSITION_RESET | UNDO_MERGE_RESET | SAVE_POSITION);
         }
 
         public void actionPerformed(ActionEvent evt, JTextComponent target) {
@@ -804,7 +801,9 @@ public class JavaKit extends NbEditorKit {
 
     @EditorActionRegistration(
             name = fixImportsAction,
-            mimeType = JAVA_MIME_TYPE
+            mimeType = JAVA_MIME_TYPE,
+            shortDescription = "#desc-fix-imports",
+            popupText = "#popup-fix-imports"
     )
     public static class JavaFixImports extends BaseAction {
 
@@ -829,11 +828,8 @@ public class JavaKit extends NbEditorKit {
         }
 
         public static final class GlobalAction extends MainMenuAction {
-            private final JMenuItem menuPresenter;
-
             public GlobalAction() {
                 super();
-                this.menuPresenter = new JMenuItem(getMenuItemText());
                 setMenu();
             }
 
@@ -844,17 +840,14 @@ public class JavaKit extends NbEditorKit {
             protected String getActionName() {
                 return fixImportsAction;
             }
-
-            public JMenuItem getMenuPresenter() {
-                return menuPresenter;
-            }
-        }
-    } // End of JavaFixImports action
+        } // End of GlobalAction class
+    } // End of JavaFixImports class
 
     @EditorActionRegistration(
             name = gotoHelpAction,
             mimeType = JAVA_MIME_TYPE,
-            shortDescription = "#java-desc-goto-help"
+            shortDescription = "#java-desc-goto-help",
+            popupText = "#show_javadoc"
     )
     public static class JavaGotoHelpAction extends BaseAction {
 
