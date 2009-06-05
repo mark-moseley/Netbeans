@@ -41,15 +41,18 @@
 
 package org.netbeans.modules.cnd.apt.impl.support;
 
-import antlr.Token;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
+import java.util.Collections;
+import org.netbeans.modules.cnd.apt.debug.APTTraceFlags;
+import org.netbeans.modules.cnd.apt.structure.APTDefine;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
+import org.netbeans.modules.cnd.apt.support.APTMacro.Kind;
 import org.netbeans.modules.cnd.apt.support.APTMacroMap;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTSerializeUtils;
-import org.netbeans.modules.cnd.apt.utils.APTUtils;
 
 /**
  * macro map is created for each translation unit and
@@ -57,12 +60,15 @@ import org.netbeans.modules.cnd.apt.utils.APTUtils;
  * requests about macros if not found in own macro map
  * @author Vladimir Voskresensky
  */
-public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
-    private APTMacroMap sysMacroMap;       
-      
-    public APTFileMacroMap() {        
+public class APTFileMacroMap extends APTBaseMacroMap {
+    private static final Map<CharSequence,APTMacro> NO_CACHE = Collections.unmodifiableMap(new HashMap<CharSequence,APTMacro>(0));
+    private static final int INITIAL_CACHE_SIZE = 512;
+    private APTMacroMap sysMacroMap;
+    private Map<CharSequence,APTMacro> macroCache = NO_CACHE;
+
+    public APTFileMacroMap() {
     }
-    
+
     /**
      * Creates a new instance of APTFileMacroMap
      */
@@ -71,70 +77,83 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
             sysMacroMap = APTBaseMacroMap.EMPTY;
         }
         this.sysMacroMap = sysMacroMap;
-        fill(userMacros);
+        this.macroCache = new HashMap<CharSequence,APTMacro>(INITIAL_CACHE_SIZE);
+        fill(userMacros, false);
     }
-    
-    public void setSysMacros(APTMacroMap sysMacroMap) {
-        this.sysMacroMap = sysMacroMap;
-    }
-    
-      
+
     @Override
-    public APTMacro getMacro(Token token) {
+    public APTMacro getMacro(APTToken token) {
         // check own map
-        APTMacro res = super.getMacro(token);
-        // then check system map
-     
-        if (res == null && sysMacroMap != null) {
-            res = sysMacroMap.getMacro(token);
-        }        
+        CharSequence macroText = token.getTextID();
+        initCache();
+        APTMacro res = macroCache.get(macroText);
+        if (res == null) {
+            // no need to check in super, because everything is in cache already
+            if (false) {
+                res = super.getMacro(token);
+            }
+            // then check system map
+            if (res == null && sysMacroMap != null) {
+                res = sysMacroMap.getMacro(token);
+            }
+            if (res == null) {
+                res = APTMacroMapSnapshot.UNDEFINED_MACRO;
+            }
+            if (res.getKind() != APTMacro.Kind.POSITION_PREDEFINED) {
+                // do not remember position based macro values
+                macroCache.put(macroText, res);
+            }
+        }
         // If UNDEFINED_MACRO is found then the requested macro is undefined, return null
         return (res != APTMacroMapSnapshot.UNDEFINED_MACRO) ? res : null;
     }
-    
+
     @Override
-    public void define(Token name, Collection<Token> params, List<Token> value) {
-        if (sysMacroMap != null && sysMacroMap.isDefined(name) && false) { // disable for IZ#124635
-            // TODO: report error about redefining system macros
-        } else {
-            super.define(name, params, value);
+    protected void putMacro(CharSequence name, APTMacro macro) {
+        initCache();
+        super.putMacro(name, macro);
+        macroCache.put(name, macro);
+    }
+
+    protected APTMacro createMacro(CharSequence file, APTDefine define, Kind macroType) {
+        APTMacro macro = new APTMacroImpl(file, define, macroType);
+        if (APTTraceFlags.APT_SHARE_MACROS) {
+            macro = cache.getMacro(macro);
         }
+        return macro;
     }
-    
-    @Override
-    public void undef(Token name) {
-        if (sysMacroMap != null && sysMacroMap.isDefined(name) && false) { // disable for IZ#124635
-            // TODO: report error about undefined system macros
-        }
-        super.undef(name);
-    }
-    
-    protected APTMacro createMacro(Token name, Collection<Token> params, List<Token> value) {
-        return new APTMacroImpl(name, params, value, false);
-    }
-    
+
     protected APTMacroMapSnapshot makeSnapshot(APTMacroMapSnapshot parent) {
         return new APTMacroMapSnapshot(parent);
     }
-    
+
     @Override
     public State getState() {
         //Create new snapshot instance in the tree
         changeActiveSnapshotIfNeeded();
         return new FileStateImpl(active.parent, sysMacroMap);
     }
-    
+
     @Override
     public void setState(State state) {
         active = makeSnapshot(((StateImpl)state).snap);
         if (state instanceof FileStateImpl) {
             sysMacroMap = ((FileStateImpl)state).sysMacroMap;
         }
+        macroCache = NO_CACHE;
     }
-    
+
+    private void initCache() {
+        if (macroCache == NO_CACHE) {
+            macroCache =  new HashMap<CharSequence,APTMacro>(INITIAL_CACHE_SIZE);
+            // fill cache to speedup getMacro
+            APTMacroMapSnapshot.addAllMacros(active, macroCache);
+        }
+    }
+
     public static class FileStateImpl extends StateImpl {
         public final APTMacroMap sysMacroMap;
-        
+
         public FileStateImpl(APTMacroMapSnapshot snap, APTMacroMap sysMacroMap) {
             super(snap);
             this.sysMacroMap = sysMacroMap;
@@ -144,7 +163,7 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
             super(state, cleanedState);
             this.sysMacroMap = state.sysMacroMap;
         }
-        
+
         @Override
         public String toString() {
             StringBuilder retValue = new StringBuilder();
@@ -155,7 +174,7 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
             retValue.append(sysMacroMap);
             return retValue.toString();
         }
-        
+
         ////////////////////////////////////////////////////////////////////////
         // persistence support
 
@@ -167,16 +186,16 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
 
         public FileStateImpl(final DataInput input) throws IOException {
             super(input);
-            
+
             APTMacroMap systemMap = APTSerializeUtils.readSystemMacroMap(input);
-             
+
             if (systemMap == null) {
                 this.sysMacroMap = APTBaseMacroMap.EMPTY;
             } else {
                 this.sysMacroMap = systemMap;
             }
-        }  
-        
+        }
+
         @Override
         public StateImpl copyCleaned() {
             return new FileStateImpl(this, true);
@@ -184,37 +203,35 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
     }
     ////////////////////////////////////////////////////////////////////////////
     // manage macro expanding stack
-    
-    private Stack<String> expandingMacros = new Stack<String>();
-    
-    public boolean pushExpanding(Token token) {
+
+    private Stack<CharSequence> expandingMacros = new Stack<CharSequence>();
+
+    public boolean pushExpanding(APTToken token) {
         assert (token != null);
         if (!isExpanding(token)) {
-            expandingMacros.push(APTUtils.getTokenTextKey(token));
+            expandingMacros.push(token.getTextID());
             return true;
         }
         return false;
     }
-    
+
     public void popExpanding() {
-        Object curMacro = null;
         try {
-            curMacro = expandingMacros.pop();
+            expandingMacros.pop();
         } catch (ArrayIndexOutOfBoundsException ex) {
             assert (false) : "why pop from empty stack?"; // NOI18N
         }
-//        return curMacro;
     }
-    
-    public boolean isExpanding(Token token) {
+
+    public boolean isExpanding(APTToken token) {
         try {
-            return expandingMacros.contains(APTUtils.getTokenTextKey(token));
+            return expandingMacros.contains(token.getTextID());
         } catch (ArrayIndexOutOfBoundsException ex) {
             assert (false) : "why ask empty stack?"; // NOI18N
         }
         return false;
     }
-    
+
     //////////////////////////////////////////////////////////////////////////
     // implementation details
     /*public boolean equals(Object obj) {
@@ -241,4 +258,6 @@ public class APTFileMacroMap extends APTBaseMacroMap implements APTMacroMap {
         retValue.append(sysMacroMap);
         return retValue.toString();
     }
+
+    private static final APTMacroCache cache = APTMacroCache.getManager();
 }
