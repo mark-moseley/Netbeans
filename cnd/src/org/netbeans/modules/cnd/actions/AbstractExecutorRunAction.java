@@ -38,18 +38,42 @@
  */
 package org.netbeans.modules.cnd.actions;
 
-import org.netbeans.api.project.FileOwnerQuery;
+import java.awt.event.ActionEvent;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import javax.swing.AbstractAction;
+import org.netbeans.api.progress.ProgressHandle;
+import org.netbeans.api.progress.ProgressHandleFactory;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet;
 import org.netbeans.modules.cnd.api.compilers.CompilerSetManager;
+import org.netbeans.modules.cnd.api.compilers.Tool;
+import org.netbeans.modules.cnd.api.compilers.ToolchainProject;
+import org.netbeans.modules.cnd.api.execution.ExecutionListener;
+import org.netbeans.modules.cnd.api.execution.NativeExecutor;
 import org.netbeans.modules.cnd.api.remote.RemoteProject;
+import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.api.utils.Path;
 import org.netbeans.modules.cnd.api.utils.PlatformInfo;
+import org.netbeans.modules.cnd.builds.MakeExecSupport;
 import org.netbeans.modules.cnd.settings.CppSettings;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.netbeans.spi.project.FileOwnerQueryImplementation;
+import org.openide.execution.ExecutorTask;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
+import org.openide.util.Cancellable;
 import org.openide.util.HelpCtx;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
+import org.openide.util.Utilities;
 import org.openide.util.actions.NodeAction;
 
 /**
@@ -76,26 +100,135 @@ public abstract class AbstractExecutorRunAction extends NodeAction {
 
     protected abstract boolean accept(DataObject object);
 
-    protected static String getDevelopmentHost(FileObject fileObject) {
-        Project project = FileOwnerQuery.getOwner(fileObject);
-
-        String developmentHost = CompilerSetManager.getDefaultDevelopmentHost();
+    protected static ExecutionEnvironment getExecutionEnvironment(FileObject fileObject, Project project) {
+        if (project == null) {
+            project = findInOpenedProject(fileObject);
+        }
+        ExecutionEnvironment developmentHost = CompilerSetManager.getDefaultExecutionEnvironment();
         if (project != null) {
             RemoteProject info = project.getLookup().lookup(RemoteProject.class);
             if (info != null) {
-                developmentHost = info.getDevelopmentHost();
+                ExecutionEnvironment dh = info.getDevelopmentHost();
+                if (dh != null) {
+                    developmentHost = dh;
+                }
             }
         }
         return developmentHost;
     }
 
-    protected static String[] prepareEnv(String developmentHost) {
+    private static Project findInOpenedProject(FileObject fileObject){
+        // First platform provider uses simplified algorithm for search that finds project in parent folder.
+        // Fixed algorithm try to find opened project by second make project provider.
+        //return FileOwnerQuery.getOwner(fileObject);
+        Collection<? extends FileOwnerQueryImplementation> instances =  Lookup.getDefault().lookupAll(FileOwnerQueryImplementation.class);
+        for(FileOwnerQueryImplementation provider : instances){
+            Project project = provider.getOwner(fileObject);
+            if (project != null){
+                for (Project p : OpenProjects.getDefault().getOpenProjects()) {
+                    if (project == p) {
+                        return project;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private Project findProject(Node node){
+        Node parent = node;
+        while (true) {
+            Project project = parent.getLookup().lookup(Project.class);
+            if (project != null){
+                return project;
+            }
+            Node p = parent.getParentNode();
+            if (p != null && p != parent){
+                parent = p;
+            } else {
+                return null;
+            }
+        }
+    }
+
+    protected String getMakeCommand(Node node, Project project){
+        DataObject dataObject = node.getCookie(DataObject.class);
+        FileObject fileObject = dataObject.getPrimaryFile();
+        if (project == null) {
+            project = findProject(node);
+        }
+        if (project == null) {
+            project = findInOpenedProject(fileObject);
+        }
+        CompilerSet set = null;
+        if (project != null) {
+            ToolchainProject toolchain = project.getLookup().lookup(ToolchainProject.class);
+            if (toolchain != null) {
+                set = toolchain.getCompilerSet();
+            }
+        }
+        if (set == null) {
+            set = CompilerSetManager.getDefault().getDefaultCompilerSet();
+        }
+        String makeCommand = null;
+        if (set != null) {
+            Tool tool = set.findTool(Tool.MakeTool);
+            if (tool != null) {
+                makeCommand = tool.getPath();
+            }
+        }
+        if (makeCommand == null || makeCommand.length()==0) {
+            MakeExecSupport mes = node.getCookie(MakeExecSupport.class);
+            if (mes != null) {
+                makeCommand = mes.getMakeCommand();
+            } else {
+                makeCommand = "make"; // NOI18N
+            }
+        }
+        return makeCommand;
+    }
+
+    protected File getBuildDirectory(Node node){
+        DataObject dataObject = node.getCookie(DataObject.class);
+        FileObject fileObject = dataObject.getPrimaryFile();
+        File makefile = FileUtil.toFile(fileObject);
+        // Build directory
+        String bdir;
+        MakeExecSupport mes = node.getCookie(MakeExecSupport.class);
+        if (mes != null) {
+            bdir = mes.getBuildDirectory();
+        } else {
+            bdir = makefile.getParent();
+        }
+        File buildDir = getAbsoluteBuildDir(bdir, makefile);
+        return buildDir;
+    }
+
+    public static String findTools(String toolName){
+        List<String> list = new ArrayList<String>(Path.getPath());
+        for (String path : list) {
+            String task = path+File.separatorChar+toolName;
+            File tool = new File(task);
+            if (tool.exists() && tool.isFile()) {
+                return tool.getAbsolutePath();
+            } else if (Utilities.isWindows()) {
+                task = task+".exe"; // NOI18N
+                tool = new File(task);
+                if (tool.exists() && tool.isFile()) {
+                    return tool.getAbsolutePath();
+                }
+            }
+        }
+        return toolName;
+    }
+
+    protected static String[] prepareEnv(ExecutionEnvironment execEnv) {
         CompilerSet cs = null;
         String csdirs = ""; // NOI18N
         String dcsn = CppSettings.getDefault().getCompilerSetName();
-        PlatformInfo pi = PlatformInfo.getDefault(developmentHost);
+        PlatformInfo pi = PlatformInfo.getDefault(execEnv);
         if (dcsn != null && dcsn.length() > 0) {
-            cs = CompilerSetManager.getDefault(developmentHost).getCompilerSet(dcsn);
+            cs = CompilerSetManager.getDefault(execEnv).getCompilerSet(dcsn);
             if (cs != null) {
                 csdirs = cs.getDirectory();
                 // TODO Provide platform info
@@ -125,5 +258,109 @@ public abstract class AbstractExecutorRunAction extends NodeAction {
 
     protected final static String getString(String key, String a1) {
         return NbBundle.getMessage(AbstractExecutorRunAction.class, key, a1);
+    }
+
+    protected static class ShellExecuter implements ExecutionListener {
+        private final NativeExecutor nativeExecutor;
+        private final ProgressHandle progressHandle;
+        private ExecutorTask executorTask = null;
+
+        public ShellExecuter(NativeExecutor nativeExecutor, ExecutionListener listener) {
+            this.nativeExecutor = nativeExecutor;
+            nativeExecutor.addExecutionListener(this);
+            if (listener != null) {
+                nativeExecutor.addExecutionListener(listener);
+            }
+            this.progressHandle = createPogressHandle(new StopAction(this), nativeExecutor);
+        }
+
+        public void execute() {
+            try {
+                executorTask = nativeExecutor.execute();
+            } catch (IOException ioe) {
+            }
+        }
+
+        public void executionFinished(int rc) {
+            progressHandle.finish();
+        }
+
+        public void executionStarted() {
+            progressHandle.start();
+        }
+
+        public ExecutorTask getExecutorTask() {
+            return executorTask;
+        }
+    }
+
+    private static final class StopAction extends AbstractAction {
+        private final ShellExecuter shellExecutor;
+
+        public StopAction(ShellExecuter shellExecutor) {
+            this.shellExecutor = shellExecutor;
+        }
+
+//        @Override
+//        public Object getValue(String key) {
+//            if (key.equals(Action.SMALL_ICON)) {
+//                return new ImageIcon(DefaultProjectActionHandler.class.getResource("/org/netbeans/modules/cnd/makeproject/ui/resources/stop.png"));
+//            } else if (key.equals(Action.SHORT_DESCRIPTION)) {
+//                return getString("TargetExecutor.StopAction.stop");
+//            } else {
+//                return super.getValue(key);
+//            }
+//        }
+
+        public void actionPerformed(ActionEvent e) {
+            if (!isEnabled()) {
+                return;
+            }
+            setEnabled(false);
+            if (shellExecutor.getExecutorTask() != null) {
+                shellExecutor.getExecutorTask().stop();
+            }
+        }
+    }
+
+    private static ProgressHandle createPogressHandle(final AbstractAction sa, final NativeExecutor nativeExecutor) {
+        ProgressHandle handle = ProgressHandleFactory.createHandle(nativeExecutor.getTabeName(), new Cancellable() {
+            public boolean cancel() {
+                sa.actionPerformed(null);
+                return true;
+            }
+        }, new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                nativeExecutor.getTab().select();
+            }
+        });
+        handle.setInitialDelay(0);
+        return handle;
+    }
+
+    @Override
+    protected boolean asynchronous() {
+        return false;
+    }
+
+    protected static File getAbsoluteBuildDir(String bdir, File startFile) {
+        File buildDir;
+        if (bdir.length() == 0 || bdir.equals(".")) { // NOI18N
+            buildDir = startFile.getParentFile();
+        } else if (IpeUtils.isPathAbsolute(bdir)) {
+            buildDir = new File(bdir);
+        } else {
+            buildDir = new File(startFile.getParentFile(), bdir);
+        }
+        // Canonical path not appropriate here.
+        // We must emulate command line behaviour hence absolute normalized path is more appropriate here.
+        // See IZ#157677:LiteSQL is not configurable in case of symlinks.
+        //try {
+        //    buildDir = buildDir.getCanonicalFile();
+        //} catch (IOException ioe) {
+        //    // FIXUP
+        //}
+        buildDir = CndFileUtils.normalizeFile(buildDir.getAbsoluteFile());
+        return buildDir;
     }
 }

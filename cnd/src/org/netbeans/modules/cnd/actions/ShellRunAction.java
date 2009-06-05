@@ -43,93 +43,87 @@ package org.netbeans.modules.cnd.actions;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.Writer;
+import java.util.List;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.cnd.api.execution.ExecutionListener;
 import org.netbeans.modules.cnd.api.execution.NativeExecutor;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
-import org.netbeans.modules.cnd.api.utils.Path;
+import org.netbeans.modules.cnd.api.utils.PlatformInfo;
 import org.netbeans.modules.cnd.execution.ShellExecSupport;
 import org.netbeans.modules.cnd.loaders.ShellDataObject;
-import org.netbeans.modules.cnd.settings.CppSettings;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
 import org.openide.LifecycleManager;
+import org.openide.cookies.SaveCookie;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
-import org.openide.util.HelpCtx;
-import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
-import org.openide.util.actions.NodeAction;
 
 /**
  * Base class for Make Actions ...
  */
-public class ShellRunAction extends NodeAction {
-
-    protected boolean enable(Node[] activatedNodes)  {
-	boolean enabled = false;
-
-	if (activatedNodes == null || activatedNodes.length == 0 || activatedNodes.length > 1) {
-	    enabled = false;
-	}
-	else {
-	    DataObject dataObject = activatedNodes[0].getCookie(DataObject.class);
-	    if (dataObject instanceof ShellDataObject)
-		enabled = true;
-	    else
-		enabled = false;
-	}
-	return enabled;
-    }
+public class ShellRunAction extends AbstractExecutorRunAction {
 
     public String getName() {
         return getString("BTN_Run");
     }
 
+    @Override
+    protected boolean accept(DataObject object) {
+        return object instanceof ShellDataObject;
+    }
+
     protected void performAction(Node[] activatedNodes) {
         // Save everything first
         LifecycleManager.getDefault().saveAll();
-        
-        for (int i = 0; i < activatedNodes.length; i++)
+
+        for (int i = 0; i < activatedNodes.length; i++) {
             performAction(activatedNodes[i]);
+        }
     }
 
-    public HelpCtx getHelpCtx () {
-	return HelpCtx.DEFAULT_HELP; // FIXUP ???
+
+    public static void performAction(Node node) {
+        performAction(node, null, null, null, null);
     }
 
-    public void performAction(Node node) {
-	ShellExecSupport bes = node.getCookie(ShellExecSupport.class);
+    public static void performAction(Node node, ExecutionListener listener, Writer outputListener, Project project, List<String> additionalEnvironment) {
+        ShellExecSupport bes = node.getCookie(ShellExecSupport.class);
+        if (bes == null) {
+            return;
+        }
+        //Save file
+        SaveCookie save = node.getLookup().lookup(SaveCookie.class);
+        if (save != null) {
+            try {
+                save.save();
+            } catch (IOException ex) {
+            }
+        }
         DataObject dataObject = node.getCookie(DataObject.class);
         FileObject fileObject = dataObject.getPrimaryFile();
         
         File shellFile = FileUtil.toFile(fileObject);
         // Build directory
         String bdir = bes.getRunDirectory();
-        File buildDir;
-        if (bdir.length() == 0 || bdir.equals(".")) { // NOI18N
-            buildDir = shellFile.getParentFile();
-        } else if (IpeUtils.isPathAbsolute(bdir)) {
-            buildDir = new File(bdir);
-        } else {
-            buildDir = new File(shellFile.getParentFile(), bdir);
-        }
-        try {
-            buildDir = buildDir.getCanonicalFile();
-        }
-        catch (IOException ioe) {
-            // FIXUP
-        }
+        File buildDir = getAbsoluteBuildDir(bdir, shellFile);
         // Tab Name
         String tabName = getString("RUN_LABEL", node.getName());
         
-	String[] shellCommandAndArgs = bes.getShellCommandAndArgs(fileObject); // from inside shell file or properties
+        String[] shellCommandAndArgs = bes.getShellCommandAndArgs(fileObject); // from inside shell file or properties
         String shellCommand = shellCommandAndArgs[0];
         String shellFilePath = IpeUtils.toRelativePath(buildDir.getPath(), shellFile.getPath()); // Absolute path to shell file
-	String[] args = bes.getArguments(); // from properties
-        
+        if (shellFilePath.equals(shellFile.getName())) {
+            shellFilePath = "."+File.separatorChar+shellFilePath; //NOI18N
+        }
+        String[] args = bes.getArguments(); // from properties
+
+        ExecutionEnvironment execEnv = getExecutionEnvironment(fileObject, project);
         // Windows: The command is usually of the from "/bin/sh", but this
         // doesn't work here, so extract the 'sh' part and use that instead. 
         // FIXUP: This is not entirely correct though.
-        if (Utilities.isWindows() && shellCommand.length() > 0) {
+        if (PlatformInfo.getDefault(execEnv).isWindows() && shellCommand.length() > 0) {
             int i = shellCommand.lastIndexOf("/"); // UNIX PATH // NOI18N
             if (i >= 0) {
                 shellCommand = shellCommand.substring(i+1);
@@ -148,32 +142,35 @@ public class ShellRunAction extends NodeAction {
             argsFlat.append(" "); // NOI18N
             argsFlat.append(args[i]);
         }
+        String[] env = prepareEnv(execEnv);
+        if (additionalEnvironment != null && additionalEnvironment.size()>0){
+            String[] tmp = new String[env.length + additionalEnvironment.size()];
+            for(int i=0; i < env.length; i++){
+                tmp[i] = env[i];
+            }
+            for(int i=0; i < additionalEnvironment.size(); i++){
+                tmp[env.length + i] = additionalEnvironment.get(i);
+            }
+            env = tmp;
+        }
        
-        // Execute the makefile
-        String[] envp = { Path.getPathName() + '=' + CppSettings.getDefault().getPath() };
-        try {
-            new NativeExecutor(
-                buildDir.getPath(),
-                shellCommand,
-                argsFlat.toString(),
-                envp,
-                tabName,
-                "Run", // NOI18N
-                true).execute();
-        } catch (IOException ioe) {
-        }    
-    }
+        // Execute the shellfile
         
-    protected final static String getString(String key) {
-        return NbBundle.getBundle(ShellRunAction.class).getString(key);
+        NativeExecutor nativeExecutor = new NativeExecutor(
+            execEnv,
+            buildDir.getPath(),
+            shellCommand,
+            argsFlat.toString(),
+            env,
+            tabName,
+            "Run", // NOI18N
+            false,
+            true,
+            false);
+        if (outputListener != null) {
+            nativeExecutor.setOutputListener(outputListener);
+        }
+        new ShellExecuter(nativeExecutor, listener).execute();
     }
     
-    protected final static String getString(String key, String a1) {
-        return NbBundle.getMessage(ShellRunAction.class, key, a1);
-    }
-
-    @Override
-    protected boolean asynchronous() {
-        return false;
-    }
 }
