@@ -41,61 +41,58 @@ package org.netbeans.modules.debugger.jpda.ui;
 
 import java.awt.AWTKeyStroke;
 import java.awt.BorderLayout;
-import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.GridBagConstraints;
 import java.awt.Insets;
 import java.awt.KeyboardFocusManager;
-import java.awt.datatransfer.Transferable;
+import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.io.IOException;
+import java.beans.PropertyChangeSupport;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.prefs.Preferences;
+import javax.swing.AbstractAction;
+import javax.swing.AbstractButton;
+import javax.swing.Action;
+import javax.swing.Icon;
+import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.DebuggerManagerAdapter;
 import org.netbeans.api.debugger.jpda.InvalidExpressionException;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
+import org.netbeans.api.debugger.jpda.ObjectVariable;
 import org.netbeans.api.debugger.jpda.Variable;
-import org.netbeans.modules.debugger.jpda.ui.models.WatchesNodeModel;
+import org.netbeans.modules.debugger.jpda.ui.HistoryPanel.Item;
+import org.netbeans.modules.debugger.jpda.ui.views.VariablesViewButtons;
 import org.netbeans.spi.debugger.ContextProvider;
-import org.netbeans.spi.viewmodel.ColumnModel;
-import org.netbeans.spi.viewmodel.ExtendedNodeModel;
-import org.netbeans.spi.viewmodel.Model;
-import org.netbeans.spi.viewmodel.ModelListener;
 import org.netbeans.spi.viewmodel.Models;
-import org.netbeans.spi.viewmodel.Models.CompoundModel;
-import org.netbeans.spi.viewmodel.NodeActionsProvider;
-import org.netbeans.spi.viewmodel.NodeActionsProviderFilter;
-import org.netbeans.spi.viewmodel.NodeModel;
-import org.netbeans.spi.viewmodel.NodeModelFilter;
-import org.netbeans.spi.viewmodel.TableModel;
-import org.netbeans.spi.viewmodel.TableModelFilter;
-import org.netbeans.spi.viewmodel.TreeExpansionModel;
-import org.netbeans.spi.viewmodel.TreeModel;
-import org.netbeans.spi.viewmodel.TreeModelFilter;
-import org.netbeans.spi.viewmodel.UnknownTypeException;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
+import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
-import org.openide.util.datatransfer.PasteType;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 
@@ -108,51 +105,153 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
 
     /** unique ID of <code>TopComponent</code> (singleton) */
     private static final String ID = "evaluator"; //NOI18N
+    private static final String PROP_RESULT_CHANGED = "resultChanged"; // NOI18N
+
+    private static CodeEvaluator defaultInstance = null;
+    private static PropertyChangeSupport pcs = new PropertyChangeSupport(new Integer(0)); // TODO
 
     private JEditorPane codePane;
     private HistoryPanel historyPanel;
     private Reference<JPDADebugger> debuggerRef = new WeakReference(null);
     private DbgManagerListener dbgManagerListener;
-    private EvaluatorModelListener viewModelListener;
-    private PropertyChangeListener csfListener;
-    private ResultView resultView;
-    private static volatile CodeEvaluator currentEvaluator;
+    private TopComponent resultView;
+    private Set<String> editItemsSet = new HashSet<String>();
+    private ArrayList<String> editItemsList = new ArrayList<String>();
+    private JButton dropDownButton;
+
+    private Preferences preferences = NbPreferences.forModule(ContextProvider.class).node(VariablesViewButtons.PREFERENCES_NAME);
+
+    private HistoryRecord lastEvaluationRecord = null;
     private Variable result;
     private RequestProcessor.Task evalTask =
             new RequestProcessor("Debugger Evaluator", 1).  // NOI18N
             create(new EvaluateTask());
 
+
     /** Creates new form CodeEvaluator */
     public CodeEvaluator() {
         initComponents();
         codePane = new JEditorPane();
+        codePane.setMinimumSize(new Dimension(0,0));
         historyPanel = new HistoryPanel();
 
-        historyToggleButton.setMargin(new Insets(2,3,2,3));
-        historyToggleButton.setFocusable(false);
+        rightPanel.setPreferredSize(new Dimension(evaluateButton.getPreferredSize().width + 6, 0));
 
-        final Document[] documentPtr = new Document[] { null };
-        ActionListener contextUpdated = new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                if (codePane.getDocument() != documentPtr[0]) {
-                    codePane.getDocument().addDocumentListener(CodeEvaluator.this);
-                }
-            }
-        };
-        WatchPanel.setupContext(codePane, contextUpdated);
+        dropDownButton = createDropDownButton();
+        GridBagConstraints gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 0;
+        gridBagConstraints.gridy = 0;
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHEAST;
+        gridBagConstraints.insets = new java.awt.Insets(3, 3, 0, 3);
+        rightPanel.add(dropDownButton, gridBagConstraints);
+        setupContext();
         editorScrollPane.setViewportView(codePane);
-        codePane.getDocument().addDocumentListener(this);
         codePane.addKeyListener(this);
-        documentPtr[0] = codePane.getDocument();
-
-        currentEvaluator = this; // [TODO]
-
         dbgManagerListener = new DbgManagerListener (this);
         DebuggerManager.getDebuggerManager().addDebuggerListener(
                 DebuggerManager.PROP_CURRENT_SESSION,
                 dbgManagerListener
         );
         checkDebuggerState();
+        defaultInstance = this;
+    }
+
+    public void pasteExpression(String expr) {
+        codePane.setText(expr);
+        if (!isOpened()) {
+            open();
+        }
+        requestActive();
+    }
+
+    private JButton createDropDownButton() {
+        Icon icon = ImageUtilities.loadImageIcon("org/netbeans/modules/debugger/jpda/resources/drop_down_arrow.png", false);
+        final JButton button = new DropDownButton();
+        button.setIcon(icon);
+        String tooltipText = NbBundle.getMessage(CodeEvaluator.class, "CTL_Expressions_Dropdown_tooltip");
+        button.setToolTipText(tooltipText);
+        button.setEnabled(false);
+        Dimension size = new Dimension(icon.getIconWidth() + 3, icon.getIconHeight() + 2);
+        button.setPreferredSize(size);
+        button.setMargin(new Insets(0, 0, 0, 0));
+        button.setFocusable(false);
+        AbstractAction action = new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if ("pressed".equals(e.getActionCommand())) {
+                    JComponent jc = (JComponent) e.getSource();
+                    Point p = new Point(jc.getWidth(), jc.getHeight());
+                    SwingUtilities.convertPointToScreen(p, jc);
+                    if (!ButtonPopupSwitcher.isShown()) {
+                        SwitcherTableItem[] items = createSwitcherItems();
+                        ButtonPopupSwitcher.selectItem(jc, items, p.x, p.y);
+                    }
+                    //Other portion of issue 37487, looks funny if the
+                    //button becomes pressed
+                    if (jc instanceof AbstractButton) {
+                        AbstractButton jb = (AbstractButton) jc;
+                        jb.getModel().setPressed(false);
+                        jb.getModel().setRollover(false);
+                        jb.getModel().setArmed(false);
+                        jb.repaint();
+                    }
+                }
+            } // actionPerformed
+
+            @Override
+            public boolean isEnabled() {
+                return !editItemsList.isEmpty();
+            }
+
+        };
+        action.putValue(Action.SMALL_ICON, icon);
+        action.putValue(Action.SHORT_DESCRIPTION, tooltipText);
+        button.setAction(action);
+        return button;
+    }
+
+    private void setupContext() {
+        final String text = codePane.getText();
+        final Document[] documentPtr = new Document[] { null };
+        ActionListener contextUpdated = new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                if (codePane.getDocument() != documentPtr[0]) {
+                    codePane.getDocument().addDocumentListener(CodeEvaluator.this);
+                    if (text != null) {
+                        codePane.setText(text);
+                    }
+                }
+            }
+        };
+        WatchPanel.setupContext(codePane, contextUpdated);
+        codePane.getDocument().addDocumentListener(this);
+        if (text != null) {
+            codePane.setText(text);
+        }
+        documentPtr[0] = codePane.getDocument();
+    }
+
+    private SwitcherTableItem[] createSwitcherItems() {
+        SwitcherTableItem[] items = new SwitcherTableItem[editItemsList.size()];
+        int x = 0;
+        for (String item : editItemsList) {
+            items[x++] = new SwitcherTableItem(new MenuItemActivatable(item), item);
+        }
+        return items;
+    }
+
+    public void recomputeDropDownItems() {
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                for (String str : editItemsList) {
+                    StringTokenizer tok = new StringTokenizer(str, "\n"); // NOI18N
+                    String dispName = "";
+                    while (dispName.trim().length() == 0 && tok.hasMoreTokens()) {
+                        dispName = tok.nextToken();
+                    }
+                }
+                dropDownButton.setEnabled(!editItemsList.isEmpty());
+            }
+        });
     }
 
     public static synchronized CodeEvaluator getInstance() {
@@ -161,6 +260,36 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
             instance = new CodeEvaluator();
         }
         return instance;
+    }
+
+    public static ArrayList<Item> getHistory() {
+        return defaultInstance != null ? defaultInstance.historyPanel.getHistoryItems() : new ArrayList<Item>();
+    }
+
+    public static Variable getResult() {
+        return defaultInstance != null ? defaultInstance.result : null;
+    }
+
+    public static String getExpressionText() {
+        return defaultInstance != null ? defaultInstance.getExpression() : ""; // NOI18N
+    }
+
+    public static synchronized void addResultListener(PropertyChangeListener listener) {
+        pcs.addPropertyChangeListener(listener);
+    }
+
+    public static synchronized void removeResultListener(PropertyChangeListener listener) {
+        pcs.removePropertyChangeListener(listener);
+    }
+
+    private static void fireResultChange() {
+        RequestProcessor.getDefault().post(new Runnable() {
+            public void run() {
+                synchronized(CodeEvaluator.class) {
+                    pcs.firePropertyChange(PROP_RESULT_CHANGED, null, null);
+                }
+            }
+        });
     }
 
     private synchronized void checkDebuggerState() {
@@ -173,17 +302,15 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
                 }
                 JPDADebugger lastDebugger = debuggerRef.get();
                 if (lastDebugger != null && debugger != lastDebugger) {
-                    lastDebugger.removePropertyChangeListener(
-                            JPDADebugger.PROP_CURRENT_THREAD,
-                            CodeEvaluator.this);
+                    lastDebugger.removePropertyChangeListener(JPDADebugger.PROP_CURRENT_THREAD, CodeEvaluator.this);
+                    lastDebugger.removePropertyChangeListener(JPDADebugger.PROP_STATE, CodeEvaluator.this);
                     debuggerRef = new WeakReference(null);
                     displayResult(null);
                 }
                 if (debugger != null) {
                     debuggerRef = new WeakReference(debugger);
-                    debugger.addPropertyChangeListener(
-                            JPDADebugger.PROP_CURRENT_THREAD,
-                            CodeEvaluator.this);
+                    debugger.addPropertyChangeListener(JPDADebugger.PROP_CURRENT_THREAD, CodeEvaluator.this);
+                    debugger.addPropertyChangeListener(JPDADebugger.PROP_STATE, CodeEvaluator.this);
                 } else {
                     historyPanel.clearHistory();
                 }
@@ -195,7 +322,7 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
     private void computeEvaluationButtonState() {
         JPDADebugger debugger = debuggerRef.get();
         boolean isEnabled = debugger != null && debugger.getCurrentThread() != null &&
-                codePane.getDocument().getLength() > 0 &&
+                debugger.getState() == JPDADebugger.STATE_STOPPED && codePane.getDocument().getLength() > 0 &&
                 editorScrollPane.getViewport().getView() == codePane;
         evaluateButton.setEnabled(isEnabled);
     }
@@ -222,12 +349,12 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         separatorPanel = new javax.swing.JPanel();
         rightPanel = new javax.swing.JPanel();
         evaluateButton = new javax.swing.JButton();
-        historyToggleButton = new javax.swing.JToggleButton();
         emptyPanel = new javax.swing.JPanel();
 
         setLayout(new java.awt.GridBagLayout());
 
         editorScrollPane.setBorder(null);
+        editorScrollPane.setMinimumSize(new java.awt.Dimension(0, 0));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 0;
@@ -238,17 +365,21 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         add(editorScrollPane, gridBagConstraints);
 
         separatorPanel.setBackground(javax.swing.UIManager.getDefaults().getColor("Separator.foreground"));
+        separatorPanel.setMaximumSize(new java.awt.Dimension(1, 32767));
+        separatorPanel.setMinimumSize(new java.awt.Dimension(0, 0));
         separatorPanel.setPreferredSize(new java.awt.Dimension(1, 10));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.fill = java.awt.GridBagConstraints.VERTICAL;
         add(separatorPanel, gridBagConstraints);
 
-        rightPanel.setPreferredSize(new java.awt.Dimension(94, 209));
+        rightPanel.setPreferredSize(new java.awt.Dimension(48, 0));
         rightPanel.setLayout(new java.awt.GridBagLayout());
 
+        evaluateButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/debugger/jpda/resources/evaluate.png"))); // NOI18N
         evaluateButton.setText(org.openide.util.NbBundle.getMessage(CodeEvaluator.class, "CodeEvaluator.evaluateButton.text")); // NOI18N
         evaluateButton.setToolTipText(org.openide.util.NbBundle.getMessage(CodeEvaluator.class, "HINT_Evaluate_Button")); // NOI18N
         evaluateButton.setEnabled(false);
+        evaluateButton.setPreferredSize(new java.awt.Dimension(40, 22));
         evaluateButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 evaluateButtonActionPerformed(evt);
@@ -257,29 +388,16 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 2;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.SOUTHEAST;
-        gridBagConstraints.insets = new java.awt.Insets(0, 6, 6, 6);
+        gridBagConstraints.anchor = java.awt.GridBagConstraints.SOUTH;
+        gridBagConstraints.insets = new java.awt.Insets(0, 3, 3, 3);
         rightPanel.add(evaluateButton, gridBagConstraints);
 
-        historyToggleButton.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/debugger/jpda/resources/info_big.png"))); // NOI18N
-        historyToggleButton.setText(org.openide.util.NbBundle.getMessage(CodeEvaluator.class, "CodeEvaluator.historyToggleButton.text")); // NOI18N
-        historyToggleButton.setToolTipText(org.openide.util.NbBundle.getMessage(CodeEvaluator.class, "HINT_Show_History")); // NOI18N
-        historyToggleButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                historyToggleButtonActionPerformed(evt);
-            }
-        });
-        gridBagConstraints = new java.awt.GridBagConstraints();
-        gridBagConstraints.gridx = 0;
-        gridBagConstraints.gridy = 0;
-        gridBagConstraints.anchor = java.awt.GridBagConstraints.NORTHWEST;
-        gridBagConstraints.insets = new java.awt.Insets(6, 6, 0, 6);
-        rightPanel.add(historyToggleButton, gridBagConstraints);
+        emptyPanel.setMinimumSize(new java.awt.Dimension(0, 0));
+        emptyPanel.setPreferredSize(new java.awt.Dimension(0, 0));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 0;
         gridBagConstraints.gridy = 1;
         gridBagConstraints.fill = java.awt.GridBagConstraints.BOTH;
-        gridBagConstraints.weightx = 1.0;
         gridBagConstraints.weighty = 1.0;
         rightPanel.add(emptyPanel, gridBagConstraints);
 
@@ -292,24 +410,11 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         evaluate();
     }//GEN-LAST:event_evaluateButtonActionPerformed
 
-    private void historyToggleButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_historyToggleButtonActionPerformed
-        boolean toggled = historyToggleButton.isSelected();
-        if (toggled) {
-            // show history
-            editorScrollPane.setViewportView(historyPanel);
-        } else {
-            // show editor pane
-            editorScrollPane.setViewportView(codePane);
-        }
-        computeEvaluationButtonState();
-    }//GEN-LAST:event_historyToggleButtonActionPerformed
-
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JScrollPane editorScrollPane;
     private javax.swing.JPanel emptyPanel;
     private javax.swing.JButton evaluateButton;
-    private javax.swing.JToggleButton historyToggleButton;
     private javax.swing.JPanel rightPanel;
     private javax.swing.JPanel separatorPanel;
     // End of variables declaration//GEN-END:variables
@@ -317,7 +422,14 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
     public static void openEvaluator() {
         CodeEvaluator evaluator = getInstance();
         evaluator.open ();
+        evaluator.codePane.selectAll();
         evaluator.requestActive ();
+    }
+
+    @Override
+    public boolean requestFocusInWindow() {
+        codePane.requestFocusInWindow(); // [TODO}
+        return super.requestFocusInWindow();
     }
 
     @Override
@@ -357,35 +469,67 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
 
     private void displayResult(Variable var) {
         this.result = var;
+        if (var == null) {
+            fireResultChange();
+            return ;
+        }
         //DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(var.getValue()));
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
-                if (result == null && resultView == null) {
-                    return ; // Ignore when nothing to display and nothing is initialized.
+                if (preferences.getBoolean("show_evaluator_result", false)) {
+                    TopComponent view = WindowManager.getDefault().findTopComponent("localsView"); // NOI18N [TODO]
+                    view.open();
+                    view.requestActive();
+                } else {
+                    if (resultView == null) {
+                        resultView = getResultViewInstance();
+                    }
+                    if (result != null) {
+                        resultView.open();
+                        resultView.requestActive();
+                    }
                 }
-                if (resultView == null) {
-                    resultView = getResultViewInstance();
-                }
-                if (result != null) {
-                    resultView.open();
-                }
-                resultView.requestActive();
-                viewModelListener.updateModel();
+                getInstance().requestActive();
+                fireResultChange();
             }
         });
-        // viewModelListener.updateModel();
     }
 
-    private void addResultToHistory(String expr, Variable result) {
-        int index = expr.indexOf('\n');
-        if (index < 0) {
-            index = expr.length();
+    private void addResultToHistory(final String expr, Variable result) {
+        if (lastEvaluationRecord != null) {
+            historyPanel.addItem(lastEvaluationRecord.expr, lastEvaluationRecord.type,
+                    lastEvaluationRecord.value, lastEvaluationRecord.toString);
         }
-        index = Math.min(index, 15); // [TODO] constant
-        String shortExpr = expr.substring(0, index);
         String type = result.getType();
         String value = result.getValue();
-        historyPanel.addItem(shortExpr, type, value);
+        String toString = ""; // NOI18N
+        if (result instanceof ObjectVariable) {
+            try {
+                toString = ((ObjectVariable) result).getToStringValue ();
+            } catch (InvalidExpressionException ex) {
+            }
+        } else {
+            toString = value;
+        }
+        lastEvaluationRecord = new HistoryRecord(expr, type, value, toString);
+
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                String expr2 = expr.trim();
+                if (editItemsSet.contains(expr2)) {
+                    editItemsList.remove(expr2);
+                    editItemsList.add(0, expr2);
+                } else {
+                    editItemsList.add(0, expr2);
+                    editItemsSet.add(expr2);
+                    if (editItemsList.size() > 20) { // [TODO] constant
+                        String removed = editItemsList.remove(editItemsList.size() - 1);
+                        editItemsSet.remove(removed);
+                    }
+                }
+                recomputeDropDownItems();
+            }
+        });
     }
 
     // KeyListener implementation ..........................................
@@ -396,8 +540,14 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
     public void keyPressed(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_ENTER && e.isControlDown()) {
             e.consume();
-            evaluate();
+            if (debuggerRef.get() != null) {
+                evaluate();
+            }
         }
+//        } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+//            e.consume();
+//            close();
+//        }
     }
 
     public void keyReleased(KeyEvent e) {
@@ -430,17 +580,42 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
 
     // PropertyChangeListener on current thread .................................
 
-    public void propertyChange(PropertyChangeEvent propertyChangeEvent) {
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                synchronized (this) {
-                    JPDADebugger debugger = debuggerRef.get();
-                    if (debugger != null) {
-                        computeEvaluationButtonState();
+    public void propertyChange(PropertyChangeEvent event) {
+        if (JPDADebugger.PROP_CURRENT_THREAD.equals(event.getPropertyName())) {
+            SwingUtilities.invokeLater(new Runnable() {
+                public void run() {
+                    synchronized (this) {
+                        JPDADebugger debugger = debuggerRef.get();
+                        if (debugger != null) {
+                            computeEvaluationButtonState();
+                            setupContext();
+                        }
                     }
                 }
-            }
-        });
+            });
+        } else if (JPDADebugger.PROP_STATE.equals(event.getPropertyName())) {
+            synchronized (this) {
+                JPDADebugger debugger = debuggerRef.get();
+                if (debugger != null && debugger.getState() != JPDADebugger.STATE_STOPPED) {
+                    if (result != null) {
+                        historyPanel.addItem(lastEvaluationRecord.expr, lastEvaluationRecord.type,
+                            lastEvaluationRecord.value, lastEvaluationRecord.toString);
+                        lastEvaluationRecord = null;
+                        result = null;
+                        fireResultChange();
+                    } // if
+                } // if
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() {
+                        JPDADebugger debugger = debuggerRef.get();
+                        if (debugger != null && debugger.getState() == JPDADebugger.STATE_STOPPED) {
+                            setupContext();
+                        }
+                        computeEvaluationButtonState();
+                    }
+                });
+            } // synchronized
+        }
     }
 
     // ..........................................................................
@@ -449,28 +624,25 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         return new ResultView();
     }
 
-    private synchronized ResultView getResultViewInstance() {
+    private synchronized TopComponent getResultViewInstance() {
         /** unique ID of <code>TopComponent</code> (singleton) */
-        ResultView instance = (ResultView) WindowManager.getDefault().findTopComponent(ResultView.ID);
+        TopComponent instance = WindowManager.getDefault().findTopComponent("resultsView"); // NOI18N [TODO]
         if (instance == null) {
             instance = new ResultView();
         }
-        initResult(instance); // [TODO]
+        //initResult(instance); // [TODO]
         return instance;
     }
 
     private void initResult(ResultView view) {
         javax.swing.JComponent tree = Models.createView (Models.EMPTY_MODEL);
         view.add (tree, BorderLayout.CENTER);
-        viewModelListener = new EvaluatorModelListener (
-            tree
-        );
         Dimension tps = tree.getPreferredSize();
         tps.height = tps.width/2;
         tree.setPreferredSize(tps);
-        tree.setName(NbBundle.getMessage(Evaluator2.class, "Evaluator.ResultA11YName"));
+        tree.setName(NbBundle.getMessage(CodeEvaluator.class, "Evaluator.ResultA11YName"));
         tree.getAccessibleContext().setAccessibleDescription(
-                NbBundle.getMessage(Evaluator2.class, "Evaluator.ResultA11YDescr"));
+                NbBundle.getMessage(CodeEvaluator.class, "Evaluator.ResultA11YDescr"));
         // view.setLabelFor(tree);
         JTextField referenceTextField = new JTextField();
         Set<AWTKeyStroke> tfkeys = referenceTextField.getFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS);
@@ -527,9 +699,11 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
             //System.out.println("evaluate: '"+exp+"'");
             try {
                 JPDADebugger debugger = debuggerRef.get();
-                Variable var = debugger.evaluate(exp);
-                addResultToHistory(exp, var);
-                displayResult(var);
+                if (debugger != null) {
+                    Variable var = debugger.evaluate(exp);
+                    addResultToHistory(exp, var);
+                    displayResult(var);
+                }
             } catch (InvalidExpressionException ieex) {
                 String message = ieex.getLocalizedMessage();
                 Throwable t = ieex.getTargetException();
@@ -552,242 +726,6 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         }
     }
 
-    /**
-     * Inspired by org.netbeans.modules.debugger.jpda.ui.views.ViewModelListener.
-     */
-    private static class EvaluatorModelListener extends DebuggerManagerAdapter {
-
-        private String          viewType;
-        private JComponent      view;
-        private List models = new ArrayList(11);
-
-
-        public EvaluatorModelListener(JComponent view) {
-            this.viewType = "LocalsView"; // NOI18N
-            this.view = view;
-            DebuggerManager.getDebuggerManager ().addDebuggerListener (
-                DebuggerManager.PROP_CURRENT_ENGINE,
-                this
-            );
-            updateModel ();
-        }
-
-        public void destroy () {
-            DebuggerManager.getDebuggerManager ().removeDebuggerListener (
-                DebuggerManager.PROP_CURRENT_ENGINE,
-                this
-            );
-            Models.setModelsToView (
-                view,
-                Models.EMPTY_MODEL
-            );
-        }
-
-        @Override
-        public void propertyChange (PropertyChangeEvent e) {
-            CodeEvaluator eval = currentEvaluator;
-            if (eval != null) {
-                eval.csfListener = null;
-//                DebuggerEngine de = DebuggerManager.getDebuggerManager().getCurrentEngine();
-//                if (de == null) return;
-//                JPDADebugger debugger = de.lookupFirst(null, JPDADebugger.class);
-//                eval.setDebugger(debugger);
-                eval.checkDebuggerState();
-            }
-            updateModel ();
-        }
-
-        public synchronized void updateModel () {
-            DebuggerManager dm = DebuggerManager.getDebuggerManager ();
-            DebuggerEngine e = dm.getCurrentEngine ();
-
-            List treeModels;
-            List treeModelFilters;
-            List treeExpansionModels;
-            List nodeModels;
-            List nodeModelFilters;
-            List tableModels;
-            List tableModelFilters;
-            List nodeActionsProviders;
-            List nodeActionsProviderFilters;
-            List columnModels;
-            List mm;
-            ContextProvider cp = e != null ? DebuggerManager.join(e, dm) : dm;
-            treeModels =            cp.lookup (viewType, TreeModel.class);
-            treeModelFilters =      cp.lookup (viewType, TreeModelFilter.class);
-            treeExpansionModels =   cp.lookup (viewType, TreeExpansionModel.class);
-            nodeModels =            cp.lookup (viewType, NodeModel.class);
-            nodeModelFilters =      cp.lookup (viewType, NodeModelFilter.class);
-            tableModels =           cp.lookup (viewType, TableModel.class);
-            tableModelFilters =     cp.lookup (viewType, TableModelFilter.class);
-            nodeActionsProviders =  cp.lookup (viewType, NodeActionsProvider.class);
-            nodeActionsProviderFilters = cp.lookup (viewType, NodeActionsProviderFilter.class);
-            columnModels =          cp.lookup (viewType, ColumnModel.class);
-            mm =                    cp.lookup (viewType, Model.class);
-
-            List treeNodeModelsCompound = new ArrayList(11);
-            treeNodeModelsCompound.add(treeModels);
-            for (int i = 0; i < 2; i++) {
-                treeNodeModelsCompound.add(Collections.EMPTY_LIST);
-            }
-            treeNodeModelsCompound.add(nodeModels);
-            for (int i = 0; i < 7; i++) {
-                treeNodeModelsCompound.add(Collections.EMPTY_LIST);
-            }
-            CompoundModel treeNodeModel = Models.createCompoundModel(treeNodeModelsCompound);
-            /*
-            List nodeModelsCompound = new ArrayList(11);
-            nodeModelsCompound.add(new ArrayList()); // An empty tree model will be added
-            for (int i = 0; i < 2; i++) {
-                nodeModelsCompound.add(Collections.EMPTY_LIST);
-            }
-            nodeModelsCompound.add(nodeModels);
-            for (int i = 0; i < 7; i++) {
-                nodeModelsCompound.add(Collections.EMPTY_LIST);
-            }
-            CompoundModel nodeModel = Models.createCompoundModel(nodeModelsCompound);
-             */
-            EvaluatorModel eTreeNodeModel = new EvaluatorModel(treeNodeModel, treeNodeModel);
-
-            models.clear();
-            treeModels.clear();
-            treeModels.add(eTreeNodeModel);
-            models.add(treeModels);
-            models.add(treeModelFilters);
-            models.add(treeExpansionModels);
-            nodeModels.clear();
-            nodeModels.add(eTreeNodeModel);
-            models.add(nodeModels);
-            models.add(nodeModelFilters);
-            models.add(tableModels);
-            models.add(tableModelFilters);
-            models.add(nodeActionsProviders);
-            models.add(nodeActionsProviderFilters);
-            models.add(columnModels);
-            models.add(mm);
-
-            Models.setModelsToView (
-                view,
-                Models.createCompoundModel (models)
-            );
-        }
-
-    }
-
-    private static class EvaluatorModel implements TreeModel, ExtendedNodeModel {
-
-        private CompoundModel treeModel;
-        private CompoundModel nodeModel;
-
-        public EvaluatorModel(CompoundModel treeModel, CompoundModel nodeModel) {
-            this.treeModel = treeModel;
-            this.nodeModel = nodeModel;
-        }
-
-        public void addModelListener(ModelListener l) {
-            treeModel.addModelListener(l);
-        }
-
-        public Object[] getChildren(Object parent, int from, int to) throws UnknownTypeException {
-            if (TreeModel.ROOT.equals(parent)) {
-                CodeEvaluator eval = currentEvaluator;
-                if (eval == null || eval.result == null) {
-                    return new Object[] {};
-                } else {
-                    return new Object[] { eval.result };
-                }
-            } else {
-                return treeModel.getChildren(parent, from, to);
-            }
-        }
-
-        public int getChildrenCount(Object node) throws UnknownTypeException {
-            if (TreeModel.ROOT.equals(node)) {
-                return currentEvaluator == null ? 0 : 1;
-            } else {
-                return treeModel.getChildrenCount(node);
-            }
-        }
-
-        public Object getRoot() {
-            return TreeModel.ROOT;
-        }
-
-        public boolean isLeaf(Object node) throws UnknownTypeException {
-            if (TreeModel.ROOT.equals(node)) {
-                return false;
-            } else {
-                return treeModel.isLeaf(node);
-            }
-        }
-
-        public void removeModelListener(ModelListener l) {
-            treeModel.removeModelListener(l);
-        }
-
-        public String getDisplayName(Object node) throws UnknownTypeException {
-            CodeEvaluator eval = currentEvaluator;
-            if (eval != null && eval.result != null) {
-                if (node == eval.result) {
-                    return eval.getExpression();
-                }
-            }
-            return nodeModel.getDisplayName(node);
-        }
-
-        public String getIconBase(Object node) throws UnknownTypeException {
-            throw new UnsupportedOperationException("Not supported.");
-        }
-
-        public String getShortDescription(Object node) throws UnknownTypeException {
-            CodeEvaluator eval = currentEvaluator;
-            if (eval != null && eval.result != null) {
-                if (node == eval.result) {
-                    return eval.getExpression();
-                }
-            }
-            return nodeModel.getShortDescription(node);
-        }
-
-        public boolean canRename(Object node) throws UnknownTypeException {
-            return nodeModel.canRename(node);
-        }
-
-        public boolean canCopy(Object node) throws UnknownTypeException {
-            return nodeModel.canCopy(node);
-        }
-
-        public boolean canCut(Object node) throws UnknownTypeException {
-            return nodeModel.canCut(node);
-        }
-
-        public Transferable clipboardCopy(Object node) throws IOException, UnknownTypeException {
-            return nodeModel.clipboardCopy(node);
-        }
-
-        public Transferable clipboardCut(Object node) throws IOException, UnknownTypeException {
-            return nodeModel.clipboardCut(node);
-        }
-
-        public PasteType[] getPasteTypes(Object node, Transferable t) throws UnknownTypeException {
-            return nodeModel.getPasteTypes(node, t);
-        }
-
-        public void setName(Object node, String name) throws UnknownTypeException {
-            nodeModel.setName(node, name);
-        }
-
-        public String getIconBaseWithExtension(Object node) throws UnknownTypeException {
-            CodeEvaluator eval = currentEvaluator;
-            if (eval != null && eval.result != null) {
-                if (node == eval.result) {
-                    return WatchesNodeModel.WATCH;
-                }
-            }
-            return nodeModel.getIconBaseWithExtension(node);
-        }
-    }
-
     private static class DbgManagerListener extends DebuggerManagerAdapter {
 
         private Reference<CodeEvaluator> codeEvaluatorRef;
@@ -804,6 +742,53 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
             }
         }
 
+    }
+
+    private class MenuItemActivatable implements SwitcherTableItem.Activatable {
+
+        String text;
+
+        MenuItemActivatable(String str) {
+            text = str;
+        }
+
+        public void activate() {
+            codePane.setText(text);
+        }
+
+    }
+
+    private static class DropDownButton extends JButton {
+
+        @Override
+        protected void processMouseEvent(MouseEvent me) {
+            super.processMouseEvent(me);
+            if (isEnabled() && me.getID() == MouseEvent.MOUSE_PRESSED) {
+                getAction().actionPerformed(new ActionEvent(this, ActionEvent.ACTION_PERFORMED, "pressed"));
+            }
+        }
+
+        protected String getTabActionCommand(ActionEvent e) {
+            return null;
+        }
+
+        void performAction( ActionEvent e ) {
+        }
+
+    }
+
+    private static class HistoryRecord {
+        String expr;
+        String type;
+        String value;
+        String toString;
+
+        HistoryRecord(String expr, String type, String value, String toString) {
+            this.expr = expr;
+            this.type = type;
+            this.value = value;
+            this.toString = toString;
+        }
     }
 
 }
