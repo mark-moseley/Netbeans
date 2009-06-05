@@ -19,7 +19,7 @@ derby\.log
 ^\.project$
 ^\.externalToolBuilders/.*$
 ^hs_err_pid[0-9]*\.log
-^nbbuild/antsrc/org/netbeans/nbbuild/extlibs/external\.pyc$
+^[^/]+/external/[^/]+\.(zip|jar|gz|bz2|gem|dll|xpi)$
 ^o.apache.tools.ant.module/external/lib$
 ^apisupport.project/src/org/netbeans/modules/apisupport/project/resources/sample-build-impl\.xml$
 ^apisupport.project/src/org/netbeans/modules/apisupport/project/resources/sample-build\.xml$
@@ -49,9 +49,7 @@ derby\.log
 ^dbschema/src/org/netbeans/modules/dbschema/jdbcimpl/resources/templates\.jar$
 ^db/test/xtest\.properties$
 ^db.sample/test/unit/.*\.properties$
-^(db|hibernate)/test/unit/data/db-derby-10\.2\.2\.0-bin$
-^db/test/unit/data/ddltestdb$
-^db/test/unit/data/derby\.log$
+^db.metadata.model/test/unit/data/mysql-connector-java-5.1.5-bin.jar$
 ^db.sql.visualeditor/src/org/netbeans/modules/db/sql/visualeditor/parser/.*\.java$
 ^debugger.jpda/test/\.swp$
 ^editor.lib2/test/\.ant-targets-build\.xml$
@@ -70,8 +68,9 @@ derby\.log
 ^performance/enterprise/test/unit/data/PerformanceTestData$
 ^swingapp/src/org/netbeans/modules/swingapp/resources/BasicShellApp\.zip$
 ^swingapp/src/org/netbeans/modules/swingapp/resources/CRUDShellApp\.zip$
-^ide.branding/src$
 ^ide/launcher/windows/netbeans\.res$
+^ide.kit/test/qa-functional/data/lime6/
+^ide.kit/test/whitelist/temp/
 ^identity.ant/nbproject/suite\.properties$
 ^identity.profile.api/src/org/netbeans/modules/identity/profile/api/configurator/impl/file/jaxb$
 ^identity.samples/src/org/netbeans/modules/identity/samples/resources/.*\.zip$
@@ -104,6 +103,7 @@ derby\.log
 ^j2ee.earproject/src/org/netbeans/modules/j2ee/earproject/ui/wizards/dd/\.ApplicationXmlVisualPanel1\.java\.swp$
 ^j2ee.ejbcore/src/org/netbeans/modules/j2ee/ejbcore/ejb/wizard/gen$
 ^j2ee.persistence/src/org/netbeans/modules/j2ee/persistence/dd/.+/model_1_0$
+^j2ee.persistence/src/org/netbeans/modules/j2ee/persistence/dd/.+/model_2_0$
 ^j2ee.toplinklib/external/toplink$
 ^j2eeserver/\.swp$
 ^j2eeserver/src/org/netbeans/modules/j2ee/deployment/devmodules/spi/gen$
@@ -195,6 +195,7 @@ derby\.log
 ^j2ee.sun.dd/src/org/netbeans/modules/j2ee/sun/dd/impl/verifier$
 ^j2ee.sun.dd/src/org/netbeans/modules/j2ee/sun/dd/impl/serverresources/model$
 ^j2ee.weblogic9/src/org/netbeans/modules/j2ee/weblogic9/config/gen$
+^gsf.api/anttask/gsfanttask\.jar$
 ^testtools/.*\.nbm$
 ^testtools/testtools-bundle\.zip$
 ^testtools/javahelp/org/netbeans/modules/usersguide$
@@ -207,6 +208,7 @@ derby\.log
 ^uml.kit/test/qa-lib/classes$
 ^performance/uml/test/.*\.sh$
 ^performance/uml/test/qa-functional/src/gui/TempTest\.java$
+^python.editor/external/pythonstubs-.*\.egg$
 ^uml.propertysupport/src/org/netbeans/modules/uml/propertysupport/options/panels/\.JavaPlatformOptionsPanel\.java\.swp$
 ^versioning/clearcase/JavaApplication21/\.hgignore$
 ^versioning/clearcase/JavaApplication21/\.hg$
@@ -233,6 +235,10 @@ derby\.log
 ^visualweb.webui/library/gen$
 ^visualweb\.woodstock\.webui\.jsf/test/functional-compile\.mark$
 ^visualweb.xhtml/generated$
+^web\.client\.tools\.internetexplorer/nativesrc/(activescript|Release|Debug|VSIP 8.0)$
+^web\.client\.tools\.internetexplorer/nativesrc/NetBeansExtension\.(h|ncb|suo|vcproj\..+)$
+^web\.client\.tools\.internetexplorer/nativesrc/NetBeansExtension_(i|p)\.c$
+^web\.client\.tools\.internetexplorer/nativesrc/dlldata\.c$
 ^web.core/src/org/netbeans/modules/web/taglib/model$
 ^web.jsf.navigation/\.externalToolBuilders$
 ^web.jsf.navigation/\.project$
@@ -293,6 +299,7 @@ derby\.log
 ^hibernate/src/org/netbeans/modules/hibernate/mapping/model$
 ^hibernate/src/org/netbeans/modules/hibernate/cfg/model$
 ^hibernate/src/org/netbeans/modules/hibernate/reveng/model$
+^hibernate/test/unit/data/db-derby-10\.2\.2\.0-bin$
 \.orig\..*$
 \.chg\..*$
 \.conflict\~$
