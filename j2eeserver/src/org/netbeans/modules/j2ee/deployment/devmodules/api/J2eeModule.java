@@ -43,13 +43,13 @@ package org.netbeans.modules.j2ee.deployment.devmodules.api;
 
 import java.beans.PropertyChangeListener;
 import java.io.File;
-import org.netbeans.modules.j2ee.dd.api.common.RootInterface;
 import org.netbeans.modules.j2ee.deployment.config.J2eeModuleAccessor;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleImplementation;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import javax.enterprise.deploy.shared.ModuleType;
 import org.openide.filesystems.FileObject;
 import java.util.Iterator;
+import org.netbeans.api.annotations.common.NonNull;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
 import org.openide.util.Parameters;
 
@@ -59,7 +59,8 @@ import org.openide.util.Parameters;
  * <p>
  * It is not possible to instantiate this class directly. Implementators have to
  * implement the {@link J2eeModuleImplementation} first and then use the
- * {@link J2eeModuleFactory} to create a J2eeModule instance.
+ * {@link org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleFactory}
+ * to create a J2eeModule instance.
  * 
  * @author  Pavel Buzek
  */
@@ -82,23 +83,26 @@ public class J2eeModule {
     /** The module is an Client Application archive. */
     public static final Object CLIENT = ModuleType.CAR;
     
-    /** 
-     * J2EE specification version 1.3 
+    /**
+     * J2EE specification version 1.3
      * @since 1.5
+     * @deprecated use {@link Profile#J2EE_13}
      */
     public static final String J2EE_13 = "1.3"; //NOI18N
-    /** 
-     * J2EE specification version 1.4 
+    /**
+     * J2EE specification version 1.4
      * @since 1.5
+     * @deprecated use {@link Profile#J2EE_14}
      */
     public static final String J2EE_14 = "1.4"; //NOI18N
     /**
-     * 
+     *
      * JAVA EE 5 specification version
-     * 
+     *
      * @since 1.6
+     * @deprecated use {@link Profile#JAVA_EE_5}
      */
-    public static final String JAVA_EE_5 = "1.5"; // NOI18N 
+    public static final String JAVA_EE_5 = "1.5"; // NOI18N
     
     public static final String APP_XML = "META-INF/application.xml";
     public static final String WEB_XML = "WEB-INF/web.xml";
@@ -149,6 +153,7 @@ public class J2eeModule {
      * 
      * @return module type.
      */
+    @NonNull
     public Object getModuleType() {
         return impl.getModuleType();
     }
@@ -266,7 +271,7 @@ public class J2eeModule {
     }
     
     static {
-        J2eeModuleAccessor.DEFAULT = new J2eeModuleAccessor() {
+        J2eeModuleAccessor.setDefault(new J2eeModuleAccessor() {
             public J2eeModule createJ2eeModule(J2eeModuleImplementation impl) {
                 return new J2eeModule(impl);
             }
@@ -278,6 +283,6 @@ public class J2eeModule {
             public void setJ2eeModuleProvider(J2eeModule j2eeModule, J2eeModuleProvider j2eeModuleProvider) {
                 j2eeModule.setJ2eeModuleProvider(j2eeModuleProvider);
             }
-        };
+        });
     }
 }
