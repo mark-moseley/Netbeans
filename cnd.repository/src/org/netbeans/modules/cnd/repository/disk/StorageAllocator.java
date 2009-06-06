@@ -44,7 +44,6 @@ package org.netbeans.modules.cnd.repository.disk;
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.netbeans.modules.cnd.repository.testbench.Stats;
@@ -63,8 +62,8 @@ public class StorageAllocator {
             long index = 0;
             diskRepositoryPath = System.getProperty("java.io.tmpdir");
             
-            diskRepositoryPath += File.separator +         //NOI18N
-                    System.getProperty("user.name") +  "-cnd60-caches-";  //NOI18N
+            diskRepositoryPath += File.separator +  
+                    System.getProperty("user.name") +  "-cnd68-caches-";  //NOI18N
             
             File diskRepositoryFile = new File(diskRepositoryPath + index);
             // find name for directory which is not occupied by file
@@ -156,4 +155,24 @@ public class StorageAllocator {
         File repositoryPath = new File(diskRepositoryPath);
         deleteDirectory(repositoryPath, false);
     }
+
+    /**
+     * Finds and deletes outdated cache entries. All directories that
+     * have not been modified within last 2 weeks are considered outdated.
+     */
+    public void purgeCaches() {
+        File repositoryDir = new File(diskRepositoryPath);
+        File[] unitDirs = repositoryDir.listFiles();
+        if (unitDirs != null && 0 < unitDirs.length) {
+            long now = System.currentTimeMillis();
+            for (File unitDir : unitDirs) {
+                if (unitDir.isDirectory() && unitDir.lastModified() + PURGE_TIMEOUT < now) {
+                    if (Stats.TRACE_UNIT_DELETION) { System.err.println("Purging outdated unit directory " + unitDir); }
+                    deleteDirectory(unitDir, true);
+                }
+            }
+        }
+    }
+
+    private static final long PURGE_TIMEOUT = 14 * 24 * 3600 * 1000l; // 14 days
 }
