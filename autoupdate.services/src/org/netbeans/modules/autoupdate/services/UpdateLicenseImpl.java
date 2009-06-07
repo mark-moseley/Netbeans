@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,28 +41,50 @@
 
 package org.netbeans.modules.autoupdate.services;
 
-import org.netbeans.spi.autoupdate.*;
+import java.net.URL;
+import org.netbeans.modules.autoupdate.updateprovider.AutoupdateCatalogCache;
 
 /**
  *
  * @author Jiri Rechtacek
+ * @author Dmitry Lipin
  */
 public final class UpdateLicenseImpl {
     private String name;
-    private String agreement;
+    private URL url;
     
     /** Creates a new instance of UpdateLicense */
     public UpdateLicenseImpl (String licenseName, String agreement) {
         this.name = licenseName;
-        this.agreement = agreement;
+        setAgreement(agreement);
+    }
+    /** Creates a new instance of UpdateLicense */
+    public UpdateLicenseImpl (String licenseName, String agreement, URL url) {
+        this.name = licenseName;
+        this.url = url;
+        setAgreement(agreement);
     }
     
     public String getName () {
         return name;
     }
     
+    public URL getURL() {
+        return url;
+    }
+
+    public void setUrl(URL url) {
+        this.url = url;
+    }
+
     public String getAgreement () {
-        return agreement;
+        return (name == null) ? null :
+            AutoupdateCatalogCache.getDefault().getLicense(name,url);
     }
     
+    public void setAgreement (String content) {
+        if(content!=null && name!=null) {
+            AutoupdateCatalogCache.getDefault().storeLicense(name,content);
+        }
+    }    
 }
