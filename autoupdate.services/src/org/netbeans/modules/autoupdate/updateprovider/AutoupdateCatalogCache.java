@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,28 +41,25 @@
 
 package org.netbeans.modules.autoupdate.updateprovider;
 
-import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.MalformedURLException;
-import java.net.URL;
 import java.net.URL;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.modules.autoupdate.services.AutoupdateSettings;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
 /**
  *
  * @author Jiri Rechtacek
+ * @author Dmitry Lipin
  */
 public class AutoupdateCatalogCache {
     private File cacheDir;
-    private Exception storedException;
+    
     
     private static AutoupdateCatalogCache INSTANCE;
     
@@ -87,10 +84,11 @@ public class AutoupdateCatalogCache {
         if (userDir != null) {
             cacheDir = new File (new File (new File (userDir, "var"), "cache"), "catalogcache"); // NOI18N
         } else {
-            File dir = FileUtil.toFile (Repository.getDefault ().getDefaultFileSystem ().getRoot());
+            File dir = FileUtil.toFile (FileUtil.getConfigRoot());
             cacheDir = new File(dir, "catalogcache"); // NOI18N
         }
         cacheDir.mkdirs();
+        getLicenseDir().mkdirs();
         err.log (Level.FINE, "getCacheDirectory: " + cacheDir.getPath ());
         return;
     }
@@ -102,7 +100,7 @@ public class AutoupdateCatalogCache {
             assert dir != null && dir.exists () : "Cache directory must exist.";
             File cache = new File (dir, codeName);
 
-            copy (original, cache);
+            copy(original, cache, false);
 
             try {
                 url = cache.toURI ().toURL ();
@@ -111,6 +109,9 @@ public class AutoupdateCatalogCache {
             }
             assert new File (dir, codeName).exists () : "Cache " + cache + " exists.";
             err.log (Level.FINER, "Cache file " + cache + " was wrote from original URL " + original);
+            if(cache.exists() && cache.length()==0) {
+                err.log (Level.INFO, "Written cache size is zero bytes");
+            }
             return url;
         }
     }
@@ -121,6 +122,10 @@ public class AutoupdateCatalogCache {
         File cache = new File (dir, codeName);
         
         if (cache != null && cache.exists ()) {
+            if(cache.length() == 0) {
+                err.log(Level.INFO, "Cache file " + cache + " exists and of zero size");
+                return null;
+            }
             URL url = null;
             try {
                 url = cache.toURI ().toURL ();
@@ -132,8 +137,101 @@ public class AutoupdateCatalogCache {
             return null;
         }
     }
+    private File getLicenseDir() {
+        return new File(getCatalogCache(), "licenses");
+    }
+
+    private File getLicenseFile(String name) {
+        return new File(getLicenseDir(), name);
+    }
+
+    public String getLicense(String name) {
+        return getLicense(name, null);
+    }
+
+    public String getLicense(String name, URL url) {
+        synchronized (name.intern()) {
+            File file = getLicenseFile(name);
+            if (!file.exists()) {
+                if (url == null) {
+                    return null;
+                }
+                try {
+                    copy(url, file, true);
+                } catch (IOException e) {
+                    // if can`t get the license, treat it as empty but delete it on exit
+                    err.log(Level.INFO, "Can`t store license from " + url + " to " + file, e);
+                    try {
+                        if (file.exists()) {
+                            file.delete();
+                        }
+                        file.createNewFile();
+                         //in case of error remove the license file and try to download it on the next start
+                        file.deleteOnExit();
+
+                    } catch (IOException ex) {
+                        err.log(Level.INFO, "Can`t create empty license file", ex);
+                    }
+                }
+            }
+            return readFile(file);
+        }
+    }
+
+    public void storeLicense(String name, String content) {
+        synchronized (name.intern()) {
+            File file = getLicenseFile(name);
+            if (file.exists() || content == null) {
+                return;
+            }
+            writeToFile(content, file);
+        }
+    }
     
-    private void copy (final URL sourceUrl, final File cache) throws IOException {
+    private String readFile(File file) {
+        FileInputStream fr = null;
+        try {
+                fr = new FileInputStream(file);
+                byte[] buffer = new byte[8192];
+                int n = 0;
+                StringBuilder sb = new StringBuilder();
+                while ((n = fr.read(buffer)) != -1) {
+                    sb.append(new String(buffer, 0, n, "utf-8"));//NOI18N
+                }
+                return sb.toString();
+            } catch (IOException e) {
+                err.log(Level.INFO, "Can`t read license from file " + file, e);
+                return null;
+            } finally {
+                if(fr != null) {
+                    try {
+                        fr.close();
+                    } catch (IOException e) {
+                        err.log(Level.INFO, "Can`t read close input stream for " + file, e);
+                    }
+                }
+            }
+    }
+    private void writeToFile(String content, File file) {
+        FileOutputStream fw = null;
+        try {
+            fw = new FileOutputStream(file);
+            fw.write(content.getBytes("utf-8")); //NOI18N
+        } catch (IOException e) {
+            err.log(Level.INFO, "Can`t write to " + file, e);
+        } finally {
+            if (fw != null) {
+                try {
+                    fw.flush();
+                    fw.close();
+                } catch (IOException e) {
+                    err.log(Level.INFO, "Can`t output stream for " + file, e);
+                }
+            }
+        }
+    }
+    
+    private void copy (final URL sourceUrl, final File cache, final boolean allowZeroSize) throws IOException {
         // -- create NetworkListener
         // -- request stream
         // -- report success or IOException
@@ -146,94 +244,12 @@ public class AutoupdateCatalogCache {
             prefix += cache.getName();
         }
         final File temp = File.createTempFile (prefix, null, cache.getParentFile ()); //NOI18N
-        temp.deleteOnExit();
-        storeException (null);
+        temp.deleteOnExit();        
 
-        NetworkAccess.NetworkListener nwl = new NetworkAccess.NetworkListener () {
-
-            public void streamOpened (InputStream stream) {
-                err.log (Level.FINE, "Successfully read URI " + sourceUrl);
-                doCopy (sourceUrl, stream, cache, temp);
-            }
-
-            public void accessCanceled () {
-                err.log (Level.FINE, "Processing " + sourceUrl + " was cancelled.");
-                storeException (new IOException ("Processing " + sourceUrl + " was cancelled."));
-            }
-
-            public void accessTimeOut () {
-                err.log (Level.FINE, "Timeout when processing " + sourceUrl);
-                storeException (new IOException ("Timeout when processing " + sourceUrl));
-            }
-
-            public void notifyException (Exception x){
-                err.log (Level.INFO,
-                            "Reading URL " + sourceUrl + " failed (" + x +
-                            ")");
-                storeException (x);
-            }
-            
-        };
+        DownloadListener nwl = new DownloadListener(sourceUrl, cache, temp,allowZeroSize);
         
         NetworkAccess.Task task = NetworkAccess.createNetworkAcessTask (sourceUrl, AutoupdateSettings.getOpenConnectionTimeout (), nwl);
         task.waitFinished ();
-        notifyException ();
+        nwl.notifyException ();
     }
-    
-    private void notifyException () throws IOException {
-        if (isExceptionStored ()) {
-            throw new IOException (getStoredException ().getLocalizedMessage ());
-        }
-    }
-    
-    private boolean isExceptionStored () {
-        return storedException != null;
-    }
-    
-    private void storeException (Exception x) {
-        storedException = x;
-    }
-    
-    private Exception getStoredException () {
-        return storedException;
-    }
-    
-    private void doCopy (URL sourceUrl, InputStream is, File cache, File temp) {
-        
-        OutputStream os = null;
-        int read = 0;
-        
-        try {
-            os = new BufferedOutputStream(new FileOutputStream (temp));
-            while ((read = is.read ()) != -1) {
-                os.write (read);
-            }   
-        } catch (IOException ioe) {
-            err.log (Level.INFO, "Writing content of URL " + sourceUrl + " failed.", ioe);
-        } finally {
-            try {
-                if (is != null) is.close ();
-                if (os != null) os.flush ();
-                if (os != null) os.close ();
-                synchronized (this) {
-                    if (cache.exists () && ! cache.delete ()) {
-                        err.log (Level.INFO, "Cannot delete cache " + cache);
-                        try {
-                            Thread.sleep(200);
-                        } catch (InterruptedException ie) {
-                            assert false : ie;
-                        }
-                        cache.delete();
-                    }
-                    if (! temp.renameTo (cache)) {
-                        err.log (Level.INFO, "Cannot rename temp " + temp + " to cache " + cache);
-                    }
-                }                    
-            } catch (IOException ioe) {
-                err.log (Level.INFO, "Closing streams failed.", ioe);
-            }
-        }
-        
-    }
-    
 }
