@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -46,10 +46,11 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.net.URL;
+import java.text.MessageFormat;
 import java.util.List;
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -61,6 +62,7 @@ import java.util.HashSet;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.regex.Pattern;
+import org.jdesktop.layout.LayoutStyle;
 import org.netbeans.modules.mercurial.FileInformation;
 import org.netbeans.modules.mercurial.FileStatusCache;
 import org.netbeans.modules.mercurial.Mercurial;
@@ -68,20 +70,24 @@ import org.netbeans.modules.mercurial.HgModuleConfig;
 import org.netbeans.modules.mercurial.HgException;
 import org.netbeans.modules.mercurial.ui.status.SyncFileNode;
 import org.openide.util.NbBundle;
+import org.netbeans.modules.versioning.util.Utils;
 
 import org.openide.loaders.DataObject;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.Node;
-import org.openide.windows.OutputEvent;
 import org.openide.windows.TopComponent;
 import org.netbeans.modules.versioning.spi.VCSContext;
-import org.openide.windows.IOProvider;
-import org.openide.windows.InputOutput;
-import org.openide.windows.OutputWriter;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.SwingConstants;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.FileLock;
@@ -92,27 +98,69 @@ import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.queries.SharabilityQuery;
-import org.openide.awt.HtmlBrowser;
+import org.netbeans.modules.mercurial.OutputLogger;
+import org.netbeans.modules.mercurial.ui.log.HgLogMessage;
 import org.openide.util.Utilities;
-import org.openide.windows.OutputListener;
 
 /**
  *
  * @author jrice
  */
 public class HgUtils {    
+    private static final Pattern httpPasswordPattern = Pattern.compile("(https*://)(\\w+\\b):(\\b\\S*)@"); //NOI18N
+    private static final String httpPasswordReplacementStr = "$1$2:\\*\\*\\*\\*@"; //NOI18N
+    private static final Pattern httpCredentialsPattern = Pattern.compile("(.*://)(\\w+\\b):(\\b\\S*)@"); //NOI18N
+    private static final String httpCredentialsReplacementStr = "$1"; //NOI18N
+    
     private static final Pattern metadataPattern = Pattern.compile(".*\\" + File.separatorChar + "(\\.)hg(\\" + File.separatorChar + ".*|$)"); // NOI18N
     
     // IGNORE SUPPORT HG: following file patterns are added to {Hg repos}/.hgignore and Hg will ignore any files
     // that match these patterns, reporting "I"status for them // NOI18N
-    private static final String [] HG_IGNORE_FILES = { "\\.orig$", "\\.orig\\..*$", "\\.chg\\..*$", "\\.rej$"}; // NOI18N
+    private static final String [] HG_IGNORE_FILES = { "\\.orig$", "\\.orig\\..*$", "\\.chg\\..*$", "\\.rej$", "\\.conflict\\~$"}; // NOI18N
+    private static final String HG_IGNORE_ORIG_FILES = "\\.orig$"; // NOI18N
+    private static final String HG_IGNORE_ORIG_ANY_FILES = "\\.orig\\..*$"; // NOI18N
+    private static final String HG_IGNORE_CHG_ANY_FILES = "\\.chg\\..*$"; // NOI18N
+    private static final String HG_IGNORE_REJ_ANY_FILES = "\\.rej$"; // NOI18N
+    private static final String HG_IGNORE_CONFLICT_ANY_FILES = "\\.conflict\\~$"; // NOI18N
     
     private static final String FILENAME_HGIGNORE = ".hgignore"; // NOI18N
 
-    public static final int MAX_LINES_TO_PRINT = 500;
+    private static HashMap<String, Set<Pattern>> ignorePatterns;
 
-    private static final String MSG_TOO_MANY_LINES = "The number of output lines is greater than 500; see message log for complete output";
 
+    /**
+     * Timeout for remote repository check in seconds, after expires the repository will be considered valid.
+     */
+    public static final String HG_CHECK_REPOSITORY_TIMEOUT_SWITCH = "mercurial.checkRepositoryTimeout"; //NOI18N
+    public static final String HG_CHECK_REPOSITORY_DEFAULT_TIMEOUT = "5";
+    public static final int HG_CHECK_REPOSITORY_DEFAULT_ROUNDS = 50;
+    private static int repositoryValidityCheckRounds = 0;
+
+    /**
+     * addDaysToDate - add days (+days) or subtract (-days) from the given date
+     *
+     * @param int days to add or substract
+     * @return Date new date that has been calculated
+     */
+    public static Date addDaysToDate(Date date, int days) {
+        Calendar c = Calendar.getInstance();
+        c.setTime(date);
+        c.add(Calendar.DATE, days);
+        return c.getTime();
+    }
+
+    /**
+     * Creates annotation format string.
+     * @param format format specified by the user, e.g. [{status}]
+     * @return modified format, e.g. [{0}]
+     */
+    public static String createAnnotationFormat(final String format) {
+        String string = format;
+        string = Utils.skipUnsupportedVariables(string, new String[] {"{status}", "{folder}"});     // NOI18N
+        string = string.replaceAll("\\{status\\}", "\\{0\\}");                                      // NOI18N
+        string = string.replaceAll("\\{folder\\}", "\\{1\\}");                                      // NOI18N
+        return string;
+    }
 
     /**
      * isSolaris - check you are running onthe Solaris OS
@@ -124,28 +172,76 @@ public class HgUtils {
     }
 
     /**
+     * replaceHttpPassword - replace any http or https passwords in the string
+     *
+     * @return String modified string with **** instead of passwords
+     */
+    public static String removeHttpCredentials(String s){
+        Matcher m = httpCredentialsPattern.matcher(s);
+        return m.replaceAll(httpCredentialsReplacementStr);
+    }
+
+    /**
+     * replaceHttpPassword - replace any http or https passwords in the string
+     *
+     * @return String modified string with **** instead of passwords
+     */
+    public static String replaceHttpPassword(String s){
+        Matcher m = httpPasswordPattern.matcher(s);
+        return m.replaceAll(httpPasswordReplacementStr); 
+    }
+    
+    /**
+     * replaceHttpPassword - replace any http or https passwords in the List<String>
+     *
+     * @return List<String> containing modified strings with **** instead of passwords
+     */
+    public static List<String> replaceHttpPassword(List<String> list){
+        if(list == null) return null;
+
+        List<String> out = new ArrayList<String>(list.size());
+        for(String s: list){
+            out.add(replaceHttpPassword(s));
+        } 
+        return out;
+    }
+
+    /**
      * isInUserPath - check if passed in name is on the Users PATH environment setting
      *
      * @param name to check
      * @return boolean true - on PATH, false - not on PATH
      */
     public static boolean isInUserPath(String name) {
+        String path = findInUserPath(name);
+        return (path == null || path.equals(""))? false: true;
+    }
+
+        /**
+     * findInUserPath - check if passed in name is on the Users PATH environment setting and return the path
+     *
+     * @param name to check
+     * @return String full path to name
+     */
+    public static String findInUserPath(String... names) {
         String pathEnv = System.getenv().get("PATH");// NOI18N
         // Work around issues on Windows fetching PATH
         if(pathEnv == null) pathEnv = System.getenv().get("Path");// NOI18N
         if(pathEnv == null) pathEnv = System.getenv().get("path");// NOI18N
         String pathSeparator = System.getProperty("path.separator");// NOI18N
-        if (pathEnv == null || pathSeparator == null) return false;
+        if (pathEnv == null || pathSeparator == null) return "";
 
         String[] paths = pathEnv.split(pathSeparator);
         for (String path : paths) {
-            File f = new File(path, name);
-            // On Windows isFile will fail on hgk.cmd use !isDirectory
-            if (f.exists() && !f.isDirectory()) {
-                return true;
+            for (String name : names) {
+                File f = new File(path, name);
+                // On Windows isFile will fail on hgk.cmd use !isDirectory
+                if (f.exists() && !f.isDirectory()) {
+                    return path;
+                }
             }
         }
-        return false;
+        return "";
     }
 
     /**
@@ -179,7 +275,19 @@ public class HgUtils {
                 NbBundle.getMessage(bundleLocation,title),
                 JOptionPane.WARNING_MESSAGE);
     }
-    
+
+    public static JComponent addContainerBorder(JComponent comp) {
+        final LayoutStyle layoutStyle = LayoutStyle.getSharedInstance();
+
+        JPanel panel = new JPanel();
+        panel.add(comp);
+        panel.setBorder(BorderFactory.createEmptyBorder(
+                layoutStyle.getContainerGap(comp, SwingConstants.NORTH, null),
+                layoutStyle.getContainerGap(comp, SwingConstants.WEST,  null),
+                layoutStyle.getContainerGap(comp, SwingConstants.SOUTH, null),
+                layoutStyle.getContainerGap(comp, SwingConstants.EAST,  null)));
+        return panel;
+    }
 
     /**
      * stripDoubleSlash - converts '\\' to '\' in path on Windows
@@ -193,6 +301,58 @@ public class HgUtils {
         }
         return path;
     }
+    
+    
+    /**
+     * fixIniFilePathsOnWindows - converts '\' to '\\' in paths in IniFile on Windows
+     *
+     * @param File iniFile to process
+     * @return File processed tmpFile 
+     */
+    public static File fixPathsInIniFileOnWindows(File iniFile) {
+        if(!Utilities.isWindows()) return null;
+        
+        File tmpFile = null;
+        BufferedReader br = null;
+        PrintWriter pw = null;
+
+        try {
+            if (iniFile == null || !iniFile.isFile() || !iniFile.canWrite()) {
+                return null;
+            }
+            
+            tmpFile = File.createTempFile(HgCommand.HG_COMMAND + "-", "tmp"); //NOI18N 
+
+            if (tmpFile == null) {
+                return null;
+            }
+            br = new BufferedReader(new FileReader(iniFile));
+            pw = new PrintWriter(new FileWriter(tmpFile));
+
+            String line = null;
+            String stripLine = null;
+            while ((line = br.readLine()) != null) {
+                stripLine = line.replace("\\\\", "\\");
+                pw.println(stripLine.replace("\\", "\\\\"));
+                pw.flush();
+            }
+        } catch (IOException ex) {
+            // Ignore
+        } finally {
+            try {
+                if (pw != null) {
+                    pw.close();
+                }
+                if (br != null) {
+                    br.close();
+                }
+            } catch (IOException ex) {
+                // Ignore
+            }
+        }
+        return tmpFile;
+    }
+
     /**
      * isLocallyAdded - checks to see if this file has been Locally Added to Hg
      *
@@ -209,6 +369,31 @@ public class HgUtils {
             return false;
     }
     
+    private static void resetIgnorePatterns(File file) {
+        if (ignorePatterns == null) {
+            return;
+        }
+        String key = file.getAbsolutePath();
+        ignorePatterns.remove(key);
+    }
+
+    private static Set<Pattern> getIgnorePatterns(File file) {
+        if (ignorePatterns == null) {
+            ignorePatterns = new HashMap<String, Set<Pattern>>();
+        }
+        String key = file.getAbsolutePath();
+        Set<Pattern> patterns = ignorePatterns.get(key);
+        if (patterns == null) {
+            patterns = new HashSet<Pattern>(5);
+        }
+        if (patterns.size() == 0) {
+            addIgnorePatterns(patterns, file);
+            ignorePatterns.put(key, patterns);
+        }
+	
+        return patterns;
+    }
+
     /**
      * isIgnored - checks to see if this is a file Hg should ignore
      *
@@ -216,28 +401,40 @@ public class HgUtils {
      * @return boolean true - ignore, false - not ignored
      */
     public static boolean isIgnored(File file){
-        if (file == null) return true;
-        String name = file.getPath();
-        File topFile = Mercurial.getInstance().getTopmostManagedParent(file);
+        return isIgnored(file, true);
+    }
+
+    public static boolean isIgnored(File file, boolean checkSharability){
+        if (file == null) return false;
+        String path = file.getPath();
+        File topFile = Mercurial.getInstance().getRepositoryRoot(file);
         
         // We assume that the toplevel directory should not be ignored.
         if (topFile == null || topFile.equals(file)) {
             return false;
         }
-
-        Set<Pattern> patterns = new HashSet<Pattern>(5);
-        addIgnorePatterns(patterns, topFile);
+        
+        Set<Pattern> patterns = getIgnorePatterns(topFile);
+        path = path.substring(topFile.getAbsolutePath().length() + 1);
 
         for (Iterator i = patterns.iterator(); i.hasNext();) {
             Pattern pattern = (Pattern) i.next();
-            if (pattern.matcher(name).find()) {
+            if (pattern.matcher(path).find()) {
                 return true;
             }
         }
 
-        if (FILENAME_HGIGNORE.equals(name)) return false;
-        int sharability = SharabilityQuery.getSharability(file);
-        if (sharability == SharabilityQuery.NOT_SHARABLE) return true;
+        // If a parent of the file matches a pattern ignore the file
+        File parentFile = file.getParentFile();
+        if (!parentFile.equals(topFile)) {
+            if (isIgnored(parentFile, false)) return true;
+        }
+
+        if (FILENAME_HGIGNORE.equals(file.getName())) return false;
+        if (checkSharability) {
+            int sharability = SharabilityQuery.getSharability(file);
+            if (sharability == SharabilityQuery.NOT_SHARABLE) return true;
+            }
         return false;
     }
 
@@ -252,31 +449,118 @@ public class HgUtils {
         if( path == null) return;
         BufferedWriter fileWriter = null;
         Mercurial hg = Mercurial.getInstance();
-        File root = hg.getTopmostManagedParent(path);
+        File root = hg.getRepositoryRoot(path);
         if( root == null) return;
         File ignore = new File(root, FILENAME_HGIGNORE);
-        if (ignore.exists()) {
-            if (!confirmDialog(HgUtils.class, "MSG_IGNORE_FILES_TITLE", "MSG_IGNORE_FILES")) { // NOI18N 
-                return;
-            }
-        }
-           
+        
         try     {
-            fileWriter = new BufferedWriter(
-                    new OutputStreamWriter(new FileOutputStream(ignore, true)));
-            for (String name : HG_IGNORE_FILES) {
-                fileWriter.write(name + "\n"); // NOI18N
+            if (!ignore.exists()) {
+                fileWriter = new BufferedWriter(
+                        new OutputStreamWriter(new FileOutputStream(ignore)));
+                for (String name : HG_IGNORE_FILES) {
+                    fileWriter.write(name + "\n"); // NOI18N
+                }
+            }else{
+                addToExistingIgnoredFile(ignore);
             }
         } catch (IOException ex) {
             Mercurial.LOG.log(Level.FINE, "createIgnored(): File {0} - {1}",  // NOI18N
                     new Object[] {ignore.getAbsolutePath(), ex.toString()});
         }finally {
             try {
-                fileWriter.close();
+                if(fileWriter != null) fileWriter.close();
                 hg.getFileStatusCache().refresh(ignore, FileStatusCache.REPOSITORY_STATUS_UNKNOWN);
             } catch (IOException ex) {
                 Mercurial.LOG.log(Level.FINE, "createIgnored(): File {0} - {1}",  // NOI18N
                         new Object[] {ignore.getAbsolutePath(), ex.toString()});
+            }
+        }
+    }
+    
+    private static int HG_NUM_PATTERNS_TO_CHECK = 5;
+    private static void addToExistingIgnoredFile(File hgignoreFile) {
+        if(hgignoreFile == null || !hgignoreFile.exists() || !hgignoreFile.canWrite()) return;
+        File tempFile = null;
+        BufferedReader br = null;
+        PrintWriter pw = null;
+        boolean bOrigAnyPresent = false;
+        boolean bOrigPresent = false;
+        boolean bChgAnyPresent = false;
+        boolean bRejAnyPresent = false;
+        boolean bConflictAnyPresent = false;
+        
+        // If new patterns are added to HG_IGNORE_FILES, following code needs to
+        // check for these new patterns
+        assert( HG_IGNORE_FILES.length == HG_NUM_PATTERNS_TO_CHECK);
+        
+        try {
+            tempFile = new File(hgignoreFile.getAbsolutePath() + ".tmp"); // NOI18N
+            if (tempFile == null) return;
+            
+            br = new BufferedReader(new FileReader(hgignoreFile));
+            pw = new PrintWriter(new FileWriter(tempFile));
+
+            String line = null;            
+            while ((line = br.readLine()) != null) {
+                if(!bOrigAnyPresent && line.equals(HG_IGNORE_ORIG_ANY_FILES)){
+                    bOrigAnyPresent = true;
+                }else if (!bOrigPresent && line.equals(HG_IGNORE_ORIG_FILES)){
+                    bOrigPresent = true;
+                }else if (!bChgAnyPresent && line.equals(HG_IGNORE_CHG_ANY_FILES)){
+                    bChgAnyPresent = true;
+                }else if (!bRejAnyPresent && line.equals(HG_IGNORE_REJ_ANY_FILES)){
+                    bRejAnyPresent = true;
+                }else if (!bConflictAnyPresent && line.equals(HG_IGNORE_CONFLICT_ANY_FILES)){
+                    bConflictAnyPresent = true;
+                }
+                pw.println(line);
+                pw.flush();
+            }
+            // If not found add as required
+            if (!bOrigAnyPresent) {
+                pw.println(HG_IGNORE_ORIG_ANY_FILES );
+                pw.flush();
+            }
+            if (!bOrigPresent) {
+                pw.println(HG_IGNORE_ORIG_FILES );
+                pw.flush();
+            }
+            if (!bChgAnyPresent) {
+                pw.println(HG_IGNORE_CHG_ANY_FILES );
+                pw.flush();
+            }
+            if (!bRejAnyPresent) {
+                pw.println(HG_IGNORE_REJ_ANY_FILES );
+                pw.flush();
+            }     
+            if (!bConflictAnyPresent) {
+                pw.println(HG_IGNORE_CONFLICT_ANY_FILES );
+                pw.flush();
+            }     
+            
+        } catch (IOException ex) {
+            // Ignore
+        } finally {
+            try {
+                if(pw != null) pw.close();
+                if(br != null) br.close();
+
+                boolean bAnyAdditions = !bOrigAnyPresent || !bOrigPresent  || 
+                        !bChgAnyPresent || !bRejAnyPresent || !bConflictAnyPresent;               
+                if(bAnyAdditions){
+                    if (!confirmDialog(HgUtils.class, "MSG_IGNORE_FILES_TITLE", "MSG_IGNORE_FILES")) { // NOI18N 
+                        tempFile.delete();
+                        return;
+                    }
+                    if(tempFile != null && tempFile.isFile() && tempFile.canWrite() && hgignoreFile != null){ 
+                        hgignoreFile.delete();
+                        tempFile.renameTo(hgignoreFile);
+                    }
+                }else{
+                    tempFile.delete();
+                }
+            } catch (IOException ex) {
+            // Ignore
             }
         }
     }
@@ -303,6 +587,34 @@ public class HgUtils {
         }
     }
 
+    /**
+     * Removes parts of the pattern denoting commentaries
+     * @param line initial pattern
+     * @return pattern with comments removed.
+     */
+    private static String removeCommentsInIgnore(String line) {
+        int indexOfHash = -1;
+        boolean cont;
+        do {
+            cont = false;
+            indexOfHash = line.indexOf("#", indexOfHash);   // NOI18N
+            // do not consider \# as a comment, skip that character and try to find the next comment
+            if (indexOfHash > 0 && line.charAt(indexOfHash - 1) == '\\') {   // NOI18N
+                ++indexOfHash;
+                cont = true;
+            }
+        } while (cont);
+        if (indexOfHash != -1) {
+            if (indexOfHash == 0) {
+                line = "";
+            } else {
+                line = line.substring(0, indexOfHash).trim();
+            }
+        }
+
+        return line;
+    }
+
     private static Boolean ignoreContainsSyntax(File directory) throws IOException {
         File hgIgnore = new File(directory, FILENAME_HGIGNORE);
         Boolean val = false;
@@ -315,12 +627,8 @@ public class HgUtils {
             r = new BufferedReader(new FileReader(hgIgnore));
             while ((s = r.readLine()) != null) {
                 String line = s.trim();
-                int indexOfHash = line.indexOf("#");
-                if (indexOfHash != -1) {
-                    if (indexOfHash == 0)
-                        continue;
-                    line = line.substring(0, indexOfHash -1); 
-                }
+                line = removeCommentsInIgnore(line);
+                if (line.length() == 0) continue;
                 String [] array = line.split(" ");
                 if (array[0].equals("syntax:")) {
                     val = true;
@@ -345,13 +653,8 @@ public class HgUtils {
             r = new BufferedReader(new FileReader(hgIgnore));
             while ((s = r.readLine()) != null) {
                 String line = s.trim();
+                line = removeCommentsInIgnore(line);
                 if (line.length() == 0) continue;
-                int indexOfHash = line.indexOf("#");
-                if (indexOfHash != -1) {
-                    if (indexOfHash == 0)
-                        continue;
-                    line = line.substring(0, indexOfHash -1); 
-                }
                 String [] array = line.split(" ");
                 if (array[0].equals("syntax:")) continue;
                 entries.addAll(Arrays.asList(array));
@@ -364,7 +667,7 @@ public class HgUtils {
 
     private static String computePatternToIgnore(File directory, File file) {
         String name = file.getAbsolutePath().substring(directory.getAbsolutePath().length()+1);
-        return name.replace(' ', '?').replace(File.separatorChar, '/');
+        return name.replace(' ', '?').replace(File.separatorChar, '/').replace("#", "\\#");
     }
 
     private static void writeIgnoreEntries(File directory, Set entries) throws IOException {
@@ -390,6 +693,7 @@ public class HgUtils {
         } finally {
             lock.releaseLock();
             if (w != null) w.close();
+            resetIgnorePatterns(directory);
         }
     }
 
@@ -536,7 +840,7 @@ itor tabs #66700).
         File [] files = context.getRootFiles().toArray(new File[context.getRootFiles().size()]);
         if (files == null || files.length == 0) return null;
         
-        File root = hg.getTopmostManagedParent(files[0]);
+        File root = hg.getRepositoryRoot(files[0]);
         return root;
     }
     
@@ -555,12 +859,18 @@ itor tabs #66700).
         File [] files = context.getRootFiles().toArray(new File[context.getRootFiles().size()]);
 
         for (File file : files) {
-            Project p = FileOwnerQuery.getOwner(FileUtil.toFileObject(file));
-            if (p != null) {
-                return p;
+            /* We may be committing a LocallyDeleted file */
+            if (!file.exists()) file = file.getParentFile();
+            FileObject fo = FileUtil.toFileObject(file);
+            if(fo == null) {
+                Mercurial.LOG.log(Level.FINE, "HgUtils.getProjectFile(): No FileObject for {0}", file); // NOI18N
             } else {
-                Mercurial.LOG.log(Level.FINE, "HgUtils.getProjectFile(): No project for {0}",  // NOI18N
-                    file);
+                Project p = FileOwnerQuery.getOwner(fo);
+                if (p != null) {
+                    return p;
+                } else {
+                    Mercurial.LOG.log(Level.FINE, "HgUtils.getProjectFile(): No project for {0}", file); // NOI18N
+                }
             }
         }
         return null;
@@ -612,7 +922,7 @@ itor tabs #66700).
             FileStatusCache cache = Mercurial.getInstance().getFileStatusCache();
 
             cache.refreshCached(file);
-            File repository = Mercurial.getInstance().getTopmostManagedParent(file);
+            File repository = Mercurial.getInstance().getRepositoryRoot(file);
             if (repository == null) {
                 return;
             }
@@ -652,6 +962,7 @@ itor tabs #66700).
      * @return void
      */
     public static void forceStatusRefreshProject(VCSContext context) {
+        // XXX and what if there is more then one project in the ctx?!
         Project project = getProject(context);
         if (project == null) return;
         File[] files = getProjectRootFiles(project);
@@ -691,7 +1002,7 @@ itor tabs #66700).
             }
             
             Mercurial mercurial = Mercurial.getInstance();
-            File rootManagedFolder = mercurial.getTopmostManagedParent(file);
+            File rootManagedFolder = mercurial.getRepositoryRoot(file);
             if ( rootManagedFolder == null){
                 return NbBundle.getMessage(SyncFileNode.class, "LBL_Location_NotInRepository"); // NOI18N
             }
@@ -804,6 +1115,42 @@ itor tabs #66700).
     }
 
     /**
+     * Returns a number of 100ms-lasting waiting loops in a repository validity check.
+     * If a sysprop defined in HgUtils.HG_CHECK_REPOSITORY_TIMEOUT_SWITCH is set, this returns a number count from HG_CHECK_REPOSITORY_TIMEOUT_SWITCH, otherwise it uses
+     * a defaut value HgUtils.HG_CHECK_REPOSITORY_DEFAULT_ROUNDS.
+     * @return number of rounds
+     */
+    public static int getNumberOfRoundsForRepositoryValidityCheck() {
+        if (repositoryValidityCheckRounds <= 0) {
+            try {
+                repositoryValidityCheckRounds = Integer.parseInt(System.getProperty(HG_CHECK_REPOSITORY_TIMEOUT_SWITCH, HG_CHECK_REPOSITORY_DEFAULT_TIMEOUT)) * 10; // number of 100ms lasting rounds
+            } catch (NumberFormatException ex) {
+                Mercurial.LOG.log(Level.INFO, "Parsing integer failed, default value will be used", ex);
+            }
+            if (repositoryValidityCheckRounds <= 0) {
+                Mercurial.LOG.fine("Using default value for number of rounds in repository validity check: " + HG_CHECK_REPOSITORY_DEFAULT_ROUNDS);
+                repositoryValidityCheckRounds = HG_CHECK_REPOSITORY_DEFAULT_ROUNDS;
+            }
+        }
+        return repositoryValidityCheckRounds;
+    }
+
+    /**
+     * Returns true if hg in a given version supports 'hg resolve' command
+     * Resolve command was introduced in 1.1
+     * @param version
+     * @return
+     */
+    public static boolean hasResolveCommand(String version) {
+        if (version != null && (!version.startsWith("0.")               //NOI18N
+                || !version.startsWith("1.0"))) {                       //NOI18N
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Compares two {@link FileInformation} objects by importance of statuses they represent.
      */
     public static class ByImportanceComparator<T> implements Comparator<FileInformation> {
@@ -875,131 +1222,96 @@ itor tabs #66700).
         }
     }
 
-
     /**
-     * Print contents of list to Mercurial Output Tab
+     * Uses content analysis for unversioned files.
      *
-     * @param list to print out
-     * 
+     * @param file file to examine
+     * @return String mime type of the file (or best guess)
      */
-     public static void outputMercurialTab(List<String> list){
-        if( list.isEmpty()) return;
-
-        InputOutput io = IOProvider.getDefault().getIO(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE, false);
-        io.select();
-        OutputWriter out = io.getOut();
-        
-        int lines = list.size();
-        if (lines > MAX_LINES_TO_PRINT) {
-            out.println(list.get(1));
-            out.println(list.get(2));
-            out.println(list.get(3));
-            out.println("...");
-            out.println(list.get(list.size() -1));
-            out.println(MSG_TOO_MANY_LINES);
-            for (String s : list){
-                Mercurial.LOG.log(Level.WARNING, s);
-            }
+    public static String getMimeType(File file) {
+        FileObject fo = FileUtil.toFileObject(file);
+        String foMime;
+        if (fo == null) {
+            foMime = "content/unknown";
         } else {
-            for (String s : list){
-                out.println(s);
-
-            }
+            foMime = fo.getMIMEType();
         }
-        out.close();
+        if(foMime.startsWith("text")) {
+            return foMime;
+        }
+        return Utils.isFileContentText(file) ? "text/plain" : "application/octet-stream";
     }
 
-     /**
-     * Print msg to Mercurial Output Tab
-     *
-     * @param String msg to print out
-     * 
-     */
-     public static void outputMercurialTab(String msg){
-        if( msg == null) return;
+    public static void logHgLog(HgLogMessage log, OutputLogger logger) {
+        String lbChangeset = NbBundle.getMessage(HgUtils.class, "LB_CHANGESET");   // NOI18N
+        String lbUser =      NbBundle.getMessage(HgUtils.class, "LB_AUTHOR");      // NOI18N
+        String lbDate =      NbBundle.getMessage(HgUtils.class, "LB_DATE");        // NOI18N
+        String lbSummary =   NbBundle.getMessage(HgUtils.class, "LB_SUMMARY");     // NOI18N
+        int l = 0;
+        for (String s : new String[] {lbChangeset, lbUser, lbDate, lbSummary}) {
+            if(l < s.length()) l = s.length();
+        }
+        StringBuffer sb = new StringBuffer();
+        sb.append(formatlabel(lbChangeset, l));
+        sb.append(log.getRevision());
+        sb.append(":"); // NOI18N
+        sb.append(log.getCSetShortID());
+        sb.append('\n'); // NOI18N
+        sb.append(formatlabel(lbUser, l));
+        sb.append(log.getAuthor());
+        sb.append('\n'); // NOI18N
+        sb.append(formatlabel(lbDate, l));
+        sb.append(log.getDate());
+        sb.append('\n'); // NOI18N
+        sb.append(formatlabel(lbSummary, l));
+        sb.append(log.getMessage());
+        sb.append('\n'); // NOI18N
 
-        InputOutput io = IOProvider.getDefault().getIO(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE, false);
-        io.select();
-        OutputWriter out = io.getOut();
-        
-        out.println(msg);
-        out.close();
+        logger.output(sb.toString());
     }
 
-    /**
-     * Print msg to Mercurial Output Tab in Red
-     *
-     * @param String msg to print out
-     * 
-     */
-     public static void outputMercurialTabInRed(String msg){
-        if( msg == null) return;
 
-        InputOutput io = IOProvider.getDefault().getIO(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE, false);
-        io.select();
-        OutputWriter out = io.getErr();
-        
-        out.println(msg);
-        out.close();
+    private static String formatlabel(String label, int l) {
+        label = label + spaces(l - label.length()) + ": ";
+        return label;
     }
 
-    /**
-     * Print URL to Mercurial Output Tab as an active Hyperlink
-     *
-     * @param String sURL to print out
-     * 
-     */
-     public static void outputMercurialTabLink(final String sURL){
-         if (sURL == null) return;
-         
-         try {
-             InputOutput io = IOProvider.getDefault().getIO(Mercurial.MERCURIAL_OUTPUT_TAB_TITLE, false);
-             io.select();
-             OutputWriter out = io.getOut();
-
-             OutputListener listener = new OutputListener() {
-                         public void outputLineAction(OutputEvent ev) {
-                             try {
-                                 HtmlBrowser.URLDisplayer.getDefault().showURL(new URL(sURL));
-                             } catch (IOException ex) {
-                             // Ignore
-                             }
-                         }
-                         public void outputLineSelected(OutputEvent ev) {}
-                         public void outputLineCleared(OutputEvent ev) {}
-                     };
-             out.println(sURL, listener, true);
-             out.close();
-         } catch (IOException ex) {
-         // Ignore
-         }
-     }
-
-    /**
-     * Select and Clear Mercurial Output Tab
-     *
-     * @param list to print out
-     * 
-     */
-     public static void clearOutputMercurialTab(){
-         InputOutput io = IOProvider.getDefault().getIO(
-                 Mercurial.MERCURIAL_OUTPUT_TAB_TITLE, false);
-         
-         io.select();
-         OutputWriter out = io.getOut();
-         
-         try {
-             out.reset();
-         } catch (IOException ex) {
-             // Ignore Exception
-         }
-         out.close();
+    private static String spaces(int l) {
+        StringBuffer sb = new StringBuffer();
+        for (int i = 0; i < l + 3; i++) {
+            sb.append(" ");
+        }
+        return sb.toString();
     }
-     
+
     /**
      * This utility class should not be instantiated anywhere.
      */
     private HgUtils() {
     }
-    
+
+    private static Logger TY9_LOG = null;
+    public static void logT9Y(String msg) {
+        if(TY9_LOG == null) TY9_LOG = Logger.getLogger("org.netbeans.modules.mercurial.t9y");
+        TY9_LOG.log(Level.FINEST, msg);
+    }
+
+    /**
+     * Validates annotation format text
+     * @param format format to be validatet
+     * @return <code>true</code> if the format is correct, <code>false</code> otherwise.
+     */
+    public static boolean isAnnotationFormatValid(String format) {
+        boolean retval = true;
+        if (format != null) {
+            try {
+                new MessageFormat(format);
+            } catch (IllegalArgumentException ex) {
+                Mercurial.LOG.log(Level.FINER, "Bad user input - annotation format", ex);
+                retval = false;
+            }
+        }
+        return retval;
+    }
+
 }
