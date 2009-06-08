@@ -54,7 +54,6 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.apisupport.project.NbModuleProject;
 import org.netbeans.modules.apisupport.project.layers.LayerNode;
 import org.netbeans.modules.apisupport.project.layers.LayerUtils;
-import org.netbeans.modules.apisupport.project.metainf.ServiceNodeHandler;
 import org.netbeans.modules.apisupport.project.suite.SuiteProject;
 import org.netbeans.spi.project.ui.support.NodeFactory;
 import org.netbeans.spi.project.ui.support.NodeList;
@@ -71,27 +70,37 @@ import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.Children;
 import org.openide.nodes.FilterNode;
 import org.openide.nodes.Node;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
-import org.openide.util.Utilities;
 
 /**
  *
  * @author mkleint
  */
+@NodeFactory.Registration(projectType={"org-netbeans-modules-apisupport-project-suite","org-netbeans-modules-apisupport-project"}, position=200)
 public class ImportantFilesNodeFactory implements NodeFactory {
 
     /** Package private for unit tests. */
     static final String IMPORTANT_FILES_NAME = "important.files"; // NOI18N
 
-    /** Package private for unit tests only. */
-    static final RequestProcessor RP = new RequestProcessor();
+    private static final RequestProcessor RP = new RequestProcessor(ImportantFilesNodeFactory.class.getName());
     
     public ImportantFilesNodeFactory() {
     }
     
     public NodeList createNodes(Project p) {
         return new ImpFilesNL(p);
+    }
+
+    /**
+     * Public RP serving as queue of calls into org.openide.nodes.
+     * All such calls must be made outside ProjectManager#mutex(),
+     * this (shared) queue ensures ordering of calls.
+     * @return Shared RP
+     */
+    public static RequestProcessor getNodesSyncRP() {
+        return RP;
     }
 
     private static class ImpFilesNL implements NodeList<String> {
@@ -114,12 +123,12 @@ public class ImportantFilesNodeFactory implements NodeFactory {
         }
 
         public Node node(String key) {
-            assert key == IMPORTANT_FILES_NAME;
+            assert key.equals(IMPORTANT_FILES_NAME);
             if (project instanceof NbModuleProject) {
                 return new ImportantFilesNode((NbModuleProject)project);
             }
             if (project instanceof SuiteProject) {
-                return new ImportantFilesNode(new SuiteImportantFilesChildren((SuiteProject)project));
+                return new ImportantFilesNode(project, new SuiteImportantFilesChildren((SuiteProject)project));
             }
             return null;
         }
@@ -138,11 +147,11 @@ public class ImportantFilesNodeFactory implements NodeFactory {
         private static final String DISPLAY_NAME = NbBundle.getMessage(ModuleLogicalView.class, "LBL_important_files");
         
         public ImportantFilesNode(NbModuleProject project) {
-            super(new ImportantFilesChildren(project));
+            this(project, new ImportantFilesChildren(project));
         }
         
-        ImportantFilesNode(Children ch) {
-            super(ch);
+        ImportantFilesNode(Project project, Children ch) {
+            super(ch, org.openide.util.lookup.Lookups.singleton(project));
         }
         
         public @Override String getName() {
@@ -150,8 +159,8 @@ public class ImportantFilesNodeFactory implements NodeFactory {
         }
         
         private Image getIcon(boolean opened) {
-            Image badge = Utilities.loadImage("org/netbeans/modules/apisupport/project/resources/config-badge.gif", true);
-            return Utilities.mergeImages(UIUtil.getTreeFolderIcon(opened), badge, 8, 8);
+            Image badge = ImageUtilities.loadImage("org/netbeans/modules/apisupport/project/resources/config-badge.gif", true);
+            return ImageUtilities.mergeImages(UIUtil.getTreeFolderIcon(opened), badge, 8, 8);
         }
         
         public @Override String getDisplayName() {
@@ -185,7 +194,7 @@ public class ImportantFilesNodeFactory implements NodeFactory {
      */
     private static final class ImportantFilesChildren extends Children.Keys<Object> {
         
-        private List<Object> visibleFiles = new ArrayList<Object>();
+        private List<Object> visibleFiles = null;
         private FileChangeListener fcl;
         
         /** Abstract location to display name. */
@@ -219,6 +228,7 @@ public class ImportantFilesNodeFactory implements NodeFactory {
         
         protected @Override void removeNotify() {
             setKeys(Collections.<String>emptyList());
+            visibleFiles = null;
             removeListeners();
             super.removeNotify();
         }
@@ -236,8 +246,6 @@ public class ImportantFilesNodeFactory implements NodeFactory {
                 }
             } else if (key instanceof LayerUtils.LayerHandle) {
                 return new Node[] {/* #68240 */ new SpecialFileNode(new LayerNode((LayerUtils.LayerHandle) key), null)};
-            } else if (key instanceof ServiceNodeHandler) {
-                return new Node[]{((ServiceNodeHandler)key).createServiceRootNode()};
             } else {
                 throw new AssertionError(key);
             } 
@@ -252,9 +260,7 @@ public class ImportantFilesNodeFactory implements NodeFactory {
                 newVisibleFiles.add(handle);
                 files.add(layerFile);
             }
-            Iterator it = FILES.keySet().iterator();
-            while (it.hasNext()) {
-                String loc = (String) it.next();
+            for (String loc : FILES.keySet()) {
                 String locEval = project.evaluator().evaluate(loc);
                 if (locEval == null) {
                     newVisibleFiles.remove(loc); // XXX why?
@@ -266,10 +272,9 @@ public class ImportantFilesNodeFactory implements NodeFactory {
                     files.add(file);
                 }
             }
-            if (!isInitialized() || !newVisibleFiles.equals(visibleFiles)) {
+            if (!newVisibleFiles.equals(visibleFiles)) {
                 visibleFiles = newVisibleFiles;
-                visibleFiles.add(project.getLookup().lookup(ServiceNodeHandler.class));
-                RP.post(new Runnable() { // #72471
+                getNodesSyncRP().post(new Runnable() { // #72471
                     public void run() {
                         setKeys(visibleFiles);
                     }
@@ -452,7 +457,7 @@ public class ImportantFilesNodeFactory implements NodeFactory {
             }
             if (!isInitialized() || !newVisibleFiles.equals(visibleFiles)) {
                 visibleFiles = newVisibleFiles;
-                RP.post(new Runnable() { // #72471
+                getNodesSyncRP().post(new Runnable() { // #72471
                     public void run() {
                         setKeys(visibleFiles);
                     }
