@@ -41,12 +41,43 @@
 
 package org.netbeans.modules.cnd.debugger.gdb;
 
-import java.util.HashMap;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.logging.Logger;
+import java.util.Set;
 import javax.swing.SwingUtilities;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.StyledDocument;
+import org.netbeans.cnd.api.lexer.CppTokenId;
+import org.netbeans.modules.cnd.api.model.CsmFile;
+import org.netbeans.modules.cnd.api.model.CsmNamespace;
+import org.netbeans.modules.cnd.api.model.CsmObject;
+import org.netbeans.modules.cnd.api.model.CsmOffsetable;
+import org.netbeans.modules.cnd.api.model.CsmScope;
+import org.netbeans.modules.cnd.api.model.CsmScopeElement;
+import org.netbeans.modules.cnd.api.model.CsmVariable;
+import org.netbeans.modules.cnd.api.model.deep.CsmForStatement;
+import org.netbeans.modules.cnd.api.model.deep.CsmIfStatement;
+import org.netbeans.modules.cnd.api.model.deep.CsmLoopStatement;
+import org.netbeans.modules.cnd.api.model.deep.CsmStatement;
+import org.netbeans.modules.cnd.api.model.deep.CsmSwitchStatement;
+import org.netbeans.modules.cnd.api.model.services.CsmFileReferences;
+import org.netbeans.modules.cnd.api.model.services.CsmMacroExpansion;
+import org.netbeans.modules.cnd.api.model.services.CsmReferenceContext;
+import org.netbeans.modules.cnd.api.model.util.CsmKindUtilities;
+import org.netbeans.modules.cnd.api.model.xref.CsmReference;
+import org.netbeans.modules.cnd.completion.csm.CsmContext;
+import org.netbeans.modules.cnd.completion.csm.CsmOffsetResolver;
 import org.netbeans.modules.cnd.debugger.gdb.models.AbstractVariable;
+import org.netbeans.modules.cnd.debugger.gdb.models.GdbLocalVariable;
+import org.netbeans.modules.cnd.modelutil.CsmUtilities;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.text.NbDocument;
+import org.openide.util.Exceptions;
 
 /**
  * Represents one stack frame.
@@ -58,70 +89,46 @@ import org.netbeans.modules.cnd.debugger.gdb.models.AbstractVariable;
  *
  * @author Gordon Prieur (copied from Jan Jancura's JPDA implementation)
  */
-public class CallStackFrame {
+public class CallStackFrame extends org.netbeans.modules.cnd.debugger.common.CallStackFrame {
+    public static boolean enableMacros = Boolean.getBoolean("gdb.autos.macros");
+
+    private final GdbDebugger debugger;
+    private final int lineNumber;
+    private final String func;
+    private final String file;
+    private final String fullname;
+    private final int frameNumber;
+    private final String address;
+    private final String from;
     
-    public static final int OBSOLETE = 1;
-    public static final int VALID = 2;
+    private AbstractVariable[] cachedLocalVariables = null;
+    private AbstractVariable[] cachedAutos = null;
+
+    private Collection<GdbVariable> arguments = null;
+    private StyledDocument document = null;
+    private int offset = -1;
+
+    //private Logger log = Logger.getLogger("gdb.logger"); // NOI18N
     
-    private CallStackFrame sf;
-    private GdbDebugger debugger;
-    private int lineNumber;
-    private String func;
-    private String file;
-    private String fullname;
-    private int frameNumber;
-    private String address;
-    private int state;
-    private LocalVariable[] cachedLocalVariables;
-    private Map<String, Object> typeMap = new HashMap();
-    private Logger log = Logger.getLogger("gdb.logger"); // NOI18N
-    
-    public CallStackFrame(GdbDebugger debugger, String func, String file, String fullname, String lnum, String address) {
+    public CallStackFrame(GdbDebugger debugger, String func, String file, String fullname, String lnum, String address, int frameNumber, String from) {
         this.debugger = debugger;
-        set(func, file, fullname, lnum, address);
-        frameNumber = 0;
-    }
-    
-    /**
-     *  Set frame values.
-     *
-     *  @param func Function name from gdb
-     *  @param file File name (basename) from gdb
-     *  @param fullname Absolute path from gdb
-     *  @param lnum Line number (as a String) from gdb
-     */
-    public void set(String func, String file, String fullname, String lnum, String address) {
-        if (this.fullname != null && !this.fullname.equals(fullname)) {
-            typeMap.clear();
-        }
         this.func = func;
         this.file = file;
         this.fullname = fullname;
         this.address = address;
+        this.frameNumber = frameNumber;
+        this.from = from;
+        int lNumber = -1;
         if (lnum != null) {
             try {
-                lineNumber = Integer.parseInt(lnum);
+                lNumber = Integer.parseInt(lnum);
             } catch (NumberFormatException ex) {
-                lineNumber = 1; // shouldn't happen
+                lNumber = 1; // shouldn't happen
             }
         } else {
-            lineNumber = -1;
+            lNumber = -1;
         }
-        invalidateCache();
-        setState(CallStackFrame.VALID);
-    }
-    
-    public void invalidateCache() {
-        cachedLocalVariables = null;
-    }
-    
-    /**
-     *  Set frame number.
-     *
-     *  @param frameNumber Frame number in Call Stack ("0" means top)
-     */
-    public void setFrameNumber(int frameNumber) {
-        this.frameNumber = frameNumber;
+        this.lineNumber = lNumber;
     }
     
     /**
@@ -143,19 +150,20 @@ public class CallStackFrame {
     }
     
     /**
-     * Set the linenumber after a step operation
-     */
-    public void setLineNumber(int lineNumber) {
-        this.lineNumber = lineNumber;
-    }
-    
-    /**
      * Returns method name associated with this stack frame.
      *
      * @return method name associated with this stack frame
      */
     public String getFunctionName() {
         return func;
+    }
+
+    /**
+     * Returns from value
+     * @return from value
+     */
+    public String getFrom() {
+        return from;
     }
     
     /**
@@ -173,6 +181,11 @@ public class CallStackFrame {
      * @return name of file this stack frame is stopped in
      */
     public String getFullname() {
+        // PathMap.getLocalPath throws NPE when argument is null
+        return fullname == null? null : debugger.getPathMap().getLocalPath(debugger.checkCygwinLibs(fullname),true);
+    }
+
+    public String getOriginalFullName() {
         return fullname;
     }
     
@@ -187,21 +200,9 @@ public class CallStackFrame {
     public void makeCurrent() {
         debugger.setCurrentCallStackFrame(this);
     }
-    
-    /** Set the state of this frame */
-    public void setState(int state) {
-        if (state != this.state && (state == OBSOLETE || state == VALID)) {
-            this.state = state;
-        }
-    }
-    
-    /**
-     * Returns <code>true</code> if this frame is obsoleted.
-     *
-     * @return <code>true</code> if this frame is obsoleted
-     */
-    public  boolean isObsolete() {
-        return state == OBSOLETE;
+
+    public boolean isValid() {
+        return getFileName() != null && getFullname() != null && getFunctionName() != null;
     }
     
     /** UNCOMMENT WHEN THIS METHOD IS NEEDED. IT'S ALREADY IMPLEMENTED IN THE IMPL. CLASS.
@@ -220,10 +221,33 @@ public class CallStackFrame {
     public void popFrame() {
         debugger.getGdbProxy().exec_finish();
     }
-    
-    /** Get stack frame */
-    public CallStackFrame getStackFrame() {
-        return sf;
+
+    public Collection<GdbVariable> getArguments() {
+        return arguments;
+    }
+
+    public void setArguments(Collection<GdbVariable> arguments) {
+        this.arguments = arguments;
+    }
+
+    public StyledDocument getDocument() {
+        if (document == null) {
+            if (fullname != null && fullname.length() > 0) {
+                File docFile = new File(fullname);
+                if (docFile.exists()) {
+                    FileObject fo = FileUtil.toFileObject(CndFileUtils.normalizeFile(docFile));
+                    document = (StyledDocument) CsmUtilities.getDocument(fo);
+                }
+            }
+        }
+        return document;
+    }
+
+    public int getOffset() {
+        if (offset < 0 && lineNumber >= 0 && getDocument() != null) {
+            offset = NbDocument.findLineOffset(document, lineNumber-1);
+        }
+        return offset;
     }
     
     /**
@@ -235,7 +259,7 @@ public class CallStackFrame {
      *
      * @return local variables
      */
-    public LocalVariable[] getLocalVariables() {
+    public AbstractVariable[] getLocalVariables() {
         assert !(Thread.currentThread().getName().equals("GdbReaderRP"));
         assert !(SwingUtilities.isEventDispatchThread()); 
 
@@ -243,9 +267,9 @@ public class CallStackFrame {
             List<GdbVariable> list = debugger.getLocalVariables();
             int n = list.size();
 
-            LocalVariable[] locals = new LocalVariable[n];
+            AbstractVariable[] locals = new AbstractVariable[n];
             for (int i = 0; i < n; i++) {
-                locals[i] = new AbstractVariable(list.get(i));
+                locals[i] = new GdbLocalVariable(debugger, list.get(i));
             }
             cachedLocalVariables = locals;
             return locals;
@@ -253,5 +277,119 @@ public class CallStackFrame {
             return cachedLocalVariables;
         }
     }
+
+    public AbstractVariable[] getAutos() {
+        if (cachedAutos == null) {
+            if (getDocument() == null) {
+                return null;
+            }
+            CsmFile csmFile = CsmUtilities.getCsmFile(getDocument(), false);
+            if (csmFile == null || !csmFile.isParsed()) {
+                return null;
+            }
+            CsmContext context = CsmOffsetResolver.findContext(csmFile, getOffset(), null);
+            CsmScope scope = context.getLastScope();
+            if (scope != null) {
+                CsmOffsetable previous = null;
+                final List<int[]> spans = new ArrayList<int[]>();
+                for (CsmScopeElement csmScopeElement : scope.getScopeElements()) {
+                    if (CsmKindUtilities.isOffsetable(csmScopeElement)) {
+                        CsmOffsetable offs = (CsmOffsetable) csmScopeElement;
+                        if (offs.getEndOffset() >= getOffset()) {
+                            if (previous != null) {
+                                spans.add(getInterestedStatementOffsets(previous));
+                            }
+                            spans.add(getInterestedStatementOffsets(offs));
+                            break;
+                        } else {
+                            previous = offs;
+                        }
+                    }
+                }
+                final Set<String> autos = new HashSet<String>();
+                if (!spans.isEmpty()) {
+                    CsmFileReferences.getDefault().accept(scope, new CsmFileReferences.Visitor() {
+                        public void visit(CsmReferenceContext context) {
+                            CsmReference reference = context.getReference();
+                            for (int[] span : spans) {
+                                if (span[0] <= reference.getStartOffset() && reference.getEndOffset() <= span[1]) {
+                                    CsmObject referencedObject = reference.getReferencedObject();
+                                    if (CsmKindUtilities.isVariable(referencedObject) && !filterAuto((CsmVariable)referencedObject)) {
+                                        StringBuilder sb = new StringBuilder(reference.getText());
+                                        if (context.size() > 1) {
+                                            outer: for (int i = context.size()-1; i >= 0; i--) {
+                                                CppTokenId token = context.getToken(i);
+                                                switch (token) {
+                                                    case DOT:
+                                                    case ARROW:
+                                                    case SCOPE:
+                                                        break;
+                                                    default: break outer;
+                                                }
+                                                if (i > 0) {
+                                                    sb.insert(0, token.fixedText());
+                                                    sb.insert(0, context.getReference(i-1).getText());
+                                                }
+                                            }
+                                        }
+                                        autos.add(sb.toString());
+                                    } else if (enableMacros && CsmKindUtilities.isMacro(referencedObject)) {
+                                        String txt = reference.getText().toString();
+                                        int[] macroExpansionSpan = CsmMacroExpansion.getMacroExpansionSpan(document, reference.getStartOffset(), false);
+                                        if (macroExpansionSpan != null && macroExpansionSpan[0] != macroExpansionSpan[1]) {
+                                            try {
+                                                txt = document.getText(macroExpansionSpan[0], macroExpansionSpan[1] - macroExpansionSpan[0]);
+                                            } catch (BadLocationException ex) {
+                                                Exceptions.printStackTrace(ex);
+                                            }
+                                        }
+                                        autos.add(txt);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+                cachedAutos = new AbstractVariable[autos.size()];
+                int i = 0;
+                for (String name : autos) {
+                    cachedAutos[i++] = new GdbLocalVariable(debugger, name);
+                }
+            }
+        }
+        return cachedAutos;
+    }
+
+    private static boolean filterAuto(CsmScopeElement object) {
+        CsmScope scope = object.getScope();
+        return CsmKindUtilities.isNamespace(scope) && "std".equals(((CsmNamespace)scope).getQualifiedName().toString()); // NOI18N
+    }
+
+    @Override
+    public int hashCode() {
+        // currently default hash code and equals are the optimal ones,
+        // because CallStackFrames can not be equal if they are not the same object
+        return super.hashCode();
+    }
+
+    private static int[] getInterestedStatementOffsets(CsmOffsetable offs) {
+        if (CsmKindUtilities.isStatement(offs)) {
+            switch (((CsmStatement)offs).getKind()) {
+                case IF:
+                    offs = ((CsmIfStatement)offs).getCondition();
+                    break;
+                case SWITCH:
+                    offs = ((CsmSwitchStatement)offs).getCondition();
+                    break;
+                case WHILE:
+                case DO_WHILE:
+                    offs = ((CsmLoopStatement)offs).getCondition();
+                    break;
+                case FOR:
+                    offs = ((CsmForStatement)offs).getCondition();
+                    break;
+            }
+        }
+        return new int[]{offs.getStartOffset(), offs.getEndOffset()};
+    }
 }
- 
