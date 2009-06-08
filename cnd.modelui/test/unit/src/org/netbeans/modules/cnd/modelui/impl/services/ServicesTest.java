@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -39,26 +39,32 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.modelimpl.csm.container;
+package org.netbeans.modules.cnd.modelui.impl.services;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import org.netbeans.modules.cnd.test.CndBaseTestSuite;
 
 /**
+ * Test suite for services
  *
- * @author Alexander Simon
+ * @author Nick Krasilnikov
  */
-public class FriendTest extends CndBaseTestSuite {
-    
-    public FriendTest() {
-        super("C++ Friend"); // NOI18N
-        addTestSuite(FriendTestCase.class);
+public class ServicesTest extends CndBaseTestSuite {
+
+    public ServicesTest() {
+        super("Model UI Services Impl");
+
+        addTestSuite(MacroExpansionExpandTestCase.class);
+        addTestSuite(MacroExpansionNextPrevMacroTestCase.class);
+        addTestSuite(MacroExpansionOffsetsTestCase.class);
+        addTestSuite(MacroExpansionSpanTestCase.class);
+        addTestSuite(MacroExpansionTablesTestCase.class);
+        addTestSuite(MacroExpansionUsagesTestCase.class);
     }
 
     public static Test suite() {
-        TestSuite suite = new FriendTest();
+        TestSuite suite = new ServicesTest();
         return suite;
     }
-    
 }

@@ -43,17 +43,17 @@ package org.netbeans.modules.cnd.highlight;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 import org.netbeans.modules.cnd.highlight.semantic.ClassFieldsTest;
-import org.netbeans.modules.cnd.test.BaseTestSuite;
+import org.netbeans.modules.cnd.test.CndBaseTestSuite;
 
 /**
  *
  * @author Sergey Grinev
  */
-public class HighlightingTestsFailed extends BaseTestSuite {
+public class HighlightingTestsFailed extends CndBaseTestSuite {
 
     public HighlightingTestsFailed() {
-        super("Highlighting tests failed");
-        addTestSuite(ClassFieldsTest.Failed.class);
+        super("Highlighting tests failed"); // NOI18N
+        //addTestSuite(ClassFieldsTest.Failed.class);
     }
 
     public static Test suite() {
