@@ -43,6 +43,7 @@ import java.io.File;
 import java.io.FileFilter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -54,25 +55,36 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 import javax.swing.JPanel;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.extexecution.print.ConvertedLine;
+import org.netbeans.api.extexecution.print.LineConvertor;
+import org.netbeans.api.extexecution.print.LineConvertors;
+import org.netbeans.api.extexecution.print.LineConvertors.FileLocator;
 import org.netbeans.api.ruby.platform.RubyPlatform;
 import org.netbeans.modules.glassfish.jruby.ui.JRubyServerCustomizer;
+import org.netbeans.modules.glassfish.spi.Recognizer;
 import org.netbeans.modules.ruby.railsprojects.server.spi.RubyInstance;
 import org.netbeans.modules.glassfish.spi.CustomizerCookie;
 import org.netbeans.modules.glassfish.spi.GlassfishModule;
 import org.netbeans.modules.glassfish.spi.OperationStateListener;
+import org.netbeans.modules.glassfish.spi.RecognizerCookie;
 import org.netbeans.modules.glassfish.spi.ServerCommand;
 import org.netbeans.modules.glassfish.spi.ServerUtilities;
+import org.netbeans.modules.ruby.platform.execution.DirectoryFileLocator;
+import org.netbeans.modules.ruby.platform.execution.RubyLineConvertorFactory;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Lookup;
 import org.openide.util.RequestProcessor;
+import org.openide.windows.OutputListener;
 
 
 /**
  *
  * @author Peter Williams
  */
-public class JRubyServerModule implements RubyInstance, CustomizerCookie {
+public class JRubyServerModule implements RubyInstance, CustomizerCookie, RecognizerCookie {
 
     public static final String USE_ROOT_CONTEXT_ATTR = "jruby.useRootContext"; // NOI18N
     
@@ -84,7 +96,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
     
     @Override
     public String toString() {
-        return "GlassFish V3 / JRuby Support"; // NOI18N
+        return "GlassFish v3 Prelude / JRuby Support"; // NOI18N
     }
     
     // ------------------------------------------------------------------------
@@ -160,6 +172,9 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
                         "Running project with current V3 Rails platform " + currentPlatformDir + 
                         " rather than requested platform " + requestedPlatformDir);
             }
+            RubyPlatform.Info info = platform.getInfo();
+            commonModule.setEnvironmentProperty(GlassfishModule.GEM_HOME, info.getGemHome(), false);
+            commonModule.setEnvironmentProperty(GlassfishModule.GEM_PATH, info.getGemPath(), false);
 
             GlassfishModule.ServerState state = commonModule.getServerState();
             if(state == GlassfishModule.ServerState.STOPPED || 
@@ -178,7 +193,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
             throw new IllegalStateException("No V3 Common Server support found for V3/Ruby server instance");
         }
     }
-    
+
     private static class RunAppTask implements 
             Callable<OperationState>,
             OperationStateListener 
@@ -195,6 +210,9 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
             applicationName = appname.replaceAll("[ \t]", "_");
             applicationDir = appdir;
             contextRoot = calculateContextRoot(module, appname);
+            if("".equals(contextRoot)) {
+                contextRoot = "/";
+            }
             doStart = startRequired;
             step = "start";
         }
@@ -262,7 +280,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
                 }
             } catch(Exception ex) {
                 // Assume application is not deployed correctly.  Not expected.
-                Logger.getLogger("glassfish.javaee").log(Level.FINE, ex.getLocalizedMessage(), ex);
+                Logger.getLogger("glassfish-jruby").log(Level.FINE, ex.getLocalizedMessage(), ex);
                 return false;
             }
             return true;
@@ -423,6 +441,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
         // JVM properties
         builder.append(" -Djruby.home=");
         builder.append(ServerUtilities.quote(platform.getHome().getAbsolutePath()));
+        builder.append(" -Djruby.runtime.max=1");
 
         String grizzlyVMParams = System.getProperty("grizzly.jruby.vm.params");
         if(grizzlyVMParams != null) {
@@ -440,7 +459,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
         // Define properties to enable rdebug inside Grizzly/JRuby adapter if
         // debugging is enabled.
         if(debug) {
-            builder.append(" -Djruby.reflection=true -Djruby.compile.mode=OFF");
+            builder.append(" -Djruby.reflection=true -Djruby.compile.mode=OFF -Djruby.debug.fullTrace=true");
             builder.append(
                     " -Dglassfish.rdebug=${rdebug.path}" +
                     " -Dglassfish.rdebug.port=${rdebug.port}" +
@@ -453,6 +472,9 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
 
         // Arguments to Grizzly/JRuby standalone server
         builder.append(" com.sun.grizzly.standalone.JRuby");
+        if(debug) {
+            builder.append(" --debug");
+        }
         builder.append(" -p ");
         builder.append(httpPort);
         builder.append(" -n 1 ");
@@ -479,7 +501,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
             File [] grizzlyJars = modulesDir.listFiles(new FileFilter() {
                 public boolean accept(File pathname) {
                     String name = pathname.getName();
-                    return name.startsWith("grizzly") && name.endsWith(".jar") && !name.contains("jruby-module");
+                    return name.startsWith("grizzly") && name.endsWith(".jar");
                 }
             });
 
@@ -505,7 +527,7 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
     private static String calculateContextRoot(GlassfishModule commonModule, String applicationName) {
         boolean useRootContext = Boolean.valueOf(
                 commonModule.getInstanceProperties().get(USE_ROOT_CONTEXT_ATTR));
-        return useRootContext ? "/" : "/" + applicationName.replaceAll("[ \t]", "_");
+        return useRootContext ? "" : "/" + applicationName.replaceAll("[ \t]", "_");
     }
 
     /**
@@ -614,4 +636,42 @@ public class JRubyServerModule implements RubyInstance, CustomizerCookie {
         return result;
     }
 
+    // ------------------------------------------------------------------------
+    // RecognizerCookie support
+    // ------------------------------------------------------------------------
+
+    private static final String PREFIX = "(?:\\s+|(?:[^:\\s\\d]{1,20}:\\s*))?"; // NOI18N
+    private static final String DRIVE = "(?:\\S{1}:)"; // NOI18N
+    private static final String FILE_CHAR = "[^\\s\\[\\]\\:\\\"]"; // NOI18N
+    private static final String FILE = "(?:" + FILE_CHAR + "*)"; // NOI18N
+    private static final String LINE = "([1-9][0-9]*)"; // NOI18N
+    private static final String ROL = ".*\\s?"; // NOI18N
+    private static final String FILE_SEP = "[\\\\/]"; // NOI18N
+    private static final String LINE_SEP = "\\:"; // NOI18N
+
+    // DRIVE?(FILE_SEP FILE)+ LINE_SEP LINE ROL
+    private static final Pattern PATH_RECOGNIZER = Pattern.compile(
+            PREFIX + DRIVE + "?(" + FILE_SEP + FILE + ")+" + LINE_SEP + LINE + ROL); // NOI18N
+
+    public Collection<? extends Recognizer> getRecognizers() {
+        FileLocator locator = new DirectoryFileLocator(FileUtil.toFileObject(FileUtil.normalizeFile(new File("/")))); //NOI18N
+        LineConvertor convertor = LineConvertors.filePattern(locator, PATH_RECOGNIZER, RubyLineConvertorFactory.EXT_RE, 1, 2);
+        return Collections.singleton(wrapRubyRecognizer(convertor));
+    }
+
+    private Recognizer wrapRubyRecognizer(final LineConvertor convertor) {
+        return new Recognizer() {
+            public OutputListener processLine(String text) {
+                OutputListener result = null;
+                List<ConvertedLine> match = convertor.convert(text);
+                if (match != null && !match.isEmpty()) {
+                    // relies on an implementation detail of FilePatternConvertor in that
+                    // this assumes the returned listener to be an instance of FindFileListener
+                    result = match.get(0).getListener();
+                }
+                return result;
+            }
+        };
+    }
+    
 }
