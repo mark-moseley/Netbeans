@@ -44,13 +44,13 @@ package org.netbeans.modules.j2ee.clientproject.queries;
 import java.io.File;
 import java.net.URL;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.project.ProjectManager;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.j2ee.clientproject.AppClientProject;
-import org.netbeans.modules.j2ee.clientproject.ui.customizer.AppClientProjectProperties;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
+import org.netbeans.modules.project.ui.test.ProjectSupport;
 import org.netbeans.spi.java.queries.SourceForBinaryQueryImplementation;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
-import org.openide.filesystems.FileUtil;
+import org.openide.util.test.MockLookup;
 
 /**
  * @author Andrei Badea
@@ -66,14 +66,16 @@ public class CompiledSourceForBinaryQueryTest extends NbTestCase {
     
     @Override
     public void setUp() throws Exception {
+        MockLookup.setLayersAndInstances();
+
         File f = new File(getDataDir().getAbsolutePath(), "projects/ApplicationClient1");
-        project = ProjectManager.getDefault().findProject(FileUtil.toFileObject(f));
+        project = (Project) ProjectSupport.openProject(f);
         // XXX should not cast a Project
         helper = ((AppClientProject) project).getAntProjectHelper();
     }
     
     public void testSourceRootsFoundForNonExistingBinaryRootIssue65733() throws Exception {
-        File buildClassesDir  = helper.resolveFile(helper.getStandardPropertyEvaluator().getProperty(AppClientProjectProperties.BUILD_CLASSES_DIR));
+        File buildClassesDir  = helper.resolveFile(helper.getStandardPropertyEvaluator().getProperty(ProjectProperties.BUILD_CLASSES_DIR));
         // the file must not exist
         assertFalse("Cannot test, the project should be cleaned first!", buildClassesDir .exists());
         URL buildClassesDirURL = new URL(buildClassesDir.toURI().toURL().toExternalForm() + "/");

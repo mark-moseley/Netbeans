@@ -47,8 +47,8 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.j2ee.clientproject.api.AppClientProjectGenerator;
 import org.netbeans.modules.j2ee.clientproject.test.TestUtil;
-import org.netbeans.modules.j2ee.clientproject.ui.customizer.AppClientProjectProperties;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.openide.filesystems.FileChangeAdapter;
@@ -57,6 +57,7 @@ import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
+import org.openide.util.test.MockLookup;
 
 /**
  *
@@ -75,6 +76,9 @@ public class AppClientProjectClassPathExtenderTest extends NbTestCase {
     protected void setUp() throws Exception {
         super.setUp();
         workDir = TestUtil.makeScratchDir(this);
+
+        MockLookup.setLayersAndInstances();
+        
         serverID = TestUtil.registerSunAppServer(this);
     }
 
@@ -123,7 +127,7 @@ public class AppClientProjectClassPathExtenderTest extends NbTestCase {
         
         EditableProperties ep = new EditableProperties();
         
-        ep.put(AppClientProjectProperties.JAVAC_CLASSPATH, "y");
+        ep.put(ProjectProperties.JAVAC_CLASSPATH, "y");
         
         helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
     }
