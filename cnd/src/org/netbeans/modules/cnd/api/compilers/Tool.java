@@ -38,113 +38,201 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.api.compilers;
 
 import java.io.File;
 import java.util.ResourceBundle;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager.ToolDescriptor;
+import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.api.utils.Path;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
 public class Tool {
-    
-    // Compiler types
-    public static int CCompiler = 0;
-    public static int CCCompiler = 1;
-    public static int FortranCompiler = 2;
-    public static int CustomTool = 3;
 
+    // Compiler types
+    public static final int CCompiler = 0;
+    public static final int CCCompiler = 1;
+    public static final int FortranCompiler = 2;
+    public static final int CustomTool = 3;
+    public static final int Assembler = 4;
+    public static final int MakeTool = 5;
+    public static final int DebuggerTool = 6;
+    public static final int QMakeTool = 7;
+    public static final int CMakeTool = 8;
     private static final String[] TOOL_NAMES = {
         getString("CCompiler"), // NOI18N
         getString("CCCompiler"), // NOI18N
         getString("FortranCompiler"), // NOI18N
         getString("CustomBuildTool"), // NOI18N
+        getString("Assembler"), // NOI18N
+        getString("MakeTool"), // NOI18N
+        getString("DebuggerTool"), // NOI18N
+        getString("QMakeTool"), // NOI18N
+        getString("CMakeTool"), // NOI18N
     };
-    
+    private static final String[] COMPILER_TOOL_NAMES = {
+        getString("CCompiler"), // NOI18N
+        getString("CCCompiler"), // NOI18N
+        getString("FortranCompiler"), // NOI18N
+        getString("Assembler"), // NOI18N // Noy yet
+        getString("CustomBuildTool"), // NOI18N
+    };
+    private final ExecutionEnvironment executionEnvironment;
     private CompilerFlavor flavor;
     private int kind;
     private String name;
     private String displayName;
     private String path;
-    private String includeFilePrefix = null;
-    
+    private CompilerSet compilerSet = null;
+
     /** Creates a new instance of GenericCompiler */
-    public Tool(CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+    protected Tool(ExecutionEnvironment executionEnvironment, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+        this.executionEnvironment = executionEnvironment;
         this.flavor = flavor;
         this.kind = kind;
         this.name = name;
         this.displayName = displayName;
-        this.path = name.length() > 0 ? path + File.separator + name : path;
+        this.path = path;
+        compilerSet = null;
     }
-    
+
+    public ToolDescriptor getDescriptor() {
+        return null;
+    }
+
+    public Tool createCopy() {
+        Tool copy = new Tool(executionEnvironment, flavor, kind, "", displayName, path);
+        copy.setName(getName());
+        return copy;
+    }
+
+    public static Tool createTool(ExecutionEnvironment executionEnvironment, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+        return new Tool(executionEnvironment, flavor, kind, name, displayName, path);
+    }
+
+//    public String getHostKey() {
+//        if (executionEnvironment.isLocal()) {
+//            return CompilerSetManager.LOCALHOST; // executionEnvironment.getHost();
+//        } else {
+//            return executionEnvironment.getUser() + '@' + executionEnvironment.getHost();
+//        }
+//    }
+
+    public ExecutionEnvironment getExecutionEnvironment() {
+        return executionEnvironment;
+    }
+
     public CompilerFlavor getFlavor() {
         return flavor;
     }
-    
+
     public int getKind() {
         return kind;
     }
-    
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public String getName() {
         return name;
     }
-    
+
     public String getPath() {
         return path;
     }
-    
+
+    public void setPath(String p) {
+        if (p == null) {
+        } else {
+            path = p;
+            name = IpeUtils.getBaseName(path);
+        }
+    }
+
+    public static String[] getCompilerToolNames() {
+        return COMPILER_TOOL_NAMES;
+    }
+
+    public static int getTool(String name) {
+        for (int i = 0; i < TOOL_NAMES.length; i++) {
+            if (TOOL_NAMES[i].equals(name)) {
+                return i;
+            }
+        }
+        return 0; // ????
+    }
+
+    public static String getName(int kind) {
+        if (kind >= 0 && kind <= TOOL_NAMES.length) {
+            return TOOL_NAMES[kind];
+        } else {
+            return null;
+        }
+    }
+
     public String getDisplayName() {
         return displayName;
     }
-    
-    public String getGenericName() {
-        String name = getName();
-        if (name.length() > 0) {
-            return TOOL_NAMES[getKind()] + " - " + getName(); // NOI18N
-        } else {
-           return TOOL_NAMES[getKind()]; 
-        }
-    }
-    
+
+//    public String getGenericName() {
+//        String name = getName();
+//        if (name.length() > 0) {
+//            return TOOL_NAMES[getKind()] + " - " + getName(); // NOI18N
+//        } else {
+//           return TOOL_NAMES[getKind()]; 
+//        }
+//    }
     public static String getToolDisplayName(int kind) {
         return TOOL_NAMES[kind];
     }
-    
+
+    @Override
     public String toString() {
-        String name = getName();
-        if (Utilities.isWindows() && name.endsWith(".exe")) { // NOI18N
-            return name.substring(0, name.length() - 4);
+        String n = getName();
+        if (Utilities.isWindows() && n.endsWith(".exe")) { // NOI18N
+            return n.substring(0, n.length() - 4);
         } else {
-            return name;
+            return n;
         }
     }
-    
+
     public String getIncludeFilePathPrefix() {
-        if (includeFilePrefix == null) {
-            includeFilePrefix = ""; // NOI18N
-            if (getFlavor() == CompilerFlavor.Cygwin ||
-                    getFlavor() == CompilerFlavor.MinGW ||
-                    getFlavor() == CompilerFlavor.DJGPP ||
-                    getFlavor() == CompilerFlavor.Interix) {
-                int i = getPath().toLowerCase().indexOf("\\bin"); // NOI18N
-                if (i < 0)
-                    i = getPath().toLowerCase().indexOf("/bin"); // NOI18N
-                if (i > 0) {
-                    includeFilePrefix = getPath().substring(0, i);
-                    includeFilePrefix = includeFilePrefix.replaceAll("\\\\", "/"); // NOI18N
-                    //includeFilePrefix = FilePathAdaptor.normalize(includeFilePrefix);
-                }
-            }
-        }
-        return includeFilePrefix;
+        // TODO: someone put this here only because OutputWindowWriter in core
+        // wants to get information about compilers which are defined in makeprojects.
+        // abstract Tool shouldn't care about include paths for compilers
+        throw new UnsupportedOperationException();
     }
-    
+
+    @Deprecated
+    public void setIncludeFilePathPrefix(String includeFilePrefix) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Deprecated
+    public boolean exists() {
+        if (getPath() == null || getPath().length() == 0) {
+            return false;
+        }
+        return new File(getPath()).exists() || Path.findCommand(getPath()) != null;
+    }
     private static ResourceBundle bundle = null;
+
     protected static String getString(String s) {
         if (bundle == null) {
             bundle = NbBundle.getBundle(Tool.class);
         }
         return bundle.getString(s);
+    }
+
+    public CompilerSet getCompilerSet() {
+        return compilerSet;
+    }
+
+    public void setCompilerSet(CompilerSet compilerSet) {
+        this.compilerSet = compilerSet;
     }
 }
