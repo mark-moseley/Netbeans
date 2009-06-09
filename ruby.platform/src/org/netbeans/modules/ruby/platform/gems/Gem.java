@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,6 +39,14 @@
  * made subject to such option by the copyright holder.
  */
 package org.netbeans.modules.ruby.platform.gems;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.SortedSet;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+import org.netbeans.modules.ruby.platform.Util;
 
 /**
  * A descriptor of a Ruby Gem.
@@ -57,47 +65,55 @@ public final class Gem implements Comparable<Gem> {
         this.installedVersions = installedVersions;
         this.availableVersions = availableVersions;
     }
-
+    
     public String getName() {
         return name;
     }
 
-    public String getInstalledVersions() {
+    /**
+     * Returns comma-separated list of installed versions.
+     */
+    public String getInstalledVersionsAsString() {
         return installedVersions;
     }
 
-    public String getAvailableVersions() {
+    List<String> getInstalledVersions() {
+        if (installedVersions == null) {
+            return Collections.emptyList();
+        }
+        return Arrays.asList(installedVersions.trim().split(","));//NOI18N
+    }
+
+    String getLatestInstalled() {
+        return getLatestVersion(installedVersions);
+    }
+
+    SortedSet<String> getAvailableVersions() {
+        return getVersions(availableVersions);
+    }
+
+    /**
+     * Returns comma-separated list of remotely available versions.
+     */
+    public String getAvailableVersionsAsString() {
         return availableVersions;
+    }
+    
+    String getLatestAvailable() {
+        return getLatestVersion(availableVersions);
+    }
+        
+    boolean hasUpdateAvailable() {
+        String latestAvailable = getLatestAvailable();
+        return latestAvailable != null && Util.compareVersions(latestAvailable, getLatestInstalled()) > 0;
     }
 
     public String getDescription() {
         return desc;
     }
 
-    public @Override String toString() {
-        // TODO: Shown in ListCellRenderer => provide appropriate ListCellRenderer for the lists in GemPanel
-        StringBuilder sb = new StringBuilder(100);
-        sb.append("<html><b>"); // NOI18N
-        sb.append(name);
-        sb.append("</b>"); // NOI18N
-
-        if (installedVersions != null) {
-            sb.append(" ("); // NOI18N
-            sb.append(installedVersions);
-            if (availableVersions != null) {
-                sb.append(" => ").append(availableVersions); // NOI18N
-            }
-            sb.append(") "); // NOI18N
-        }
-
-        if (desc != null) {
-            sb.append(": "); // NOI18N
-            sb.append(desc);
-        }
-
-        sb.append("</html>"); // NOI18N
-
-        return sb.toString();
+    public String getHTMLDescription() {
+        return desc.replace("\n", "<br>\n"); // NOI18N
     }
 
     public int compareTo(Gem other) {
@@ -118,5 +134,25 @@ public final class Gem implements Comparable<Gem> {
 
     public void setDescription(String description) {
         this.desc = description;
+    }
+
+    private static String getLatestVersion(final String commaVersions) {
+        SortedSet<String> versions = getVersions(commaVersions);
+        if (versions.isEmpty()) {
+            return null;
+        }
+        return versions.last();
+    }
+
+    private static SortedSet<String> getVersions(final String commaVersions) {
+        if (commaVersions == null) {
+            return new TreeSet<String>();
+        }
+        StringTokenizer st = new StringTokenizer(commaVersions, " ,"); // NOI18N
+        SortedSet<String> versions = new TreeSet<String>(Util.VERSION_COMPARATOR);
+        while (st.hasMoreTokens()) {
+            versions.add(st.nextToken());
+        }
+        return versions;
     }
 }
