@@ -45,12 +45,15 @@ import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleListener;
 
 /** 
- * Base SPI interface for {@link J2eeApplication}. Implementation of this interface 
- * is used to create {@link J2eeApplication} instance using the {@link J2eeModuleFactory}.
+ * Base SPI interface for {@link org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeApplication}.
+ * Implementation of this interface is used to create
+ * {@link org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeApplication}
+ * instance using the {@link J2eeModuleFactory}.
  * 
  * @author sherold
  * 
  * @since 1.23
+ * @deprecated implement {@link J2eeApplicationImplementation2}
  */
 public interface J2eeApplicationImplementation extends J2eeModuleImplementation {
 
