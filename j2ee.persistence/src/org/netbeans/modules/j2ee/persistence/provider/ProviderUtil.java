@@ -50,9 +50,9 @@ import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.persistence.api.PersistenceLocation;
 import org.netbeans.modules.j2ee.persistence.api.PersistenceScope;
 import org.netbeans.modules.j2ee.persistence.dd.PersistenceUtils;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Properties;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Property;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.Properties;
+import org.netbeans.modules.j2ee.persistence.dd.common.Property;
 import org.netbeans.modules.j2ee.persistence.spi.provider.PersistenceProviderSupplier;
 import org.netbeans.modules.j2ee.persistence.spi.server.ServerStatusProvider;
 import org.netbeans.modules.j2ee.persistence.unit.*;
@@ -60,7 +60,6 @@ import org.netbeans.modules.j2ee.persistence.wizard.Util;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.util.Exceptions;
@@ -78,7 +77,9 @@ public class ProviderUtil {
     // known providers
     public static final Provider HIBERNATE_PROVIDER = new HibernateProvider();
     public static final Provider TOPLINK_PROVIDER = ToplinkProvider.create();
+    public static final Provider ECLIPSELINK_PROVIDER = new EclipseLinkProvider();
     public static final Provider KODO_PROVIDER = new KodoProvider();
+    public static final Provider DATANUCLEUS_PROVIDER = new DataNucleusProvider();
     public static final Provider OPENJPA_PROVIDER = new OpenJPAProvider();
     public static final Provider DEFAULT_PROVIDER = new DefaultProvider();
     
@@ -216,6 +217,10 @@ public class ProviderUtil {
      * @provider the provider whose table generation property will be used.
      */
     public static void setTableGeneration(PersistenceUnit persistenceUnit, String tableGenerationStrategy, Provider provider){
+        // issue 123224. The user can have a persistence.xml in J2SE project without provider specified
+        if(provider == null ) {
+            return;
+        }
         Property tableGenerationProperty = provider.getTableGenerationProperty(tableGenerationStrategy);
         Properties properties = persistenceUnit.getProperties();
         if (properties == null) {
@@ -250,7 +255,8 @@ public class ProviderUtil {
             DatabaseConnection connection, String tableGenerationStrategy){
         
         Parameters.notNull("persistenceUnit", persistenceUnit); //NOI18N
-        Parameters.notNull("connection", connection); //NOI18N
+        // See issue 123224 desc 12 and desc 15 - connection can be null
+        //Parameters.notNull("connection", connection); //NOI18N
         Parameters.notNull("provider", provider); //NOI18N
         
         removeProviderProperties(persistenceUnit);
@@ -303,7 +309,7 @@ public class ProviderUtil {
         Parameters.notNull("provider", provider);
         Parameters.notNull("connection", connection);
         
-        PersistenceUnit persistenceUnit = new PersistenceUnit();
+        PersistenceUnit persistenceUnit = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit();
         persistenceUnit.setName(name);
         persistenceUnit.setProvider(provider.getProviderClass());
         Properties properties = persistenceUnit.newProperties();
@@ -341,7 +347,9 @@ public class ProviderUtil {
     public static void setDatabaseConnection(PersistenceUnit persistenceUnit, DatabaseConnection connection){
         
         Parameters.notNull("persistenceUnit", persistenceUnit); //NOI18N
-        Parameters.notNull("connection", connection); //NOI18N
+        // See issue 123224 desc 12 and desc 15 - connection can be null
+        //Parameters.notNull("connection", connection); //NOI18N
+        
         
         Provider provider = getProvider(persistenceUnit);
         Property[] properties = getProperties(persistenceUnit);
@@ -555,7 +563,8 @@ public class ProviderUtil {
      * 
      *@param project the project whose PUDataObject is to be get. Must not be null.
      * 
-     *@return <code>PUDataObject</code> associated with the given project; never null.
+     *@return <code>PUDataObject</code> associated with the given project or null 
+     * if there is no such <code>PUDataObject</code>.
      * 
      * @throws InvalidPersistenceXmlException if the given <code>project</code> had an existing
      * invalid persitence.xml file.
@@ -565,7 +574,14 @@ public class ProviderUtil {
         
         FileObject puFileObject = getDDFile(project);
         if (puFileObject == null) {
-            puFileObject = createPersistenceDDFile(project);
+            try {
+                puFileObject = createPersistenceDDFile(project);
+            } catch (IOException e) {
+                Exceptions.printStackTrace(e);
+            }
+        }
+        if (puFileObject == null) {
+            return null;
         }
         return getPUDataObject(puFileObject);
     }
@@ -575,24 +591,19 @@ public class ProviderUtil {
      * persistence units (<tt>persistence.xml</tt>). <i>Todo: move somewhere else?</i>
      * @return FileObject representing <tt>persistence.xml</tt>.
      */
-    private static FileObject createPersistenceDDFile(Project project){
-        final FileObject[] dd = new FileObject[1];
-        try {
-            final FileObject persistenceLocation = PersistenceLocation.createLocation(project);
-            // must create the file using AtomicAction, see #72058
-            persistenceLocation.getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
-                public void run() {
-                    try {
-                        dd[0] = FileUtil.copyFile(Repository.getDefault().getDefaultFileSystem().findResource(
-                                "org-netbeans-modules-j2ee-persistence/persistence-1.0.xml"), persistenceLocation, "persistence"); //NOI18N
-                    } catch (IOException ex) {
-                        Exceptions.printStackTrace(ex);
-                    }
-                }
-            });
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
+    private static FileObject createPersistenceDDFile(Project project) throws IOException {
+        final FileObject persistenceLocation = PersistenceLocation.createLocation(project);
+        if (persistenceLocation == null) {
+            return null;
         }
+        final FileObject[] dd = new FileObject[1];
+        // must create the file using AtomicAction, see #72058
+        persistenceLocation.getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
+            public void run() throws IOException {
+                dd[0] = FileUtil.copyFile(FileUtil.getConfigFile(
+                        "org-netbeans-modules-j2ee-persistence/persistence-1.0.xml"), persistenceLocation, "persistence"); //NOI18N
+            }
+        });
         return dd[0];
     }
     
@@ -635,8 +646,8 @@ public class ProviderUtil {
      */
     public static Provider[] getAllProviders() {
         return new Provider[]{
-            TOPLINK_PROVIDER, HIBERNATE_PROVIDER, 
-            KODO_PROVIDER, OPENJPA_PROVIDER, TOPLINK_PROVIDER_55_COMPATIBLE};
+            TOPLINK_PROVIDER, ECLIPSELINK_PROVIDER, HIBERNATE_PROVIDER, 
+            KODO_PROVIDER, DATANUCLEUS_PROVIDER, OPENJPA_PROVIDER, TOPLINK_PROVIDER_55_COMPATIBLE};
     }
     
     /**
@@ -692,6 +703,51 @@ public class ProviderUtil {
             return true;
         }
         return serverStatusProvider.validServerInstancePresent();
+    }
+   
+    /**
+     * Help to migrate the Toplink properties to the corresponding Eclipselink ones and vice versa
+     * 
+     * @param prevProvider the provider class string 
+     * @param curProvider the provider class string
+     * @param persistenceUnit the persistence unit that is being modified on
+     */
+    public static void migrateProperties(String prevProvider, String curProvider, PersistenceUnit persistenceUnit) {
+        if (prevProvider.equals("oracle.toplink.essentials.PersistenceProvider") && // NOI18N
+                curProvider.equals("org.eclipse.persistence.jpa.PersistenceProvider")) { // NOI18N
+            // Migrate TopLink properties to EclipseLink
+            Property[] toplinkProps = persistenceUnit.getProperties().getProperty2();
+            for (int i = 0; i < toplinkProps.length; i++) {
+                if (toplinkProps[i].getName().contains("toplink")) { // NOI18N
+                    String propName = toplinkProps[i].getName();
+                    propName = propName.replace("toplink", "eclipselink"); // NOI18N
+
+                    Property eclipselinkProp = persistenceUnit.getProperties().newProperty();
+                    eclipselinkProp.setName(propName);
+                    eclipselinkProp.setValue(toplinkProps[i].getValue());
+
+                    persistenceUnit.getProperties().removeProperty2(toplinkProps[i]);
+                    persistenceUnit.getProperties().addProperty2(eclipselinkProp);
+                }
+            }
+        } else if (prevProvider.equals("org.eclipse.persistence.jpa.PersistenceProvider") && // NOI18N
+                curProvider.equals("oracle.toplink.essentials.PersistenceProvider")) { // NOI18N
+            // Change back to TopLink properties from EclipseLink
+            Property[] eclipselinkProps = persistenceUnit.getProperties().getProperty2();
+            for (int i = 0; i < eclipselinkProps.length; i++) {
+                if (eclipselinkProps[i].getName().contains("eclipselink")) { // NOI18N
+                    String propName = eclipselinkProps[i].getName();
+                    propName = propName.replace("eclipselink", "toplink"); // NOI18N
+
+                    Property toplinkProp = persistenceUnit.getProperties().newProperty();
+                    toplinkProp.setName(propName);
+                    toplinkProp.setValue(eclipselinkProps[i].getValue());
+
+                    persistenceUnit.getProperties().removeProperty2(eclipselinkProps[i]);
+                    persistenceUnit.getProperties().addProperty2(toplinkProp);
+                }
+            }
+        }
     }
     
 }
