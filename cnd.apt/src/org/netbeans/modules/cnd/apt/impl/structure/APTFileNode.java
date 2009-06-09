@@ -44,7 +44,7 @@ package org.netbeans.modules.cnd.apt.impl.structure;
 import java.io.Serializable;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.structure.APTFile;
-import org.netbeans.modules.cnd.apt.support.APTWalker;
+import org.netbeans.modules.cnd.utils.cache.FilePathCache;
 
 /**
  * implementation of APTFile
@@ -53,7 +53,7 @@ import org.netbeans.modules.cnd.apt.support.APTWalker;
 public final class APTFileNode extends APTContainerNode 
                                 implements APTFile, Serializable {
     private static final long serialVersionUID = -6182803432699849825L;
-    private String path;
+    private final CharSequence path;
     transient private boolean tokenized;
     
     /** Copy constructor */
@@ -63,14 +63,9 @@ public final class APTFileNode extends APTContainerNode
         this.tokenized = false;
     }
     
-    /** Constructor for serialization */
-    protected APTFileNode() {
-        tokenized = false;
-    }
-    
     /** Creates a new instance of APTFileNode */
-    public APTFileNode(String path) {
-        this.path = path;
+    public APTFileNode(CharSequence path) {
+        this.path = FilePathCache.getManager().getString(path);
         tokenized = true;
     }
     
@@ -95,97 +90,40 @@ public final class APTFileNode extends APTContainerNode
         return "FILE:{" + getPath() + "}"; // NOI18N
     }
 
-    public String getPath() {
+    public CharSequence getPath() {
         return path;
-    }
-
-    public void dispose() {
-        if (isTokenized()) {
-            new CleanTokensWalker(this).visit();
-            tokenized = false;
-        }
     }
 
     public boolean isTokenized() {
         return tokenized;
-    }    
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!(obj instanceof APTFileNode)) {
+            return false;
+        }
+        final APTFileNode other = (APTFileNode) obj;
+        if (!this.path.equals(other.path)) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 5;
+        hash = 41 * hash + this.path.hashCode();
+        return hash;
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // implementation details
     
     public final void setNextSibling(APT next) {
         assert(false):"Illegal to add siblings to file node"; // NOI18N
     }
-    
-    private static class CleanTokensWalker extends APTWalker {
-
-        /** Creates a new instance of APTCleanTokensWalker */
-        public CleanTokensWalker(APTFileNode apt) {
-            super(apt, null);
-        }
-
-        protected void onInclude(APT apt) {
-            // do nothing
-        }
-
-        protected void onIncludeNext(APT apt) {
-            // do nothing
-        }
-
-        protected void onDefine(APT apt) {
-            // do nothing
-        }
-
-        protected void onUndef(APT apt) {
-            // do nothing
-        }
-
-        protected boolean onIf(APT apt) {
-            // always return true, because we want to visit all branches
-            return true;
-        }
-
-        protected boolean onIfdef(APT apt) {
-            // always return true, because we want to visit all branches
-            return true;
-        }
-
-        protected boolean onIfndef(APT apt) {
-            // always return true, because we want to visit all branches
-            return true;
-        }
-
-        protected boolean onElif(APT apt, boolean wasInPrevBranch) {
-            // always return true, because we want to visit all branches
-            return true;
-        }
-
-        protected boolean onElse(APT apt, boolean wasInPrevBranch) {
-            // always return true, because we want to visit all branches
-            return true;
-        }
-
-        protected void onEndif(APT apt, boolean wasInBranch) {
-            // do nothing
-        }
-
-//        protected Token onToken(Token token) {
-//            // do nothing
-//            return token;
-//        }    
-
-        protected void onStreamNode(APT apt) {
-            // clean node's stream
-            apt.dispose();
-        }
-        
-        protected void onOtherNode(APT apt) {
-            // clean tokens for 
-            //APT.Type.INVALID:
-            //APT.Type.ERROR:
-            //APT.Type.LINE:
-            //APT.Type.PRAGMA:
-            //APT.Type.PREPROC_UNKNOWN: 
-            apt.dispose();
-        }
-    }    
 }

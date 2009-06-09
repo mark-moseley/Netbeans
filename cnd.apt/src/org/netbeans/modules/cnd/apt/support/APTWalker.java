@@ -41,14 +41,13 @@
 
 package org.netbeans.modules.cnd.apt.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import antlr.TokenStreamException;
 import java.util.LinkedList;
 import java.util.Stack;
 import java.util.logging.Level;
-import org.netbeans.modules.cnd.apt.debug.APTTraceFlags;
 import org.netbeans.modules.cnd.apt.structure.APT;
+import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.structure.APTStream;
 import org.netbeans.modules.cnd.apt.utils.APTTraceUtils;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
@@ -58,15 +57,15 @@ import org.netbeans.modules.cnd.apt.utils.APTUtils;
  * @author Vladimir Voskresensky
  */
 public abstract class APTWalker {
-    private APTMacroMap macros;
-    private APT root;  
+    private final APTMacroMap macros;
+    private final APTFile root;
     private boolean walkerInUse = false;
     private boolean stopped = false;
     
     /**
      * Creates a new instance of APTWalker
      */
-    public APTWalker(APT apt, APTMacroMap macros) {
+    public APTWalker(APTFile apt, APTMacroMap macros) {
         assert (apt != null) : "how can we work on null tree?"; // NOI18N
         this.root = apt;
         this.macros = macros;
@@ -77,19 +76,11 @@ public abstract class APTWalker {
         if (walkerInUse) {
             throw new IllegalStateException("walker could be used only once"); // NOI18N
         }  
-        if (APTTraceFlags.APT_NON_RECURSE_VISIT) {
-            nonRecurseVisit();
-        } else {
-            walkerInUse = true;
-            visit(root.getFirstChild());
-        }
-    }
-     
-    public void nonRecurseVisit() {
+        // non Recurse Visit
         init(false);
-        while(!finished()) {           
+        while (!finished()) {
             toNextNode();
-        }        
+        }
     }
     
     public TokenStream getTokenStream() {
@@ -99,41 +90,20 @@ public abstract class APTWalker {
         return new WalkerTokenStream();
     }
     
-    private class WalkerTokenStream implements TokenStream {
-        public WalkerTokenStream() {
+    private final class WalkerTokenStream implements TokenStream, APTTokenStream {
+        private WalkerTokenStream() {
             init(true);
         }
         
-        public Token nextToken() throws TokenStreamException {
-            //Token token = null;
-            //do {
-                //token = nextTokenImpl();
-                //token = onToken(token); not used anywhere
-            //} while (token == null); 
-            return nextTokenImpl();
+        public APTToken nextToken() {
+            try {
+                return nextTokenImpl();
+            } catch (TokenStreamException ex) {
+                APTUtils.LOG.log(Level.WARNING, "{0}:{1}", new Object[] { root.getPath(), ex});
+                return APTUtils.EOF_TOKEN;
+            }
         }
-    }
-    
-//    /** walk APT and generate correspondent token stream */
-//    private Token nextToken() throws TokenStreamException {
-////        if (!initedTokenStreamCreating) {
-////            init();
-////        }
-//        Token token = null;
-//        do {
-//            token = nextTokenImpl();
-//            token = onToken(token);
-//        } while (token == null);
-//        return token;
-//    }    
-//    
-//    private int LA() throws TokenStreamException {
-//        if (!initedTokenStreamCreating) {
-//            init();
-//        }        
-//        laToken = (laToken == null) ? nextTokenImpl() : laToken;
-//        return laToken.getType();
-//    }
+    }    
     
     ////////////////////////////////////////////////////////////////////////////
     // template methods to override by extensions 
@@ -210,33 +180,9 @@ public abstract class APTWalker {
     protected boolean stopOnErrorDirective() {
 	return true;
     }
-    
-    // tokens stream generating/callback for token
-//    protected abstract Token onToken(Token token);  
-    
+     
     ////////////////////////////////////////////////////////////////////////////
-    // impl details
-    
-    /** fast recursive walker to be used when token stream is not interested */
-    private void visit(APT t) {
-        if (t == null || isStopped()) {
-            return;
-        }
-        boolean wasInChild = false;
-        for (APT node = t; node != null && !isStopped(); node = node.getNextSibling()) {
-            if (node.getType() == APT.Type.CONDITION_CONTAINER) {
-                assert(node.getFirstChild() != null);
-                visit(node.getFirstChild());
-            } else {
-                boolean visitChild = onAPT(node, wasInChild);
-                if (visitChild && node.getFirstChild() != null) {
-                    assert(APTUtils.isStartOrSwitchConditionNode(node.getType()));
-                    visit(node.getFirstChild());
-                }
-                wasInChild |= visitChild;
-            }
-        }
-    } 
+    // impl details    
     
     protected boolean onAPT(APT node, boolean wasInBranch) {
         boolean visitChild = false;
@@ -285,14 +231,16 @@ public abstract class APTWalker {
                 break;
             default:
                 assert(false) : "unsupported " + APTTraceUtils.getTypeName(node); // NOI18N
-        }   
-        APTUtils.LOG.log(Level.FINE, "onAPT: {0}; {1} {2}",  // NOI18N
-                new Object[]    {
-                                node, 
-                                (wasInBranch ? "Was before;" : ""), // NOI18N
-                                (visitChild ? "Will visit children" : "") // NOI18N
-                                }
-                        );
+        }
+        if (APTUtils.LOG.isLoggable(Level.FINE)) {
+            APTUtils.LOG.log(Level.FINE, "onAPT: {0}; {1} {2}",  // NOI18N
+                    new Object[]    {
+                                    node,
+                                    (wasInBranch ? "Was before;" : ""), // NOI18N
+                                    (visitChild ? "Will visit children" : "") // NOI18N
+                                    }
+                            );
+        }
         return visitChild;
     }
     
@@ -320,13 +268,13 @@ public abstract class APTWalker {
         walkerInUse = true;
     }    
     
-    private Token nextTokenImpl() throws TokenStreamException {
-        Token theRetToken=null;
+    private APTToken nextTokenImpl() throws TokenStreamException {
+        APTToken theRetToken;
         tokenLoop:
         for (;;) {           
             while (!tokens.isEmpty()) {
                 TokenStream ts = tokens.peek();
-                theRetToken = ts.nextToken();
+                theRetToken = (APTToken) ts.nextToken();
                 if (!APTUtils.isEOF(theRetToken)) {
                     return theRetToken;
                 } else {
@@ -399,8 +347,7 @@ public abstract class APTWalker {
                             new Object[] { endif, root });
                 }
                 curWasInChild = false;
-            }
-	    else if( curAPT.getType() == APT.Type.ERROR ) {
+            } else if( curAPT.getType() == APT.Type.ERROR ) {
 		if (stopOnErrorDirective()) {
 		    stop();
 		    return;
@@ -430,14 +377,18 @@ public abstract class APTWalker {
         return (curAPT == null && visits.isEmpty()) || isStopped();
     }
     
-    protected APTMacroMap getMacroMap() {
+    protected final APTMacroMap getMacroMap() {
         return macros;
     }
     
-    protected APT getCurNode() {
+    protected final APT getCurNode() {
         return curAPT;
-    }  
-    
+    }
+
+    public final APTFile getRootFile() {
+        return root;
+    }
+
     // fields to be used when generating token stream
     private APT curAPT;
     private boolean curWasInChild;
@@ -445,8 +396,8 @@ public abstract class APTWalker {
     private Stack<WalkerState> visits = new Stack<WalkerState>();
     
     private static final class WalkerState {
-        APT lastNode;
-        boolean wasInChild;
+        private final APT lastNode;
+        private final boolean wasInChild;
         private WalkerState(APT node, boolean wasInChildState) {
             this.lastNode = node;
             this.wasInChild = wasInChildState;

@@ -41,7 +41,7 @@
 
 package org.netbeans.modules.cnd.apt.structure;
 
-import antlr.Token;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 
 /**
  * Abstract Preprocessing Tree
@@ -80,16 +80,10 @@ public interface APT {
     /** method called consequently token by token to let APT node to init itself 
      * when initializing is finished APT node returns false (not accepted token)
      */
-    public boolean accept(Token token);
+    public boolean accept(APTToken token);
     
     /** Get the associated token */
-    public Token getToken();
-    
-    /** dispose **/
-    public void dispose();
-    
-//    /** Add a (rightmost) child to this node */
-//    public void addChild(APT child);
+    public APTToken getToken();
     
     /** Get the first child of this node; null if no children */
     public APT getFirstChild();
