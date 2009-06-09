@@ -41,13 +41,11 @@
 
 package org.netbeans.modules.cnd.apt.impl.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import antlr.TokenStreamException;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -55,20 +53,26 @@ import java.util.Map;
 import java.util.logging.Level;
 import org.netbeans.modules.cnd.apt.debug.APTTraceFlags;
 import org.netbeans.modules.cnd.apt.impl.structure.APTDefineNode;
+import org.netbeans.modules.cnd.apt.structure.APTDefine;
+import org.netbeans.modules.cnd.apt.structure.APTFile;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
+import org.netbeans.modules.cnd.apt.support.APTMacro.Kind;
 import org.netbeans.modules.cnd.apt.support.APTMacroMap;
 import org.netbeans.modules.cnd.apt.support.APTMacroMap.State;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.support.APTTokenTypes;
 import org.netbeans.modules.cnd.apt.support.APTTokenStreamBuilder;
 import org.netbeans.modules.cnd.apt.utils.APTSerializeUtils;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
+import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
+import org.netbeans.modules.cnd.utils.cache.TinyCharSequence;
 
 /**
  * APTMacroMap base implementation
  * support collection of macros and saving/restoring this collection
  * @author Vladimir Voskresensky
  */
-public abstract class APTBaseMacroMap {
+public abstract class APTBaseMacroMap implements APTMacroMap {
 
     protected APTMacroMapSnapshot active;
     
@@ -77,7 +81,7 @@ public abstract class APTBaseMacroMap {
     /**
      * Creates a new instance of APTBaseMacroMap
      */    
-    public APTBaseMacroMap() {
+    protected APTBaseMacroMap() {
         active = makeSnapshot(null);
     }
 
@@ -85,81 +89,93 @@ public abstract class APTBaseMacroMap {
     // manage define/undef macros
 
     
-    protected final void fill(List<String> macros) {
+    protected final void fill(List<String> macros, boolean isSystem) {
         // update callback with user macros information
         for (Iterator<String> it = macros.iterator(); it.hasNext();) {
             String macro = it.next();
             if (APTTraceFlags.TRACE_APT) {
                 System.err.println("adding macro in map " + macro); // NOI18N
             }
-            define(macro);
+            define(macro, isSystem);
         }           
     }
     
     /** 
      * analyze macroText string with structure "macro=value" and put in map
      */
-    private void define(String macroText) {
+    private void define(String macroText, boolean isSystem) {
         macroText = DEFINE_PREFIX + macroText;
         TokenStream stream = APTTokenStreamBuilder.buildTokenStream(macroText);
         try {
-            Token next = stream.nextToken();
+            APTToken next = (APTToken) stream.nextToken();
             // use define node to initialize #define directive from stream
             APTDefineNode defNode = new APTDefineNode(next);
             boolean look4Equal = true;
             do {
-                next = stream.nextToken();
+                next = (APTToken) stream.nextToken();
                 if (look4Equal && (next.getType() == APTTokenTypes.ASSIGNEQUAL)) {
                     // skip the first equal token, it's delimeter
                     look4Equal = false;
-                    next = stream.nextToken();
+                    next = (APTToken) stream.nextToken();
                 }
-            } while (defNode.accept(next)); 
+            } while (defNode.accept(null, next));
             // special check for macros without values, we must set it to be 1
-            List<Token> body = defNode.getBody();
-            if (body == APTUtils.EMPTY_STREAM) {
-                body = APTUtils.DEF_MACRO_BODY;
+            if (defNode.getBody().isEmpty() && look4Equal) {
+                defNode.accept(null, APTUtils.DEF_MACRO_BODY.get(0));
             }
-            defineImpl(defNode.getName(), defNode.getParams(), body);
+            if (isSystem) {
+                defineImpl(null, defNode, Kind.COMPILER_PREDEFINED);
+            } else {
+                defineImpl(null, defNode, Kind.USER_SPECIFIED);
+            }
         } catch (TokenStreamException ex) {
             APTUtils.LOG.log(Level.SEVERE, 
                     "error on lexing macros {0}\n\t{1}", // NOI18N
                     new Object[] {macroText, ex.getMessage()});
         }
     }
-    
-    public final void define(Token name, List<Token> value) {
-        defineImpl(name, value);
+
+    public void define(APTFile file, APTDefine define, Kind macroType) {
+        defineImpl(file, define, macroType);
     }
     
-    protected final void defineImpl(Token name, List<Token> value) {
-        define(name, null, value);
+    private void defineImpl(APTFile file, APTDefine define, Kind macroType) {
+        APTToken name = define.getName();
+        CharSequence filePath = (file == null ? CharSequenceKey.empty() : file.getPath());
+        putMacro(name.getTextID(), createMacro(filePath, define, macroType));
     }
 
-    protected void define(Token name, Collection<Token> params, List<Token> value) {
-        defineImpl(name, params, value);
+    public void undef(APTFile file, APTToken name) {
+        putMacro(name.getTextID(), APTMacroMapSnapshot.UNDEFINED_MACRO);
     }
-    
-    protected void defineImpl(Token name, Collection<Token> params, List<Token> value) {
-        active.macros.put(APTUtils.getTokenTextKey(name), createMacro(name, params, value));
+
+    protected void putMacro(CharSequence name, APTMacro macro) {
+        active.getMacros().put(name, macro);
     }
-    
-    protected void undef(Token name) {
-        active.macros.put(APTUtils.getTokenTextKey(name), APTMacroMapSnapshot.UNDEFINED_MACRO);
-    }
-    
     /** method to implement in children */
-    protected abstract APTMacro createMacro(Token name, Collection<Token> params, List<Token> value);
+    protected abstract APTMacro createMacro(CharSequence file, APTDefine define, Kind macroType);
     
     ////////////////////////////////////////////////////////////////////////////
     // manage macro access
 
-    public final boolean isDefined(Token token) {
+    public final boolean isDefined(APTToken token) {
         return getMacro(token) != null;
     } 
 
-    protected APTMacro getMacro(Token token) {
-        return active.getMacro(token);
+    public final boolean isDefined(CharSequence token) {
+        token = CharSequenceKey.create(token);
+        return getMacro(token) != null;
+    } 
+
+    public APTMacro getMacro(APTToken token) {
+        APTMacro res = active.getMacro(token);
+        return (res != APTMacroMapSnapshot.UNDEFINED_MACRO) ? res : null;
+    }
+
+    protected APTMacro getMacro(CharSequence token) {
+        assert token instanceof TinyCharSequence : "must not be String object " + token;
+        APTMacro res = active.getMacro(token);
+        return (res != APTMacroMapSnapshot.UNDEFINED_MACRO) ? res : null;
     }
     
     ////////////////////////////////////////////////////////////////////////////
@@ -233,7 +249,7 @@ public abstract class APTBaseMacroMap {
 
     @Override
     public String toString() {
-        Map<String, APTMacro> tmpMap = new HashMap<String, APTMacro>();
+        Map<CharSequence, APTMacro> tmpMap = new HashMap<CharSequence, APTMacro>();
         APTMacroMapSnapshot.addAllMacros(active, tmpMap);
         return APTUtils.macros2String(tmpMap);
     }
@@ -278,37 +294,38 @@ public abstract class APTBaseMacroMap {
         private EmptyMacroMap() {
         }
         
-        protected APTMacro createMacro(Token name, Token[] params, List value) {
+        protected APTMacro createMacro(APTDefine define) {
             return null;
         }
 
-        public boolean pushExpanding(Token token) {
+        public boolean pushExpanding(APTToken token) {
             return false;
         }
 
         public void popExpanding() {
-//            return null;
         }
 
-        public boolean isExpanding(Token token) {
+        public boolean isExpanding(APTToken token) {
             return false;
         }    
         
-        public boolean isDefined(Token token) {
+        public boolean isDefined(APTToken token) {
+            return false;
+        }
+        
+        public boolean isDefined(CharSequence token) {
             return false;
         }
 
-        public APTMacro getMacro(Token token) {
+
+        public APTMacro getMacro(APTToken token) {
             return null;
         }      
 
-        public void define(Token name, Collection params, List value) {
+        public void define(APTFile file, APTDefine define, Kind macroType) {
         }
 
-        public void define(Token name, List value) {
-        }
-
-        public void undef(Token name) {
+        public void undef(APTFile file, APTToken name) {
         }
 
         public void setState(State state) {
@@ -316,6 +333,6 @@ public abstract class APTBaseMacroMap {
 
         public State getState() {
             return new StateImpl((APTMacroMapSnapshot )null);
-        }               
+        }
     };    
 }

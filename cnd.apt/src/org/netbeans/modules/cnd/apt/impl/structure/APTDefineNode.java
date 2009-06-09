@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.cnd.apt.impl.structure;
 
-import antlr.Token;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -52,6 +51,8 @@ import org.netbeans.modules.cnd.apt.debug.DebugUtils;
 import org.netbeans.modules.cnd.apt.support.APTTokenTypes;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.structure.APTDefine;
+import org.netbeans.modules.cnd.apt.structure.APTFile;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 import org.netbeans.modules.cnd.apt.utils.ListBasedTokenStream;
 
@@ -63,10 +64,10 @@ public final class APTDefineNode extends APTMacroBaseNode
                                     implements APTDefine, Serializable {
     private static final long serialVersionUID = -99267816578145490L;
     
-    private List<Token> params = null;
-    private List<Token> bodyTokens = null;
+    private List<APTToken> params = null;
+    private List<APTToken> bodyTokens = null;
     
-    private byte state = BEFORE_MACRO_NAME;
+    private volatile int stateAndHashCode = BEFORE_MACRO_NAME;
     
     private static final byte BEFORE_MACRO_NAME = 0;
     private static final byte AFTER_MACRO_NAME = 1;
@@ -80,7 +81,7 @@ public final class APTDefineNode extends APTMacroBaseNode
         super(orig);
         this.params = orig.params;
         this.bodyTokens = orig.bodyTokens;
-        this.state = orig.state;
+        this.stateAndHashCode = orig.stateAndHashCode;
     }
     
     /** Constructor for serialization */
@@ -88,7 +89,7 @@ public final class APTDefineNode extends APTMacroBaseNode
     }
 
     /** Creates a new instance of APTDefineNode */
-    public APTDefineNode(Token token) {
+    public APTDefineNode(APTToken token) {
         super(token);
     }
 
@@ -96,11 +97,11 @@ public final class APTDefineNode extends APTMacroBaseNode
         return APT.Type.DEFINE;
     }
     
-    public Collection<Token> getParams() {
+    public Collection<APTToken> getParams() {
         if (params == null) {
             return null;
         } else {
-            return Collections.<Token>unmodifiableList(params);// != null ? (Token[]) params.toArray(new Token[params.size()]) : null;
+            return Collections.<APTToken>unmodifiableList(params);// != null ? (APTToken[]) params.toArray(new APTToken[params.size()]) : null;
         }
     }
     
@@ -111,42 +112,53 @@ public final class APTDefineNode extends APTMacroBaseNode
     /**
      * returns List of Tokens of macro body
      */
-    public List<Token> getBody() {
-        return bodyTokens != null ? bodyTokens : Collections.<Token>emptyList();
+    public List<APTToken> getBody() {
+        return bodyTokens != null ? bodyTokens : Collections.<APTToken>emptyList();
     }
     
     /**
      * returns true if #define directive is valid
      */
     public boolean isValid() {
-        return state != ERROR;
+        return stateAndHashCode != ERROR;
     }
     
-    public boolean accept(Token token) {
+    @Override
+    public boolean accept(APTFile curFile, APTToken token) {
         int ttype = token.getType();
         if (APTUtils.isEndDirectiveToken(ttype)) {
+            if (bodyTokens != null){
+                ((ArrayList<?>)bodyTokens).trimToSize();
+            }
+            if (params != null){
+                ((ArrayList<?>)params).trimToSize();
+            }
+            if (stateAndHashCode == BEFORE_MACRO_NAME) {
+                // macro without name
+                stateAndHashCode = ERROR;
+            }
             return false;
         } else {
-            switch (state) {
+            switch (stateAndHashCode) {
                 case BEFORE_MACRO_NAME:
                 {
                     // allow base class to remember macro nam
-                    boolean accepted = super.accept(token);
+                    boolean accepted = super.accept(curFile, token);
                     assert(accepted);
-                    state = AFTER_MACRO_NAME;
+                    stateAndHashCode = AFTER_MACRO_NAME;
                     break;
                 }
                 case AFTER_MACRO_NAME:
                 {
                     if (token.getType() == APTTokenTypes.FUN_LIKE_MACRO_LPAREN) {
-                        params = new ArrayList<Token>();
-                        state = IN_PARAMS;
+                        params = new ArrayList<APTToken>();
+                        stateAndHashCode = IN_PARAMS;
                     } else {
                         if (bodyTokens == null) {
-                            bodyTokens = new ArrayList<Token>();
+                            bodyTokens = new ArrayList<APTToken>();
                         }
                         bodyTokens.add(token);                        
-                        state = IN_BODY;
+                        stateAndHashCode = IN_BODY;
                     }
                     break;
                 }
@@ -158,7 +170,7 @@ public final class APTDefineNode extends APTMacroBaseNode
                             // leave IN_PARAMS state
                             break;
                         case APTTokenTypes.RPAREN:
-                            state = IN_BODY;
+                            stateAndHashCode = IN_BODY;
                             break;
                         case APTTokenTypes.ELLIPSIS:
                             // TODO: need to support ELLIPSIS for IZ#83949
@@ -169,13 +181,13 @@ public final class APTDefineNode extends APTMacroBaseNode
                             if (!(token.getType() == APTTokenTypes.COMMA || APTUtils.isCommentToken(token.getType()))) {
                                 // error check
                                 if (DebugUtils.STANDALONE) {
-                                    System.err.printf("line %d: \"%s\" may not appear in macro parameter list\n", // NOI18N
-                                            getToken().getLine(), token.getText());
+                                    System.err.printf("%s, line %d: \"%s\" may not appear in macro parameter list\n", // NOI18N
+                                            curFile == null ? "<no file>" : curFile.getPath(), getToken().getLine(), token.getText()); // NOI18N
                                 } else {
-                                    APTUtils.LOG.log(Level.SEVERE, "line {0}: {1} may not appear in macro parameter list", // NOI18N
-                                            new Object[] {getToken().getLine(), token.getText()} );
+                                    APTUtils.LOG.log(Level.SEVERE, "{0} line {1}: {2} may not appear in macro parameter list", // NOI18N
+                                            new Object[] {curFile == null ? "<no file>" : curFile.getPath(), getToken().getLine(), token.getText()} ); // NOI18N
                                 }                                
-                                state = ERROR;
+                                stateAndHashCode = ERROR;
                             }
                             break;
                     }
@@ -185,11 +197,11 @@ public final class APTDefineNode extends APTMacroBaseNode
                 {
                     // init body list if necessary
                     if (bodyTokens == null) {
-                        bodyTokens = new ArrayList<Token>();
+                        bodyTokens = new ArrayList<APTToken>();
                     }
                     // check for errors:
                     if (token.getType() == APTTokenTypes.SHARP) {
-                        state = IN_BODY_AFTER_SHARP;
+                        stateAndHashCode = IN_BODY_AFTER_SHARP;
                     }
                     bodyTokens.add(token);
                     break;
@@ -202,12 +214,12 @@ public final class APTDefineNode extends APTMacroBaseNode
                         // stay in the current state
                     } else if (token.getType() == APTTokenTypes.ID) {
                         // error check: token after # must be parameter
-                        state = isInParamList(token) ? IN_BODY : ERROR;
+                        stateAndHashCode = isInParamList(token) ? IN_BODY : ERROR;
                     } else {
                         // only id is accepted after #
-                        state = ERROR;
+                        stateAndHashCode = ERROR;
                     }                   
-                    if (state == ERROR) {
+                    if (stateAndHashCode == ERROR) {
                         if (DebugUtils.STANDALONE) {
                             System.err.printf("line %d: '#' is not followed by a macro parameter\n", // NOI18N
                                     getToken().getLine());
@@ -230,13 +242,13 @@ public final class APTDefineNode extends APTMacroBaseNode
         }
     }
     
-    private boolean isInParamList(Token id) {
+    private boolean isInParamList(APTToken id) {
         assert id != null;
         if (params == null) {
             return false;
         }
-        for (Token param : params) {
-            if (APTUtils.getTokenTextKey(param).equals(APTUtils.getTokenTextKey(id))) {
+        for (APTToken param : params) {
+            if (param.getTextID().equals(id.getTextID())) {
                 return true;
             }
         }
@@ -256,5 +268,37 @@ public final class APTDefineNode extends APTMacroBaseNode
             bodyStr = "{NO BODY}"; // NOI18N
         }
         return ret + paramStr + bodyStr;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!super.equals(obj)) {
+            return false;
+        }
+        final APTDefineNode other = (APTDefineNode) obj;
+        if (!APTUtils.equalArrayLists(this.params, other.params)) {
+            return false;
+        }
+        if (!APTUtils.equalArrayLists(this.bodyTokens, other.bodyTokens)) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = stateAndHashCode;
+        // if state was ERROR, leave it as hashcode as well, otherwise calc and cache hashcode
+        if (0 <= hash && hash < ERROR) {
+            hash = super.hashCode();
+            hash = 37 * hash + APTUtils.hash(this.params);
+            hash = 37 * hash + APTUtils.hash(this.bodyTokens);
+            hash = APTUtils.hash(hash);
+            if (0 <= hash && hash <= ERROR) {
+                hash += ERROR + ERROR;
+            }
+            stateAndHashCode = hash;
+        }
+        return hash;
     }
 }

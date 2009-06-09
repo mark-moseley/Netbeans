@@ -41,10 +41,11 @@
 
 package org.netbeans.modules.cnd.apt.impl.structure;
 
-import antlr.Token;
 import java.io.Serializable;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.structure.APTElse;
+import org.netbeans.modules.cnd.apt.structure.APTFile;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 
 /**
@@ -65,7 +66,7 @@ public final class APTElseNode extends APTTokenAndChildBasedNode
     }
     
     /** Creates a new instance of APTElseNode */
-    public APTElseNode(Token token) {
+    public APTElseNode(APTToken token) {
         super(token);
     }
     
@@ -73,7 +74,7 @@ public final class APTElseNode extends APTTokenAndChildBasedNode
         return APT.Type.ELSE;
     }
     
-    public boolean accept(Token token) {
+    public boolean accept(APTFile curFile,APTToken token) {
         assert (token != null);
         int ttype = token.getType();
         assert (!APTUtils.isEOF(ttype)) : "EOF must be handled in callers"; // NOI18N

@@ -41,11 +41,12 @@
 
 package org.netbeans.modules.cnd.apt.impl.structure;
 
-import antlr.Token;
 import java.io.Serializable;
 import java.util.logging.Level;
 import org.netbeans.modules.cnd.apt.debug.DebugUtils;
 import org.netbeans.modules.cnd.apt.structure.APT;
+import org.netbeans.modules.cnd.apt.structure.APTFile;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.support.APTTokenAbstact;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 
@@ -56,7 +57,7 @@ import org.netbeans.modules.cnd.apt.utils.APTUtils;
 public abstract class APTMacroBaseNode extends APTTokenBasedNode
                                         implements Serializable {
     private static final long serialVersionUID = 1315417078059538898L;
-    private Token macroName = EMPTY_NAME;
+    private APTToken macroName = EMPTY_NAME;
     
     /** Copy constructor */
     /**package*/APTMacroBaseNode(APTMacroBaseNode orig) {
@@ -69,7 +70,7 @@ public abstract class APTMacroBaseNode extends APTTokenBasedNode
     }
     
     /** Creates a new instance of APTMacroBaseNode */
-    public APTMacroBaseNode(Token token) {
+    public APTMacroBaseNode(APTToken token) {
         super(token);
     }
 
@@ -83,16 +84,16 @@ public abstract class APTMacroBaseNode extends APTTokenBasedNode
         assert (false) : "define/undef doesn't support children"; // NOI18N        
     }
 
-    public boolean accept(Token token) {
+    public boolean accept(APTFile curFile,APTToken token) {
         if (APTUtils.isID(token)) {
             if (macroName != EMPTY_NAME) {
                 // init macro name only once
                 if (DebugUtils.STANDALONE) {
-                    System.err.printf("line %d: warning: extra tokens at end of %s directive\n", // NOI18N
-                            getToken().getLine(), getToken().getText().trim());
+                    System.err.printf("%s, line %d: warning: extra tokens at end of %s directive\n", // NOI18N
+                            curFile == null ? "<no file>" : curFile.getPath(), getToken().getLine(), getToken().getText().trim());
                 } else {
-                    APTUtils.LOG.log(Level.WARNING, "line {0}: warning: extra tokens at end of {1} directive", // NOI18N
-                            new Object[] {getToken().getLine(), getToken().getText().trim()} );
+                    APTUtils.LOG.log(Level.WARNING, "line {1}: warning: extra tokens at end of {2} directive", // NOI18N
+                            new Object[] {curFile == null ? "<no file>" : curFile.getPath(), getToken().getLine(), getToken().getText().trim()} ); // NOI18N
                 }
             } else {
                 this.macroName = token;
@@ -113,19 +114,32 @@ public abstract class APTMacroBaseNode extends APTTokenBasedNode
         return retValue;
     }
     
-    public Token getName() {
+    public APTToken getName() {
         return macroName;
     }
     
     private static final NotHandledMacroName EMPTY_NAME = new NotHandledMacroName();
     
     //TODO: what about Serializable
-    private static class NotHandledMacroName extends APTTokenAbstact {
+    private static final class NotHandledMacroName extends APTTokenAbstact {
         public NotHandledMacroName() {
         }
         
+        @Override
         public String getText() {
             return "<<DUMMY>>"; // NOI18N
-        }        
+        }
+
+        @Override
+        public int hashCode() {
+            return -1;
+        }
+
+        @Override
+        @SuppressWarnings("EqualsWhichDoesntCheckParameterClass")
+        public boolean equals(Object obj) {
+            return this == obj;
+        }
+
     };    
 }
