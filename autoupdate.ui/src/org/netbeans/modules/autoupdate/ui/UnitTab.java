@@ -962,18 +962,20 @@ public class UnitTab extends javax.swing.JPanel {
     private  abstract class TabAction extends AbstractAction {
         private String name;
         private String actionCategory;
-        public TabAction (String nameKey, String actionCategoryKey) {
+        public TabAction (String nameKey, KeyStroke accelerator, String actionCategoryKey) {
             super (textForKey (nameKey));
             this.actionCategory = actionCategoryKey;//(actionCategoryKey != null) ? NbBundle.getMessage(UnitTab.class, actionCategoryKey) : null;
+            if(accelerator!=null) {
+                putValue (ACCELERATOR_KEY, accelerator);
+            }
+
             putValue (MNEMONIC_KEY, mnemonicForKey (nameKey));
             name = (String)getValue (NAME);
             putIntoActionMap (table);
         }
         
-        public TabAction (String key, KeyStroke accelerator, String actionCategoryKey) {
-            this (key, actionCategoryKey);
-            putValue (ACCELERATOR_KEY, accelerator);
-            putIntoActionMap (table);
+        public TabAction (String key, String actionCategoryKey) {
+            this (key, null, actionCategoryKey);
         }
         
         protected String getActionName () {
@@ -1012,11 +1014,11 @@ public class UnitTab extends javax.swing.JPanel {
             }
         }
         
-        public void putIntoActionMap (JComponent component) {
+        private void putIntoActionMap (JComponent component) {
             KeyStroke ks = (KeyStroke)getValue (ACCELERATOR_KEY);
             Object key = getValue (NAME);
             if (ks == null) {
-                ks = KeyStroke.getKeyStroke ((Integer)getValue (MNEMONIC_KEY), KeyEvent.VK_ALT);
+                ks = KeyStroke.getKeyStroke ((Integer)getValue (MNEMONIC_KEY), KeyEvent.ALT_DOWN_MASK);
             }
             if (ks != null && key != null) {
                 component.getInputMap (JComponent.WHEN_FOCUSED).put (ks, key);
@@ -1176,6 +1178,25 @@ public class UnitTab extends javax.swing.JPanel {
                 focusTable ();
             }
         }
+
+        @Override
+        public void tableDataChanged (Collection<Unit> units) {
+            if (units.size() == 0) {
+                setEnabled(false);
+                return;
+            }
+            for (Unit u : units) {
+                if (u instanceof Unit.Installed) {
+                    Unit.Installed inst = (Unit.Installed)u;
+                    if (!inst.isUninstallAllowed()) {
+                        setEnabled(false);
+                        return;
+                    }
+                }
+            }
+            setEnabled (true);
+        }
+
     }
     
     private class UpdateAction extends TabAction {
@@ -1264,7 +1285,7 @@ public class UnitTab extends javax.swing.JPanel {
             String category = u.getCategoryName();
             List<Unit> units = model.getUnits();
             for (Unit unit : units) {
-                if (unit != null && category.equals(unit.getCategoryName()) && !unit.isMarked()) {
+                if (unit != null && category.equals(unit.getCategoryName()) && !unit.isMarked() && unit.canBeMarked()) {
                     retval = true;
                     break;
                 }
@@ -1328,11 +1349,21 @@ public class UnitTab extends javax.swing.JPanel {
                 }
             }
             UninstallUnitWizard wizard = new UninstallUnitWizard ();
-            wizard.invokeWizard (true);
-            Containers.forEnable ().removeAll ();
-            restoreSelectedRow(row);
-            refreshState ();
-            focusTable ();
+            boolean finished = false;
+            try {
+                finished = wizard.invokeWizard(true);
+            } finally {
+                Containers.forEnable().removeAll();
+                if (finished) {
+                    for (Unit u : model.getMarkedUnits()) {
+                        u.setMarked(false);
+                    }
+                }
+                fireUpdataUnitChange();
+                restoreSelectedRow(row);
+                refreshState ();
+                focusTable ();
+            }
         }
         /*
         public void performerImpl (Unit u) {
@@ -1620,7 +1651,7 @@ public class UnitTab extends javax.swing.JPanel {
     }
     private class CheckAllAction extends RowTabAction {
         public CheckAllAction () {
-            super ("UnitTab_CheckAllAction", /*KeyStroke.getKeyStroke (KeyEvent.VK_A, KeyEvent.CTRL_DOWN_MASK | KeyEvent.SHIFT_DOWN_MASK),*/"Check");
+            super ("UnitTab_CheckAllAction", KeyStroke.getKeyStroke (KeyEvent.VK_A, KeyEvent.CTRL_DOWN_MASK), "Check");
         }
         
         public void performerImpl (Unit uu) {
