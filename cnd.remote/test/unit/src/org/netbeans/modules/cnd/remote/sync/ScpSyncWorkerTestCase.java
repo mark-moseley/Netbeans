@@ -51,6 +51,7 @@ import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
 import org.netbeans.modules.nativeexecution.api.NativeProcess;
 import org.netbeans.modules.nativeexecution.api.NativeProcessBuilder;
 import org.netbeans.modules.nativeexecution.api.util.CommonTasksSupport;
+import org.netbeans.modules.nativeexecution.api.util.ConnectionManager;
 import org.openide.util.Lookup;
 
 /**
@@ -59,8 +60,14 @@ import org.openide.util.Lookup;
  */
 public class ScpSyncWorkerTestCase extends RemoteTestBase {
 
-    public ScpSyncWorkerTestCase(String testName) {
-        super(testName);
+//    public ScpSyncWorkerTestCase(String testName) {
+//        super(testName);
+//        Logger.getLogger("cnd.remote.logger").setLevel(Level.FINEST);
+//        Logger.getLogger("nativeexecution.support.logger.level").setLevel(Level.FINEST);
+//    }
+
+    public ScpSyncWorkerTestCase(String testName, ExecutionEnvironment execEnv) {
+        super(testName, execEnv);
         Logger.getLogger("cnd.remote.logger").setLevel(Level.FINEST);
         Logger.getLogger("nativeexecution.support.logger.level").setLevel(Level.FINEST);
     }
@@ -135,7 +142,7 @@ public class ScpSyncWorkerTestCase extends RemoteTestBase {
         System.err.printf("testUploadFile: %s to %s:%s\n", src.getAbsolutePath(), execEnv.getDisplayName(), dst);
         ScpSyncWorker worker = new ScpSyncWorker(src, execEnv, out, err);
         worker.synchronizeImpl(dst);
-        CommonTasksSupport.rmDir(execEnv, dst, true, err);
+        CommonTasksSupport.rmDir(execEnv, dst, true, err).get();
     }
 
     private File createTestDir() throws IOException {

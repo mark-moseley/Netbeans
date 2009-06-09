@@ -59,20 +59,35 @@ import org.netbeans.modules.nativeexecution.api.util.ConnectionManager;
  */
 public abstract class RemoteTestBase extends CndBaseTestCase {
 
-    protected RemoteTestBase(String testName) {
-        super(testName);
+// Absence of this constructor prevents errors
+//    protected RemoteTestBase(String testName) {
+//        super(testName);
+//    }
+
+    protected RemoteTestBase(String testName, ExecutionEnvironment execEnv) {
+        super(testName, execEnv);
     }
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        final ExecutionEnvironment execEnv = getTestExecutionEnvironment();
-        if (execEnv != null) {
+        final ExecutionEnvironment env = getTestExecutionEnvironment();
+        if (env != null) {
             // the password should be stored in the initialization phase
-            ConnectionManager.getInstance().connectTo(execEnv);
+            ConnectionManager.getInstance().connectTo(env);
         }
     }
 
+    @Override
+    public String getName() {
+        String name = super.getName();
+        ExecutionEnvironment env = getTestExecutionEnvironment();
+        if (env == null) {
+            return name;
+        } else {
+            return String.format("%s [%s]", name, env);
+        }
+    }
 
     public static class FakeCompilerSet extends CompilerSet {
 
