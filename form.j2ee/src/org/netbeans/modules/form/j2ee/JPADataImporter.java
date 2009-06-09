@@ -63,7 +63,7 @@ import org.netbeans.modules.form.RADComponent;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
 import org.netbeans.modules.j2ee.persistence.api.PersistenceScope;
 import org.netbeans.modules.j2ee.persistence.api.metadata.orm.EntityMappingsMetadata;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -76,6 +76,7 @@ import org.openide.util.RequestProcessor;
  *
  * @author Jan Stola
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.form.DataImporter.class)
 public class JPADataImporter extends JPanel implements DataImporter {
     
     /** This method is called from within the constructor to
@@ -212,7 +213,7 @@ private void connectionComboActionPerformed(java.awt.event.ActionEvent evt) {//G
 
                     // Initializes project's classpath
                     JDBCDriver[] driver = JDBCDriverManager.getDefault().getDrivers(connection.getDriverClass());
-                    J2EEUtils.updateProjectForUnit(persistenceXML, unit, driver[0]);
+                    J2EEUtils.updateProjectForUnit(formFile, unit, driver[0]);
 
                     // Obtain description of entity mappings
                     PersistenceScope scope = PersistenceScope.getPersistenceScope(formFile);

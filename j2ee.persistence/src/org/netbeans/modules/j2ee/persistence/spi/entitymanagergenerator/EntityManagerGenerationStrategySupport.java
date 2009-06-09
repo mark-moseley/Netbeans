@@ -66,7 +66,7 @@ import org.netbeans.api.java.source.TreeMaker;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.modules.j2ee.core.api.support.java.GenerationUtils;
 import org.netbeans.modules.j2ee.persistence.action.GenerationOptions.*;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.openide.util.Parameters;
 
 /**
@@ -74,7 +74,7 @@ import org.openide.util.Parameters;
  *
  * @author Erno Mononen
  */
-abstract class EntityManagerGenerationStrategySupport implements EntityManagerGenerationStrategy{
+public abstract class EntityManagerGenerationStrategySupport implements EntityManagerGenerationStrategy{
     
     protected static final String ENTITY_MANAGER_FQN = "javax.persistence.EntityManager"; //NOI18N
     protected static final String ENTITY_MANAGER_FACTORY_FQN = "javax.persistence.EntityManagerFactory"; //NOI18N

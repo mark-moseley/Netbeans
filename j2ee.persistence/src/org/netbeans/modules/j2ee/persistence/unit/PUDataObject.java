@@ -50,8 +50,8 @@ import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.modules.j2ee.persistence.dd.PersistenceMetadata;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Persistence;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.Persistence;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
 import org.openide.DialogDisplayer;
 import org.netbeans.api.xml.cookies.CheckXMLCookie;
@@ -73,6 +73,7 @@ import org.openide.loaders.DataObjectExistsException;
 import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 
 /**
@@ -151,14 +152,14 @@ public class PUDataObject extends XmlMultiViewDataObject {
                 java.io.InputStream is = getEditorSupport().getInputStream();
                 Persistence newPersistence = null;
                 try {
-                    newPersistence = Persistence.createGraph(is);
+                    newPersistence = org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Persistence.createGraph(is);
                 } catch (RuntimeException ex) { // must catch RTE (thrown by schema2beans when document is not valid)
                     LOG.log(Level.INFO, null, ex);
                     return false;
                 }
                 if (newPersistence!=null) {
                     try{
-                        persistence.merge(newPersistence, BaseBean.MERGE_UPDATE);
+                        ((BaseBean)persistence).merge((BaseBean) newPersistence, BaseBean.MERGE_UPDATE);
                     } catch (IllegalArgumentException iae) {
                         // see #104180
                         LOG.log(Level.FINE, "IAE thrown during merge, see #104180.", iae); //NOI18N
@@ -244,7 +245,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
     public void addPersistenceUnit(PersistenceUnit persistenceUnit){
         ProviderUtil.makePortableIfPossible(FileOwnerQuery.getOwner(getPrimaryFile()), persistenceUnit);
         getPersistence().addPersistenceUnit(persistenceUnit);
-        modelUpdatedFromUI();
+        modelUpdated();
         firePropertyChange(PERSISTENCE_UNIT_ADDED_OR_REMOVED, false, true);
     }
     
@@ -253,7 +254,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
      */
     public void removePersistenceUnit(PersistenceUnit persistenceUnit){
         getPersistence().removePersistenceUnit(persistenceUnit);
-        modelUpdatedFromUI();
+        modelUpdated();
         firePropertyChange(PERSISTENCE_UNIT_ADDED_OR_REMOVED, false, true);
     }
     
@@ -273,7 +274,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
             }
         }
         persistenceUnit.addClass2(clazz);
-        modelUpdatedFromUI();
+        modelUpdated();
         return true;
     }
     
@@ -285,8 +286,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
      */
     public void removeClass(PersistenceUnit persistenceUnit, String clazz){
         persistenceUnit.removeClass2(clazz);
-        
-        modelUpdatedFromUI();
+        modelUpdated();
     }
     
     
@@ -312,7 +312,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
         }
         
         public java.awt.Image getIcon() {
-            return org.openide.util.Utilities.loadImage("org/netbeans/modules/j2ee/persistence/unit/PersistenceIcon.gif"); //NOI18N
+            return ImageUtilities.loadImage("org/netbeans/modules/j2ee/persistence/unit/PersistenceIcon.gif"); //NOI18N
         }
         
         public String preferredID() {
@@ -351,8 +351,15 @@ public class PUDataObject extends XmlMultiViewDataObject {
         return (ToolBarMultiViewElement)super.getActiveMultiViewElement();
     }
     
-    public void modelUpdatedFromUI() {
+    public void modelUpdated() {
         setModified(true);
+        modelSynchronizer.requestUpdateData();
+    }
+    
+    /**
+     * Call this method if the model got updated via UI, such as,visual editor
+     */
+    public void modelUpdatedFromUI() {
         modelSynchronizer.requestUpdateData();
     }
     
@@ -373,7 +380,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
     }
     
     protected Image getXmlViewIcon() {
-        return org.openide.util.Utilities.loadImage("org/netbeans/modules/j2ee/persistence/unit/PersistenceIcon.gif"); //NOI18N
+        return ImageUtilities.loadImage("org/netbeans/modules/j2ee/persistence/unit/PersistenceIcon.gif"); //NOI18N
     }
     
     private class ModelSynchronizer extends XmlMultiViewDataSynchronizer {
@@ -392,7 +399,7 @@ public class PUDataObject extends XmlMultiViewDataObject {
             }
             try {
                 Writer out = new StringWriter();
-                ((Persistence) model).write(out);
+                ((BaseBean) model).write(out);
                 out.close();
                 getDataCache().setData(lock, out.toString(), modify);
             } catch (IOException e) {

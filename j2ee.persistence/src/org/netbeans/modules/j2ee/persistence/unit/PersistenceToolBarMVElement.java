@@ -46,8 +46,9 @@ import java.util.List;
 import javax.swing.Action;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Persistence;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.api.project.libraries.Library;
+import org.netbeans.modules.j2ee.persistence.dd.common.Persistence;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.wizard.Util;
 import org.netbeans.modules.j2ee.persistence.wizard.entity.WrapperPanel;
@@ -55,6 +56,7 @@ import org.netbeans.modules.j2ee.persistence.wizard.unit.PersistenceUnitWizardDe
 import org.netbeans.modules.j2ee.persistence.wizard.unit.PersistenceUnitWizardPanel;
 import org.netbeans.modules.j2ee.persistence.wizard.unit.PersistenceUnitWizardPanelDS;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
+import org.netbeans.modules.j2ee.persistence.wizard.library.PersistenceLibrarySupport;
 import org.netbeans.modules.j2ee.persistence.wizard.unit.PersistenceUnitWizardPanelJdbc;
 import org.netbeans.modules.xml.multiview.*;
 import org.netbeans.modules.xml.multiview.ui.*;
@@ -293,7 +295,7 @@ public class PersistenceToolBarMVElement extends ToolBarMultiViewElement impleme
             Object result = DialogDisplayer.getDefault().notify(nd);
             
             if (result == NotifyDescriptor.OK_OPTION) {
-                PersistenceUnit punit = new PersistenceUnit();
+                PersistenceUnit punit = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit();
                 
                 if (isContainer) {
                     PersistenceUnitWizardPanelDS puPanel = (PersistenceUnitWizardPanelDS) panel;
@@ -312,8 +314,9 @@ public class PersistenceToolBarMVElement extends ToolBarMultiViewElement impleme
                     PersistenceUnitWizardPanelJdbc puJdbc = (PersistenceUnitWizardPanelJdbc) panel;
                     punit = ProviderUtil.buildPersistenceUnit(puJdbc.getPersistenceUnitName(), puJdbc.getSelectedProvider(), puJdbc.getPersistenceConnection());
                     punit.setTransactionType("RESOURCE_LOCAL");
-                    if (puJdbc.getPersistenceLibrary() != null){
-                        Util.addLibraryToProject(project, puJdbc.getPersistenceLibrary());
+                    Library lib = PersistenceLibrarySupport.getLibrary(puJdbc.getSelectedProvider());
+                    if (lib != null){
+                        Util.addLibraryToProject(project, lib);
                     }
                 }
                 

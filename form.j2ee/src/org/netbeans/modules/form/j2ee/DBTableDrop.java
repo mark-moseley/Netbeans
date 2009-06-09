@@ -40,7 +40,6 @@
  */
 package org.netbeans.modules.form.j2ee;
 
-import com.sun.source.tree.*;
 import java.awt.dnd.DnDConstants;
 import java.awt.dnd.DropTargetDragEvent;
 import java.util.*;
@@ -65,8 +64,9 @@ import org.netbeans.modules.form.project.ClassSource;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
 import org.netbeans.modules.j2ee.persistence.api.PersistenceScope;
 import org.netbeans.modules.j2ee.persistence.api.metadata.orm.EntityMappingsMetadata;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.openide.filesystems.FileObject;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -117,10 +117,9 @@ public class DBTableDrop extends DBConnectionDrop {
             pItem = new PaletteItem(new ClassSource("javax.persistence.EntityManager", // NOI18N
                         new ClassSource.LibraryEntry(LibraryManager.getDefault().getLibrary("toplink"))), // NOI18N
                         null);
-            pItem.setIcon(new ImageIcon(
-                Utilities.loadImage("org/netbeans/modules/form/j2ee/resources/binding.gif")).getImage()); // NOI18N
+            pItem.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/form/j2ee/resources/binding.gif", false).getImage()); // NOI18N
         } else {
-            pItem = new PaletteItem(new ClassSource("javax.swing.JTable", null, null), null); // NOI18N
+            pItem = new PaletteItem(new ClassSource("javax.swing.JTable"), null); // NOI18N
         }
         return pItem;
     }
@@ -162,7 +161,7 @@ public class DBTableDrop extends DBConnectionDrop {
             PersistenceUnit unit = J2EEUtils.initPersistenceUnit(persistenceXML, table.getDatabaseConnection());
 
             // Initializes project's classpath
-            J2EEUtils.updateProjectForUnit(persistenceXML, unit, table.getJDBCDriver());
+            J2EEUtils.updateProjectForUnit(formFile, unit, table.getJDBCDriver());
 
             // Obtain description of entity mappings
             PersistenceScope scope = PersistenceScope.getPersistenceScope(formFile);

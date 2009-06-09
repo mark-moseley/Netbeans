@@ -54,8 +54,9 @@ import org.netbeans.modules.form.NewComponentDrop;
 import org.netbeans.modules.form.RADComponent;
 import org.netbeans.modules.form.palette.PaletteItem;
 import org.netbeans.modules.form.project.ClassSource;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.openide.filesystems.FileObject;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Utilities;
 
 /**
@@ -96,8 +97,7 @@ public class DBConnectionDrop implements NewComponentDrop {
         PaletteItem pItem = new PaletteItem(new ClassSource("javax.persistence.EntityManager", // NOI18N
                 new ClassSource.LibraryEntry(LibraryManager.getDefault().getLibrary("toplink"))), // NOI18N
                 null);
-        pItem.setIcon(new ImageIcon(
-            Utilities.loadImage("org/netbeans/modules/form/j2ee/resources/EntityManager.png")).getImage()); // NOI18N
+        pItem.setIcon(ImageUtilities.loadImageIcon("org/netbeans/modules/form/j2ee/resources/EntityManager.png", false).getImage()); // NOI18N
         return pItem;
     }
 
@@ -119,7 +119,7 @@ public class DBConnectionDrop implements NewComponentDrop {
             PersistenceUnit unit = J2EEUtils.initPersistenceUnit(persistenceXML, connection.getDatabaseConnection());
 
             // Initializes project's classpath
-            J2EEUtils.updateProjectForUnit(persistenceXML, unit, connection.getJDBCDriver());
+            J2EEUtils.updateProjectForUnit(formFile, unit, connection.getJDBCDriver());
 
             RADComponent entityManager = model.getMetaComponent(componentId);
             entityManager.getPropertyByName("persistenceUnit").setValue(unit.getName()); // NOI18N

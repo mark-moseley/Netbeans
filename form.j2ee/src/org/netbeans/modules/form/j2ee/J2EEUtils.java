@@ -48,8 +48,6 @@ import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.ResultSet;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
@@ -69,7 +67,6 @@ import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.api.db.explorer.JDBCDriver;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
-import org.netbeans.api.java.queries.UnitTestForSourceQuery;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
@@ -80,7 +77,6 @@ import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
-import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.modules.form.FormEditor;
 import org.netbeans.modules.form.FormModel;
@@ -99,15 +95,17 @@ import org.netbeans.modules.j2ee.persistence.api.metadata.orm.Basic;
 import org.netbeans.modules.j2ee.persistence.api.metadata.orm.Entity;
 import org.netbeans.modules.j2ee.persistence.api.metadata.orm.EntityMappingsMetadata;
 import org.netbeans.modules.j2ee.persistence.api.metadata.orm.Id;
+import org.netbeans.modules.j2ee.persistence.api.metadata.orm.JoinColumn;
 import org.netbeans.modules.j2ee.persistence.api.metadata.orm.ManyToOne;
 import org.netbeans.modules.j2ee.persistence.dd.PersistenceMetadata;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Persistence;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.Property;
+import org.netbeans.modules.j2ee.persistence.dd.common.Persistence;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.Property;
+import org.netbeans.modules.j2ee.persistence.entitygenerator.EntityRelation.CollectionType;
+import org.netbeans.modules.j2ee.persistence.entitygenerator.EntityRelation.FetchType;
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.provider.Provider;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
-import org.netbeans.modules.j2ee.persistence.wizard.fromdb.*;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
@@ -314,8 +312,10 @@ public class J2EEUtils {
             if (fob == null) {
                 List<ClassSource.Entry> cpEntries = new ArrayList<ClassSource.Entry>(urls.length);
                 for (URL url : urls) {
-                    cpEntries.add(new ClassSource.JarEntry(
-                            FileUtil.toFile(URLMapper.findFileObject(url))));
+                    FileObject jar = URLMapper.findFileObject(url);
+                    if (jar != null) {
+                        cpEntries.add(new ClassSource.JarEntry(FileUtil.toFile(jar)));
+                    }
                 }
                 return ClassPathUtils.updateProject(fileInProject, new ClassSource("", cpEntries)); // NOI18N
             }
@@ -445,14 +445,16 @@ public class J2EEUtils {
      */
     private static String[] generateEntityClass(final Project project, SourceGroup location, String packageName, DatabaseConnection dbconn, List<String> tableNames, PersistenceUnit unit) {
         try {
-            EntitiesFromDBGenerator generator = new EntitiesFromDBGenerator(tableNames, true, packageName, location, dbconn, project, unit);
+            boolean regenTablesAttrs = "org.apache.derby.jdbc.EmbeddedDriver".equals(dbconn.getDriverClass()); // NOI18N
+            EntitiesFromDBGenerator generator = new EntitiesFromDBGenerator(tableNames, true, true, regenTablesAttrs,
+                    FetchType.DEFAULT, CollectionType.LIST,
+                    packageName, location, dbconn, project, unit);
             // PENDING
             final Set<FileObject> entities = generator.generate(AggregateProgressFactory.createProgressContributor("PENDING"));
 
             String[] result = new String[entities.size()];
             int count = 0;
             for (FileObject fob : entities) {
-                addSchemaParameter(fob, dbconn.getSchema()); // see issue 121493 and 89092
                 result[count++] = packageName + '.' + fob.getName();
             }
             return result;
@@ -539,7 +541,13 @@ public class J2EEUtils {
         SourceGroup[] groups = getJavaSourceGroups(project);
         SourceGroup location = groups[0];
         for (int i=0; i<groups.length; i++) {
-            if (groups[i].contains(dir)) {
+            boolean contains;
+            try {
+                contains = groups[i].contains(dir);
+            } catch (IllegalArgumentException iaex) {
+                contains = false;
+            }
+            if (contains) {
                 location = groups[i];
                 break;
             }
@@ -1032,7 +1040,13 @@ public class J2EEUtils {
                         if (all) {
                             props.add(propName);
                         } else {
-                            String columnName = manyToOne.getJoinColumn(0).getName();
+                            JoinColumn[] joinColumn = manyToOne.getJoinColumn();
+                            String columnName;
+                            if (joinColumn.length == 0) {
+                                columnName = manyToOne.getName().toUpperCase() + "_ID"; // NOI18N
+                            } else {
+                                columnName = manyToOne.getJoinColumn(0).getName();
+                            }
                             columnName = unquote(columnName);
                             columnToProperty.put(columnName, propName);                        
                         }
@@ -1058,79 +1072,10 @@ public class J2EEUtils {
         return properties;
     }
 
-    /**
-     * Adds schema parameter into Table annotation if it is not present already.
-     * 
-     * @param entity entity to update.
-     * @param schema name of the schema.
-     */
-    private static void addSchemaParameter(FileObject entity, final String schema) {
-        if (schema == null) return;
-        JavaSource source = JavaSource.forFileObject(entity);
-        try {
-            source.runModificationTask(new CancellableTask<WorkingCopy>() {
-                public void run(WorkingCopy wc) throws Exception {
-                    wc.toPhase(JavaSource.Phase.RESOLVED);
-                    CompilationUnitTree cu = wc.getCompilationUnit();
-                    ClassTree clazz = null;
-                    for (Tree typeDecl : cu.getTypeDecls()) {
-                        if (Tree.Kind.CLASS == typeDecl.getKind()) {
-                            ClassTree candidate = (ClassTree) typeDecl;
-                            if (candidate.getModifiers().getFlags().contains(javax.lang.model.element.Modifier.PUBLIC)) {
-                                clazz = candidate;
-                                break;
-                            }
-                        }
-                    }
-                    if (clazz == null) return;
-                    AnnotationTree tableAnn = null;
-                    for (AnnotationTree annotation : clazz.getModifiers().getAnnotations()) {
-                        Tree annotationType = annotation.getAnnotationType();
-                        Element classElement = wc.getTrees().getElement(wc.getTrees().getPath(cu, annotationType));
-                        if ((classElement != null) && ("javax.persistence.Table".equals(classElement.toString()))) { // NOI18N
-                            tableAnn = annotation;
-                            break;
-                        }
-                    }
-                    if (tableAnn == null) return;
-                    ExpressionTree schemaTree = null;
-                    for (ExpressionTree argument : tableAnn.getArguments()) {
-                        if (argument.getKind() == Tree.Kind.ASSIGNMENT) {
-                            AssignmentTree assignment = (AssignmentTree)argument;
-                            if ("schema".equals(assignment.getVariable().toString())) { // NOI18N
-                                schemaTree = assignment;
-                                break;
-                            }
-                        }
-                    }
-                    if (schemaTree == null) {
-                        TreeMaker make = wc.getTreeMaker();
-                        IdentifierTree nameTree = make.Identifier("schema"); // NOI18N
-                        LiteralTree valueTree = make.Literal(schema);
-                        schemaTree = make.Assignment(nameTree, valueTree);
-                        AnnotationTree newTableAnn = make.addAnnotationAttrValue(tableAnn, schemaTree);
-                        wc.rewrite(tableAnn, newTableAnn);
-                    }
-                }
-
-                public void cancel() {
-                }
-            }).commit();
-        } catch (IOException ex) {
-            Logger.getLogger(J2EEUtils.class.getName()).log(Level.INFO, ex.getMessage(), ex);
-        }
-    }
-
     private static SourceGroup[] getJavaSourceGroups(Project project) {
         Parameters.notNull("project", project); //NOI18N
         SourceGroup[] sourceGroups = ProjectUtils.getSources(project).getSourceGroups(
                 JavaProjectConstants.SOURCES_TYPE_JAVA);
-        List<SourceGroup> result = new ArrayList<SourceGroup>();
-        for(SourceGroup sourceGroup : sourceGroups){
-            if (UnitTestForSourceQuery.findUnitTests(sourceGroup.getRootFolder()).length > 0){
-                result.add(sourceGroup);
-            }
-        }
-        return result.toArray(new SourceGroup[result.size()]);
+        return sourceGroups;
     }
 }

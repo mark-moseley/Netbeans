@@ -62,7 +62,7 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.modules.j2ee.core.api.support.SourceGroups;
 import org.netbeans.modules.j2ee.core.api.support.java.JavaIdentifiers;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.provider.Provider;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
@@ -77,8 +77,8 @@ import org.openide.filesystems.FileObject;
 import org.openide.util.ChangeSupport;
 import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
 /**
  *
@@ -167,6 +167,8 @@ public class EntityClassesPanel extends javax.swing.JPanel {
             classNamesLabel.setVisible(false);
             classNamesScrollPane.setVisible(false);
             spacerPanel.setVisible(false);
+            
+            setName(org.openide.util.NbBundle.getMessage(EntityClassesPanel.class, "LBL_EntityBeansLocation"));
 
             Mnemonics.setLocalizedText(specifyNamesLabel, org.openide.util.NbBundle.getMessage(EntityClassesPanel.class, "LBL_SpecifyBeansLocation"));
         }
@@ -261,13 +263,17 @@ public class EntityClassesPanel extends javax.swing.JPanel {
             warning = NbBundle.getMessage(EntityClassesPanel.class, "ERR_InvalidPersistenceUnit", ipx.getPath());
         }
 
-        Icon icon = null;
         if (warning.trim().length() > 0) {
-            icon = new ImageIcon(Utilities.loadImage("org/netbeans/modules/j2ee/persistence/ui/resources/warning.gif"));
+            Icon icon = ImageUtilities.loadImageIcon("org/netbeans/modules/j2ee/persistence/ui/resources/warning.gif", false);
+            createPUWarningLabel.setIcon(icon);
+            createPUWarningLabel.setText(warning);
+            createPUWarningLabel.setToolTipText(warning);
+        } else {
+            createPUWarningLabel.setIcon(null);
+            createPUWarningLabel.setText(null);
+            createPUWarningLabel.setToolTipText(null);
+            
         }
-        createPUWarningLabel.setIcon(icon);
-        createPUWarningLabel.setText(warning);
-        createPUWarningLabel.setToolTipText(warning);
     }
 
     private void updateSelectedTables() {
@@ -445,7 +451,7 @@ public class EntityClassesPanel extends javax.swing.JPanel {
     private javax.swing.JLabel specifyNamesLabel;
     // End of variables declaration//GEN-END:variables
 
-    public static final class WizardPanel implements WizardDescriptor.Panel, ChangeListener {
+    public static final class WizardPanel implements WizardDescriptor.Panel, WizardDescriptor.FinishablePanel, ChangeListener {
 
         private final ChangeSupport changeSupport = new ChangeSupport(this);
 
@@ -457,7 +463,7 @@ public class EntityClassesPanel extends javax.swing.JPanel {
         private boolean cmp;
 
         private List<Provider> providers;
-
+        
         public EntityClassesPanel getComponent() {
             if (component == null) {
                 component = new EntityClassesPanel();
@@ -484,6 +490,7 @@ public class EntityClassesPanel extends javax.swing.JPanel {
 
         public void readSettings(Object settings) {
             wizardDescriptor = (WizardDescriptor)settings;
+            
             RelatedCMPHelper helper = RelatedCMPWizard.getHelper(wizardDescriptor);
 
             if (!componentInitialized) {
@@ -581,19 +588,14 @@ public class EntityClassesPanel extends javax.swing.JPanel {
         }
 
         public void storeSettings(Object settings) {
-            Object buttonPressed = ((WizardDescriptor)settings).getValue();
-            if (buttonPressed.equals(WizardDescriptor.NEXT_OPTION) ||
-                    buttonPressed.equals(WizardDescriptor.FINISH_OPTION)) {
+            RelatedCMPHelper helper = RelatedCMPWizard.getHelper(wizardDescriptor);
 
-                RelatedCMPHelper helper = RelatedCMPWizard.getHelper(wizardDescriptor);
-
-                helper.setSelectedTables(getComponent().getSelectedTables());
-                helper.setLocation(getComponent().getLocationValue());
-                helper.setPackageName(getComponent().getPackageName());
-                helper.setCmpFieldsInInterface(getComponent().getCmpFieldsInInterface());
-                helper.setGenerateFinderMethods(getComponent().getGenerateFinderMethods());
-                helper.setPersistenceUnit(getComponent().getPersistenceUnit());
-            }
+            helper.setSelectedTables(getComponent().getSelectedTables());
+            helper.setLocation(getComponent().getLocationValue());
+            helper.setPackageName(getComponent().getPackageName());
+            helper.setCmpFieldsInInterface(getComponent().getCmpFieldsInInterface());
+            helper.setGenerateFinderMethods(getComponent().getGenerateFinderMethods());
+            helper.setPersistenceUnit(getComponent().getPersistenceUnit());
         }
 
         public void stateChanged(ChangeEvent event) {
@@ -601,7 +603,11 @@ public class EntityClassesPanel extends javax.swing.JPanel {
         }
 
         private void setErrorMessage(String errorMessage) {
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", errorMessage); // NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, errorMessage); // NOI18N
+        }
+
+        public boolean isFinishPanel() {
+            return true;
         }
     }
 

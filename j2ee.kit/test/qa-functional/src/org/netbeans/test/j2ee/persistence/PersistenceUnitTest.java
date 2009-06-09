@@ -32,9 +32,10 @@ import java.io.IOException;
 import junit.framework.*;
 import junit.textui.TestRunner;
 import org.netbeans.api.project.Project;
+import org.netbeans.jellytools.modules.j2ee.J2eeTestCase;
+import org.netbeans.junit.NbModuleSuite;
 import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.unit.PUDataObject;
 import org.netbeans.modules.web.project.WebProject;
 import org.netbeans.test.j2ee.lib.J2eeProjectSupport;
@@ -46,7 +47,7 @@ import org.netbeans.test.j2ee.lib.TrimmingLineDiff;
  *
  * @author rroska
  */
-public class PersistenceUnitTest extends NbTestCase {
+public class PersistenceUnitTest extends J2eeTestCase {
 
     public PersistenceUnitTest(String test) {
         super(test);
@@ -76,11 +77,10 @@ public class PersistenceUnitTest extends NbTestCase {
     private NbTestCase nbtestcase;
 
     public static Test suite() {
-        NbTestSuite suite = new NbTestSuite();
-        suite.addTest(new PersistenceUnitTest("testOpenProject"));
-        suite.addTest(new PersistenceUnitTest("testPUProviders"));
-        suite.addTest(new PersistenceUnitTest("testPUDataSource"));
-        return suite;
+        NbModuleSuite.Configuration conf = NbModuleSuite.createConfiguration(PersistenceUnitTest.class);
+        conf = addServerTests(Server.ANY, conf,"testOpenProject","testPUProviders","testPUDataSource");
+        conf = conf.enableModules(".*").clusters(".*");
+        return NbModuleSuite.create(conf);
     }
 
     /** Use for execution inside IDE */
@@ -120,7 +120,7 @@ public class PersistenceUnitTest extends NbTestCase {
             System.out.println(s);
             for (Provider p : ProviderUtil.getAllProviders()) {
                 System.out.println(i);
-                PersistenceUnit persistenceUnit = new PersistenceUnit();
+                PersistenceUnit persistenceUnit = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit();
                 assertNotNull("Persistence unit not created ", persistenceUnit);
 
                 persistenceUnit.setName("pu" + Integer.toString(i++));
@@ -128,7 +128,7 @@ public class PersistenceUnitTest extends NbTestCase {
                 persistenceUnit.setJtaDataSource(p.getDefaultJtaDatasource());
                 persistenceUnit.setProvider(p.getProviderClass());
                 ProviderUtil.setTableGeneration(persistenceUnit, s, p);
-
+                
                 dataObject.addPersistenceUnit(persistenceUnit);
             }
         }
@@ -140,7 +140,7 @@ public class PersistenceUnitTest extends NbTestCase {
     public void testPUDataSource() throws Exception {
         int i = 0;
 
-        PersistenceUnit persistenceUnit1 = new PersistenceUnit();
+        PersistenceUnit persistenceUnit1 = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit();
         assertNotNull("Persistence unit not created ", persistenceUnit1);
 
         Provider p = ProviderUtil.DEFAULT_PROVIDER;
@@ -152,7 +152,7 @@ public class PersistenceUnitTest extends NbTestCase {
 
         dataObject.addPersistenceUnit(persistenceUnit1);
 
-        PersistenceUnit persistenceUnit2 = new PersistenceUnit();
+        PersistenceUnit persistenceUnit2 = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit();
         assertNotNull("Persistence unit not created ", persistenceUnit2);
 
         persistenceUnit2.setName("pu" + Integer.toString(i++));

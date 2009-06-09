@@ -48,7 +48,7 @@ import java.util.List;
 import org.netbeans.api.fileinfo.NonRecursiveFolder;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.modules.j2ee.core.api.support.java.JavaIdentifiers;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
 import org.netbeans.modules.j2ee.persistence.unit.PUDataObject;
 import org.netbeans.modules.refactoring.api.AbstractRefactoring;
@@ -97,7 +97,10 @@ public class PersistenceXmlPackageRename extends PersistenceXmlRefactoring{
             FileObject folder = renameRefactoring.getRefactoringSource().lookup(FileObject.class);
             ClassPath classPath = ClassPath.getClassPath(folder, ClassPath.SOURCE);
             FileObject root = classPath.findOwnerRoot(folder);
-            
+            // issue 62320. By JavaDoc, ClassPath.fineOwnerRoot can return null
+            if(root == null ) {
+                return null;
+            }
             String prefix = FileUtil.getRelativePath(root, folder.getParent()).replace('/','.');
             String oldName = buildName(prefix, folder.getName());
             // the new package name

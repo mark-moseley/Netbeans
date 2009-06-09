@@ -54,7 +54,7 @@ import javax.lang.model.element.ElementKind;
 import org.netbeans.api.fileinfo.NonRecursiveFolder;
 import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.modules.j2ee.persistence.dd.PersistenceUtils;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
 import org.netbeans.modules.j2ee.persistence.unit.PUDataObject;
@@ -328,7 +328,10 @@ public abstract class PersistenceXmlRefactoring implements JPARefactoring{
         
         PersistenceScope[] persistenceScopes = PersistenceUtils.getPersistenceScopes(project);
         for (int i = 0; i < persistenceScopes.length; i++) {
-            result.add(persistenceScopes[i].getPersistenceXml());
+            FileObject persistenceXmlFo = persistenceScopes[i].getPersistenceXml();
+            if(persistenceXmlFo != null) {
+                result.add(persistenceXmlFo);
+            }
         }
         
         return result;

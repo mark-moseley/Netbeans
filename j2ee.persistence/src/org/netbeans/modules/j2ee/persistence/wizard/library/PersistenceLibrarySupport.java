@@ -53,7 +53,7 @@ import java.util.List;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.libraries.LibraryManager;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.provider.Provider;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
@@ -63,7 +63,6 @@ import org.openide.filesystems.URLMapper;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.util.Exceptions;
 import org.openide.xml.XMLUtil;
 
@@ -110,9 +109,8 @@ public class PersistenceLibrarySupport  {
     }
     
     private static final FileObject createStorage() {
-        FileSystem storageFS = Repository.getDefault().getDefaultFileSystem();
         try {
-            return FileUtil.createFolder(storageFS.getRoot(), LIBRARIES_REPOSITORY);
+            return FileUtil.createFolder(FileUtil.getConfigRoot(), LIBRARIES_REPOSITORY);
         } catch (IOException e) {
             return null;
         }
