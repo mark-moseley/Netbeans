@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,6 +42,7 @@
 package org.netbeans.updater;
 
 import java.io.File;
+import java.io.IOException;
 import javax.swing.SwingUtilities;
 
 /**
@@ -57,8 +58,11 @@ public final class UpdaterDispatcher implements Runnable {
     
     public static final String UPDATE_DIR = "update"; // NOI18N
     public static final String DEACTIVATE_DIR = "deactivate"; // NOI18N
+    public static final String NEW_UPDATER_DIR = "new_updater"; // NOI18N
     
     public static final String DEACTIVATE_LATER = "deactivate_later.txt"; // NOI18N
+    
+    public static final String LAST_MODIFIED = ".lastModified"; // NOI18N
     
     /** Explore <cluster>/update directory and schedules actions handler for
      * Install/Update, Uninstall or Disable modules
@@ -144,6 +148,22 @@ public final class UpdaterDispatcher implements Runnable {
     public void run () {
         dispatch ();
         UpdaterFrame.disposeSplash ();
+    }
+    
+    public static void touchLastModified (File cluster) {
+        try {
+            File stamp = new File (cluster, LAST_MODIFIED);
+            if(!stamp.exists() && !stamp.createNewFile ()) {
+                throw new IOException("Can`t create stamp file " + stamp);
+            }
+            if(!stamp.setLastModified (System.currentTimeMillis ())) {
+                stamp.delete ();
+                stamp.createNewFile ();
+                stamp.setLastModified (System.currentTimeMillis ());
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace ();
+        }
     }
     
 }
