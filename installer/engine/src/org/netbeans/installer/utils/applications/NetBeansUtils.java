@@ -37,12 +37,16 @@
 package org.netbeans.installer.utils.applications;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,27 +56,86 @@ import org.netbeans.installer.utils.LogManager;
 import org.netbeans.installer.utils.ResourceUtils;
 import org.netbeans.installer.utils.StringUtils;
 import org.netbeans.installer.utils.SystemUtils;
+import org.netbeans.installer.utils.XMLUtils;
+import org.netbeans.installer.utils.exceptions.XMLException;
 import org.netbeans.installer.utils.helper.FilesList;
+import org.netbeans.installer.utils.helper.ErrorLevel;
+import org.netbeans.installer.wizard.components.panels.netbeans.NbWelcomePanel;
+import org.netbeans.installer.wizard.components.panels.netbeans.NbWelcomePanel.BundleType;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 
 /**
  *
  * @author Kirill Sorokin
+ * @author Dmitry Lipin
  */
 public class NetBeansUtils {
     /////////////////////////////////////////////////////////////////////////////////
     // Static
     public static void addCluster(File nbLocation, String clusterName) throws IOException {
-        File netbeansclusters = new File(nbLocation, NETBEANS_CLUSTERS);
-        
+        addCluster(nbLocation, clusterName, null);
+    }
+
+    public static void addCluster(File nbLocation, String clusterName, String afterCluster) throws IOException {
+        LogManager.log(ErrorLevel.DEBUG, "Modifying netbeans.conf for NetBeans installed at " + nbLocation + " by adding cluster \""+ clusterName + "\"" + (afterCluster==null ? "" : " after cluster \"" + afterCluster + "\""));
+        final File netbeansclusters = new File(nbLocation, NETBEANS_CLUSTERS);
+        touchLastModified(nbLocation, clusterName);
         List<String> list = FileUtils.readStringList(netbeansclusters);
-        for (String string: list) {
+        LogManager.log(ErrorLevel.DEBUG, "... initial list of clusters : ");
+        LogManager.indent();
+        LogManager.log(ErrorLevel.DEBUG, StringUtils.asString(list, SystemUtils.getLineSeparator()));
+        LogManager.unindent();
+        int length  = list.size();
+        for (int i=0;i<length;i++) {
+            String string = list.get(i);
             if (string.equals(clusterName)) {
-                return;
+                if(afterCluster!=null) {
+                    LogManager.log(ErrorLevel.DEBUG, "... after-cluster exist, removing from the list");
+                    list.remove(i);
+                    break;
+                } else {
+                    LogManager.log(ErrorLevel.DEBUG, "... requested cluster already exist, do nothing");
+                    return;
+                }
             }
         }
-        list.add(clusterName);
-        
+
+        int index = 0;
+        for (String string : list) {
+            index++;
+            if (afterCluster != null && string.equals(afterCluster)) {
+                break;
+            }
+        }
+
+        list.add(index, clusterName);
+        LogManager.log(ErrorLevel.DEBUG, "... final list of clusters : ");
+        LogManager.indent();
+        LogManager.log(ErrorLevel.DEBUG, StringUtils.asString(list, SystemUtils.getLineSeparator()));
+        LogManager.unindent();
         FileUtils.writeStringList(netbeansclusters, list);
+    }
+    
+    private static void touchLastModified(File nbLocation, String clusterName) {
+        final File clusterFile = new File(nbLocation, clusterName);
+        final File lastModified = new File(clusterFile, LAST_MODIFIED_MARKER);
+        // Workaround to Issue #129288 (http://www.netbeans.org/issues/show_bug.cgi?id=129288)
+        // Enabling clusters has no effect without removal userdir
+        // Touching of .lastModified file is done everytime when user requests to add the cluster -
+        // even though it is already in the netbeans.clusters
+        if(FileUtils.exists(clusterFile)) {
+            if(!FileUtils.exists(lastModified)) {
+                try {
+                    lastModified.createNewFile();
+                    lastModified.setLastModified(new Date().getTime());
+                } catch (IOException e) {
+                    LogManager.log(e);
+                }
+            } else {
+                lastModified.setLastModified(new Date().getTime());
+            }
+        }
     }
     
     public static void removeCluster(File nbLocation, String clusterName) throws IOException {
@@ -89,7 +152,7 @@ public class NetBeansUtils {
         
         File productid = new File(nbCluster, PRODUCT_ID);
         
-        return FileUtils.writeFile(productid, NB_IDE_ID);
+        return FileUtils.writeFile(productid, getNetBeansId());
     }
     
     public static FilesList addPackId(File nbLocation, String packId) throws IOException {
@@ -99,7 +162,7 @@ public class NetBeansUtils {
         
         final String id;
         if (!productid.exists()) {
-            id = NB_IDE_ID;
+            id = getNetBeansId();
         } else {
             id = FileUtils.readFile(productid).trim();
         }
@@ -128,7 +191,73 @@ public class NetBeansUtils {
                 productid,
                 StringUtils.asString(ids, PACK_ID_SEPARATOR));
     }
-    
+
+    public static void updateTrackingFilesInfo(File nbLocation, String clusterName) throws IOException {
+
+        File clusterDir = new File(nbLocation, clusterName);
+        if (!FileUtils.exists(clusterDir)) {
+            return;
+        }
+        LogManager.log("Update update_tracking files for cluster directory " + clusterDir);
+        File[] files = new File(clusterDir,UPDATE_TRACKING_DIR).listFiles(new FileFilter() {
+            public boolean accept(File pathname) {
+                return pathname.getName().endsWith(".xml");
+            }
+        });
+        
+        if (files != null) {
+            for (File f : files) {
+                updateTrackingFilesCRC(f, clusterDir);
+            }
+        }
+    }
+
+    private static void updateTrackingFilesCRC(File f, File clusterDir) throws IOException {
+        try {
+            LogManager.log("... check if correct CRC sums are used in update_tracking file " + f);
+            Element root = XMLUtils.getDocumentElement(f);
+            boolean needSave = false;
+            for (Element el : XMLUtils.getChildren(root, "module_version")) {
+                if ("true".equals(el.getAttribute("last"))) {
+                    for (Element fileEl : XMLUtils.getChildren(el)) {
+                        String crc = fileEl.getAttribute("crc");
+                        String name = fileEl.getAttribute("name");
+                        if (name != null && crc != null) {
+                            File utFile = new File(clusterDir, name);
+                            if (FileUtils.exists(utFile)) {
+                                long crcValue = Long.parseLong(crc);
+                                long realCRC = FileUtils.getCrc32(utFile);
+                                if (realCRC != crcValue) {
+                                    fileEl.setAttribute("crc", new Long(realCRC).toString());
+                                    needSave = true;
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            if (needSave) {
+                XMLUtils.saveXMLDocument(root.getOwnerDocument(), f);
+            }
+        } catch (XMLException e) {
+            LogManager.log(e);
+            IOException ex = new IOException("Can`t update CRC in update_tracking files");
+            ex.initCause(e);
+            throw ex;
+        } catch (NumberFormatException e) {
+            LogManager.log(e);
+            IOException ex = new IOException("Can`t update CRC in update_tracking files");
+            ex.initCause(e);
+            throw ex;
+        } catch (IOException e) {
+            LogManager.log(e);
+            IOException ex = new IOException("Can`t update CRC in update_tracking files");
+            ex.initCause(e);
+            throw ex;
+        }
+    }
+
     public static void removePackId(File nbLocation, String packId) throws IOException {
         File nbCluster = getNbCluster(nbLocation);
         
@@ -136,7 +265,7 @@ public class NetBeansUtils {
         
         String id;
         if (!productid.exists()) {
-            id = NB_IDE_ID;
+            id = getNetBeansId();
         } else {
             id = FileUtils.readFile(productid).trim();
         }
@@ -180,6 +309,34 @@ public class NetBeansUtils {
         
         if (license_accepted.exists()) {
             FileUtils.deleteFile(license_accepted);
+        }
+    }
+    
+    public static FilesList setUsageStatistics(File nbLocation, boolean enabled) throws IOException {
+        File file = new File(getNbCluster(nbLocation), CORE_PROPERTIES);
+        String prop = USAGE_STATISTICS_ENABLED_PROPERTY + "=" + enabled;
+        if (!file.exists()) {
+            return FileUtils.writeFile(file,
+                    prop);
+        } else {
+            List<String> list = FileUtils.readStringList(file);
+            boolean exist = false;
+            for (int i = 0; i < list.size(); i++) {
+                String s = list.get(i);
+                if (s.startsWith(USAGE_STATISTICS_ENABLED_PROPERTY)) {
+                    exist = true;
+                    if (!s.endsWith("" + enabled)) {
+                        list.remove(i);
+                        list.add(prop);
+                    }
+                    break;
+                }
+            }
+            if (!exist) {
+                list.add(prop);
+            }
+            FileUtils.writeStringList(file, list);
+            return new FilesList();
         }
     }
     
@@ -425,7 +582,7 @@ public class NetBeansUtils {
             return matcher.group(1);
         } else {
             throw new IOException(StringUtils.format(
-                    ERROR_CANNOT_GET_USERDIR_STRING, netbeansconf));
+                    ERROR_CANNOT_GET_JAVAHOME_STRING, netbeansconf));
         }
     }
     
@@ -496,8 +653,7 @@ public class NetBeansUtils {
         
         File netbeansclusters = new File(nbLocation, NETBEANS_CLUSTERS);
         List<String> list = FileUtils.readStringList(netbeansclusters);
-        List<String> clusters = new ArrayList <String> ();
-        
+                
         File platformCluster = null;
         
         for(String s : list) {
@@ -548,6 +704,79 @@ public class NetBeansUtils {
             "-cp", classpath,
             UPDATER_FRAMENAME, "--nosplash"});
     }
+    public static final boolean setModuleStatus(File nbLocation, String clusterName, String moduleName, boolean enable) {        
+        LogManager.log(ErrorLevel.DEBUG,
+                ((enable) ? "... enabling" : "disabling") +
+                " module " + moduleName + 
+                " in cluster " + clusterName + 
+                " at " + nbLocation);
+        final File configFile = getConfigFile(nbLocation, clusterName, moduleName);
+        if (FileUtils.exists(configFile)) {
+            Document doc = null;
+            try {
+                doc = XMLUtils.loadXMLDocument(configFile);
+            } catch (XMLException e) {
+                LogManager.log("Cannot load config file", e);
+            }
+            if (doc != null) {
+                for (Element element : XMLUtils.getChildren(doc.getDocumentElement(), "param")) {
+                    if (element.getAttribute("name").equals("enabled")) {
+                        if (element.getTextContent().equals(Boolean.toString(!enable))) {
+                            element.setTextContent(Boolean.toString(enable));
+                            try {
+                                XMLUtils.saveXMLDocument(doc, configFile);
+                                LogManager.log(ErrorLevel.MESSAGE, "... module status changed");
+                                return true;
+                            } catch (XMLException e) {
+                                LogManager.log("... Cannot save config file", e);
+                            }
+                        } else {
+                            LogManager.log(ErrorLevel.MESSAGE, "... module is already set to requested status");
+                            return true;
+                        }
+                        break;
+                    }
+                }
+            }
+            LogManager.log(ErrorLevel.MESSAGE,"... module status did not changed");
+        } else {
+            LogManager.log(ErrorLevel.MESSAGE,"... module config file does not exist at " + configFile);
+        }
+        return false;
+    }
+    
+    public static final Boolean getModuleStatus(File nbLocation, String clusterName, String moduleName) {        
+        LogManager.log(ErrorLevel.DEBUG, 
+                "... getting status of module " + moduleName + 
+                " in cluster " + clusterName + 
+                " at " + nbLocation);
+        final File configFile = getConfigFile(nbLocation, clusterName, moduleName);
+        
+        if (FileUtils.exists(configFile)) {
+            Document doc = null;
+            try {
+                doc = XMLUtils.loadXMLDocument(configFile);
+            } catch (XMLException e) {
+                LogManager.log("Cannot load config file", e);
+            }
+            if (doc != null) {
+                for (Element element : XMLUtils.getChildren(doc.getDocumentElement(), "param")) {
+                    if (element.getAttribute("name").equals("enabled")) {
+                         return new Boolean(element.getTextContent());
+                }
+                }
+            }
+            LogManager.log(ErrorLevel.MESSAGE,"... cannot get module status");
+        } else {
+            LogManager.log(ErrorLevel.MESSAGE,"... module config file does not exist");
+        }
+        return null;
+    }
+    
+    private static File getConfigFile(File nbLocation, String clusterName, String moduleName) {
+        File cluster = new File (nbLocation, clusterName);
+        return new File(cluster, "config" + File.separator + "Modules" + File.separator + moduleName + ".xml");
+    }
     
     // private //////////////////////////////////////////////////////////////////////
     private static long getJavaMemorySize(String string) {
@@ -589,7 +818,11 @@ public class NetBeansUtils {
             }
         }
     }
-    
+    public static String getNetBeansId() {
+        return BundleType.getType(
+                System.getProperty(NbWelcomePanel.WELCOME_PAGE_TYPE_PROPERTY)).
+                getNetBeansBundleId();
+    }
     /////////////////////////////////////////////////////////////////////////////////
     // Instance
     private NetBeansUtils() {
@@ -606,7 +839,10 @@ public class NetBeansUtils {
             "config/productid"; // NOI18N
     public static final String LICENSE_ACCEPTED =
             "var/license_accepted"; // NOI18N
-    
+    public static final String CORE_PROPERTIES =
+            "config/Preferences/org/netbeans/core.properties";
+    public static final String USAGE_STATISTICS_ENABLED_PROPERTY = 
+            "usageStatisticsEnabled";//NOI18N
     public static final String DIGITS_PATTERN =
             "[0-9]+"; // NOI18N
     public static final String CLUSTER_NUMBER_PATTERN =
@@ -628,7 +864,11 @@ public class NetBeansUtils {
     
     public static final String NETBEANS_OPTIONS_PATTERN =
             NETBEANS_OPTIONS + "\"(.*?)( ?)(-J{0}(?:{1}\\\\\\\"(.*?)\\\\\\\"|{1}(.*?)|())(?= |\"))( ?)(.*)?\"";
-    
+
+    public static final String LAST_MODIFIED_MARKER =
+           ".lastModified";
+    public static final String UPDATE_TRACKING_DIR =
+            "update_tracking";
     public static final String NB_IDE_ID =
             "NB"; // NOI18N
     public static final String PACK_ID_SEPARATOR =
@@ -653,6 +893,9 @@ public class NetBeansUtils {
     public static final String ERROR_CANNOT_GET_USERDIR_STRING =
             ResourceUtils.getString(NetBeansUtils.class,
             "NU.error.cannot.get.userdir");//NOI18N
+    public static final String ERROR_CANNOT_GET_JAVAHOME_STRING =
+            ResourceUtils.getString(NetBeansUtils.class,
+            "NU.error.cannot.get.javahome");//NOI18N
     
     public static final long K =
             1024; // NOMAGI
