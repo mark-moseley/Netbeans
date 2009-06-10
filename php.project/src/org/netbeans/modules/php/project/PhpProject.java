@@ -40,32 +40,50 @@
  */
 package org.netbeans.modules.php.project;
 
+import org.netbeans.modules.php.project.util.CopySupport;
+import org.netbeans.modules.php.project.ui.logicalview.PhpLogicalViewProvider;
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
+import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.java.classpath.GlobalPathRegistry;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectManager;
-import org.netbeans.modules.php.project.customizer.PhpCustomizerProvider;
-import org.netbeans.modules.php.rt.utils.PhpProjectSharedConstants;
+import org.netbeans.modules.php.project.api.PhpSourcePath;
+import org.netbeans.modules.php.project.api.PhpSeleniumProvider;
+import org.netbeans.modules.php.project.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.php.project.classpath.IncludePathClassPathProvider;
+import org.netbeans.modules.php.project.ui.actions.support.CommandUtils;
+import org.netbeans.modules.php.project.ui.actions.support.ConfigAction;
+import org.netbeans.modules.php.project.ui.codecoverage.PhpCoverageProvider;
+import org.netbeans.modules.php.project.ui.customizer.CustomizerProviderImpl;
+import org.netbeans.modules.php.project.ui.customizer.PhpProjectProperties;
+import org.netbeans.modules.php.project.util.PhpUnit;
 import org.netbeans.spi.project.AuxiliaryConfiguration;
-import org.netbeans.spi.project.SubprojectProvider;
-import org.netbeans.spi.project.support.ant.AntProjectEvent;
+import org.netbeans.spi.project.support.ant.AntBasedProjectRegistration;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
-import org.netbeans.spi.project.support.ant.AntProjectListener;
-import org.netbeans.spi.project.support.ant.GeneratedFilesHelper;
+import org.netbeans.spi.project.support.ant.FilterPropertyProvider;
 import org.netbeans.spi.project.support.ant.ProjectXmlSavedHook;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
+import org.netbeans.spi.project.support.ant.PropertyProvider;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
 import org.netbeans.spi.project.ui.ProjectOpenedHook;
-import org.openide.ErrorManager;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
-import org.openide.util.Utilities;
+import org.openide.util.NbBundle;
+import org.openide.util.WeakListeners;
 import org.openide.util.lookup.Lookups;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -74,128 +92,258 @@ import org.w3c.dom.Text;
 
 
 /**
- * @author ads
- *
+ * @author ads, Tomas Mysik
  */
-public class PhpProject implements Project, AntProjectListener {
-    
-    protected static String SRC_              = "src.";               // NOI18N
-    
-    protected static String _DIR              = "dir";                // NOI18N
-    
-    public static String SRC                = SRC_ + _DIR;
-    
-    public static String SRC_DIR            = "${" + SRC + "}";     // NOI18N
-    
-    public static String TMP_FILE_POSTFIX   = "~";     // NOI18N
-    
-    public static final String PROVIDER_ID  = "provider.id";        // NOI18N
-    
-    public static final String VERSION      = "version";            // NOI18N
-    
-    public static final String COMMAND_PATH = "command.path";       // NOI18N
-    
-    private static final String NAME        
-            = PhpProjectSharedConstants.PHP_PROJECT_NAME; // NOI18N
-    
-    public static final String SOURCE_ENCODING = "source.encoding"; // NOI18N
-    
-    public static final String SOURCE_LBL  = "LBL_Node_Sources";   // NOI18N
+@AntBasedProjectRegistration(
+    type=PhpProjectType.TYPE,
+    iconResource="org/netbeans/modules/php/project/ui/resources/phpProject.png",
+    sharedNamespace=PhpProjectType.PROJECT_CONFIGURATION_NAMESPACE,
+    privateNamespace=PhpProjectType.PRIVATE_CONFIGURATION_NAMESPACE
+)
+public class PhpProject implements Project {
 
-    public static final String SOURCES_TYPE_PHP 
-            = PhpProjectSharedConstants.SOURCES_TYPE_PHP;
+    public static final String USG_LOGGER_NAME = "org.netbeans.ui.metrics.php"; //NOI18N
+    private static final Icon PROJECT_ICON = ImageUtilities.loadImageIcon("org/netbeans/modules/php/project/ui/resources/phpProject.png", false); // NOI18N
 
-    private static final Icon PROJECT_ICON = 
-        new ImageIcon(Utilities.loadImage( 
-                ResourceMarker.getLocation()+ResourceMarker.PROJECT_ICON ));
+    final AntProjectHelper helper;
+    final UpdateHelper updateHelper;
+    private final ReferenceHelper refHelper;
+    private final PropertyEvaluator eval;
+    private final Lookup lookup;
+    private final SourceRoots sourceRoots;
+    private final SourceRoots testRoots;
+    private final SourceRoots seleniumRoots;
 
-    PhpProject( AntProjectHelper helper ) {
-        myHelper = helper;
-        AuxiliaryConfiguration configuration = 
-            helper.createAuxiliaryConfiguration();
-        myRefHelper = new ReferenceHelper(helper, configuration, getEvaluator());
-        myGenFilesHelper = new GeneratedFilesHelper( helper );
-        helper.addAntProjectListener(this);
-        initLookup( configuration );
+    // #165136
+    // @GuardedBy(ProjectManager.mutex())
+    volatile FileObject sourcesDirectory;
+    // @GuardedBy(ProjectManager.mutex())
+    volatile FileObject testsDirectory;
+    // @GuardedBy(ProjectManager.mutex())
+    volatile FileObject seleniumDirectory;
+
+    public PhpProject(AntProjectHelper helper) {
+        assert helper != null;
+
+        this.helper = helper;
+        updateHelper = new UpdateHelper(UpdateImplementation.NULL, helper);
+        AuxiliaryConfiguration configuration = helper.createAuxiliaryConfiguration();
+        eval = createEvaluator();
+        refHelper = new ReferenceHelper(helper, configuration, getEvaluator());
+        sourceRoots = SourceRoots.create(updateHelper, eval, refHelper, SourceRoots.Type.SOURCES);
+        testRoots = SourceRoots.create(updateHelper, eval, refHelper, SourceRoots.Type.TESTS);
+        seleniumRoots = SourceRoots.create(updateHelper, eval, refHelper, SourceRoots.Type.SELENIUM);
+        lookup = createLookup(configuration);
     }
 
-    /* (non-Javadoc)
-     * @see org.netbeans.api.project.Project#getLookup()
-     */
     public Lookup getLookup() {
-        return myLookup;
+        return lookup;
     }
 
-    /* (non-Javadoc)
-     * @see org.netbeans.api.project.Project#getProjectDirectory()
-     */
+    PropertyEvaluator getEvaluator() {
+        return eval;
+    }
+
+    void addWeakPropertyEvaluatorListener(PropertyChangeListener listener) {
+        eval.addPropertyChangeListener(WeakListeners.propertyChange(listener, eval));
+    }
+
+    private PropertyEvaluator createEvaluator() {
+        // It is currently safe to not use the UpdateHelper for PropertyEvaluator; UH.getProperties() delegates to APH
+        // Adapted from APH.getStandardPropertyEvaluator (delegates to ProjectProperties):
+        PropertyEvaluator baseEval1 = PropertyUtils.sequentialPropertyEvaluator(
+                helper.getStockPropertyPreprovider(),
+                helper.getPropertyProvider(PhpConfigurationProvider.CONFIG_PROPS_PATH));
+        PropertyEvaluator baseEval2 = PropertyUtils.sequentialPropertyEvaluator(
+                helper.getStockPropertyPreprovider(),
+                helper.getPropertyProvider(AntProjectHelper.PRIVATE_PROPERTIES_PATH));
+        return PropertyUtils.sequentialPropertyEvaluator(
+                helper.getStockPropertyPreprovider(),
+                helper.getPropertyProvider(PhpConfigurationProvider.CONFIG_PROPS_PATH),
+                new ConfigPropertyProvider(baseEval1, "nbproject/private/configs", helper), // NOI18N
+                helper.getPropertyProvider(AntProjectHelper.PRIVATE_PROPERTIES_PATH),
+                helper.getProjectLibrariesPropertyProvider(),
+                PropertyUtils.userPropertiesProvider(baseEval2,
+                    "user.properties.file", FileUtil.toFile(getProjectDirectory())), // NOI18N
+                new ConfigPropertyProvider(baseEval1, "nbproject/configs", helper), // NOI18N
+                helper.getPropertyProvider(AntProjectHelper.PROJECT_PROPERTIES_PATH));
+    }
+
     public FileObject getProjectDirectory() {
         return getHelper().getProjectDirectory();
     }
 
-    /* (non-Javadoc)
-     * @see org.netbeans.spi.project.support.ant.AntProjectListener#configurationXmlChanged(org.netbeans.spi.project.support.ant.AntProjectEvent)
-     */
-    public void configurationXmlChanged( AntProjectEvent event ) {
-        /*
-         *  The code below is standart and copied f.e. from MakeProject
-         */
-        if (event.getPath().equals( AntProjectHelper.PROJECT_XML_PATH ) ) {
-            // Could be various kinds of changes, but name & displayName might have changed.
-            Info info = (Info)getLookup().lookup( ProjectInformation.class );
-            info.firePropertyChange( ProjectInformation.PROP_NAME );
-            info.firePropertyChange( ProjectInformation.PROP_DISPLAY_NAME );
+    public SourceRoots getSourceRoots() {
+        return sourceRoots;
+    }
+
+    public SourceRoots getTestRoots() {
+        return testRoots;
+    }
+
+    public SourceRoots getSeleniumRoots() {
+        return seleniumRoots;
+    }
+
+    FileObject getSourcesDirectory() {
+        if (sourcesDirectory == null) {
+            ProjectManager.mutex().readAccess(new Mutex.Action<Void>() {
+                public Void run() {
+                    synchronized (PhpProject.this) {
+                        if (sourcesDirectory == null) {
+                            sourcesDirectory = resolveSourcesDirectory();
+                        }
+                    }
+                    return null;
+                }
+            });
         }
-
+        assert sourcesDirectory != null : "Sources directory cannot be null";
+        return sourcesDirectory;
     }
 
-    /* (non-Javadoc)
-     * @see org.netbeans.spi.project.support.ant.AntProjectListener#propertiesChanged(org.netbeans.spi.project.support.ant.AntProjectEvent)
+    private FileObject resolveSourcesDirectory() {
+        String srcDirProperty = eval.getProperty(PhpProjectProperties.SRC_DIR);
+        assert srcDirProperty != null : "Property for Sources must be defined";
+        FileObject srcDir = helper.resolveFileObject(srcDirProperty);
+        if (srcDir != null) {
+            return srcDir;
+        }
+        return restoreDirectory(PhpProjectProperties.SRC_DIR, "MSG_SourcesFolderRestored", "MSG_SourcesFolderTemporaryToProjectDirectory");
+    }
+
+    /**
+     * @return tests directory or <code>null</code>
      */
-    public void propertiesChanged( AntProjectEvent arg0 ) {
-        // We are interested only to listen to changes in sources.
-        // PhpSources will do it itself
-        /*
-         * Also copied from  MakeProject
-         */
-        //  currently ignored (probably better to listen to evaluator() if you need to)
+    FileObject getTestsDirectory() {
+        if (testsDirectory == null) {
+            ProjectManager.mutex().readAccess(new Mutex.Action<Void>() {
+                public Void run() {
+                    synchronized (PhpProject.this) {
+                        if (testsDirectory == null) {
+                            testsDirectory = resolveTestsDirectory();
+                        }
+                    }
+                    return null;
+                }
+            });
+        }
+        return testsDirectory;
     }
-    
+
+    void setTestsDirectory(FileObject testsDirectory) {
+        assert this.testsDirectory == null : "Project test directory already set to " + this.testsDirectory;
+        assert testsDirectory != null && testsDirectory.isValid();
+        this.testsDirectory = testsDirectory;
+    }
+
+    private FileObject resolveTestsDirectory() {
+        // similar to source directory
+        String testsProperty = eval.getProperty(PhpProjectProperties.TEST_SRC_DIR);
+        if (testsProperty == null) {
+            // test directory not set yet
+            return null;
+        }
+        FileObject testDir = helper.resolveFileObject(testsProperty);
+        if (testDir != null) {
+            return testDir;
+        }
+        return restoreDirectory(PhpProjectProperties.TEST_SRC_DIR, "MSG_TestsFolderRestored", "MSG_TestsFolderTemporaryToProjectDirectory");
+    }
+
+    /**
+     * @return selenium tests directory or <code>null</code>
+     */
+    FileObject getSeleniumDirectory() {
+        if (seleniumDirectory == null) {
+            ProjectManager.mutex().readAccess(new Mutex.Action<Void>() {
+                public Void run() {
+                    synchronized (PhpProject.this) {
+                        if (seleniumDirectory == null) {
+                            seleniumDirectory = resolveSeleniumDirectory();
+                        }
+                    }
+                    return null;
+                }
+            });
+        }
+        return seleniumDirectory;
+    }
+
+    void setSeleniumDirectory(FileObject seleniumDirectory) {
+        assert this.seleniumDirectory == null : "Project selenium directory already set to " + this.seleniumDirectory;
+        assert seleniumDirectory != null && seleniumDirectory.isValid();
+        this.seleniumDirectory = seleniumDirectory;
+    }
+
+    private FileObject resolveSeleniumDirectory() {
+        // similar to source directory
+        String testsProperty = eval.getProperty(PhpProjectProperties.SELENIUM_SRC_DIR);
+        if (testsProperty == null) {
+            // test directory not set yet
+            return null;
+        }
+        FileObject testDir = helper.resolveFileObject(testsProperty);
+        if (testDir != null) {
+            return testDir;
+        }
+        return restoreDirectory(PhpProjectProperties.SELENIUM_SRC_DIR, "MSG_SeleniumFolderRestored", "MSG_SeleniumFolderTemporaryToProjectDirectory");
+    }
+
+    private FileObject restoreDirectory(String propertyName, String infoMessageKey, String errorMessageKey) {
+        // #144371 - source folder probably deleted => so:
+        //  1. try to restore it - if it fails, then
+        //  2. just return the project directory & warn user about impossibility of creating src dir
+        String projectName = getName();
+        File dir = FileUtil.normalizeFile(new File(helper.resolvePath(eval.getProperty(propertyName))));
+        if (dir.mkdirs()) {
+            // original sources restored
+            informUser(projectName, NbBundle.getMessage(PhpProject.class, infoMessageKey, dir.getAbsolutePath()), NotifyDescriptor.INFORMATION_MESSAGE);
+            return FileUtil.toFileObject(dir);
+        }
+        // temporary set sources to project directory, do not store it anywhere
+        informUser(projectName, NbBundle.getMessage(PhpProject.class, errorMessageKey, dir.getAbsolutePath()), NotifyDescriptor.ERROR_MESSAGE);
+        return helper.getProjectDirectory();
+    }
+
+    private void informUser(String title, String message, int type) {
+        DialogDisplayer.getDefault().notify(new NotifyDescriptor(
+                message,
+                title,
+                NotifyDescriptor.DEFAULT_OPTION,
+                type,
+                new Object[] {NotifyDescriptor.OK_OPTION},
+                NotifyDescriptor.OK_OPTION));
+    }
+
     /*
      * Copied from MakeProject.
      */
     public String getName() {
-        return ProjectManager.mutex().readAccess(
-                new Mutex.Action<String>() 
-                {
-
-                    public String run() {
-                        Element data = getHelper().getPrimaryConfigurationData(true);
-                        NodeList nl = data.getElementsByTagNameNS(
-                                PhpProjectType.PROJECT_CONFIGURATION_NAMESPACE, NAME);
-                        if (nl.getLength() == 1) {
-                            nl = nl.item(0).getChildNodes();
-                            if (nl.getLength() == 1
-                                    && nl.item(0).getNodeType() == Node.TEXT_NODE)
-                            {
-                                return ((Text) nl.item(0)).getNodeValue();
-                            }
-                        }
-                        return "???";                                           // NOI18N
+        return ProjectManager.mutex().readAccess(new Mutex.Action<String>() {
+            public String run() {
+                Element data = getHelper().getPrimaryConfigurationData(true);
+                NodeList nl = data.getElementsByTagNameNS(PhpProjectType.PROJECT_CONFIGURATION_NAMESPACE, "name"); // NOI18N
+                if (nl.getLength() == 1) {
+                    nl = nl.item(0).getChildNodes();
+                    if (nl.getLength() == 1
+                            && nl.item(0).getNodeType() == Node.TEXT_NODE) {
+                        return ((Text) nl.item(0)).getNodeValue();
                     }
-                });
+                }
+                return "???"; // NOI18N
+            }
+        });
     }
-    
+
     /*
      * Copied from MakeProject.
      */
-    public void setName( final String name ) {
-        ProjectManager.mutex().writeAccess(new Mutex.Action<Object>() {
-
-            public Object run() {
+    public void setName(final String name) {
+        ProjectManager.mutex().writeAccess(new Runnable() {
+            public void run() {
                 Element data = getHelper().getPrimaryConfigurationData(true);
-                NodeList nl = data.getElementsByTagNameNS(
-                        PhpProjectType.PROJECT_CONFIGURATION_NAMESPACE, NAME ); 
+                NodeList nl = data.getElementsByTagNameNS(PhpProjectType.PROJECT_CONFIGURATION_NAMESPACE, "name"); // NOI18N
                 Element nameEl;
                 if (nl.getLength() == 1) {
                     nameEl = (Element) nl.item(0);
@@ -203,160 +351,187 @@ public class PhpProject implements Project, AntProjectListener {
                     while (deadKids.getLength() > 0) {
                         nameEl.removeChild(deadKids.item(0));
                     }
-                }
-                else {
+                } else {
                     nameEl = data.getOwnerDocument().createElementNS(
-                            PhpProjectType.PROJECT_CONFIGURATION_NAMESPACE,
-                            NAME ); 
-                    data.insertBefore(nameEl, /* OK if null */data
-                            .getChildNodes().item(0));
+                            PhpProjectType.PROJECT_CONFIGURATION_NAMESPACE, "name"); // NOI18N
+                    data.insertBefore(nameEl, /* OK if null */data.getChildNodes().item(0));
                 }
-                nameEl
-                        .appendChild(data.getOwnerDocument().createTextNode(
-                                name));
+                nameEl.appendChild(data.getOwnerDocument().createTextNode(name));
                 getHelper().putPrimaryConfigurationData(data, true);
-                return null;
             }
         });
     }
-    
+
     public AntProjectHelper getHelper() {
-        return myHelper;
-    }
-    
-    PropertyEvaluator getEvaluator() {
-        if ( myEvaluator == null ) {
-            myEvaluator = getHelper().getStandardPropertyEvaluator();
-        }
-        return myEvaluator;
+        return helper;
     }
 
-    private void initLookup( AuxiliaryConfiguration configuration ) {
+    CopySupport getCopySupport() {
+        return getLookup().lookup(CopySupport.class);
+    }
 
-        SubprojectProvider provider = getRefHelper().createSubprojectProvider();
-
-        myLookup = Lookups.fixed(new Object[] {
+    private Lookup createLookup(AuxiliaryConfiguration configuration) {
+        return Lookups.fixed(new Object[] {
+                this,
+                CopySupport.getInstance(),
+                new SeleniumProvider(),
+                new PhpCoverageProvider(this),
                 new Info(),
                 configuration,
-                new PhpXmlSavedHook(),
                 new PhpOpenedHook(),
-                provider,
-                new PhpActionProvider( this ),
-                getHelper().createCacheDirectoryProvider(),
-                new PhpLogicalViewProvider( this , provider ),
-                new PhpCustomizerProvider( this ),
-                getHelper().createSharabilityQuery( getEvaluator(), 
-                    new String[] { SRC_DIR } , new String[] {} ),
+                new PhpProjectXmlSavedHook(),
+                new PhpActionProvider(this),
+                new PhpConfigurationProvider(this),
+                new PhpModuleImpl(this),
+                helper.createCacheDirectoryProvider(),
+                helper.createAuxiliaryProperties(),
+                new ClassPathProviderImpl(getHelper(), getEvaluator(), getSourceRoots(), getTestRoots(), getSeleniumRoots()),
+                new PhpLogicalViewProvider(this),
+                new CustomizerProviderImpl(this),
+                new PhpSharabilityQuery(helper, getEvaluator(), getSourceRoots(), getTestRoots(), getSeleniumRoots()),
                 new PhpProjectOperations(this) ,
                 new PhpProjectEncodingQueryImpl(getEvaluator()),
                 new PhpTemplates(),
-                new PhpSources(getHelper(), getEvaluator()),
+                new PhpSources(this, getHelper(), getEvaluator(), getSourceRoots(), getTestRoots(), getSeleniumRoots()),
                 getHelper(),
                 getEvaluator()
                 // ?? getRefHelper()
         });
     }
 
-    private ReferenceHelper getRefHelper() {
-        return myRefHelper;
+    public ReferenceHelper getRefHelper() {
+        return refHelper;
     }
-    
+
     private final class Info implements ProjectInformation {
+        private final PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
 
-        /* (non-Javadoc)
-         * @see org.netbeans.api.project.ProjectInformation#addPropertyChangeListener(java.beans.PropertyChangeListener)
-         */
-        public void addPropertyChangeListener( PropertyChangeListener  listener  ) {
-            mySupport.addPropertyChangeListener( listener );
+        public void addPropertyChangeListener(PropertyChangeListener  listener) {
+            propertyChangeSupport.addPropertyChangeListener(listener);
         }
 
-        /* (non-Javadoc)
-         * @see org.netbeans.api.project.ProjectInformation#getDisplayName()
-         */
         public String getDisplayName() {
-            return PropertyUtils.getUsablePropertyName(getName());
+            return PhpProject.this.getName();
         }
 
-        /* (non-Javadoc)
-         * @see org.netbeans.api.project.ProjectInformation#getIcon()
-         */
         public Icon getIcon() {
             return PROJECT_ICON;
         }
 
-        /* (non-Javadoc)
-         * @see org.netbeans.api.project.ProjectInformation#getName()
-         */
         public String getName() {
             return PhpProject.this.getName();
         }
 
-        /* (non-Javadoc)
-         * @see org.netbeans.api.project.ProjectInformation#getProject()
-         */
         public Project getProject() {
             return PhpProject.this;
         }
 
-        /* (non-Javadoc)
-         * @see org.netbeans.api.project.ProjectInformation#removePropertyChangeListener(java.beans.PropertyChangeListener)
-         */
-        public void removePropertyChangeListener( PropertyChangeListener listener ){
-            mySupport.removePropertyChangeListener(listener);
+        public void removePropertyChangeListener(PropertyChangeListener listener) {
+            propertyChangeSupport.removePropertyChangeListener(listener);
         }
-        
+
         void firePropertyChange(String prop) {
-            mySupport.firePropertyChange( prop , null, null );
-        }
-        
-        private final PropertyChangeSupport mySupport = 
-            new PropertyChangeSupport(this);
- 
-    }
-    
-    private final class PhpXmlSavedHook extends ProjectXmlSavedHook {
-        
-        protected void projectXmlSaved() {
-        /*
-            It seems we don't have "build" scripts here in this project.
-            So I commented out this code at least for now. 
-            
-            genFilesHelper.refreshBuildScript(
-                GeneratedFilesHelper.BUILD_IMPL_XML_PATH,
-                MakeProject.class.getResource("resources/build-impl.xsl"),
-                false);
-            genFilesHelper.refreshBuildScript(
-                GeneratedFilesHelper.BUILD_XML_PATH,
-                MakeProject.class.getResource("resources/build.xsl"),
-                false);
-        */
+            propertyChangeSupport.firePropertyChange(prop , null, null);
         }
     }
-    
+
     private final class PhpOpenedHook extends ProjectOpenedHook {
-        
         protected void projectOpened() {
-            // TODO ??
+            // #165494 - moved from projectClosed() to projectOpened()
+            // clear references to ensure that all the dirs are read again
+            sourcesDirectory = null;
+            testsDirectory = null;
+            seleniumDirectory = null;
+
+            // #139159 - we need to hold sources FO to prevent gc
+            getSourcesDirectory();
+
+            ClassPathProviderImpl cpProvider = lookup.lookup(ClassPathProviderImpl.class);
+            ClassPath[] bootClassPaths = cpProvider.getProjectClassPaths(PhpSourcePath.BOOT_CP);
+            GlobalPathRegistry.getDefault().register(PhpSourcePath.BOOT_CP, bootClassPaths);
+            GlobalPathRegistry.getDefault().register(PhpSourcePath.SOURCE_CP, cpProvider.getProjectClassPaths(PhpSourcePath.SOURCE_CP));
+            for (ClassPath classPath : bootClassPaths) {
+                IncludePathClassPathProvider.addProjectIncludePath(classPath);
+            }
+
+            // ensure that code coverage is initialized in case it's enabled...
+            PhpCoverageProvider coverageProvider = getLookup().lookup(PhpCoverageProvider.class);
+            if (coverageProvider.isEnabled()) {
+                PhpCoverageProvider.notifyProjectOpened(PhpProject.this);
+            }
+
+            final CopySupport copySupport = getCopySupport();
+            if (copySupport != null) {
+                copySupport.projectOpened(PhpProject.this);
+            }
+
+            // #164073 - for the first time, let's do it not in AWT thread
+            PhpUnit phpUnit = CommandUtils.getPhpUnit(false);
+            if (phpUnit != null) {
+                phpUnit.supportedVersionFound();
+            }
         }
-        
+
         protected void projectClosed() {
+            ClassPathProviderImpl cpProvider = lookup.lookup(ClassPathProviderImpl.class);
+            GlobalPathRegistry.getDefault().unregister(PhpSourcePath.BOOT_CP, cpProvider.getProjectClassPaths(PhpSourcePath.BOOT_CP));
+            GlobalPathRegistry.getDefault().unregister(PhpSourcePath.SOURCE_CP, cpProvider.getProjectClassPaths(PhpSourcePath.SOURCE_CP));
+
+            final CopySupport copySupport = getCopySupport();
+            if (copySupport != null) {
+                copySupport.projectClosed(PhpProject.this);
+            }
+
             try {
-                ProjectManager.getDefault().saveProject( PhpProject.this);
+                ProjectManager.getDefault().saveProject(PhpProject.this);
             } catch (IOException e) {
-                ErrorManager.getDefault().notify(e);
+                Exceptions.printStackTrace(e);
             }
         }
     }
-    
-    
-    private final AntProjectHelper myHelper;
-    
-    private PropertyEvaluator myEvaluator;
-    
-    private final ReferenceHelper myRefHelper;
-    
-    private GeneratedFilesHelper myGenFilesHelper;
 
-    private Lookup myLookup;
+    private static final class ConfigPropertyProvider extends FilterPropertyProvider implements PropertyChangeListener {
+        private final PropertyEvaluator baseEval;
+        private final String prefix;
+        private final AntProjectHelper helper;
+        public ConfigPropertyProvider(PropertyEvaluator baseEval, String prefix, AntProjectHelper helper) {
+            super(computeDelegate(baseEval, prefix, helper));
+            this.baseEval = baseEval;
+            this.prefix = prefix;
+            this.helper = helper;
+            baseEval.addPropertyChangeListener(this);
+        }
+        public void propertyChange(PropertyChangeEvent ev) {
+            if (PhpConfigurationProvider.PROP_CONFIG.equals(ev.getPropertyName())) {
+                setDelegate(computeDelegate(baseEval, prefix, helper));
+            }
+        }
+        private static PropertyProvider computeDelegate(PropertyEvaluator baseEval, String prefix, AntProjectHelper helper) {
+            String config = baseEval.getProperty(PhpConfigurationProvider.PROP_CONFIG);
+            if (config != null) {
+                return helper.getPropertyProvider(prefix + "/" + config + ".properties"); // NOI18N
+            }
+            return PropertyUtils.fixedPropertyProvider(Collections.<String, String>emptyMap());
+        }
+    }
 
+    public final class PhpProjectXmlSavedHook extends ProjectXmlSavedHook {
+
+        protected void projectXmlSaved() throws IOException {
+            Info info = getLookup().lookup(Info.class);
+            assert info != null;
+            info.firePropertyChange(ProjectInformation.PROP_NAME);
+            info.firePropertyChange(ProjectInformation.PROP_DISPLAY_NAME);
+        }
+    }
+
+    private final class SeleniumProvider implements PhpSeleniumProvider {
+        public FileObject getTestDirectory(boolean showCustomizer) {
+            return ProjectPropertiesSupport.getSeleniumDirectory(PhpProject.this, showCustomizer);
+        }
+
+        public void runAllTests() {
+            ConfigAction.get(ConfigAction.Type.SELENIUM, PhpProject.this).runProject();
+        }
+    }
 }
