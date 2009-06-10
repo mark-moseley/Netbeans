@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,58 +39,64 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.j2ee.ejbjarproject;
+package org.netbeans.modules.j2ee.spi.ejbjar.support;
 
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbJar;
-import org.netbeans.modules.j2ee.ejbjarproject.ui.customizer.EjbJarProjectProperties;
 import org.netbeans.modules.j2ee.spi.ejbjar.EjbJarProvider;
 import org.netbeans.modules.j2ee.spi.ejbjar.EjbJarsInProject;
-import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.openide.filesystems.FileObject;
 
-public class ProjectEjbJarProvider implements EjbJarProvider, EjbJarsInProject/*, ProjectPropertiesSupport*/ {
-    
-    private EjbJarProject project;
-    
-    public ProjectEjbJarProvider (EjbJarProject project) {
-        this.project = project;
-    }
-    
-    public EjbJar findEjbJar (FileObject file) {
-        Project owner = FileOwnerQuery.getOwner (file);
-        if (owner != null && owner instanceof EjbJarProject) {
-            return ((EjbJarProject) owner).getAPIEjbJar();
-        }
-        return null;
+/**
+ * Factory for creating default implementations of EJB jar related interfaces.
+ * 
+ * @author kaktus
+ */
+public class EjbJarSupport {
+
+    /**
+     * Creates default implementation of {@link org.netbeans.modules.j2ee.spi.ejbjar.EjbJarProvider}.
+     */
+    public static EjbJarProvider createEjbJarProvider(Project project, EjbJar ejbJar){
+        return new EjbJarProviderImpl(project, ejbJar);
     }
 
-    public EjbJar[] getEjbJars() {
-        return new EjbJar [] {project.getAPIEjbJar()};
+    /**
+     * Creates default implementation of {@link org.netbeans.modules.j2ee.spi.ejbjar.EjbJarsInProject}.
+     */
+    public static EjbJarsInProject createEjbJarsInProject(EjbJar ejbJar){
+        return new EjbJarsInProjectImpl(ejbJar);
     }
 
-    public void disableSunCmpMappingExclusion() {
-        EjbJarProject ejbProject = project;
-        PropertyHelper ph = ejbProject.getPropertyHelper();
-        
-        String metaInfExcludes = ph.getProperty(AntProjectHelper.PROJECT_PROPERTIES_PATH, EjbJarProjectProperties.META_INF_EXCLUDES);
-        if (metaInfExcludes == null) {
-            return;
+    private static class EjbJarProviderImpl implements EjbJarProvider{
+        private Project project;
+        private EjbJar ejbJar;
+
+        public EjbJarProviderImpl(Project project, EjbJar ejbJar) {
+            this.project = project;
+            this.ejbJar = ejbJar;
         }
-        String[] tokens = metaInfExcludes.split(" |,");
-        StringBuffer newMetaInfExcludes = new StringBuffer();
-        for (int i = 0; i < tokens.length; i++) {
-            if (tokens[i].equals("sun-cmp-mappings.xml") || tokens[i].equals("")) { // NOI18N
-                continue;
+
+        public EjbJar findEjbJar(FileObject file) {
+            Project owner = FileOwnerQuery.getOwner (file);
+            if (owner != null && owner == project) {
+                return ejbJar;
             }
-
-            newMetaInfExcludes.append(tokens[i]);
-            if (i < tokens.length - 1) {
-                newMetaInfExcludes.append(" "); // NOI18N
-            }
+            return null;
         }
-        ph.saveProperty(AntProjectHelper.PROJECT_PROPERTIES_PATH, EjbJarProjectProperties.META_INF_EXCLUDES, newMetaInfExcludes.toString());
     }
-    
+
+    private static class EjbJarsInProjectImpl implements EjbJarsInProject{
+        private EjbJar ejbJar;
+
+        public EjbJarsInProjectImpl(EjbJar ejbJar) {
+            this.ejbJar = ejbJar;
+        }
+
+        public EjbJar[] getEjbJars() {
+            return new EjbJar [] {ejbJar};
+        }
+    }
+
 }
