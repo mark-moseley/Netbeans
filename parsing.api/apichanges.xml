@@ -107,6 +107,115 @@ is the proper place.
 <!-- ACTUAL CHANGES BEGIN HERE: -->
 
   <changes>
+  <change id="adding-forceRefresh">
+      <api name="ParsingAPI"/>
+      <summary>Adding IndexingManager.refreshIndex methods with forceRefresh parameter</summary>
+      <version major="1" minor="16"/>
+      <date day="10" month="6" year="2009"/>
+      <author login="vstejskal"/>
+      <compatibility source="compatible" binary="compatible" semantic="compatible" deletion="no" addition="yes" modification="no"/>
+      <description>
+          <p>
+              Added <code>IndexingManager.refreshIndex(URL root, Collection&lt;? extends URL&gt; files, boolean forceRefresh)</code>
+              and <code>IndexingManager.refreshIndexAndWait(URL root, Collection&lt;? extends URL&gt; files, boolean forceRefresh)</code>.
+          </p>
+      </description>
+  </change>
+
+  <change id="changes-Indexable-Context">
+      <api name="ParsingAPI"/>
+      <summary>Tweaking Indexable and Context</summary>
+      <version major="1" minor="13"/>
+      <date day="21" month="5" year="2009"/>
+      <author login="vstejskal"/>
+      <compatibility source="incompatible" binary="incompatible" semantic="compatible" deletion="yes" addition="yes" modification="no"/>
+      <description>
+          <p>
+              Added <code>Indexable.getMimeType()</code>, <code>Context.isCancelled()</code>.
+              Removed <code>Indexabe.getName()</code>, <code>Indexable.getLastModified()</code>,
+              <code>Indexable.openInputStream()</code>.
+          </p>
+      </description>
+  </change>
+
+  <change id="typo-IndexingManager-refreshAllIndices">
+      <api name="ParsingAPI"/>
+      <summary>Fixing typo: IndexingManager.refreshAllIndices()</summary>
+      <version major="1" minor="12"/>
+      <date day="20" month="4" year="2009"/>
+      <author login="vstejskal"/>
+      <compatibility source="incompatible" binary="incompatible" semantic="compatible" deletion="no" addition="no" modification="yes"/>
+      <description>
+          <p>
+              Fixing typo in <code>IndexingManager.refreshAllIndicies(String)</code> method
+              name. Technically this method was removed and a new one called
+              <code>IndexingManager.refreshAllIndices(String)</code> was created. The same happened
+              for <code>IndexingManager.refreshAllIndicies(FileObject...)</code>.
+          </p>
+      </description>
+  </change>
+
+  <change id="Context-checkForEditorModifications">
+      <api name="ParsingAPI"/>
+      <summary>Adding Context.checkForEditorModifications</summary>
+      <version major="1" minor="10"/>
+      <date day="15" month="4" year="2009"/>
+      <author login="vstejskal"/>
+      <compatibility source="compatible" binary="compatible" semantic="compatible" deletion="no" addition="yes" modification="no"/>
+      <description>
+          <p>
+              Adding <code>Context.checkForEditorModifications()</code> in order to
+              signal indexers whether they should or should not care about editor documents.
+          </p>
+      </description>
+  </change>
+
+  <change id="IndexResult-getRoot-getRelativePath">
+      <api name="ParsingAPI"/>
+      <summary>Adding IndexResult.getRoot and getRelativePath</summary>
+      <version major="1" minor="9"/>
+      <date day="2" month="4" year="2009"/>
+      <author login="vstejskal"/>
+      <compatibility source="compatible" binary="compatible" semantic="compatible" deletion="no" addition="yes" modification="no"/>
+      <description>
+          <p>
+              Adding <code>IndexResult.getRoot()</code> and <code>IndexResult.getRelativePath()</code>
+              methods.
+          </p>
+      </description>
+  </change>
+
+  <change id="IndexingManager-refreshAllIndicies">
+      <api name="ParsingAPI"/>
+      <summary>Adding IndexingManager.refreshAllIndicies()</summary>
+      <version major="1" minor="8"/>
+      <date day="27" month="3" year="2009"/>
+      <author login="vstejskal"/>
+      <compatibility source="compatible" binary="compatible" semantic="compatible" deletion="no" addition="yes" modification="no"/>
+      <description>
+          <p>
+              Adding <code>IndexingManager.refreshAllIndicies(String)</code> method
+              for refreshing all indices created by a given indexer.
+          </p>
+      </description>
+  </change>
+
+  <change id="QuerySupport-findRoots">
+      <api name="ParsingAPI"/>
+      <summary>Adding QuerySupport.findRoots(...) methods</summary>
+      <version major="1" minor="7"/>
+      <date day="27" month="3" year="2009"/>
+      <author login="vstejskal"/>
+      <compatibility source="compatible" binary="compatible" semantic="compatible" deletion="no" addition="yes" modification="no"/>
+      <description>
+          <p>
+              Adding two <code>QuerySupport.findRoots(...)</code> methods that can be used
+              for finding classpath roots from classpaths marked with specific IDs
+              and supplied by specific project.
+          </p>
+      </description>
+  </change>
+
   <change id="IndexingManager-refreshIndexAndWait">
       <api name="ParsingAPI"/>
       <summary>Adding IndexingManager.refreshIndexAndWait()</summary>
